@@ -14,10 +14,12 @@ class GlobalTopActions extends StatelessWidget {
     super.key,
     this.showSearch = true,
     this.initialSearchScope = GlobalSearchScope.all,
+    this.quickActionPriority = CreateActionSheetPriority.createPrimary,
   });
 
   final bool showSearch;
   final GlobalSearchScope initialSearchScope;
+  final CreateActionSheetPriority quickActionPriority;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +38,10 @@ class GlobalTopActions extends StatelessWidget {
           ),
         _TopActionIcon(
           icon: CupertinoIcons.add,
-          onTap: () => GlobalQuickActionSheet.show(context),
+          onTap: () => GlobalQuickActionSheet.show(
+            context,
+            priority: quickActionPriority,
+          ),
           iconAlignment: Alignment.centerRight,
           visualShiftX: AppSpacing.intraGroupXs,
         ),
@@ -62,7 +67,11 @@ class _TopActionIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      onPressed: onTap, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+      onPressed: onTap,
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
       child: SizedBox(
         width: AppSpacing.minInteractiveSize,
         height: AppSpacing.minInteractiveSize,
@@ -88,18 +97,24 @@ class _TopActionIcon extends StatelessWidget {
 class GlobalQuickActionSheet {
   const GlobalQuickActionSheet._();
 
-  static Future<void> show(BuildContext context) {
+  static Future<void> show(
+    BuildContext context, {
+    CreateActionSheetPriority priority =
+        CreateActionSheetPriority.createPrimary,
+  }) {
     return showCupertinoModalPopup<void>(
       context: context,
-      builder: (sheetContext) => _QuickActionSheet(rootContext: context),
+      builder: (sheetContext) =>
+          _QuickActionSheet(rootContext: context, priority: priority),
     );
   }
 }
 
 class _QuickActionSheet extends StatelessWidget {
-  const _QuickActionSheet({required this.rootContext});
+  const _QuickActionSheet({required this.rootContext, required this.priority});
 
   final BuildContext rootContext;
+  final CreateActionSheetPriority priority;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +123,7 @@ class _QuickActionSheet extends StatelessWidget {
       onStartGroupChat: () => _openStartGroupChat(context),
       onAddContact: () => _openAddContact(context),
       onCancel: () => Navigator.of(context).pop(),
+      priority: priority,
     );
   }
 
@@ -230,7 +246,9 @@ class _AddContactSheet extends ConsumerWidget {
                               horizontal: AppSpacing.sm,
                               vertical: AppSpacing.xs,
                             ),
-                            color: AppColors.primaryColor.withValues(alpha: 0.12),
+                            color: AppColors.primaryColor.withValues(
+                              alpha: 0.12,
+                            ),
                             onPressed: () {
                               Navigator.of(context).pop();
                               AppToast.show(context, '已将 $displayName 加入联系候选');
@@ -323,10 +341,12 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
         return source.take(8).toList(growable: false);
       }
       return source
-          .where((item) => keys.any((key) {
-                final value = item[key]?.toString().toLowerCase() ?? '';
-                return value.contains(query);
-              }))
+          .where(
+            (item) => keys.any((key) {
+              final value = item[key]?.toString().toLowerCase() ?? '';
+              return value.contains(query);
+            }),
+          )
           .take(8)
           .toList(growable: false);
     }
@@ -357,101 +377,106 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
               AppSpacing.containerLg,
             ),
             child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: CupertinoSearchTextField(
-                      controller: _controller,
-                      autofocus: true,
-                      placeholder: UITextConstants.globalSearchTitle,
-                      onChanged: (_) => setState(() {}),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoSearchTextField(
+                        controller: _controller,
+                        autofocus: true,
+                        placeholder: UITextConstants.globalSearchTitle,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.only(left: AppSpacing.sm),
+                      child: const Text(UITextConstants.cancel),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.interGroupSm),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: CupertinoSlidingSegmentedControl<GlobalSearchScope>(
+                    groupValue: _scope,
+                    children: {
+                      for (var scope in GlobalSearchScope.values)
+                        scope: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                          ),
+                          child: Text(
+                            _scopeLabel(scope),
+                            style: TextStyle(fontSize: AppTypography.xs),
+                          ),
+                        ),
+                    },
+                    onValueChanged: (scope) {
+                      if (scope != null) {
+                        setState(() => _scope = scope);
+                      }
+                    },
+                  ),
+                ),
+                SizedBox(height: AppSpacing.interGroupMd),
+                Expanded(
+                  child: CupertinoScrollbar(
+                    child: ListView(
+                      children: [
+                        if (_scope == GlobalSearchScope.all ||
+                            _scope == GlobalSearchScope.content)
+                          _ResultSection(
+                            title: '内容',
+                            items: contentResults,
+                            titleKey: 'title',
+                            subtitleKey: 'content',
+                          ),
+                        if (_scope == GlobalSearchScope.all ||
+                            _scope == GlobalSearchScope.circles)
+                          _ResultSection(
+                            title: '圈子',
+                            items: circleResults,
+                            titleKey: 'name',
+                            subtitleKey: 'subCategory',
+                            onTap: (item) {
+                              Navigator.of(context).pop();
+                              context.push(
+                                AppRoutePaths.circleDetail(
+                                  id: item['id']?.toString() ?? '',
+                                ),
+                              );
+                            },
+                          ),
+                        if (_scope == GlobalSearchScope.all ||
+                            _scope == GlobalSearchScope.contacts)
+                          _ResultSection(
+                            title: '联系人',
+                            items: contactResults,
+                            titleKey: 'displayName',
+                            subtitleKey: 'userId',
+                          ),
+                        if (_scope == GlobalSearchScope.all ||
+                            _scope == GlobalSearchScope.messages)
+                          _ResultSection(
+                            title: '消息',
+                            items: messageResults,
+                            titleKey: 'title',
+                            subtitleKey: 'lastMessage',
+                            onTap: (item) {
+                              Navigator.of(context).pop();
+                              context.push(
+                                AppRoutePaths.chatDetail(
+                                  id: item['_id']?.toString() ?? '',
+                                ),
+                              );
+                            },
+                          ),
+                      ],
                     ),
                   ),
-                  CupertinoButton(
-                    padding: EdgeInsets.only(left: AppSpacing.sm),
-                    child: const Text(UITextConstants.cancel),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              SizedBox(height: AppSpacing.interGroupSm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: CupertinoSlidingSegmentedControl<GlobalSearchScope>(
-                  groupValue: _scope,
-                  children: {
-                    for (var scope in GlobalSearchScope.values)
-                        scope: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                        child: Text(_scopeLabel(scope), style: TextStyle(fontSize: AppTypography.xs)),
-                      ),
-                  },
-                  onValueChanged: (scope) {
-                    if (scope != null) {
-                      setState(() => _scope = scope);
-                    }
-                  },
                 ),
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              Expanded(
-                child: CupertinoScrollbar(
-                  child: ListView(
-                    children: [
-                      if (_scope == GlobalSearchScope.all ||
-                          _scope == GlobalSearchScope.content)
-                        _ResultSection(
-                          title: '内容',
-                          items: contentResults,
-                          titleKey: 'title',
-                          subtitleKey: 'content',
-                        ),
-                      if (_scope == GlobalSearchScope.all ||
-                          _scope == GlobalSearchScope.circles)
-                        _ResultSection(
-                          title: '圈子',
-                          items: circleResults,
-                          titleKey: 'name',
-                          subtitleKey: 'subCategory',
-                          onTap: (item) {
-                            Navigator.of(context).pop();
-                            context.push(
-                              AppRoutePaths.circleDetail(
-                                id: item['id']?.toString() ?? '',
-                              ),
-                            );
-                          },
-                        ),
-                      if (_scope == GlobalSearchScope.all ||
-                          _scope == GlobalSearchScope.contacts)
-                        _ResultSection(
-                          title: '联系人',
-                          items: contactResults,
-                          titleKey: 'displayName',
-                          subtitleKey: 'userId',
-                        ),
-                      if (_scope == GlobalSearchScope.all ||
-                          _scope == GlobalSearchScope.messages)
-                        _ResultSection(
-                          title: '消息',
-                          items: messageResults,
-                          titleKey: 'title',
-                          subtitleKey: 'lastMessage',
-                          onTap: (item) {
-                            Navigator.of(context).pop();
-                            context.push(
-                              AppRoutePaths.chatDetail(
-                                id: item['_id']?.toString() ?? '',
-                              ),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+              ],
             ),
           ),
         ),
@@ -495,7 +520,7 @@ class _ResultSection extends StatelessWidget {
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: Column(
@@ -515,11 +540,15 @@ class _ResultSection extends StatelessWidget {
               padding: EdgeInsets.zero,
               title: Text(
                 item[titleKey]?.toString() ?? '',
-                style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
+                style: TextStyle(
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
               ),
               subtitle: Text(
                 item[subtitleKey]?.toString() ?? '',
-                style: TextStyle(color: CupertinoColors.secondaryLabel.resolveFrom(context)),
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
               ),
               onTap: onTap == null ? null : () => onTap!(item),
             ),

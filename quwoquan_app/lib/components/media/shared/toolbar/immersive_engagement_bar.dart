@@ -147,6 +147,10 @@ class ImmersiveEngagementBar extends StatelessWidget {
     final actionCellWidth = _actionCellWidth(context);
     final crossGroupGap = _crossGroupGap(context);
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
+    final showFollowLane = showFollowButton;
+    final currentNameSlotWidth = showFollowLane
+        ? revealNameSlotWidth
+        : restNameSlotWidth;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {
@@ -179,100 +183,109 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.intraGroupSm),
-                SizedBox(
-                  width: restNameSlotWidth,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.centerLeft,
-                    children: [
-                      AnimatedContainer(
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedContainer(
+                      duration: _kTransitionDuration,
+                      curve: Curves.easeOutCubic,
+                      width: currentNameSlotWidth,
+                      child: isRevealState
+                          ? ShaderMask(
+                              shaderCallback: (bounds) {
+                                const fadeWidth = 14.0;
+                                final start = bounds.width <= fadeWidth
+                                    ? 0.0
+                                    : ((bounds.width - fadeWidth) / bounds.width)
+                                          .clamp(0.0, 1.0);
+                                return LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  stops: [start, 1.0],
+                                  colors: const [
+                                    Colors.white,
+                                    Colors.transparent,
+                                  ],
+                                ).createShader(bounds);
+                              },
+                              blendMode: BlendMode.dstIn,
+                              child: _nameColumn(
+                                displayName: textDisplayName,
+                                displayStyle: compressedDisplayStyle,
+                                secondaryStyle: secondaryStyle,
+                                primaryMaxWidth: revealNameWidth,
+                                secondaryMaxWidth: revealSecondaryWidth,
+                                clip: true,
+                              ),
+                            )
+                          : _nameColumn(
+                              displayName: textDisplayName,
+                              displayStyle: restDisplayStyle,
+                              secondaryStyle: secondaryStyle,
+                              primaryMaxWidth: restNameWidth,
+                              secondaryMaxWidth: restSecondaryWidth,
+                              clip: false,
+                            ),
+                    ),
+                    ClipRect(
+                      child: AnimatedContainer(
                         duration: _kTransitionDuration,
                         curve: Curves.easeOutCubic,
-                        width: isRevealState
-                            ? revealNameSlotWidth
-                            : restNameSlotWidth,
-                        child: isRevealState
-                            ? ShaderMask(
-                                shaderCallback: (bounds) {
-                                  const fadeWidth = 14.0;
-                                  final start = bounds.width <= fadeWidth
-                                      ? 0.0
-                                      : ((bounds.width - fadeWidth) /
-                                                bounds.width)
-                                            .clamp(0.0, 1.0);
-                                  return LinearGradient(
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                    stops: [start, 1.0],
-                                    colors: const [
-                                      Colors.white,
-                                      Colors.transparent,
-                                    ],
-                                  ).createShader(bounds);
-                                },
-                                blendMode: BlendMode.dstIn,
-                                child: _nameColumn(
-                                  displayName: textDisplayName,
-                                  displayStyle: compressedDisplayStyle,
-                                  secondaryStyle: secondaryStyle,
-                                  primaryMaxWidth: revealNameWidth,
-                                  secondaryMaxWidth: revealSecondaryWidth,
-                                  clip: true,
-                                ),
-                              )
-                            : _nameColumn(
-                                displayName: textDisplayName,
-                                displayStyle: restDisplayStyle,
-                                secondaryStyle: secondaryStyle,
-                                primaryMaxWidth: restNameWidth,
-                                secondaryMaxWidth: restSecondaryWidth,
-                                clip: false,
-                              ),
-                      ),
-                      Positioned.fill(
+                        width: showFollowLane
+                            ? AppSpacing.intraGroupSm + _kFollowBtnWidth
+                            : 0,
                         child: Align(
                           alignment: Alignment.centerRight,
-                          child: IgnorePointer(
-                            ignoring: !showFollowButton,
-                            child: AnimatedSlide(
-                              duration: _kTransitionDuration,
-                              curve: Curves.easeOutCubic,
-                              offset: showFollowButton
-                                  ? Offset.zero
-                                  : const Offset(0.24, 0),
-                              child: AnimatedOpacity(
-                                duration: _kTransitionDuration,
-                                curve: Curves.easeOutCubic,
-                                opacity: showFollowButton ? 1 : 0,
-                                child: GestureDetector(
-                                  onTap: onFollowTap,
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Container(
-                                    width: _kFollowBtnWidth,
-                                    height: AppSpacing.buttonHeightXs,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: isFollowing
-                                          ? AppColors.followingButtonOnDark
-                                          : AppColors.worksAccent,
-                                      borderRadius: BorderRadius.circular(
-                                        AppSpacing.circularBorderRadius,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      isFollowing
-                                          ? UITextConstants.following
-                                          : UITextConstants.follow,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.fade,
-                                      softWrap: false,
-                                      style: TextStyle(
-                                        color: isFollowing
-                                            ? AppColors.worksBodyText
-                                                  .withValues(alpha: 0.72)
-                                            : AppColors.white,
-                                        fontSize: AppTypography.xs,
-                                        fontWeight: AppTypography.semiBold,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: AppSpacing.intraGroupSm,
+                            ),
+                            child: SizedBox(
+                              width: _kFollowBtnWidth,
+                              height: AppSpacing.buttonHeightXs,
+                              child: IgnorePointer(
+                                ignoring: !showFollowButton,
+                                child: AnimatedSlide(
+                                  duration: _kTransitionDuration,
+                                  curve: Curves.easeOutCubic,
+                                  offset: showFollowButton
+                                      ? Offset.zero
+                                      : const Offset(0.24, 0),
+                                  child: AnimatedOpacity(
+                                    duration: _kTransitionDuration,
+                                    curve: Curves.easeOutCubic,
+                                    opacity: showFollowButton ? 1 : 0,
+                                    child: GestureDetector(
+                                      onTap: onFollowTap,
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Container(
+                                        width: _kFollowBtnWidth,
+                                        height: AppSpacing.buttonHeightXs,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isFollowing
+                                              ? AppColors.followingButtonOnDark
+                                              : AppColors.worksAccent,
+                                          borderRadius: BorderRadius.circular(
+                                            AppSpacing.circularBorderRadius,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          isFollowing
+                                              ? UITextConstants.following
+                                              : UITextConstants.follow,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.fade,
+                                          softWrap: false,
+                                          style: TextStyle(
+                                            color: isFollowing
+                                                ? AppColors.worksBodyText
+                                                      .withValues(alpha: 0.72)
+                                                : AppColors.white,
+                                            fontSize: AppTypography.xs,
+                                            fontWeight: AppTypography.semiBold,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -282,8 +295,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 SizedBox(width: crossGroupGap),
                 Expanded(
@@ -316,6 +329,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                                   ),
                                   label: formatCompactActionCount(likeCount),
                                   onTap: onLikeTap,
+                                  alignment: Alignment.centerLeft,
                                 ),
                               ),
                               SizedBox(
@@ -328,6 +342,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                                   ),
                                   label: formatCompactActionCount(shareCount),
                                   onTap: onShareTap,
+                                  alignment: Alignment.center,
                                 ),
                               ),
                               SizedBox(
@@ -340,6 +355,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                                   ),
                                   label: formatCompactActionCount(commentCount),
                                   onTap: onCommentTap,
+                                  alignment: Alignment.centerRight,
                                 ),
                               ),
                             ],
@@ -402,6 +418,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   Widget _action({
     required Widget icon,
     required String label,
+    required Alignment alignment,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
@@ -409,20 +426,23 @@ class ImmersiveEngagementBar extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: double.infinity,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            SizedBox(height: AppSpacing.intraGroupXs / 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppColors.worksBodyText,
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.medium,
+        child: Align(
+          alignment: alignment,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              SizedBox(height: AppSpacing.intraGroupXs / 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.worksBodyText,
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.medium,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

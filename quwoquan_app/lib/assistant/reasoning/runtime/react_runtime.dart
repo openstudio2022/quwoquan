@@ -267,6 +267,7 @@ class ReactRuntime {
         state,
         availableToolNames,
         templateId: templateId,
+        hasPrecomputedSearch: executionShell.preComputedQueryTasks.isNotEmpty,
       );
       final phaseHint = _buildPhaseHint(currentPhase, availableToolNames);
       if (phaseHint.isNotEmpty) {
@@ -287,11 +288,9 @@ class ReactRuntime {
           },
         ),
       );
-      var anyDeltaForwarded = false;
       final wrappedOnDelta = onDelta != null
           ? (String delta) {
               if (delta.trim().isEmpty) return;
-              anyDeltaForwarded = true;
               pushTrace(
                 AssistantTraceEvent(
                   type: AssistantTraceEventType.thinkingProgress,
@@ -362,7 +361,7 @@ class ReactRuntime {
         output.reasoningText,
         currentPhase: currentPhase,
       );
-      if (extractedThinking.isNotEmpty && !anyDeltaForwarded) {
+      if (extractedThinking.isNotEmpty) {
         pushTrace(
           AssistantTraceEvent(
             type: AssistantTraceEventType.thinkingProgress,
@@ -1249,20 +1248,37 @@ class ReactRuntime {
     };
     final existingTasks = _coerceSearchTasks(args['queryTasks']);
     if (existingTasks.isNotEmpty) {
-      final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
+      final taskBudget = _queryTaskBudget(
+        availableCount: existingTasks.length,
+        shell: shell,
+      );
       return _normalizeSearchTasks(
         existingTasks,
         commonMetadata: commonTaskMetadata,
       ).take(taskBudget).toList(growable: false);
     }
     if (shell.preComputedQueryTasks.isNotEmpty) {
-      final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
+      final taskBudget = _queryTaskBudget(
+        availableCount: shell.preComputedQueryTasks.length,
+        shell: shell,
+      );
       return _normalizeSearchTasks(
         shell.preComputedQueryTasks,
         commonMetadata: commonTaskMetadata,
       ).take(taskBudget).toList(growable: false);
     }
     return const <Map<String, dynamic>>[];
+  }
+
+  int _queryTaskBudget({
+    required int availableCount,
+    required _RuntimeExecutionShell shell,
+  }) {
+    if (availableCount <= 0) {
+      return 0;
+    }
+    final configuredBudget = shell.variantBudget > 0 ? shell.variantBudget : 4;
+    return configuredBudget < availableCount ? configuredBudget : availableCount;
   }
 
   List<Map<String, dynamic>> _coerceSearchTasks(Object? raw) {
@@ -1442,6 +1458,7 @@ class ReactRuntime {
     ReactRunState state,
     List<String> availableToolNames, {
     required String templateId,
+    required bool hasPrecomputedSearch,
   }) {
     final normalizedTemplateId = templateId.trim();
     final answeringTemplate =
@@ -1449,6 +1466,9 @@ class ReactRuntime {
         normalizedTemplateId == 'phase_one_direct_answer';
     if (state.forceAnswerOnly || answeringTemplate) {
       return 'answering';
+    }
+    if (hasPrecomputedSearch && state.iteration == 1 && state.usedTools == 0) {
+      return 'search';
     }
     if (state.iteration == 1 &&
         state.evidences.isEmpty &&

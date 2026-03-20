@@ -54,6 +54,9 @@ abstract final class AssistantDisplayTextResolver {
     r'</?<?(?:tool_call|function|parameter)[^>\n\r]*>?',
     caseSensitive: false,
   );
+  static final RegExp _romanizedQueryLeakFragmentRe = RegExp(
+    r'\b(?:[A-Z][a-z]+|[a-z]+)(?:\s+[a-z]+){1,7}\b',
+  );
 
   static AssistantDisplayProjection projectTurn(AssistantTurnOutput turn) {
     final answerLike =
@@ -232,6 +235,50 @@ abstract final class AssistantDisplayTextResolver {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return _internalPlannerNarrationFragmentRe.hasMatch(text);
+  }
+
+  static bool containsRomanizedQueryLeakFragment(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return false;
+    return _romanizedQueryLeakFragmentRe.hasMatch(text);
+  }
+
+  static String stripRomanizedQueryLeakSentences(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    final preservedLines = <String>[];
+    for (final rawLine in text.replaceAll('\r\n', '\n').split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        continue;
+      }
+      final sentenceMatches = RegExp(
+        r'[^。！？!?]+[。！？!?]?',
+      ).allMatches(line).toList();
+      if (sentenceMatches.isEmpty) {
+        if (!containsRomanizedQueryLeakFragment(line)) {
+          preservedLines.add(line);
+        }
+        continue;
+      }
+      final keptSentences = <String>[];
+      for (final match in sentenceMatches) {
+        final sentence = (match.group(0) ?? '').trim();
+        if (sentence.isEmpty ||
+            containsRomanizedQueryLeakFragment(sentence) ||
+            AssistantContentFilters.isDegradedText(sentence) ||
+            containsInternalAssistantProtocolFragment(sentence) ||
+            containsTechnicalFailureFragment(sentence)) {
+          continue;
+        }
+        keptSentences.add(sentence);
+      }
+      final rebuilt = keptSentences.join('').trim();
+      if (rebuilt.isNotEmpty) {
+        preservedLines.add(rebuilt);
+      }
+    }
+    return preservedLines.join('\n').trim();
   }
 
   static bool hasStructuredPrefixLeak(String raw) {

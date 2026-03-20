@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
@@ -186,6 +187,8 @@ class _HomePageState extends ConsumerState<HomePage>
                       child: const Center(
                         child: GlobalTopActions(
                           initialSearchScope: GlobalSearchScope.content,
+                          quickActionPriority:
+                              CreateActionSheetPriority.createPrimary,
                         ),
                       ),
                     ),

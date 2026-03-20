@@ -80,6 +80,24 @@ class AssistantJourneyProjector {
           );
         }
         break;
+      case AssistantTraceEventType.searchQueryGenerated:
+        _activateStage(JourneyStageId.search);
+        final detail = _searchQueryGeneratedDetail(
+          message: event.message,
+          data: data,
+        );
+        if (detail.isNotEmpty) {
+          _upsertNarrativeEntry(
+            key:
+                'search_query_generated::${event.toolCallId ?? _searchQueryPlanKey(data)}',
+            stageId: JourneyStageId.search,
+            headline: '',
+            detail: detail,
+            status: JourneyStageStatus.active,
+            provenance: provenance,
+          );
+        }
+        break;
       case AssistantTraceEventType.searchStarted:
         final message = _sanitizeJourneyText(event.message);
         _activateStage(JourneyStageId.search);
@@ -265,7 +283,6 @@ class AssistantJourneyProjector {
           _completeStage(JourneyStageId.answer);
         }
         break;
-      case AssistantTraceEventType.searchQueryGenerated:
       case AssistantTraceEventType.planCompleted:
       case AssistantTraceEventType.lifecycleStart:
       case AssistantTraceEventType.assistantDelta:
@@ -855,6 +872,136 @@ class AssistantJourneyProjector {
         '';
   }
 
+  String _searchQueryGeneratedDetail({
+    required String message,
+    required Map<String, dynamic> data,
+  }) {
+    final parts = <String>[];
+    final queryTasks = _queryTasksFromData(data);
+    if (queryTasks.isNotEmpty) {
+      parts.add(_queryTaskLeadLine(queryTasks));
+      parts.addAll(_formattedQueryTaskLines(queryTasks));
+    } else {
+      final narrative = _sanitizeJourneyText(message);
+      if (narrative.isNotEmpty && !_isLowSignalSearchPlanningMessage(narrative)) {
+        parts.add(narrative);
+      }
+      final query = (data['query'] as String?)?.trim() ?? '';
+      if (query.isNotEmpty) {
+        parts.add('- $query');
+      }
+    }
+    return parts.join('\n').trim();
+  }
+
+  bool _isLowSignalSearchPlanningMessage(String text) {
+    final normalized = text.trim();
+    return normalized == '生成检索计划';
+  }
+
+  List<Map<String, dynamic>> _queryTasksFromData(Map<String, dynamic> data) {
+    final raw = data['queryTasks'];
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return raw
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  String _queryTaskLeadLine(List<Map<String, dynamic>> queryTasks) {
+    if (queryTasks.length >= 2) {
+      return '我会先把最影响结论的几路信息拆开核对：';
+    }
+    return '我先核对最影响结论的这一项：';
+  }
+
+  List<String> _formattedQueryTaskLines(List<Map<String, dynamic>> queryTasks) {
+    final lines = <String>[];
+    final seen = <String>{};
+    for (final task in queryTasks) {
+      final line = _queryTaskDisplayLine(task);
+      if (line.isEmpty || !seen.add(line)) {
+        continue;
+      }
+      lines.add(line);
+    }
+    return lines;
+  }
+
+  String _queryTaskDisplayLine(Map<String, dynamic> task) {
+    final query = (task['query'] as String?)?.trim() ?? '';
+    if (query.isEmpty) {
+      return '';
+    }
+    final objectLabel = _queryTaskObjectLabel(task, query: query);
+    final displayLabel = _queryTaskDisplayLabel(task, query: query);
+    final prefixParts = <String>[
+      if (objectLabel.isNotEmpty) objectLabel,
+      if (displayLabel.isNotEmpty) displayLabel,
+    ];
+    final prefix = prefixParts.join('｜');
+    if (prefix.isEmpty || _normalizedCompact(prefix) == _normalizedCompact(query)) {
+      return '- $query';
+    }
+    return '- $prefix：$query';
+  }
+
+  String _queryTaskDisplayLabel(
+    Map<String, dynamic> task, {
+    required String query,
+  }) {
+    final label = (task['label'] as String?)?.trim() ?? '';
+    if (label.isNotEmpty &&
+        _normalizedCompact(label) != _normalizedCompact(query)) {
+      return label;
+    }
+    final dimension = (task['dimensionLabel'] as String?)?.trim() ?? '';
+    if (dimension.isNotEmpty &&
+        _normalizedCompact(dimension) != _normalizedCompact(query)) {
+      return dimension;
+    }
+    return '';
+  }
+
+  String _queryTaskObjectLabel(
+    Map<String, dynamic> task, {
+    required String query,
+  }) {
+    final anchors = (task['entityAnchors'] as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    if (anchors.isEmpty) {
+      return '';
+    }
+    final joined = anchors.join(' / ');
+    return _normalizedCompact(joined) == _normalizedCompact(query) ? '' : joined;
+  }
+
+  String _normalizedCompact(String raw) {
+    return raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s:：|｜/、,，。！？!?._-]+'), '');
+  }
+
+  String _searchQueryPlanKey(Map<String, dynamic> data) {
+    final query = (data['query'] as String?)?.trim() ?? '';
+    if (query.isNotEmpty) {
+      return query;
+    }
+    final queryTasks = _queryTasksFromData(data);
+    if (queryTasks.isEmpty) {
+      return _toolNameFromData(data);
+    }
+    return _formattedQueryTaskLines(queryTasks).join('|');
+  }
+
   String _toolStartHeadline({
     required String toolName,
     required Map<String, dynamic> data,
@@ -868,6 +1015,10 @@ class AssistantJourneyProjector {
     if (startLabel.isNotEmpty &&
         _toolMetadataRegistry.canResolveTemplate(startLabel, data)) {
       return _toolMetadataRegistry.resolveTemplate(startLabel, data);
+    }
+    final phaseTitle = (interaction?['phaseTitle'] as String?)?.trim() ?? '';
+    if (phaseTitle.isNotEmpty) {
+      return phaseTitle;
     }
     return fallback;
   }
@@ -886,6 +1037,10 @@ class AssistantJourneyProjector {
     if (progressTemplate.isNotEmpty &&
         _toolMetadataRegistry.canResolveTemplate(progressTemplate, data)) {
       return _toolMetadataRegistry.resolveTemplate(progressTemplate, data);
+    }
+    final phaseTitle = (interaction?['phaseTitle'] as String?)?.trim() ?? '';
+    if (phaseTitle.isNotEmpty) {
+      return phaseTitle;
     }
     return _toolStartHeadline(
       toolName: toolName,
@@ -949,7 +1104,9 @@ class AssistantJourneyProjector {
   }
 
   String _sanitizeJourneyText(String raw) {
-    final text = raw.trim();
+    final text = AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(
+      raw,
+    ).trim();
     if (text.isEmpty) return '';
     if (_looksLikeRomanizedQueryFragment(text)) return '';
     if (AssistantDisplayTextResolver.containsInternalProcessFragment(text) ||
@@ -965,7 +1122,9 @@ class AssistantJourneyProjector {
   }
 
   String _sanitizeJourneyUserEventText(String raw) {
-    final text = raw.trim();
+    final text = AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(
+      raw,
+    ).trim();
     if (text.isEmpty) return '';
     if (_looksLikeRomanizedQueryFragment(text)) return '';
     if (AssistantDisplayTextResolver.containsInternalProcessFragment(text) ||
@@ -981,7 +1140,9 @@ class AssistantJourneyProjector {
   }
 
   String _sanitizeThinkingStreamText(String raw) {
-    final text = raw.trim();
+    final text = AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(
+      raw,
+    ).trim();
     if (text.isEmpty) return '';
     if (_looksLikeRomanizedQueryFragment(text)) return '';
     if (AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(

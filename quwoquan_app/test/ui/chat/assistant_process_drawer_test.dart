@@ -88,6 +88,66 @@ const AssistantJourney _referenceJourney = AssistantJourney(
 
 void main() {
   group('AssistantProcessDrawer', () {
+    test('运行中且 answer gate 未打开时，会继续停留在搜索阶段', () {
+      const journey = AssistantJourney(
+        stages: <AssistantJourneyStage>[
+          AssistantJourneyStage(
+            stageId: JourneyStageId.analyze,
+            status: JourneyStageStatus.completed,
+            order: 0,
+            summary: '先把问题立住',
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.search,
+            status: JourneyStageStatus.completed,
+            order: 1,
+            summary: '我在核对实时天气来源',
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.answer,
+            status: JourneyStageStatus.active,
+            order: 3,
+            summary: '我开始整理答案',
+          ),
+        ],
+        entries: <AssistantJourneyEntry>[
+          AssistantJourneyEntry(
+            entryId: 'journey.search.1',
+            stageId: JourneyStageId.search,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: 0,
+            headline: '我在核对实时天气来源',
+          ),
+          AssistantJourneyEntry(
+            entryId: 'journey.answer.1',
+            stageId: JourneyStageId.answer,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.active,
+            order: 1,
+            headline: '我开始整理答案',
+          ),
+        ],
+        readiness: AssistantJourneyReadiness(finalAnswerReady: false),
+      );
+
+      final viewModel = buildAssistantJourneyViewModel(
+        journey: journey,
+        isRunning: true,
+        allowAnswerStage: false,
+      );
+
+      expect(viewModel.activeStageId, JourneyStageId.search);
+      expect(
+        viewModel.activeStageLabel,
+        UITextConstants.assistantProcessStageSearch,
+      );
+      expect(
+        viewModel.blocks.any((block) => block.stageId == JourneyStageId.answer),
+        isFalse,
+      );
+    });
+
     test('空 journey 运行中也不再生成 seeded 假过程', () {
       final viewModel = _viewModel(isRunning: true);
 
@@ -110,6 +170,48 @@ void main() {
       expect(
         find.text(UITextConstants.assistantProcessLongWaitReassurance),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('三阶段已出现时不在头部插入 reassurance', (tester) async {
+      const journey = AssistantJourney(
+        stages: <AssistantJourneyStage>[
+          AssistantJourneyStage(
+            stageId: JourneyStageId.analyze,
+            status: JourneyStageStatus.active,
+            order: 0,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.search,
+            status: JourneyStageStatus.pending,
+            order: 1,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.answer,
+            status: JourneyStageStatus.pending,
+            order: 2,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AssistantProcessDrawer(
+              viewModel: _viewModel(
+                journey: journey,
+                isRunning: true,
+                elapsedMs: 7000,
+              ),
+              initiallyExpanded: true,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.text(UITextConstants.assistantProcessLongWaitReassurance),
+        findsNothing,
       );
     });
 
@@ -210,6 +312,235 @@ void main() {
       await tester.pump();
 
       expect(find.text('四川文旅公告 · 官方'), findsOneWidget);
+    });
+
+    testWidgets('search query design 会在无 retrieval snapshot 时回退展示', (
+      tester,
+    ) async {
+      const journey = AssistantJourney(
+        stages: <AssistantJourneyStage>[
+          AssistantJourneyStage(
+            stageId: JourneyStageId.analyze,
+            status: JourneyStageStatus.completed,
+            order: 0,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.search,
+            status: JourneyStageStatus.active,
+            order: 1,
+            summary: '检索词：实时天气：深圳天气 实时 降雨 温度',
+          ),
+        ],
+        entries: <AssistantJourneyEntry>[
+          AssistantJourneyEntry(
+            entryId: 'journey.search.plan',
+            stageId: JourneyStageId.search,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.active,
+            order: 0,
+            detail: '我先按最影响结论的几路信息分开核对。\n检索词：实时天气：深圳天气 实时 降雨 温度',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AssistantProcessDrawer(
+              viewModel: _viewModel(journey: journey, isRunning: true),
+              initiallyExpanded: true,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.text('我先按最影响结论的几路信息分开核对。\n检索词：实时天气：深圳天气 实时 降雨 温度'),
+        findsOneWidget,
+      );
+    });
+
+    test('search 正式 narrative 存在时不会再回退补一遍 summary', () {
+      const queryDesign =
+          '我会先把最影响结论的几路信息拆开核对：\n- 体感与当前状态：深圳 天气 当前温度 体感 湿度 风力';
+      final built = buildAssistantJourneyViewModel(
+        journey: const AssistantJourney(
+          stages: <AssistantJourneyStage>[
+            AssistantJourneyStage(
+              stageId: JourneyStageId.search,
+              status: JourneyStageStatus.completed,
+              order: 1,
+              summary: queryDesign,
+            ),
+          ],
+          entries: <AssistantJourneyEntry>[
+            AssistantJourneyEntry(
+              entryId: 'journey.search.plan',
+              stageId: JourneyStageId.search,
+              kind: JourneyEntryKind.narrative,
+              status: JourneyStageStatus.completed,
+              order: 0,
+              detail: queryDesign,
+            ),
+          ],
+        ),
+        isRunning: false,
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processingSummary: queryDesign,
+        ),
+      );
+
+      final searchNarratives = built.blocks
+          .where(
+            (block) =>
+                block.stageId == JourneyStageId.search &&
+                block.kind == AssistantJourneyBlockKind.narrative,
+          )
+          .toList(growable: false);
+
+      expect(searchNarratives, hasLength(1));
+      expect(searchNarratives.single.headline, contains('我会先把最影响结论的几路信息拆开核对'));
+      expect(
+        built.blocks.where((block) => block.stageId == JourneyStageId.search),
+        hasLength(1),
+      );
+    });
+
+    test('三阶段内容会按理解、检索、接纳文档、成答顺序归位', () {
+      const journey = AssistantJourney(
+        stages: <AssistantJourneyStage>[
+          AssistantJourneyStage(
+            stageId: JourneyStageId.analyze,
+            status: JourneyStageStatus.completed,
+            order: 0,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.search,
+            status: JourneyStageStatus.completed,
+            order: 1,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.answer,
+            status: JourneyStageStatus.completed,
+            order: 3,
+          ),
+        ],
+        entries: <AssistantJourneyEntry>[
+          AssistantJourneyEntry(
+            entryId: 'journey.analyze.weather',
+            stageId: JourneyStageId.analyze,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: 0,
+            headline: '先确认你想看的就是深圳今天的实时天气。',
+          ),
+          AssistantJourneyEntry(
+            entryId: 'journey.search.plan',
+            stageId: JourneyStageId.search,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: 1,
+            detail: '围绕深圳实时天气、深圳今天天气预报组织检索。\n检索词：深圳 实时天气；深圳今天天气',
+          ),
+          AssistantJourneyEntry(
+            entryId: 'journey.answer.weather',
+            stageId: JourneyStageId.answer,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: 2,
+            detail:
+                '我开始整理Shenzhen tian qi的关键信息。已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
+          ),
+        ],
+        readiness: AssistantJourneyReadiness(finalAnswerReady: true),
+      );
+      const retrievalProcessing = RetrievalProcessingSnapshot(
+        processedDocumentCount: 10,
+        acceptedDocumentCount: 3,
+        processingSummary: '围绕深圳实时天气、深圳今天天气预报组织检索。\n检索词：深圳 实时天气；深圳今天天气',
+        acceptedReferences: <RetrievalProcessingReference>[
+          RetrievalProcessingReference(
+            title: '深圳天气预报 - nmc.cn',
+            url: 'https://www.nmc.cn',
+            source: 'nmc.cn',
+          ),
+          RetrievalProcessingReference(
+            title: '深圳天气预报 - weather.com.cn',
+            url: 'https://www.weather.com.cn',
+            source: 'weather.com.cn',
+          ),
+          RetrievalProcessingReference(
+            title: '中央气象台 - wx.nmc.cn',
+            url: 'https://wx.nmc.cn',
+            source: 'wx.nmc.cn',
+          ),
+        ],
+      );
+
+      final viewModel = buildAssistantJourneyViewModel(
+        journey: journey,
+        isRunning: false,
+        retrievalProcessing: retrievalProcessing,
+      );
+
+      expect(
+        viewModel.blocks.map((block) => block.stageId).toList(growable: false),
+        equals(const <JourneyStageId>[
+          JourneyStageId.analyze,
+          JourneyStageId.search,
+          JourneyStageId.search,
+          JourneyStageId.answer,
+        ]),
+      );
+      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.narrative);
+      expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
+      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.searchSummary);
+      expect(viewModel.blocks[2].headline, '处理10篇文档，接纳3篇如下');
+      expect(viewModel.blocks[2].detail, isEmpty);
+      expect(viewModel.blocks[3].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
+      expect(viewModel.blocks[3].headline, isNot(contains('Shenzhen tian qi')));
+    });
+
+    test('检索引用块不会混入低信号系统状态文案', () {
+      final built = buildAssistantJourneyViewModel(
+        journey: const AssistantJourney(),
+        isRunning: false,
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processedDocumentCount: 10,
+          acceptedDocumentCount: 3,
+          processingSummary: '已完成资料筛选并进入成答',
+          acceptedReferences: <RetrievalProcessingReference>[
+            RetrievalProcessingReference(
+              title: '深圳天气预报 - nmc.cn',
+              url: 'https://www.nmc.cn',
+              source: 'nmc.cn',
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        built.blocks.any(
+          (block) =>
+              block.headline.contains('已完成资料筛选') ||
+              block.detail.contains('已完成资料筛选'),
+        ),
+        isFalse,
+      );
+      expect(
+        built.blocks.where(
+          (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
+        ),
+        hasLength(1),
+      );
+      expect(
+        built.blocks
+            .singleWhere(
+              (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
+            )
+            .detail,
+        isEmpty,
+      );
     });
 
     testWidgets('journey 完成态会展示 narrative 细节', (tester) async {

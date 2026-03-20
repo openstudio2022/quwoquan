@@ -21,6 +21,7 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
@@ -343,6 +344,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
             child: const Center(
               child: GlobalTopActions(
                 initialSearchScope: GlobalSearchScope.messages,
+                quickActionPriority: CreateActionSheetPriority.socialPrimary,
               ),
             ),
           ),
@@ -1456,7 +1458,9 @@ class _ConversationTile extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.error,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusTen,
+                        ),
                         border: Border.all(
                           color: Theme.of(context).scaffoldBackgroundColor,
                           width: AppSpacing.oneHalf,
@@ -1509,7 +1513,9 @@ class _ConversationTile extends StatelessWidget {
                                   color: AppColors.warning.withValues(
                                     alpha: 0.2,
                                   ),
-                                  borderRadius: BorderRadius.circular(AppSpacing.xs),
+                                  borderRadius: BorderRadius.circular(
+                                    AppSpacing.xs,
+                                  ),
                                 ),
                                 child: Text(
                                   'AI',

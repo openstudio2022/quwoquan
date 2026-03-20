@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 
 class _SequenceProvider implements AssistantLlmProvider {
   int _callCount = 0;
@@ -260,6 +262,36 @@ class _ForceAnswerOnlyProvider implements AssistantLlmProvider {
       );
     }
     return const AssistantModelOutput(text: '最终回答');
+  }
+}
+
+class _ThinkingDeltaProvider implements AssistantLlmProvider {
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    onDelta?.call('{"partial":"json"}');
+    return AssistantModelOutput(
+      text: jsonEncode(
+        const AssistantTurnOutput(
+          contractId: kAssistantTurnCurrentContractId,
+          messageKind: AssistantMessageKind.progress,
+          userMarkdown: '',
+          phaseId: PlannerPhaseId.understanding,
+          reasonShort: '我先确认你关心的是深圳当前天气。',
+        ).toJson(),
+      ),
+    );
   }
 }
 
@@ -524,5 +556,39 @@ void main() {
     expect(provider.callCount, equals(2), reason: '自动补检索后应继续进入下一轮收敛');
     expect(result.finalText, equals('最终回答'));
     expect(captureTool.lastArguments['query'], equals('深圳住宿 通勤 景点 夜生活 适合'));
+    final firstThinkingTrace = result.traces.firstWhere(
+      (trace) => trace.type == AssistantTraceEventType.thinkingProgress,
+    );
+    expect(firstThinkingTrace.data?['phase'], equals('search'));
+  });
+
+  test('provider 已产生 delta 时，runtime 仍会上报提取后的 thinkingProgress', () async {
+    final metadata = ToolMetadataRegistry();
+    await metadata.ensureLoaded();
+    final registry = AssistantToolRegistry(metadataRegistry: metadata);
+    final runtime = ReactRuntime(
+      llmProvider: _ThinkingDeltaProvider(),
+      toolRegistry: registry,
+      toolMetadataRegistry: metadata,
+    );
+
+    final result = await runtime.run(
+      messages: <Map<String, dynamic>>[
+        const <String, dynamic>{'role': 'user', 'content': '深圳天气怎么样'},
+      ],
+      maxIterations: 1,
+      goal: '深圳天气怎么样',
+      onDelta: (_) {},
+    );
+
+    expect(
+      result.traces.any(
+        (trace) =>
+            trace.type == AssistantTraceEventType.thinkingProgress &&
+            trace.message.contains('深圳当前天气'),
+      ),
+      isTrue,
+      reason: 'JSON token 已经触发 onDelta 时，也不能吞掉提取后的用户语言思考摘要',
+    );
   });
 }

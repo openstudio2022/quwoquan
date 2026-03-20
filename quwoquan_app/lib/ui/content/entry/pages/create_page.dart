@@ -55,6 +55,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   bool _isPublishing = false;
   double _heroCollapseProgress = 0;
   String? _draggingMediaPath;
+  String? _pressedMediaPath;
   List<CreateDraft> _savedDrafts = <CreateDraft>[];
   String? _currentDraftId;
 
@@ -213,6 +214,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       default:
         return 1.16;
     }
+  }
+
+  String _pageTitleForState(CreateEditorStateV2 state) {
+    return '创作';
+  }
+
+  String _mediaHeaderHintForState(CreateEditorStateV2 state) {
+    if (state.hasVideo) {
+      return '轻点替换视频';
+    }
+    if (state.imagePaths.isEmpty) {
+      return '从一张图或一段视频开始';
+    }
+    return '拖拽排序，轻点编辑';
   }
 
   void _autoScrollDuringMediaDrag(Offset globalPosition) {
@@ -733,10 +748,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     return _circleService.listCircles(ref.read(circleRepositoryProvider));
   }
 
-  String _previewAssetForState(CreateEditorStateV2 state) {
-    return _coverAssetPathForState(state);
-  }
-
   Future<PublishSettings?> _showPublishConfirmationSheet(
     CreateEditorStateV2 state,
   ) async {
@@ -744,17 +755,19 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     if (!mounted) {
       return null;
     }
-    return showCupertinoModalPopup<PublishSettings>(
-      context: context,
-      builder: (_) => _CreatePublishConfirmSheet(
-        initialSettings: state.settings,
-        title: state.title.trim(),
-        body: state.body.trim(),
-        previewAssetPath: _previewAssetForState(state),
-        showsVideoBadge: state.hasVideo,
-        locationService: _locationService,
-        joinedCircles: joinedCircles,
-        recommendedCircles: mockRecommendedCircles,
+    return Navigator.of(context).push<PublishSettings>(
+      CupertinoPageRoute<PublishSettings>(
+        fullscreenDialog: true,
+        builder: (_) => _CreatePublishConfirmSheet(
+          initialSettings: state.settings,
+          title: state.title.trim(),
+          body: state.body.trim(),
+          imageCount: state.imagePaths.length,
+          hasVideo: state.hasVideo,
+          locationService: _locationService,
+          joinedCircles: joinedCircles,
+          recommendedCircles: mockRecommendedCircles,
+        ),
       ),
     );
   }
@@ -966,7 +979,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required CreateEditorStateV2 state,
     required double collapseProgress,
   }) {
-    final title = state.editorKind == CreateEditorKind.media ? '发布内容' : '写点内容';
+    final title = _pageTitleForState(state);
     final divider = CupertinoColors.separator.resolveFrom(context);
     final chrome = CupertinoColors.systemBackground
         .resolveFrom(context)
@@ -1036,7 +1049,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                 ),
                 Center(
                   child: Opacity(
-                    opacity: collapseProgress,
+                    opacity: lerpDouble(0.34, 1, collapseProgress)!,
                     child: Transform.translate(
                       offset: Offset(0, lerpDouble(6, 0, collapseProgress)!),
                       child: Text(
@@ -1090,7 +1103,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required Color foreground,
     required double collapseProgress,
   }) {
-    final title = state.editorKind == CreateEditorKind.media ? '发布内容' : '写点内容';
+    final title = _pageTitleForState(state);
     final titleOpacity = (1 - collapseProgress * 1.2).clamp(0.0, 1.0);
     final bottomSpacing = lerpDouble(
       AppSpacing.containerSm,
@@ -1110,18 +1123,36 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             children: <Widget>[
               Opacity(
                 opacity: titleOpacity,
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: lerpDouble(
-                      AppTypography.xxxl.toDouble(),
-                      AppTypography.xl.toDouble(),
-                      collapseProgress,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: lerpDouble(
+                          AppTypography.xxxl.toDouble(),
+                          AppTypography.xl.toDouble(),
+                          collapseProgress,
+                        ),
+                        fontWeight: AppTypography.bold,
+                        height: AppTypography.lineHeightTight,
+                      ),
                     ),
-                    fontWeight: AppTypography.bold,
-                    height: AppTypography.lineHeightTight,
-                  ),
+                    if (state.editorKind == CreateEditorKind.media) ...[
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                      Text(
+                        _mediaHeaderHintForState(state),
+                        style: TextStyle(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.medium,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -1159,7 +1190,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       children: <Widget>[
         _buildMediaComposerSection(
           state: state,
-          title: '图片',
+          title: '插图可选',
           trailing: state.imagePaths.isEmpty
               ? '可选'
               : '${state.imagePaths.length} / $_kMaxMediaImages',
@@ -1198,7 +1229,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       children: <Widget>[
         _buildMediaComposerSection(
           state: state,
-          title: state.hasVideo ? '视频' : '素材',
+          title: _mediaHeaderHintForState(state),
           trailing: state.hasVideo
               ? '仅 1 个视频'
               : '${state.imagePaths.length} / $_kMaxMediaImages',
@@ -1274,15 +1305,16 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   Widget _buildSectionHeader({required String title, String? trailing}) {
     return Row(
       children: <Widget>[
-        Text(
-          title,
-          style: TextStyle(
-            color: CupertinoColors.secondaryLabel.resolveFrom(context),
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.semiBold,
-            letterSpacing: 0.2,
+        if (title.trim().isNotEmpty)
+          Text(
+            title,
+            style: TextStyle(
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              fontSize: AppTypography.sm,
+              fontWeight: AppTypography.semiBold,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
         const Spacer(),
         if (trailing != null)
           Text(
@@ -1460,6 +1492,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       height: tileHeight,
                       showDragHandle: true,
                       isEmphasized: candidateData.isNotEmpty,
+                      isPressed: _pressedMediaPath == assetPath,
                       onTap: () => onTapImage(index),
                       onRemove: () => onRemove(index),
                     );
@@ -1469,6 +1502,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         HapticFeedback.mediumImpact();
                         setState(() {
                           _draggingMediaPath = assetPath;
+                          _pressedMediaPath = assetPath;
                         });
                       },
                       onDragUpdate: (details) {
@@ -1481,6 +1515,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         }
                         setState(() {
                           _draggingMediaPath = null;
+                          _pressedMediaPath = null;
                         });
                       },
                       onDraggableCanceled: (_, offset) {
@@ -1490,6 +1525,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         }
                         setState(() {
                           _draggingMediaPath = null;
+                          _pressedMediaPath = null;
                         });
                       },
                       onDragCompleted: () {
@@ -1498,6 +1534,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         }
                         setState(() {
                           _draggingMediaPath = null;
+                          _pressedMediaPath = null;
                         });
                       },
                       feedback: Material(
@@ -1571,12 +1608,41 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required Future<void> Function() onTap,
     required VoidCallback onRemove,
     bool isEmphasized = false,
+    bool isPressed = false,
     bool showDragHandle = true,
     bool showRemoveButton = true,
     bool showFloatingShadow = false,
   }) {
     return GestureDetector(
-      onTap: () async => onTap(),
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _pressedMediaPath = assetPath;
+        });
+      },
+      onTapCancel: () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          if (_pressedMediaPath == assetPath) {
+            _pressedMediaPath = null;
+          }
+        });
+      },
+      onTap: () async {
+        if (mounted) {
+          setState(() {
+            if (_pressedMediaPath == assetPath) {
+              _pressedMediaPath = null;
+            }
+          });
+        }
+        await onTap();
+      },
       child: SizedBox(
         width: width,
         height: height,
@@ -1639,48 +1705,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       ),
                     if (isVideo)
                       Positioned(
-                        top: AppSpacing.intraGroupXs,
-                        right: AppSpacing.intraGroupXs,
+                        left: AppSpacing.intraGroupXs,
+                        bottom: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
                           label: '视频',
                           backgroundColor: Colors.black.withValues(alpha: 0.48),
-                        ),
-                      )
-                    else
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Center(
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 180),
-                              opacity: isEmphasized ? 0.92 : 0.82,
-                              child: Container(
-                                width: AppSpacing.buttonHeight,
-                                height: AppSpacing.buttonHeight,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.16),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.14),
-                                    width: AppSpacing.hairline,
-                                  ),
-                                  boxShadow: <BoxShadow>[
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.08,
-                                      ),
-                                      blurRadius: AppSpacing.containerSm,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  CupertinoIcons.pencil,
-                                  size: AppSpacing.iconMedium,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                     if (!isVideo)
@@ -1689,31 +1718,38 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                           child: Center(
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 180),
-                              opacity: isEmphasized ? 0.92 : 0.82,
-                              child: Container(
-                                width: AppSpacing.buttonHeight,
-                                height: AppSpacing.buttonHeight,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.16),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.14),
-                                    width: AppSpacing.hairline,
+                              opacity: isPressed
+                                  ? 0.92
+                                  : (isEmphasized ? 0.54 : 0.14),
+                              child: ClipOval(
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: AppSpacing.containerSm,
+                                    sigmaY: AppSpacing.containerSm,
                                   ),
-                                  boxShadow: <BoxShadow>[
-                                    BoxShadow(
+                                  child: Container(
+                                    width: AppSpacing.buttonHeight,
+                                    height: AppSpacing.buttonHeight,
+                                    decoration: BoxDecoration(
                                       color: Colors.black.withValues(
-                                        alpha: 0.08,
+                                        alpha: isPressed ? 0.2 : 0.08,
                                       ),
-                                      blurRadius: AppSpacing.containerSm,
-                                      offset: const Offset(0, 4),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: isPressed ? 0.18 : 0.06,
+                                        ),
+                                        width: AppSpacing.hairline,
+                                      ),
                                     ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  CupertinoIcons.pencil,
-                                  size: AppSpacing.iconMedium,
-                                  color: Colors.white,
+                                    child: Icon(
+                                      Icons.edit_square,
+                                      size: AppSpacing.iconSmall + 2,
+                                      color: Colors.white.withValues(
+                                        alpha: isPressed ? 0.96 : 0.88,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -1747,28 +1783,36 @@ class _CreatePageState extends ConsumerState<CreatePage> {
               ),
               if (showRemoveButton)
                 Positioned(
-                  left: AppSpacing.intraGroupXs,
+                  right: AppSpacing.intraGroupXs,
                   top: AppSpacing.intraGroupXs,
                   child: GestureDetector(
                     key: index == 0 ? TestKeys.createMediaRemoveButton : null,
                     onTap: onRemove,
-                    child: Container(
-                      width: AppSpacing.iconMedium,
-                      height: AppSpacing.iconMedium,
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemBackground.resolveFrom(
-                          context,
+                    child: ClipOval(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(
+                          sigmaX: AppSpacing.containerSm,
+                          sigmaY: AppSpacing.containerSm,
                         ),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: CupertinoColors.separator.resolveFrom(context),
-                          width: AppSpacing.hairline,
+                        child: Container(
+                          width:
+                              AppSpacing.iconMedium + AppSpacing.intraGroupSm,
+                          height:
+                              AppSpacing.iconMedium + AppSpacing.intraGroupSm,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              width: AppSpacing.hairline,
+                            ),
+                          ),
+                          child: Icon(
+                            CupertinoIcons.xmark,
+                            size: AppTypography.xsPlus,
+                            color: Colors.white.withValues(alpha: 0.92),
+                          ),
                         ),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.xmark,
-                        size: AppTypography.xs,
-                        color: CupertinoColors.secondaryLabel,
                       ),
                     ),
                   ),
@@ -2138,8 +2182,8 @@ class _CreatePublishConfirmSheet extends StatefulWidget {
     required this.initialSettings,
     required this.title,
     required this.body,
-    required this.previewAssetPath,
-    required this.showsVideoBadge,
+    required this.imageCount,
+    required this.hasVideo,
     required this.locationService,
     required this.joinedCircles,
     required this.recommendedCircles,
@@ -2148,8 +2192,8 @@ class _CreatePublishConfirmSheet extends StatefulWidget {
   final PublishSettings initialSettings;
   final String title;
   final String body;
-  final String previewAssetPath;
-  final bool showsVideoBadge;
+  final int imageCount;
+  final bool hasVideo;
   final CreateLocationService locationService;
   final List<CreateCircleOption> joinedCircles;
   final List<CreateCircleOption> recommendedCircles;
@@ -2166,6 +2210,9 @@ class _CreatePublishConfirmSheetState
   bool _previewReady = false;
   bool _settingsReady = false;
   bool _buttonReady = false;
+
+  bool get _hasContentSummary =>
+      widget.title.trim().isNotEmpty || widget.body.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -2199,261 +2246,213 @@ class _CreatePublishConfirmSheetState
 
   @override
   Widget build(BuildContext context) {
-    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: ClipRRect(
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.largeBorderRadius),
+    final pageBackground = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    return CupertinoPageScaffold(
+      key: TestKeys.createPublishConfirmSheet,
+      backgroundColor: pageBackground,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              CupertinoColors.systemBackground
+                  .resolveFrom(context)
+                  .withValues(alpha: 0.92),
+              pageBackground,
+            ],
           ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: AppSpacing.sm,
-              sigmaY: AppSpacing.sm,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              _buildPublishSettingsHeader(context),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.containerMd,
+                    AppSpacing.containerSm,
+                    AppSpacing.containerMd,
+                    AppSpacing.lg,
+                  ),
+                  children: <Widget>[
+                    _buildSheetEntrance(
+                      visible: _settingsReady,
+                      beginOffsetY: 0.035,
+                      beginScale: 0.988,
+                      child: _buildSettingsCard(context),
+                    ),
+                    if (_hasContentSummary) ...<Widget>[
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildSheetEntrance(
+                        visible: _previewReady,
+                        beginOffsetY: 0.028,
+                        beginScale: 0.992,
+                        child: _buildPreviewCard(context),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              _buildSheetEntrance(
+                visible: _buttonReady,
+                beginOffsetY: 0.045,
+                beginScale: 0.992,
+                child: _buildPublishBottomBar(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPublishSettingsHeader(BuildContext context) {
+    final chrome = CupertinoColors.systemBackground
+        .resolveFrom(context)
+        .withValues(alpha: 0.82);
+    final divider = CupertinoColors.separator
+        .resolveFrom(context)
+        .withValues(alpha: 0.12);
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
+        child: Container(
+          height: AppSpacing.toolbarHeight + AppSpacing.containerSm,
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerSm,
+            AppSpacing.intraGroupXs,
+            AppSpacing.containerSm,
+            AppSpacing.intraGroupXs,
+          ),
+          decoration: BoxDecoration(
+            color: chrome,
+            border: Border(
+              bottom: BorderSide(color: divider, width: AppSpacing.hairline),
             ),
-            child: Container(
-              key: TestKeys.createPublishConfirmSheet,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-              ),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemBackground
-                    .resolveFrom(context)
-                    .withValues(alpha: 0.92),
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppSpacing.largeBorderRadius),
-                ),
-                border: Border.all(
-                  color: CupertinoColors.separator
-                      .resolveFrom(context)
-                      .withValues(alpha: 0.18),
-                  width: AppSpacing.hairline,
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _GlassBackButton(
+                  label: '创作',
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                    child: Container(
-                      width: AppSpacing.forty,
-                      height: AppSpacing.xs,
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemGrey3.resolveFrom(context),
-                        borderRadius: BorderRadius.circular(AppSpacing.xs / 2),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.containerMd,
-                      0,
-                      AppSpacing.containerMd,
-                      AppSpacing.containerSm,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                '确认发布',
-                                style: TextStyle(
-                                  fontSize: AppTypography.xl,
-                                  fontWeight: AppTypography.semiBold,
-                                ),
-                              ),
-                              SizedBox(height: AppSpacing.intraGroupXs),
-                              Text(
-                                '再看一眼内容和发布范围，确认后再发出去。',
-                                style: TextStyle(
-                                  color: secondary,
-                                  fontSize: AppTypography.sm,
-                                  height: AppTypography.lineHeightCompact,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Container(
-                            width: AppSpacing.buttonHeightSm,
-                            height: AppSpacing.buttonHeightSm,
-                            decoration: BoxDecoration(
-                              color: CupertinoColors.systemFill.resolveFrom(
-                                context,
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(CupertinoIcons.xmark),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.containerMd,
-                        0,
-                        AppSpacing.containerMd,
-                        AppSpacing.containerMd,
-                      ),
-                      children: <Widget>[
-                        Text(
-                          '内容预览',
-                          style: TextStyle(
-                            color: secondary,
-                            fontSize: AppTypography.sm,
-                            fontWeight: AppTypography.medium,
-                          ),
-                        ),
-                        SizedBox(height: AppSpacing.intraGroupSm),
-                        _buildSheetEntrance(
-                          visible: _previewReady,
-                          beginOffsetY: 0.035,
-                          beginScale: 0.972,
-                          child: _buildPreviewCard(context),
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
-                        Text(
-                          '发布设置',
-                          style: TextStyle(
-                            color: secondary,
-                            fontSize: AppTypography.sm,
-                            fontWeight: AppTypography.medium,
-                          ),
-                        ),
-                        SizedBox(height: AppSpacing.intraGroupSm),
-                        _buildSheetEntrance(
-                          visible: _settingsReady,
-                          beginOffsetY: 0.05,
-                          beginScale: 0.982,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: CupertinoColors
-                                  .secondarySystemGroupedBackground
-                                  .resolveFrom(context),
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.largeBorderRadius,
-                              ),
-                            ),
-                            child: Column(
-                              children: <Widget>[
-                                _buildSettingRow(
-                                  context: context,
-                                  title: '可见性',
-                                  value: _settings.isPublic ? '公开' : '私密',
-                                  trailing: CupertinoSwitch(
-                                    value: _settings.isPublic,
-                                    activeTrackColor: AppColors.iosAccentLight,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _settings = _settings.copyWith(
-                                          isPublic: value,
-                                          circleIds: value
-                                              ? _settings.circleIds
-                                              : const <String>[],
-                                          circleNames: value
-                                              ? _settings.circleNames
-                                              : const <String>[],
-                                        );
-                                      });
-                                    },
-                                  ),
-                                ),
-                                Divider(
-                                  height: AppSpacing.one,
-                                  color: CupertinoColors.separator
-                                      .resolveFrom(context)
-                                      .withValues(alpha: 0.18),
-                                ),
-                                _buildSettingRow(
-                                  context: context,
-                                  title: '位置',
-                                  value: _settings.locationName.trim().isEmpty
-                                      ? '不显示位置'
-                                      : _settings.locationName.trim(),
-                                  onTap: _pickLocation,
-                                ),
-                                Divider(
-                                  height: AppSpacing.one,
-                                  color: CupertinoColors.separator
-                                      .resolveFrom(context)
-                                      .withValues(alpha: 0.18),
-                                ),
-                                _buildSettingRow(
-                                  context: context,
-                                  title: '圈子',
-                                  value: _settings.circleNames.isEmpty
-                                      ? '未选圈子'
-                                      : _settings.circleNames.join('、'),
-                                  onTap: _settings.isPublic
-                                      ? _pickCircles
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildSheetEntrance(
-                    visible: _buttonReady,
-                    beginOffsetY: 0.075,
-                    beginScale: 0.988,
-                    child: Container(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.containerMd,
-                        AppSpacing.intraGroupSm,
-                        AppSpacing.containerMd,
-                        MediaQuery.paddingOf(context).bottom +
-                            AppSpacing.containerSm,
-                      ),
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemBackground
-                            .resolveFrom(context)
-                            .withValues(alpha: 0.94),
-                        border: Border(
-                          top: BorderSide(
-                            color: CupertinoColors.separator
-                                .resolveFrom(context)
-                                .withValues(alpha: 0.18),
-                            width: AppSpacing.hairline,
-                          ),
-                        ),
-                      ),
-                      child: AnimatedScale(
-                        scale: _buttonReady ? 1 : 0.98,
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: AppSpacing.buttonHeight,
-                          child: CupertinoButton(
-                            key: TestKeys.createPublishConfirmButton,
-                            color: AppColors.iosAccentLight,
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusTwenty,
-                            ),
-                            onPressed: () =>
-                                Navigator.of(context).pop(_settings),
-                            child: const Text('确认发布'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              Text(
+                '发布设置',
+                style: TextStyle(
+                  color: CupertinoColors.label.resolveFrom(context),
+                  fontSize: AppTypography.xl,
+                  fontWeight: AppTypography.semiBold,
+                  letterSpacing: 0.1,
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard(BuildContext context) {
+    final divider = CupertinoColors.separator
+        .resolveFrom(context)
+        .withValues(alpha: 0.14);
+    return Container(
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+        border: Border.all(color: divider, width: AppSpacing.hairline),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: AppSpacing.twenty,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: <Widget>[
+          _buildSettingRow(
+            context: context,
+            title: '谁可以看',
+            value: _settings.isPublic ? '公开' : '仅自己可见',
+            onTap: _pickVisibility,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppSpacing.radiusTwentyEight),
+            ),
+          ),
+          Divider(height: AppSpacing.one, color: divider),
+          _buildSettingRow(
+            context: context,
+            title: '显示位置',
+            value: _settings.locationName.trim().isEmpty
+                ? '不显示位置'
+                : _settings.locationName.trim(),
+            onTap: _pickLocation,
+            borderRadius: BorderRadius.zero,
+          ),
+          Divider(height: AppSpacing.one, color: divider),
+          _buildSettingRow(
+            context: context,
+            title: '同步圈子',
+            value: !_settings.isPublic
+                ? '仅公开内容可选'
+                : _settings.circleNames.isEmpty
+                ? '未选圈子'
+                : _settings.circleNames.join('、'),
+            onTap: _settings.isPublic ? _pickCircles : null,
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(AppSpacing.radiusTwentyEight),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPublishBottomBar(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+        AppSpacing.containerMd,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.containerMd,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            CupertinoColors.systemBackground
+                .resolveFrom(context)
+                .withValues(alpha: 0),
+            CupertinoColors.systemBackground
+                .resolveFrom(context)
+                .withValues(alpha: 0.92),
+          ],
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: AppSpacing.buttonHeight + AppSpacing.intraGroupXs,
+        child: CupertinoButton(
+          key: TestKeys.createPublishConfirmButton,
+          color: AppColors.iosAccentLight,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+          onPressed: () => Navigator.of(context).pop(_settings),
+          child: const Text(
+            '确认发布',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: AppTypography.xl,
+              fontWeight: AppTypography.medium,
             ),
           ),
         ),
@@ -2462,24 +2461,38 @@ class _CreatePublishConfirmSheetState
   }
 
   Widget _buildPreviewCard(BuildContext context) {
-    final summaryItems = <String>[
-      _settings.isPublic ? '公开' : '私密',
-      _settings.locationName.trim().isEmpty
-          ? '不显示位置'
-          : _settings.locationName.trim(),
-      _settings.circleNames.isEmpty
-          ? '未选圈子'
-          : '${_settings.circleNames.length} 个圈子',
-    ];
+    final metaLabel = widget.hasVideo
+        ? '视频内容'
+        : widget.imageCount > 0
+        ? '${widget.imageCount} 张图片'
+        : '文字内容';
     return AnimatedContainer(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
-      padding: EdgeInsets.all(AppSpacing.containerMd),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.containerMd,
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+      ),
       decoration: BoxDecoration(
         color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
           context,
         ),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+        border: Border.all(
+          color: CupertinoColors.separator
+              .resolveFrom(context)
+              .withValues(alpha: 0.16),
+          width: AppSpacing.hairline,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: AppSpacing.twenty,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: AnimatedSize(
         duration: const Duration(milliseconds: 220),
@@ -2487,73 +2500,51 @@ class _CreatePublishConfirmSheetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Wrap(
-              spacing: AppSpacing.intraGroupSm,
-              runSpacing: AppSpacing.intraGroupSm,
-              children: summaryItems
-                  .map((item) => _buildSummaryChip(context, item))
-                  .toList(growable: false),
-            ),
-            SizedBox(height: AppSpacing.interGroupSm),
-            if (widget.previewAssetPath.trim().isNotEmpty) ...<Widget>[
-              AspectRatio(
-                aspectRatio: widget.showsVideoBadge ? 3 / 4 : 4 / 5,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                    vertical: AppSpacing.intraGroupXs,
                   ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Image.file(
-                        File(widget.previewAssetPath),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: CupertinoColors.systemGrey5.resolveFrom(
-                            context,
-                          ),
-                        ),
-                      ),
-                      if (widget.showsVideoBadge)
-                        Center(
-                          child: Container(
-                            padding: EdgeInsets.all(AppSpacing.containerSm),
-                            decoration: const BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              CupertinoIcons.play_fill,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      if (widget.showsVideoBadge)
-                        Positioned(
-                          left: AppSpacing.containerSm,
-                          bottom: AppSpacing.containerSm,
-                          child: _PreviewBadge(
-                            label: '视频封面',
-                            backgroundColor: Colors.black.withValues(
-                              alpha: 0.48,
-                            ),
-                          ),
-                        ),
-                    ],
+                  decoration: BoxDecoration(
+                    color: AppColors.iosAccentLight.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusNinetyNine,
+                    ),
+                  ),
+                  child: Text(
+                    metaLabel,
+                    style: TextStyle(
+                      color: AppColors.iosAccentLight,
+                      fontSize: AppTypography.sm,
+                      fontWeight: AppTypography.medium,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: AppSpacing.interGroupSm),
-            ],
+                const Spacer(),
+                Text(
+                  '内容概览',
+                  style: TextStyle(
+                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.medium,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.intraGroupSm),
             if (widget.title.isNotEmpty) ...<Widget>[
               Text(
                 widget.title,
                 style: const TextStyle(
-                  fontSize: AppTypography.base,
+                  fontSize: AppTypography.xl,
                   fontWeight: AppTypography.semiBold,
+                  height: AppTypography.lineHeightTight,
                 ),
               ),
-              SizedBox(height: AppSpacing.intraGroupXs),
+              if (widget.body.isNotEmpty)
+                SizedBox(height: AppSpacing.intraGroupXs),
             ],
             if (widget.body.isNotEmpty)
               _ExpandablePreviewText(
@@ -2599,74 +2590,53 @@ class _CreatePublishConfirmSheetState
     required BuildContext context,
     required String title,
     required String value,
-    Widget? trailing,
     VoidCallback? onTap,
+    BorderRadius borderRadius = BorderRadius.zero,
   }) {
-    final chevronColor = CupertinoColors.tertiaryLabel.resolveFrom(context);
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.containerSm,
-        ),
-        child: Row(
-          children: <Widget>[
-            Text(
-              title,
-              style: TextStyle(
-                color: CupertinoColors.label.resolveFrom(context),
-                fontSize: AppTypography.base,
-                fontWeight: AppTypography.medium,
-              ),
-            ),
-            const Spacer(),
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  color: AppColors.iosAccentLight,
-                  fontSize: AppTypography.sm,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            trailing ??
-                Icon(
-                  CupertinoIcons.chevron_forward,
-                  color: chevronColor,
-                  size: AppSpacing.iconSmall,
-                ),
-          ],
-        ),
-      ),
+    return _PressableSettingRow(
+      title: title,
+      value: value,
+      onTap: onTap,
+      borderRadius: borderRadius,
     );
   }
 
-  Widget _buildSummaryChip(BuildContext context, String label) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: CupertinoColors.secondaryLabel.resolveFrom(context),
-          fontSize: AppTypography.sm,
-          fontWeight: AppTypography.medium,
-        ),
-      ),
+  Future<void> _pickVisibility() async {
+    final nextValue = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (sheetContext) {
+        return CupertinoActionSheet(
+          title: const Text('谁可以看'),
+          message: const Text('公开内容可以同步到圈子，私密内容仅自己可见。'),
+          actions: <Widget>[
+            CupertinoActionSheetAction(
+              isDefaultAction: _settings.isPublic,
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+              child: const Text('公开'),
+            ),
+            CupertinoActionSheetAction(
+              isDefaultAction: !_settings.isPublic,
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+              child: const Text('仅自己可见'),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text(UITextConstants.cancel),
+          ),
+        );
+      },
     );
+    if (nextValue == null) {
+      return;
+    }
+    setState(() {
+      _settings = _settings.copyWith(
+        isPublic: nextValue,
+        circleIds: nextValue ? _settings.circleIds : const <String>[],
+        circleNames: nextValue ? _settings.circleNames : const <String>[],
+      );
+    });
   }
 
   Future<void> _pickLocation() async {
@@ -2714,6 +2684,246 @@ class _CreatePublishConfirmSheetState
         circleNames: selected.values.toList(growable: false),
       );
     });
+  }
+}
+
+class _GlassBackButton extends StatefulWidget {
+  const _GlassBackButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  State<_GlassBackButton> createState() => _GlassBackButtonState();
+}
+
+class _GlassBackButtonState extends State<_GlassBackButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || !mounted) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  Future<void> _handleTap() async {
+    _setPressed(true);
+    HapticFeedback.selectionClick();
+    await Future<void>.delayed(const Duration(milliseconds: 48));
+    if (mounted) {
+      _setPressed(false);
+    }
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark
+        ? CupertinoColors.white.withValues(alpha: 0.1)
+        : CupertinoColors.white.withValues(alpha: 0.52);
+    final glassTop = isDark
+        ? CupertinoColors.systemGrey.withValues(alpha: _pressed ? 0.24 : 0.16)
+        : CupertinoColors.white.withValues(alpha: _pressed ? 0.58 : 0.46);
+    final glassBottom = isDark
+        ? CupertinoColors.systemGrey2.withValues(alpha: _pressed ? 0.16 : 0.1)
+        : CupertinoColors.systemGrey6.withValues(alpha: _pressed ? 0.42 : 0.3);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTap: _handleTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.985 : 1,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: _pressed ? 14 : 12,
+              sigmaY: _pressed ? 14 : 12,
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[glassTop, glassBottom],
+                ),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                border: Border.all(
+                  color: borderColor,
+                  width: AppSpacing.hairline,
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: _pressed ? 0.04 : 0.03,
+                    ),
+                    blurRadius: _pressed ? 18 : 14,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    CupertinoIcons.chevron_back,
+                    color: AppColors.iosAccentLight,
+                    size: AppSpacing.iconMedium,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs / 2),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: AppColors.iosAccentLight,
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PressableSettingRow extends StatefulWidget {
+  const _PressableSettingRow({
+    required this.title,
+    required this.value,
+    required this.borderRadius,
+    this.onTap,
+  });
+
+  final String title;
+  final String value;
+  final VoidCallback? onTap;
+  final BorderRadius borderRadius;
+
+  @override
+  State<_PressableSettingRow> createState() => _PressableSettingRowState();
+}
+
+class _PressableSettingRowState extends State<_PressableSettingRow> {
+  bool _pressed = false;
+
+  bool get _isEnabled => widget.onTap != null;
+
+  void _setPressed(bool value) {
+    if (!_isEnabled || _pressed == value || !mounted) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  Future<void> _handleTapUp(TapUpDetails details) async {
+    if (!_isEnabled) {
+      return;
+    }
+    HapticFeedback.selectionClick();
+    await Future<void>.delayed(const Duration(milliseconds: 56));
+    if (mounted) {
+      _setPressed(false);
+    }
+    widget.onTap?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chevronColor = CupertinoColors.tertiaryLabel.resolveFrom(context);
+    final wash = AppColors.iosAccentLight.withValues(alpha: _pressed ? 0.1 : 0);
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: _isEnabled ? 1 : 0.48,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: _isEnabled ? (_) => _setPressed(true) : null,
+        onTapCancel: _isEnabled ? () => _setPressed(false) : null,
+        onTapUp: _isEnabled ? _handleTapUp : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: wash,
+            borderRadius: widget.borderRadius,
+          ),
+          child: SizedBox(
+            height: AppSpacing.buttonHeight + AppSpacing.containerSm,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: CupertinoColors.label.resolveFrom(context),
+                        fontSize: AppTypography.lg,
+                        fontWeight: AppTypography.normal,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.containerSm),
+                  Expanded(
+                    flex: 7,
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      style: TextStyle(
+                        color: AppColors.iosAccentLight.withValues(
+                          alpha: _pressed ? 1 : 0.92,
+                        ),
+                        fontSize: AppTypography.lg,
+                        fontWeight: AppTypography.normal,
+                      ),
+                      child: Text(
+                        widget.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  AnimatedScale(
+                    scale: _pressed ? 1.03 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      CupertinoIcons.chevron_forward,
+                      color: chevronColor.withValues(
+                        alpha: _isEnabled ? 1 : 0.6,
+                      ),
+                      size: AppSpacing.iconSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

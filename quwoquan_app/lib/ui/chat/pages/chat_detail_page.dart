@@ -830,6 +830,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return buildAssistantJourneyViewModel(
       journey: journey,
       isRunning: isRunning,
+      allowAnswerStage:
+          !isRunning || _answerGateOpen || journey.readiness.finalAnswerReady,
       retrievalProcessing: retrievalProcessing,
       usageStats: usageStats,
       elapsedMs: elapsedMs ?? _currentJourneyElapsedMs,

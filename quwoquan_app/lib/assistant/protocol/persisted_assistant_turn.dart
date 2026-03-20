@@ -522,10 +522,17 @@ String _sanitizeUserFacingTimelineText(String raw) {
   if (text.isEmpty) {
     return '';
   }
+  final romanizedStripped =
+      AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(text);
+  if (romanizedStripped.isEmpty) {
+    return '';
+  }
   if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(text)) {
     return '';
   }
-  final normalized = AssistantDisplayTextResolver.normalizePlainText(text);
+  final normalized = AssistantDisplayTextResolver.normalizePlainText(
+    romanizedStripped,
+  );
   if (normalized.isEmpty) {
     return '';
   }

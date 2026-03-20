@@ -35,7 +35,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
 
   bool get _isLongWaitWithoutProgress {
     if (!_viewModel.isRunning) return false;
-    return _viewModel.elapsedMs >= 6000 && _viewModel.blocks.isEmpty;
+    return _viewModel.elapsedMs >= 6000 &&
+        _viewModel.stages.isEmpty &&
+        _viewModel.blocks.isEmpty;
   }
 
   String _waitReassuranceText() {

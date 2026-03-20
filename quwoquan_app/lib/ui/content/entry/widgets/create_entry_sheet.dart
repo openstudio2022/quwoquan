@@ -11,12 +11,14 @@ class CreateEntrySheet extends ConsumerWidget {
     required this.onClose,
     required this.onSelect,
     this.onOpenLegacyTab,
+    this.priority = CreateActionSheetPriority.createPrimary,
   });
 
   final bool isOpen;
   final VoidCallback onClose;
   final void Function(EditorStartAction action) onSelect;
   final void Function(String tabKey)? onOpenLegacyTab;
+  final CreateActionSheetPriority priority;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,10 +42,12 @@ class CreateEntrySheet extends ConsumerWidget {
                   onStartGroupChat: onClose,
                   onAddContact: onClose,
                   onCancel: onClose,
+                  priority: priority,
                 )
               : _LegacyFallbackSheet(
                   onClose: onClose,
                   onSelect: onSelect,
+                  priority: priority,
                 ),
         ),
       ),
@@ -55,10 +59,12 @@ class _LegacyFallbackSheet extends StatelessWidget {
   const _LegacyFallbackSheet({
     required this.onClose,
     required this.onSelect,
+    required this.priority,
   });
 
   final VoidCallback onClose;
   final void Function(EditorStartAction action) onSelect;
+  final CreateActionSheetPriority priority;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +73,7 @@ class _LegacyFallbackSheet extends StatelessWidget {
       onStartGroupChat: onClose,
       onAddContact: onClose,
       onCancel: onClose,
+      priority: priority,
     );
   }
 }

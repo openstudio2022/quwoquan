@@ -108,6 +108,44 @@ void main() {
       expect(journey.summary, isEmpty);
     });
 
+    test('searchQueryGenerated 会把检索设计投影为用户可见 search 过程', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.searchQueryGenerated,
+          message: '我先按最影响结论的几路信息分开核对。',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{
+            'toolName': 'web_search',
+            'query': '深圳天气',
+            'queryTasks': <Map<String, dynamic>>[
+              <String, dynamic>{'label': '实时天气', 'query': '深圳天气 实时 降雨 温度'},
+              <String, dynamic>{'label': '出行影响', 'query': '深圳天气 出行 影响 路况'},
+            ],
+          },
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.search)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, hasLength(1));
+      expect(journey.entries.first.headline, isEmpty);
+      expect(journey.entries.first.detail, contains('我会先把最影响结论的几路信息拆开核对'));
+      expect(
+        journey.entries.first.detail,
+        contains('- 实时天气：深圳天气 实时 降雨 温度'),
+      );
+      expect(
+        journey.entries.first.detail,
+        contains('- 出行影响：深圳天气 出行 影响 路况'),
+      );
+    });
+
     test('answerDelta 只驱动答案主线，不把最终答案正文写进抽屉', () {
       final projector = AssistantJourneyProjector(
         toolMetadataRegistry: ToolMetadataRegistry(),
