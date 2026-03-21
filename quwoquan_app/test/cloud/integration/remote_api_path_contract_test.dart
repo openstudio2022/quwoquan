@@ -464,18 +464,39 @@ void main() {
       );
     });
 
-    test('listPersonas → GET /v1/user/personas', () async {
-      await repo.listPersonas();
+    test('listSubAccounts → GET /v1/owner/sub-accounts', () async {
+      await repo.listSubAccounts();
       expect(log.last.method, 'GET');
-      expect(log.last.path, UserApiMetadata.listPersonasPath);
+      expect(log.last.path, UserApiMetadata.listSubAccountsPath);
     });
 
-    test('activatePersona → POST /v1/user/personas/{id}/activate', () async {
-      await repo.activatePersona('persona_1');
+    test('getActivePersonaContext → GET /v1/owner/sub-accounts/active', () async {
+      await repo.getActivePersonaContext();
+      expect(log.last.method, 'GET');
+      expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
+    });
+
+    test('createSubAccount → POST /v1/owner/sub-accounts', () async {
+      await repo.createSubAccount(displayName: '摄影分身');
+      expect(log.last.method, 'POST');
+      expect(log.last.path, UserApiMetadata.createSubAccountPath);
+    });
+
+    test('activateSubAccount → POST /v1/owner/sub-accounts/{id}/activate', () async {
+      await repo.activateSubAccount('persona_1');
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
-        UserApiMetadata.activatePersonaPath(personaId: 'persona_1'),
+        UserApiMetadata.activateSubAccountPath(subAccountId: 'persona_1'),
+      );
+    });
+
+    test('deleteEmptySubAccount → DELETE /v1/owner/sub-accounts/{id}:delete-empty', () async {
+      await repo.deleteEmptySubAccount('persona_1');
+      expect(log.last.method, 'DELETE');
+      expect(
+        log.last.path,
+        UserApiMetadata.deleteEmptySubAccountPath(subAccountId: 'persona_1'),
       );
     });
 
@@ -507,18 +528,21 @@ void main() {
       );
     });
 
-    test('blockUser → POST /v1/user/block/{targetUserId}', () async {
+    test('blockUser → POST /v1/user/profile-subjects/{targetProfileSubjectId}/block', () async {
       await repo.blockUser('u1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, UserApiMetadata.blockUserPath(targetUserId: 'u1'));
+      expect(
+        log.last.path,
+        UserApiMetadata.blockUserPath(targetProfileSubjectId: 'u1'),
+      );
     });
 
-    test('unblockUser → DELETE /v1/user/block/{targetUserId}', () async {
+    test('unblockUser → DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/block', () async {
       await repo.unblockUser('u1');
       expect(log.last.method, 'DELETE');
       expect(
         log.last.path,
-        UserApiMetadata.unblockUserPath(targetUserId: 'u1'),
+        UserApiMetadata.unblockUserPath(targetProfileSubjectId: 'u1'),
       );
     });
   });

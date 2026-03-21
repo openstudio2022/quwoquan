@@ -7,34 +7,46 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/user/follow/{targetUserId}
+    path: /v1/user/profile-subjects/{targetProfileSubjectId}/follow
     operation: FollowUser
-    description: 关注用户
+    description: 关注公开主体（profileSubject 级别）
+    request_entity: FollowCommandRequest
+    request_fields: [actorProfileSubjectId, source, clientRequestId]
+    response_entity: FollowCommandResult
+    response_fields: [actorProfileSubjectId, targetProfileSubjectId, relationState, idempotentReplay, updatedAt]
 
   - method: DELETE
-    path: /v1/user/follow/{targetUserId}
+    path: /v1/user/profile-subjects/{targetProfileSubjectId}/follow
     operation: UnfollowUser
-    description: 取消关注
+    description: 取消关注公开主体（profileSubject 级别）
 
   - method: GET
-    path: /v1/user/{userId}/following
+    path: /v1/user/profile-subjects/{profileSubjectId}/following
     operation: ListFollowing
-    description: 关注列表
+    description: 关注列表（按 profileSubject 读取）
+    query_params: [cursor, limit]
+    response_entity: FollowingListItemView
+    response_fields: [profileSubjectId, subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
 
   - method: GET
-    path: /v1/user/{userId}/followers
+    path: /v1/user/profile-subjects/{profileSubjectId}/followers
     operation: ListFollowers
-    description: 粉丝列表
+    description: 粉丝列表（按 profileSubject 读取）
+    query_params: [cursor, limit]
+    response_entity: FollowerListItemView
+    response_fields: [profileSubjectId, subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
 
   - method: GET
-    path: /v1/user/{userId}/relationship
+    path: /v1/user/profile-subjects/{profileSubjectId}/relationship
     operation: GetRelationship
-    description: 关系查询（是否互关）
+    description: 关系查询（profileSubject 级别的基础关系态）
+    response_entity: RelationshipView
+    response_fields: [viewerProfileSubjectId, targetProfileSubjectId, relationState, isBlocked, isBlockedBy]
 
   - method: GET
-    path: /v1/user/{userId}/relationship/capability
+    path: /v1/user/profile-subjects/{profileSubjectId}/relationship/capability
     operation: GetRelationshipCapability
-    description: "关系能力位投影（统一真相源）。基于 FollowEdge + BlockEdge 计算 relationState 与消息/通话能力。端侧用户主页按钮矩阵和 RTC 门禁直接消费。"
+    description: "关系能力位投影（统一真相源）。基于 FollowEdge + BlockEdge + ProfileSubject 计算 relationState 与消息/通话能力。端侧用户主页按钮矩阵和 RTC 门禁直接消费。"
     response_entity: RelationshipCapabilityView
     response_fields: [viewerProfileSubjectId, targetProfileSubjectId, relationState, canFollow, canUnfollow, canMessage, canFollowBack, canStartVoiceCall, canStartVideoCall, isBlocked, isBlockedBy]
 
@@ -54,16 +66,16 @@ contract_test:
       scenarios:
         - name: follow_unfollow_toggle
           routes:
-            - POST /v1/user/follow/{targetUserId}
-            - DELETE /v1/user/follow/{targetUserId}
+            - POST /v1/user/profile-subjects/{targetProfileSubjectId}/follow
+            - DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/follow
           assertions: [follow_created, follow_removed, idempotent]
 
         - name: mutual_follow_detection
-          route: GET /v1/user/{userId}/relationship
+          route: GET /v1/user/profile-subjects/{profileSubjectId}/relationship
           assertions: [status_200, mutual_flag_correct]
 
         - name: follower_list_pagination
-          route: GET /v1/user/{userId}/followers
+          route: GET /v1/user/profile-subjects/{profileSubjectId}/followers
           assertions: [status_200, cursor_pagination_works]
 
     service_side:

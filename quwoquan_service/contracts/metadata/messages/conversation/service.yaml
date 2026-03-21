@@ -16,12 +16,24 @@ api_routes:
     query_params: [cursor, limit]
     response_entity: Conversation
 
+  - method: GET
+    path: /v1/chat/conversations/timestamps
+    operation: ListConversationTimestamps
+    description: 会话时间戳索引（用于本地缓存增量同步）
+    response_entity: Conversation
+
   - method: POST
     path: /v1/chat/conversations
     operation: CreateConversation
     description: 创建会话（自动创建 ConversationMember + ConversationUserState）
     request_entity: Conversation
     writable_fields: [type, title, circleId, maxGroupSize]
+
+  - method: POST
+    path: /v1/chat/conversations/batch
+    operation: BatchGetConversations
+    description: 批量拉取指定会话的完整信息
+    response_entity: Conversation
 
   - method: GET
     path: /v1/chat/conversations/{conversationId}
@@ -42,7 +54,7 @@ api_routes:
     operation: SendMessage
     description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
     request_entity: Message
-    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId]
+    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderPersonaId, senderProfileSubjectId, personaContextVersion]
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
@@ -107,6 +119,24 @@ api_routes:
     path: /v1/chat/conversations/{conversationId}/settings
     operation: UpdateConversationSettings
     description: 更新用户级会话设置（mute/pin，写入 ConversationUserState）
+    auth: required
+
+  - method: PATCH
+    path: /v1/chat/conversations/{conversationId}/owner
+    operation: TransferOwnership
+    description: 转让群主
+    auth: required
+
+  - method: PUT
+    path: /v1/chat/conversations/{conversationId}/admins
+    operation: UpdateGroupAdmins
+    description: 设置管理员列表
+    auth: required
+
+  - method: DELETE
+    path: /v1/chat/conversations/{conversationId}
+    operation: DissolveConversation
+    description: 解散群聊
     auth: required
 
   # ── 收件箱 ──────────────────────────────────

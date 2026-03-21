@@ -57,6 +57,12 @@ routes:
     path: /chat/{id}/settings
   - id: chatAddMembers
     path: /chat/{id}/add-members
+  - id: chatManage
+    path: /chat/{id}/manage
+  - id: chatTransferOwnership
+    path: /chat/{id}/transfer-ownership
+  - id: chatAdmins
+    path: /chat/{id}/admins
   - id: rtcOutgoing
     path: /rtc/outgoing/{callId}
   - id: rtcIncoming

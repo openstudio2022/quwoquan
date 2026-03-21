@@ -1,0 +1,75 @@
+version: 1
+node: user-identity-profile-relationship/persona-follow-graph/follow-relationship
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260321-001-persona-follow-graph-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze follow command, event, and block gate metadata
+    goal: 收口 persona-aware follow/unfollow command、幂等约束、block gate 与事件 contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `FollowCommandRequest / Result`、`UnfollowCommandRequest`、事件与错误码冻结
+      - `ProfileSubject` 成为 command 主键
+      - block gate 与 request context 由 metadata 表达
+    status: planned
+
+  - id: P2
+    title: establish codegen and command repository baseline
+    goal: 让 App 与 service 通过生成物消费 persona-aware follow contract
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - "`verify-metadata / codegen / codegen-app` 通过"
+      - follow 按钮与关系操作入口统一调用同一 repository / facade
+      - UI 不再以局部 `isFollowing` 布尔值充当写入真相源
+    status: planned
+
+  - id: P3
+    title: implement idempotent edge write and counter sync
+    goal: 落地 `FollowEdge` 幂等写入、block gate、事件发布与计数修正，并完成 legacy edge 迁移
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T3_cross_service_integration
+    done_when:
+      - duplicate follow / unfollow no-op 行为稳定
+      - `UserFollowed / UserUnfollowed` 可驱动计数修正
+      - legacy owner-level follow edge 回填到主分身并支持双读兼容
+    status: planned
+
+  - id: P4
+    title: validate rollout, rollback, and audit metrics
+    goal: 建立 persona-aware follow 的灰度、回滚、迁移退出与审计指标
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A3
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - duplicate follow、block rejection、counter mismatch、legacy edge read 指标可观测
+      - persona-aware graph 开关关闭后可回退旧写路径
+      - migration rehearsal 与 rollback rehearsal 完成
+    status: planned

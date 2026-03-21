@@ -268,7 +268,7 @@ class RemoteRelationshipCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final path = UserApiMetadata.getRelationshipCapabilityPath(
-      userId: targetUserId,
+      profileSubjectId: targetUserId,
     );
     final uri = Uri.parse('$_baseUrl$path');
     final resp = await _client.get(

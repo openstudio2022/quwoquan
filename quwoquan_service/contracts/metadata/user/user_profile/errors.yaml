@@ -233,3 +233,47 @@ errors:
     user_message:
       zh: "该用户不存在"
       en: "User not found"
+
+  - code: USER.SUB_ACCOUNT.quota_reached
+    kind: SUB_ACCOUNT
+    reason: constraint_violation
+    http_status: 400
+    retryable: false
+    dart_const: subAccountQuotaReached
+    go_const: ErrSubAccountQuotaReached
+    user_message:
+      zh: "分身数量已达上限，请先整理现有分身"
+      en: "Persona limit reached, please manage existing personas first"
+
+  - code: USER.SUB_ACCOUNT.primary_guard
+    kind: SUB_ACCOUNT
+    reason: constraint_violation
+    http_status: 400
+    retryable: false
+    dart_const: primarySubAccountGuard
+    go_const: ErrPrimarySubAccountGuard
+    user_message:
+      zh: "主分身不能直接删除或退役"
+      en: "Primary persona cannot be deleted or retired directly"
+
+  - code: USER.SUB_ACCOUNT.active_guard
+    kind: SUB_ACCOUNT
+    reason: constraint_violation
+    http_status: 400
+    retryable: false
+    dart_const: activeSubAccountGuard
+    go_const: ErrActiveSubAccountGuard
+    user_message:
+      zh: "请先切换到其他分身后再继续"
+      en: "Please switch to another persona before continuing"
+
+  - code: USER.SUB_ACCOUNT.retire_required
+    kind: SUB_ACCOUNT
+    reason: constraint_violation
+    http_status: 409
+    retryable: false
+    dart_const: subAccountRetireRequired
+    go_const: ErrSubAccountRetireRequired
+    user_message:
+      zh: "该分身已有历史数据，请使用退役而不是删除"
+      en: "This persona has history and must be retired instead of deleted"

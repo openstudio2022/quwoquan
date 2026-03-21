@@ -4,9 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
-import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildApp() {
   return ProviderScope(
@@ -16,7 +18,13 @@ Widget _buildApp() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (context, state) => const Scaffold(body: HomePage()),
+            builder: (context, state) =>
+                const Scaffold(body: HomePage(routeLocation: '/')),
+          ),
+          GoRoute(
+            path: '/circles',
+            builder: (context, state) =>
+                const Scaffold(body: HomePage(routeLocation: '/circles')),
           ),
           GoRoute(
             path: '/circle/:id',
@@ -50,6 +58,10 @@ void _suppressExpectedErrors() {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+  });
+
   group('HomePage', () {
     testWidgets('展示 关注/精选/圈子 与搜索加号入口', (tester) async {
       _suppressExpectedErrors();
@@ -64,30 +76,28 @@ void main() {
       expect(find.byIcon(CupertinoIcons.add), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('切换到圈子后展示新的聚合模块', (tester) async {
+    testWidgets('默认停留在关注信息流', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 默认是圈子，所以不需要点击切换，直接验证
-      // 如果不是默认，则需要点击
-      final circleTabFinder = find.descendant(
+      expect(find.byType(MomentSocialFeed), findsOneWidget);
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+    });
+
+    testWidgets('点击圈子切换到首页内整合的圈子页', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final circlesTabFinder = find.descendant(
         of: find.byType(CenteredScrollableTabBar),
         matching: find.text('圈子'),
       );
+      await tester.tap(circlesTabFinder);
+      await tester.pumpAndSettle();
 
-      if (circleTabFinder.evaluate().isNotEmpty) {
-        // 确保它是选中的？或者只是为了触发切换
-        // 如果已经是默认，点击可能没反应，或者重新加载
-        // 这里假设默认就是圈子，直接检查内容
-      } else {
-        // 如果找不到圈子 Tab，说明可能已经在沉浸模式？
-        // 但 _buildApp 默认应该不是沉浸模式
-      }
-
-      // 检查首页圈子聚合区的新文案与结构
-      expect(find.text('圈子推荐'), findsOneWidget);
-      expect(find.text('我的'), findsWidgets);
+      expect(find.byType(HomeCirclesHubPage), findsOneWidget);
     });
 
     testWidgets('点击精选进入沉浸模式', (tester) async {
@@ -99,7 +109,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 默认是圈子，Tab 栏存在
+      // 默认是关注，Tab 栏存在
       expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
 
       // 点击精选
@@ -114,43 +124,6 @@ void main() {
       expect(find.byType(CenteredScrollableTabBar), findsNothing);
 
       // WorksImmersiveViewer 应该存在
-      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
-    });
-
-    testWidgets('圈子列表区左滑优先切换二级分类而不是一级 Tab', (tester) async {
-      _suppressExpectedErrors();
-      await tester.pumpWidget(_buildApp());
-      await tester.pumpAndSettle();
-
-      final before = tester.widget<HomeCirclesCategoryTab>(
-        find.byType(HomeCirclesCategoryTab),
-      );
-      final beforeKey = before.key! as ValueKey<String>;
-      final contentAnchor = find.text('圈子推荐');
-
-      await tester.fling(contentAnchor, const Offset(-420, 0), 1200);
-      await tester.pumpAndSettle();
-
-      final after = tester.widget<HomeCirclesCategoryTab>(
-        find.byType(HomeCirclesCategoryTab),
-      );
-      final afterKey = after.key! as ValueKey<String>;
-
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
-      expect(find.byType(WorksImmersiveViewer), findsNothing);
-      expect(afterKey.value, isNot(beforeKey.value));
-    });
-
-    testWidgets('圈子二级分类在左边界继续右滑会切到首页一级 Tab', (tester) async {
-      _suppressExpectedErrors();
-      await tester.pumpWidget(_buildApp());
-      await tester.pumpAndSettle();
-      final contentAnchor = find.text('圈子推荐');
-
-      await tester.fling(contentAnchor, const Offset(420, 0), 1200);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(CenteredScrollableTabBar), findsNothing);
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);
     });
   });

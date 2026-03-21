@@ -68,6 +68,24 @@ class CloudHttpClient {
     return _decodeBody(res.body, uri.path);
   }
 
+  Future<dynamic> putJson(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Map<String, dynamic> body,
+  }) async {
+    final merged = await _mergeHeaders(headers);
+    final payload = jsonEncode(body);
+    final requestHeaders = <String, String>{
+      ...merged,
+      'Content-Type': 'application/json',
+    };
+    final res = await _guardRequest(
+      () => _client.put(uri, headers: requestHeaders, body: payload).timeout(_timeout),
+    );
+    _guardStatus(res, uri.path);
+    return _decodeBody(res.body, uri.path);
+  }
+
   Future<dynamic> deleteJson(
     Uri uri, {
     required Map<String, String> headers,

@@ -1,11 +1,13 @@
 /// Patrol integration test entry point.
 ///
-/// Patrol 3.x + integration_test 要求 main() 调用真实 app，否则 FTL 上测试在空白屏运行。
-/// 每个 patrolTest 直接与已启动的 App 交互，不需要在 test 内再 pumpWidget。
+/// Patrol 4.x 仍要求 main() 调用真实 app，否则 T4 用例会在空白屏运行。
+/// 本仓库将 Patrol 用例保留在 `test/patrol/`，并通过 `pubspec.yaml` 的
+/// `patrol.test_directory` 指向该目录。
 ///
 /// 执行方式（本地，需连接真机或模拟器）：
 ///   patrol test test/patrol/ \
 ///     --dart-define=ENV=staging \
+///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=TEST_AUTH_TOKEN=YOUR_TOKEN
 ///
 /// 执行方式（Firebase Test Lab）：

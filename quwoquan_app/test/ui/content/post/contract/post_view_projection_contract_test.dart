@@ -466,6 +466,84 @@ void main() {
       expect(r.images, isNotEmpty);
       expect(r.images.first, equals('https://example.com/cover3.jpg'));
     });
+
+    test('无 articleBlocks/calls 时 contentBlocks 回退为 body 段落', () {
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      expect(r.contentBlocks, hasLength(1));
+      expect(r.contentBlocks.first.type, equals('paragraph'));
+      expect(r.contentBlocks.first.body, contains('这是文章内容'));
+    });
+
+    test('articleBlocks 优先投射为连续内容块', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleBlocks'] = <Map<String, dynamic>>[
+          {
+            'id': 'p1',
+            'type': 'paragraph',
+            'text': '第一段',
+            'imagePath': '',
+          },
+          {
+            'id': 'o1',
+            'type': 'orderedItem',
+            'text': '第二条',
+            'imagePath': '',
+          },
+          {
+            'id': 'i1',
+            'type': 'image',
+            'text': '',
+            'imagePath': 'https://example.com/block.jpg',
+          },
+        ];
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_blocks');
+      expect(r.contentBlocks, hasLength(3));
+      expect(r.contentBlocks[0].type, equals('paragraph'));
+      expect(r.contentBlocks[1].type, equals('ordered_item'));
+      expect(r.contentBlocks[1].orderedIndex, equals(1));
+      expect(r.contentBlocks[2].type, equals('image'));
+      expect(r.contentBlocks[2].imageUrl, equals('https://example.com/block.jpg'));
+    });
+
+    test('wrap image + paragraph 会投射为 wrapped_paragraph', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleBlocks'] = <Map<String, dynamic>>[
+          {
+            'id': 'i1',
+            'type': 'image',
+            'text': '',
+            'imagePath': 'https://example.com/wrap.jpg',
+            'imageLayout': 'wrapLeft',
+          },
+          {
+            'id': 'p1',
+            'type': 'paragraph',
+            'text': '图片旁边的正文',
+            'imagePath': '',
+          },
+        ];
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_wrap');
+      expect(r.contentBlocks, hasLength(1));
+      expect(r.contentBlocks.first.type, equals('wrapped_paragraph'));
+      expect(r.contentBlocks.first.imageLayout, equals('wrapLeft'));
+      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/wrap.jpg'));
+    });
+
+    test('旧 cards 可回退为连续阅读 section 块', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['cards'] = <Map<String, dynamic>>[
+          {
+            'title': '小节一',
+            'body': '这是第一节',
+            'imageUrl': 'https://example.com/card.jpg',
+          },
+        ];
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_cards');
+      expect(r.contentBlocks, hasLength(1));
+      expect(r.contentBlocks.first.type, equals('section'));
+      expect(r.contentBlocks.first.title, equals('小节一'));
+      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/card.jpg'));
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────

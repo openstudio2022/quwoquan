@@ -15,13 +15,15 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.routeLocation});
+
+  final String? routeLocation;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -29,15 +31,14 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
-  static const String _defaultTab =
-      'circles'; // Change default to circles to avoid starting in immersive mode without nav
+  static const String _defaultTab = 'following';
   static const List<String> _tabOrder = <String>[
     'following',
     'featured',
     'circles',
   ];
-  String _activeTab = _defaultTab;
-  String _lastNonFeaturedTab = _defaultTab;
+  late String _activeTab;
+  late String _lastNonFeaturedTab;
 
   @override
   bool get wantKeepAlive => true;
@@ -45,9 +46,66 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void initState() {
     super.initState();
+    _activeTab = _initialTabForRoute(widget.routeLocation);
+    _lastNonFeaturedTab = _activeTab == 'featured' ? _defaultTab : _activeTab;
     // Ensure state consistency on load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateImmersiveState();
+    });
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeLocation == widget.routeLocation) {
+      return;
+    }
+    final routeTab = _routeDrivenTab(widget.routeLocation);
+    if (routeTab == null ||
+        _activeTab == 'featured' ||
+        routeTab == _activeTab) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _activeTab = routeTab;
+        _lastNonFeaturedTab = routeTab;
+      });
+      _updateImmersiveState();
+    });
+  }
+
+  String _initialTabForRoute(String? location) {
+    return _routeDrivenTab(location) ?? _defaultTab;
+  }
+
+  String? _routeDrivenTab(String? location) {
+    switch (location) {
+      case AppRoutePaths.circles:
+        return 'circles';
+      case AppRoutePaths.home:
+        return 'following';
+      default:
+        return null;
+    }
+  }
+
+  void _syncShellRouteForTab(String id) {
+    final targetLocation = switch (id) {
+      'circles' => AppRoutePaths.circles,
+      'following' => AppRoutePaths.home,
+      _ => null,
+    };
+    final router = GoRouter.maybeOf(context);
+    if (targetLocation == null ||
+        widget.routeLocation == targetLocation ||
+        router == null) {
+      return;
+    }
+    Future.microtask(() {
+      if (!mounted) return;
+      router.go(targetLocation);
     });
   }
 
@@ -59,6 +117,7 @@ class _HomePageState extends ConsumerState<HomePage>
       _lastNonFeaturedTab = id;
     }
     setState(() => _activeTab = id);
+    _syncShellRouteForTab(id);
     _updateImmersiveState();
   }
 
@@ -114,9 +173,7 @@ class _HomePageState extends ConsumerState<HomePage>
             onUserTap: _openUserProfile,
             onAssistantTap: _openAssistantHalfSheet,
             onTapBack: _handleFeaturedBack,
-            // 兼容已有入口：直接切回常规首页态
-            onSwitchToMoment: () => _handleTabChange('circles'),
-            // 顶部导航回调
+            onSwitchToMoment: () => _handleTabChange('following'),
             onSwitchToFollowing: () => _handleTabChange('following'),
             onSwitchToCircles: () => _handleTabChange('circles'),
           ),
@@ -126,18 +183,15 @@ class _HomePageState extends ConsumerState<HomePage>
 
     // 常规模式
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(
+    final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+    final borderColor = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
+      ColorType.separatorSubtle,
     );
     final tabs = const <TabItem>[
       TabItem(id: 'following', label: UITextConstants.homeTabFollowing),
       TabItem(id: 'featured', label: UITextConstants.homeTabFeatured),
-      TabItem(id: 'circles', label: UITextConstants.homeTabCircles),
+      TabItem(id: 'circles', label: AppConceptConstants.circles),
     ];
 
     return CupertinoPageScaffold(
@@ -155,7 +209,8 @@ class _HomePageState extends ConsumerState<HomePage>
                   color: bg,
                   border: Border(
                     bottom: BorderSide(
-                      color: fgSecondary.withValues(alpha: 0.15),
+                      color: borderColor,
+                      width: AppSpacing.hairline,
                     ),
                   ),
                 ),
@@ -197,7 +252,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
               Expanded(
                 child: TabSwipeSwitchRegion(
-                  enabled: _activeTab != 'circles',
+                  enabled: true,
                   onSwipe: _handleTabSwipe,
                   child: _buildBody(isDark),
                 ),
@@ -220,11 +275,11 @@ class _HomePageState extends ConsumerState<HomePage>
             _openFeedPost(post, index, feedPosts: feedPosts);
           },
         );
-      case 'circles':
-        return HomeCirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
       case 'featured':
         // This case is handled in the main build method now for full screen
         return const SizedBox.shrink();
+      case 'circles':
+        return HomeCirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
       default:
         return const SizedBox.shrink();
     }

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -143,7 +144,9 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                     fgPrimary: fgPrimary,
                     secondaryColor: secondaryColor,
                     onTap: () => context.push(
-                      '/chat/${widget.conversationId}/transfer-ownership',
+                      AppRoutePaths.chatTransferOwnership(
+                        id: widget.conversationId,
+                      ),
                     ),
                   ),
                   _divider(isDark),
@@ -152,7 +155,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                     fgPrimary: fgPrimary,
                     secondaryColor: secondaryColor,
                     onTap: () => context.push(
-                      '/chat/${widget.conversationId}/admins',
+                      AppRoutePaths.chatAdmins(id: widget.conversationId),
                     ),
                   ),
                 ],

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
@@ -107,6 +108,25 @@ class RemoteAssistantRepository implements AssistantRepository {
   final http.Client _client;
   final AssistantConsentStore _store;
 
+  Map<String, String> _headersForSettings({
+    required String operationId,
+    required String legacyPageId,
+  }) {
+    return CloudRequestHeaders.forSurfaceOperation(
+      surfaceId: AppUiSurfaces.assistantSettings.id,
+      routeId: AppUiSurfaces.assistantSettings.routeId,
+      operationId: operationId,
+      legacyPageId: legacyPageId,
+    );
+  }
+
+  String _settingsContext({required String operationId}) {
+    return CloudRequestHeaders.contextForSurfaceOperation(
+      surfaceId: AppUiSurfaces.assistantSettings.id,
+      operationId: operationId,
+    );
+  }
+
   @override
   Future<List<AssistantSkillConsent>> listConsents() async {
     final local = await _store.load();
@@ -114,8 +134,9 @@ class RemoteAssistantRepository implements AssistantRepository {
       final uri = _assistantUri(AssistantApiMetadata.listConsentsPath);
       final response = await _client.get(
         uri,
-        headers: CloudRequestHeaders.forPage(
-          AssistantRequestPageIds.listConsents,
+        headers: _headersForSettings(
+          operationId: AssistantApiMetadata.listConsentsOperation,
+          legacyPageId: AssistantRequestPageIds.listConsents,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -126,7 +147,9 @@ class RemoteAssistantRepository implements AssistantRepository {
           ? <String, dynamic>{'items': decoded}
           : CloudResponseDecoder.asObject(
               decoded,
-              context: AssistantRequestPageIds.listConsents,
+              context: _settingsContext(
+                operationId: AssistantApiMetadata.listConsentsOperation,
+              ),
             );
       final rawItems =
           (object['items'] as List?)
@@ -163,8 +186,9 @@ class RemoteAssistantRepository implements AssistantRepository {
       final response = await _client.post(
         uri,
         headers: <String, String>{
-          ...CloudRequestHeaders.forPage(
-            AssistantRequestPageIds.grantSkillConsent,
+          ..._headersForSettings(
+            operationId: AssistantApiMetadata.grantSkillConsentOperation,
+            legacyPageId: AssistantRequestPageIds.grantSkillConsent,
           ),
           'Content-Type': 'application/json',
         },
@@ -174,7 +198,9 @@ class RemoteAssistantRepository implements AssistantRepository {
         final consent = _decodeConsentResponse(
           response.body,
           fallback: fallback,
-          context: AssistantRequestPageIds.grantSkillConsent,
+          context: _settingsContext(
+            operationId: AssistantApiMetadata.grantSkillConsentOperation,
+          ),
         );
         await _store.upsert(consent);
         return consent;
@@ -194,8 +220,9 @@ class RemoteAssistantRepository implements AssistantRepository {
       );
       await _client.delete(
         uri,
-        headers: CloudRequestHeaders.forPage(
-          AssistantRequestPageIds.revokeSkillConsent,
+        headers: _headersForSettings(
+          operationId: AssistantApiMetadata.revokeSkillConsentOperation,
+          legacyPageId: AssistantRequestPageIds.revokeSkillConsent,
         ),
       );
     } catch (_) {

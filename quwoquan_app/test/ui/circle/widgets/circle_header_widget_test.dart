@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
@@ -66,7 +67,7 @@ void main() {
       ));
       await tester.pump();
 
-      expect(find.byIcon(Icons.group), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.person_3_fill), findsOneWidget);
     });
 
     testWidgets('深色模式正确渲染', (tester) async {
@@ -149,7 +150,7 @@ void main() {
       ));
       await tester.pump();
 
-      expect(find.byIcon(Icons.group), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.person_3_fill), findsOneWidget);
     });
 
     testWidgets('空标签列表不渲染 Wrap', (tester) async {

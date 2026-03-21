@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
@@ -21,6 +22,7 @@ import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/invite_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
@@ -139,18 +141,18 @@ class AppearanceSnapshot {
   });
 }
 
-/// 从小趣对话返回时恢复的 tab 索引（0=发现 1=小趣 2=趣聊 3=我的）。
-/// 由底部栏 C 位进入小趣时写入，返回时读取并跳转
+/// 从 assistant 域退出时恢复的主底栏 tab。
+/// 仅记录进入 assistant 前的上一个主 tab，避免多处维护数字索引语义。
 final lastMainTabBeforeAssistantProvider =
-    NotifierProvider<LastMainTabBeforeAssistantNotifier, int?>(
+    NotifierProvider<LastMainTabBeforeAssistantNotifier, MainTabDestination?>(
       LastMainTabBeforeAssistantNotifier.new,
     );
 
-class LastMainTabBeforeAssistantNotifier extends Notifier<int?> {
+class LastMainTabBeforeAssistantNotifier extends Notifier<MainTabDestination?> {
   @override
-  int? build() => null;
+  MainTabDestination? build() => null;
 
-  void set(int? value) => state = value;
+  void set(MainTabDestination? value) => state = value;
 }
 
 /// 助理页内部当前一级 tab（`schedule` / `dialog` / `skills`）。
@@ -179,14 +181,29 @@ class UserDataNotifier extends Notifier<User?> {
       final repo = ref.read(userProfileRepositoryProvider);
       final profile = await repo.getUserProfile(userId);
       final avatarUrl = profile['avatarUrl']?.toString();
+      final profileSubjectId =
+          profile['profileSubjectId']?.toString() ??
+          profile['userId']?.toString() ??
+          userId;
       state = User(
-        id: profile['userId']?.toString() ?? userId,
-        username: userId,
-        displayName: profile['nickname']?.toString(),
+        id: profileSubjectId,
+        username:
+            profile['username']?.toString() ??
+            profile['nickname']?.toString() ??
+            userId,
+        displayName:
+            profile['displayName']?.toString() ??
+            profile['nickname']?.toString(),
         avatarUrl: avatarUrl,
         avatar: avatarUrl,
         bio: profile['bio']?.toString(),
         backgroundImage: profile['backgroundUrl']?.toString(),
+        metadata: <String, dynamic>{
+          'ownerUserId': profile['ownerUserId']?.toString(),
+          'subAccountId': profile['subAccountId']?.toString(),
+          'subjectType': profile['subjectType']?.toString(),
+          'personaContextVersion': profile['personaContextVersion']?.toString(),
+        },
       );
     } catch (_) {
       state = User(id: userId, username: userId);
@@ -201,6 +218,10 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
 /// 当前用户 ID — Mock/Remote 过渡期均使用 ChatMockData.currentUserProfileId；
 /// auth 就绪后可改为 ref.watch(authRepositoryProvider).currentUserId。
 final currentUserIdProvider = Provider<String>((ref) {
+  final profileUserId = ref.watch(userDataProvider)?.id;
+  if (profileUserId != null && profileUserId.isNotEmpty) {
+    return profileUserId;
+  }
   return ChatMockData.currentUserProfileId;
 });
 
@@ -1067,6 +1088,35 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
   }
   return MockUserRepository();
 });
+
+/// 当前活动分身上下文。mock 模式下允许回退；remote 模式由调用方自行决定是否 fail-closed。
+final activePersonaContextProvider =
+    FutureProvider<ActivePersonaContextViewData>((ref) async {
+      try {
+        return await ref.read(userRepositoryProvider).getActivePersonaContext();
+      } catch (_) {
+        final currentUser = ref.read(userDataProvider);
+        final fallbackId =
+            currentUser?.id.isNotEmpty == true
+            ? currentUser!.id
+            : ref.read(currentUserIdProvider);
+        return ActivePersonaContextViewData.fallback(
+          profileSubjectId: fallbackId,
+          ownerUserId:
+              currentUser?.metadata?['ownerUserId']?.toString() ?? fallbackId,
+          subAccountId: currentUser?.metadata?['subAccountId']?.toString() ?? '',
+          subjectType:
+              currentUser?.metadata?['subjectType']?.toString() ?? 'owner',
+          displayName:
+              currentUser?.displayName ??
+              currentUser?.username ??
+              fallbackId,
+          avatarUrl: currentUser?.avatarUrlOrAvatar ?? '',
+          personaContextVersion:
+              currentUser?.metadata?['personaContextVersion']?.toString() ?? '',
+        );
+      }
+    });
 
 /// Auth Repository（登录/凭证/子账号管理）
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

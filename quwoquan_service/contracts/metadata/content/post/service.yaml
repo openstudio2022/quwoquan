@@ -20,12 +20,12 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, personaContextVersion]
 
   - method: GET
-    path: /v1/users/{userId}/posts
+    path: /v1/content/profile-subjects/{profileSubjectId}/posts
     operation: ListUserPosts
-    description: 用户发布的帖子列表（用户主页-创作 Tab）
+    description: 公开主体发布的帖子列表（个人主页-创作 Tab）
     query_params: [identity, type, visibility, cursor, limit]
     response_entity: Post
 
@@ -84,7 +84,7 @@ api_routes:
     operation: CreateComment
     description: 发表评论
     request_entity: Comment
-    writable_fields: [content, replyToCommentId, personaId]
+    writable_fields: [content, replyToCommentId, personaId, profileSubjectId, personaContextVersion]
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}

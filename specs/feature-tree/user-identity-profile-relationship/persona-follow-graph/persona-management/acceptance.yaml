@@ -1,14 +1,132 @@
-version: 1
+version: 2
 feature: persona-management
-level: "L3_story"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+level: L3_scenario
+source_path: user-identity-profile-relationship/persona-follow-graph/persona-management
+parent_journey: persona-follow-graph
+archived: false
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 owner 视角下的分身管理台，包括统一入口、列表状态、创建、切换、
+    停用/删除保护与配额控制。
+  journey_bindings:
+    - J1
+    - J3
+  in_scope:
+    - 个人主页与设置页的分身管理入口
+    - 分身列表、激活态、主分身、隔离等级与配额展示
+    - 创建分身、激活切换、删除/停用保护
+    - owner 可见管理字段与失败恢复
+  out_of_scope:
+    - 公开资料壳层与视觉体验
+    - 分身公开身份继承/覆写契约
+    - content/chat/circle/assistant 下游透传
+
+scenario_acceptance:
+  A1:
+    title: 分身管理入口与列表唯一化
+    scenario: owner 从个人主页或设置进入统一的分身管理台
+    journey_step: open persona management
+    done_when:
+      - "`我的主页` 与设置都进入同一个管理台"
+      - 列表能够稳定展示当前 active persona、主分身、隔离等级与配额
+      - 单分身用户不会被强制打扰，但始终能找到管理入口
+    edge_cases:
+      - 首次进入时只有 1 个分身
+      - 远端列表为空或返回异常
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - persona management entry widget test
+        - unified route contract test
+      recorded: []
+    status: pending
+  A2:
+    title: owner 可创建并切换分身
+    scenario: owner 在管理台创建新分身并决定是否立即切换
+    journey_step: create and activate persona
+    done_when:
+      - 创建时最少采集 displayName、isolationLevel，可选 purposeHint
+      - 新分身默认继承 owner 资料基线
+      - 创建成功后可选择立即切换或稍后切换
+      - 同一 owner 同时仅有 1 个 active persona
+    edge_cases:
+      - 已达到 5 个分身上限
+      - 创建成功但切换失败
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - persona create contract test
+        - active persona exclusivity test
+        - create and switch widget journey test
+      recorded: []
+    status: pending
+  A3:
+    title: 删除动作遵循停用/删除保护
+    scenario: owner 删除或停用已有分身，系统保证历史归因与主分身约束
+    journey_step: retire or delete persona
+    done_when:
+      - 主分身与最后一个剩余分身不可删除
+      - 空白分身可以直接删除
+      - 有历史归因的分身按停用处理，不再作为新动作主体
+      - 删除或停用失败时，当前 active persona 与历史归因不受损
+    edge_cases:
+      - 试图删除主分身
+      - 试图删除仍处于 active 状态的分身
+      - 有历史内容但无公开资料的分身
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - primary persona delete forbidden test
+        - last persona delete forbidden test
+        - retired persona management flow test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 分身管理台可灰度、可观测、可回退
+    done_when:
+      - 管理台入口可按功能开关独立控制
+      - create/activate/delete failure、quota reached、retired persona count 可观测
+      - 回退时可退回单 active persona 基线，不影响历史归因
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - management flag rollback verification
+        - error telemetry verification
+      recorded: []
+    status: pending

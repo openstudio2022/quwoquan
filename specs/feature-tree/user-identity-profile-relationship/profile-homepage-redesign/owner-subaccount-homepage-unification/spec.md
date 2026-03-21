@@ -7,7 +7,12 @@
 1. UI 与交互割裂：`MyProfilePage/ProfileShell` 与 `OtherProfilePage/AuthorProfile` 并行维护，导致滚动、拉伸、按钮矩阵、Tab 结构和视觉风格长期漂移。
 2. 端云契约失真：用户域已经明确 `OwnerAccount` 与 `SubAccount` 双层身份模型，但个人主页仍在 `userId / subAccountId / username / Persona` 多套语义之间摇摆，端侧大量直接消费手写 `Map<String, dynamic>`，无法进入稳定的 metadata-first 开发。
 
-这次 Story 的目标不是单纯“重画页面”，而是把 `owner` 与 `subAccount` 一体化主页的领域模型、交互规格、metadata 真相源和端云消费链一次性收拢，为后续 `/dev` 提供稳定设计基线。
+这次 Story 的目标不是单纯“重画页面”，而是把 `owner` 与 `subAccount` 一体化主页的交互规格、metadata 消费边界和端云消费链一次性收拢，为后续 `/dev` 提供稳定设计基线。
+
+补充冻结：
+
+- user 域关于 `ProfileSubjectView / ProfileSubjectMutation / 分身可见性 / 历史归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
+- 本场景消费这些 user 域契约来构建主页与资料编辑体验，不再拥有分身生命周期与公开身份模型的主定义权。
 
 ## 目标用户
 

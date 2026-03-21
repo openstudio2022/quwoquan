@@ -25,6 +25,61 @@ void main() {
       expect(draft.state.imagePaths, hasLength(1));
     });
 
+    test('从文章块恢复正文与图片索引', () {
+      final draft = CreateDraft.fromStorageMap({
+        'id': 'draft_blocks',
+        'draftVersion': 'v2',
+        'updatedAt': 456,
+        'type': 'text',
+        'editorKind': 'text',
+        'mediaKind': 'none',
+        'title': '块编辑器',
+        'body': '',
+        'articleBlocks': [
+          {
+            'id': 'p1',
+            'type': 'paragraph',
+            'text': '第一段',
+            'imagePath': '',
+          },
+          {
+            'id': 'o1',
+            'type': 'orderedItem',
+            'text': '第二条',
+            'imagePath': '',
+          },
+          {
+            'id': 'i1',
+            'type': 'image',
+            'text': '',
+            'imagePath': 'inline.png',
+          },
+        ],
+        'activeArticleBlockId': 'o1',
+        'settings': const <String, dynamic>{},
+      });
+
+      expect(draft.state.body, '第一段\n第二条');
+      expect(draft.state.imagePaths, <String>['inline.png']);
+      expect(draft.state.activeArticleBlockId, 'o1');
+      expect(
+        (draft.toStorageMap()['articleBlocks'] as List).length,
+        3,
+      );
+    });
+
+    test('图片块布局样式可序列化恢复', () {
+      final block = CreateTextBlock.image(
+        id: 'img_1',
+        imagePath: 'inline.png',
+        imageLayout: CreateTextImageLayout.wrapRight,
+      );
+
+      final restored = CreateTextBlock.fromMap(block.toMap());
+      expect(restored.imageLayout, CreateTextImageLayout.wrapRight);
+      expect(restored.usesWrappedLayout, isTrue);
+    });
+
     test('旧草稿缺失 identity 时按 tabKey 迁移到 v2', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'legacy_photo',

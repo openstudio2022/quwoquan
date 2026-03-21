@@ -60,6 +60,38 @@ class CloudRequestHeaders {
     };
   }
 
+  static Map<String, String> forSurfaceOperation({
+    required String surfaceId,
+    required String operationId,
+    required String legacyPageId,
+    String? routeId,
+  }) {
+    final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
+    final rand = _toBase36(_rng.nextInt(36 * 36 * 36 * 36));
+    final nowIso = DateTime.now().toIso8601String();
+    final traceId = 'APP.$sessionId.$surfaceId.$operationId.$ts.$rand';
+    final requestId = 'APP.$surfaceId.$operationId.$ts.$rand';
+    return <String, String>{
+      'X-Client-Page-Id': legacyPageId,
+      'X-Client-Surface-Id': surfaceId,
+      'X-Client-Operation-Id': operationId,
+      if (routeId != null && routeId.isNotEmpty) 'X-Client-Route-Id': routeId,
+      'X-Client-Session-Id': sessionId,
+      'X-Client-Sent-At': nowIso,
+      'X-Client-Device-Platform': platform(),
+      'X-Client-App-Version': appVersion,
+      'X-Trace-Id': traceId,
+      'X-Request-Id': requestId,
+    };
+  }
+
+  static String contextForSurfaceOperation({
+    required String surfaceId,
+    required String operationId,
+  }) {
+    return '$surfaceId.$operationId';
+  }
+
   static String _toBase36(int value) => value.toRadixString(36);
 }
 

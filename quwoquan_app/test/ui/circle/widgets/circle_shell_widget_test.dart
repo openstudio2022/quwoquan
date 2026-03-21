@@ -71,15 +71,14 @@ void main() {
       await _pumpIgnoringTabPaintErrors(tester);
 
       expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis_circle), findsOneWidget);
     });
 
-    testWidgets('分段控件存在于 Widget 树中', (tester) async {
+    testWidgets('一级 Tab 文案正确渲染', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await _pumpIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
-      expect(find.text('内容'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
   });
 

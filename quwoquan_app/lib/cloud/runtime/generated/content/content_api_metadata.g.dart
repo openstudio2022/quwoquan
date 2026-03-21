@@ -10,7 +10,6 @@ class ContentApiMetadata {
   static const List<String> apiPrefixes = <String>[
     '/v1/config',
     '/v1/content',
-    '/v1/users',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
@@ -40,7 +39,7 @@ class ContentApiMetadata {
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
     'ListProfileInteractionActivitiesReceived': '/v1/content/profile-subjects/{profileSubjectId}/interactions/received',
     'ListProfileInteractionActivitiesSent': '/v1/content/profile-subjects/{profileSubjectId}/interactions/sent',
-    'ListUserPosts': '/v1/users/{userId}/posts',
+    'ListUserPosts': '/v1/content/profile-subjects/{profileSubjectId}/posts',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
@@ -100,6 +99,48 @@ class ContentApiMetadata {
     'UpdatePostCircles': 'PATCH',
     'UpdatePostSettings': 'PATCH',
   };
+
+  static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String completeMediaUploadOperation = 'CompleteMediaUpload';
+  static const String createCommentOperation = 'CreateComment';
+  static const String createPostOperation = 'CreatePost';
+  static const String createReportOperation = 'CreateReport';
+  static const String deleteCommentOperation = 'DeleteComment';
+  static const String deletePostOperation = 'DeletePost';
+  static const String favoritePostOperation = 'FavoritePost';
+  static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
+  static const String getAppConfigOperation = 'GetAppConfig';
+  static const String getCountersOperation = 'GetCounters';
+  static const String getFeedOperation = 'GetFeed';
+  static const String getHelperReadOperation = 'GetHelperRead';
+  static const String getMediaAssetOperation = 'GetMediaAsset';
+  static const String getPostOperation = 'GetPost';
+  static const String getReactionStateOperation = 'GetReactionState';
+  static const String getRecommendationOperation = 'GetRecommendation';
+  static const String getReportOperation = 'GetReport';
+  static const String initMediaUploadOperation = 'InitMediaUpload';
+  static const String likeCommentOperation = 'LikeComment';
+  static const String likePostOperation = 'LikePost';
+  static const String listCommentsOperation = 'ListComments';
+  static const String listCommentsByAuthorOperation = 'ListCommentsByAuthor';
+  static const String listCommentsForPostAuthorOperation = 'ListCommentsForPostAuthor';
+  static const String listProfileInteractionActivitiesReceivedOperation = 'ListProfileInteractionActivitiesReceived';
+  static const String listProfileInteractionActivitiesSentOperation = 'ListProfileInteractionActivitiesSent';
+  static const String listUserPostsOperation = 'ListUserPosts';
+  static const String promotePostToWorkOperation = 'PromotePostToWork';
+  static const String publishPostOperation = 'PublishPost';
+  static const String quoteToCircleOperation = 'QuoteToCircle';
+  static const String reportBehaviorsOperation = 'ReportBehaviors';
+  static const String repostToCircleOperation = 'RepostToCircle';
+  static const String resolveReportOperation = 'ResolveReport';
+  static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
+  static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
+  static const String unfavoritePostOperation = 'UnfavoritePost';
+  static const String unlikeCommentOperation = 'UnlikeComment';
+  static const String unlikePostOperation = 'UnlikePost';
+  static const String updatePostOperation = 'UpdatePost';
+  static const String updatePostCirclesOperation = 'UpdatePostCircles';
+  static const String updatePostSettingsOperation = 'UpdatePostSettings';
 
   static const String abortMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:abort';
   static String abortMediaUploadPath({required String sessionId}) {
@@ -213,10 +254,10 @@ class ContentApiMetadata {
       'profileSubjectId': profileSubjectId,
     });
   }
-  static const String listUserPostsPathTemplate = '/v1/users/{userId}/posts';
-  static String listUserPostsPath({required String userId}) {
+  static const String listUserPostsPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/posts';
+  static String listUserPostsPath({required String profileSubjectId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{
-      'userId': userId,
+      'profileSubjectId': profileSubjectId,
     });
   }
   static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';

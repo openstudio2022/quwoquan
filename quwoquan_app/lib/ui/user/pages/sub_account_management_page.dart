@@ -1,11 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 子账号管理页面 - 对应 /profile/sub-accounts 路由
 ///
@@ -23,10 +25,13 @@ class SubAccountManagementPage extends ConsumerStatefulWidget {
 
 class _SubAccountManagementPageState
     extends ConsumerState<SubAccountManagementPage> {
-  static const int _maxSubAccounts = 5;
-  List<Map<String, dynamic>> _subAccounts = [];
+  List<PersonaManagementItemViewData> _subAccounts = const [];
+  PersonaManagementQuotaViewData? _quota;
+  ActivePersonaContextViewData? _activeContext;
   bool _loading = true;
   String? _error;
+
+  int get _maxSubAccounts => _quota?.maxSubAccounts ?? 5;
 
   @override
   void initState() {
@@ -43,29 +48,48 @@ class _SubAccountManagementPageState
       _error = null;
     });
     try {
-      final repo = ref.read(authRepositoryProvider);
-      final accounts = await repo.listSubAccounts();
+      final repo = ref.read(userRepositoryProvider);
+      final summary = await repo.getPersonaManagementSummary();
       if (mounted) {
         setState(() {
-          _subAccounts = accounts;
+          _subAccounts = summary.items;
+          _quota = summary.quota;
+          _activeContext = summary.activeContext;
           _loading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
+      try {
+        final repo = ref.read(userRepositoryProvider);
+        final accounts = await repo.listSubAccounts();
+        final activeContext = await repo.getActivePersonaContext();
+        if (mounted) {
+          setState(() {
+            _subAccounts = accounts;
+            _quota = PersonaManagementQuotaViewData(
+              maxSubAccounts: 5,
+              usedSubAccounts: accounts.length,
+            );
+            _activeContext = activeContext;
+            _loading = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _error = e.toString();
+            _loading = false;
+          });
+        }
       }
     }
   }
 
-  Future<void> _activate(Map<String, dynamic> account) async {
-    final subAccountId = account['subAccountId'] as String? ?? '';
+  Future<void> _activate(PersonaManagementItemViewData account) async {
+    final subAccountId = account.subAccountId;
     if (subAccountId.isEmpty) return;
     try {
-      final repo = ref.read(authRepositoryProvider);
+      final repo = ref.read(userRepositoryProvider);
       await repo.activateSubAccount(subAccountId);
       await _loadSubAccounts();
     } catch (e) {
@@ -73,9 +97,56 @@ class _SubAccountManagementPageState
     }
   }
 
-  Future<void> _delete(Map<String, dynamic> account) async {
-    final subAccountId = account['subAccountId'] as String? ?? '';
+  Future<void> _delete(PersonaManagementItemViewData account) async {
+    final subAccountId = account.subAccountId;
     if (subAccountId.isEmpty) return;
+
+    final repo = ref.read(userRepositoryProvider);
+    PersonaLifecycleGuardViewData? guard;
+    try {
+      guard = await repo.getSubAccountLifecycleGuard(subAccountId);
+    } catch (_) {
+      guard = null;
+    }
+    if (guard != null && !guard.canDelete) {
+      if (guard.canRetire) {
+        final retire = await showCupertinoDialog<bool>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('退役子账号'),
+            content: Text(
+              guard!.message.isNotEmpty
+                  ? guard.message
+                  : '该子账号仍有关联历史，需先退役后再删除。',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text(UITextConstants.cancel),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('退役'),
+              ),
+            ],
+          ),
+        );
+        if (retire == true) {
+          try {
+            await repo.retireSubAccount(subAccountId);
+            await _loadSubAccounts();
+          } catch (e) {
+            _showError('退役失败: $e');
+          }
+        }
+        return;
+      }
+      _showError(
+        guard.message.isNotEmpty ? guard.message : UITextConstants.profileSubAccountDeleteFailed,
+      );
+      return;
+    }
 
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
@@ -84,7 +155,7 @@ class _SubAccountManagementPageState
         content: Text(
           UITextConstants.profileSubAccountDeleteConfirmTemplate.replaceFirst(
             '%s',
-            '${account['displayName'] ?? ''}',
+            account.displayName,
           ),
         ),
         actions: [
@@ -103,8 +174,7 @@ class _SubAccountManagementPageState
     if (confirmed != true) return;
 
     try {
-      final repo = ref.read(authRepositoryProvider);
-      await repo.deleteSubAccount(subAccountId);
+      await repo.deleteEmptySubAccount(subAccountId);
       await _loadSubAccounts();
     } catch (e) {
       _showError('${UITextConstants.profileSubAccountDeleteFailed}: $e');
@@ -172,7 +242,7 @@ class _SubAccountManagementPageState
                 if (displayName.trim().isEmpty) return;
                 Navigator.of(ctx).pop();
                 try {
-                  final repo = ref.read(authRepositoryProvider);
+                  final repo = ref.read(userRepositoryProvider);
                   await repo.createSubAccount(
                     displayName: displayName.trim(),
                     isolationLevel: isolationLevel,
@@ -210,12 +280,32 @@ class _SubAccountManagementPageState
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      backgroundColor: AppColors.iosPageBackground(context),
       navigationBar: AppNavigationBar(
-        middle: const Text(UITextConstants.profileSubAccountManagement),
+        backgroundColor: AppColors.iosSystemBackground(
+          context,
+        ).withValues(alpha: 0.94),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.iosSeparator(context).withValues(alpha: 0.28),
+            width: AppSpacing.hairline,
+          ),
+        ),
+        middle: Text(
+          UITextConstants.profileSubAccountManagement,
+          style: TextStyle(
+            fontSize: AppTypography.iosNavTitle,
+            fontWeight: AppTypography.semiBold,
+            color: AppColors.iosLabel(context),
+          ),
+        ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _subAccounts.length < _maxSubAccounts ? _createNew : null,
-          child: const Icon(CupertinoIcons.add),
+          child: Icon(
+            CupertinoIcons.add,
+            color: AppColors.iosAccent(context),
+          ),
         ),
       ),
       child: SafeArea(
@@ -252,15 +342,41 @@ class _SubAccountManagementPageState
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      itemCount: _subAccounts.length,
-      separatorBuilder: (context, index) => const SizedBox.shrink(),
-      itemBuilder: (context, i) => _SubAccountTile(
-        account: _subAccounts[i],
-        onActivate: () => _activate(_subAccounts[i]),
-        onDelete: () => _delete(_subAccounts[i]),
+    return ListView(
+      padding: EdgeInsets.only(
+        top: AppSpacing.containerSm,
+        bottom: MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg,
       ),
+      children: <Widget>[
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+          child: ProfileIosSectionCard(
+            child: Text(
+              '当前 Owner 下共有 ${_subAccounts.length}/$_maxSubAccounts 个子账号。'
+              '当前激活：${_activeContext?.displayName ?? '未同步'}。'
+              '可在此切换当前激活账号，或管理账号隔离级别。',
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+                height: 1.35,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: AppSpacing.interGroupMd),
+        ProfileIosGroupedSection(
+          header: '子账号列表',
+          children: _subAccounts
+              .map(
+                (account) => _SubAccountTile(
+                  account: account,
+                  onActivate: () => _activate(account),
+                  onDelete: () => _delete(account),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }
@@ -272,98 +388,68 @@ class _SubAccountTile extends StatelessWidget {
     required this.onDelete,
   });
 
-  final Map<String, dynamic> account;
+  final PersonaManagementItemViewData account;
   final VoidCallback onActivate;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final displayName = account['displayName'] as String? ?? '';
-    final isActive = account['isActive'] as bool? ?? false;
-    final isPrimary = account['isPrimary'] as bool? ?? false;
-    final isolationLevel = account['isolationLevel'] as String? ?? 'open';
+    final displayName = account.displayName;
+    final isActive = account.isActive;
+    final isPrimary = account.isPrimary;
+    final isolationLevel = account.isolationLevel;
 
-    return GestureDetector(
+    return ProfileIosGroupedCell(
+      leading: _IsolationBadge(level: isolationLevel),
+      title: displayName,
+      subtitle: _isolationLabel(isolationLevel),
       onTap: isActive ? null : onActivate,
-      child: Container(
-        color: CupertinoColors.systemBackground,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md - AppSpacing.xs,
-        ),
-        child: Row(
-          children: [
-            _IsolationBadge(level: isolationLevel),
-            const SizedBox(width: AppSpacing.md - AppSpacing.xs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        displayName,
-                        style: const TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (isPrimary) ...[
-                        const SizedBox(width: AppSpacing.sm - AppSpacing.xs / 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm - AppSpacing.xs / 2,
-                            vertical: AppSpacing.xs / 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.smallBorderRadius,
-                            ),
-                          ),
-                          child: Text(
-                            UITextConstants.personaPrimary,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: AppColors.primaryColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs / 2),
-                  Text(
-                    _isolationLabel(isolationLevel),
-                    style: const TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: CupertinoColors.secondaryLabel,
-                    ),
-                  ),
-                ],
+      showChevron: !isActive,
+      minHeight: 62,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (isPrimary)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs / 2,
               ),
-            ),
-            if (isActive)
-              const Icon(
-                CupertinoIcons.check_mark,
-                color: CupertinoColors.activeBlue,
-                size: AppTypography.xxl,
+              decoration: BoxDecoration(
+                color: AppColors.iosTintedFill(context),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
               ),
-            if (!isPrimary) ...[
-              const SizedBox(width: AppSpacing.sm),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-                onPressed: onDelete,
-                child: const Icon(
-                  CupertinoIcons.delete,
-                  size: AppTypography.xl,
-                  color: CupertinoColors.destructiveRed,
+              child: Text(
+                UITextConstants.personaPrimary,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: AppColors.iosAccent(context),
+                  fontWeight: AppTypography.semiBold,
                 ),
               ),
-            ],
+            ),
+          if (isActive) ...<Widget>[
+            if (isPrimary) const SizedBox(width: AppSpacing.sm),
+            const Icon(
+              CupertinoIcons.check_mark_circled_solid,
+              color: CupertinoColors.activeBlue,
+              size: AppSpacing.iconMedium,
+            ),
           ],
-        ),
+          if (!isPrimary) ...<Widget>[
+            SizedBox(width: AppSpacing.sm),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+              onPressed: onDelete,
+              child: const Icon(
+                CupertinoIcons.delete,
+                size: AppSpacing.iconSmall,
+                color: CupertinoColors.destructiveRed,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -398,12 +484,12 @@ class _IsolationBadge extends StatelessWidget {
       height: AppSpacing.minInteractiveSize,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
       child: Icon(
         icon,
         color: color,
-        size: AppTypography.xxxl,
+        size: AppSpacing.iconMedium,
       ),
     );
   }

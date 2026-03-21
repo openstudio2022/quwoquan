@@ -1,9 +1,9 @@
-/// L4 Patrol E2E: 横竖屏切换聊天页稳定性
+/// T4 Patrol E2E: 横竖屏切换聊天页稳定性
 ///
 /// 守护：flutter_test 无法覆盖的真实屏幕旋转场景。
 /// 验证聊天详情页在横竖屏切换后 UI 不崩溃、消息列表保持可见。
 ///
-/// 当前跳过：Patrol 3.x 中 NativeAutomator 已移除 setOrientationLandscape/setOrientationPortrait，
+/// 当前跳过：Patrol 4.x 仍未提供稳定的屏幕方向切换能力，
 /// 需迁移至 PlatformAutomator 后再启用。
 library;
 
@@ -16,13 +16,13 @@ const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
 void main() {
   patrolTest(
     '横竖屏切换聊天页稳定',
-    tags: ['l4', 'chat', 'orientation'],
+    tags: ['t4', 'chat', 'orientation'],
     skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 15),
     ),
     ($) async {
-      assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
@@ -36,13 +36,13 @@ void main() {
 
   patrolTest(
     '横屏下输入文字后切回竖屏内容保持',
-    tags: ['l4', 'chat', 'orientation'],
+    tags: ['t4', 'chat', 'orientation'],
     skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 15),
     ),
     ($) async {
-      assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
@@ -57,13 +57,13 @@ void main() {
 
   patrolTest(
     '快速多次旋转不崩溃',
-    tags: ['l4', 'chat', 'orientation'],
+    tags: ['t4', 'chat', 'orientation'],
     skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 20),
     ),
     ($) async {
-      assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 

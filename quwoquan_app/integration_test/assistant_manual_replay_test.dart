@@ -10,7 +10,7 @@ import 'package:quwoquan_app/components/assistant/petal_mark.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/main.dart' as app;
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 
 const _defaultFirstQuery = '如果把九寨沟方向考虑进去，多给我几个备选方案';
 const _defaultSecondQuery = '如果我只有4天，优先哪条路线？';
@@ -22,6 +22,8 @@ const _secondQuery = String.fromEnvironment(
   'ASSISTANT_REPLAY_SECOND_QUERY',
   defaultValue: _defaultSecondQuery,
 );
+const _weatherFirstQuery = '深圳今天天气怎么样？需要带外套吗？';
+const _weatherSecondQuery = '明天会下雨吗，要带伞还是外套？';
 const _skeletalProcessHeaders = <String>[
   '理解问题中',
   '检索处理中',
@@ -65,36 +67,71 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('真实两轮助理问答界面联调', (tester) async {
-    final originalOnError = FlutterError.onError;
-    addTearDown(() {
-      FlutterError.onError = originalOnError;
-    });
-    _suppressNetworkImageErrors();
-    app.main();
-
-    await _waitForMainEntry(tester);
-    await _openAssistantConversation(tester);
-    await _waitForChatInput(tester);
-
-    final firstResult = await _sendQueryWithSingleRetry(
+    await _runReplayCase(
       tester,
-      query: _firstQuery,
+      binding: binding,
+      caseName: 'manual_replay',
+      firstQuery: _firstQuery,
+      secondQuery: _secondQuery,
     );
-    debugPrint('FIRST_RESULT: ${firstResult.toJson()}');
-    _expectReplayResult(firstResult);
+  });
 
-    final secondResult = await _sendQueryWithSingleRetry(
+  testWidgets('小趣私人对话-天气问答回归', (tester) async {
+    await _runReplayCase(
       tester,
-      query: _secondQuery,
+      binding: binding,
+      caseName: 'weather_replay',
+      firstQuery: _weatherFirstQuery,
+      secondQuery: _weatherSecondQuery,
     );
-    debugPrint('SECOND_RESULT: ${secondResult.toJson()}');
-    _expectReplayResult(secondResult);
+  });
+}
 
-    binding.reportData = <String, dynamic>{
+Future<void> _runReplayCase(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+  required String caseName,
+  required String firstQuery,
+  required String secondQuery,
+}) async {
+  final originalOnError = FlutterError.onError;
+  addTearDown(() {
+    FlutterError.onError = originalOnError;
+  });
+  _suppressNetworkImageErrors();
+  app.main();
+
+  await _waitForMainEntry(tester);
+  await _openAssistantConversation(tester);
+  await _waitForChatInput(tester);
+
+  final firstResult = await _sendQueryWithSingleRetry(
+    tester,
+    query: firstQuery,
+  );
+  debugPrint('${caseName.toUpperCase()}_FIRST_RESULT: ${firstResult.toJson()}');
+  _expectReplayResult(firstResult);
+
+  final secondResult = await _sendQueryWithSingleRetry(
+    tester,
+    query: secondQuery,
+  );
+  debugPrint('${caseName.toUpperCase()}_SECOND_RESULT: ${secondResult.toJson()}');
+  _expectReplayResult(secondResult);
+
+  final existingReportData = switch (binding.reportData) {
+    final Map<Object?, Object?> map => map.map(
+      (key, value) => MapEntry(key.toString(), value),
+    ),
+    _ => <String, dynamic>{},
+  };
+  binding.reportData = <String, dynamic>{
+    ...existingReportData,
+    caseName: <String, dynamic>{
       'firstQuery': firstResult.toJson(),
       'secondQuery': secondResult.toJson(),
-    };
-  });
+    },
+  };
 }
 
 void _suppressNetworkImageErrors() {
@@ -261,9 +298,6 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   final deadline = DateTime.now().add(const Duration(seconds: 80));
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(seconds: 1));
-    final screenText = chatScope.evaluate().isNotEmpty
-        ? _collectVisibleText(tester, scope: chatScope.last)
-        : _collectVisibleText(tester);
     final snapshot = _latestAssistantSnapshot(tester);
     if (snapshot == null) {
       continue;
@@ -361,7 +395,7 @@ _AssistantBubbleSnapshot? _latestAssistantSnapshot(WidgetTester tester) {
           of: dialogScope.last,
           matching: find.byWidgetPredicate(
             (widget) =>
-                widget is ChatMessageBubble &&
+                widget is AssistantMessageBubble &&
                 (widget.message['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId,
             description: 'assistant bubble in assistant dialog',
@@ -369,14 +403,14 @@ _AssistantBubbleSnapshot? _latestAssistantSnapshot(WidgetTester tester) {
         )
       : find.byWidgetPredicate(
           (widget) =>
-              widget is ChatMessageBubble &&
+              widget is AssistantMessageBubble &&
               (widget.message['senderId'] as String?) ==
                   AppConceptConstants.assistantSenderId,
           description: 'assistant bubble',
         );
   if (assistantBubbleFinder.evaluate().isEmpty) return null;
   final latestBubbleFinder = assistantBubbleFinder.last;
-  final bubble = tester.widget<ChatMessageBubble>(latestBubbleFinder);
+  final bubble = tester.widget<AssistantMessageBubble>(latestBubbleFinder);
   final bubbleText = _collectVisibleText(tester, scope: latestBubbleFinder);
   return _AssistantBubbleSnapshot(
     message: bubble.message,
@@ -391,7 +425,7 @@ Future<String> _latestAssistantProcessHeaderText(WidgetTester tester) async {
           of: dialogScope.last,
           matching: find.byWidgetPredicate(
             (widget) =>
-                widget is ChatMessageBubble &&
+                widget is AssistantMessageBubble &&
                 (widget.message['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId,
             description: 'assistant bubble in assistant dialog',
@@ -399,7 +433,7 @@ Future<String> _latestAssistantProcessHeaderText(WidgetTester tester) async {
         )
       : find.byWidgetPredicate(
           (widget) =>
-              widget is ChatMessageBubble &&
+              widget is AssistantMessageBubble &&
               (widget.message['senderId'] as String?) ==
                   AppConceptConstants.assistantSenderId,
           description: 'assistant bubble',

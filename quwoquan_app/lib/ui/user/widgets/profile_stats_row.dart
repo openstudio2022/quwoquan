@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 class ProfileStatsRow extends StatelessWidget {
   const ProfileStatsRow({
@@ -23,55 +25,98 @@ class ProfileStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.28 : 0.18);
     final subject = profile;
 
     final items = [
-      _StatItem(value: _formatCount(subject?.circleCount), label: UITextConstants.contactsTabCircles, type: 'circles'),
-      _StatItem(value: _formatCount(subject?.followingCount), label: UITextConstants.follow, type: 'following'),
-      _StatItem(value: _formatCount(subject?.followerCount), label: UITextConstants.circleFans, type: 'fans'),
+      _StatItem(
+        value: _formatCount(subject?.circleCount),
+        label: UITextConstants.contactsTabCircles,
+        type: 'circles',
+      ),
+      _StatItem(
+        value: _formatCount(subject?.followingCount),
+        label: UITextConstants.follow,
+        type: 'following',
+      ),
+      _StatItem(
+        value: _formatCount(subject?.followerCount),
+        label: UITextConstants.circleFans,
+        type: 'fans',
+      ),
     ];
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: items.map((item) {
-        return GestureDetector(
-          onTap: onStatTap != null ? () => onStatTap!(item.type) : null,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.value,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.bold,
-                    color: fg,
+    return ProfileIosSectionCard(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+      backgroundColor: AppColors.iosGroupedSurfaceElevated(context),
+      child: Row(
+        children: <Widget>[
+          for (var i = 0; i < items.length; i += 1) ...<Widget>[
+            Expanded(
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onStatTap != null
+                    ? () => onStatTap!(items[i].type)
+                    : null,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: AppSpacing.intraGroupXs,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        items[i].value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosTitle3,
+                          fontWeight: AppTypography.semiBold,
+                          color: fg,
+                          letterSpacing: -0.32,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.intraGroupXs / 2),
+                      Text(
+                        items[i].label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosFootnote,
+                          fontWeight: AppTypography.medium,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: AppSpacing.intraGroupXs / 2),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    fontWeight: AppTypography.medium,
-                    color: fgSecondary,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      }).toList(),
+            if (i != items.length - 1)
+              Container(
+                width: AppSpacing.hairline,
+                height: AppSpacing.buttonHeightSm,
+                color: separator,
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _StatItem {
-  const _StatItem({required this.value, required this.label, required this.type});
+  const _StatItem({
+    required this.value,
+    required this.label,
+    required this.type,
+  });
   final String value;
   final String label;
   final String type;

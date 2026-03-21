@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -278,8 +279,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.more_horiz), findsNothing);
+      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
     });
 
     testWidgets('旅程 C2：other 模式显示 more 按钮', (tester) async {
@@ -289,8 +290,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-      expect(find.byIcon(Icons.settings_outlined), findsNothing);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.settings), findsNothing);
     });
   });
 }

@@ -1,0 +1,76 @@
+version: 1
+node: user-identity-profile-relationship/persona-follow-graph/persona-management
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260321-001-persona-follow-graph-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze owner plane management metadata
+    goal: 收口统一管理台 route、列表/配额/guard 实体与 create/activate/retire/delete command contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - "`ListOwnerPersonas / CreateSubAccount / ActivateSubAccount / RetireSubAccount / DeleteEmptySubAccount` 契约冻结"
+      - "`PersonaManagementItemView / QuotaView / LifecycleGuardView` 可由 metadata 表达"
+      - 主页与设置共用同一私有 surface 定义
+    status: planned
+
+  - id: P2
+    title: establish codegen and management facade baseline
+    goal: 让 App 只通过生成物和统一 facade 消费管理台数据
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - "`verify-metadata / codegen / codegen-app` 通过"
+      - 旧 mock 页降级为兼容跳转壳，不再承载业务逻辑
+      - 主页入口与设置入口读取同一 management facade 状态
+    status: planned
+
+  - id: P3
+    title: implement create, activate, delete, and retire flows
+    goal: 落地 owner plane 的创建、立即切换、删除保护和退役主链路
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 创建成功后可显式选择是否立即切换
+      - active persona exclusivity 由 user 域保证
+      - 主分身、最后一个分身与有历史分身的 guard 行为稳定
+    status: planned
+
+  - id: P4
+    title: validate management telemetry and rollback
+    goal: 建立管理台灰度、错误观测与 owner journey 回归，确保可安全放量
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A3
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - create/activate/delete failure、quota reached、retired count 指标可观测
+      - 管理台开关关闭后可退回单 active persona 安全基线
+      - owner journey 回归覆盖单分身、配额上限、删除阻断与退役分流
+    status: planned

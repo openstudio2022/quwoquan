@@ -33,7 +33,6 @@ import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
-import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
@@ -2477,38 +2476,6 @@ class _RootLevelIntentGraphUnderstandLlm implements AssistantLlmProvider {
         ],
         'contextSlots': <String, dynamic>{'city': '深圳'},
         'globalConstraints': <String, dynamic>{'mode': 'qa'},
-      }),
-    );
-  }
-}
-
-class _ContinuityAwareRetrievalDesignLlm implements AssistantLlmProvider {
-  Map<String, dynamic> lastTemplateVariables = const <String, dynamic>{};
-
-  @override
-  Future<AssistantModelOutput> reason({
-    required List<Map<String, dynamic>> messages,
-    required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
-    String templateId = 'planner.global_plan',
-    String templateVersion = '',
-    String sessionId = '',
-    String runId = '',
-    String traceId = '',
-    LlmCallOptions? callOptions,
-    void Function(String delta)? onDelta,
-  }) async {
-    lastTemplateVariables = Map<String, dynamic>.from(templateVariables);
-    return AssistantModelOutput(
-      text: jsonEncode(<String, dynamic>{
-        'queryTasks': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'route_priority',
-            'label': '路线优先级',
-            'query': '九寨沟 4天 路线 优先',
-          },
-        ],
       }),
     );
   }

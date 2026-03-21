@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -20,40 +21,51 @@ class ProfileHeader extends StatelessWidget {
   final String? bio;
 
   static const double avatarRadius = AppSpacing.xl;
-  static const double _avatarBorder = AppSpacing.intraGroupXs;
+  static const double _avatarBorder = AppSpacing.three;
   static double get avatarOuterDiameter => (avatarRadius + _avatarBorder) * 2;
   static double get avatarOverlapPx =>
       avatarOuterDiameter * UserProfileUIConfig.headerLayout.avatarOverlapRatio;
   static double get avatarIntrusion => avatarOverlapPx;
 
-  Widget _buildAvatar(Color bg, Color fgSecondary) {
+  Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
     final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     return Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: bg, width: _avatarBorder),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: hasAvatar
           ? CircleAvatar(
               radius: avatarRadius,
-              backgroundColor: fgSecondary.withValues(alpha: 0.2),
+              backgroundColor: AppColors.iosSecondaryFill(context),
               backgroundImage: NetworkImage(avatarUrl!),
               onBackgroundImageError: (e, s) {},
             )
           : CircleAvatar(
               radius: avatarRadius,
-              backgroundColor: fgSecondary.withValues(alpha: 0.2),
-              child: Icon(Icons.person, size: AppSpacing.iconLarge, color: fgSecondary),
+              backgroundColor: AppColors.iosTintedFill(context),
+              child: Icon(
+                CupertinoIcons.person_crop_circle_fill,
+                size: AppSpacing.iconLarge,
+                color: AppColors.iosAccent(context),
+              ),
             ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bg = AppColors.iosSystemBackground(context);
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -68,9 +80,10 @@ class ProfileHeader extends StatelessWidget {
               Text(
                 displayName ?? '',
                 style: TextStyle(
-                  fontSize: AppTypography.xxl,
-                  fontWeight: AppTypography.bold,
+                  fontSize: AppTypography.iosProfileTitle,
+                  fontWeight: AppTypography.semiBold,
                   color: fg,
+                  letterSpacing: -0.72,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -80,9 +93,10 @@ class ProfileHeader extends StatelessWidget {
                 Text(
                   bio!,
                   style: TextStyle(
-                    fontSize: AppTypography.md,
+                    fontSize: AppTypography.iosSubheadline,
                     color: fgSecondary,
-                    height: AppTypography.bodyLineHeight,
+                    height: 1.35,
+                    letterSpacing: -0.16,
                   ),
                   textAlign: TextAlign.start,
                   maxLines: 2,
@@ -95,7 +109,7 @@ class ProfileHeader extends StatelessWidget {
         Positioned(
           top: -avatarOverlapPx,
           left: 0,
-          child: _buildAvatar(bg, fgSecondary),
+          child: _buildAvatar(context, bg, fgSecondary),
         ),
       ],
     );

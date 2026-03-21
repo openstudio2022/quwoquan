@@ -12,11 +12,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 /// 圈子/关注/粉丝列表页。根据 type 调用 Repository 获取数据，移除硬编码。
 /// 路由：/profile/stats?type=circles|following|fans&userId=...
 class ProfileStatsPage extends ConsumerStatefulWidget {
-  const ProfileStatsPage({
-    super.key,
-    this.type = 'fans',
-    this.userId = '',
-  });
+  const ProfileStatsPage({super.key, this.type = 'fans', this.userId = ''});
 
   final String type;
   final String userId;
@@ -76,28 +72,31 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     try {
       if (_type == 'circles') {
         final list = await repo.listUserCircles(_userId);
-        if (mounted) setState(() {
-          _circles = list;
-          _loading = false;
-          _error = null;
-        });
+        if (mounted)
+          setState(() {
+            _circles = list;
+            _loading = false;
+            _error = null;
+          });
       } else {
         final list = _type == 'following'
             ? await repo.listFollowing(_userId)
             : await repo.listFollowers(_userId);
-        if (mounted) setState(() {
-          _users = list;
-          _loading = false;
-          _error = null;
-        });
+        if (mounted)
+          setState(() {
+            _users = list;
+            _loading = false;
+            _error = null;
+          });
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _circles = null;
-        _users = null;
-        _loading = false;
-        _error = e;
-      });
+      if (mounted)
+        setState(() {
+          _circles = null;
+          _users = null;
+          _loading = false;
+          _error = e;
+        });
     }
   }
 
@@ -106,8 +105,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
     return list
-        .where((c) =>
-            (c['name'] as String?)?.toLowerCase().contains(q) == true)
+        .where((c) => (c['name'] as String?)?.toLowerCase().contains(q) == true)
         .toList();
   }
 
@@ -116,24 +114,39 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
     return list
-        .where((u) =>
-            (u['nickname'] as String?)?.toLowerCase().contains(q) == true)
+        .where(
+          (u) =>
+              ((u['displayName'] ?? u['nickname']) as String?)
+                  ?.toLowerCase()
+                  .contains(q) ==
+              true,
+        )
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
-    final inputBg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
+    final inputBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
 
     String searchHint;
     switch (_type) {
@@ -194,21 +207,20 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           ),
           Expanded(
             child: _loading
-                ? Center(
-                    child: CupertinoActivityIndicator(),
-                  )
+                ? Center(child: CupertinoActivityIndicator())
                 : _error != null
-                    ? Center(
-                        child: Text(
-                          '加载失败',
-                          style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-                        ),
-                      )
-                    : _type == 'circles'
-                        ? _buildCirclesList(
-                            fg, fgSecondary, borderColor, bg)
-                        : _buildUsersList(
-                            fg, fgSecondary, borderColor, bg),
+                ? Center(
+                    child: Text(
+                      '加载失败',
+                      style: TextStyle(
+                        color: fgSecondary,
+                        fontSize: AppTypography.base,
+                      ),
+                    ),
+                  )
+                : _type == 'circles'
+                ? _buildCirclesList(fg, fgSecondary, borderColor, bg)
+                : _buildUsersList(fg, fgSecondary, borderColor, bg),
           ),
         ],
       ),
@@ -216,7 +228,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   }
 
   Widget _buildCirclesList(
-    Color fg, Color fgSecondary, Color borderColor, Color bg,
+    Color fg,
+    Color fgSecondary,
+    Color borderColor,
+    Color bg,
   ) {
     final list = _filteredCircles;
     if (list.isEmpty) {
@@ -253,8 +268,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundImage:
-                      coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
+                  backgroundImage: coverUrl.isNotEmpty
+                      ? NetworkImage(coverUrl)
+                      : null,
                   onBackgroundImageError: (_, __) {},
                   child: coverUrl.isEmpty
                       ? Icon(CupertinoIcons.group, color: fgSecondary)
@@ -298,7 +314,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   }
 
   Widget _buildUsersList(
-    Color fg, Color fgSecondary, Color borderColor, Color bg,
+    Color fg,
+    Color fgSecondary,
+    Color borderColor,
+    Color bg,
   ) {
     final list = _filteredUsers;
     if (list.isEmpty) {
@@ -318,8 +337,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ),
       itemBuilder: (context, i) {
         final u = list[i];
-        final userId = u['userId'] as String? ?? '';
-        final nickname = u['nickname'] as String? ?? '';
+        final userId =
+            (u['profileSubjectId'] ?? u['userId']) as String? ?? '';
+        final nickname =
+            (u['displayName'] ?? u['nickname']) as String? ?? '';
         final avatarUrl = u['avatarUrl'] as String? ?? '';
         final isFollowing = u['isFollowing'] as bool? ?? false;
         return CupertinoButton(
@@ -329,6 +350,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               context.push(
                 AppRoutePaths.userProfile(username: userId),
                 extra: UserProfileRouteExtra(
+                  profileSubjectId: userId,
                   avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
                   displayName: nickname.isNotEmpty ? nickname : null,
                 ),
@@ -341,8 +363,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundImage:
-                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  backgroundImage: avatarUrl.isNotEmpty
+                      ? NetworkImage(avatarUrl)
+                      : null,
                   onBackgroundImageError: (_, __) {},
                   child: avatarUrl.isEmpty
                       ? Icon(CupertinoIcons.person, color: fgSecondary)
@@ -368,24 +391,34 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                 ),
                 const SizedBox(width: AppSpacing.intraGroupLg),
                 CupertinoButton(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                    vertical: AppSpacing.intraGroupXs,
                   ),
                   color: isFollowing
                       ? borderColor.withValues(alpha: 0.3)
                       : AppColors.primaryColor.withValues(alpha: 0.12),
-                  minimumSize: const Size(72, 32),
+                  minimumSize: const Size(
+                    AppSpacing.minInteractiveSize,
+                    AppSpacing.minInteractiveSize,
+                  ),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                   onPressed: () {},
-                  child: Text(
-                    isFollowing
-                        ? UITextConstants.following
-                        : UITextConstants.follow,
-                    style: TextStyle(
-                      fontSize: AppTypography.xsPlus,
-                      fontWeight: FontWeight.w800,
-                      color: isFollowing ? fgSecondary : AppColors.primaryColor,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      isFollowing
+                          ? UITextConstants.following
+                          : UITextConstants.follow,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.xsPlus,
+                        fontWeight: FontWeight.w800,
+                        color: isFollowing
+                            ? fgSecondary
+                            : AppColors.primaryColor,
+                      ),
                     ),
                   ),
                 ),

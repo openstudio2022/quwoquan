@@ -5,11 +5,25 @@ class CircleMockData {
   static Map<String, dynamic> get circleInfo => {
     'name': '光影摄影社',
     'id': 'circle_photo_01',
+    'ownerId': 'u3',
+    'role': 'owner',
+    'joinStatus': 'joined',
+    'isFollowed': true,
     'avatar':
         'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
     'cover':
         'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
+    'coverUrl':
+        'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
     'desc': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
+    'description':
+        '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
+    'tags': ['城市漫步', '胶片', '人像', '风光'],
+    'visibility': 'public',
+    'joinPolicy': 'approval',
+    'memberCount': 128,
+    'postCount': 1024,
+    'weeklyActiveCount': 45,
     'conversationId': 'conv_circle_photo_01',
     'domainId': 'culture_arts',
     'autoSyncChat': true,

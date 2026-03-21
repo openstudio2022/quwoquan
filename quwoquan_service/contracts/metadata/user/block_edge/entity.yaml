@@ -4,7 +4,7 @@ entity: BlockEdge
 is_aggregate: false
 
 description: |
-  屏蔽关系。用户间屏蔽关系，必须强一致即时生效。
+  屏蔽关系。以 profileSubjectId 为主键语义的双向门禁对象，必须强一致即时生效。
   PostgreSQL 存储（数据量小 + 强 ACID）。
   Redis 缓存 blocked_set:{userId} SET，消息/推荐/搜索时 O(1) 检查。
 

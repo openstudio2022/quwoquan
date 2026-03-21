@@ -81,6 +81,9 @@ class AssistantRunRequest {
     required this.messages,
     this.sessionId,
     this.userId,
+    this.profileSubjectId,
+    this.subAccountId,
+    this.personaContextVersion,
     this.deviceProfile = 'mobile',
     this.deviceModel = '',
     this.deviceOs = '',
@@ -99,6 +102,9 @@ class AssistantRunRequest {
   final List<AssistantRunMessage> messages;
   final String? sessionId;
   final String? userId;
+  final String? profileSubjectId;
+  final String? subAccountId;
+  final String? personaContextVersion;
   final String deviceProfile;
   final String deviceModel;
   final String deviceOs;
@@ -123,6 +129,9 @@ class AssistantRunRequest {
       'messages': messages.map((m) => m.toJson()).toList(growable: false),
       'sessionId': sessionId,
       'userId': userId,
+      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
+      'personaContextVersion': personaContextVersion,
       'deviceProfile': deviceProfile,
       'deviceModel': deviceModel,
       'deviceOs': deviceOs,
@@ -149,6 +158,9 @@ class AssistantRunRequest {
           .toList(growable: false),
       sessionId: json['sessionId'] as String?,
       userId: json['userId'] as String?,
+      profileSubjectId: (json['profileSubjectId'] as String?)?.trim(),
+      subAccountId: (json['subAccountId'] as String?)?.trim(),
+      personaContextVersion: (json['personaContextVersion'] as String?)?.trim(),
       deviceProfile:
           (json['deviceProfile'] as String?)?.trim().isNotEmpty == true
           ? (json['deviceProfile'] as String).trim()

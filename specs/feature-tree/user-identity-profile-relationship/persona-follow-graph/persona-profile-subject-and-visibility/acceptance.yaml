@@ -1,0 +1,129 @@
+version: 2
+feature: persona-profile-subject-and-visibility
+level: L3_scenario
+source_path: user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
+parent_journey: persona-follow-graph
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结分身公开身份 `ProfileSubject`、owner 基线与分身覆写、可见性与停用后的历史归因规则。
+  journey_bindings:
+    - J1
+    - J3
+  in_scope:
+    - "`ProfileSubjectView / ProfileSubjectMutation`"
+    - owner 基线、分身覆写与同步范围
+    - strict isolation 与公开读取规则
+    - 停用分身后的历史归因与作者快照合同
+  out_of_scope:
+    - 主页壳层视觉与滚动
+    - 分身管理台入口与列表
+    - 下游透传与动作主体切换
+
+scenario_acceptance:
+  A1:
+    title: "`ProfileSubject` 成为唯一公开身份真相源"
+    scenario: "主页、内容卡、评论、聊天等公开作者展示统一消费 `ProfileSubject`"
+    journey_step: resolve public persona identity
+    done_when:
+      - "公开读取统一返回 `ProfileSubject`"
+      - "`username` 不再承担跨域内部主键语义"
+      - 公开接口不暴露 owner 管理字段与映射关系
+    edge_cases:
+      - 同一个 owner 拥有多个分身
+      - username 变更后内部引用仍稳定
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - profile subject contract test
+        - public read model regression test
+      recorded: []
+    status: pending
+  A2:
+    title: owner 基线、分身覆写与同步范围显式可控
+    scenario: owner 编辑 owner 或分身资料，并选择同步目标
+    journey_step: edit public persona profile
+    done_when:
+      - 新分身默认继承 owner 公开资料基线
+      - 分身只保存覆写字段
+      - 写入契约显式支持 apply scope 与 sync targets
+      - UI 可以消费该契约做同步提示，但不自建第二真相源
+    edge_cases:
+      - 同时编辑 owner 与某个分身
+      - 只同步部分字段到选定分身
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - profile subject mutation schema test
+        - sync prompt widget test
+        - owner to persona sync contract test
+      recorded: []
+    status: pending
+  A3:
+    title: 可见性与停用后的历史归因稳定
+    scenario: 分身进入 strict isolation 或停用后，公开读取与历史对象作者渲染仍符合预期
+    journey_step: read retired or hidden persona
+    done_when:
+      - strict isolation 的公开读取返回不可见语义
+      - 停用分身不再作为新动作主体
+      - 历史内容、评论、聊天消息与通知继续使用不可变作者快照
+      - 历史归因不被重绑到 owner 或其它分身
+    edge_cases:
+      - 停用分身仍有公开内容
+      - 分身停用后再次激活
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - strict isolation not found contract test
+        - retired persona attribution regression test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 公开身份契约可被主页与内容域安全消费
+    done_when:
+      - profile-homepage-redesign 只消费本场景冻结的 user 域模型
+      - content/chat/circle/assistant 不再复制 persona 公开身份规则
+      - visibility 与 retired attribution 指标可观测
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - profile consumer contract verification
+        - visibility telemetry verification
+      recorded: []
+    status: pending

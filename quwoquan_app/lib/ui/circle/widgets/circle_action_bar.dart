@@ -28,7 +28,10 @@ class CircleActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
 
     if (role == CircleRole.owner || role == CircleRole.admin) {
@@ -37,7 +40,7 @@ class CircleActionBar extends StatelessWidget {
           Expanded(
             child: _ActionButton(
               label: UITextConstants.editCircle,
-              icon: Icons.edit_outlined,
+              icon: CupertinoIcons.pencil,
               onTap: onEditCircle,
               fg: fg,
               border: border,
@@ -47,7 +50,7 @@ class CircleActionBar extends StatelessWidget {
           Expanded(
             child: _ActionButton(
               label: UITextConstants.manageCenter,
-              icon: Icons.settings_outlined,
+              icon: CupertinoIcons.slider_horizontal_3,
               onTap: onManageCenter,
               fg: fg,
               border: border,
@@ -65,7 +68,7 @@ class CircleActionBar extends StatelessWidget {
         Expanded(
           child: _ActionButton(
             label: isFollowed ? UITextConstants.following : UITextConstants.follow,
-            icon: isFollowed ? Icons.check : Icons.add,
+            icon: isFollowed ? CupertinoIcons.check_mark : CupertinoIcons.add,
             onTap: onFollow,
             fg: isFollowed ? fgSecondary : Colors.white,
             border: isFollowed ? border : AppColors.primaryColor,
@@ -81,10 +84,10 @@ class CircleActionBar extends StatelessWidget {
                     ? UITextConstants.joinPending
                     : UITextConstants.joinCircle,
             icon: isJoined
-                ? Icons.check_circle_outline
+                ? CupertinoIcons.check_mark_circled
                 : isPending
-                    ? Icons.hourglass_top
-                    : Icons.group_add_outlined,
+                    ? CupertinoIcons.time
+                    : CupertinoIcons.person_add,
             onTap: onJoinCircle,
             fg: isJoined ? fgSecondary : (isPending ? fgSecondary : Colors.white),
             border: isJoined ? border : (isPending ? border : AppColors.primaryColor),
@@ -122,13 +125,24 @@ class _ActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         color: filled ? AppColors.primaryColor : null,
         onPressed: onTap,
-        child: DecoratedBox(
+        child: Container(
           decoration: BoxDecoration(
+            color: filled ? AppColors.primaryColor : Colors.transparent,
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             border: filled
                 ? null
-                : Border.all(color: border.withValues(alpha: 0.5)),
+                : Border.all(color: border.withValues(alpha: 0.45)),
+            boxShadow: filled
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryColor.withValues(alpha: 0.2),
+                      blurRadius: AppSpacing.md,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -136,12 +150,16 @@ class _ActionButton extends StatelessWidget {
               children: [
                 Icon(icon, size: AppSpacing.iconSmall, color: fg),
                 SizedBox(width: AppSpacing.xs),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.md,
-                    fontWeight: AppTypography.semiBold,
-                    color: fg,
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.md,
+                      fontWeight: AppTypography.semiBold,
+                      color: fg,
+                    ),
                   ),
                 ),
               ],

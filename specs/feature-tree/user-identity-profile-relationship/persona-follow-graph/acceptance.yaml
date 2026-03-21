@@ -1,113 +1,129 @@
-version: 1
+version: 2
 feature: persona-follow-graph
-level: "L2_feature"
-template: A1-A8
+level: L2_journey
+source_path: user-identity-profile-relationship/persona-follow-graph
 archived: false
-tree_context:
-  feature_path: capability.user-identity-profile-relationship.feature.persona-follow-graph
-  parent_path: capability.user-identity-profile-relationship
-notes:
-  semantic_upgrade:
-  - 保留历史路径名 persona-follow-graph，业务语义升级为子账号隔离与关系网络
-  benchmark_inputs:
-  - 微信：强关系链路与工作/生活身份冲突痛点
-  - 小红书：人格化表达与评论身份感知
-  - 微博：运营账号心智、粉丝关系与传播
-non_functional_acceptance:
-  realtime:
-    enabled: true
-    slo:
-    - 子账号切换到新上下文 P95 < 1s
-    - 切换后评论、私信、圈子、邀请主体立即一致，不发生串号
-  weak_network:
-    enabled: true
-    scenarios:
-    - 关系建立、切换、删除失败后可恢复且不写入错误归属
-    - 分页与列表重试后不跨子账号串数据
-  gray_release:
-    enabled: true
-    steps:
-    - 5
-    - 25
-    - 50
-    - 100
-    rollback_on:
-    - 多个子账号被外部链路间接关联
-    - 好友/圈子/群/邀请归属串号
-    - 切换后推荐、聊天、评论上下文不同步
-level_acceptance:
-  A1:
-    criteria: 用户可以创建、切换和管理多个 SubAccount，且单子账号用户路径依旧简单。
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A2:
-    criteria: 好友、关注、圈子、群、评论、私信、主页与互动数据都按 SubAccount 独立归属。
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A3:
-    criteria: 外部默认无法从主页、评论、共同联系人、圈子参与、邀请传播与常规业务接口推断多个子账号归属于同一 OwnerAccount。
-    status: pending
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests: []
-  A4:
-    criteria: 通讯录匹配结果来自 OwnerAccount，但转化为好友、圈子、群或其他真实关系时必须显式落到具体 SubAccount。
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A5:
-    criteria: 评论、发帖、加好友、进圈、私信、邀请等关键动作可以明确绑定当前 SubAccount，不发生串号。
-    status: pending
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A6:
-    criteria: 平台审计与风控能追踪 OwnerAccount 到 SubAccount 的映射，但普通读接口遵循隔离与最小暴露。
-    status: pending
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests: []
-  A7:
-    criteria: 子账号、关系网络、隔离规则相关 service/openapi/fields/errors 契约与 metadata 一致。
-    status: pending
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests: []
-  A8:
-    criteria: 自动化测试覆盖子账号生命周期、关系网络分页、切换透传、隔离验证与异常恢复，可进入 `/design` 细化对象拆分。
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: required
-    tests: []
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 owner 进入分身管理、分身公开身份建立、跨域身份透传与关系隔离的完整旅程，
+    把“作者分身”明确收口为 user 域 Persona/SubAccount 的产品化闭环。
+  composed_scenarios:
+    - persona-management
+    - persona-profile-subject-and-visibility
+    - persona-context-propagation
+    - follow-relationship
+    - social-graph-read
+  out_of_scope:
+    - 登录与凭证绑定本身
+    - 主页壳层视觉与滚动动效实现
+    - 合规物理清除与客服工单流
+
+journey_acceptance:
+  J1:
+    title: owner 可完成分身创建、切换、停用与恢复管理
+    journey: profile/settings -> persona management -> create/edit/activate/retire
+    scenario_refs:
+      - persona-management
+      - persona-profile-subject-and-visibility
+    done_when:
+      - owner 可以从个人主页与设置进入统一的分身管理台
+      - 分身支持创建、切换、停用/删除保护、配额与主分身约束
+      - 新分身默认继承 owner 资料基线，并可进入公开身份编辑
+    blockers:
+      - 管理入口仍分裂为 mock 页与真实页两套
+      - create/activate/delete 任一步会导致 active persona 丢失或切换到错误主体
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+        - T4_user_journey
+    tests:
+      planned:
+        - persona management widget journey test
+        - user-service persona lifecycle contract test
+        - owner to persona management patrol test
+      recorded: []
+    status: pending
+  J2:
+    title: 分身成为内容、聊天、圈子、助手与邀请的统一动作主体
+    journey: activate persona -> publish/comment/chat/circle/assistant/invite -> observe downstream consistency
+    scenario_refs:
+      - persona-context-propagation
+      - follow-relationship
+      - social-graph-read
+    done_when:
+      - 激活分身后，发帖、评论、聊天、圈子、邀请与助手上下文统一切换
+      - 默认动作主体来自 active persona，只有显式选择时才允许覆盖
+      - 任何链路缺少 persona 上下文时，系统阻断或提示恢复，不允许静默回退到 owner
+    blockers:
+      - 下游域继续以 userId 或 ownerId 作为默认动作主体
+      - 评论、聊天、邀请、通知任一链路发生串号
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - persona propagation integration test
+        - publish comment chat assistant end-to-end journey test
+        - notification attribution verification
+      recorded: []
+    status: pending
+  J3:
+    title: 外部只看到分身主体，内部保留 owner 审计链
+    journey: public read -> social graph -> historical activity -> internal audit
+    scenario_refs:
+      - persona-profile-subject-and-visibility
+      - follow-relationship
+      - social-graph-read
+    done_when:
+      - 普通读接口与常规界面无法推断同 owner 下的多个分身关联
+      - strict isolation 与停用分身的公开读取策略稳定可预期
+      - 审计与风控链路可追踪 owner 与分身映射，但不泄露到业务读接口
+    blockers:
+      - 主页、评论、共同联系人、圈子参与或邀请记录可反推出跨分身关联
+      - 停用后历史归因丢失或被重绑到 owner
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+        - T4_user_journey
+    tests:
+      planned:
+        - profile subject visibility contract test
+        - isolation leakage regression test
+        - audit mapping verification
+      recorded: []
+    status: pending
+
+release_guardrails:
+  R1:
+    title: 分身管理、公开身份与跨域透传可灰度可回滚
+    done_when:
+      - persona management、profile subject、context propagation 三类能力可独立开关
+      - 串号、公开映射泄露或历史归因丢失时可单独回退对应能力
+      - 关键指标具备观测：switch latency、attribution mismatch、public leakage、retired-subject reads
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T4_release_rehearsal
+    tests:
+      planned:
+        - feature flag rollback rehearsal
+        - observability dashboard verification
+      recorded: []
+    status: pending

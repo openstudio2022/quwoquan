@@ -14,17 +14,15 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/assistant/protocol/run_response.dart';
-import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
 void main() {
   testWidgets('远端未配置时 assistant 对话页会自动回落本地 backend', (tester) async {
@@ -51,10 +49,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: ChatDetailPage(
-              conversationId: AppConceptConstants.assistantConversationId,
-              onBack: _noop,
-            ),
+            body: AssistantConversationPage(onBack: _noop),
           ),
         ),
       ),
@@ -96,7 +91,7 @@ void main() {
       condition: () => find
           .byWidgetPredicate(
             (widget) =>
-                widget is ChatMessageBubble &&
+                widget is AssistantMessageBubble &&
                 (widget.message['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId &&
                 (((widget.message['content'] as String?) ?? '').contains(
@@ -138,10 +133,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: ChatDetailPage(
-              conversationId: AppConceptConstants.assistantConversationId,
-              onBack: _noop,
-            ),
+            body: AssistantConversationPage(onBack: _noop),
           ),
         ),
       ),
@@ -470,10 +462,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: ChatDetailPage(
-              conversationId: AppConceptConstants.assistantConversationId,
-              onBack: _noop,
-            ),
+            body: AssistantConversationPage(onBack: _noop),
           ),
         ),
       ),
@@ -529,10 +518,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: ChatDetailPage(
-              conversationId: AppConceptConstants.assistantConversationId,
-              onBack: _noop,
-            ),
+            body: AssistantConversationPage(onBack: _noop),
           ),
         ),
       ),
@@ -884,15 +870,15 @@ class _AssistantCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
-ChatMessageBubble _latestAssistantBubble(WidgetTester tester) {
+AssistantMessageBubble _latestAssistantBubble(WidgetTester tester) {
   final finder = find.byWidgetPredicate(
     (widget) =>
-        widget is ChatMessageBubble &&
+        widget is AssistantMessageBubble &&
         (widget.message['senderId'] as String?) ==
             AppConceptConstants.assistantSenderId,
     description: 'assistant bubble',
   );
-  return tester.widget<ChatMessageBubble>(finder.last);
+  return tester.widget<AssistantMessageBubble>(finder.last);
 }
 
 Future<void> _pumpUntil(

@@ -5,6 +5,24 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
+TextStyle _myCirclesRailLabelStyle() {
+  return const TextStyle(fontSize: AppTypography.xsPlus);
+}
+
+double _myCirclesRailHeight(BuildContext context) {
+  final painter = TextPainter(
+    text: TextSpan(text: 'Hg', style: _myCirclesRailLabelStyle()),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final adaptiveHeight =
+      AppSpacing.avatarCircleLg + AppSpacing.intraGroupXs + painter.height;
+  return adaptiveHeight > AppSpacing.avatarRailHeight
+      ? adaptiveHeight
+      : AppSpacing.avatarRailHeight;
+}
+
 class MyCirclesRail extends StatelessWidget {
   final List<CircleDto> circles;
   final Function(CircleDto) onCircleTap;
@@ -20,7 +38,7 @@ class MyCirclesRail extends StatelessWidget {
     if (circles.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
-      height: AppSpacing.avatarRailHeight,
+      height: _myCirclesRailHeight(context),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
         scrollDirection: Axis.horizontal,
@@ -67,8 +85,7 @@ class MyCirclesRail extends StatelessWidget {
             width: AppSpacing.largeAvatarSize,
             child: Text(
               circle.name,
-              style: TextStyle(
-                fontSize: AppTypography.xsPlus,
+              style: _myCirclesRailLabelStyle().copyWith(
                 color: AppColors.light.foregroundSecondary,
               ),
               maxLines: 1,
@@ -99,11 +116,16 @@ class MyCirclesRail extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.intraGroupXs),
-        Text(
-          '全部',
-          style: TextStyle(
-            fontSize: AppTypography.xsPlus,
-            color: AppColors.light.foregroundSecondary,
+        SizedBox(
+          width: AppSpacing.largeAvatarSize,
+          child: Text(
+            '全部',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: _myCirclesRailLabelStyle().copyWith(
+              color: AppColors.light.foregroundSecondary,
+            ),
           ),
         ),
       ],

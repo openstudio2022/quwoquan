@@ -227,6 +227,9 @@ class _TrackingSendChatRepository extends MockChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   }) async {
     sendCallCount++;
@@ -236,6 +239,11 @@ class _TrackingSendChatRepository extends MockChatRepository {
       content: content,
       mediaUrl: mediaUrl,
       media: media,
+      replyToMessageId: replyToMessageId,
+      mentions: mentions,
+      senderPersonaId: senderPersonaId,
+      senderProfileSubjectId: senderProfileSubjectId,
+      personaContextVersion: personaContextVersion,
       clientMsgId: clientMsgId,
     );
   }
@@ -252,6 +260,9 @@ class _ErrorSendChatRepository extends MockChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   }) async {
     throw Exception('发送失败：网络异常');

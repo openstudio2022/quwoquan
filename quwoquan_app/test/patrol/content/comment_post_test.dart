@@ -1,4 +1,4 @@
-/// L4 Patrol E2E: 评论发布旅程
+/// T4 Patrol E2E: 评论发布旅程
 ///
 /// 对应 e2e.yaml 场景：comment_on_post_journey [test_type: ui_journey]
 ///
@@ -17,6 +17,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 const _stagingBase = String.fromEnvironment('STAGING_BASE_URL');
@@ -36,7 +37,7 @@ Future<String> _seedPhotoPost(http.Client client) async {
     },
     body: jsonEncode({
       'contentType': 'image',
-      'title': 'L4 comment_on_post_journey seed',
+      'title': 'T4 comment_on_post_journey seed',
       'body': 'patrol test fixture',
       'mediaUrls': ['https://example.com/patrol.jpg'],
       'width': 1080,
@@ -65,7 +66,7 @@ void main() {
   late String seededPostId;
 
   setUp(() async {
-    assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+    assert(_env == 'staging', 'T4 tests must run with ENV=staging');
     client = http.Client();
     seededPostId = await _seedPhotoPost(client);
   });
@@ -77,7 +78,8 @@ void main() {
 
   patrolTest(
     'comment_on_post_journey — 发表评论 + commentCount +1',
-    tags: ['l4', 'content', 'comment'],
+    tags: ['t4', 'content', 'comment'],
+    skip: !kRunPatrolT4,
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 10),
     ),
@@ -106,9 +108,9 @@ void main() {
       await $.pumpAndSettle();
 
       // iOS 可能弹出通知权限弹窗，dismiss 它
-      if (await $.native.isPermissionDialogVisible(
+      if (await $.platform.mobile.isPermissionDialogVisible(
           timeout: const Duration(seconds: 3))) {
-        await $.native.denyPermission();
+        await $.platform.mobile.denyPermission();
       }
 
       // ── tap Submit ────────────────────────────────────────────────────
@@ -138,7 +140,8 @@ void main() {
 
   patrolTest(
     'comment_on_post_journey — rate limit toast 可见 + 输入框重新 enabled',
-    tags: ['l4', 'content', 'comment', 'flaky'],
+    tags: ['t4', 'content', 'comment', 'flaky'],
+    skip: !kRunPatrolT4,
     ($) async {
       // 此场景依赖 staging rate limit 触发，标记 flaky，允许 retry
       await $(TestKeys.photoPostCard)

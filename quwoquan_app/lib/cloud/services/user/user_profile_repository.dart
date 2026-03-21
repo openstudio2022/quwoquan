@@ -533,6 +533,69 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
   }
 
+  static String _normalizeRelationshipState(Map<String, dynamic> map) {
+    final state =
+        map['relationState']?.toString() ??
+        map['relationTier']?.toString() ??
+        '';
+    if (state.isNotEmpty) {
+      switch (state) {
+        case 'same_interest':
+        case 'close_friend':
+          return 'mutual';
+        case 'following_only':
+          return 'following';
+        case 'none':
+          return 'not_following';
+      }
+      return state;
+    }
+    final isFollowing = map['isFollowing'] == true;
+    final isFollowedBy = map['isFollowedBy'] == true;
+    if (isFollowing && isFollowedBy) return 'mutual';
+    if (isFollowing) return 'following';
+    if (isFollowedBy) return 'followed_by';
+    return 'not_following';
+  }
+
+  static Map<String, dynamic> _normalizeRelationshipItem(Map<String, dynamic> raw) {
+    final profileSubjectId =
+        raw['profileSubjectId']?.toString() ??
+        raw['targetProfileSubjectId']?.toString() ??
+        raw['userId']?.toString() ??
+        '';
+    final displayName =
+        raw['displayName']?.toString() ??
+        raw['nickname']?.toString() ??
+        profileSubjectId;
+    final avatarUrl =
+        raw['avatarUrl']?.toString() ??
+        raw['avatarUrlSnapshot']?.toString() ??
+        '';
+    return <String, dynamic>{
+      ...raw,
+      'profileSubjectId': profileSubjectId,
+      'userId': profileSubjectId,
+      'displayName': displayName,
+      'nickname': displayName,
+      'avatarUrl': avatarUrl,
+    };
+  }
+
+  static Map<String, dynamic> _normalizeRelationship(Map<String, dynamic> raw) {
+    final relationState = _normalizeRelationshipState(raw);
+    final isMutual = relationState == 'mutual';
+    final isFollowing = relationState == 'following' || isMutual;
+    final isFollowedBy = relationState == 'followed_by' || isMutual;
+    return <String, dynamic>{
+      ..._normalizeRelationshipItem(raw),
+      'relationState': relationState,
+      'isFollowing': raw['isFollowing'] == true || isFollowing,
+      'isFollowedBy': raw['isFollowedBy'] == true || isFollowedBy,
+      'isMutual': raw['isMutual'] == true || isMutual,
+    };
+  }
+
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
@@ -598,7 +661,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final url = _uri(
-      ContentApiMetadata.listUserPostsPath(userId: userId),
+      ContentApiMetadata.listUserPostsPath(profileSubjectId: userId),
       queryParameters: <String, String>{'limit': '$limit'},
     );
     final resp = await _client.get(
@@ -686,7 +749,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> followUser(String targetUserId) async {
     final url = _uri(
-      UserApiMetadata.followUserPath(targetUserId: targetUserId),
+      UserApiMetadata.followUserPath(
+        targetProfileSubjectId: targetUserId,
+      ),
     );
     final resp = await _client.post(
       url,
@@ -700,7 +765,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> unfollowUser(String targetUserId) async {
     final url = _uri(
-      UserApiMetadata.unfollowUserPath(targetUserId: targetUserId),
+      UserApiMetadata.unfollowUserPath(
+        targetProfileSubjectId: targetUserId,
+      ),
     );
     final resp = await _client.delete(
       url,
@@ -720,7 +787,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
-      UserApiMetadata.listFollowingPath(userId: userId),
+      UserApiMetadata.listFollowingPath(profileSubjectId: userId),
       queryParameters: params,
     );
     final resp = await _client.get(
@@ -730,8 +797,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowing failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    return _decodeItems(resp)
+        .map(_normalizeRelationshipItem)
+        .toList(growable: false);
   }
 
   @override
@@ -743,7 +811,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
-      UserApiMetadata.listFollowersPath(userId: userId),
+      UserApiMetadata.listFollowersPath(profileSubjectId: userId),
       queryParameters: params,
     );
     final resp = await _client.get(
@@ -753,13 +821,16 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowers failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    return _decodeItems(resp)
+        .map(_normalizeRelationshipItem)
+        .toList(growable: false);
   }
 
   @override
   Future<Map<String, dynamic>> getRelationship(String userId) async {
-    final url = _uri(UserApiMetadata.getRelationshipPath(userId: userId));
+    final url = _uri(
+      UserApiMetadata.getRelationshipPath(profileSubjectId: userId),
+    );
     final resp = await _client.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.getRelationship),
@@ -767,7 +838,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('getRelationship failed: ${resp.statusCode}');
     }
-    return json.decode(resp.body) as Map<String, dynamic>;
+    final data = json.decode(resp.body) as Map<String, dynamic>;
+    return _normalizeRelationship(data);
   }
 
   @override

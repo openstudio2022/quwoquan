@@ -2443,54 +2443,68 @@ features:
               tags: []
         - id: persona-follow-graph
           name: persona-follow-graph
-          level: L2_feature
+          level: L2_journey
           path: user-identity-profile-relationship/persona-follow-graph
-          domain: ""
+          domain: user
           status: specified
-          tags: []
+          tags: [persona, sub-account, identity]
           children:
-            - id: follow-relationship
-              name: follow-relationship
-              level: L3_story
-              path: user-identity-profile-relationship/persona-follow-graph/follow-relationship
-              domain: ""
-              status: specified
-              tags: []
-            - id: follow-relationship--follow-unfollow-contract
-              name: follow-relationship--follow-unfollow-contract
-              level: L3_story
-              path: user-identity-profile-relationship/persona-follow-graph/follow-relationship--follow-unfollow-contract
-              domain: ""
-              status: specified
-              tags: []
             - id: persona-management
               name: persona-management
-              level: L3_story
+              level: L3_scenario
               path: user-identity-profile-relationship/persona-follow-graph/persona-management
-              domain: ""
+              domain: user
               status: specified
-              tags: []
-            - id: persona-management--persona-lifecycle-contract
-              name: persona-management--persona-lifecycle-contract
-              level: L3_story
-              path: user-identity-profile-relationship/persona-follow-graph/persona-management--persona-lifecycle-contract
-              domain: ""
+              tags: [management, owner-plane]
+            - id: persona-profile-subject-and-visibility
+              name: persona-profile-subject-and-visibility
+              level: L3_scenario
+              path: user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
+              domain: user
               status: specified
-              tags: []
+              tags: [profile-subject, visibility, inheritance]
+            - id: persona-context-propagation
+              name: persona-context-propagation
+              level: L3_scenario
+              path: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+              domain: user
+              status: specified
+              tags: [context, propagation, attribution]
+            - id: follow-relationship
+              name: follow-relationship
+              level: L3_scenario
+              path: user-identity-profile-relationship/persona-follow-graph/follow-relationship
+              domain: user
+              status: specified
+              tags: [relationship, graph-write]
             - id: social-graph-read
               name: social-graph-read
-              level: L3_story
+              level: L3_scenario
               path: user-identity-profile-relationship/persona-follow-graph/social-graph-read
-              domain: ""
+              domain: user
               status: specified
-              tags: []
+              tags: [relationship, graph-read]
+            - id: follow-relationship--follow-unfollow-contract
+              name: follow-relationship--follow-unfollow-contract
+              level: L3_scenario
+              path: user-identity-profile-relationship/persona-follow-graph/follow-relationship--follow-unfollow-contract
+              domain: user
+              status: specified
+              tags: [relationship, graph-write]
+            - id: persona-management--persona-lifecycle-contract
+              name: persona-management--persona-lifecycle-contract
+              level: L3_scenario
+              path: user-identity-profile-relationship/persona-follow-graph/persona-management--persona-lifecycle-contract
+              domain: user
+              status: specified
+              tags: [management, owner-plane]
             - id: social-graph-read--followers-following-pagination
               name: social-graph-read--followers-following-pagination
-              level: L3_story
+              level: L3_scenario
               path: user-identity-profile-relationship/persona-follow-graph/social-graph-read--followers-following-pagination
-              domain: ""
+              domain: user
               status: specified
-              tags: []
+              tags: [relationship, graph-read]
         - id: profile-homepage-redesign
           name: profile-homepage-redesign
           level: L2_feature

@@ -51,10 +51,14 @@ class MessageDto {
       conversationId: (map['conversationId'] ?? '') as String,
       seq: (map['seq'] as num?)?.toInt() ?? 0,
       clientMsgId: (map['clientMsgId'] ?? '') as String,
-      senderId: (map['senderId'] ?? '') as String,
-      senderName: map['senderName'] as String?,
-      senderAvatar: map['senderAvatar'] as String?,
-      senderPersonaId: map['senderPersonaId'] as String?,
+      senderId:
+          (map['senderProfileSubjectId'] ?? map['senderId'] ?? '').toString(),
+      senderName:
+          (map['senderDisplayNameSnapshot'] ?? map['senderName'])?.toString(),
+      senderAvatar:
+          (map['senderAvatarUrlSnapshot'] ?? map['senderAvatar'])?.toString(),
+      senderPersonaId:
+          (map['senderPersonaId'] ?? map['senderSubAccountId'])?.toString(),
       type: (map['type'] ?? 'text') as String,
       content: map['content'] as String?,
       mediaUrl: map['mediaUrl'] as String?,
@@ -132,8 +136,11 @@ class MessageDto {
     'seq': seq,
     'clientMsgId': clientMsgId,
     'senderId': senderId,
+    'senderProfileSubjectId': senderId,
     if (senderName != null) 'senderName': senderName,
+    if (senderName != null) 'senderDisplayNameSnapshot': senderName,
     if (senderAvatar != null) 'senderAvatar': senderAvatar,
+    if (senderAvatar != null) 'senderAvatarUrlSnapshot': senderAvatar,
     if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
     'type': type,
     if (content != null) 'content': content,
@@ -151,7 +158,9 @@ class MessageDto {
   /// Converts to the display-oriented Map expected by ChatMessageBubble.
   /// Bridges typed DTO to legacy `Map<String, dynamic>` UI contract.
   Map<String, dynamic> toDisplayMap({required String currentUserId}) {
-    final isSelf = senderId == currentUserId;
+    final isSelf =
+        senderId == currentUserId ||
+        (senderId == 'current_user' && currentUserId.isNotEmpty);
     final timeStr = timestamp != null
         ? ChatTimeFormatter.format(timestamp!)
         : '';
@@ -162,6 +171,7 @@ class MessageDto {
       'seq': seq,
       'clientMsgId': clientMsgId,
       'senderId': senderId,
+      'senderProfileSubjectId': senderId,
       if (senderName != null) 'senderName': senderName,
       if (senderAvatar != null) 'senderAvatar': senderAvatar,
       if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,

@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -48,6 +49,9 @@ abstract class ChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   });
 
@@ -223,6 +227,9 @@ class MockChatRepository implements ChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   }) async {
     _seqCounter++;
@@ -422,6 +429,29 @@ class RemoteChatRepository implements ChatRepository {
     ).replace(queryParameters: queryParameters);
   }
 
+  Map<String, String> _headersForSurface(
+    AppUiSurface surface, {
+    required String operationId,
+    required String legacyPageId,
+  }) {
+    return CloudRequestHeaders.forSurfaceOperation(
+      surfaceId: surface.id,
+      routeId: surface.routeId,
+      operationId: operationId,
+      legacyPageId: legacyPageId,
+    );
+  }
+
+  String _contextForSurface(
+    AppUiSurface surface, {
+    required String operationId,
+  }) {
+    return CloudRequestHeaders.contextForSurfaceOperation(
+      surfaceId: surface.id,
+      operationId: operationId,
+    );
+  }
+
   // ── 会话 ──────────────────────────────────────────────────────────────────
 
   @override
@@ -438,11 +468,18 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listInbox),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listInboxOperation,
+        legacyPageId: ChatRequestPageIds.listInbox,
+      ),
     );
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: ChatRequestPageIds.listInbox,
+      context: _contextForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listInboxOperation,
+      ),
     );
     return page.items.map(ChatInboxDto.fromMap).toList(growable: false);
   }
@@ -461,13 +498,18 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.listConversations,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listConversationsOperation,
+        legacyPageId: ChatRequestPageIds.listConversations,
       ),
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
-      context: ChatRequestPageIds.listConversations,
+      context: _contextForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listConversationsOperation,
+      ),
     ).items;
   }
 
@@ -481,8 +523,10 @@ class RemoteChatRepository implements ChatRepository {
     final uri = _uri(ChatApiMetadata.createConversationPath);
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.createConversation,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.createConversationOperation,
+        legacyPageId: ChatRequestPageIds.createConversation,
       ),
       body: {
         'type': type,
@@ -500,7 +544,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     return await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.getConversationOperation,
+        legacyPageId: ChatRequestPageIds.getConversation,
+      ),
     );
   }
 
@@ -521,11 +569,18 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listMessages),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.listMessagesOperation,
+        legacyPageId: ChatRequestPageIds.listMessages,
+      ),
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
-      context: ChatRequestPageIds.listMessages,
+      context: _contextForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.listMessagesOperation,
+      ),
     ).items;
   }
 
@@ -539,6 +594,9 @@ class RemoteChatRepository implements ChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   }) async {
     final uri = _uri(
@@ -546,7 +604,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.sendMessage),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.sendMessageOperation,
+        legacyPageId: ChatRequestPageIds.sendMessage,
+      ),
       body: {
         'type': type,
         'content': content,
@@ -556,6 +618,9 @@ class RemoteChatRepository implements ChatRepository {
         'cardPayload': ?cardPayload,
         'replyToMessageId': ?replyToMessageId,
         'mentions': ?mentions,
+        'senderPersonaId': ?senderPersonaId,
+        'senderProfileSubjectId': ?senderProfileSubjectId,
+        'personaContextVersion': ?personaContextVersion,
       },
     );
   }
@@ -573,7 +638,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.recallMessage),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.recallMessageOperation,
+        legacyPageId: ChatRequestPageIds.recallMessage,
+      ),
       body: {},
     );
   }
@@ -589,7 +658,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.syncMessages),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.syncMessagesOperation,
+        legacyPageId: ChatRequestPageIds.syncMessages,
+      ),
       body: {'lastSeq': lastSeq, 'limit': limit},
     );
   }
@@ -609,7 +682,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.markAsRead),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.markAsReadOperation,
+        legacyPageId: ChatRequestPageIds.markAsRead,
+      ),
       body: {},
     );
   }
@@ -627,7 +704,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getReceipts),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.getReceiptsOperation,
+        legacyPageId: ChatRequestPageIds.getReceipts,
+      ),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -655,7 +736,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listMembers),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatManage,
+        operationId: ChatApiMetadata.listMembersOperation,
+        legacyPageId: ChatRequestPageIds.listMembers,
+      ),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -674,7 +759,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.addMembers),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatAddMembers,
+        operationId: ChatApiMetadata.addMembersOperation,
+        legacyPageId: ChatRequestPageIds.addMembers,
+      ),
       body: {'userIds': userIds},
     );
   }
@@ -692,7 +781,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.removeMember),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatManage,
+        operationId: ChatApiMetadata.removeMemberOperation,
+        legacyPageId: ChatRequestPageIds.removeMember,
+      ),
     );
   }
 
@@ -708,7 +801,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.inviteAssistant),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.inviteAssistantOperation,
+        legacyPageId: ChatRequestPageIds.inviteAssistant,
+      ),
       body: {'skillId': ?skillId},
     );
   }
@@ -720,7 +817,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.removeAssistant),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.removeAssistantOperation,
+        legacyPageId: ChatRequestPageIds.removeAssistant,
+      ),
     );
   }
 
@@ -739,8 +840,10 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.updateConversationSettings,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatSettings,
+        operationId: ChatApiMetadata.updateConversationSettingsOperation,
+        legacyPageId: ChatRequestPageIds.updateConversationSettings,
       ),
       body: {'muted': ?muted, 'pinned': ?pinned},
     );
@@ -762,7 +865,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listContacts),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listContactsOperation,
+        legacyPageId: ChatRequestPageIds.listContacts,
+      ),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -781,7 +888,11 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.searchContacts),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.searchContactsOperation,
+        legacyPageId: ChatRequestPageIds.searchContacts,
+      ),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -794,11 +905,13 @@ class RemoteChatRepository implements ChatRepository {
 
   @override
   Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
-    final uri = _uri('/chat/v1/conversations/timestamps');
+    final uri = _uri(ChatApiMetadata.listConversationTimestampsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.listConversations,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listConversationTimestampsOperation,
+        legacyPageId: ChatRequestPageIds.listConversationTimestamps,
       ),
     );
     final items = decoded['items'];
@@ -812,11 +925,13 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> batchGetConversations(
     List<String> ids,
   ) async {
-    final uri = _uri('/chat/v1/conversations/batch');
+    final uri = _uri(ChatApiMetadata.batchGetConversationsPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.listConversations,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.batchGetConversationsOperation,
+        legacyPageId: ChatRequestPageIds.batchGetConversations,
       ),
       body: {'ids': ids},
     );
@@ -831,10 +946,16 @@ class RemoteChatRepository implements ChatRepository {
 
   @override
   Future<Map<String, dynamic>> getGroupSettings(String conversationId) async {
-    final uri = _uri('/chat/v1/conversations/$conversationId/settings');
+    final uri = _uri(
+      ChatApiMetadata.getConversationPath(conversationId: conversationId),
+    );
     return await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatSettings,
+        operationId: ChatApiMetadata.getConversationOperation,
+        legacyPageId: ChatRequestPageIds.getConversation,
+      ),
     );
   }
 
@@ -843,10 +964,18 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     Map<String, dynamic> settings,
   ) async {
-    final uri = _uri('/chat/v1/conversations/$conversationId/settings');
+    final uri = _uri(
+      ChatApiMetadata.updateConversationSettingsPath(
+        conversationId: conversationId,
+      ),
+    );
     await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatSettings,
+        operationId: ChatApiMetadata.updateConversationSettingsOperation,
+        legacyPageId: ChatRequestPageIds.updateConversationSettings,
+      ),
       body: settings,
     );
   }
@@ -857,11 +986,15 @@ class RemoteChatRepository implements ChatRepository {
     String newOwnerId,
   ) async {
     final uri = _uri(
-      '/chat/v1/conversations/$conversationId/transfer-ownership',
+      ChatApiMetadata.transferOwnershipPath(conversationId: conversationId),
     );
-    await _httpClient.postJson(
+    await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatTransferOwnership,
+        operationId: ChatApiMetadata.transferOwnershipOperation,
+        legacyPageId: ChatRequestPageIds.transferOwnership,
+      ),
       body: {'newOwnerId': newOwnerId},
     );
   }
@@ -871,20 +1004,32 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     List<String> adminIds,
   ) async {
-    final uri = _uri('/chat/v1/conversations/$conversationId/admins');
-    await _httpClient.patchJson(
+    final uri = _uri(
+      ChatApiMetadata.updateGroupAdminsPath(conversationId: conversationId),
+    );
+    await _httpClient.putJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatAdmins,
+        operationId: ChatApiMetadata.updateGroupAdminsOperation,
+        legacyPageId: ChatRequestPageIds.updateGroupAdmins,
+      ),
       body: {'adminIds': adminIds},
     );
   }
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
-    final uri = _uri('/chat/v1/conversations/$conversationId');
+    final uri = _uri(
+      ChatApiMetadata.dissolveConversationPath(conversationId: conversationId),
+    );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
+      headers: _headersForSurface(
+        AppUiSurfaces.chatManage,
+        operationId: ChatApiMetadata.dissolveConversationOperation,
+        legacyPageId: ChatRequestPageIds.dissolveConversation,
+      ),
     );
   }
 }

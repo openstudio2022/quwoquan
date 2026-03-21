@@ -1,0 +1,77 @@
+version: 1
+node: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260321-001-persona-follow-graph-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze active persona and cross-domain context metadata
+    goal: 收口 `ActivePersonaContextView`、跨域 request context、assistant session persona contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - active persona、content/comment、chat、assistant 的 persona envelope 冻结
+      - `profileSubjectId`、`contextVersion`、snapshot version 可由 metadata 表达
+      - 缺失 context 的错误码与 fail closed 语义有正式 contract
+    status: planned
+
+  - id: P2
+    title: establish codegen, cloud client, and provider baseline
+    goal: 让 App、cloud client 与 assistant/application 都通过生成物消费 persona context
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - "`verify-metadata / codegen / codegen-app` 通过"
+      - `activePersonaContextProvider`、cloud client 与 assistant session adapter 对齐同一 contract
+      - legacy persona adapter 只保留为兼容层
+    status: planned
+
+  - id: P3
+    title: implement persona-aware persistence and recovery
+    goal: 落地 content/chat/circle/assistant/notification 的 persona 消费、最小快照与恢复逻辑
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 关键写操作统一落库 persona key 与最小快照
+      - notification 与 assistant 能按 `contextVersion` 恢复正确上下文
+      - stale / missing persona context 触发阻断或恢复，而不是 owner fallback
+    status: planned
+
+  - id: P4
+    title: validate fail-closed guardrails and rollout
+    goal: 建立 mismatch/drift telemetry、灰度开关与端到端验证，确保可安全放量
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A3
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+      - T4_release_rehearsal
+    done_when:
+      - mismatch、stale context、assistant drift、notification replay 错误都有观测
+      - persona context 开关关闭后可退回单 active persona 安全基线
+      - 切换分身后首个关键动作和通知/助手回放旅程回归通过
+    status: planned

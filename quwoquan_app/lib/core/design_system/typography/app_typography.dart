@@ -43,6 +43,21 @@ class AppTypography {
   /// 欢迎页主标题（hero）
   static const double welcomeHeroTitle = 48.0;
 
+  // ==================== iOS 语义字号 ====================
+  static const double iosLargeTitle = 34.0;
+  static const double iosProfileTitle = 28.0;
+  static const double iosTitle2 = 22.0;
+  static const double iosTitle3 = 20.0;
+  static const double iosNavTitle = 17.0;
+  static const double iosBody = 17.0;
+  static const double iosCallout = 16.0;
+  static const double iosSubheadline = 15.0;
+  static const double iosFootnote = 13.0;
+  static const double iosCaption1 = 12.0;
+  static const double iosCaption2 = 11.0;
+  static const double iosSectionHeader = iosFootnote;
+  static const double iosButton = iosSubheadline;
+
   /// 内容分享海报标题/正文层级
   static const double sharePosterEyebrow = 42.0;
   static const double sharePosterSubtitle = 28.0;
@@ -64,6 +79,7 @@ class AppTypography {
   static const double lineHeightRelaxed = 1.5;
 
   static const FontWeight normal = FontWeight.w400;
+  static const FontWeight regular = normal;
   static const FontWeight medium = FontWeight.w500;
   static const FontWeight semiBold = FontWeight.w600;
   static const FontWeight bold = FontWeight.w700;

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -29,7 +30,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
     final isDark = ref.watch(effectiveIsDarkProvider);
     final cardBg = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundSecondary,
+      ColorType.surfaceElevated,
     );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -38,6 +39,10 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
     );
 
     if (posts.isEmpty) {
@@ -48,12 +53,12 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
             padding: const EdgeInsets.all(AppSpacing.containerMd),
             decoration: BoxDecoration(
               color: cardBg,
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             ),
             child: Text(
-              '$label 暂无内容',
+              '$label ${UITextConstants.noData}',
               style: TextStyle(
-                fontSize: AppTypography.base,
+                fontSize: AppTypography.iosSubheadline,
                 color: fgSecondary,
               ),
             ),
@@ -80,16 +85,19 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
           final isLiked = (post['isLiked'] as bool?) ?? false;
           final aspectRatio = _coverAspectRatioFor(post);
 
-          return GestureDetector(
+          return CupertinoButton(
             key: ValueKey(
               'home-circle-grid-post-${post['postId'] ?? post['id']}',
             ),
-            onTap: () => onPostTap(post, posts),
-            behavior: HitTestBehavior.opaque,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: () => onPostTap(post, posts),
             child: Container(
               decoration: BoxDecoration(
                 color: cardBg,
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,8 +124,8 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
                           Text(
                             title,
                             style: TextStyle(
-                              fontSize: AppTypography.smPlus,
-                              fontWeight: AppTypography.medium,
+                              fontSize: AppTypography.iosSubheadline,
+                              fontWeight: AppTypography.semiBold,
                               color: fgPrimary,
                             ),
                             maxLines: 2,
@@ -129,7 +137,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
                           Text(
                             body,
                             style: TextStyle(
-                              fontSize: AppTypography.caption,
+                              fontSize: AppTypography.iosCaption1,
                               color: fgSecondary,
                               height: AppTypography.lineHeightRelaxed,
                             ),
@@ -148,7 +156,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
                               child: Text(
                                 authorName,
                                 style: TextStyle(
-                                  fontSize: AppTypography.caption,
+                                  fontSize: AppTypography.iosCaption1,
                                   color: fgSecondary,
                                 ),
                                 maxLines: 1,
@@ -156,7 +164,9 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
                               ),
                             ),
                             Icon(
-                              isLiked ? Icons.favorite : Icons.favorite_border,
+                              isLiked
+                                  ? CupertinoIcons.heart_fill
+                                  : CupertinoIcons.heart,
                               size: AppSpacing.iconSmall,
                               color: isLiked
                                   ? AppColors.worksLike
@@ -166,7 +176,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
                             Text(
                               '$likeCount',
                               style: TextStyle(
-                                fontSize: AppTypography.caption,
+                                fontSize: AppTypography.iosCaption1,
                                 color: fgSecondary,
                               ),
                             ),

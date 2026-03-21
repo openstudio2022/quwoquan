@@ -1,0 +1,131 @@
+version: 2
+feature: persona-context-propagation
+level: L3_scenario
+source_path: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+parent_journey: persona-follow-graph
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 active persona 向 content/chat/circle/assistant/invite/notification
+    的统一透传、串号阻断与观测基线。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - active persona 作为跨域默认动作主体
+    - content/comment/chat/circle/invite/assistant/notification 的 persona 透传
+    - 串号阻断、恢复与 telemetry
+  out_of_scope:
+    - 分身管理台入口与列表
+    - 公开资料与可见性合同
+    - 粉丝/关注图谱分页读取
+
+scenario_acceptance:
+  A1:
+    title: active persona 成为跨域唯一默认主体
+    scenario: 激活分身后，关键写操作与会话都以当前分身作为默认动作主体
+    journey_step: switch persona and perform first action
+    done_when:
+      - user 域提供 active persona 真相源
+      - 发帖、评论、聊天、圈子、邀请默认读取 active persona
+      - 只有显式选择其它分身时，才允许覆盖默认主体
+    edge_cases:
+      - 切换后立即提交评论或发送消息
+      - 切换过程中网络抖动
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - active persona propagation integration test
+        - switch then first action end-to-end test
+      recorded: []
+    status: pending
+  A2:
+    title: 下游域正确落库 persona 身份与历史快照
+    scenario: content/chat/circle/invite/notification 消费 persona 标识与作者快照
+    journey_step: persist action attribution
+    done_when:
+      - content/comment 至少保留 persona 标识与作者快照
+      - chat message 使用 senderPersonaId 或等价字段
+      - circle 与 invite 的归属不落到 owner
+      - notification 打开时可恢复正确 persona 上下文
+    edge_cases:
+      - persona 停用后查看历史内容或消息
+      - 通知延迟到达时当前 active persona 已切换
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - comment persona attribution contract test
+        - chat sender persona contract test
+        - notification persona replay test
+      recorded: []
+    status: pending
+  A3:
+    title: persona 上下文缺失时系统阻断或恢复，不允许静默串号
+    scenario: 下游在提交或回放时拿不到有效 persona 上下文
+    journey_step: recover from stale or missing persona context
+    done_when:
+      - 关键动作在 persona 上下文缺失时被阻断或要求用户确认
+      - 系统可以回退到最近一次稳定 active persona 快照
+      - mismatch、stale context、assistant drift 被记录并可用于回滚
+    edge_cases:
+      - 通知打开到错误分身
+      - assistant 会话在中途切换分身
+      - 弱网下客户端与服务端 active persona 视图短暂不一致
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - stale persona context recovery test
+        - assistant persona drift regression test
+        - notification mismatch blocking test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 透传能力可灰度、可观测、可回退
+    done_when:
+      - content/chat/circle/assistant/notification 的透传可按开关灰度
+      - mismatch、stale context、drift 指标可观测
+      - 回退后可恢复到单 active persona 安全基线
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T4_release_rehearsal
+    tests:
+      planned:
+        - propagation flag rollback rehearsal
+        - mismatch telemetry verification
+      recorded: []
+    status: pending

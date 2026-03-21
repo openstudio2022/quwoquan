@@ -9,13 +9,25 @@ void main() {
       repo = MockUserRepository();
     });
 
-    test('listPersonas 返回分身列表', () async {
-      final personas = await repo.listPersonas();
-      expect(personas, isList);
+    test('listSubAccounts 返回子账号列表', () async {
+      final accounts = await repo.listSubAccounts();
+      expect(accounts, isNotEmpty);
+      expect(accounts.first.subAccountId, isNotEmpty);
     });
 
-    test('activatePersona 不崩溃', () async {
-      await repo.activatePersona('persona_test');
+    test('getPersonaManagementSummary 返回 quota 与 items', () async {
+      final summary = await repo.getPersonaManagementSummary();
+      expect(summary.items, isNotEmpty);
+      expect(summary.quota.maxSubAccounts, greaterThan(0));
+    });
+
+    test('getActivePersonaContext 返回活动身份上下文', () async {
+      final context = await repo.getActivePersonaContext();
+      expect(context.profileSubjectId, isNotEmpty);
+    });
+
+    test('activateSubAccount 不崩溃', () async {
+      await repo.activateSubAccount('persona_test');
     });
 
     test('getNotificationSettings 返回通知设置', () async {
@@ -29,16 +41,6 @@ void main() {
       expect(settings, isA<Map<String, dynamic>>());
       expect(settings.containsKey('profileVisibility'), isTrue);
     });
-
-    test('接口包含全部 4 个 service.yaml API 方法', () {
-      final methods = <String>[
-        'listPersonas',
-        'activatePersona',
-        'getNotificationSettings',
-        'getPrivacySettings',
-      ];
-      expect(methods.length, 4);
-    });
   });
 
   group('UserRepository — 异常/边界契约', () {
@@ -48,8 +50,12 @@ void main() {
       repo = MockUserRepository();
     });
 
-    test('activatePersona 空 ID 不崩溃', () async {
-      await repo.activatePersona('');
+    test('activateSubAccount 空 ID 不崩溃', () async {
+      await repo.activateSubAccount('');
+    });
+
+    test('deleteEmptySubAccount 空 ID 不崩溃', () async {
+      await repo.deleteEmptySubAccount('');
     });
   });
 }

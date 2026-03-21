@@ -97,54 +97,144 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     final fgPrimary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
     final borderColor = AppColorsFunctional.getColor(widget.isDark, ColorType.borderPrimary);
+    final bgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.backgroundSecondary,
+    );
 
-    return Column(
+    return Padding(
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCapacityBar(fgSecondary),
+        _buildCapacityBar(
+          fgPrimary: fgPrimary,
+          fgSecondary: fgSecondary,
+          borderColor: borderColor,
+          backgroundColor: bgSecondary,
+        ),
         SizedBox(height: AppSpacing.md),
         ..._files.map(
-          (file) => _buildFileItem(file, fgPrimary, fgSecondary, borderColor),
+          (file) => _buildFileItem(
+            file,
+            fgPrimary,
+            fgSecondary,
+            borderColor,
+            bgSecondary,
+          ),
         ),
         SizedBox(height: AppSpacing.sm),
         _buildUploadButton(),
       ],
-    );
+    ));
   }
 
-  Widget _buildCapacityBar(Color fgSecondary) {
+  Widget _buildCapacityBar({
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color borderColor,
+    required Color backgroundColor,
+  }) {
     final usedRatio = widget.storageQuotaBytes > 0
         ? widget.storageUsedBytes / widget.storageQuotaBytes
         : 0.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${_formatBytes(widget.storageUsedBytes)} / ${_formatBytes(widget.storageQuotaBytes)}',
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-            ),
-            Text(
-              '${(usedRatio * 100).toStringAsFixed(1)}%',
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-            ),
-          ],
-        ),
-        SizedBox(height: AppSpacing.xs),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-          child: LinearProgressIndicator(
-            value: usedRatio,
-            backgroundColor: fgSecondary.withValues(alpha: 0.15),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              usedRatio > 0.9 ? AppColors.error : AppColors.primaryColor,
-            ),
-            minHeight: AppSpacing.xs,
+    final remainingBytes = (widget.storageQuotaBytes - widget.storageUsedBytes)
+        .clamp(0, widget.storageQuotaBytes);
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: AppSpacing.buttonHeight,
+                height: AppSpacing.buttonHeight,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                ),
+                child: Icon(
+                  CupertinoIcons.folder_fill,
+                  color: AppColors.primaryColor,
+                  size: AppSpacing.iconMedium,
+                ),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      UITextConstants.circleAssetsTab,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: AppTypography.semiBold,
+                        color: fgPrimary,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
+                    Text(
+                      '${_formatBytes(widget.storageUsedBytes)} / ${_formatBytes(widget.storageQuotaBytes)}',
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${(usedRatio * 100).toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.semiBold,
+                  color: fgSecondary,
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+            child: LinearProgressIndicator(
+              value: usedRatio,
+              backgroundColor: fgSecondary.withValues(alpha: 0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                usedRatio > 0.9 ? AppColors.error : AppColors.primaryColor,
+              ),
+              minHeight: AppSpacing.xs,
+            ),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: _StorageStatChip(
+                  label: '已用',
+                  value: _formatBytes(widget.storageUsedBytes),
+                  fgPrimary: fgPrimary,
+                  fgSecondary: fgSecondary,
+                ),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _StorageStatChip(
+                  label: '剩余',
+                  value: _formatBytes(remainingBytes),
+                  fgPrimary: fgPrimary,
+                  fgSecondary: fgSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -153,6 +243,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
+    Color backgroundColor,
   ) {
     final name = file['name'] as String;
     final fileType = file['fileType'] as String;
@@ -163,56 +254,65 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.sm),
       child: CupertinoButton(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        padding: EdgeInsets.all(AppSpacing.containerSm),
         minimumSize: Size.zero,
         onPressed: () {},
-        child: Row(
-          children: [
-            Container(
-              width: AppSpacing.largeButtonSize,
-              height: AppSpacing.largeButtonSize,
-              decoration: BoxDecoration(
-                color: _fileIconColor(mimeType, fileType).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: AppSpacing.largeButtonSize,
+                height: AppSpacing.largeButtonSize,
+                decoration: BoxDecoration(
+                  color: _fileIconColor(mimeType, fileType).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                ),
+                child: Icon(
+                  _fileIcon(mimeType, fileType),
+                  color: _fileIconColor(mimeType, fileType),
+                  size: AppSpacing.iconMedium,
+                ),
               ),
-              child: Icon(
-                _fileIcon(mimeType, fileType),
-                color: _fileIconColor(mimeType, fileType),
-                size: AppSpacing.iconMedium,
-              ),
-            ),
-            SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      fontWeight: AppTypography.medium,
-                      color: fgPrimary,
+              SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: AppTypography.medium,
+                        color: fgPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: AppSpacing.xs),
-                  Text(
-                    fileType == 'folder' ? date : '${_formatBytes(sizeBytes)} · $date',
-                    style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: fgSecondary,
+                    SizedBox(height: AppSpacing.xs),
+                    Text(
+                      fileType == 'folder'
+                          ? date
+                          : '${_formatBytes(sizeBytes)} · $date',
+                      style: TextStyle(
+                        fontSize: AppTypography.xs,
+                        color: fgSecondary,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              color: fgSecondary,
-              size: AppSpacing.iconSmall,
-            ),
-          ],
+              Icon(
+                CupertinoIcons.chevron_forward,
+                color: fgSecondary,
+                size: AppSpacing.iconSmall,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -222,7 +322,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     return SizedBox(
       width: double.infinity,
       child: CupertinoButton(
-        color: AppColors.primaryColor.withValues(alpha: 0.12),
+        color: AppColors.primaryColor,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         onPressed: () {},
         child: Row(
@@ -230,14 +330,14 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
           children: [
             Icon(
               CupertinoIcons.cloud_upload,
-              color: AppColors.primaryColor,
+              color: Colors.white,
               size: AppSpacing.iconMedium,
             ),
             SizedBox(width: AppSpacing.sm),
             Text(
               UITextConstants.circleUploadFile,
               style: TextStyle(
-                color: AppColors.primaryColor,
+                color: Colors.white,
                 fontSize: AppTypography.base,
                 fontWeight: AppTypography.semiBold,
               ),
@@ -270,6 +370,52 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
                 color: AppColors.primaryColor,
                 fontSize: AppTypography.base,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StorageStatChip extends StatelessWidget {
+  const _StorageStatChip({
+    required this.label,
+    required this.value,
+    required this.fgPrimary,
+    required this.fgSecondary,
+  });
+
+  final String label;
+  final String value;
+  final Color fgPrimary;
+  final Color fgSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: fgSecondary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.xs,
+              color: fgSecondary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              fontWeight: AppTypography.semiBold,
+              color: fgPrimary,
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
@@ -23,7 +24,7 @@ class AssistantHalfSheet extends StatelessWidget {
     await Future<void>.delayed(Duration.zero);
     if (!modalContext.mounted) return;
     modalContext.push(
-      '/chat/${AppConceptConstants.assistantConversationId}',
+      AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
       extra: assistantOpenContext,
     );
   }
@@ -175,7 +176,9 @@ class AssistantHalfSheet extends StatelessWidget {
                     onPressed: () {
                       Navigator.of(context).pop();
                       context.push(
-                        '/chat/${AppConceptConstants.assistantConversationId}',
+                        AppRoutePaths.chatDetail(
+                          id: AppConceptConstants.assistantConversationId,
+                        ),
                         extra: openContext,
                       );
                     },

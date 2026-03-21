@@ -25,6 +25,11 @@ class NotificationApiMetadata {
     'MarkAsRead': 'POST',
   };
 
+  static const String getUnreadCountOperation = 'GetUnreadCount';
+  static const String listNotificationsOperation = 'ListNotifications';
+  static const String markAllAsReadOperation = 'MarkAllAsRead';
+  static const String markAsReadOperation = 'MarkAsRead';
+
   static const String getUnreadCountPath = '/v1/notifications/unread-count';
   static const String listNotificationsPath = '/v1/notifications';
   static const String markAllAsReadPath = '/v1/notifications/read-all';

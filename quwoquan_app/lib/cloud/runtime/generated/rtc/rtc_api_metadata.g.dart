@@ -49,6 +49,23 @@ class RtcApiMetadata {
     'ToggleMute': 'POST',
   };
 
+  static const String answerCallOperation = 'AnswerCall';
+  static const String cancelCallOperation = 'CancelCall';
+  static const String getCallOperation = 'GetCall';
+  static const String hangupCallOperation = 'HangupCall';
+  static const String initiateCallOperation = 'InitiateCall';
+  static const String inviteToCallOperation = 'InviteToCall';
+  static const String joinCallOperation = 'JoinCall';
+  static const String leaveCallOperation = 'LeaveCall';
+  static const String listCallsOperation = 'ListCalls';
+  static const String rejectCallOperation = 'RejectCall';
+  static const String startRecordingOperation = 'StartRecording';
+  static const String startScreenShareOperation = 'StartScreenShare';
+  static const String stopRecordingOperation = 'StopRecording';
+  static const String stopScreenShareOperation = 'StopScreenShare';
+  static const String toggleCameraOperation = 'ToggleCamera';
+  static const String toggleMuteOperation = 'ToggleMute';
+
   static const String answerCallPathTemplate = '/v1/rtc/calls/{callId}/answer';
   static String answerCallPath({required String callId}) {
     return _fillPath(answerCallPathTemplate, <String, String>{

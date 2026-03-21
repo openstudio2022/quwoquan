@@ -14,13 +14,16 @@ class ChatApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortChatUpload': '/v1/chat/media/uploads:abort',
     'AddMembers': '/v1/chat/conversations/{conversationId}/members',
+    'BatchGetConversations': '/v1/chat/conversations/batch',
     'CompleteChatUpload': '/v1/chat/media/uploads:complete',
     'CreateConversation': '/v1/chat/conversations',
+    'DissolveConversation': '/v1/chat/conversations/{conversationId}',
     'GetConversation': '/v1/chat/conversations/{conversationId}',
     'GetReceipts': '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts',
     'InitChatUpload': '/v1/chat/media/uploads:init',
     'InviteAssistant': '/v1/chat/conversations/{conversationId}/assistant',
     'ListContacts': '/v1/chat/contacts',
+    'ListConversationTimestamps': '/v1/chat/conversations/timestamps',
     'ListConversations': '/v1/chat/conversations',
     'ListInbox': '/v1/chat/inbox',
     'ListMembers': '/v1/chat/conversations/{conversationId}/members',
@@ -32,19 +35,24 @@ class ChatApiMetadata {
     'SearchContacts': '/v1/chat/contacts/search',
     'SendMessage': '/v1/chat/conversations/{conversationId}/messages',
     'SyncMessages': '/v1/chat/conversations/{conversationId}/sync',
+    'TransferOwnership': '/v1/chat/conversations/{conversationId}/owner',
     'UpdateConversationSettings': '/v1/chat/conversations/{conversationId}/settings',
+    'UpdateGroupAdmins': '/v1/chat/conversations/{conversationId}/admins',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortChatUpload': 'POST',
     'AddMembers': 'POST',
+    'BatchGetConversations': 'POST',
     'CompleteChatUpload': 'POST',
     'CreateConversation': 'POST',
+    'DissolveConversation': 'DELETE',
     'GetConversation': 'GET',
     'GetReceipts': 'GET',
     'InitChatUpload': 'POST',
     'InviteAssistant': 'POST',
     'ListContacts': 'GET',
+    'ListConversationTimestamps': 'GET',
     'ListConversations': 'GET',
     'ListInbox': 'GET',
     'ListMembers': 'GET',
@@ -56,8 +64,37 @@ class ChatApiMetadata {
     'SearchContacts': 'GET',
     'SendMessage': 'POST',
     'SyncMessages': 'POST',
+    'TransferOwnership': 'PATCH',
     'UpdateConversationSettings': 'PATCH',
+    'UpdateGroupAdmins': 'PUT',
   };
+
+  static const String abortChatUploadOperation = 'AbortChatUpload';
+  static const String addMembersOperation = 'AddMembers';
+  static const String batchGetConversationsOperation = 'BatchGetConversations';
+  static const String completeChatUploadOperation = 'CompleteChatUpload';
+  static const String createConversationOperation = 'CreateConversation';
+  static const String dissolveConversationOperation = 'DissolveConversation';
+  static const String getConversationOperation = 'GetConversation';
+  static const String getReceiptsOperation = 'GetReceipts';
+  static const String initChatUploadOperation = 'InitChatUpload';
+  static const String inviteAssistantOperation = 'InviteAssistant';
+  static const String listContactsOperation = 'ListContacts';
+  static const String listConversationTimestampsOperation = 'ListConversationTimestamps';
+  static const String listConversationsOperation = 'ListConversations';
+  static const String listInboxOperation = 'ListInbox';
+  static const String listMembersOperation = 'ListMembers';
+  static const String listMessagesOperation = 'ListMessages';
+  static const String markAsReadOperation = 'MarkAsRead';
+  static const String recallMessageOperation = 'RecallMessage';
+  static const String removeAssistantOperation = 'RemoveAssistant';
+  static const String removeMemberOperation = 'RemoveMember';
+  static const String searchContactsOperation = 'SearchContacts';
+  static const String sendMessageOperation = 'SendMessage';
+  static const String syncMessagesOperation = 'SyncMessages';
+  static const String transferOwnershipOperation = 'TransferOwnership';
+  static const String updateConversationSettingsOperation = 'UpdateConversationSettings';
+  static const String updateGroupAdminsOperation = 'UpdateGroupAdmins';
 
   static const String abortChatUploadPath = '/v1/chat/media/uploads:abort';
   static const String addMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
@@ -66,8 +103,15 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String batchGetConversationsPath = '/v1/chat/conversations/batch';
   static const String completeChatUploadPath = '/v1/chat/media/uploads:complete';
   static const String createConversationPath = '/v1/chat/conversations';
+  static const String dissolveConversationPathTemplate = '/v1/chat/conversations/{conversationId}';
+  static String dissolveConversationPath({required String conversationId}) {
+    return _fillPath(dissolveConversationPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
   static const String getConversationPathTemplate = '/v1/chat/conversations/{conversationId}';
   static String getConversationPath({required String conversationId}) {
     return _fillPath(getConversationPathTemplate, <String, String>{
@@ -89,6 +133,7 @@ class ChatApiMetadata {
     });
   }
   static const String listContactsPath = '/v1/chat/contacts';
+  static const String listConversationTimestampsPath = '/v1/chat/conversations/timestamps';
   static const String listConversationsPath = '/v1/chat/conversations';
   static const String listInboxPath = '/v1/chat/inbox';
   static const String listMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
@@ -143,9 +188,21 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String transferOwnershipPathTemplate = '/v1/chat/conversations/{conversationId}/owner';
+  static String transferOwnershipPath({required String conversationId}) {
+    return _fillPath(transferOwnershipPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
   static const String updateConversationSettingsPathTemplate = '/v1/chat/conversations/{conversationId}/settings';
   static String updateConversationSettingsPath({required String conversationId}) {
     return _fillPath(updateConversationSettingsPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String updateGroupAdminsPathTemplate = '/v1/chat/conversations/{conversationId}/admins';
+  static String updateGroupAdminsPath({required String conversationId}) {
+    return _fillPath(updateGroupAdminsPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }

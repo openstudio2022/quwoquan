@@ -27,6 +27,12 @@ class OpsApiMetadata {
     'RecordVisit': 'POST',
   };
 
+  static const String assignBucketOperation = 'AssignBucket';
+  static const String getBucketOperation = 'GetBucket';
+  static const String getExperimentStatsOperation = 'GetExperimentStats';
+  static const String getVisitStatsOperation = 'GetVisitStats';
+  static const String recordVisitOperation = 'RecordVisit';
+
   static const String assignBucketPathTemplate = '/v1/ops/experiments/{experimentId}/assign';
   static String assignBucketPath({required String experimentId}) {
     return _fillPath(assignBucketPathTemplate, <String, String>{

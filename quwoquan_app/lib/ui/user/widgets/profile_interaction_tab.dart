@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 class ProfileInteractionTab extends ConsumerStatefulWidget {
   const ProfileInteractionTab({
@@ -95,18 +96,13 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       widget.isDark,
       ColorType.foregroundPrimary,
     );
-    final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundSecondary,
-    );
-    final primary = AppColors.primaryColor;
-    final border = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.borderPrimary,
-    );
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
     final activeIndex = _interactionFilters.indexWhere(
       (filter) => _interactionSubTabForId(filter.id) == state.interactionSubTab,
     );
+    final directionToggleWidth = (MediaQuery.sizeOf(context).width * 0.34)
+        .clamp(116.0, 156.0)
+        .toDouble();
 
     final header = SizedBox(
       key: const ValueKey<String>('profile-interaction-secondary-tabs'),
@@ -125,43 +121,60 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
           );
         },
         trailing: widget.mode == ProfileMode.mine
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _DirectionChip(
-                    label: '收到',
-                    isActive:
-                        state.interactionDirection ==
-                        InteractionDirection.received,
-                    onTap: () {
-                      notifier.setInteractionDirection(
-                        InteractionDirection.received,
-                      );
-                    },
-                    fg: fg,
-                    primary: primary,
-                    border: border,
+            ? Padding(
+                padding: EdgeInsets.only(right: AppSpacing.containerMd),
+                child: SizedBox(
+                  width: directionToggleWidth,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child:
+                        CupertinoSlidingSegmentedControl<InteractionDirection>(
+                          groupValue: state.interactionDirection,
+                          backgroundColor: AppColors.iosFill(context),
+                          thumbColor: AppColors.iosGroupedSurface(context),
+                          children: <InteractionDirection, Widget>{
+                            InteractionDirection.received: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: AppSpacing.intraGroupXs,
+                              ),
+                              child: Text(
+                                '收到',
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosCaption1,
+                                  fontWeight: AppTypography.medium,
+                                  color: fg,
+                                ),
+                              ),
+                            ),
+                            InteractionDirection.sent: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: AppSpacing.intraGroupXs,
+                              ),
+                              child: Text(
+                                '发出',
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosCaption1,
+                                  fontWeight: AppTypography.medium,
+                                  color: fg,
+                                ),
+                              ),
+                            ),
+                          },
+                          onValueChanged: (value) {
+                            if (value != null) {
+                              notifier.setInteractionDirection(value);
+                            }
+                          },
+                        ),
                   ),
-                  SizedBox(width: AppSpacing.xs),
-                  _DirectionChip(
-                    label: '发出',
-                    isActive:
-                        state.interactionDirection == InteractionDirection.sent,
-                    onTap: () {
-                      notifier.setInteractionDirection(
-                        InteractionDirection.sent,
-                      );
-                    },
-                    fg: fg,
-                    primary: primary,
-                    border: border,
-                  ),
-                  SizedBox(width: AppSpacing.containerMd),
-                ],
+                ),
               )
             : null,
         showTrailingDivider: widget.mode == ProfileMode.mine,
-        variant: SecondaryCapsuleTabBarVariant.inlineMuted,
+        variant: SecondaryCapsuleTabBarVariant.iosProfile,
         onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
       ),
     );
@@ -175,14 +188,14 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
               children: [
                 Icon(
                   _emptyStateIcon(state.interactionSubTab),
-                  size: AppSpacing.xl * 2,
+                  size: AppSpacing.iconLarge,
                   color: fgSecondary,
                 ),
                 SizedBox(height: AppSpacing.md),
                 Text(
                   _emptyStateTitle(state.interactionSubTab),
                   style: TextStyle(
-                    fontSize: AppTypography.md,
+                    fontSize: AppTypography.iosSubheadline,
                     color: fgSecondary,
                   ),
                 ),
@@ -218,51 +231,74 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                     context.push(
                       AppRoutePaths.userProfile(username: userId),
                       extra: UserProfileRouteExtra(
+                        profileSubjectId: userId,
                         avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
                         displayName: nickname.isNotEmpty ? nickname : null,
                       ),
                     );
                   }
                 },
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundImage: avatarUrl.isNotEmpty
-                          ? NetworkImage(avatarUrl)
-                          : null,
-                      onBackgroundImageError: (error, stackTrace) {},
-                      child: avatarUrl.isEmpty
-                          ? Icon(CupertinoIcons.person, color: fgSecondary)
-                          : null,
-                    ),
-                    SizedBox(width: AppSpacing.containerSm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nickname,
-                            style: TextStyle(
-                              fontSize: AppTypography.md,
-                              fontWeight: AppTypography.semiBold,
-                              color: fg,
-                            ),
-                          ),
-                          if (targetTitle.isNotEmpty)
-                            Text(
-                              targetTitle,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
+                child: ProfileIosSectionCard(
+                  padding: EdgeInsets.all(AppSpacing.containerSm),
+                  backgroundColor: AppColors.iosGroupedSurface(context),
+                  borderColor: AppColors.iosSeparator(
+                    context,
+                  ).withValues(alpha: 0.16),
+                  child: Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundImage: avatarUrl.isNotEmpty
+                            ? NetworkImage(avatarUrl)
+                            : null,
+                        backgroundColor: AppColors.iosFill(context),
+                        onBackgroundImageError: (error, stackTrace) {},
+                        child: avatarUrl.isEmpty
+                            ? Icon(
+                                CupertinoIcons.person_crop_circle_fill,
                                 color: fgSecondary,
-                              ),
+                              )
+                            : null,
+                      ),
+                      SizedBox(width: AppSpacing.containerSm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              nickname,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.iosSubheadline,
+                                fontWeight: AppTypography.semiBold,
+                                color: fg,
+                                letterSpacing: -0.18,
+                              ),
                             ),
-                        ],
+                            if (targetTitle.isNotEmpty) ...<Widget>[
+                              SizedBox(height: AppSpacing.intraGroupXs),
+                              Text(
+                                targetTitle,
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosFootnote,
+                                  color: fgSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      SizedBox(width: AppSpacing.intraGroupSm),
+                      Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: AppSpacing.iconSmall,
+                        color: AppColors.iosTertiaryLabel(context),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -313,11 +349,11 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
   IconData _emptyStateIcon(InteractionSubTab subTab) {
     switch (subTab) {
       case InteractionSubTab.likes:
-        return Icons.favorite_border;
+        return CupertinoIcons.heart;
       case InteractionSubTab.comments:
-        return Icons.chat_bubble_outline;
+        return CupertinoIcons.chat_bubble;
       case InteractionSubTab.shares:
-        return Icons.repeat;
+        return CupertinoIcons.arrowshape_turn_up_right;
     }
   }
 
@@ -344,59 +380,5 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
         _load();
       }
     });
-  }
-}
-
-/// 方向切换 chip（接收/发送），保持现有圆角胶囊样式。
-class _DirectionChip extends StatelessWidget {
-  const _DirectionChip({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-    required this.fg,
-    required this.primary,
-    required this.border,
-  });
-
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  final Color fg;
-  final Color primary;
-  final Color border;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupXs + 1,
-        ),
-        decoration: BoxDecoration(
-          color: isActive
-              ? primary.withValues(alpha: 0.08)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-          border: Border.all(
-            color: isActive
-                ? primary.withValues(alpha: 0.18)
-                : border.withValues(alpha: 0.18),
-            width: AppSpacing.intraGroupXs / 4,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            fontWeight: isActive
-                ? AppTypography.semiBold
-                : AppTypography.normal,
-            color: isActive ? primary : fg,
-          ),
-        ),
-      ),
-    );
   }
 }

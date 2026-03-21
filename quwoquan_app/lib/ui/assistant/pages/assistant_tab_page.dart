@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
@@ -9,8 +10,8 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
 class AssistantTabPage extends ConsumerStatefulWidget {
   const AssistantTabPage({super.key});
@@ -74,23 +75,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
 
     if (lastTab != null) {
-      // 映射 index 到 route
-      switch (lastTab) {
-        case 0:
-          context.go(AppRoutePaths.home);
-          break;
-        case 1:
-          context.go(AppRoutePaths.assistant);
-          break;
-        case 2:
-          context.go(AppRoutePaths.chat);
-          break;
-        case 3:
-          context.go(AppRoutePaths.profile);
-          break;
-        default:
-          context.go(AppRoutePaths.home);
-      }
+      context.go(lastTab.routePath);
     } else {
       context.go(AppRoutePaths.home);
     }
@@ -170,8 +155,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       default:
         return KeyedSubtree(
           key: TestKeys.assistantDialogPage,
-          child: ChatDetailPage(
-            conversationId: AppConceptConstants.assistantConversationId,
+          child: AssistantConversationPage(
             onBack: _handleExit,
             embedded: true,
           ),

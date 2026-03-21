@@ -1,14 +1,130 @@
-version: 1
+version: 2
 feature: follow-relationship
-level: "L3_story"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+level: L3_scenario
+source_path: user-identity-profile-relationship/persona-follow-graph/follow-relationship
+parent_journey: persona-follow-graph
+archived: false
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 `FollowEdge` 命令侧的关注/取关、幂等、Block 门禁与跨对象计数副作用边界。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - follow / unfollow 命令
+    - "`FollowEdge` 唯一约束与幂等"
+    - "`BlockEdge` 门禁"
+    - "`UserFollowed / UserUnfollowed` 事件与 UserProfile 计数同步边界"
+  out_of_scope:
+    - follower / following 列表分页读取
+    - 主页按钮矩阵 UI
+    - 推荐算法如何消费图谱
+
+scenario_acceptance:
+  A1:
+    title: follow / unfollow 的主体与业务对象边界冻结
+    scenario: 当前激活分身发起关注或取关命令
+    journey_step: write social edge
+    done_when:
+      - follow / unfollow 的主体统一为 active persona 或显式选择的 persona
+      - "`FollowEdge` 成为 user 域独立业务对象，而不是 `UserProfile` 聚合内部字段"
+      - owner 不作为默认社交动作主体
+    edge_cases:
+      - 切换分身后立刻关注
+      - 显式选择分身覆盖 active persona
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - follow edge command contract test
+        - persona follow attribution integration test
+      recorded: []
+    status: pending
+  A2:
+    title: "`FollowEdge` 满足幂等、唯一约束与 Block 门禁"
+    scenario: 同一对分身重复关注、取关或遇到 block 时执行写入
+    journey_step: validate command and persist edge
+    done_when:
+      - 相同 follower/followee 对重复 follow 不产生重复边
+      - unfollow 不会破坏不存在边之外的关系状态
+      - "`BlockEdge` 门禁生效，follow 写入不能绕过 block 规则"
+      - 失败语义不泄露不应暴露的屏蔽信息
+    edge_cases:
+      - follow x2 重试
+      - follow 后立即 unfollow
+      - blocker / blocked 任一方向存在 block
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - duplicate follow idempotent test
+        - block gate follow rejection test
+        - unfollow no-op regression test
+      recorded: []
+    status: pending
+  A3:
+    title: "follow 写入通过事件同步 `UserProfile` 统计"
+    scenario: 关注边写入后更新 follower / following 计数和下游事件
+    journey_step: publish edge events and sync counters
+    done_when:
+      - "follow 成功后发布 `UserFollowed`"
+      - "unfollow 成功后发布 `UserUnfollowed`"
+      - "`UserProfile` 的 followerCount / followingCount 通过跨对象副作用更新"
+      - "计数同步失败可修正，不影响 `FollowEdge` 主对象幂等性"
+    edge_cases:
+      - 事件重复消费
+      - 计数落后于 follow edge 主对象
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T1_schema
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - follow counter sync contract test
+        - event publication verification
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 关系写入可灰度、可审计、可回退
+    done_when:
+      - follow command 可按 persona-aware 开关灰度
+      - duplicate follow、block gate、counter mismatch 指标可观测
+      - 回退时可退回到旧 follow 写入路径而不破坏已存在 follow edge
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T4_release_rehearsal
+    tests:
+      planned:
+        - follow write rollback rehearsal
+        - audit metric verification
+      recorded: []
+    status: pending

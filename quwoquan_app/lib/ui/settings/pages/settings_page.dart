@@ -390,10 +390,7 @@ class _SettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sectionColor = CupertinoDynamicColor.resolve(
-      CupertinoColors.secondarySystemGroupedBackground,
-      context,
-    );
+    final sectionColor = AppColors.iosGroupedSurface(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -437,9 +434,10 @@ class _SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final titleStyle = CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-      fontSize: AppTypography.lg,
-      fontWeight: AppTypography.semiBold,
+      fontSize: AppTypography.iosSubheadline,
+      fontWeight: AppTypography.regular,
     );
+    final accent = AppColors.iosAccent(context);
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -449,20 +447,20 @@ class _SettingsRow extends StatelessWidget {
           horizontal: AppSpacing.md,
           vertical: AppSpacing.fourteen,
         ),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: CupertinoColors.separator,
-              width: AppSpacing.one * 0,
-            ),
-          ),
-        ),
         child: Row(
           children: <Widget>[
-            Icon(
-              icon,
-              size: AppSpacing.iconSmall,
-              color: CupertinoColors.systemGrey,
+            Container(
+              width: AppSpacing.buttonHeightSm,
+              height: AppSpacing.buttonHeightSm,
+              decoration: BoxDecoration(
+                color: AppColors.iosTintedFill(context),
+                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+              ),
+              child: Icon(
+                icon,
+                size: AppSpacing.iconSmall,
+                color: accent,
+              ),
             ),
             SizedBox(width: AppSpacing.intraGroupLg),
             Expanded(

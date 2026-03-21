@@ -236,7 +236,7 @@ class UnderstandPhase implements Phase {
         : continuationActive &&
               previousIntentGraph != null &&
               previousIntentGraph.answerShape != AnswerShape.unspecified
-        ? previousIntentGraph!.answerShape
+        ? previousIntentGraph.answerShape
         : intentGraph.answerShape;
     final effectiveFreshnessNeed =
         intentGraph.freshnessNeed != FreshnessNeed.unspecified
@@ -244,7 +244,7 @@ class UnderstandPhase implements Phase {
         : continuationActive &&
               previousIntentGraph != null &&
               previousIntentGraph.freshnessNeed != FreshnessNeed.unspecified
-        ? previousIntentGraph!.freshnessNeed
+        ? previousIntentGraph.freshnessNeed
         : intentGraph.freshnessNeed;
     return IntentGraph(
       userGoal: intentGraph.userGoal.trim().isNotEmpty
@@ -740,7 +740,7 @@ class UnderstandPhase implements Phase {
           continuationActive &&
               previousIntentGraph != null &&
               previousIntentGraph.problemShape != ProblemShape.unknown
-          ? previousIntentGraph!.problemShape
+          ? previousIntentGraph.problemShape
           : ProblemShape.singleSkill,
       primarySkill: primarySkill,
       problemClass: problemClass,

@@ -225,6 +225,42 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: senderProfileSubjectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 稳定公开主体 ID；优先于 legacy senderPersonaId 作为消息发送者主键
+
+      - name: senderDisplayNameSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送者显示名快照
+
+      - name: senderAvatarUrlSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送者头像快照
+
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送消息时绑定的 persona 上下文版本
+
       - name: type
         type: enum
         enum_ref: MessageType

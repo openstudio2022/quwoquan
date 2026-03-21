@@ -158,6 +158,33 @@ class AppRoutePaths {
   }
   static const String chatAddMembersSegment = 'add-members';
 
+  static const String chatManagePathTemplate = '/chat/{id}/manage';
+  static String chatManage({required String id}) {
+    return _buildPath(chatManagePathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String chatManageSegment = 'manage';
+
+  static const String chatTransferOwnershipPathTemplate = '/chat/{id}/transfer-ownership';
+  static String chatTransferOwnership({required String id}) {
+    return _buildPath(chatTransferOwnershipPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String chatTransferOwnershipSegment = 'transfer-ownership';
+
+  static const String chatAdminsPathTemplate = '/chat/{id}/admins';
+  static String chatAdmins({required String id}) {
+    return _buildPath(chatAdminsPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String chatAdminsSegment = 'admins';
+
   static const String rtcOutgoingPathTemplate = '/rtc/outgoing/{callId}';
   static String rtcOutgoing({required String callId}) {
     return _buildPath(rtcOutgoingPathTemplate, <String, String>{

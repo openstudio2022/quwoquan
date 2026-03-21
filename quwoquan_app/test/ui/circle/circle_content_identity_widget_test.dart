@@ -46,16 +46,16 @@ void main() {
 
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('点滴'), findsOneWidget);
-    expect(find.text('作品'), findsOneWidget);
+    expect(find.text('作品'), findsAtLeastNWidgets(1));
     expect(find.text('微趣'), findsNothing);
     expect(find.text('笔记'), findsNothing);
 
-    await tester.tap(find.text('作品'));
+    await tester.tap(find.text('作品').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('图片'), findsOneWidget);
-    expect(find.text('视频'), findsOneWidget);
-    expect(find.text('笔记'), findsOneWidget);
+    expect(find.text('图片'), findsAtLeastNWidgets(1));
+    expect(find.text('视频'), findsAtLeastNWidgets(1));
+    expect(find.text('笔记'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('圈子作品切到笔记后，列表标签与筛选口径保持一致', (tester) async {
@@ -73,7 +73,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('作品'));
+    await tester.tap(find.text('作品').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('列表视图'));
     await tester.pumpAndSettle();

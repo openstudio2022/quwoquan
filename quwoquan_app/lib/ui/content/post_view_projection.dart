@@ -34,8 +34,18 @@ ArticleDetailView projectArticleDetailView(
           caption: card['caption']?.toString(),
         ),
       )
-      .where((card) => card.title.isNotEmpty || card.body.isNotEmpty)
+      .where(
+        (card) =>
+            card.title.isNotEmpty ||
+            card.body.isNotEmpty ||
+            (card.imageUrl?.isNotEmpty ?? false),
+      )
       .toList(growable: false);
+  final contentBlocks = _projectArticleContentBlocks(
+    raw: raw,
+    body: body,
+    cards: cards,
+  );
 
   return ArticleDetailView(
     id: post.id.isNotEmpty ? post.id : fallbackArticleId,
@@ -61,6 +71,120 @@ ArticleDetailView projectArticleDetailView(
       comments: post.commentsCount,
       bookmarks: post.savesCount,
     ),
+    contentBlocks: contentBlocks,
     cards: cards,
   );
+}
+
+List<ArticleContentBlockView> _projectArticleContentBlocks({
+  required Map<String, dynamic> raw,
+  required String body,
+  required List<ArticleCardView> cards,
+}) {
+  final rawBlocks = (raw['articleBlocks'] as List?) ?? const <dynamic>[];
+  if (rawBlocks.isNotEmpty) {
+    final blocks = <ArticleContentBlockView>[];
+    var orderedIndex = 0;
+    final normalized = rawBlocks
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList(growable: false);
+    for (var index = 0; index < normalized.length; index++) {
+      final block = normalized[index];
+      final type = (block['type'] ?? 'paragraph').toString().trim();
+      final text = (block['text'] ?? '').toString().trim();
+      final imageUrl = (block['imagePath'] ?? '').toString().trim();
+      final imageLayout = (block['imageLayout'] ?? 'fullWidth')
+          .toString()
+          .trim();
+      switch (type) {
+        case 'orderedItem':
+          if (text.isEmpty) {
+            continue;
+          }
+          orderedIndex += 1;
+          blocks.add(
+            ArticleContentBlockView(
+              type: 'ordered_item',
+              body: text,
+              orderedIndex: orderedIndex,
+            ),
+          );
+          break;
+        case 'image':
+          orderedIndex = 0;
+          if (imageUrl.isEmpty) {
+            continue;
+          }
+          if ((imageLayout == 'wrapLeft' || imageLayout == 'wrapRight') &&
+              index + 1 < normalized.length) {
+            final next = normalized[index + 1];
+            final nextType = (next['type'] ?? 'paragraph').toString().trim();
+            final nextText = (next['text'] ?? '').toString().trim();
+            if (nextType == 'paragraph' && nextText.isNotEmpty) {
+              blocks.add(
+                ArticleContentBlockView(
+                  type: 'wrapped_paragraph',
+                  body: nextText,
+                  imageUrl: imageUrl,
+                  imageLayout: imageLayout,
+                ),
+              );
+              index += 1;
+              continue;
+            }
+          }
+          blocks.add(
+            ArticleContentBlockView(
+              type: 'image',
+              imageUrl: imageUrl,
+              imageLayout: imageLayout,
+            ),
+          );
+          break;
+        case 'paragraph':
+        default:
+          orderedIndex = 0;
+          if (text.isEmpty) {
+            continue;
+          }
+          blocks.add(
+            ArticleContentBlockView(
+              type: 'paragraph',
+              body: text,
+            ),
+          );
+          break;
+      }
+    }
+    if (blocks.isNotEmpty) {
+      return blocks;
+    }
+  }
+
+  if (cards.isNotEmpty) {
+    return cards
+        .map(
+          (card) => ArticleContentBlockView(
+            type: 'section',
+            title: card.title,
+            body: card.body,
+            imageUrl: card.imageUrl,
+            caption: card.caption,
+            imageLayout: 'fullWidth',
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  if (body.trim().isNotEmpty) {
+    return <ArticleContentBlockView>[
+      ArticleContentBlockView(
+        type: 'paragraph',
+        body: body.trim(),
+      ),
+    ];
+  }
+
+  return const <ArticleContentBlockView>[];
 }

@@ -1,10 +1,13 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 const _uuid = Uuid();
 
@@ -35,14 +38,24 @@ class ChatMessageState {
 
 /// 管理单个会话的消息列表、发送、撤回、seq gap 补全。
 class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
-  ChatMessageNotifier(this._repo, this.conversationId)
+  ChatMessageNotifier(this._ref, this._repo, this.conversationId)
     : super(const ChatMessageState());
 
+  final Ref _ref;
   final ChatRepository _repo;
   final String conversationId;
 
   // seq=0 表示消息尚未被服务端确认（发送中/发送失败）
   static const int _unconfirmedSeq = 0;
+
+  Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
+    final activeContext = await _ref.read(activePersonaContextProvider.future);
+    final mode = _ref.read(appDataSourceModeProvider);
+    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+      throw StateError('active persona context unavailable');
+    }
+    return activeContext;
+  }
 
   /// 加载消息并按 seq 排序，之后检测 gap。
   Future<void> loadMessages({int? maxSeq}) async {
@@ -98,15 +111,24 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
     String? senderName,
     String? senderAvatar,
   }) async {
+    final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
+    final resolvedSenderId =
+        activeContext.profileSubjectId.isNotEmpty
+        ? activeContext.profileSubjectId
+        : _ref.read(currentUserIdProvider);
+    final resolvedSenderPersonaId = activeContext.subAccountId;
     final optimistic = MessageDto(
       id: clientMsgId,
       conversationId: conversationId,
       seq: _unconfirmedSeq,
       clientMsgId: clientMsgId,
-      senderId: 'current_user',
-      senderName: senderName,
-      senderAvatar: senderAvatar,
+      senderId: resolvedSenderId,
+      senderName: senderName ?? activeContext.displayName,
+      senderAvatar: senderAvatar ?? activeContext.avatarUrl,
+      senderPersonaId: resolvedSenderPersonaId.isEmpty
+          ? null
+          : resolvedSenderPersonaId,
       type: type,
       content: content,
       mediaUrl: mediaUrl,
@@ -121,6 +143,11 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
         content: content,
         mediaUrl: mediaUrl,
         media: media,
+        senderPersonaId: resolvedSenderPersonaId.isEmpty
+            ? null
+            : resolvedSenderPersonaId,
+        senderProfileSubjectId: resolvedSenderId,
+        personaContextVersion: activeContext.personaContextVersion,
         clientMsgId: clientMsgId,
       );
       final resp = SendMessageResponse.fromMap(raw);
@@ -148,6 +175,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       (m) => m.clientMsgId == clientMsgId && m.status == 'failed',
       orElse: () => throw StateError('Message not found or not failed'),
     );
+    final activeContext = await _resolveActivePersonaContext();
     final retrying = state.messages.map((m) {
       return m.clientMsgId == clientMsgId ? m.copyWith(status: 'sending') : m;
     }).toList();
@@ -159,6 +187,13 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
         content: msg.content ?? '',
         mediaUrl: msg.mediaUrl,
         media: msg.media,
+        senderPersonaId:
+            msg.senderPersonaId ??
+            (activeContext.subAccountId.isEmpty
+                ? null
+                : activeContext.subAccountId),
+        senderProfileSubjectId: msg.senderId,
+        personaContextVersion: activeContext.personaContextVersion,
         clientMsgId: clientMsgId,
       );
       final resp = SendMessageResponse.fromMap(raw);
@@ -307,6 +342,6 @@ final chatMessageProvider =
     StateNotifierProvider.family<ChatMessageNotifier, ChatMessageState, String>(
       (ref, conversationId) {
         final repo = ref.watch(chatRepositoryProvider);
-        return ChatMessageNotifier(repo, conversationId);
+        return ChatMessageNotifier(ref, repo, conversationId);
       },
     );

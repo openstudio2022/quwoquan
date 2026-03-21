@@ -29,6 +29,41 @@ class HomeCirclesHubPage extends ConsumerStatefulWidget {
 
 const double _homeCircleCoverAspectRatio = 4 / 3;
 
+TextStyle _homeCircleRailTitleTextStyle() {
+  return const TextStyle(
+    fontSize: AppTypography.secondary,
+    fontWeight: AppTypography.medium,
+  );
+}
+
+TextStyle _homeCircleRailMetaTextStyle() {
+  return const TextStyle(fontSize: AppTypography.xs);
+}
+
+double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: 'Hg', style: style),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  return painter.height;
+}
+
+double _homeCircleChannelTileHeight(BuildContext context) {
+  final labelHeight = _measureSingleLineTextHeight(
+    context,
+    const TextStyle(
+      fontSize: AppTypography.base,
+      fontWeight: AppTypography.medium,
+    ),
+  );
+  final adaptiveHeight = labelHeight + (AppSpacing.containerSm * 2);
+  return adaptiveHeight > AppSpacing.bottomNavHeight
+      ? adaptiveHeight
+      : AppSpacing.bottomNavHeight;
+}
+
 enum _HomeCirclesModuleTab { recommended, mine }
 
 class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
@@ -682,7 +717,23 @@ class _CirclesGlobalHeader extends StatelessWidget {
   double _circleRailHeight(BuildContext context) {
     final cardWidth = _circleCardWidth(context);
     final coverHeight = cardWidth / _homeCircleCoverAspectRatio;
-    return coverHeight + AppSpacing.intraGroupSm + AppTypography.secondary;
+    final titleHeight = _measureSingleLineTextHeight(
+      context,
+      _homeCircleRailTitleTextStyle(),
+    );
+    final metaHeight = _measureSingleLineTextHeight(
+      context,
+      _homeCircleRailMetaTextStyle(),
+    );
+    final verticalPadding = AppSpacing.intraGroupXs * 2;
+    final contentSpacing =
+        AppSpacing.intraGroupXs + (AppSpacing.intraGroupXs / 2);
+    return coverHeight +
+        verticalPadding +
+        contentSpacing +
+        titleHeight +
+        metaHeight +
+        1;
   }
 
   @override
@@ -967,43 +1018,85 @@ class _HomeCircleRailCard extends StatelessWidget {
       isDark,
       ColorType.foregroundPrimary,
     );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
+    final bgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final titleStyle = _homeCircleRailTitleTextStyle().copyWith(
+      color: fgPrimary,
+    );
+    final metaStyle = _homeCircleRailMetaTextStyle().copyWith(
+      color: fgSecondary,
+    );
     return SizedBox(
       width: width,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         minimumSize: Size.zero,
         onPressed: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              child: AspectRatio(
-                aspectRatio: _homeCircleCoverAspectRatio,
-                child: AppCachedNetworkImage(
-                  imageUrl: circle.coverUrl ?? '',
-                  fit: BoxFit.cover,
-                ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: bgPrimary,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
+                blurRadius: AppSpacing.md,
+                offset: const Offset(0, 8),
               ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  circle.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.secondary,
-                    fontWeight: AppTypography.medium,
-                    color: fgPrimary,
+            ],
+          ),
+          padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                child: AspectRatio(
+                  aspectRatio: _homeCircleCoverAspectRatio,
+                  child: AppCachedNetworkImage(
+                    imageUrl: circle.coverUrl ?? '',
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
-            ),
-          ],
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        circle.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
+                      SizedBox(height: AppSpacing.intraGroupXs / 2),
+                      Text(
+                        '${circle.memberCount} ${UITextConstants.circleMembers}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: metaStyle,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1044,12 +1137,24 @@ class _HomeCircleStoryCard extends StatelessWidget {
       isDark,
       ColorType.backgroundSecondary,
     );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
     final thumbnailWidth = _thumbnailWidth(context);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: bgSecondary,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+            blurRadius: AppSpacing.md,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: CupertinoButton(
         padding: EdgeInsets.all(AppSpacing.sm),
@@ -1094,6 +1199,29 @@ class _HomeCircleStoryCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: AppTypography.sm,
                       color: fgSecondary,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.intraGroupXs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.circularBorderRadius,
+                      ),
+                    ),
+                    child: Text(
+                      item.isMine
+                          ? UITextConstants.homeCirclesMy
+                          : UITextConstants.homeCirclesRecommendTab,
+                      style: TextStyle(
+                        fontSize: AppTypography.xs,
+                        color: AppColors.primaryColor,
+                        fontWeight: AppTypography.semiBold,
+                      ),
                     ),
                   ),
                 ],
@@ -1313,7 +1441,7 @@ class _HomeCirclesChannelGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = AppSpacing.intraGroupSm;
-    final panelTileHeight = AppSpacing.bottomNavHeight;
+    final panelTileHeight = _homeCircleChannelTileHeight(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalSpacing = spacing * 3;
@@ -1423,20 +1551,26 @@ class _HomeCirclesChannelTile extends StatelessWidget {
             Container(
               width: width,
               height: height,
-              alignment: Alignment.center,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
               decoration: BoxDecoration(
                 color: bg,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 border: Border.all(color: borderColor),
               ),
-              child: Text(
-                canRemove ? label : '+ $label',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: fg,
-                  fontWeight: AppTypography.medium,
+              child: Center(
+                child: Text(
+                  canRemove ? label : '+ $label',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: fg,
+                    fontWeight: AppTypography.medium,
+                  ),
                 ),
               ),
             ),

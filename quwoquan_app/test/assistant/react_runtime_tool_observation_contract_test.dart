@@ -8,7 +8,6 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 
 class _SequenceProvider implements AssistantLlmProvider {
   int _callCount = 0;

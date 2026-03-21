@@ -75,7 +75,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
         _secretPasswordController.clear();
       });
     } else {
-      setState(() => _secretAuthError = '密码错误，请重试');
+      setState(() => _secretAuthError = UITextConstants.secretPasswordError);
     }
   }
 
@@ -206,7 +206,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final isDark = ref.watch(isDarkProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundPrimary,
+      ColorType.pageBackground,
     );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -218,7 +218,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
     final borderColor = AppColorsFunctional.getColor(
       isDark,
-      ColorType.borderPrimary,
+      ColorType.separatorSubtle,
     );
 
     return AppScaffold(
@@ -452,14 +452,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.chat_bubble_outline,
+              CupertinoIcons.lock,
               size: AppSpacing.iconButtonMinSizeMd,
               color: fgSecondary,
             ),
             SizedBox(height: AppSpacing.md),
             Text(
-              '暂无密信对话',
-              style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+              UITextConstants.noSecretConversations,
+              style: TextStyle(
+                fontSize: AppTypography.iosTitle3,
+                color: fgSecondary,
+              ),
             ),
           ],
         ),
@@ -490,26 +493,18 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgSecondary,
   ) {
     final isDark = ref.read(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(
+    final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+    final fieldBg = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundPrimary,
+      ColorType.surfaceMuted,
+    );
+    final panelBorder = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
     );
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: bg,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            isDark
-                ? Colors.white.withValues(alpha: 0.04)
-                : Colors.black.withValues(alpha: 0.03),
-            bg,
-          ],
-          stops: const [0.0, 0.5],
-        ),
-      ),
+      color: bg,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(AppSpacing.xl),
         child: Column(
@@ -525,102 +520,118 @@ class _ChatPageState extends ConsumerState<ChatPage>
             Text(
               UITextConstants.secretLockedTitle,
               style: TextStyle(
-                fontSize: AppTypography.lg,
+                fontSize: AppTypography.iosTitle3,
                 fontWeight: AppTypography.semiBold,
                 color: fgPrimary,
               ),
             ),
             SizedBox(height: AppSpacing.xs),
             Text(
-              '输入密码以查看对话',
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+              UITextConstants.secretPasswordPrompt,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: fgSecondary,
+              ),
             ),
             SizedBox(height: AppSpacing.xl * 1.5),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Column(
-                children: [
-                  CupertinoTextField(
-                    controller: _secretPasswordController,
-                    obscureText: !_secretShowPassword,
-                    onChanged: (_) => setState(() => _secretAuthError = ''),
-                    onSubmitted: (_) => _secretUnlock(),
-                    placeholder: UITextConstants.secretPasswordHint,
-                    placeholderStyle: TextStyle(
-                      color: fgSecondary.withValues(alpha: 0.6),
-                      fontSize: AppTypography.base,
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.fullBorderRadius,
-                      ),
-                    ),
-                    suffix: CupertinoButton(
-                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                      minimumSize: const Size(
-                        AppSpacing.minInteractiveSize,
-                        AppSpacing.minInteractiveSize,
-                      ),
-                      onPressed: () => setState(
-                        () => _secretShowPassword = !_secretShowPassword,
-                      ),
-                      child: Icon(
-                        _secretShowPassword
-                            ? CupertinoIcons.eye_slash_fill
-                            : CupertinoIcons.eye_fill,
-                        color: fgSecondary.withValues(alpha: 0.6),
-                        size: AppSpacing.iconMedium,
-                      ),
-                    ),
-                    style: TextStyle(
-                      color: fgPrimary,
-                      fontSize: AppTypography.base,
-                    ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.surfaceElevated,
                   ),
-                  if (_secretAuthError.isNotEmpty) ...[
-                    SizedBox(height: AppSpacing.md),
-                    Text(
-                      _secretAuthError,
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: AppColors.error,
-                      ),
-                    ),
-                  ],
-                  SizedBox(height: AppSpacing.xl),
-                  SizedBox(
-                    width: double.infinity,
-                    height: AppSpacing.buttonHeight,
-                    child: CupertinoButton(
-                      onPressed: () {
-                        if (_secretPasswordController.text.trim().isEmpty) {
-                          return;
-                        }
-                        _secretUnlock();
-                      },
-                      padding: EdgeInsets.zero,
-                      color: AppColors.primaryColor,
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.fullBorderRadius,
-                      ),
-                      child: Text(
-                        UITextConstants.secretUnlockButton,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                  border: Border.all(color: panelBorder),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    children: [
+                      CupertinoTextField(
+                        controller: _secretPasswordController,
+                        obscureText: !_secretShowPassword,
+                        onChanged: (_) => setState(() => _secretAuthError = ''),
+                        onSubmitted: (_) => _secretUnlock(),
+                        placeholder: UITextConstants.secretPasswordHint,
+                        placeholderStyle: TextStyle(
+                          color: fgSecondary.withValues(alpha: 0.6),
+                          fontSize: AppTypography.iosSubheadline,
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.md,
+                        ),
+                        decoration: BoxDecoration(
+                          color: fieldBg,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.fullBorderRadius,
+                          ),
+                        ),
+                        suffix: CupertinoButton(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                          ),
+                          minimumSize: const Size(
+                            AppSpacing.minInteractiveSize,
+                            AppSpacing.minInteractiveSize,
+                          ),
+                          onPressed: () => setState(
+                            () => _secretShowPassword = !_secretShowPassword,
+                          ),
+                          child: Icon(
+                            _secretShowPassword
+                                ? CupertinoIcons.eye_slash_fill
+                                : CupertinoIcons.eye_fill,
+                            color: fgSecondary.withValues(alpha: 0.6),
+                            size: AppSpacing.iconMedium,
+                          ),
+                        ),
                         style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: AppTypography.semiBold,
-                          fontSize: AppTypography.base,
+                          color: fgPrimary,
+                          fontSize: AppTypography.iosBody,
                         ),
                       ),
-                    ),
+                      if (_secretAuthError.isNotEmpty) ...[
+                        SizedBox(height: AppSpacing.md),
+                        Text(
+                          _secretAuthError,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: AppSpacing.xl),
+                      SizedBox(
+                        width: double.infinity,
+                        height: AppSpacing.buttonHeight,
+                        child: CupertinoButton(
+                          onPressed: () {
+                            if (_secretPasswordController.text.trim().isEmpty) {
+                              return;
+                            }
+                            _secretUnlock();
+                          },
+                          padding: EdgeInsets.zero,
+                          color: AppColors.primaryColor,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.fullBorderRadius,
+                          ),
+                          child: Text(
+                            UITextConstants.secretUnlockButton,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: AppTypography.semiBold,
+                              fontSize: AppTypography.iosSubheadline,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -707,8 +718,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
               title,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: AppTypography.lg,
-                fontWeight: AppTypography.medium,
+                fontSize: AppTypography.iosTitle3,
+                fontWeight: AppTypography.semiBold,
                 color: fgSecondary,
               ),
             ),
@@ -717,7 +728,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
               subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: AppTypography.base,
+                fontSize: AppTypography.iosFootnote,
                 color: fgSecondary.withValues(alpha: 0.82),
                 height: AppTypography.lineHeightCompact,
               ),
@@ -760,43 +771,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
 
     if (convs.isEmpty) {
-      final sub = _messageSubTabs[_subTabIndex];
-      String title = '';
-      String subtitle = '';
-
-      if (sub == '全部') {
-        title = '暂无对话';
-        subtitle = '开始与圈友聊天吧！';
-      } else if (sub == '@我') {
-        title = '暂无@我的消息';
-      } else if (sub == '未读') {
-        title = '暂无未读消息';
-      }
-
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: AppSpacing.iconButtonMinSizeMd,
-              color: fgSecondary,
-            ),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
-            ),
-            if (subtitle.isNotEmpty)
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: AppTypography.md,
-                  color: fgSecondary,
-                ),
-              ),
-          ],
-        ),
+      return _buildConversationEmptyState(
+        fgSecondary: fgSecondary,
+        subTab: _messageSubTabs[_subTabIndex],
       );
     }
 
@@ -863,14 +840,25 @@ class _ChatPageState extends ConsumerState<ChatPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.people_outline,
+              CupertinoIcons.person_2,
               size: AppSpacing.iconButtonMinSizeMd,
               color: fgSecondary,
             ),
             SizedBox(height: AppSpacing.md),
             Text(
-              '暂无$sub内容',
-              style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+              UITextConstants.noData,
+              style: TextStyle(
+                fontSize: AppTypography.iosTitle3,
+                color: fgSecondary,
+              ),
+            ),
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              sub,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: fgSecondary.withValues(alpha: 0.8),
+              ),
             ),
           ],
         ),
@@ -890,69 +878,99 @@ class _ChatPageState extends ConsumerState<ChatPage>
       itemCount: list.length,
       itemBuilder: (context, i) {
         final item = list[i];
-        final title =
-            (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
-            '';
+        final title = _chatContactTitle(item);
         final avatar = item['avatar'] as String? ?? '';
-        final subtitle =
-            (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
-                as String? ??
-            '';
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {},
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 12,
-              ),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+        final subtitle = _chatContactSubtitle(item);
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          onPressed: () => _openChatContactTarget(context, item),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm + AppSpacing.two,
+            ),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: borderColor,
+                  width: AppSpacing.hairline,
                 ),
               ),
-              child: Row(
-                children: [
-                  RoundedSquareAvatar(
-                    size: AppSpacing.largeButtonSize,
-                    imageUrl: avatar,
-                    name: title,
-                  ),
-                  SizedBox(width: AppSpacing.interGroupSm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+            ),
+            child: Row(
+              children: [
+                RoundedSquareAvatar(
+                  size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                  imageUrl: avatar,
+                  name: title,
+                ),
+                SizedBox(width: AppSpacing.interGroupSm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosBody,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty)
                         Text(
-                          title,
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: FontWeight.w600,
-                            color: fgPrimary,
+                            fontSize: AppTypography.iosFootnote,
+                            color: fgSecondary,
                           ),
                         ),
-                        if (subtitle.isNotEmpty)
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTypography.smPlus,
-                              color: fgSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
       },
     );
   }
+}
+
+String _chatContactTitle(Map<String, dynamic> item) {
+  return (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
+      '';
+}
+
+String _chatContactSubtitle(Map<String, dynamic> item) {
+  return (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
+          as String? ??
+      '';
+}
+
+void _openChatContactTarget(BuildContext context, Map<String, dynamic> item) {
+  final type = item['type'] as String? ?? '';
+  final circleId = item['circleId']?.toString() ?? item['id']?.toString() ?? '';
+  final conversationId =
+      item['conversationId']?.toString() ?? item['id']?.toString() ?? '';
+  final userId =
+      item['userId']?.toString() ??
+      item['username']?.toString() ??
+      item['id']?.toString() ??
+      _chatContactTitle(item);
+
+  if (type == 'circle' || item['isCircle'] == true) {
+    context.push(AppRoutePaths.circleDetail(id: circleId));
+    return;
+  }
+  if (type == 'group' || item['isGroup'] == true) {
+    context.push(AppRoutePaths.chatDetail(id: conversationId));
+    return;
+  }
+  context.push(AppRoutePaths.userProfile(username: userId));
 }
 
 /// 同好列表带右侧字母索引（1:1 ContactsList.tsx ContactsContent）
@@ -1152,12 +1170,12 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                 horizontal: AppSpacing.md,
                 vertical: 4,
               ),
-              color: widget.borderColor.withValues(alpha: 0.15),
+              color: widget.borderColor.withValues(alpha: 0.18),
               child: Text(
                 UITextConstants.starredFriends,
                 style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  fontWeight: FontWeight.w600,
+                  fontSize: AppTypography.iosCaption1,
+                  fontWeight: AppTypography.semiBold,
                   color: widget.fgSecondary,
                 ),
               ),
@@ -1177,12 +1195,12 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                 horizontal: AppSpacing.md,
                 vertical: 4,
               ),
-              color: widget.borderColor.withValues(alpha: 0.15),
+              color: widget.borderColor.withValues(alpha: 0.18),
               child: Text(
                 initial,
                 style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  fontWeight: FontWeight.w600,
+                  fontSize: AppTypography.iosCaption1,
+                  fontWeight: AppTypography.semiBold,
                   color: widget.fgSecondary,
                 ),
               ),
@@ -1200,69 +1218,71 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
               as String? ??
           '';
       listChildren.add(
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {},
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 12,
-              ),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: widget.borderColor.withValues(alpha: 0.3),
-                  ),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          onPressed: () => _openChatContactTarget(context, item),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm + AppSpacing.two,
+            ),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: widget.borderColor,
+                  width: AppSpacing.hairline,
                 ),
               ),
-              child: Row(
-                children: [
-                  RoundedSquareAvatar(
-                    size: AppSpacing.largeButtonSize,
-                    imageUrl: avatar,
-                    name: title,
-                  ),
-                  SizedBox(width: AppSpacing.interGroupSm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
+            ),
+            child: Row(
+              children: [
+                RoundedSquareAvatar(
+                  size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                  imageUrl: avatar,
+                  name: title,
+                ),
+                SizedBox(width: AppSpacing.interGroupSm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
                               title,
                               style: TextStyle(
-                                fontSize: AppTypography.lg,
-                                fontWeight: FontWeight.w600,
+                                fontSize: AppTypography.iosBody,
+                                fontWeight: AppTypography.semiBold,
                                 color: widget.fgPrimary,
                               ),
                             ),
-                            if (starred) ...[
-                              SizedBox(width: AppSpacing.xs),
-                              Icon(
-                                Icons.star,
-                                size: AppSpacing.iconSmall,
-                                color: AppColors.warning,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (subtitle.isNotEmpty)
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTypography.smPlus,
-                              color: widget.fgSecondary,
-                            ),
                           ),
-                      ],
-                    ),
+                          if (starred) ...[
+                            SizedBox(width: AppSpacing.xs),
+                            Icon(
+                              CupertinoIcons.star_fill,
+                              size: AppSpacing.iconSmall,
+                              color: AppColors.warning,
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: widget.fgSecondary,
+                          ),
+                        ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1295,8 +1315,10 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
               mainAxisSize: MainAxisSize.min,
               children: allInitials.map((letter) {
                 final isActive = _activeLetter == letter;
-                return GestureDetector(
-                  onTap: () {
+                return CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () {
                     setState(() => _activeLetter = letter);
                     final offset = _sectionOffsets[letter];
                     if (offset != null && _scrollController.hasClients) {
@@ -1326,7 +1348,10 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                     margin: EdgeInsets.symmetric(vertical: 1),
                     decoration: BoxDecoration(
                       color: isActive
-                          ? AppColors.primaryColor
+                          ? AppColorsFunctional.getColor(
+                              Theme.of(context).brightness == Brightness.dark,
+                              ColorType.selectionForeground,
+                            )
                           : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
@@ -1334,7 +1359,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                       letter,
                       style: TextStyle(
                         fontSize: AppTypography.xs,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: AppTypography.semiBold,
                         color: isActive ? Colors.white : widget.fgSecondary,
                       ),
                     ),
@@ -1407,16 +1432,18 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unread = conversation['unreadCount'] as int? ?? 0;
     final isEncrypted = showEncryptedBadge;
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm + AppSpacing.two,
+        ),
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(
-              color: borderColor.withValues(alpha: 0.3),
-              width: AppSpacing.hairline,
-            ),
+            bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
           ),
         ),
         child: Row(
@@ -1441,7 +1468,7 @@ class _ConversationTile extends StatelessWidget {
                         ),
                       ),
                       child: Icon(
-                        Icons.lock,
+                        CupertinoIcons.lock_fill,
                         size: AppTypography.xs,
                         color: Colors.white,
                       ),
@@ -1494,8 +1521,8 @@ class _ConversationTile extends StatelessWidget {
                               child: Text(
                                 conversation['title'] as String? ?? '',
                                 style: TextStyle(
-                                  fontSize: AppTypography.lg,
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: AppTypography.iosBody,
+                                  fontWeight: AppTypography.semiBold,
                                   color: fgPrimary,
                                 ),
                                 maxLines: 1,
@@ -1534,7 +1561,7 @@ class _ConversationTile extends StatelessWidget {
                       Text(
                         _formatConversationTime(conversation),
                         style: TextStyle(
-                          fontSize: AppTypography.base,
+                          fontSize: AppTypography.iosFootnote,
                           color: fgSecondary.withValues(alpha: 0.8),
                         ),
                       ),
@@ -1545,7 +1572,7 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       if (isEncrypted) ...[
                         Icon(
-                          Icons.lock,
+                          CupertinoIcons.lock_fill,
                           size: AppSpacing.fourteen,
                           color: fgSecondary.withValues(alpha: 0.8),
                         ),
@@ -1557,7 +1584,7 @@ class _ConversationTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: AppTypography.base,
+                            fontSize: AppTypography.iosFootnote,
                             color: fgSecondary.withValues(alpha: 0.8),
                           ),
                         ),
@@ -1606,12 +1633,14 @@ class _InboxConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scaffoldBackground = Theme.of(context).scaffoldBackgroundColor;
-    final dividerColor = fgSecondary.withValues(alpha: 0.12);
+    final dividerColor = Theme.of(context).dividerColor;
     final subtitleColor = fgSecondary.withValues(alpha: 0.9);
     final timeColor = fgSecondary.withValues(alpha: 0.72);
 
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
       child: Container(
         color: item.isPinned
             ? fgSecondary.withValues(alpha: 0.04)
@@ -1683,8 +1712,8 @@ class _InboxConversationTile extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: AppTypography.lg,
-                                  fontWeight: AppTypography.medium,
+                                  fontSize: AppTypography.iosBody,
+                                  fontWeight: AppTypography.semiBold,
                                   color: fgPrimary,
                                   height: AppTypography.lineHeightTight,
                                 ),
@@ -1699,7 +1728,7 @@ class _InboxConversationTile extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: AppTypography.base,
+                                  fontSize: AppTypography.iosFootnote,
                                   color: timeColor,
                                   height: AppTypography.lineHeightTight,
                                 ),
@@ -1724,7 +1753,7 @@ class _InboxConversationTile extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: AppTypography.base,
+                                  fontSize: AppTypography.iosFootnote,
                                   color: subtitleColor,
                                   height: AppTypography.lineHeightCompact,
                                 ),

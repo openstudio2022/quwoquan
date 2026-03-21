@@ -11,6 +11,8 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 管理分身页（1:1 对应 PersonaManagementPage.tsx）
 /// 路由：/profile/personas
@@ -61,113 +63,133 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final bg = AppColors.iosPageBackground(context);
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final accent = AppColors.iosAccent(context);
+    final secondaryStyle = isDark
+        ? ProfileIosActionStyle.outlined
+        : ProfileIosActionStyle.tinted;
 
     return AppScaffold(
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
-        backgroundColor: bg,
+        backgroundColor: AppColors.iosSystemBackground(
+          context,
+        ).withValues(alpha: 0.94),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.iosSeparator(context).withValues(alpha: 0.28),
+            width: AppSpacing.hairline,
+          ),
+        ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
+          child: Icon(CupertinoIcons.back, color: fg),
           onPressed: () => context.pop(),
         ),
         middle: Text(
           UITextConstants.personaManage,
           style: TextStyle(
             color: fg,
-            fontSize: AppTypography.lg,
-            fontWeight: FontWeight.w700,
+            fontSize: AppTypography.iosNavTitle,
+            fontWeight: AppTypography.semiBold,
           ),
         ),
       ),
       body: ListView(
-        padding: EdgeInsets.all(
-          AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+        padding: EdgeInsets.only(
+          top: AppSpacing.containerSm,
+          bottom:
+              MediaQuery.viewPaddingOf(context).bottom +
+              AppSpacing.interGroupLg,
         ),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.person_outline,
-                    size: AppSpacing.twenty,
-                    color: AppColors.primaryColor,
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+            child: ProfileIosSectionCard(
+              addShadow: true,
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.iosTintedFill(context),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      CupertinoIcons.person_2,
+                      color: accent,
+                      size: AppSpacing.iconMedium,
+                    ),
                   ),
-                  SizedBox(width: AppSpacing.sm),
-                  Text(
-                    '切换角色',
-                    style: TextStyle(
-                      fontSize: AppTypography.xl,
-                      fontWeight: FontWeight.w900,
-                      color: fg,
+                  SizedBox(width: AppSpacing.containerSm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '角色切换',
+                          style: TextStyle(
+                            fontSize: AppTypography.iosTitle3,
+                            fontWeight: AppTypography.semiBold,
+                            color: fg,
+                            letterSpacing: -0.32,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          '已创建 ${_personas.length}/$_maxPersonas 个分身，可为不同内容语境切换身份。',
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: fgSecondary,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              Text(
-                '已创建 ${_personas.length}/$_maxPersonas',
-                style: TextStyle(
-                  fontSize: AppTypography.smPlus,
-                  fontWeight: FontWeight.w700,
-                  color: fgSecondary,
-                ),
-              ),
-            ],
+            ),
           ),
-          SizedBox(height: AppSpacing.lg),
+          SizedBox(height: AppSpacing.interGroupMd),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+            child: Row(
+              children: <Widget>[
+                Text(
+                  '我的分身',
+                  style: TextStyle(
+                    fontSize: AppTypography.iosSectionHeader,
+                    fontWeight: AppTypography.semiBold,
+                    color: fgSecondary,
+                  ),
+                ),
+                const Spacer(),
+                if (_personas.length < _maxPersonas)
+                  ProfileIosActionButton(
+                    label: '新增分身',
+                    icon: CupertinoIcons.add,
+                    onPressed: () => AppToast.show(context, '新增分身能力待接入'),
+                    style: secondaryStyle,
+                    expand: false,
+                    height: 32,
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
           ..._personas.map(
             (p) => _buildPersonaCard(
               persona: p,
-              isDark: isDark,
               fg: fg,
               fgSecondary: fgSecondary,
-              borderColor: borderColor,
+              accent: accent,
+              secondaryStyle: secondaryStyle,
             ),
           ),
-          if (_personas.length < _maxPersonas)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: CupertinoButton(
-                onPressed: () {},
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.fourteen),
-                color: Colors.transparent,
-                disabledColor: Colors.transparent,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.fourteen),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.lg),
-                    border: Border.all(color: AppColors.primaryColor),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        CupertinoIcons.add,
-                        size: AppSpacing.twenty,
-                        color: AppColors.primaryColor,
-                      ),
-                      SizedBox(width: AppSpacing.sm),
-                      Text(
-                        '新增分身',
-                        style: TextStyle(
-                          color: AppColors.primaryColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -175,10 +197,10 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
 
   Widget _buildPersonaCard({
     required Map<String, dynamic> persona,
-    required bool isDark,
     required Color fg,
     required Color fgSecondary,
-    required Color borderColor,
+    required Color accent,
+    required ProfileIosActionStyle secondaryStyle,
   }) {
     final isActive = _currentId == persona['id'];
     final isPrimary = persona['isPrimary'] as bool? ?? false;
@@ -189,167 +211,201 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final avatar = persona['avatar'] as String? ?? '';
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: GestureDetector(
-        onTap: () => setState(() => _currentId = persona['id'] as String),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.twenty),
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.primaryColor.withValues(alpha: 0.08)
-                : AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.backgroundSecondary,
-                  ),
-            borderRadius: BorderRadius.circular(AppSpacing.lg),
-            border: Border.all(
-              color: isActive
-                  ? AppColors.primaryColor
-                  : borderColor.withValues(alpha: 0.5),
-              width: isActive ? 2 : 1,
-            ),
-          ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        0,
+        AppSpacing.containerMd,
+        AppSpacing.interGroupSm,
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: () => setState(() => _currentId = persona['id'] as String),
+        child: ProfileIosSectionCard(
+          addShadow: isActive,
+          backgroundColor: isActive
+              ? AppColors.iosTintedFill(context)
+              : AppColors.iosGroupedSurface(context),
+          borderColor: isActive
+              ? accent.withValues(alpha: 0.24)
+              : AppColors.iosSeparator(context).withValues(alpha: 0.16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isActive)
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: AppColors.primaryColor,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(AppSpacing.md),
-                        topRight: Radius.circular(AppTypography.xxxl),
-                      ),
-                    ),
-                    child: const Text(
-                      '当前使用',
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              if (isActive) const SizedBox(height: AppSpacing.sm),
+            children: <Widget>[
               Row(
-                children: [
+                children: <Widget>[
                   Stack(
                     clipBehavior: Clip.none,
-                    children: [
+                    children: <Widget>[
                       CircleAvatar(
                         radius: 32,
-                        backgroundImage:
-                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        backgroundImage: avatar.isNotEmpty
+                            ? NetworkImage(avatar)
+                            : null,
+                        backgroundColor: AppColors.iosFill(context),
                         onBackgroundImageError: (_, __) {},
                         child: avatar.isEmpty
-                            ? Icon(Icons.person, color: fgSecondary)
+                            ? Icon(
+                                CupertinoIcons.person_crop_circle_fill,
+                                color: fgSecondary,
+                              )
                             : null,
                       ),
                       if (isPrimary)
-                        const Positioned(
+                        Positioned(
                           top: -AppSpacing.two,
                           right: -AppSpacing.two,
-                          child: Icon(
-                            Icons.star,
-                            size: AppSpacing.fourteen,
-                            color: Colors.amber,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: CupertinoColors.systemYellow.resolveFrom(
+                                context,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.star_fill,
+                              size: 12,
+                              color: CupertinoColors.white,
+                            ),
                           ),
                         ),
                     ],
                   ),
-                  const SizedBox(width: AppSpacing.md),
+                  SizedBox(width: AppSpacing.containerSm),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      children: <Widget>[
                         Row(
-                          children: [
-                            Text(
-                              persona['displayName'] as String? ?? '',
-                              style: TextStyle(
-                                fontSize: AppTypography.lg,
-                                fontWeight: FontWeight.w800,
-                                color: fg,
+                          children: <Widget>[
+                            Flexible(
+                              child: Text(
+                                persona['displayName'] as String? ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosTitle3,
+                                  fontWeight: AppTypography.semiBold,
+                                  color: fg,
+                                  letterSpacing: -0.32,
+                                ),
                               ),
                             ),
-                            if (persona['isPrivate'] == true) ...[
-                              const SizedBox(width: AppSpacing.xs),
+                            if (persona['isPrivate'] == true) ...<Widget>[
+                              SizedBox(width: AppSpacing.intraGroupXs),
                               Icon(
-                                Icons.lock,
-                                size: AppSpacing.fourteen,
-                                color: Colors.purple.shade300,
+                                CupertinoIcons.lock_fill,
+                                size: AppSpacing.iconSmall,
+                                color: AppColors.iosSecondaryLabel(context),
                               ),
                             ],
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.xs),
+                        SizedBox(height: AppSpacing.intraGroupXs),
                         Text(
                           '@${persona['name'] ?? ''}',
                           style: TextStyle(
-                            fontSize: AppTypography.sm,
+                            fontSize: AppTypography.iosFootnote,
                             color: fgSecondary,
-                            fontWeight: FontWeight.w700,
                           ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Row(
-                          children: [
-                            _statChip(
-                              '作品',
-                              '${persona['postCount'] ?? 0}',
-                              fgSecondary,
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            _statChip('关注', '128', fgSecondary),
-                            const SizedBox(width: AppSpacing.md),
-                            _statChip('获赞', likeStr, fgSecondary),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.interGroupSm),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    onPressed: () {}, minimumSize: Size(0, 0),
-                    child: const Text(
-                      '编辑',
-                      style: TextStyle(fontSize: AppTypography.sm),
-                    ),
-                  ),
-                  if (!isPrimary)
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      onPressed: () {}, minimumSize: Size(0, 0),
-                      child: Text(
-                        '删除',
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundSecondary,
+                  SizedBox(width: AppSpacing.containerSm),
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.containerSm,
+                          vertical: AppSpacing.intraGroupXs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isActive ? accent : AppColors.iosFill(context),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusTwenty,
+                          ),
+                        ),
+                        child: Text(
+                          isActive ? '当前使用' : '点按切换',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosCaption1,
+                            fontWeight: AppTypography.semiBold,
+                            color: isActive
+                                ? CupertinoColors.white
+                                : AppColors.iosSecondaryLabel(context),
                           ),
                         ),
                       ),
                     ),
+                  ),
+                ],
+              ),
+              SizedBox(height: AppSpacing.containerSm),
+              ProfileIosSectionCard(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                  vertical: AppSpacing.containerSm,
+                ),
+                backgroundColor: AppColors.iosGroupedSurfaceElevated(context),
+                borderColor: AppColors.iosSeparator(
+                  context,
+                ).withValues(alpha: 0.12),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: _statChip(
+                        '作品',
+                        '${persona['postCount'] ?? 0}',
+                        fgSecondary,
+                      ),
+                    ),
+                    Expanded(child: _statChip('关注', '128', fgSecondary)),
+                    Expanded(child: _statChip('获赞', likeStr, fgSecondary)),
+                  ],
+                ),
+              ),
+              SizedBox(height: AppSpacing.containerSm),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: ProfileIosActionButton(
+                      label: isActive ? '当前身份' : '切换到此身份',
+                      icon: isActive
+                          ? CupertinoIcons.check_mark
+                          : CupertinoIcons.arrow_right_circle,
+                      onPressed: () =>
+                          setState(() => _currentId = persona['id'] as String),
+                      style: isActive
+                          ? secondaryStyle
+                          : ProfileIosActionStyle.filled,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: ProfileIosActionButton(
+                      label: '编辑',
+                      icon: CupertinoIcons.pencil,
+                      onPressed: () => AppToast.show(context, '分身编辑待接入'),
+                      style: secondaryStyle,
+                    ),
+                  ),
+                  if (!isPrimary) ...<Widget>[
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: ProfileIosActionButton(
+                        label: '删除',
+                        icon: CupertinoIcons.delete,
+                        onPressed: () => AppToast.show(context, '分身删除待接入'),
+                        style: ProfileIosActionStyle.outlined,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -360,13 +416,30 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
   }
 
   Widget _statChip(String label, String value, Color fgSecondary) {
-    return Text(
-      '$label $value',
-      style: TextStyle(
-        fontSize: AppTypography.sm,
-        fontWeight: FontWeight.w700,
-        color: fgSecondary,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppTypography.iosSubheadline,
+            fontWeight: AppTypography.semiBold,
+            color: AppColors.iosLabel(context),
+          ),
+        ),
+        SizedBox(height: AppSpacing.intraGroupXs / 2),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppTypography.iosCaption1,
+            color: fgSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

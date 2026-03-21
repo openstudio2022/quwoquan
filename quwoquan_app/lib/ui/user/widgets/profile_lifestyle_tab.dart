@@ -5,6 +5,26 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 
+double _profileLifestyleTabBarHeight(BuildContext context) {
+  final painter = TextPainter(
+    text: const TextSpan(
+      text: 'Hg',
+      style: TextStyle(
+        fontSize: AppTypography.md,
+        fontWeight: AppTypography.semiBold,
+      ),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final adaptiveHeight =
+      painter.height + (AppSpacing.intraGroupSm * 2) + AppSpacing.intraGroupXs;
+  return adaptiveHeight > AppSpacing.subTabNavigationHeight
+      ? adaptiveHeight
+      : AppSpacing.subTabNavigationHeight;
+}
+
 class ProfileLifestyleTab extends ConsumerWidget {
   const ProfileLifestyleTab({
     super.key,
@@ -40,6 +60,7 @@ class ProfileLifestyleTab extends ConsumerWidget {
       ColorType.foregroundSecondary,
     );
     final primary = AppColors.primaryColor;
+    final tabBarHeight = _profileLifestyleTabBarHeight(context);
 
     final filteredItems = state.lifeItems.where((item) {
       final key = _subTabCategoryKeys[state.lifestyleSubTab];
@@ -49,7 +70,7 @@ class ProfileLifestyleTab extends ConsumerWidget {
     return Column(
       children: [
         SizedBox(
-          height: AppSpacing.subTabNavigationHeight,
+          height: tabBarHeight,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),

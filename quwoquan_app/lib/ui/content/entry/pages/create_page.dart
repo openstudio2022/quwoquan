@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -10,10 +11,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:video_player/video_player.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -23,8 +26,10 @@ import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/ios_article_editor.dart';
 
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({super.key, this.initialAction, this.initialTabKey});
@@ -62,6 +67,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   bool get _editorV2Enabled =>
       ref.read(contentFeatureFlagProvider('create_editor_v2')) ||
       ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
+
+  bool _useImmersiveArticleExperience(CreateEditorStateV2 state) {
+    return widget.initialAction == EditorStartAction.write &&
+        state.editorKind == CreateEditorKind.text;
+  }
 
   @override
   void initState() {
@@ -168,9 +178,19 @@ class _CreatePageState extends ConsumerState<CreatePage> {
 
   void _focusBodyField() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _bodyFocusNode.requestFocus();
+      if (!mounted) {
+        return;
       }
+      final state = ref.read(createEditorProvider);
+      if (state.editorKind == CreateEditorKind.text) {
+        final target = state.articleBlocks.firstWhere(
+          (block) => block.isTextLike,
+          orElse: () => state.articleBlocks.first,
+        );
+        ref.read(createEditorProvider.notifier).setActiveArticleBlock(target.id);
+        return;
+      }
+      _bodyFocusNode.requestFocus();
     });
   }
 
@@ -196,13 +216,13 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   int _mediaColumnsForWidth(double width) {
+    if (width >= 720) {
+      return 5;
+    }
     if (width >= 520) {
       return 4;
     }
-    if (width >= 340) {
-      return 3;
-    }
-    return 2;
+    return 3;
   }
 
   double _mediaTileAspectRatioForColumns(int columns) {
@@ -222,12 +242,16 @@ class _CreatePageState extends ConsumerState<CreatePage> {
 
   String _mediaHeaderHintForState(CreateEditorStateV2 state) {
     if (state.hasVideo) {
-      return '轻点替换视频';
+      return '轻点视频编辑，可设置封面';
     }
     if (state.imagePaths.isEmpty) {
-      return '从一张图或一段视频开始';
+      return '先添加图片或视频';
     }
     return '拖拽排序，轻点编辑';
+  }
+
+  bool _canAddMoreImages(CreateEditorStateV2 state) {
+    return !state.hasVideo && state.imagePaths.length < _kMaxMediaImages;
   }
 
   void _autoScrollDuringMediaDrag(Offset globalPosition) {
@@ -560,6 +584,19 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .map((item) => item.path)
         .take(_kMaxMediaImages)
         .toList(growable: false);
+    if (state.editorKind == CreateEditorKind.text) {
+      ref
+          .read(createEditorProvider.notifier)
+          .insertArticleImages(
+            paths,
+            afterBlockId: state.activeArticleBlockId,
+          );
+      await _reportEvent('create_media_images_selected', <String, dynamic>{
+        'count': paths.length,
+        'editorKind': state.editorKind.name,
+      });
+      return;
+    }
     ref
         .read(createEditorProvider.notifier)
         .setImages(paths, editorKind: state.editorKind);
@@ -587,14 +624,28 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     final item = result.items.first;
     final thumbnail = await _generateVideoThumbnail(item.path);
+    final durationMs = await _loadVideoDurationMs(item.path);
+    final preserved = _deriveVideoEditContext(
+      previousState: state,
+      nextDurationMs: durationMs,
+    );
     ref
         .read(createEditorProvider.notifier)
         .setVideo(
           item.path,
           editorKind: CreateEditorKind.media,
           thumbnail: thumbnail ?? '',
+          originalPath: item.path,
+          durationMs: durationMs,
+          trimStartMs: preserved.trimStartMs,
+          trimEndMs: preserved.trimEndMs,
+          coverTimeMs: preserved.coverTimeMs,
+          muted: preserved.muted,
         );
     await _reportEvent('create_media_video_selected');
+    if (state.hasVideo && mounted) {
+      await _editCurrentVideo();
+    }
   }
 
   Future<void> _openCameraForCurrentEditor({
@@ -623,10 +674,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       }
       ref
           .read(createEditorProvider.notifier)
-          .appendImages(
+          .insertArticleImages(
             <String>[result.path],
-            editorKind: CreateEditorKind.text,
-            maxImages: _kMaxMediaImages,
+            afterBlockId: state.activeArticleBlockId,
           );
       return;
     }
@@ -636,13 +686,27 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         return;
       }
       final thumbnail = await _generateVideoThumbnail(result.path);
+      final durationMs = await _loadVideoDurationMs(result.path);
+      final preserved = _deriveVideoEditContext(
+        previousState: state,
+        nextDurationMs: durationMs,
+      );
       ref
           .read(createEditorProvider.notifier)
           .setVideo(
             result.path,
             editorKind: CreateEditorKind.media,
             thumbnail: thumbnail ?? '',
+            originalPath: result.path,
+            durationMs: durationMs,
+            trimStartMs: preserved.trimStartMs,
+            trimEndMs: preserved.trimEndMs,
+            coverTimeMs: preserved.coverTimeMs,
+            muted: preserved.muted,
           );
+      if (state.hasVideo && mounted) {
+        await _editCurrentVideo();
+      }
       return;
     }
     if (state.hasVideo) {
@@ -670,14 +734,14 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         final isTextEditor = state.editorKind == CreateEditorKind.text;
         final isVideoState = state.mediaKind == CreateMediaKind.video;
         final supportsVideo =
-            !isTextEditor && state.mediaKind == CreateMediaKind.none;
+            !isTextEditor && state.imagePaths.isEmpty && !state.hasVideo;
 
         return CupertinoActionSheet(
           actions: <Widget>[
             if (!isVideoState)
               CupertinoActionSheetAction(
                 onPressed: () => runAction(_pickImagesForCurrentEditor),
-                child: Text(isTextEditor ? '添加图片' : '从相册选择'),
+                child: Text(isTextEditor ? '添加图片' : '添加图片'),
               ),
             CupertinoActionSheetAction(
               onPressed: () => runAction(
@@ -692,7 +756,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             if (supportsVideo || isVideoState)
               CupertinoActionSheetAction(
                 onPressed: () => runAction(_pickVideoForMedia),
-                child: Text(isVideoState ? '替换视频' : '选择视频'),
+                child: Text(isVideoState ? '更换视频' : '添加视频'),
               ),
           ],
           cancelButton: CupertinoActionSheetAction(
@@ -705,6 +769,48 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
+  Future<void> _editCurrentVideo() async {
+    final state = ref.read(createEditorProvider);
+    if (!state.hasVideo) {
+      return;
+    }
+    final result = await Navigator.of(context).push<VideoEditorResult>(
+      MaterialPageRoute<VideoEditorResult>(
+        fullscreenDialog: true,
+        builder: (_) => VideoEditorPage(
+          sourceVideoPath: state.originalVideoPath.trim().isEmpty
+              ? state.videoPath
+              : state.originalVideoPath,
+          initialVideoPath: state.videoPath,
+          initialThumbnailPath: state.videoThumbnail,
+          initialDurationMs: state.videoDurationMs,
+          initialTrimStartMs: state.videoTrimStartMs,
+          initialTrimEndMs: state.videoTrimEndMs,
+          initialCoverTimeMs: state.videoCoverTimeMs,
+          initialMuted: state.videoMuted,
+        ),
+      ),
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    ref.read(createEditorProvider.notifier).applyVideoEditing(
+          videoPath: result.videoPath,
+          thumbnailPath: result.thumbnailPath,
+          videoDurationMs: result.durationMs,
+          trimStartMs: result.trimStartMs,
+          trimEndMs: result.trimEndMs,
+          coverTimeMs: result.coverTimeMs,
+          muted: result.muted,
+          originalVideoPath: result.originalVideoPath,
+        );
+    await _reportEvent('create_media_video_edited', <String, dynamic>{
+      'muted': result.muted,
+      'trimStartMs': result.trimStartMs,
+      'trimEndMs': result.trimEndMs,
+    });
+  }
+
   Future<String?> _generateVideoThumbnail(String path) async {
     try {
       return await VideoThumbnail.thumbnailFile(
@@ -715,6 +821,62 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<int> _loadVideoDurationMs(String path) async {
+    final controller = VideoPlayerController.file(File(path));
+    try {
+      await controller.initialize();
+      return math.max(controller.value.duration.inMilliseconds, 1000);
+    } catch (_) {
+      return 0;
+    } finally {
+      await controller.dispose();
+    }
+  }
+
+  _VideoEditContext _deriveVideoEditContext({
+    required CreateEditorStateV2 previousState,
+    required int nextDurationMs,
+  }) {
+    if (!previousState.hasVideo || nextDurationMs <= 0) {
+      return _VideoEditContext(
+        trimStartMs: 0,
+        trimEndMs: 0,
+        coverTimeMs: 0,
+        muted: false,
+      );
+    }
+    final previousDuration = previousState.videoDurationMs > 0
+        ? previousState.videoDurationMs
+        : math.max(previousState.videoTrimEndMs, 1000);
+    final previousStart = previousState.videoTrimStartMs.clamp(0, previousDuration);
+    final previousEnd = previousState.videoTrimEndMs > 0
+        ? previousState.videoTrimEndMs.clamp(previousStart + 100, previousDuration)
+        : previousDuration;
+    final startRatio = previousStart / previousDuration;
+    final endRatio = previousEnd / previousDuration;
+    final coverRatio = previousState.videoCoverTimeMs > 0
+        ? previousState.videoCoverTimeMs.clamp(previousStart, previousEnd) /
+            previousDuration
+        : (startRatio + endRatio) / 2;
+    final nextStart = (nextDurationMs * startRatio).round().clamp(
+          0,
+          math.max(nextDurationMs - 100, 0),
+        ) as int;
+    final rawNextEnd = (nextDurationMs * endRatio).round();
+    final nextEnd = rawNextEnd.clamp(nextStart + 100, nextDurationMs) as int;
+    final nextCover = (nextDurationMs * coverRatio).round().clamp(
+          nextStart,
+          nextEnd,
+        ) as int;
+    final keepsFullRange = nextStart == 0 && nextEnd == nextDurationMs;
+    return _VideoEditContext(
+      trimStartMs: nextStart,
+      trimEndMs: keepsFullRange ? 0 : nextEnd,
+      coverTimeMs: nextCover,
+      muted: previousState.videoMuted,
+    );
   }
 
   Future<void> _editCurrentImage(int index) async {
@@ -742,6 +904,43 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     ref
         .read(createEditorProvider.notifier)
         .setImages(next, editorKind: state.editorKind, currentIndex: index);
+  }
+
+  Future<void> _editArticleImageBlock(String blockId) async {
+    final state = ref.read(createEditorProvider);
+    final block = state.articleBlocks.firstWhere(
+      (item) => item.id == blockId,
+      orElse: () => const CreateTextBlock(
+        id: '',
+        type: CreateTextBlockType.paragraph,
+      ),
+    );
+    if (!block.hasImage) {
+      return;
+    }
+    final imagePaths = state.articleBlocks
+        .where((item) => item.hasImage)
+        .map((item) => item.imagePath)
+        .toList(growable: false);
+    final currentIndex = imagePaths.indexOf(block.imagePath);
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute<Object?>(
+        fullscreenDialog: true,
+        builder: (_) => ImageEditorPage(
+          initialPath: block.imagePath,
+          source: 'create_article',
+          index: currentIndex < 0 ? 0 : currentIndex,
+          total: imagePaths.length,
+          imagePaths: imagePaths,
+        ),
+      ),
+    );
+    if (!mounted || result is! String || result.trim().isEmpty) {
+      return;
+    }
+    ref
+        .read(createEditorProvider.notifier)
+        .replaceArticleImageBlock(blockId, result.trim());
   }
 
   Future<List<CreateCircleOption>> _loadJoinedCircles() {
@@ -801,12 +1000,71 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     return state.hasBody || state.hasTitle || state.hasImages;
   }
 
+  String _articleSummaryForState(CreateEditorStateV2 state) {
+    final plainText = state.body.trim();
+    if (plainText.isEmpty) {
+      return state.imagePaths.isNotEmpty ? '图文内容' : '';
+    }
+    if (plainText.length <= 120) {
+      return plainText;
+    }
+    return '${plainText.substring(0, 120)}...';
+  }
+
+  List<Map<String, dynamic>> _buildArticleCards(CreateEditorStateV2 state) {
+    final cards = <Map<String, dynamic>>[];
+    final textBuffer = <String>[];
+    String pendingImageUrl = '';
+    var orderedCount = 0;
+
+    void flushCard() {
+      final body = textBuffer.join('\n').trim();
+      if (body.isEmpty && pendingImageUrl.isEmpty) {
+        return;
+      }
+      cards.add(<String, dynamic>{
+        'title': '',
+        'body': body,
+        'layout': pendingImageUrl.isNotEmpty ? 'half' : 'full',
+        if (pendingImageUrl.isNotEmpty) 'imageUrl': pendingImageUrl,
+      });
+      textBuffer.clear();
+      pendingImageUrl = '';
+    }
+
+    for (final block in state.articleBlocks) {
+      switch (block.type) {
+        case CreateTextBlockType.paragraph:
+          orderedCount = 0;
+          if (block.text.trim().isNotEmpty) {
+            textBuffer.add(block.text.trim());
+          }
+          break;
+        case CreateTextBlockType.orderedItem:
+          orderedCount += 1;
+          if (block.text.trim().isNotEmpty) {
+            textBuffer.add('$orderedCount. ${block.text.trim()}');
+          }
+          break;
+        case CreateTextBlockType.image:
+          flushCard();
+          pendingImageUrl = block.imagePath.trim();
+          flushCard();
+          orderedCount = 0;
+          break;
+      }
+    }
+    flushCard();
+    return cards;
+  }
+
   Map<String, dynamic> _buildCreatePayload(CreateEditorStateV2 state) {
     final settings = state.settings.toPayloadFields();
     final coverAssetPath = _coverAssetPathForState(state);
     if (state.editorKind == CreateEditorKind.media) {
       if (state.hasVideo) {
         return <String, dynamic>{
+          'type': 'video',
           'contentType': 'video',
           'title': state.title.trim(),
           'body': state.body.trim(),
@@ -817,6 +1075,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         };
       }
       return <String, dynamic>{
+        'type': 'image',
         'contentType': 'image',
         'title': state.title.trim(),
         'body': state.body.trim(),
@@ -826,8 +1085,25 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       };
     }
     final asArticle = _shouldPublishAsArticle(state);
+    if (asArticle) {
+      final articleBody = buildArticlePlainText(state.articleBlocks).trim();
+      return <String, dynamic>{
+        'type': 'article',
+        'contentType': 'article',
+        'title': state.title.trim(),
+        'body': articleBody.isNotEmpty ? articleBody : _articleSummaryForState(state),
+        'mediaUrls': state.imagePaths,
+        'coverUrl': coverAssetPath,
+        'cards': _buildArticleCards(state),
+        'articleBlocks': state.articleBlocks
+            .map((block) => block.toMap())
+            .toList(growable: false),
+        ...settings,
+      };
+    }
     return <String, dynamic>{
-      'contentType': asArticle ? 'article' : 'micro',
+      'type': 'moment',
+      'contentType': 'micro',
       'title': state.title.trim(),
       'body': state.body.trim(),
       'mediaUrls': state.imagePaths,
@@ -840,6 +1116,25 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
         .toString()
         .trim();
+  }
+
+  Future<Map<String, dynamic>> _attachActivePersonaContext(
+    Map<String, dynamic> payload,
+  ) async {
+    final activeContext = await ref.read(activePersonaContextProvider.future);
+    final mode = ref.read(appDataSourceModeProvider);
+    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+      throw StateError('active persona context unavailable');
+    }
+    return <String, dynamic>{
+      ...payload,
+      if (activeContext.subAccountId.isNotEmpty)
+        'personaId': activeContext.subAccountId,
+      if (activeContext.profileSubjectId.isNotEmpty)
+        'profileSubjectId': activeContext.profileSubjectId,
+      if (activeContext.personaContextVersion.isNotEmpty)
+        'personaContextVersion': activeContext.personaContextVersion,
+    };
   }
 
   Future<void> _publish() async {
@@ -860,7 +1155,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     setState(() => _isPublishing = true);
     try {
       final repository = ref.read(contentRepositoryProvider);
-      final payload = _buildCreatePayload(publishState);
+      final payload = await _attachActivePersonaContext(
+        _buildCreatePayload(publishState),
+      );
       final created = await repository.createPost(payload: payload);
       final postId = _extractPostId(created);
       if (postId.isEmpty) {
@@ -879,10 +1176,15 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       }
       AppToast.show(context, UITextConstants.publishAction);
       _doClose();
-    } catch (_) {
+    } catch (error) {
       await _reportEvent('create_publish_failure');
       if (mounted) {
-        AppToast.show(context, context.l10n.loadFailed);
+        AppToast.show(
+          context,
+          '$error'.contains('active persona context')
+              ? '当前分身上下文未就绪，请稍后重试'
+              : context.l10n.loadFailed,
+        );
       }
     } finally {
       if (mounted) {
@@ -895,6 +1197,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   Widget build(BuildContext context) {
     final state = ref.watch(createEditorProvider);
     _syncControllersFromState(state);
+    if (_useImmersiveArticleExperience(state)) {
+      return _buildImmersiveArticlePage(state);
+    }
     final background = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
@@ -936,16 +1241,146 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         if (!_editorV2Enabled) _buildRollbackBanner(secondary),
-                        _buildHeroIntro(
-                          state: state,
-                          foreground: foreground,
-                          collapseProgress: _heroCollapseProgress,
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
                         if (state.editorKind == CreateEditorKind.media)
                           _buildMediaEditor(state)
                         else
                           _buildTextEditor(state),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImmersiveArticlePage(CreateEditorStateV2 state) {
+    final background = CupertinoColors.systemBackground.resolveFrom(context);
+    final foreground = CupertinoColors.label.resolveFrom(context);
+    final divider = CupertinoColors.separator.resolveFrom(context);
+    final actionTint = _isPublishing
+        ? CupertinoColors.tertiaryLabel.resolveFrom(context)
+        : AppColors.iosAccentLight;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) {
+          await _onCloseRequest();
+        }
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: background,
+        child: Material(
+          key: TestKeys.createPage,
+          color: background,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: <Widget>[
+                Container(
+                  height: AppSpacing.toolbarHeight,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: background.withValues(alpha: 0.98),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: divider.withValues(alpha: 0.45),
+                        width: AppSpacing.hairline,
+                      ),
+                    ),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minSize: AppSpacing.iconButtonMinSizeSm,
+                          onPressed: _onCloseRequest,
+                          child: Icon(
+                            CupertinoIcons.clear,
+                            color: foreground,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '文章编辑',
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: AppTypography.base,
+                          fontWeight: AppTypography.semiBold,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            CupertinoButton(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.intraGroupSm,
+                              ),
+                              minSize: AppSpacing.iconButtonMinSizeSm,
+                              onPressed: _savedDrafts.isEmpty
+                                  ? null
+                                  : () => _showDraftsSheet(),
+                              child: Text(
+                                '草稿',
+                                style: TextStyle(
+                                  color: _savedDrafts.isEmpty
+                                      ? CupertinoColors.tertiaryLabel
+                                            .resolveFrom(context)
+                                      : foreground,
+                                  fontSize: AppTypography.sm,
+                                  fontWeight: AppTypography.medium,
+                                ),
+                              ),
+                            ),
+                            CupertinoButton(
+                              key: TestKeys.createPublishButton,
+                              padding: EdgeInsets.zero,
+                              minSize: AppSpacing.iconButtonMinSizeSm,
+                              onPressed: _isPublishing ? null : _publish,
+                              child: Text(
+                                _isPublishing ? '发布中' : '发布',
+                                style: TextStyle(
+                                  color: actionTint,
+                                  fontSize: AppTypography.base,
+                                  fontWeight: AppTypography.semiBold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      AppSpacing.containerSm,
+                      AppSpacing.containerMd,
+                      MediaQuery.of(context).padding.bottom +
+                          AppSpacing.containerLg,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (!_editorV2Enabled) ...<Widget>[
+                          _buildRollbackBanner(
+                            CupertinoColors.secondaryLabel.resolveFrom(context),
+                          ),
+                        ],
+                        _buildTextEditor(state),
                       ],
                     ),
                   ),
@@ -1098,70 +1533,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Widget _buildHeroIntro({
-    required CreateEditorStateV2 state,
-    required Color foreground,
-    required double collapseProgress,
-  }) {
-    final title = _pageTitleForState(state);
-    final titleOpacity = (1 - collapseProgress * 1.2).clamp(0.0, 1.0);
-    final bottomSpacing = lerpDouble(
-      AppSpacing.containerSm,
-      AppSpacing.intraGroupXs,
-      collapseProgress,
-    )!;
-    return ClipRect(
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: AppSpacing.containerSm,
-          bottom: bottomSpacing,
-        ),
-        child: Transform.translate(
-          offset: Offset(0, lerpDouble(0, -18, collapseProgress)!),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Opacity(
-                opacity: titleOpacity,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: lerpDouble(
-                          AppTypography.xxxl.toDouble(),
-                          AppTypography.xl.toDouble(),
-                          collapseProgress,
-                        ),
-                        fontWeight: AppTypography.bold,
-                        height: AppTypography.lineHeightTight,
-                      ),
-                    ),
-                    if (state.editorKind == CreateEditorKind.media) ...[
-                      SizedBox(height: AppSpacing.intraGroupXs),
-                      Text(
-                        _mediaHeaderHintForState(state),
-                        style: TextStyle(
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
-                            context,
-                          ),
-                          fontSize: AppTypography.sm,
-                          fontWeight: AppTypography.medium,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHeaderIconButton({
     required Key key,
     required IconData icon,
@@ -1185,41 +1556,59 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildTextEditor(CreateEditorStateV2 state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _buildMediaComposerSection(
-          state: state,
-          title: '插图可选',
-          trailing: state.imagePaths.isEmpty
-              ? '可选'
-              : '${state.imagePaths.length} / $_kMaxMediaImages',
-        ),
-        SizedBox(height: AppSpacing.interGroupMd),
-        _buildTitleSection(
-          state: state,
-          titleFieldKey: TestKeys.createTitleInput,
-        ),
-        SizedBox(height: AppSpacing.interGroupSm),
-        _buildInputPanel(
-          label: '正文',
-          currentLength: state.body.length,
-          input: CupertinoTextField(
-            key: TestKeys.createMomentInput,
-            controller: _bodyController,
-            focusNode: _bodyFocusNode,
-            inputFormatters: _bodyInputFormatters,
-            maxLines: null,
-            minLines: 10,
-            padding: EdgeInsets.zero,
-            placeholder: '先写下你想表达的内容',
-            decoration: const BoxDecoration(),
-            onChanged: (value) {
-              ref.read(createEditorProvider.notifier).updateBody(value);
-            },
-          ),
-        ),
-      ],
+    return IosArticleEditor(
+      state: state,
+      titleController: _titleController,
+      titleFocusNode: _titleFocusNode,
+      onTitleChanged: (value) {
+        ref.read(createEditorProvider.notifier).updateTitle(value);
+      },
+      onInsertParagraph: (afterBlockId) {
+        return ref
+            .read(createEditorProvider.notifier)
+            .insertArticleParagraph(afterBlockId: afterBlockId);
+      },
+      onInsertOrderedItem: (afterBlockId) {
+        return ref
+            .read(createEditorProvider.notifier)
+            .insertArticleOrderedItem(afterBlockId: afterBlockId);
+      },
+      onInsertImages: (afterBlockId) async {
+        final result = await _openMediaPicker(
+          mode: MediaPickerEntryMode.image,
+          maxSelection: _kMaxMediaImages,
+          initialPaths: state.imagePaths,
+        );
+        if (!mounted || result == null) {
+          return;
+        }
+        final paths = result.items
+            .where((item) => item.isImage)
+            .map((item) => item.path)
+            .take(_kMaxMediaImages)
+            .toList(growable: false);
+        ref
+            .read(createEditorProvider.notifier)
+            .insertArticleImages(paths, afterBlockId: afterBlockId);
+      },
+      onUpdateTextBlock: (blockId, value) {
+        ref
+            .read(createEditorProvider.notifier)
+            .updateArticleTextBlock(blockId, value);
+      },
+      onRemoveBlock: (blockId) {
+        ref.read(createEditorProvider.notifier).removeArticleBlock(blockId);
+      },
+      onReplaceImage: _editArticleImageBlock,
+      onUpdateImageLayout: (blockId, layout) {
+        ref
+            .read(createEditorProvider.notifier)
+            .updateArticleImageLayout(blockId, layout);
+      },
+      onActiveBlockChanged: (blockId) {
+        ref.read(createEditorProvider.notifier).setActiveArticleBlock(blockId);
+      },
+      immersive: widget.initialAction == EditorStartAction.write,
     );
   }
 
@@ -1283,7 +1672,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             children: <Widget>[
               _buildMediaStrip(
                 state: state,
-                onAdd: () => _showAddMediaOptions(state),
+                onAdd: state.hasVideo ? _pickVideoForMedia : () => _showAddMediaOptions(state),
                 onTapImage: _editCurrentImage,
                 onRemove: (index) {
                   if (state.mediaKind == CreateMediaKind.video) {
@@ -1426,45 +1815,63 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         final columns = _mediaColumnsForWidth(constraints.maxWidth);
         final tileWidth =
             ((constraints.maxWidth - spacing * (columns - 1)) / columns)
-                .clamp(104.0, 148.0)
+                .clamp(72.0, 148.0)
                 .toDouble();
         final tileHeight = tileWidth * _mediaTileAspectRatioForColumns(columns);
+        final addEnabled = state.editorKind == CreateEditorKind.text
+            ? true
+            : _canAddMoreImages(state);
         final addLabel = state.editorKind == CreateEditorKind.text
             ? '添加图片'
-            : (isVideo ? '替换视频' : (items.isEmpty ? '添加图片或视频' : '添加图片'));
+            : (items.isEmpty ? '添加' : '添加图片');
         if (isVideo) {
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
+          final videoWidth =
+              math.min(tileWidth * 1.2, constraints.maxWidth).toDouble();
+          return Column(
             children: <Widget>[
-              _buildMediaTile(
-                assetPath: items.first,
-                index: 0,
-                isVideo: true,
-                width: tileWidth,
-                height: tileHeight,
-                showDragHandle: false,
-                isEmphasized: true,
-                onTap: () => onAdd(),
-                onRemove: () => onRemove(0),
+              Align(
+                alignment: Alignment.center,
+                child: _buildMediaTile(
+                  assetPath: items.first,
+                  index: 0,
+                  isVideo: true,
+                  width: videoWidth,
+                  height: tileHeight,
+                  showDragHandle: false,
+                  isEmphasized: true,
+                  onTap: _editCurrentVideo,
+                  onRemove: () => onRemove(0),
+                ),
               ),
-              _AddThumbnailButton(
-                key: TestKeys.createMediaAddButton,
+              SizedBox(height: spacing),
+              Text(
+                '轻点视频编辑，支持裁切、静音和精细选帧',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                  fontSize: AppTypography.sm,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
                 onPressed: onAdd,
-                width: tileWidth,
-                height: tileHeight,
-                label: addLabel,
+                child: const Text('更换视频'),
               ),
             ],
           );
         }
         if (items.isEmpty) {
-          return _AddThumbnailButton(
-            key: TestKeys.createMediaAddButton,
-            onPressed: onAdd,
-            width: tileWidth,
-            height: tileHeight,
-            label: addLabel,
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: _AddThumbnailButton(
+              key: TestKeys.createMediaAddButton,
+              onPressed: onAdd,
+              width: tileWidth,
+              height: tileHeight,
+              label: addLabel,
+              enabled: addEnabled,
+            ),
           );
         }
 
@@ -1588,7 +1995,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                     width: tileWidth,
                     height: tileHeight,
                     label: addLabel,
-                    isHighlighted: candidateData.isNotEmpty,
+                    isHighlighted: candidateData.isNotEmpty && addEnabled,
+                    enabled: addEnabled,
                   );
                 },
               ),
@@ -1687,14 +2095,58 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                   fit: StackFit.expand,
                   children: <Widget>[
                     if (isVideo)
-                      Container(
-                        color: Colors.black87,
-                        alignment: Alignment.center,
-                        child: Icon(
-                          CupertinoIcons.play_fill,
-                          color: Colors.white,
-                          size: AppSpacing.iconLarge,
-                        ),
+                      Stack(
+                        fit: StackFit.expand,
+                        children: <Widget>[
+                          Image.file(
+                            File(assetPath),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: <Color>[
+                                    Color(0xFF343434),
+                                    Color(0xFF141414),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: <Color>[
+                                  Colors.black.withValues(alpha: 0.08),
+                                  Colors.black.withValues(alpha: 0.34),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Center(
+                            child: Container(
+                              width: AppSpacing.buttonHeight,
+                              height: AppSpacing.buttonHeight,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.28),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  width: AppSpacing.hairline,
+                                ),
+                              ),
+                              child: Icon(
+                                CupertinoIcons.play_fill,
+                                color: Colors.white.withValues(alpha: 0.96),
+                                size: AppSpacing.iconLarge,
+                              ),
+                            ),
+                          ),
+                        ],
                       )
                     else
                       Image.file(
@@ -1707,6 +2159,15 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       Positioned(
                         left: AppSpacing.intraGroupXs,
                         bottom: AppSpacing.intraGroupXs,
+                        child: _PreviewBadge(
+                          label: '编辑视频',
+                          backgroundColor: Colors.black.withValues(alpha: 0.48),
+                        ),
+                      ),
+                    if (isVideo)
+                      Positioned(
+                        left: AppSpacing.intraGroupXs,
+                        top: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
                           label: '视频',
                           backgroundColor: Colors.black.withValues(alpha: 0.48),
@@ -1940,6 +2401,20 @@ class _PreviewBadge extends StatelessWidget {
   }
 }
 
+class _VideoEditContext {
+  const _VideoEditContext({
+    required this.trimStartMs,
+    required this.trimEndMs,
+    required this.coverTimeMs,
+    required this.muted,
+  });
+
+  final int trimStartMs;
+  final int trimEndMs;
+  final int coverTimeMs;
+  final bool muted;
+}
+
 class _AddThumbnailButton extends StatelessWidget {
   const _AddThumbnailButton({
     super.key,
@@ -1948,6 +2423,7 @@ class _AddThumbnailButton extends StatelessWidget {
     required this.height,
     required this.label,
     this.isHighlighted = false,
+    this.enabled = true,
   });
 
   final Future<void> Function() onPressed;
@@ -1955,11 +2431,15 @@ class _AddThumbnailButton extends StatelessWidget {
   final double height;
   final String label;
   final bool isHighlighted;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
+    final accent = enabled
+        ? AppColors.iosAccentLight
+        : CupertinoColors.tertiaryLabel.resolveFrom(context);
     return GestureDetector(
-      onTap: () => onPressed(),
+      onTap: enabled ? () => onPressed() : null,
       child: Transform.scale(
         scale: isHighlighted ? 1.015 : 1.0,
         child: AnimatedContainer(
@@ -1969,19 +2449,29 @@ class _AddThumbnailButton extends StatelessWidget {
           height: height,
           padding: EdgeInsets.all(AppSpacing.containerSm),
           decoration: BoxDecoration(
-            color: CupertinoColors.systemBackground.resolveFrom(context),
+            color: enabled
+                ? CupertinoColors.systemBackground.resolveFrom(context)
+                : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+                    context,
+                  ),
             borderRadius: BorderRadius.circular(AppSpacing.containerSm),
             border: Border.all(
-              color: (isHighlighted
-                  ? AppColors.iosAccentLight
-                  : AppColors.iosAccentLight.withValues(alpha: 0.24)),
+              color: enabled
+                  ? (isHighlighted
+                      ? AppColors.iosAccentLight
+                      : AppColors.iosAccentLight.withValues(alpha: 0.24))
+                  : CupertinoColors.separator
+                        .resolveFrom(context)
+                        .withValues(alpha: 0.18),
               width: isHighlighted ? AppSpacing.oneHalf : AppSpacing.hairline,
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: AppColors.iosAccentLight.withValues(
-                  alpha: isHighlighted ? 0.12 : 0.06,
-                ),
+                color: enabled
+                    ? AppColors.iosAccentLight.withValues(
+                        alpha: isHighlighted ? 0.12 : 0.06,
+                      )
+                    : Colors.black.withValues(alpha: 0.02),
                 blurRadius: isHighlighted ? 12 : AppSpacing.ten,
                 offset: const Offset(0, 4),
               ),
@@ -1992,7 +2482,7 @@ class _AddThumbnailButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 CupertinoIcons.add,
-                color: AppColors.iosAccentLight,
+                color: accent,
                 size: AppSpacing.iconLarge,
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
@@ -2000,7 +2490,7 @@ class _AddThumbnailButton extends StatelessWidget {
                 label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: AppColors.iosAccentLight,
+                  color: accent,
                   fontSize: AppTypography.smPlus,
                   fontWeight: AppTypography.medium,
                 ),

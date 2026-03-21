@@ -23,8 +23,8 @@ void main() {
 
       expect(find.text(UITextConstants.editCircle), findsOneWidget);
       expect(find.text(UITextConstants.manageCenter), findsOneWidget);
-      expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.pencil), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.slider_horizontal_3), findsOneWidget);
     });
 
     testWidgets('admin 角色显示编辑和管理按钮', (tester) async {
@@ -68,7 +68,7 @@ void main() {
       await tester.pump();
 
       expect(find.text(UITextConstants.following), findsOneWidget);
-      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.check_mark), findsOneWidget);
     });
 
     testWidgets('已加入状态显示"已加入圈子"', (tester) async {
@@ -83,7 +83,7 @@ void main() {
       await tester.pump();
 
       expect(find.text(UITextConstants.joinedCircle), findsOneWidget);
-      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.check_mark_circled), findsOneWidget);
     });
 
     testWidgets('审批中状态显示"加入审批中"', (tester) async {
@@ -98,7 +98,7 @@ void main() {
       await tester.pump();
 
       expect(find.text(UITextConstants.joinPending), findsOneWidget);
-      expect(find.byIcon(Icons.hourglass_top), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.time), findsOneWidget);
     });
 
     testWidgets('深色模式正确渲染', (tester) async {

@@ -38,20 +38,10 @@ l2:
   - feature: persona-follow-graph
     l3:
       - feature: persona-management
-        l4:
-          - feature: persona-lifecycle-contract
-            l5:
-              - feature: persona-activation-guard
+      - feature: persona-profile-subject-and-visibility
+      - feature: persona-context-propagation
       - feature: follow-relationship
-        l4:
-          - feature: follow-unfollow-contract
-            l5:
-              - feature: relationship-idempotency-guard
       - feature: social-graph-read
-        l4:
-          - feature: followers-following-pagination
-            l5:
-              - feature: graph-consistency-repair
   - feature: settings-and-device-token
     l3:
       - feature: appearance-accessibility-settings

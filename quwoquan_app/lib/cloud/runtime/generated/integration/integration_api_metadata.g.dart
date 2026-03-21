@@ -21,6 +21,9 @@ class IntegrationApiMetadata {
     'SearchLocations': 'GET',
   };
 
+  static const String getNearbyLocationsOperation = 'GetNearbyLocations';
+  static const String searchLocationsOperation = 'SearchLocations';
+
   static const String getNearbyLocationsPath = '/v1/integration/location/nearby';
   static const String searchLocationsPath = '/v1/integration/location/search';
 }

@@ -49,7 +49,11 @@ class RemoteBlockRepository extends BlockRepository {
 
   @override
   Future<void> blockUser(String targetUserId) async {
-    final uri = _uri(UserApiMetadata.blockUserPath(targetUserId: targetUserId));
+    final uri = _uri(
+      UserApiMetadata.blockUserPath(
+        targetProfileSubjectId: targetUserId,
+      ),
+    );
     try {
       await _httpClient.postJson(
         uri,
@@ -67,7 +71,9 @@ class RemoteBlockRepository extends BlockRepository {
   @override
   Future<void> unblockUser(String targetUserId) async {
     final uri = _uri(
-      UserApiMetadata.unblockUserPath(targetUserId: targetUserId),
+      UserApiMetadata.unblockUserPath(
+        targetProfileSubjectId: targetUserId,
+      ),
     );
     try {
       await _httpClient.deleteJson(

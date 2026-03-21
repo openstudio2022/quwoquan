@@ -27,6 +27,7 @@ Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
+  double textScaleFactor = 1.0,
 }) {
   return ProviderScope(
     overrides: [
@@ -38,6 +39,15 @@ Widget _scopedApp({
       ),
     ],
     child: MaterialApp(
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(textScaleFactor),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       themeMode: themeMode,
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
@@ -70,7 +80,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
     });
 
     testWidgets('other 模式渲染返回和更多按钮', (tester) async {
@@ -81,7 +91,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
-      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
     testWidgets('渲染三个主 Tab', (tester) async {
@@ -94,6 +104,34 @@ void main() {
       expect(find.text('创作'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
+    });
+
+    testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 690);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final capturedErrors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        capturedErrors.add(details);
+      };
+      try {
+        await tester.pumpWidget(
+          _scopedApp(mode: ProfileMode.mine, textScaleFactor: 1.4),
+        );
+        await _pumpFrames(tester, count: 20);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+
+      final overflowErrors = capturedErrors
+          .map((details) => details.exceptionAsString())
+          .where((message) => message.contains('A RenderFlex overflowed'))
+          .toList(growable: false);
+
+      expect(overflowErrors, isEmpty);
     });
   });
 
@@ -254,17 +292,25 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester, count: 20);
 
-      final worksGrid = find.byKey(
-        const ValueKey<String>('profile-works-grid'),
-      );
+      final swipeSurface = find.byType(CustomScrollView);
 
       for (var i = 0; i < UserProfileUIConfig.creationSubTabs.length - 1; i++) {
-        await tester.fling(worksGrid, const Offset(-420, 0), 1200);
+        await tester.fling(
+          swipeSurface,
+          const Offset(-420, 0),
+          1200,
+          warnIfMissed: false,
+        );
         await tester.pumpAndSettle();
         expect(find.byType(ProfileCirclesTab), findsNothing);
       }
 
-      await tester.fling(worksGrid, const Offset(-420, 0), 1200);
+      await tester.fling(
+        swipeSurface,
+        const Offset(-420, 0),
+        1200,
+        warnIfMissed: false,
+      );
       await tester.pumpAndSettle();
 
       expect(find.byType(ProfileCirclesTab), findsOneWidget);
@@ -340,7 +386,7 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.text('创作'), findsOneWidget);
-      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
     });
 
     testWidgets('暗色模式下 other 模式渲染不崩溃', (tester) async {

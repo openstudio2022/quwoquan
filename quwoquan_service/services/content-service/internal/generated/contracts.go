@@ -51,7 +51,7 @@ const (
 	RouteListProfileInteractionActivitiesSentMethod     = "GET"
 	RouteListProfileInteractionActivitiesSentPath       = "/v1/content/profile-subjects/{profileSubjectId}/interactions/sent"
 	RouteListUserPostsMethod                            = "GET"
-	RouteListUserPostsPath                              = "/v1/users/{userId}/posts"
+	RouteListUserPostsPath                              = "/v1/content/profile-subjects/{profileSubjectId}/posts"
 	RoutePromotePostToWorkMethod                        = "POST"
 	RoutePromotePostToWorkPath                          = "/v1/content/posts/{postId}:promoteToWork"
 	RoutePublishPostMethod                              = "POST"

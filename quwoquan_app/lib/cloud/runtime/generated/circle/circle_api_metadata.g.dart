@@ -60,6 +60,28 @@ class CircleApiMetadata {
     'UpdateMemberRole': 'PATCH',
   };
 
+  static const String archiveCircleOperation = 'ArchiveCircle';
+  static const String createCircleOperation = 'CreateCircle';
+  static const String createCircleFileOperation = 'CreateCircleFile';
+  static const String deleteCircleFileOperation = 'DeleteCircleFile';
+  static const String featureCirclePostOperation = 'FeatureCirclePost';
+  static const String getCircleOperation = 'GetCircle';
+  static const String getCircleFeedOperation = 'GetCircleFeed';
+  static const String getCircleFileOperation = 'GetCircleFile';
+  static const String getCircleStatsOperation = 'GetCircleStats';
+  static const String joinCircleOperation = 'JoinCircle';
+  static const String leaveCircleOperation = 'LeaveCircle';
+  static const String listCircleFilesOperation = 'ListCircleFiles';
+  static const String listCircleMembersOperation = 'ListCircleMembers';
+  static const String listCirclesOperation = 'ListCircles';
+  static const String listUserCirclesOperation = 'ListUserCircles';
+  static const String pinCirclePostOperation = 'PinCirclePost';
+  static const String reportCircleBehaviorOperation = 'ReportCircleBehavior';
+  static const String updateCircleOperation = 'UpdateCircle';
+  static const String updateCircleFileOperation = 'UpdateCircleFile';
+  static const String updateCircleSectionsOperation = 'UpdateCircleSections';
+  static const String updateMemberRoleOperation = 'UpdateMemberRole';
+
   static const String archiveCirclePathTemplate = '/v1/circles/{circleId}';
   static String archiveCirclePath({required String circleId}) {
     return _fillPath(archiveCirclePathTemplate, <String, String>{

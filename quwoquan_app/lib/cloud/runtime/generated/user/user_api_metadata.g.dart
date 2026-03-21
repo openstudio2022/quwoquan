@@ -22,33 +22,37 @@ class UserApiMetadata {
     'ActivateSubAccount': '/v1/owner/sub-accounts/{subAccountId}/activate',
     'ApplyProposal': '/v1/user/profile/proposals/{id}/apply',
     'BindCredential': '/v1/owner/credentials/bind',
-    'BlockUser': '/v1/user/block/{targetUserId}',
+    'BlockUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/block',
     'CancelGreetingRequest': '/v1/user/greeting-request/{requestId}',
     'ConfirmProposal': '/v1/user/profile/proposals/{id}/confirm',
     'CreatePersona': '/v1/user/personas',
     'CreateSubAccount': '/v1/owner/sub-accounts',
+    'DeleteEmptySubAccount': '/v1/owner/sub-accounts/{subAccountId}:delete-empty',
     'DeletePersona': '/v1/user/personas/{personaId}',
     'DeleteSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'DismissContactDiscovery': '/v1/owner/contact-discovery/{id}',
-    'FollowUser': '/v1/user/follow/{targetUserId}',
+    'FollowUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/follow',
     'GenerateInvite': '/v1/me/invites',
+    'GetActivePersonaContext': '/v1/owner/sub-accounts/active',
     'GetAppearanceSettings': '/v1/user/settings/appearance',
     'GetCallSettings': '/v1/user/settings/calls',
     'GetInviteByCode': '/v1/invites/{linkCode}',
     'GetLatestContactDiscovery': '/v1/owner/contact-discovery/latest',
     'GetMeProfile': '/v1/me',
     'GetNotificationSettings': '/v1/user/settings/notifications',
+    'GetPersonaManagementSummary': '/v1/owner/sub-accounts/summary',
     'GetPrivacySettings': '/v1/user/settings/privacy',
-    'GetRelationship': '/v1/user/{userId}/relationship',
-    'GetRelationshipCapability': '/v1/user/{userId}/relationship/capability',
+    'GetRelationship': '/v1/user/profile-subjects/{profileSubjectId}/relationship',
+    'GetRelationshipCapability': '/v1/user/profile-subjects/{profileSubjectId}/relationship/capability',
+    'GetSubAccountLifecycleGuard': '/v1/owner/sub-accounts/{subAccountId}/lifecycle-guard',
     'GetSubAccountProfile': '/v1/user/{subAccountId}',
     'GetUserProfile': '/v1/user/profile/{userId}',
     'IgnoreGreetingRequest': '/v1/user/greeting-request/{requestId}/ignore',
     'InitiateContactDiscovery': '/v1/owner/contact-discovery',
-    'ListBlockedUsers': '/v1/user/blocked',
+    'ListBlockedUsers': '/v1/user/profile-subjects/blocked',
     'ListCredentials': '/v1/owner/credentials',
-    'ListFollowers': '/v1/user/{userId}/followers',
-    'ListFollowing': '/v1/user/{userId}/following',
+    'ListFollowers': '/v1/user/profile-subjects/{profileSubjectId}/followers',
+    'ListFollowing': '/v1/user/profile-subjects/{profileSubjectId}/following',
     'ListGreetingInbox': '/v1/user/greeting-request/inbox',
     'ListGreetingOutbox': '/v1/user/greeting-request/outbox',
     'ListMyInvites': '/v1/me/invites',
@@ -65,10 +69,11 @@ class UserApiMetadata {
     'RegisterDevice': '/v1/user/devices/push-tokens',
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
     'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
+    'RetireSubAccount': '/v1/owner/sub-accounts/{subAccountId}:retire',
     'SendGreetingRequest': '/v1/user/greeting-request',
     'UnbindCredential': '/v1/owner/credentials/{credentialType}',
-    'UnblockUser': '/v1/user/block/{targetUserId}',
-    'UnfollowUser': '/v1/user/follow/{targetUserId}',
+    'UnblockUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/block',
+    'UnfollowUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/follow',
     'UpdateAppearanceSettings': '/v1/user/settings/appearance',
     'UpdateCallSettings': '/v1/user/settings/calls',
     'UpdateNotificationSettings': '/v1/user/settings/notifications',
@@ -89,20 +94,24 @@ class UserApiMetadata {
     'ConfirmProposal': 'POST',
     'CreatePersona': 'POST',
     'CreateSubAccount': 'POST',
+    'DeleteEmptySubAccount': 'POST',
     'DeletePersona': 'DELETE',
     'DeleteSubAccount': 'DELETE',
     'DismissContactDiscovery': 'DELETE',
     'FollowUser': 'POST',
     'GenerateInvite': 'POST',
+    'GetActivePersonaContext': 'GET',
     'GetAppearanceSettings': 'GET',
     'GetCallSettings': 'GET',
     'GetInviteByCode': 'GET',
     'GetLatestContactDiscovery': 'GET',
     'GetMeProfile': 'GET',
     'GetNotificationSettings': 'GET',
+    'GetPersonaManagementSummary': 'GET',
     'GetPrivacySettings': 'GET',
     'GetRelationship': 'GET',
     'GetRelationshipCapability': 'GET',
+    'GetSubAccountLifecycleGuard': 'GET',
     'GetSubAccountProfile': 'GET',
     'GetUserProfile': 'GET',
     'IgnoreGreetingRequest': 'POST',
@@ -127,6 +136,7 @@ class UserApiMetadata {
     'RegisterDevice': 'POST',
     'RejectProposal': 'POST',
     'ReplyGreetingRequest': 'POST',
+    'RetireSubAccount': 'POST',
     'SendGreetingRequest': 'POST',
     'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
@@ -139,6 +149,71 @@ class UserApiMetadata {
     'UpdateSubAccount': 'PATCH',
     'UpdateUserProfile': 'PATCH',
   };
+
+  static const String acceptInviteOperation = 'AcceptInvite';
+  static const String activatePersonaOperation = 'ActivatePersona';
+  static const String activateSubAccountOperation = 'ActivateSubAccount';
+  static const String applyProposalOperation = 'ApplyProposal';
+  static const String bindCredentialOperation = 'BindCredential';
+  static const String blockUserOperation = 'BlockUser';
+  static const String cancelGreetingRequestOperation = 'CancelGreetingRequest';
+  static const String confirmProposalOperation = 'ConfirmProposal';
+  static const String createPersonaOperation = 'CreatePersona';
+  static const String createSubAccountOperation = 'CreateSubAccount';
+  static const String deleteEmptySubAccountOperation = 'DeleteEmptySubAccount';
+  static const String deletePersonaOperation = 'DeletePersona';
+  static const String deleteSubAccountOperation = 'DeleteSubAccount';
+  static const String dismissContactDiscoveryOperation = 'DismissContactDiscovery';
+  static const String followUserOperation = 'FollowUser';
+  static const String generateInviteOperation = 'GenerateInvite';
+  static const String getActivePersonaContextOperation = 'GetActivePersonaContext';
+  static const String getAppearanceSettingsOperation = 'GetAppearanceSettings';
+  static const String getCallSettingsOperation = 'GetCallSettings';
+  static const String getInviteByCodeOperation = 'GetInviteByCode';
+  static const String getLatestContactDiscoveryOperation = 'GetLatestContactDiscovery';
+  static const String getMeProfileOperation = 'GetMeProfile';
+  static const String getNotificationSettingsOperation = 'GetNotificationSettings';
+  static const String getPersonaManagementSummaryOperation = 'GetPersonaManagementSummary';
+  static const String getPrivacySettingsOperation = 'GetPrivacySettings';
+  static const String getRelationshipOperation = 'GetRelationship';
+  static const String getRelationshipCapabilityOperation = 'GetRelationshipCapability';
+  static const String getSubAccountLifecycleGuardOperation = 'GetSubAccountLifecycleGuard';
+  static const String getSubAccountProfileOperation = 'GetSubAccountProfile';
+  static const String getUserProfileOperation = 'GetUserProfile';
+  static const String ignoreGreetingRequestOperation = 'IgnoreGreetingRequest';
+  static const String initiateContactDiscoveryOperation = 'InitiateContactDiscovery';
+  static const String listBlockedUsersOperation = 'ListBlockedUsers';
+  static const String listCredentialsOperation = 'ListCredentials';
+  static const String listFollowersOperation = 'ListFollowers';
+  static const String listFollowingOperation = 'ListFollowing';
+  static const String listGreetingInboxOperation = 'ListGreetingInbox';
+  static const String listGreetingOutboxOperation = 'ListGreetingOutbox';
+  static const String listMyInvitesOperation = 'ListMyInvites';
+  static const String listPersonasOperation = 'ListPersonas';
+  static const String listSubAccountsOperation = 'ListSubAccounts';
+  static const String listUserLifeItemsOperation = 'ListUserLifeItems';
+  static const String listUserLikesOperation = 'ListUserLikes';
+  static const String listUserWorksOperation = 'ListUserWorks';
+  static const String loginWithAppleOperation = 'LoginWithApple';
+  static const String loginWithPhoneOperation = 'LoginWithPhone';
+  static const String loginWithWechatOperation = 'LoginWithWechat';
+  static const String logoutOperation = 'Logout';
+  static const String refreshTokenOperation = 'RefreshToken';
+  static const String registerDeviceOperation = 'RegisterDevice';
+  static const String rejectProposalOperation = 'RejectProposal';
+  static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
+  static const String retireSubAccountOperation = 'RetireSubAccount';
+  static const String sendGreetingRequestOperation = 'SendGreetingRequest';
+  static const String unbindCredentialOperation = 'UnbindCredential';
+  static const String unblockUserOperation = 'UnblockUser';
+  static const String unfollowUserOperation = 'UnfollowUser';
+  static const String updateAppearanceSettingsOperation = 'UpdateAppearanceSettings';
+  static const String updateCallSettingsOperation = 'UpdateCallSettings';
+  static const String updateNotificationSettingsOperation = 'UpdateNotificationSettings';
+  static const String updatePersonaOperation = 'UpdatePersona';
+  static const String updatePrivacySettingsOperation = 'UpdatePrivacySettings';
+  static const String updateSubAccountOperation = 'UpdateSubAccount';
+  static const String updateUserProfileOperation = 'UpdateUserProfile';
 
   static const String acceptInvitePathTemplate = '/v1/invites/{linkCode}/accept';
   static String acceptInvitePath({required String linkCode}) {
@@ -165,10 +240,10 @@ class UserApiMetadata {
     });
   }
   static const String bindCredentialPath = '/v1/owner/credentials/bind';
-  static const String blockUserPathTemplate = '/v1/user/block/{targetUserId}';
-  static String blockUserPath({required String targetUserId}) {
+  static const String blockUserPathTemplate = '/v1/user/profile-subjects/{targetProfileSubjectId}/block';
+  static String blockUserPath({required String targetProfileSubjectId}) {
     return _fillPath(blockUserPathTemplate, <String, String>{
-      'targetUserId': targetUserId,
+      'targetProfileSubjectId': targetProfileSubjectId,
     });
   }
   static const String cancelGreetingRequestPathTemplate = '/v1/user/greeting-request/{requestId}';
@@ -185,6 +260,12 @@ class UserApiMetadata {
   }
   static const String createPersonaPath = '/v1/user/personas';
   static const String createSubAccountPath = '/v1/owner/sub-accounts';
+  static const String deleteEmptySubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}:delete-empty';
+  static String deleteEmptySubAccountPath({required String subAccountId}) {
+    return _fillPath(deleteEmptySubAccountPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String deletePersonaPathTemplate = '/v1/user/personas/{personaId}';
   static String deletePersonaPath({required String personaId}) {
     return _fillPath(deletePersonaPathTemplate, <String, String>{
@@ -203,13 +284,14 @@ class UserApiMetadata {
       'id': id,
     });
   }
-  static const String followUserPathTemplate = '/v1/user/follow/{targetUserId}';
-  static String followUserPath({required String targetUserId}) {
+  static const String followUserPathTemplate = '/v1/user/profile-subjects/{targetProfileSubjectId}/follow';
+  static String followUserPath({required String targetProfileSubjectId}) {
     return _fillPath(followUserPathTemplate, <String, String>{
-      'targetUserId': targetUserId,
+      'targetProfileSubjectId': targetProfileSubjectId,
     });
   }
   static const String generateInvitePath = '/v1/me/invites';
+  static const String getActivePersonaContextPath = '/v1/owner/sub-accounts/active';
   static const String getAppearanceSettingsPath = '/v1/user/settings/appearance';
   static const String getCallSettingsPath = '/v1/user/settings/calls';
   static const String getInviteByCodePathTemplate = '/v1/invites/{linkCode}';
@@ -221,17 +303,24 @@ class UserApiMetadata {
   static const String getLatestContactDiscoveryPath = '/v1/owner/contact-discovery/latest';
   static const String getMeProfilePath = '/v1/me';
   static const String getNotificationSettingsPath = '/v1/user/settings/notifications';
+  static const String getPersonaManagementSummaryPath = '/v1/owner/sub-accounts/summary';
   static const String getPrivacySettingsPath = '/v1/user/settings/privacy';
-  static const String getRelationshipPathTemplate = '/v1/user/{userId}/relationship';
-  static String getRelationshipPath({required String userId}) {
+  static const String getRelationshipPathTemplate = '/v1/user/profile-subjects/{profileSubjectId}/relationship';
+  static String getRelationshipPath({required String profileSubjectId}) {
     return _fillPath(getRelationshipPathTemplate, <String, String>{
-      'userId': userId,
+      'profileSubjectId': profileSubjectId,
     });
   }
-  static const String getRelationshipCapabilityPathTemplate = '/v1/user/{userId}/relationship/capability';
-  static String getRelationshipCapabilityPath({required String userId}) {
+  static const String getRelationshipCapabilityPathTemplate = '/v1/user/profile-subjects/{profileSubjectId}/relationship/capability';
+  static String getRelationshipCapabilityPath({required String profileSubjectId}) {
     return _fillPath(getRelationshipCapabilityPathTemplate, <String, String>{
-      'userId': userId,
+      'profileSubjectId': profileSubjectId,
+    });
+  }
+  static const String getSubAccountLifecycleGuardPathTemplate = '/v1/owner/sub-accounts/{subAccountId}/lifecycle-guard';
+  static String getSubAccountLifecycleGuardPath({required String subAccountId}) {
+    return _fillPath(getSubAccountLifecycleGuardPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
     });
   }
   static const String getSubAccountProfilePathTemplate = '/v1/user/{subAccountId}';
@@ -253,18 +342,18 @@ class UserApiMetadata {
     });
   }
   static const String initiateContactDiscoveryPath = '/v1/owner/contact-discovery';
-  static const String listBlockedUsersPath = '/v1/user/blocked';
+  static const String listBlockedUsersPath = '/v1/user/profile-subjects/blocked';
   static const String listCredentialsPath = '/v1/owner/credentials';
-  static const String listFollowersPathTemplate = '/v1/user/{userId}/followers';
-  static String listFollowersPath({required String userId}) {
+  static const String listFollowersPathTemplate = '/v1/user/profile-subjects/{profileSubjectId}/followers';
+  static String listFollowersPath({required String profileSubjectId}) {
     return _fillPath(listFollowersPathTemplate, <String, String>{
-      'userId': userId,
+      'profileSubjectId': profileSubjectId,
     });
   }
-  static const String listFollowingPathTemplate = '/v1/user/{userId}/following';
-  static String listFollowingPath({required String userId}) {
+  static const String listFollowingPathTemplate = '/v1/user/profile-subjects/{profileSubjectId}/following';
+  static String listFollowingPath({required String profileSubjectId}) {
     return _fillPath(listFollowingPathTemplate, <String, String>{
-      'userId': userId,
+      'profileSubjectId': profileSubjectId,
     });
   }
   static const String listGreetingInboxPath = '/v1/user/greeting-request/inbox';
@@ -308,6 +397,12 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
+  static const String retireSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}:retire';
+  static String retireSubAccountPath({required String subAccountId}) {
+    return _fillPath(retireSubAccountPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String sendGreetingRequestPath = '/v1/user/greeting-request';
   static const String unbindCredentialPathTemplate = '/v1/owner/credentials/{credentialType}';
   static String unbindCredentialPath({required String credentialType}) {
@@ -315,16 +410,16 @@ class UserApiMetadata {
       'credentialType': credentialType,
     });
   }
-  static const String unblockUserPathTemplate = '/v1/user/block/{targetUserId}';
-  static String unblockUserPath({required String targetUserId}) {
+  static const String unblockUserPathTemplate = '/v1/user/profile-subjects/{targetProfileSubjectId}/block';
+  static String unblockUserPath({required String targetProfileSubjectId}) {
     return _fillPath(unblockUserPathTemplate, <String, String>{
-      'targetUserId': targetUserId,
+      'targetProfileSubjectId': targetProfileSubjectId,
     });
   }
-  static const String unfollowUserPathTemplate = '/v1/user/follow/{targetUserId}';
-  static String unfollowUserPath({required String targetUserId}) {
+  static const String unfollowUserPathTemplate = '/v1/user/profile-subjects/{targetProfileSubjectId}/follow';
+  static String unfollowUserPath({required String targetProfileSubjectId}) {
     return _fillPath(unfollowUserPathTemplate, <String, String>{
-      'targetUserId': targetUserId,
+      'targetProfileSubjectId': targetProfileSubjectId,
     });
   }
   static const String updateAppearanceSettingsPath = '/v1/user/settings/appearance';

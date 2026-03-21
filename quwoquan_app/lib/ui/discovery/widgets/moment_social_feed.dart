@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_non_null_assertion
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -9,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
@@ -95,16 +97,37 @@ class MomentSocialFeed extends ConsumerWidget {
                 context.l10n.loadFailed,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
-                  fontSize: AppTypography.base,
+                  fontSize: AppTypography.iosBody,
                 ),
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: AppSpacing.interGroupMd),
-              TextButton.icon(
+              CupertinoButton(
                 onPressed: () =>
                     ref.read(discoveryFeedMapProvider.notifier).load(feedTabId),
-                icon: const Icon(Icons.refresh),
-                label: Text(context.l10n.retry),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
+                  vertical: AppSpacing.intraGroupSm,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.arrow_clockwise,
+                      size: AppSpacing.iconSmall,
+                      color: AppColors.iosAccent(context),
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    Text(
+                      context.l10n.retry,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.iosAccent(context),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -113,138 +136,124 @@ class MomentSocialFeed extends ConsumerWidget {
     }
 
     final horizontal = AppSpacing.feedContentHorizontal(context);
-    final dividerColor = AppColorsFunctional.getColor(
+    final pageBackground = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundTertiary,
+      ColorType.pageBackground,
     );
 
-    return ListView.builder(
-      padding: EdgeInsets.only(
-        top: AppSpacing.containerSm,
-        bottom:
-            MediaQuery.of(context).padding.bottom +
-            AppSpacing.bottomNavHeight +
-            AppSpacing.interGroupLg,
-      ),
-      itemCount: moments.length,
-      itemBuilder: (context, index) {
-        final dto = moments[index];
-        // 首次渲染时上报曝光（Tracker 内部去重）
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
-        });
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontal),
-              child: _MomentWeiboCard(
-                item: dto,
-                isDark: isDark,
-                isLiked: discoveryState.likedPosts.contains(dto.id),
-                likeCount: (() {
-                  final n = discoveryState.getPostLikesCount(dto.id);
-                  return n > 0 ? n : dto.likeCount;
-                })(),
-                sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-                onUserTap: (id) => onUserTap(
-                  id,
-                  avatarUrl: dto.avatarUrl,
-                  displayName: dto.displayName,
-                  backgroundUrl: dto.authorBackgroundUrl,
-                ),
-                onImageTap: (imgIndex) =>
-                    onPostTap?.call(dto, imgIndex, feedPosts: moments),
-                onCommentTap: () {
-                  CommentViewer.showModal(context: context, postId: dto.id);
-                },
-                onShareTap: () => _showShare(
-                  context,
-                  ref,
-                  dto,
-                  enableIdentityTemplate: ref.read(
-                    contentFeatureFlagProvider(
-                      'enable_identity_share_template',
-                    ),
-                  ),
-                ),
-                onLikeTap: () {
-                  ref
-                      .read(discoveryStateProvider)
-                      .toggleLike(dto.id, baseLikesCount: dto.likeCount);
-                },
-                onMoreTap: () {
-                  if (onMoreTap != null) {
-                    onMoreTap!(dto);
-                  } else {
-                    MoreActionPopup.show(
-                      context: context,
-                      config: MediaPostMoreActionConfig(
-                        post: dto,
-                        onCopyLink: () => _copyLink(
-                          context,
-                          ref,
-                          dto,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
-                        ),
-                        onShare: () => _showShare(
-                          context,
-                          ref,
-                          dto,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
-                        ),
-                        onNotInterested: () {
-                          ref
-                              .read(contentBehaviorTrackerProvider)
-                              .trackDislike(dto.id);
-                        },
-                        onBlockUser: () {
-                          ref
-                              .read(blockRepositoryProvider)
-                              .blockUser(dto.authorId);
-                        },
-                        onBlockWords: () async {
-                          final keyword = _extractKeyword(dto.normalizedBody);
-                          if (keyword.isEmpty) return;
-                          await ref
-                              .read(keywordBlockRepositoryProvider)
-                              .addBlockedKeyword(keyword);
-                        },
-                        onReport: () {
-                          ref
-                              .read(behaviorRepositoryProvider)
-                              .reportSingle(
-                                contentId: dto.id,
-                                action: 'report',
-                              );
-                          ref
-                              .read(reportRepositoryProvider)
-                              .createReport(
-                                targetId: dto.id,
-                                targetType: 'post',
-                                reason: 'inappropriate',
-                              );
-                        },
-                      ),
-                    );
-                  }
-                },
+    return ColoredBox(
+      color: pageBackground,
+      child: ListView.separated(
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          AppSpacing.interGroupSm,
+          horizontal,
+          MediaQuery.of(context).padding.bottom +
+              AppSpacing.bottomNavHeight +
+              AppSpacing.interGroupLg,
+        ),
+        itemCount: moments.length,
+        separatorBuilder: (_, __) => SizedBox(height: AppSpacing.interGroupSm),
+        itemBuilder: (context, index) {
+          final dto = moments[index];
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
+          });
+          return _MomentWeiboCard(
+            item: dto,
+            isDark: isDark,
+            isLiked: discoveryState.likedPosts.contains(dto.id),
+            likeCount: (() {
+              final n = discoveryState.getPostLikesCount(dto.id);
+              return n > 0 ? n : dto.likeCount;
+            })(),
+            sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+            onUserTap: (id) => onUserTap(
+              id,
+              avatarUrl: dto.avatarUrl,
+              displayName: dto.displayName,
+              backgroundUrl: dto.authorBackgroundUrl,
+            ),
+            onImageTap: (imgIndex) =>
+                onPostTap?.call(dto, imgIndex, feedPosts: moments),
+            onCommentTap: () {
+              CommentViewer.showModal(context: context, postId: dto.id);
+            },
+            onShareTap: () => _showShare(
+              context,
+              ref,
+              dto,
+              enableIdentityTemplate: ref.read(
+                contentFeatureFlagProvider('enable_identity_share_template'),
               ),
             ),
-            if (index < moments.length - 1)
-              Container(height: AppSpacing.sm, color: dividerColor),
-          ],
-        );
-      },
+            onLikeTap: () {
+              ref
+                  .read(discoveryStateProvider)
+                  .toggleLike(dto.id, baseLikesCount: dto.likeCount);
+            },
+            onMoreTap: () {
+              if (onMoreTap != null) {
+                onMoreTap!(dto);
+              } else {
+                MoreActionPopup.show(
+                  context: context,
+                  config: MediaPostMoreActionConfig(
+                    post: dto,
+                    onCopyLink: () => _copyLink(
+                      context,
+                      ref,
+                      dto,
+                      enableIdentityTemplate: ref.read(
+                        contentFeatureFlagProvider(
+                          'enable_identity_share_template',
+                        ),
+                      ),
+                    ),
+                    onShare: () => _showShare(
+                      context,
+                      ref,
+                      dto,
+                      enableIdentityTemplate: ref.read(
+                        contentFeatureFlagProvider(
+                          'enable_identity_share_template',
+                        ),
+                      ),
+                    ),
+                    onNotInterested: () {
+                      ref
+                          .read(contentBehaviorTrackerProvider)
+                          .trackDislike(dto.id);
+                    },
+                    onBlockUser: () {
+                      ref.read(blockRepositoryProvider).blockUser(dto.authorId);
+                    },
+                    onBlockWords: () async {
+                      final keyword = _extractKeyword(dto.normalizedBody);
+                      if (keyword.isEmpty) return;
+                      await ref
+                          .read(keywordBlockRepositoryProvider)
+                          .addBlockedKeyword(keyword);
+                    },
+                    onReport: () {
+                      ref
+                          .read(behaviorRepositoryProvider)
+                          .reportSingle(contentId: dto.id, action: 'report');
+                      ref
+                          .read(reportRepositoryProvider)
+                          .createReport(
+                            targetId: dto.id,
+                            targetType: 'post',
+                            reason: 'inappropriate',
+                          );
+                    },
+                  ),
+                );
+              }
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -423,117 +432,125 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
       isDark,
       ColorType.foregroundSecondary,
     );
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
+    final bg = AppColorsFunctional.getColor(isDark, ColorType.surfaceElevated);
 
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerMd),
-      color: bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 头像 + 作者信息行
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: () => widget.onUserTap(item.authorId),
-                child: CircleAvatar(
-                  radius: AppSpacing.avatarUserMd / 2,
-                  backgroundImage: item.avatarUrl.isNotEmpty
-                      ? NetworkImage(item.avatarUrl)
-                      : null,
-                  backgroundColor: AppColors.followingButtonOnDark,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerMd),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 头像 + 作者信息行
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => widget.onUserTap(item.authorId),
+                  child: CircleAvatar(
+                    radius: AppSpacing.avatarUserMd / 2,
+                    backgroundImage: item.avatarUrl.isNotEmpty
+                        ? NetworkImage(item.avatarUrl)
+                        : null,
+                    backgroundColor: AppColors.followingButtonOnDark,
+                  ),
                 ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupMd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.displayName,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        fontWeight: AppTypography.medium,
-                        color: fg,
+                SizedBox(width: AppSpacing.intraGroupMd),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.displayName,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosBody,
+                          fontWeight: AppTypography.semiBold,
+                          color: fg,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupXs / 2),
-                    Text(
-                      _buildMetaLine(context),
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: muted,
+                      SizedBox(height: AppSpacing.intraGroupXs / 2),
+                      Text(
+                        _buildMetaLine(context),
+                        style: TextStyle(
+                          fontSize: AppTypography.iosFootnote,
+                          color: muted,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.more_horiz,
-                  size: AppSpacing.iconMedium,
-                  color: muted,
-                ),
-                onPressed: widget.onMoreTap,
-                style: IconButton.styleFrom(
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
                   minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  onPressed: widget.onMoreTap,
+                  child: Icon(
+                    CupertinoIcons.ellipsis_circle,
+                    size: AppSpacing.iconMedium,
+                    color: muted.withValues(alpha: 0.9),
+                  ),
                 ),
+              ],
+            ),
+
+            // 正文（5 行截断 + 就地展开）
+            if (item.normalizedBody.isNotEmpty) ...[
+              SizedBox(height: AppSpacing.intraGroupSm),
+              _ExpandableText(
+                text: item.normalizedBody,
+                maxLines: _maxLines,
+                isDark: isDark,
+                expanded: _isExpanded,
+                onToggle: () => setState(() => _isExpanded = !_isExpanded),
               ),
             ],
-          ),
 
-          // 正文（5 行截断 + 就地展开）
-          if (item.normalizedBody.isNotEmpty) ...[
-            SizedBox(height: AppSpacing.intraGroupSm),
-            _ExpandableText(
-              text: item.normalizedBody,
-              maxLines: _maxLines,
+            // 图片区域（自适应宫格）
+            if (item.hasImages) ...[
+              SizedBox(height: AppSpacing.interGroupSm),
+              _MomentImageGrid(
+                urls: item.imageUrls,
+                isDark: isDark,
+                onTap: widget.onImageTap,
+              ),
+            ],
+
+            // 视频卡片
+            if (item.hasVideo && !item.hasImages) ...[
+              SizedBox(height: AppSpacing.interGroupSm),
+              _MomentVideoCard(
+                dto: item,
+                isDark: isDark,
+                onTap: () => widget.onImageTap(0),
+              ),
+            ],
+
+            // 互动栏
+            SizedBox(height: AppSpacing.interGroupSm),
+            _ActionRow(
+              item: item,
               isDark: isDark,
-              expanded: _isExpanded,
-              onToggle: () => setState(() => _isExpanded = !_isExpanded),
+              isLiked: widget.isLiked,
+              likeCount: widget.likeCount,
+              likeCtrl: _likeCtrl,
+              onLike: () {
+                final wasLiked = widget.isLiked;
+                HapticFeedback.lightImpact();
+                _likeCtrl.forward(from: 0);
+                widget.onLikeTap();
+                final repo = ref.read(contentInteractionRepositoryProvider);
+                if (wasLiked) repo.unlike(widget.item.id);
+                if (!wasLiked) repo.like(widget.item.id);
+              },
+              onComment: widget.onCommentTap,
+              onShare: widget.onShareTap,
             ),
           ],
-
-          // 图片区域（自适应宫格）
-          if (item.hasImages) ...[
-            SizedBox(height: AppSpacing.interGroupSm),
-            _MomentImageGrid(urls: item.imageUrls, onTap: widget.onImageTap),
-          ],
-
-          // 视频卡片
-          if (item.hasVideo && !item.hasImages) ...[
-            SizedBox(height: AppSpacing.interGroupSm),
-            _MomentVideoCard(
-              dto: item,
-              isDark: isDark,
-              onTap: () => widget.onImageTap(0),
-            ),
-          ],
-
-          // 互动栏
-          SizedBox(height: AppSpacing.interGroupSm),
-          _ActionRow(
-            item: item,
-            isDark: isDark,
-            isLiked: widget.isLiked,
-            likeCount: widget.likeCount,
-            likeCtrl: _likeCtrl,
-            onLike: () {
-              final wasLiked = widget.isLiked;
-              _likeCtrl.forward(from: 0);
-              widget.onLikeTap();
-              final repo = ref.read(contentInteractionRepositoryProvider);
-              if (wasLiked) repo.unlike(widget.item.id);
-              if (!wasLiked) repo.like(widget.item.id);
-            },
-            onComment: widget.onCommentTap,
-            onShare: widget.onShareTap,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -545,10 +562,11 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
   }
 
   static String _timeAgo(BuildContext context, DateTime t) {
+    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
     final delta = DateTime.now().difference(t).inHours;
-    if (delta < 1) return context.l10n.justNow;
-    if (delta < 24) return context.l10n.hoursAgoTemplate(delta);
-    return context.l10n.monthDayTemplate(t.month, t.day);
+    if (delta < 1) return l10n?.justNow ?? '刚刚';
+    if (delta < 24) return l10n?.hoursAgoTemplate(delta) ?? '$delta 小时前';
+    return l10n?.monthDayTemplate(t.month, t.day) ?? '${t.month}/${t.day}';
   }
 }
 
@@ -578,7 +596,7 @@ class _ExpandableText extends StatelessWidget {
       ColorType.foregroundPrimary,
     );
     final textStyle = TextStyle(
-      fontSize: AppTypography.lg,
+      fontSize: AppTypography.iosBody,
       color: fg,
       height: AppTypography.lineHeightRelaxed,
     );
@@ -606,14 +624,16 @@ class _ExpandableText extends StatelessWidget {
               overflow: expanded ? null : TextOverflow.ellipsis,
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
-            GestureDetector(
-              onTap: onToggle,
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: onToggle,
               child: Text(
-                expanded ? '收起' : '展开',
+                expanded ? UITextConstants.collapse : UITextConstants.fullText,
                 style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: AppColors.primaryColor,
-                  fontWeight: AppTypography.medium,
+                  fontSize: AppTypography.iosFootnote,
+                  color: AppColors.iosAccent(context),
+                  fontWeight: AppTypography.semiBold,
                 ),
               ),
             ),
@@ -629,9 +649,14 @@ class _ExpandableText extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MomentImageGrid extends StatelessWidget {
-  const _MomentImageGrid({required this.urls, required this.onTap});
+  const _MomentImageGrid({
+    required this.urls,
+    required this.isDark,
+    required this.onTap,
+  });
 
   final List<String> urls;
+  final bool isDark;
   final void Function(int index) onTap;
 
   @override
@@ -712,7 +737,7 @@ class _MomentImageGrid extends StatelessWidget {
                         aspectRatio: 1,
                         child: idx < urls.length
                             ? _img(urls[idx])
-                            : Container(color: Colors.grey.shade200),
+                            : _placeholder(),
                       ),
                     ),
                   ),
@@ -727,14 +752,21 @@ class _MomentImageGrid extends StatelessWidget {
 
   Widget _img(String url) {
     if (url.isEmpty) {
-      return Container(color: Colors.grey.shade200);
+      return _placeholder();
     }
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      placeholder: (context, url) => Container(color: Colors.grey.shade200),
-      errorWidget: (context, url, err) =>
-          Container(color: Colors.grey.shade200),
+      placeholder: (context, url) => _placeholder(),
+      errorWidget: (context, url, err) => _placeholder(),
+    );
+  }
+
+  Widget _placeholder() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted),
+      ),
     );
   }
 }
@@ -756,6 +788,10 @@ class _MomentVideoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceMuted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceMuted,
+    );
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -765,7 +801,7 @@ class _MomentVideoCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Container(color: Colors.grey.shade900),
+              DecoratedBox(decoration: BoxDecoration(color: surfaceMuted)),
               // 中央播放按钮
               Center(
                 child: Container(
@@ -797,7 +833,7 @@ class _MomentVideoCard extends StatelessWidget {
                       vertical: AppSpacing.xs / 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
+                      color: AppColors.overlayStrong,
                       borderRadius: BorderRadius.circular(
                         AppSpacing.smallBorderRadius,
                       ),
@@ -883,6 +919,8 @@ class _ActionRow extends StatelessWidget {
       children: [
         Expanded(
           child: _chip(
+            context: context,
+            selected: isLiked,
             child: ScaleTransition(
               scale: likeScale,
               child: Icon(
@@ -898,6 +936,7 @@ class _ActionRow extends StatelessWidget {
         ),
         Expanded(
           child: _chip(
+            context: context,
             child: Icon(
               CupertinoIcons.arrowshape_turn_up_right,
               size: AppSpacing.iconMedium,
@@ -910,6 +949,7 @@ class _ActionRow extends StatelessWidget {
         ),
         Expanded(
           child: _chip(
+            context: context,
             child: Icon(
               CupertinoIcons.chat_bubble,
               size: AppSpacing.iconMedium,
@@ -925,31 +965,42 @@ class _ActionRow extends StatelessWidget {
   }
 
   Widget _chip({
+    required BuildContext context,
     required Widget child,
     required String label,
     required Color muted,
     required VoidCallback onTap,
+    bool selected = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: double.infinity,
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              child,
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                softWrap: false,
-                style: TextStyle(fontSize: AppTypography.sm, color: muted),
+    final foreground = selected ? AppColors.worksLike : muted;
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      onPressed: onTap,
+      child: Container(
+        height: AppSpacing.buttonHeightSm,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            child,
+            SizedBox(width: AppSpacing.intraGroupXs),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: foreground,
+                fontWeight: AppTypography.medium,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

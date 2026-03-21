@@ -6,11 +6,20 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 
-Widget _scopedApp({CircleRepository? mock}) {
+Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
     overrides: [circleRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp.router(
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(textScaleFactor),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       routerConfig: GoRouter(
         initialLocation: '/circles',
         routes: [
@@ -49,6 +58,32 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CirclesPage), findsOneWidget);
+    });
+
+    testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 690);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final capturedErrors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        capturedErrors.add(details);
+      };
+      try {
+        await tester.pumpWidget(_scopedApp(textScaleFactor: 1.4));
+        await tester.pumpAndSettle();
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+
+      final overflowErrors = capturedErrors
+          .map((details) => details.exceptionAsString())
+          .where((message) => message.contains('A RenderFlex overflowed'))
+          .toList(growable: false);
+
+      expect(overflowErrors, isEmpty);
     });
   });
 

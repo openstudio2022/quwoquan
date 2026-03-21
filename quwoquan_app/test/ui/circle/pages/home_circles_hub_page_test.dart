@@ -208,7 +208,7 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   }
 }
 
-Widget _buildTestApp() {
+Widget _buildTestApp({double textScaleFactor = 1.0}) {
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -227,7 +227,20 @@ Widget _buildTestApp() {
       ),
     ],
   );
-  return ProviderScope(child: MaterialApp.router(routerConfig: router));
+  return ProviderScope(
+    child: MaterialApp.router(
+      routerConfig: router,
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(textScaleFactor),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    ),
+  );
 }
 
 void _consumeImageLoadExceptions(WidgetTester tester) {
@@ -287,5 +300,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('media-viewer'), findsOneWidget);
+  });
+
+  testWidgets('圈子横向卡片在窄屏大字号下保持自适应不溢出', (tester) async {
+    tester.view.physicalSize = const Size(320, 690);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final capturedErrors = <FlutterErrorDetails>[];
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      capturedErrors.add(details);
+    };
+    addTearDown(() {
+      FlutterError.onError = originalOnError;
+    });
+
+    await tester.pumpWidget(_buildTestApp(textScaleFactor: 1.4));
+    await tester.pumpAndSettle();
+
+    final overflowErrors = capturedErrors
+        .map((details) => details.exceptionAsString())
+        .where((message) => message.contains('A RenderFlex overflowed'))
+        .toList(growable: false);
+
+    expect(overflowErrors, isEmpty);
   });
 }

@@ -90,6 +90,9 @@ class GeneratedPostRuntimeMetadata {
     'sourceType',
     'deviceInfo',
     'publishLocation',
+    'personaId',
+    'profileSubjectId',
+    'personaContextVersion',
   ];
 
   // Reaction mutation route paths (from post/service.yaml).

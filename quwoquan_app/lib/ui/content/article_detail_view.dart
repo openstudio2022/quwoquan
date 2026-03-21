@@ -14,6 +14,7 @@ class ArticleDetailView {
     required this.coverImage,
     required this.images,
     required this.stats,
+    required this.contentBlocks,
     required this.cards,
   });
 
@@ -29,6 +30,7 @@ class ArticleDetailView {
   final String coverImage;
   final List<String> images;
   final ArticleStatsView stats;
+  final List<ArticleContentBlockView> contentBlocks;
   final List<ArticleCardView> cards;
 }
 
@@ -72,4 +74,24 @@ class ArticleCardView {
   final String layout; // full | half | third
   final String? imageUrl;
   final String? caption;
+}
+
+class ArticleContentBlockView {
+  const ArticleContentBlockView({
+    required this.type,
+    this.title = '',
+    this.body = '',
+    this.imageUrl,
+    this.caption,
+    this.orderedIndex,
+    this.imageLayout = 'fullWidth',
+  });
+
+  final String type; // paragraph | ordered_item | image | section
+  final String title;
+  final String body;
+  final String? imageUrl;
+  final String? caption;
+  final int? orderedIndex;
+  final String imageLayout; // fullWidth | wrapLeft | wrapRight
 }

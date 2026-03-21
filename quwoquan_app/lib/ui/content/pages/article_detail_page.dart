@@ -1,19 +1,20 @@
 // ignore_for_file: sort_child_properties_last
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
   const ArticleDetailPage({super.key, required this.articleId});
@@ -25,11 +26,9 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 }
 
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
-  late final PageController _cardController;
   ArticleDetailView? _article;
   bool _isLoading = true;
   Object? _loadError;
-  int _currentCardPage = 0;
   bool _isLiked = false;
   bool _isSaved = false;
   int _likesCount = 0;
@@ -39,21 +38,17 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   @override
   void initState() {
     super.initState();
-    _cardController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadArticle());
   }
 
   @override
-  void dispose() {
-    _cardController.dispose();
-    super.dispose();
-  }
-
-  @override
   void deactivate() {
-    final seconds = DateTime.now().difference(_enterTime).inMilliseconds / 1000.0;
+    final seconds =
+        DateTime.now().difference(_enterTime).inMilliseconds / 1000.0;
     if (seconds >= 1) {
-      ref.read(behaviorRepositoryProvider).reportSingle(
+      ref
+          .read(behaviorRepositoryProvider)
+          .reportSingle(
             contentId: widget.articleId,
             action: 'dwell',
             duration: seconds,
@@ -81,10 +76,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         _isLoading = false;
         _loadError = null;
       });
-      ref.read(behaviorRepositoryProvider).reportSingle(
-            contentId: widget.articleId,
-            action: 'impression',
-          );
+      ref
+          .read(behaviorRepositoryProvider)
+          .reportSingle(contentId: widget.articleId, action: 'impression');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -109,23 +103,41 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     return formatCompactActionCount(n);
   }
 
+  String _formatArticleDate(String rawValue) {
+    final date = DateTime.tryParse(rawValue);
+    if (date == null) {
+      return rawValue;
+    }
+    return '${date.year}年${context.l10n.monthDayTemplate(date.month, date.day)}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final background = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    final navBackground = CupertinoColors.systemBackground
+        .resolveFrom(context)
+        .withValues(alpha: 0.92);
+
     if (_isLoading) {
       return AppScaffold(
-        backgroundColor: AppColors.worksBackground,
+        backgroundColor: background,
         child: const Center(child: CupertinoActivityIndicator()),
       );
     }
 
     if (_article == null) {
       return AppScaffold(
-        backgroundColor: AppColors.worksBackground,
+        backgroundColor: background,
         navigationBar: AppNavigationBar(
           backgroundColor: Colors.transparent,
           leading: CupertinoButton(
             padding: EdgeInsets.zero,
-            child: const Icon(CupertinoIcons.back, color: AppColors.worksTitle),
+            child: Icon(
+              CupertinoIcons.back,
+              color: CupertinoColors.label.resolveFrom(context),
+            ),
             onPressed: () => context.canPop()
                 ? context.pop()
                 : context.go(AppRoutePaths.home),
@@ -133,9 +145,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         ),
         child: Center(
           child: Text(
-            _loadError?.toString() ?? '文章不存在',
+            _loadError?.toString() ?? context.l10n.articleNotFound,
             style: TextStyle(
-              color: AppColors.worksBodyText,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
               fontSize: AppTypography.base,
             ),
           ),
@@ -144,65 +156,67 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     }
 
     final article = _article!;
-    final pages = <Widget>[
-      _ArticlePosterPage(article: article),
-      ...article.cards.map((card) => _ArticleCardPage(card: card)),
-    ];
-    final cardTotal = pages.length;
-    final cardCurrent = (_currentCardPage + 1).clamp(1, cardTotal);
-
     return AppScaffold(
-      backgroundColor: AppColors.worksBackground,
+      backgroundColor: background,
       navigationBar: AppNavigationBar(
-        backgroundColor: AppColors.worksBackground.withValues(alpha: 0.92),
+        backgroundColor: navBackground,
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: Icon(CupertinoIcons.back, color: AppColors.worksTitle),
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.go(AppRoutePaths.home),
+          child: Icon(
+            CupertinoIcons.back,
+            color: CupertinoColors.label.resolveFrom(context),
+          ),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(AppRoutePaths.home),
         ),
         middle: Text(
           article.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: AppColors.worksTitle,
+            color: CupertinoColors.label.resolveFrom(context),
             fontSize: AppTypography.base,
             fontWeight: AppTypography.semiBold,
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              child: Icon(Icons.auto_awesome, color: AppColors.worksTitle),
-              onPressed: _openAssistantHalfSheet,
-            ),
-            Padding(
-              padding: EdgeInsets.only(right: AppSpacing.containerSm),
-              child: Center(
-                child: Text(
-                  '$cardCurrent/$cardTotal',
-                  style: TextStyle(
-                    color: AppColors.worksBodyText,
-                    fontSize: AppTypography.sm,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minSize: 0,
+          onPressed: _openAssistantHalfSheet,
+          child: Icon(
+            Icons.auto_awesome,
+            color: CupertinoColors.label.resolveFrom(context),
+          ),
         ),
       ),
       child: Column(
         children: [
           Expanded(
-            child: PageView.builder(
-              controller: _cardController,
-              onPageChanged: (index) => setState(() => _currentCardPage = index),
-              itemCount: pages.length,
-              itemBuilder: (context, index) => pages[index],
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                AppSpacing.containerMd,
+                AppSpacing.containerMd,
+                AppSpacing.containerLg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ArticleHeader(
+                    article: article,
+                    dateText: _formatArticleDate(article.date),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  _ArticleSectionLabel(label: context.l10n.articleContent),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  ...article.contentBlocks.map(
+                    (block) => Padding(
+                      padding: EdgeInsets.only(bottom: AppSpacing.interGroupSm),
+                      child: ArticleContentBlockRenderer(block: block),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Container(
@@ -213,24 +227,28 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
               AppSpacing.containerMd,
             ),
             decoration: BoxDecoration(
-              color: AppColors.worksBackground.withValues(alpha: 0.95),
+              color: CupertinoColors.systemBackground
+                  .resolveFrom(context)
+                  .withValues(alpha: 0.96),
               border: Border(
                 top: BorderSide(
-                  color: AppColors.worksBodyText.withValues(alpha: 0.12),
+                  color: CupertinoColors.separator.resolveFrom(context),
                 ),
               ),
             ),
             child: SafeArea(
               top: false,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _BottomAction(
                     icon: _isLiked
                         ? CupertinoIcons.hand_thumbsup_fill
                         : CupertinoIcons.hand_thumbsup,
                     label: _formatCount(_likesCount),
-                    color: _isLiked ? AppColors.worksAccent : AppColors.worksTitle,
+                    color: _isLiked
+                        ? CupertinoColors.activeBlue.resolveFrom(context)
+                        : CupertinoColors.label.resolveFrom(context),
                     onTap: () {
                       setState(() {
                         _isLiked = !_isLiked;
@@ -240,21 +258,19 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                     },
                   ),
                   _BottomAction(
-                    icon: CupertinoIcons.arrowshape_turn_up_right,
+                    icon: _isSaved
+                        ? CupertinoIcons.bookmark_fill
+                        : CupertinoIcons.bookmark,
                     label: _formatCount(article.stats.bookmarks),
-                    color: AppColors.worksTitle,
-                    onTap: () {},
-                  ),
-                  _BottomAction(
-                    icon: _isSaved ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
-                    label: _isSaved ? UITextConstants.following : UITextConstants.follow,
-                    color: _isSaved ? AppColors.warning : AppColors.worksTitle,
+                    color: _isSaved
+                        ? CupertinoColors.systemYellow.resolveFrom(context)
+                        : CupertinoColors.label.resolveFrom(context),
                     onTap: () => setState(() => _isSaved = !_isSaved),
                   ),
                   _BottomAction(
                     icon: CupertinoIcons.chat_bubble,
                     label: _formatCount(_commentsCount),
-                    color: AppColors.worksTitle,
+                    color: CupertinoColors.label.resolveFrom(context),
                     onTap: () {
                       CommentViewer.showModal(
                         context: context,
@@ -262,6 +278,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                       );
                     },
                   ),
+                  _BottomAction(
+                    icon: CupertinoIcons.arrowshape_turn_up_right,
+                    label: context.l10n.share,
+                    color: CupertinoColors.label.resolveFrom(context),
+                    onTap: () {},
+                  ),
                 ],
               ),
             ),
@@ -272,193 +294,209 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   }
 }
 
-class _ArticlePosterPage extends StatelessWidget {
-  const _ArticlePosterPage({required this.article});
+class _ArticleHeader extends StatelessWidget {
+  const _ArticleHeader({required this.article, required this.dateText});
 
   final ArticleDetailView article;
+  final String dateText;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (article.coverImage.isNotEmpty)
-          CachedNetworkImage(
-            imageUrl: article.coverImage,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(color: AppColors.worksBackground),
-            errorWidget: (context, url, error) => Container(color: AppColors.worksBackground),
-          )
-        else
-          Container(color: AppColors.worksBackground),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.16),
-                  Colors.black.withValues(alpha: 0.36),
-                  AppColors.worksBackground.withValues(alpha: 0.92),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: AppSpacing.containerLg,
-          right: AppSpacing.containerLg,
-          bottom: AppSpacing.containerLg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                article.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.worksTitle,
-                  fontSize: AppTypography.xxl,
-                  fontWeight: AppTypography.bold,
-                  height: 1.35, // ignore: verify_dart_semantic
-                ),
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(
-                article.description,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.worksBodyText,
-                  fontSize: AppTypography.base,
-                  height: 1.8, // ignore: verify_dart_semantic
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ArticleCardPage extends StatelessWidget {
-  const _ArticleCardPage({required this.card});
-
-  final ArticleCardView card;
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final imageWidth = switch (card.layout) {
-      'third' => width / 3,
-      'half' => width / 2,
-      _ => width,
-    };
-    final imageHeight = imageWidth * (9 / 16);
-
-    Widget imageBlock() {
-      if (card.imageUrl == null || card.imageUrl!.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      return SizedBox(
-        width: imageWidth,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              child: SizedBox(
-                width: imageWidth,
-                height: imageHeight,
-                child: CachedNetworkImage(
-                  imageUrl: card.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: AppColors.worksDrawerBg,
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: AppColors.worksDrawerBg,
-                  ),
-                ),
-              ),
-            ),
-            if ((card.caption ?? '').isNotEmpty) ...[
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                card.caption!,
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  color: AppColors.worksCaption,
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
+    final panelColor = CupertinoColors.secondarySystemGroupedBackground
+        .resolveFrom(context);
+    final titleColor = CupertinoColors.label.resolveFrom(context);
+    final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final stats = <String>[
+      '${formatCompactActionCount(article.stats.likes)} 赞',
+      '${formatCompactActionCount(article.stats.comments)} 评论',
+      '${formatCompactActionCount(article.stats.bookmarks)} 收藏',
+    ];
 
     return Container(
-      color: AppColors.worksBackground,
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerLg,
-        AppSpacing.containerLg,
-        AppSpacing.containerLg,
-        AppSpacing.containerMd,
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (card.title.isNotEmpty)
+          if (article.coverImage.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: ArticleAdaptiveImage(imageUrl: article.coverImage),
+              ),
+            ),
+            SizedBox(height: AppSpacing.interGroupMd),
+          ],
+          Text(
+            article.title,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: AppTypography.xxl,
+              fontWeight: AppTypography.bold,
+              height: 1.35, // ignore: verify_dart_semantic
+            ),
+          ),
+          if (article.description.trim().isNotEmpty) ...[
+            SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              card.title,
+              article.description,
               style: TextStyle(
-                color: AppColors.worksTitle,
-                fontSize: AppTypography.xl,
-                fontWeight: AppTypography.semiBold,
+                color: bodyColor,
+                fontSize: AppTypography.base,
+                height: 1.75, // ignore: verify_dart_semantic
               ),
             ),
-          if (card.title.isNotEmpty) SizedBox(height: AppSpacing.intraGroupSm),
-          if (card.layout == 'full') ...[
-            imageBlock(),
-            if ((card.imageUrl ?? '').isNotEmpty) SizedBox(height: AppSpacing.interGroupSm),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Text(
-                  card.body,
-                  style: TextStyle(
-                    color: AppColors.worksBodyText,
-                    fontSize: AppTypography.base,
-                    height: 2.0, // ignore: verify_dart_semantic
-                  ),
-                ),
-              ),
-            ),
-          ] else
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  imageBlock(),
-                  if ((card.imageUrl ?? '').isNotEmpty)
-                    SizedBox(width: AppSpacing.interGroupSm),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Text(
-                        card.body,
-                        style: TextStyle(
-                          color: AppColors.worksBodyText,
-                          fontSize: AppTypography.base,
-                          height: 2.0, // ignore: verify_dart_semantic
+          ],
+          SizedBox(height: AppSpacing.interGroupMd),
+          Row(
+            children: [
+              _ArticleAvatar(imageUrl: article.author.avatar),
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            article.author.name.trim().isEmpty
+                                ? context.l10n.anonymous
+                                : article.author.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: AppTypography.base,
+                              fontWeight: AppTypography.semiBold,
+                            ),
+                          ),
                         ),
+                        if ((article.author.badge ?? '').isNotEmpty) ...[
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          _ArticleBadge(label: article.author.badge!),
+                        ],
+                      ],
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
+                    Text(
+                      dateText,
+                      style: TextStyle(
+                        color: bodyColor,
+                        fontSize: AppTypography.sm,
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.interGroupMd),
+          Wrap(
+            spacing: AppSpacing.intraGroupXs,
+            runSpacing: AppSpacing.intraGroupXs,
+            children: stats
+                .map((text) => _ArticleStatChip(label: text))
+                .toList(),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ArticleSectionLabel extends StatelessWidget {
+  const _ArticleSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        fontSize: AppTypography.sm,
+        fontWeight: AppTypography.semiBold,
+      ),
+    );
+  }
+}
+
+class _ArticleAvatar extends StatelessWidget {
+  const _ArticleAvatar({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: ArticleAdaptiveImage(imageUrl: imageUrl),
+      ),
+    );
+  }
+}
+
+class _ArticleBadge extends StatelessWidget {
+  const _ArticleBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupXs,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: CupertinoColors.activeBlue
+            .resolveFrom(context)
+            .withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: CupertinoColors.activeBlue.resolveFrom(context),
+          fontSize: AppTypography.xs,
+          fontWeight: AppTypography.semiBold,
+        ),
+      ),
+    );
+  }
+}
+
+class _ArticleStatChip extends StatelessWidget {
+  const _ArticleStatChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemGrey6.resolveFrom(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          fontSize: AppTypography.sm,
+          fontWeight: AppTypography.medium,
+        ),
       ),
     );
   }
@@ -483,8 +521,7 @@ class _BottomAction extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: EdgeInsets.only(left: AppSpacing.intraGroupMd),
-        width: AppSpacing.iconButtonMinSizeSm,
+        width: AppSpacing.largeButtonSize,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -492,8 +529,10 @@ class _BottomAction extends StatelessWidget {
             SizedBox(height: AppSpacing.intraGroupXs / 2),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: AppColors.worksBodyText,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 fontSize: AppTypography.xs,
               ),
             ),

@@ -3,10 +3,13 @@ version: 1
 domain_operation_page_ids:
   chat:
     AddMembers: chat.member.add
+    BatchGetConversations: chat.conversation.batch
     CreateConversation: chat.conversation.create
+    DissolveConversation: chat.conversation.dissolve
     GetConversation: chat.conversation.detail
     GetReceipts: chat.message.receipts
     InviteAssistant: chat.assistant.invite
+    ListConversationTimestamps: chat.conversation.timestamps
     ListContacts: chat.contacts.list
     ListConversations: chat.conversation.list
     ListMembers: chat.member.list
@@ -18,6 +21,8 @@ domain_operation_page_ids:
     SearchContacts: chat.contacts.search
     SendMessage: chat.message.send
     SyncMessages: chat.message.sync
+    TransferOwnership: chat.owner.transfer
+    UpdateGroupAdmins: chat.admins.update
     UpdateConversationSettings: chat.settings.update
 
   circle:
@@ -100,30 +105,40 @@ domain_operation_page_ids:
     ToggleMute: rtc.mute
 
   user:
+    ActivateSubAccount: user.owner.sub_accounts.activate
     ActivatePersona: user.personas.activate
     BlockUser: user.block.create
+    CreateSubAccount: user.owner.sub_accounts.create
     CreatePersona: user.personas.create
+    DeleteEmptySubAccount: user.owner.sub_accounts.delete_empty
     DeletePersona: user.personas.delete
+    DeleteSubAccount: user.owner.sub_accounts.delete
+    GetActivePersonaContext: user.owner.sub_accounts.active_context
     FollowUser: user.follow
     GetAppearanceSettings: user.settings.appearance.get
     GetMeProfile: user.get.me.profile
     GetNotificationSettings: user.notification_settings.get
+    GetPersonaManagementSummary: user.owner.sub_accounts.summary
     GetPrivacySettings: user.settings.privacy.get
     GetRelationship: user.relationship
     GetRelationshipCapability: user.get.relationship.capability
+    GetSubAccountLifecycleGuard: user.owner.sub_accounts.lifecycle_guard
     GetSubAccountProfile: user.get.sub.account.profile
     GetUserProfile: user.profile
     ListBlockedUsers: user.block.list
     ListFollowers: user.followers
     ListFollowing: user.following
+    ListSubAccounts: user.owner.sub_accounts.list
     ListPersonas: user.personas
     ListUserLifeItems: user.lifeItems
     ListUserLikes: user.likes
     ListUserWorks: user.works
+    RetireSubAccount: user.owner.sub_accounts.retire
     UnblockUser: user.block.delete
     UnfollowUser: user.unfollow
     UpdateAppearanceSettings: user.settings.appearance.patch
     UpdatePersona: user.personas.update
+    UpdateSubAccount: user.owner.sub_accounts.update
     UpdatePrivacySettings: user.settings.privacy.patch
     UpdateUserProfile: user.profile.edit
 

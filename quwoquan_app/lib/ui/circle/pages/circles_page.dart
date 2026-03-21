@@ -467,6 +467,16 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     _switchSecondaryByDelta(velocity < 0 ? 1 : -1);
   }
 
+  double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'Hg', style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.height;
+  }
+
   double _circleCardWidth(BuildContext context) {
     return AppSpacing.responsiveValue(
       context,
@@ -479,10 +489,28 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   double _circleCardRailHeight(BuildContext context) {
     final cardWidth = _circleCardWidth(context);
     final coverHeight = cardWidth / _circleCoverAspectRatio;
-    return coverHeight +
-        AppSpacing.intraGroupXs +
-        AppTypography.sm +
-        AppSpacing.sm;
+    final labelHeight = _measureSingleLineTextHeight(
+      context,
+      const TextStyle(
+        fontSize: AppTypography.iosFootnote,
+        fontWeight: AppTypography.medium,
+      ),
+    );
+    return coverHeight + AppSpacing.intraGroupXs + labelHeight + AppSpacing.sm;
+  }
+
+  double _channelPanelTileHeight(BuildContext context) {
+    final labelHeight = _measureSingleLineTextHeight(
+      context,
+      const TextStyle(
+        fontSize: AppTypography.base,
+        fontWeight: AppTypography.medium,
+      ),
+    );
+    final adaptiveHeight = labelHeight + (AppSpacing.containerSm * 2);
+    return adaptiveHeight > AppSpacing.bottomNavHeight
+        ? adaptiveHeight
+        : AppSpacing.bottomNavHeight;
   }
 
   @override
@@ -491,7 +519,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     final isDark = ref.watch(isDarkProvider);
     final bgPrimary = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundPrimary,
+      ColorType.pageBackground,
     );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -756,7 +784,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }) {
     final labelMap = _categoryLabelMap;
     final spacing = AppSpacing.intraGroupSm;
-    final panelTileHeight = AppSpacing.bottomNavHeight;
+    final panelTileHeight = _channelPanelTileHeight(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalSpacing = spacing * 3;
@@ -825,14 +853,17 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.people_outline,
+            CupertinoIcons.person_2,
             size: AppSpacing.largeButtonSize + AppSpacing.sm,
             color: fgSecondary,
           ),
           SizedBox(height: AppSpacing.interGroupMd),
           Text(
             UITextConstants.circlesFollowingEmpty,
-            style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+            style: TextStyle(
+              fontSize: AppTypography.iosTitle3,
+              color: fgSecondary,
+            ),
           ),
         ],
       ),
@@ -968,10 +999,12 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     List<Map<String, dynamic>>? circlesParam,
   }) {
     final circles = circlesParam ?? _filteredCircles;
+    final sectionBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceMuted,
+    );
     return Container(
-      color: isDark
-          ? Colors.white.withValues(alpha: 0.03)
-          : Colors.black.withValues(alpha: 0.02),
+      color: sectionBg,
       padding: EdgeInsets.symmetric(
         vertical: AppSpacing.md,
         horizontal: AppSpacing.feedContentHorizontal(context),
@@ -985,18 +1018,21 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
               Text(
                 UITextConstants.circlesRecommendedTitle,
                 style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.extraBold,
-                  color: fgSecondary,
+                  fontSize: AppTypography.iosTitle3,
+                  fontWeight: AppTypography.bold,
+                  color: fgPrimary,
                 ),
               ),
-              TextButton(
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
                 onPressed: () {},
                 child: Text(
                   UITextConstants.seeMore,
                   style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: AppColors.primaryColor,
+                    fontSize: AppTypography.iosFootnote,
+                    fontWeight: AppTypography.semiBold,
+                    color: AppColors.iosAccent(context),
                   ),
                 ),
               ),
@@ -1011,21 +1047,32 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                 if (i == circles.length) {
                   return Padding(
                     padding: EdgeInsets.only(left: AppSpacing.sm),
-                    child: GestureDetector(
-                      onTap: () {
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () {
                         AppToast.show(context, UITextConstants.createCircle);
                       },
                       child: Container(
                         width: _circleCardWidth(context),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryColor.withValues(alpha: 0.15),
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.selectionBackground,
+                          ),
                           borderRadius: BorderRadius.circular(
-                            AppSpacing.borderRadius,
+                            AppSpacing.largeBorderRadius,
+                          ),
+                          border: Border.all(
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.selectionBorder,
+                            ),
                           ),
                         ),
                         child: Icon(
-                          Icons.add,
-                          color: AppColors.primaryColor,
+                          CupertinoIcons.add,
+                          color: AppColors.iosAccent(context),
                           size: AppSpacing.iconLarge,
                         ),
                       ),
@@ -1035,8 +1082,10 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                 final c = circles[i];
                 return Padding(
                   padding: EdgeInsets.only(right: AppSpacing.sm),
-                  child: GestureDetector(
-                    onTap: () => context.push(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: () => context.push(
                       AppRoutePaths.circleDetail(id: '${c['id']}'),
                     ),
                     child: Column(
@@ -1056,7 +1105,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                                     Container(
                                       color: fgSecondary.withValues(alpha: 0.2),
                                       child: Icon(
-                                        Icons.group,
+                                        CupertinoIcons.person_3_fill,
                                         color: fgSecondary,
                                         size: AppSpacing.iconMedium,
                                       ),
@@ -1074,7 +1123,8 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: AppTypography.sm,
+                              fontSize: AppTypography.iosFootnote,
+                              fontWeight: AppTypography.medium,
                               color: fgPrimary,
                             ),
                           ),
@@ -1098,6 +1148,14 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     List<Map<String, dynamic>>? activitiesParam,
   }) {
     final activities = activitiesParam ?? _filteredActivities;
+    final cardBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final dividerColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.feedContentHorizontal(context),
@@ -1107,61 +1165,63 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         children: activities.map((a) {
           return Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Material(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              child: InkWell(
-                onTap: () {},
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cardBg,
                 borderRadius: BorderRadius.circular(
                   AppSpacing.largeBorderRadius,
                 ),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.sm),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.borderRadius,
-                        ),
-                        child: Image.network(
-                          a['image'] as String? ?? '',
+                border: Border.all(color: dividerColor),
+              ),
+              child: CupertinoButton(
+                padding: EdgeInsets.all(AppSpacing.sm),
+                minimumSize: Size.zero,
+                onPressed: () {},
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
+                      child: Image.network(
+                        a['image'] as String? ?? '',
+                        width: AppSpacing.bottomNavHeight,
+                        height: AppSpacing.bottomNavHeight,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
                           width: AppSpacing.bottomNavHeight,
                           height: AppSpacing.bottomNavHeight,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                                width: AppSpacing.bottomNavHeight,
-                                height: AppSpacing.bottomNavHeight,
-                                color: fgSecondary.withValues(alpha: 0.2),
-                              ),
+                          color: fgSecondary.withValues(alpha: 0.2),
                         ),
                       ),
-                      SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              a['title'] as String,
-                              style: TextStyle(
-                                fontSize: AppTypography.base,
-                                fontWeight: AppTypography.semiBold,
-                              ),
+                    ),
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            a['title'] as String,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosSubheadline,
+                              fontWeight: AppTypography.semiBold,
                             ),
-                            Text(
-                              a['circleName'] as String,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: fgSecondary,
-                              ),
+                          ),
+                          Text(
+                            a['circleName'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosFootnote,
+                              color: fgSecondary,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1189,8 +1249,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     final activeIndex = subs.indexOf(selectedSub);
 
     return Container(
-      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-      height: AppSpacing.subTabNavigationHeight,
+      color: AppColorsFunctional.getColor(isDark, ColorType.pageBackground),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd: onSubHorizontalDragEnd ?? _onSecondaryDragEnd,
@@ -1276,6 +1335,14 @@ class _DiscoveryPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -1292,14 +1359,26 @@ class _DiscoveryPostCard extends StatelessWidget {
       expanded: AppTypography.base,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragEnd: onHorizontalDragEnd,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: onHorizontalDragEnd,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+              blurRadius: AppSpacing.containerMd,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: CupertinoButton(
+          padding: EdgeInsets.all(AppSpacing.intraGroupSm),
+          minimumSize: Size.zero,
+          onPressed: onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1323,7 +1402,7 @@ class _DiscoveryPostCard extends StatelessWidget {
                           top: AppSpacing.intraGroupSm,
                           right: AppSpacing.intraGroupSm,
                           child: Icon(
-                            Icons.play_circle_fill,
+                            CupertinoIcons.play_circle_fill,
                             color: Colors.white,
                             size: AppSpacing.iconLarge - AppSpacing.xs,
                           ),
@@ -1338,7 +1417,11 @@ class _DiscoveryPostCard extends StatelessWidget {
                 post['title'] as String,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: gridMetaFontSize, color: fgPrimary),
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.semiBold,
+                  color: fgPrimary,
+                ),
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
               // 底部行：左侧三动作，右侧转发（宫格保持更紧凑字号）。
@@ -1356,7 +1439,7 @@ class _DiscoveryPostCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: gridMetaFontSize,
+                        fontSize: AppTypography.iosCaption1,
                         color: fgSecondary,
                       ),
                     ),
@@ -1372,7 +1455,7 @@ class _DiscoveryPostCard extends StatelessWidget {
                       Text(
                         ' ${post['likes'] ?? 0}',
                         style: TextStyle(
-                          fontSize: gridMetaFontSize,
+                          fontSize: AppTypography.iosCaption1,
                           color: fgSecondary,
                         ),
                       ),
@@ -1409,13 +1492,13 @@ class _ChannelTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = canRemove
-        ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
-        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+        ? AppColorsFunctional.getColor(isDark, ColorType.surfaceElevated)
+        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final borderColor = canRemove
         ? Colors.transparent
         : AppColorsFunctional.getColor(
             isDark,
-            ColorType.borderPrimary,
+            ColorType.separatorSubtle,
           ).withValues(alpha: 0.5);
     final fg = AppColorsFunctional.getColor(
       isDark,
@@ -1437,20 +1520,26 @@ class _ChannelTile extends StatelessWidget {
             Container(
               width: width,
               height: height,
-              alignment: Alignment.center,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
               decoration: BoxDecoration(
                 color: bg,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 border: Border.all(color: borderColor),
               ),
-              child: Text(
-                canRemove ? label : '+ $label',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: fg,
-                  fontWeight: AppTypography.medium,
+              child: Center(
+                child: Text(
+                  canRemove ? label : '+ $label',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: fg,
+                    fontWeight: AppTypography.medium,
+                  ),
                 ),
               ),
             ),
@@ -1481,14 +1570,12 @@ class _ChannelTile extends StatelessWidget {
               )
             else
               Positioned.fill(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.borderRadius,
-                    ),
-                    onTap: onIconTap,
-                  ),
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  onPressed: onIconTap,
+                  child: const SizedBox.expand(),
                 ),
               ),
           ],
@@ -1535,7 +1622,11 @@ Widget _buildUserAvatar(
     return CircleAvatar(
       radius: radius,
       backgroundColor: fgSecondary.withValues(alpha: 0.15),
-      child: Icon(Icons.person, size: AppSpacing.iconSmall, color: fgSecondary),
+      child: Icon(
+        CupertinoIcons.person_fill,
+        size: AppSpacing.iconSmall,
+        color: fgSecondary,
+      ),
     );
   }
   return SizedBox(
@@ -1550,7 +1641,7 @@ Widget _buildUserAvatar(
         errorBuilder: (_, __, ___) => Container(
           color: fgSecondary.withValues(alpha: 0.15),
           child: Icon(
-            Icons.person,
+            CupertinoIcons.person_fill,
             size: AppSpacing.iconSmall,
             color: fgSecondary,
           ),

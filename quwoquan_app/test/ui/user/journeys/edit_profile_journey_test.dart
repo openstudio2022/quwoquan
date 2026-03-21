@@ -104,7 +104,7 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text('保存'));
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       expect(find.text(newNickname), findsAtLeastNWidgets(1));

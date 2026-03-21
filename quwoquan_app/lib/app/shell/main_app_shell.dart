@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
@@ -14,7 +14,7 @@ import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 
 /// 主 App 壳
 ///
-/// 包含五大频道容器与底部导航，与原型 App.tsx 的主框架结构一致。
+/// 包含四个底部一级频道，圈子作为首页内一级 Tab 保留。
 /// 使用 IndexedStack 保持各频道状态，底部导航切换频道。
 class MainAppShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -39,7 +39,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = _getIndexFromLocation(widget.currentLocation);
+    _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
     _currentLocation = widget.currentLocation;
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
@@ -55,7 +55,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   void didUpdateWidget(MainAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
-      _currentIndex = _getIndexFromLocation(widget.currentLocation);
+      _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
       _logPageReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -81,34 +81,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     super.dispose();
   }
 
-  int _getIndexFromLocation(String location) {
-    if (location == '/') {
-      return 0; // 首页
-    } else if (location == '/circles') {
-      return 1; // 圈子
-    } else if (location == '/assistant') {
-      return 2; // 私主
-    } else if (location.startsWith('/chat')) {
-      return 3; // 趣信
-    } else if (location == '/profile') {
-      return 4; // 我的
-    }
-    return 0;
-  }
-
-  int _getBottomNavIndexFromLocation(String location) {
-    if (location == '/') {
-      return 0;
-    } else if (location == '/assistant') {
-      return 1;
-    } else if (location.startsWith('/chat')) {
-      return 2;
-    } else if (location == '/profile') {
-      return 3;
-    }
-    return -1;
-  }
-
   @override
   Widget build(BuildContext context) {
     final themeDark = ref.watch(isDarkProvider);
@@ -117,14 +89,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final assistantInternalTab = ref.watch(assistantInternalTabProvider);
     final shellBackground = forceDark
         ? AppColors.worksBackground
-        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final assistantImmersive =
         widget.currentLocation == AppRoutePaths.assistant &&
         assistantInternalTab == 'dialog';
     final bottomNavHidden =
-        ref.watch(bottomNavHiddenProvider).hidden ||
-        assistantImmersive ||
-        widget.currentLocation == AppRoutePaths.circles;
+        ref.watch(bottomNavHiddenProvider).hidden || assistantImmersive;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -144,12 +114,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           children: [
             IndexedStack(
               index: _currentIndex,
-              children: const [
-                HomePage(),
-                CirclesPage(),
-                AssistantTabPage(),
-                ChatPage(),
-                MyProfilePage(),
+              children: [
+                HomePage(routeLocation: _currentLocation),
+                const AssistantTabPage(),
+                const ChatPage(),
+                const MyProfilePage(),
               ],
             ),
             if (!bottomNavHidden)
@@ -157,20 +126,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: shellBackground.withValues(alpha: 0.94),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewPaddingOf(context).bottom,
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.viewPaddingOf(context).bottom,
-                    ),
-                    child: BottomNavigationWidget(
-                      currentIndex: _getBottomNavIndexFromLocation(
-                        _currentLocation,
-                      ),
-                      onTap: _handleBottomNavTap,
-                    ),
+                  child: BottomNavigationWidget(
+                    currentIndex: bottomNavIndexFromLocation(_currentLocation),
+                    onTap: _handleBottomNavTap,
                   ),
                 ),
               ),
@@ -182,6 +144,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   void _handleBottomNavTap(int index) {
     final previousIndex = _currentIndex;
+    final nextTab = mainTabFromBottomNavIndex(index);
     _logBrowseEvent(
       action: 'bottom_nav_tap',
       meta: <String, dynamic>{'fromIndex': previousIndex, 'toIndex': index},
@@ -190,52 +153,56 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       _currentIndex = index;
     });
 
-    switch (index) {
-      case 0:
+    switch (nextTab) {
+      case MainTabDestination.home:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        context.go(AppRoutePaths.home);
+        context.go(nextTab.routePath);
         break;
-      case 1:
-        if (previousIndex != 2) {
+      case MainTabDestination.assistant:
+        if (previousIndex != MainTabDestination.assistant.bottomNavIndex) {
+          final previousTab = mainTabFromLocation(_currentLocation);
           ref
               .read(lastMainTabBeforeAssistantProvider.notifier)
-              .set(_getBottomNavIndexFromLocation(_currentLocation));
+              .set(
+                previousTab == MainTabDestination.assistant
+                    ? null
+                    : previousTab,
+              );
         }
         // 助理入口根据当前内部 tab 决定是否走沉浸式，避免把日程/技能误判为全屏。
         ref
             .read(bottomNavHiddenProvider.notifier)
             .setHidden(ref.read(assistantInternalTabProvider) == 'dialog');
-        context.go(AppRoutePaths.assistant);
+        context.go(nextTab.routePath);
         break;
-      case 2:
+      case MainTabDestination.chat:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        context.go(AppRoutePaths.chat);
+        context.go(nextTab.routePath);
         break;
-      case 3:
+      case MainTabDestination.profile:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        context.go(AppRoutePaths.profile);
+        context.go(nextTab.routePath);
+        break;
+      case MainTabDestination.circles:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+        context.go(AppRoutePaths.circles);
         break;
     }
   }
 
   String _routeNameFromLocation(String location) {
-    switch (location) {
-      case '/':
-        return 'home';
-      case '/circles':
-        return 'circles';
-      case '/assistant':
-        return 'assistant';
-      case '/chat':
-        return 'chat';
-      case '/profile':
-        return 'profile';
-      default:
-        return 'route_unknown';
+    if (location == AppRoutePaths.home ||
+        location == AppRoutePaths.circles ||
+        location == AppRoutePaths.assistant ||
+        location == AppRoutePaths.profile ||
+        location.startsWith(AppRoutePaths.chat)) {
+      return mainTabFromLocation(location).routeName;
     }
+    return 'route_unknown';
   }
 
   Future<void> _logPageOpen({

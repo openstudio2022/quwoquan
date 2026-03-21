@@ -1,14 +1,131 @@
-version: 1
+version: 2
 feature: social-graph-read
-level: "L3_story"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+level: L3_scenario
+source_path: user-identity-profile-relationship/persona-follow-graph/social-graph-read
+parent_journey: persona-follow-graph
+archived: false
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 `FollowEdge` 的 read side，包括 follower/following 分页、基础关系查询、
+    `RelationshipCapabilityView` 投影以及 block/可见性过滤。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - ListFollowing / ListFollowers
+    - GetRelationship / GetRelationshipCapability
+    - block 与 strict isolation 过滤后的公开读语义
+    - "列表展示对 `ProfileSubject` 的消费边界"
+  out_of_scope:
+    - follow / unfollow 写命令
+    - 推荐算法消费图谱
+    - 主页按钮组件实现
+
+scenario_acceptance:
+  A1:
+    title: follower / following 分页按分身主体稳定读取
+    scenario: 外部用户或本人查看某个分身的粉丝/关注列表
+    journey_step: read graph list
+    done_when:
+      - "`ListFollowing / ListFollowers` 按 `FollowEdge` 游标稳定分页"
+      - "列表项展示统一消费 `ProfileSubject` 公共字段"
+      - 分身可见性与 block 过滤后不出现重复、漏页或串页
+    edge_cases:
+      - strict isolation 主体
+      - 列表中混有已停用分身
+      - block 过滤导致页内元素减少
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - follower list pagination contract test
+        - following list visibility filtering test
+      recorded: []
+    status: pending
+  A2:
+    title: "`GetRelationship` 与 `RelationshipCapabilityView` 成为统一读投影"
+    scenario: 主页、聊天与 RTC 读取当前 viewer 对 target 的关系能力
+    journey_step: resolve relation capability
+    done_when:
+      - "基础关系态由 `GetRelationship` 提供"
+      - "按钮矩阵与消息/通话门禁统一消费 `RelationshipCapabilityView`"
+      - "读投影来源明确为 `FollowEdge + BlockEdge + ProfileSubject`"
+      - UI 不再手写 tier/布尔组合推断能力
+    edge_cases:
+      - mutual / followed_by / not_following
+      - 被 block / 被对方 block
+      - target strict isolation
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - relationship capability schema contract test
+        - profile action bar matrix widget test
+        - rtc gate capability integration test
+      recorded: []
+    status: pending
+  A3:
+    title: 图谱读取遵守分身隔离与 owner 不泄露原则
+    scenario: 外部通过粉丝列表、能力查询和公开主页间接观察图谱
+    journey_step: enforce isolation on public reads
+    done_when:
+      - 列表与能力读取不暴露 owner 映射
+      - "不同分身的 follow 图谱按 `ProfileSubject` 隔离"
+      - 审计与风控可内部追踪 owner 关系，但普通读接口保持最小暴露
+    edge_cases:
+      - 同 owner 多分身关注同一人
+      - 通过共同粉丝或 mutual 状态间接推断 owner
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - graph isolation leakage regression test
+        - owner mapping hidden contract test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 图谱读取与能力投影可灰度、可观测、可回退
+    done_when:
+      - capability projection 可按 persona-aware graph 开关灰度
+      - page drift、filter mismatch、capability mismatch 指标可观测
+      - 回退时 follower/following 读取可退回旧只读路径，不影响 follow 主对象
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T4_release_rehearsal
+    tests:
+      planned:
+        - graph read rollback rehearsal
+        - capability telemetry verification
+      recorded: []
+    status: pending

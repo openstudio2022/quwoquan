@@ -1,4 +1,4 @@
-/// L4 Patrol E2E: 发现页 Feed 加载旅程
+/// T4 Patrol E2E: 发现页 Feed 加载旅程
 ///
 /// 对应 e2e.yaml 场景：discovery_feed_load_and_render [test_type: ui_journey]
 ///
@@ -11,6 +11,7 @@
 /// 执行方式（本地，需连接真机或模拟器）：
 ///   patrol test test/patrol/discovery/feed_load_test.dart \
 ///     --dart-define=ENV=staging \
+///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=TEST_AUTH_TOKEN=YOUR_TOKEN
 ///
 /// CI：由 .github/workflows/e2e.yaml 在 pre-release tag 时触发。
@@ -18,6 +19,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 // dart-define 注入
@@ -26,13 +28,14 @@ const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
 void main() {
   patrolTest(
     'discovery_feed_load_and_render',
-    tags: ['l4', 'discovery'],
+    tags: ['t4', 'discovery'],
+    skip: !kRunPatrolT4,
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 10),
     ),
     ($) async {
       // ── App 已由 patrol_test_main.dart 启动，直接交互 ────────────────
-      assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
 
       // ── 等待发现页渲染（冷启动需留足时间）──────────────────────────────
       await $(TestKeys.discoveryPage)

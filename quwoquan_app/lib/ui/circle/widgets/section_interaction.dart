@@ -193,14 +193,19 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      item['userName'] as String,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: AppTypography.semiBold,
-                        color: fgPrimary,
+                    Expanded(
+                      child: Text(
+                        item['userName'] as String,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.base,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
                       ),
                     ),
+                    SizedBox(width: AppSpacing.sm),
                     Text(
                       item['time'] as String,
                       style: TextStyle(

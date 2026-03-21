@@ -39,6 +39,18 @@ class AssistantApiMetadata {
     'RevokeSkillConsent': 'DELETE',
   };
 
+  static const String createRunOperation = 'CreateRun';
+  static const String createRunStreamOperation = 'CreateRunStream';
+  static const String getPolicyOperation = 'GetPolicy';
+  static const String getSuggestedActionsOperation = 'GetSuggestedActions';
+  static const String grantSkillConsentOperation = 'GrantSkillConsent';
+  static const String listConsentsOperation = 'ListConsents';
+  static const String listSkillsOperation = 'ListSkills';
+  static const String reportInteractionEventOperation = 'ReportInteractionEvent';
+  static const String reportPageContextOperation = 'ReportPageContext';
+  static const String reportScorecardOperation = 'ReportScorecard';
+  static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
+
   static const String createRunPath = '/v1/assistant/runs';
   static const String createRunStreamPath = '/v1/assistant/runs/stream';
   static const String getPolicyPath = '/v1/assistant/policy';

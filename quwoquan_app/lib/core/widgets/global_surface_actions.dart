@@ -134,9 +134,11 @@ class _QuickActionSheet extends StatelessWidget {
 
   void _openStartGroupChat(BuildContext sheetContext) {
     Navigator.of(sheetContext).pop();
-    final route =
-        '${AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId)}/${AppRoutePaths.chatAddMembersSegment}';
-    rootContext.push(route);
+    rootContext.push(
+      AppRoutePaths.chatAddMembers(
+        id: AppConceptConstants.assistantConversationId,
+      ),
+    );
   }
 
   void _openAddContact(BuildContext sheetContext) {

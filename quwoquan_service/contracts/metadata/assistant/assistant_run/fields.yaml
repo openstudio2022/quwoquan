@@ -21,6 +21,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: profileSubjectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 触发本次助手执行时的稳定公开主体 ID
+
+      - name: subAccountId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 触发本次助手执行时的子账号 ID（兼容 legacy persona 语义）
+
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 助手会话读取到的 persona 上下文版本，用于 drift 检测与回放恢复
+
       - name: sessionId
         type: string
         constraints: [NOT_NULL]

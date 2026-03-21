@@ -324,6 +324,9 @@ class _TrackingAssistantRepo extends MockChatRepository {
     Map<String, dynamic>? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
+    String? senderPersonaId,
+    String? senderProfileSubjectId,
+    String? personaContextVersion,
     required String clientMsgId,
   }) async {
     sendCallCount++;
@@ -333,6 +336,11 @@ class _TrackingAssistantRepo extends MockChatRepository {
       content: content,
       mediaUrl: mediaUrl,
       media: media,
+      replyToMessageId: replyToMessageId,
+      mentions: mentions,
+      senderPersonaId: senderPersonaId,
+      senderProfileSubjectId: senderProfileSubjectId,
+      personaContextVersion: personaContextVersion,
       clientMsgId: clientMsgId,
     );
   }

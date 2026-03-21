@@ -1,0 +1,76 @@
+version: 1
+node: user-identity-profile-relationship/persona-follow-graph/social-graph-read
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260321-001-persona-follow-graph-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze graph read, cursor, and capability projection metadata
+    goal: 收口 follower/following 列表、稳定游标、`RelationshipView` 与 `RelationshipCapabilityView` contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - list item、cursor、relationship/capability projection 可由 metadata 表达
+      - block、strict isolation、retired persona 的读取过滤语义冻结
+      - `ProfileSubject` 成为图谱展示唯一主键
+    status: planned
+
+  - id: P2
+    title: establish codegen and graph consumer baseline
+    goal: 让 App provider、主页按钮矩阵和聊天门禁通过生成物消费 graph read projection
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - "`verify-metadata / codegen / codegen-app` 通过"
+      - 主页、粉丝页、聊天门禁有统一 graph read 接入口
+      - 旧 `RelationTier` 只保留 adapter 兼容层
+    status: planned
+
+  - id: P3
+    title: implement filtered pagination and capability projection
+    goal: 落地 overfetch+fill、visibility/block 过滤、capability 消费与 legacy graph 双读
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - follower/following 分页在过滤场景下不重复、不漏页、不串页
+      - `RelationshipCapabilityView` 覆盖主页按钮矩阵与聊天/RTC 门禁
+      - legacy owner edge 双读与主分身映射稳定
+    status: planned
+
+  - id: P4
+    title: validate graph telemetry and rollback
+    goal: 建立 page drift、filter mismatch、capability mismatch 的观测与回滚演练
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A3
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - graph 读开关关闭后可退回旧只读路径
+      - page drift、capability mismatch、legacy edge read 指标可观测
+      - rollback rehearsal 与 graph read regression 清单完成
+    status: planned

@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 
 Widget _scopedApp({CircleRepository? mock}) {
@@ -91,13 +93,8 @@ Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
   FlutterError.onError = original;
 }
 
-Finder _circleShellContentPageView() {
-  return find.byWidgetPredicate(
-    (widget) => widget is PageView && widget.physics is BouncingScrollPhysics,
-    description: 'CircleShell content PageView',
-  );
-}
-
+/// 圈子详情 [CircleShell] 的主内容 [PageView] 使用可滑动 physics；
+/// 列表页 [CirclesPage] 的一级 [PageView] 为 [NeverScrollableScrollPhysics]。
 void main() {
   group('旅程正常路径', () {
     testWidgets('旅程 A1：导航到圈子详情页并加载信息', (tester) async {
@@ -120,8 +117,8 @@ void main() {
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
-      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
-      expect(_circleShellContentPageView(), findsOneWidget);
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(find.text(UITextConstants.circleWorksTab), findsWidgets);
     });
 
     testWidgets('旅程 A3：从详情页返回到列表页', (tester) async {
@@ -220,7 +217,7 @@ void main() {
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
-      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
 
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 

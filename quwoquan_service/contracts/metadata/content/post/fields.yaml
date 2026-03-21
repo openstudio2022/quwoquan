@@ -31,6 +31,42 @@ entities:
         ops_exposure: read
         description: 发布时使用的分身
 
+      - name: profileSubjectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 稳定公开主体 ID；优先于 legacy personaId / authorId 作为作者身份主键
+
+      - name: authorDisplayNameSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 作者显示名快照，避免分身退役或改名后历史渲染漂移
+
+      - name: authorAvatarUrlSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 作者头像快照
+
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 写入时绑定的 persona 上下文版本
+
       - name: contentType
         type: enum
         enum_ref: ContentType
@@ -367,6 +403,42 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: profileSubjectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 稳定公开主体 ID；优先于 legacy personaId 作为评论作者主键
+
+      - name: authorDisplayNameSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 评论作者显示名快照
+
+      - name: authorAvatarUrlSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 评论作者头像快照
+
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发表评论时绑定的 persona 上下文版本
 
       - name: content
         type: string

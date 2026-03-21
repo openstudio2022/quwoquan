@@ -41,6 +41,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   List<WorkFormatFilterConfig> get _workFormatFilters =>
       ContentUIConfig.workFormatFilters;
 
+  static const double _creationGridCoverAspectRatio = 0.92;
+
   static const _sortLabels = {
     CreationSortMode.latest: UITextConstants.circleSortLatest,
     CreationSortMode.hot: UITextConstants.circleSortHot,
@@ -84,6 +86,44 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
+  double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'Hg', style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.height;
+  }
+
+  double _gridItemMainAxisExtent(BuildContext context, double itemWidth) {
+    final coverHeight = itemWidth / _creationGridCoverAspectRatio;
+    final titleHeight =
+        _measureSingleLineTextHeight(
+          context,
+          const TextStyle(
+            fontSize: AppTypography.base,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ) *
+        2;
+    final metaTextHeight = _measureSingleLineTextHeight(
+      context,
+      const TextStyle(
+        fontSize: AppTypography.sm,
+        fontWeight: AppTypography.medium,
+      ),
+    );
+    final metaRowHeight = metaTextHeight > AppSpacing.iconSmall
+        ? metaTextHeight
+        : AppSpacing.iconSmall;
+    return coverHeight +
+        (AppSpacing.containerSm * 2) +
+        titleHeight +
+        metaRowHeight +
+        (AppSpacing.intraGroupXs * 2);
+  }
+
   @override
   Widget build(BuildContext context) {
     final notifier = ref.watch(circleStateProvider(widget.circleId));
@@ -91,25 +131,74 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       widget.isDark,
       ColorType.foregroundPrimary,
     );
+    final bgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.backgroundSecondary,
+    );
+    final bgTertiary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.backgroundTertiary,
+    );
     final fgSecondary = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.foregroundSecondary,
     );
+    final borderColor = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.borderPrimary,
+    );
 
-    return Column(
-      children: [
-        _buildIdentityFilterRow(notifier, fg, fgSecondary),
-        if (_isWorkLikeSubTab(notifier.state.activeSubTab)) ...[
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+        AppSpacing.containerMd,
+        AppSpacing.containerLg,
+      ),
+      child: Column(
+        children: [
+          _buildSurface(
+            backgroundColor: bgSecondary,
+            borderColor: borderColor,
+            child: Column(
+              children: [
+                _buildIdentityFilterRow(notifier, fg, fgSecondary),
+                if (_isWorkLikeSubTab(notifier.state.activeSubTab)) ...[
+                  SizedBox(height: AppSpacing.sm),
+                  _buildWorkFormatFilterRow(notifier, fg, fgSecondary),
+                ],
+                if (_isAdminOrOwner) ...[
+                  SizedBox(height: AppSpacing.sm),
+                  _buildSortControls(notifier, fg, fgSecondary),
+                  SizedBox(height: AppSpacing.xs),
+                  _buildViewModeToggle(
+                    notifier,
+                    fgSecondary: fgSecondary,
+                    borderColor: borderColor,
+                    backgroundColor: bgTertiary,
+                  ),
+                ],
+              ],
+            ),
+          ),
           SizedBox(height: AppSpacing.sm),
-          _buildWorkFormatFilterRow(notifier, fg, fgSecondary),
+          Expanded(
+            child: _buildSurface(
+              backgroundColor: bgSecondary,
+              borderColor: borderColor,
+              padding: EdgeInsets.zero,
+              child: _buildContent(
+                notifier,
+                fg,
+                fgSecondary,
+                bgSecondary,
+                bgTertiary,
+                borderColor,
+              ),
+            ),
+          ),
         ],
-        if (_isAdminOrOwner) ...[
-          _buildSortControls(notifier, fg, fgSecondary),
-          _buildViewModeToggle(notifier),
-        ],
-        SizedBox(height: AppSpacing.sm),
-        Expanded(child: _buildContent(notifier, fg, fgSecondary)),
-      ],
+      ),
     );
   }
 
@@ -389,32 +478,36 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  Widget _buildViewModeToggle(CircleStateNotifier notifier) {
+  Widget _buildViewModeToggle(
+    CircleStateNotifier notifier, {
+    required Color fgSecondary,
+    required Color borderColor,
+    required Color backgroundColor,
+  }) {
     final activeMode = notifier.state.viewMode;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          IconButton(
+          _ViewModeButton(
+            icon: CupertinoIcons.square_grid_2x2,
             tooltip: '网格视图',
+            selected: activeMode == CreationViewMode.grid,
+            fgSecondary: fgSecondary,
+            borderColor: borderColor,
+            backgroundColor: backgroundColor,
             onPressed: () => notifier.setViewMode(CreationViewMode.grid),
-            icon: Icon(
-              Icons.grid_view_rounded,
-              color: activeMode == CreationViewMode.grid
-                  ? AppColors.primaryColor
-                  : null,
-            ),
           ),
-          IconButton(
+          SizedBox(width: AppSpacing.xs),
+          _ViewModeButton(
+            icon: CupertinoIcons.rectangle_grid_1x2,
             tooltip: '列表视图',
+            selected: activeMode == CreationViewMode.list,
+            fgSecondary: fgSecondary,
+            borderColor: borderColor,
+            backgroundColor: backgroundColor,
             onPressed: () => notifier.setViewMode(CreationViewMode.list),
-            icon: Icon(
-              Icons.view_agenda_outlined,
-              color: activeMode == CreationViewMode.list
-                  ? AppColors.primaryColor
-                  : null,
-            ),
           ),
         ],
       ),
@@ -425,6 +518,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     CircleStateNotifier notifier,
     Color fg,
     Color fgSecondary,
+    Color bgSecondary,
+    Color bgTertiary,
+    Color borderColor,
   ) {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
@@ -446,35 +542,60 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
     if (notifier.state.viewMode == CreationViewMode.list) {
       return ListView.separated(
-        padding: EdgeInsets.all(AppSpacing.containerSm),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerSm,
+          AppSpacing.containerSm,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+        ),
         itemCount: filtered.length,
         separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
         itemBuilder: (context, index) {
           final item = filtered[index];
           return _buildListItem(
             item,
+            fg,
             fgSecondary,
+            backgroundColor: bgTertiary,
+            borderColor: borderColor,
             onTap: () => _openMediaViewer(context, item, filtered),
           );
         },
       );
     }
 
-    return GridView.builder(
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppSpacing.sm,
-        crossAxisSpacing: AppSpacing.sm,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: filtered.length,
-      itemBuilder: (context, index) {
-        final item = filtered[index];
-        return _buildGridItem(
-          item,
-          fgSecondary,
-          onTap: () => _openMediaViewer(context, item, filtered),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth =
+            (constraints.maxWidth -
+                (AppSpacing.containerSm * 2) -
+                AppSpacing.sm) /
+            2;
+        return GridView.builder(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerSm,
+            AppSpacing.containerSm,
+            AppSpacing.containerSm,
+            AppSpacing.containerMd,
+          ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            mainAxisExtent: _gridItemMainAxisExtent(context, itemWidth),
+          ),
+          itemCount: filtered.length,
+          itemBuilder: (context, index) {
+            final item = filtered[index];
+            return _buildGridItem(
+              item,
+              fg,
+              fgSecondary,
+              backgroundColor: bgSecondary,
+              borderColor: borderColor,
+              onTap: () => _openMediaViewer(context, item, filtered),
+            );
+          },
         );
       },
     );
@@ -589,7 +710,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   Widget _buildGridItem(
     Map<String, dynamic> item,
+    Color fg,
     Color fgSecondary, {
+    required Color backgroundColor,
+    required Color borderColor,
     required VoidCallback onTap,
   }) {
     final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
@@ -600,63 +724,117 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               ? imageUrls[0].toString()
               : '');
     final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
+    final typeLabel = _itemTypeLabel(item);
+    final title = _itemTitle(item);
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (resolvedCover.isNotEmpty)
-              Image.network(
-                resolvedCover,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: fgSecondary.withValues(alpha: 0.1),
-                  child: Icon(Icons.image, color: fgSecondary),
-                ),
-              )
-            else
-              Container(
-                color: fgSecondary.withValues(alpha: 0.1),
-                child: Icon(Icons.image, color: fgSecondary),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          border: Border.all(color: borderColor.withValues(alpha: 0.14)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: widget.isDark ? 0.18 : 0.06,
               ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: EdgeInsets.all(AppSpacing.intraGroupMd),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.6),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Row(
+              blurRadius: AppSpacing.md,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppSpacing.largeBorderRadius),
+              ),
+              child: AspectRatio(
+                aspectRatio: _creationGridCoverAspectRatio,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Icon(
-                      Icons.favorite,
-                      size: AppTypography.sm,
-                      color: Colors.white,
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Text(
-                      '$likeCount',
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        fontWeight: AppTypography.medium,
-                        color: Colors.white,
+                    if (resolvedCover.isNotEmpty)
+                      Image.network(
+                        resolvedCover,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => ColoredBox(
+                          color: fgSecondary.withValues(alpha: 0.12),
+                          child: Icon(CupertinoIcons.photo, color: fgSecondary),
+                        ),
+                      )
+                    else
+                      ColoredBox(
+                        color: fgSecondary.withValues(alpha: 0.12),
+                        child: Icon(CupertinoIcons.photo, color: fgSecondary),
+                      ),
+                    Positioned(
+                      top: AppSpacing.sm,
+                      left: AppSpacing.sm,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.intraGroupXs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.32),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.circularBorderRadius,
+                          ),
+                        ),
+                        child: Text(
+                          typeLabel,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: AppTypography.xs,
+                            fontWeight: AppTypography.semiBold,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(AppSpacing.containerSm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.semiBold,
+                      color: fg,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.heart_fill,
+                        size: AppSpacing.iconSmall,
+                        color: AppColors.error.withValues(alpha: 0.9),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupXs),
+                      Text(
+                        '$likeCount',
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.medium,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -667,22 +845,26 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   Widget _buildListItem(
     Map<String, dynamic> item,
+    Color fg,
     Color fgSecondary, {
+    required Color backgroundColor,
+    required Color borderColor,
     required VoidCallback onTap,
   }) {
     final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
     final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
     final typeLabel = _itemTypeLabel(item);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+    final title = _itemTitle(item);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
       child: Container(
         padding: EdgeInsets.all(AppSpacing.containerSm),
         decoration: BoxDecoration(
-          color: widget.isDark
-              ? Colors.white10
-              : Colors.black.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          border: Border.all(color: borderColor.withValues(alpha: 0.12)),
         ),
         child: Row(
           children: [
@@ -697,12 +879,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(
                           color: fgSecondary.withValues(alpha: 0.1),
-                          child: Icon(Icons.image, color: fgSecondary),
+                          child: Icon(CupertinoIcons.photo, color: fgSecondary),
                         ),
                       )
                     : Container(
                         color: fgSecondary.withValues(alpha: 0.1),
-                        child: Icon(Icons.image, color: fgSecondary),
+                        child: Icon(CupertinoIcons.photo, color: fgSecondary),
                       ),
               ),
             ),
@@ -721,17 +903,40 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                   ),
                   SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
-                    '赞 $likeCount',
+                    title,
                     style: TextStyle(
                       fontSize: AppTypography.base,
-                      color: AppColorsFunctional.getColor(
-                        widget.isDark,
-                        ColorType.foregroundPrimary,
-                      ),
+                      color: fg,
+                      fontWeight: AppTypography.medium,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.heart_fill,
+                        size: AppSpacing.iconSmall,
+                        color: AppColors.error.withValues(alpha: 0.9),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupXs),
+                      Text(
+                        '赞 $likeCount',
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconSmall,
+              color: fgSecondary,
             ),
           ],
         ),
@@ -739,17 +944,42 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
+  String _itemTitle(Map<String, dynamic> item) {
+    final candidates = [
+      item['title'],
+      item['body'],
+      item['caption'],
+      item['summary'],
+    ];
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return _itemTypeLabel(item);
+  }
+
   Widget _buildEmpty(Color fgSecondary) {
     return Center(
-      child: SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerMd),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.photo_library_outlined,
-              size: AppSpacing.xl * 2,
-              color: fgSecondary,
+            Container(
+              width: AppSpacing.xl * 2,
+              height: AppSpacing.xl * 2,
+              decoration: BoxDecoration(
+                color: fgSecondary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.photo_on_rectangle,
+                size: AppSpacing.xl,
+                color: fgSecondary,
+              ),
             ),
             SizedBox(height: AppSpacing.md),
             Text(
@@ -764,31 +994,116 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   Widget _buildErrorCard(Color fgSecondary) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: AppColors.error,
-            size: AppSpacing.iconLarge,
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            UITextConstants.loadFailed,
-            style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            onPressed: _loadFeed,
-            child: Text(
-              UITextConstants.retry,
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerMd),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              CupertinoIcons.exclamationmark_circle,
+              color: AppColors.error,
+              size: AppSpacing.iconLarge,
+            ),
+            SizedBox(height: AppSpacing.sm),
+            Text(
+              UITextConstants.loadFailed,
               style: TextStyle(
-                color: AppColors.primaryColor,
+                color: fgSecondary,
                 fontSize: AppTypography.base,
               ),
             ),
+            SizedBox(height: AppSpacing.sm),
+            CupertinoButton(
+              onPressed: _loadFeed,
+              child: Text(
+                UITextConstants.retry,
+                style: TextStyle(
+                  color: AppColors.primaryColor,
+                  fontSize: AppTypography.base,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSurface({
+    required Widget child,
+    required Color backgroundColor,
+    required Color borderColor,
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(
+      vertical: AppSpacing.containerSm,
+    ),
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: widget.isDark ? 0.16 : 0.05),
+            blurRadius: AppSpacing.md,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ViewModeButton extends StatelessWidget {
+  const _ViewModeButton({
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.fgSecondary,
+    required this.borderColor,
+    required this.backgroundColor,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final Color fgSecondary;
+  final Color borderColor;
+  final Color backgroundColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: onPressed,
+        child: Container(
+          padding: EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryColor.withValues(alpha: 0.12)
+                : backgroundColor,
+            borderRadius: BorderRadius.circular(
+              AppSpacing.circularBorderRadius,
+            ),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primaryColor.withValues(alpha: 0.24)
+                  : borderColor.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: AppSpacing.iconSmall,
+            color: selected ? AppColors.primaryColor : fgSecondary,
+          ),
+        ),
       ),
     );
   }

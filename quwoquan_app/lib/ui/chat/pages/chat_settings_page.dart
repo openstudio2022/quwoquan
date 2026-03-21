@@ -218,7 +218,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 borderColor: borderColor,
                                 avatarHeight: AppSpacing.largeButtonSize,
                                 onTap: () => context.push(
-                                  '/chat/${widget.conversationId}/add-members',
+                                  AppRoutePaths.chatAddMembers(
+                                    id: widget.conversationId,
+                                  ),
                                 ),
                               ),
                             );
@@ -352,7 +354,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         color: secondaryColor,
                       ),
                       onTap: () => context.push(
-                        '/chat/${widget.conversationId}/manage',
+                        AppRoutePaths.chatManage(id: widget.conversationId),
                       ),
                     ),
                     _divider(isDark),

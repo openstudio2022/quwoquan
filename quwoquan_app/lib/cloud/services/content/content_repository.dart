@@ -128,6 +128,8 @@ abstract class ContentRepository {
     required String content,
     String? replyToCommentId,
     String? personaId,
+    String? profileSubjectId,
+    String? personaContextVersion,
   });
   Future<void> deleteComment({
     required String postId,
@@ -187,10 +189,12 @@ class CommentDto {
     return CommentDto(
       id: (m['_id'] ?? m['id'] ?? '').toString(),
       postId: (m['postId'] ?? '').toString(),
-      authorId: (m['authorId'] ?? '').toString(),
-      personaId: m['personaId']?.toString(),
-      displayName: m['displayName']?.toString(),
-      avatarUrl: m['avatarUrl']?.toString(),
+      authorId: (m['profileSubjectId'] ?? m['authorId'] ?? '').toString(),
+      personaId: (m['personaId'] ?? m['subAccountId'])?.toString(),
+      displayName:
+          (m['authorDisplayNameSnapshot'] ?? m['displayName'])?.toString(),
+      avatarUrl:
+          (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
       content: (m['content'] ?? '').toString(),
       replyToCommentId: m['replyToCommentId']?.toString(),
       replyToUserId: m['replyToUserId']?.toString(),
@@ -208,9 +212,12 @@ class CommentDto {
     'id': id,
     'postId': postId,
     'authorId': authorId,
+    'profileSubjectId': authorId,
     'personaId': personaId,
     'displayName': displayName,
+    'authorDisplayNameSnapshot': displayName,
     'avatarUrl': avatarUrl,
+    'authorAvatarUrlSnapshot': avatarUrl,
     'content': content,
     'replyToCommentId': replyToCommentId,
     'replyToUserId': replyToUserId,
@@ -326,9 +333,15 @@ class MockContentRepository implements ContentRepository {
   Future<Map<String, dynamic>> createPost({
     required Map<String, dynamic> payload,
   }) async {
+    final postId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+    final type = (payload['type'] ?? payload['contentType'] ?? '')
+        .toString()
+        .trim();
     return <String, dynamic>{
       ...payload,
-      'postId': 'local_${DateTime.now().millisecondsSinceEpoch}',
+      'id': postId,
+      'postId': postId,
+      if (type.isNotEmpty) 'type': type,
     };
   }
 
@@ -377,6 +390,8 @@ class MockContentRepository implements ContentRepository {
     required String content,
     String? replyToCommentId,
     String? personaId,
+    String? profileSubjectId,
+    String? personaContextVersion,
   }) async {
     createCommentCallCount++;
     lastCommentPostId = postId;
@@ -387,7 +402,9 @@ class MockContentRepository implements ContentRepository {
       'postId': postId,
       'content': content,
       'authorId': 'mock_user',
+      'profileSubjectId': profileSubjectId ?? 'mock_user',
       'personaId': personaId,
+      'personaContextVersion': personaContextVersion,
       'replyCount': 0,
       'likeCount': 0,
       'status': 'visible',
@@ -954,11 +971,17 @@ class RemoteContentRepository implements ContentRepository {
     required String content,
     String? replyToCommentId,
     String? personaId,
+    String? profileSubjectId,
+    String? personaContextVersion,
   }) async {
     final uri = _uri(ContentApiMetadata.createCommentPath(postId: postId));
     final body = <String, dynamic>{'content': content};
     if (replyToCommentId != null) body['replyToCommentId'] = replyToCommentId;
     if (personaId != null) body['personaId'] = personaId;
+    if (profileSubjectId != null) body['profileSubjectId'] = profileSubjectId;
+    if (personaContextVersion != null) {
+      body['personaContextVersion'] = personaContextVersion;
+    }
     final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createComment),
@@ -1402,7 +1425,7 @@ class RemoteContentRepository implements ContentRepository {
       query['type'] = resolvedType;
     }
     final uri = _uri(
-      ContentApiMetadata.listUserPostsPath(userId: userId),
+      ContentApiMetadata.listUserPostsPath(profileSubjectId: userId),
       queryParameters: query,
     );
     final decoded = await _httpClient.getJson(

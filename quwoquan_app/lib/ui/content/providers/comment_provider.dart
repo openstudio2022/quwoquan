@@ -1,5 +1,8 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 enum CommentSortMode { latest, hot }
@@ -50,10 +53,21 @@ class CommentState {
 }
 
 class CommentNotifier extends StateNotifier<CommentState> {
+  final Ref _ref;
   final ContentRepository _repo;
   final String postId;
 
-  CommentNotifier(this._repo, this.postId) : super(const CommentState());
+  CommentNotifier(this._ref, this._repo, this.postId)
+    : super(const CommentState());
+
+  Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
+    final activeContext = await _ref.read(activePersonaContextProvider.future);
+    final mode = _ref.read(appDataSourceModeProvider);
+    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+      throw StateError('active persona context unavailable');
+    }
+    return activeContext;
+  }
 
   Future<void> loadComments() async {
     if (state.isLoading) return;
@@ -62,12 +76,10 @@ class CommentNotifier extends StateNotifier<CommentState> {
       errorMessage: () => null,
     );
     try {
-      final sortParam =
-          state.sortMode == CommentSortMode.hot ? 'hot' : 'latest';
-      final page = await _repo.listComments(
-        postId: postId,
-        sort: sortParam,
-      );
+      final sortParam = state.sortMode == CommentSortMode.hot
+          ? 'hot'
+          : 'latest';
+      final page = await _repo.listComments(postId: postId, sort: sortParam);
       state = state.copyWith(
         comments: page.items,
         nextCursor: () => page.nextCursor,
@@ -82,14 +94,14 @@ class CommentNotifier extends StateNotifier<CommentState> {
   }
 
   Future<void> loadMore() async {
-    if (!state.hasMore ||
-        state.status == CommentListStatus.loadingMore) {
+    if (!state.hasMore || state.status == CommentListStatus.loadingMore) {
       return;
     }
     state = state.copyWith(status: CommentListStatus.loadingMore);
     try {
-      final sortParam =
-          state.sortMode == CommentSortMode.hot ? 'hot' : 'latest';
+      final sortParam = state.sortMode == CommentSortMode.hot
+          ? 'hot'
+          : 'latest';
       final page = await _repo.listComments(
         postId: postId,
         cursor: state.nextCursor,
@@ -115,15 +127,25 @@ class CommentNotifier extends StateNotifier<CommentState> {
     await loadComments();
   }
 
-  Future<CommentDto?> addComment(String content,
-      {String? replyToCommentId, String? personaId}) async {
+  Future<CommentDto?> addComment(
+    String content, {
+    String? replyToCommentId,
+    String? personaId,
+  }) async {
+    final activeContext = await _resolveActivePersonaContext();
+    final resolvedProfileSubjectId = activeContext.profileSubjectId.isNotEmpty
+        ? activeContext.profileSubjectId
+        : _ref.read(currentUserIdProvider);
+    final resolvedPersonaId = personaId ?? activeContext.subAccountId;
     final optimistic = CommentDto(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       postId: postId,
-      authorId: 'me',
+      authorId: resolvedProfileSubjectId,
       content: content,
       replyToCommentId: replyToCommentId,
-      personaId: personaId,
+      personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
+      displayName: activeContext.displayName,
+      avatarUrl: activeContext.avatarUrl,
       createdAt: DateTime.now(),
     );
     state = state.copyWith(
@@ -135,7 +157,9 @@ class CommentNotifier extends StateNotifier<CommentState> {
         postId: postId,
         content: content,
         replyToCommentId: replyToCommentId,
-        personaId: personaId,
+        personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
+        profileSubjectId: resolvedProfileSubjectId,
+        personaContextVersion: activeContext.personaContextVersion,
       );
       final confirmed = CommentDto.fromMap(
         result['comment'] as Map<String, dynamic>? ?? result,
@@ -151,8 +175,7 @@ class CommentNotifier extends StateNotifier<CommentState> {
       return confirmed;
     } catch (e) {
       state = state.copyWith(
-        comments:
-            state.comments.where((c) => c.id != optimistic.id).toList(),
+        comments: state.comments.where((c) => c.id != optimistic.id).toList(),
         pendingComments: state.pendingComments
             .where((c) => c.id != optimistic.id)
             .toList(),
@@ -219,6 +242,6 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
 final commentProviderFamily = StateNotifierProvider.autoDispose
     .family<CommentNotifier, CommentState, String>((ref, postId) {
-  final repo = ref.watch(contentRepositoryProvider);
-  return CommentNotifier(repo, postId);
-});
+      final repo = ref.watch(contentRepositoryProvider);
+      return CommentNotifier(ref, repo, postId);
+    });

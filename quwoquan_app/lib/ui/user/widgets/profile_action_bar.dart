@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 用户主页五态按钮矩阵
 ///
@@ -51,224 +52,145 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final border = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.borderPrimary,
-    );
+    final secondaryStyle = isDark
+        ? ProfileIosActionStyle.outlined
+        : ProfileIosActionStyle.tinted;
 
     if (mode == ProfileMode.mine) {
-      return Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.profileEditLabel,
-              icon: Icons.edit_outlined,
-              onTap: onEditProfile,
-              fg: fg,
-              border: border,
-            ),
+      return _buildButtonRow(<Widget>[
+        Expanded(
+          flex: 6,
+          child: ProfileIosActionButton(
+            label: UITextConstants.profileEditLabel,
+            icon: CupertinoIcons.pencil,
+            onPressed: onEditProfile,
+            style: ProfileIosActionStyle.filled,
           ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.profilePersonasLabel,
-              icon: Icons.people_outline,
-              onTap: onManagePersonas,
-              fg: fg,
-              border: border,
-            ),
+        ),
+        Expanded(
+          flex: 5,
+          child: ProfileIosActionButton(
+            label: UITextConstants.profilePersonasLabel,
+            icon: CupertinoIcons.person_2,
+            onPressed: onManagePersonas,
+            style: secondaryStyle,
           ),
-        ],
-      );
+        ),
+      ]);
     }
 
     final cap = capability;
 
     if (cap != null && cap.isMutual) {
-      return Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.profileDirectMessage,
-              icon: Icons.chat_bubble_outline,
-              onTap: onMessage,
-              fg: fg,
-              border: border,
-            ),
+      return _buildButtonRow(<Widget>[
+        Expanded(
+          flex: 6,
+          child: ProfileIosActionButton(
+            label: UITextConstants.profileDirectMessage,
+            icon: CupertinoIcons.chat_bubble,
+            onPressed: onMessage,
+            style: ProfileIosActionStyle.filled,
           ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.callVideo,
-              icon: CupertinoIcons.video_camera,
-              onTap: cap.canStartVideoCall ? onVideoCall : null,
-              fg: fg,
-              border: border,
-            ),
+        ),
+        Expanded(
+          child: ProfileIosActionButton(
+            label: UITextConstants.callVideo,
+            icon: CupertinoIcons.video_camera,
+            onPressed: cap.canStartVideoCall ? onVideoCall : null,
+            style: secondaryStyle,
           ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.callVoice,
-              icon: CupertinoIcons.phone,
-              onTap: cap.canStartVoiceCall ? onVoiceCall : null,
-              fg: fg,
-              border: border,
-            ),
+        ),
+        Expanded(
+          child: ProfileIosActionButton(
+            label: UITextConstants.callVoice,
+            icon: CupertinoIcons.phone,
+            onPressed: cap.canStartVoiceCall ? onVoiceCall : null,
+            style: secondaryStyle,
           ),
-        ],
-      );
+        ),
+      ]);
     }
 
     if (cap != null && cap.isFollowedBy) {
-      return Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.followBack,
-              icon: Icons.add,
-              onTap: onFollow,
-              fg: Colors.white,
-              border: AppColors.primaryColor,
-              filled: true,
-            ),
+      return _buildButtonRow(<Widget>[
+        Expanded(
+          child: ProfileIosActionButton(
+            label: UITextConstants.followBack,
+            icon: CupertinoIcons.add,
+            onPressed: onFollow,
+            style: ProfileIosActionStyle.filled,
           ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.profileDirectMessage,
-              icon: Icons.chat_bubble_outline,
-              onTap: onMessage,
-              fg: fg,
-              border: border,
-            ),
+        ),
+        Expanded(
+          child: ProfileIosActionButton(
+            label: UITextConstants.profileDirectMessage,
+            icon: CupertinoIcons.chat_bubble,
+            onPressed: onMessage,
+            style: secondaryStyle,
           ),
-        ],
-      );
+        ),
+      ]);
     }
 
     if (cap != null && (cap.isFollowing || cap.isNotFollowing)) {
       final alreadyFollowing = cap.isFollowing;
-      return Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: alreadyFollowing
-                  ? UITextConstants.following
-                  : UITextConstants.follow,
-              icon: alreadyFollowing ? Icons.check : Icons.add,
-              onTap: onFollow,
-              fg: alreadyFollowing ? fgSecondary : Colors.white,
-              border: alreadyFollowing ? border : AppColors.primaryColor,
-              filled: !alreadyFollowing,
-            ),
+      return _buildButtonRow(<Widget>[
+        Expanded(
+          child: ProfileIosActionButton(
+            label: alreadyFollowing
+                ? UITextConstants.following
+                : UITextConstants.follow,
+            icon: alreadyFollowing
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.add,
+            onPressed: onFollow,
+            style: alreadyFollowing
+                ? secondaryStyle
+                : ProfileIosActionStyle.filled,
           ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _ActionButton(
-              label: UITextConstants.profileDirectMessage,
-              icon: Icons.chat_bubble_outline,
-              onTap: onMessage,
-              fg: fg,
-              border: border,
-            ),
+        ),
+        Expanded(
+          child: ProfileIosActionButton(
+            label: UITextConstants.profileDirectMessage,
+            icon: CupertinoIcons.chat_bubble,
+            onPressed: onMessage,
+            style: secondaryStyle,
           ),
-        ],
-      );
+        ),
+      ]);
     }
 
     // fallback：旧版 isFollowing 逻辑（capability 未载入时）
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            label: isFollowing
-                ? UITextConstants.following
-                : UITextConstants.follow,
-            icon: isFollowing ? Icons.check : Icons.add,
-            onTap: onFollow,
-            fg: isFollowing ? fgSecondary : Colors.white,
-            border: isFollowing ? border : AppColors.primaryColor,
-            filled: !isFollowing,
-          ),
-        ),
-        SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _ActionButton(
-            label: UITextConstants.profileDirectMessage,
-            icon: Icons.chat_bubble_outline,
-            onTap: onMessage,
-            fg: fg,
-            border: border,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    this.onTap,
-    required this.fg,
-    required this.border,
-    this.filled = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onTap;
-  final Color fg;
-  final Color border;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    final btn = SizedBox(
-      height: AppSpacing.minInteractiveSize,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        color: filled ? AppColors.primaryColor : null,
-        onPressed: onTap,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: filled
-                ? null
-                : Border.all(color: border.withValues(alpha: 0.5)),
-          ),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: AppSpacing.iconSmall, color: fg),
-                SizedBox(width: AppSpacing.xs),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.md,
-                    fontWeight: AppTypography.semiBold,
-                    color: fg,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return _buildButtonRow(<Widget>[
+      Expanded(
+        child: ProfileIosActionButton(
+          label: isFollowing
+              ? UITextConstants.following
+              : UITextConstants.follow,
+          icon: isFollowing ? CupertinoIcons.check_mark : CupertinoIcons.add,
+          onPressed: onFollow,
+          style: isFollowing ? secondaryStyle : ProfileIosActionStyle.filled,
         ),
       ),
+      Expanded(
+        child: ProfileIosActionButton(
+          label: UITextConstants.profileDirectMessage,
+          icon: CupertinoIcons.chat_bubble,
+          onPressed: onMessage,
+          style: secondaryStyle,
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildButtonRow(List<Widget> buttons) {
+    return Row(
+      children: <Widget>[
+        for (var i = 0; i < buttons.length; i += 1) ...<Widget>[
+          buttons[i],
+          if (i != buttons.length - 1) SizedBox(width: AppSpacing.sm),
+        ],
+      ],
     );
-    return btn;
   }
 }

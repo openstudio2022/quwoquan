@@ -7,28 +7,32 @@ class UserRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'AcceptInvite': 'user.accept.invite',
     'ActivatePersona': 'user.personas.activate',
-    'ActivateSubAccount': 'user.activate.sub.account',
+    'ActivateSubAccount': 'user.owner.sub_accounts.activate',
     'ApplyProposal': 'user.apply.proposal',
     'BindCredential': 'user.bind.credential',
     'BlockUser': 'user.block.create',
     'CancelGreetingRequest': 'user.cancel.greeting.request',
     'ConfirmProposal': 'user.confirm.proposal',
     'CreatePersona': 'user.personas.create',
-    'CreateSubAccount': 'user.create.sub.account',
+    'CreateSubAccount': 'user.owner.sub_accounts.create',
+    'DeleteEmptySubAccount': 'user.owner.sub_accounts.delete_empty',
     'DeletePersona': 'user.personas.delete',
-    'DeleteSubAccount': 'user.delete.sub.account',
+    'DeleteSubAccount': 'user.owner.sub_accounts.delete',
     'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'FollowUser': 'user.follow',
     'GenerateInvite': 'user.generate.invite',
+    'GetActivePersonaContext': 'user.owner.sub_accounts.active_context',
     'GetAppearanceSettings': 'user.settings.appearance.get',
     'GetCallSettings': 'user.get.call.settings',
     'GetInviteByCode': 'user.get.invite.by.code',
     'GetLatestContactDiscovery': 'user.get.latest.contact.discovery',
     'GetMeProfile': 'user.get.me.profile',
     'GetNotificationSettings': 'user.notification_settings.get',
+    'GetPersonaManagementSummary': 'user.owner.sub_accounts.summary',
     'GetPrivacySettings': 'user.settings.privacy.get',
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
+    'GetSubAccountLifecycleGuard': 'user.owner.sub_accounts.lifecycle_guard',
     'GetSubAccountProfile': 'user.get.sub.account.profile',
     'GetUserProfile': 'user.profile',
     'IgnoreGreetingRequest': 'user.ignore.greeting.request',
@@ -41,7 +45,7 @@ class UserRequestPageIds {
     'ListGreetingOutbox': 'user.list.greeting.outbox',
     'ListMyInvites': 'user.list.my.invites',
     'ListPersonas': 'user.personas',
-    'ListSubAccounts': 'user.list.sub.accounts',
+    'ListSubAccounts': 'user.owner.sub_accounts.list',
     'ListUserLifeItems': 'user.lifeItems',
     'ListUserLikes': 'user.likes',
     'ListUserWorks': 'user.works',
@@ -53,6 +57,7 @@ class UserRequestPageIds {
     'RegisterDevice': 'user.register.device',
     'RejectProposal': 'user.reject.proposal',
     'ReplyGreetingRequest': 'user.reply.greeting.request',
+    'RetireSubAccount': 'user.owner.sub_accounts.retire',
     'SendGreetingRequest': 'user.send.greeting.request',
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
@@ -62,34 +67,38 @@ class UserRequestPageIds {
     'UpdateNotificationSettings': 'user.update.notification.settings',
     'UpdatePersona': 'user.personas.update',
     'UpdatePrivacySettings': 'user.settings.privacy.patch',
-    'UpdateSubAccount': 'user.update.sub.account',
+    'UpdateSubAccount': 'user.owner.sub_accounts.update',
     'UpdateUserProfile': 'user.profile.edit',
   };
 
   static const String acceptInvite = 'user.accept.invite';
   static const String activatePersona = 'user.personas.activate';
-  static const String activateSubAccount = 'user.activate.sub.account';
+  static const String activateSubAccount = 'user.owner.sub_accounts.activate';
   static const String applyProposal = 'user.apply.proposal';
   static const String bindCredential = 'user.bind.credential';
   static const String blockUser = 'user.block.create';
   static const String cancelGreetingRequest = 'user.cancel.greeting.request';
   static const String confirmProposal = 'user.confirm.proposal';
   static const String createPersona = 'user.personas.create';
-  static const String createSubAccount = 'user.create.sub.account';
+  static const String createSubAccount = 'user.owner.sub_accounts.create';
+  static const String deleteEmptySubAccount = 'user.owner.sub_accounts.delete_empty';
   static const String deletePersona = 'user.personas.delete';
-  static const String deleteSubAccount = 'user.delete.sub.account';
+  static const String deleteSubAccount = 'user.owner.sub_accounts.delete';
   static const String dismissContactDiscovery = 'user.dismiss.contact.discovery';
   static const String followUser = 'user.follow';
   static const String generateInvite = 'user.generate.invite';
+  static const String getActivePersonaContext = 'user.owner.sub_accounts.active_context';
   static const String getAppearanceSettings = 'user.settings.appearance.get';
   static const String getCallSettings = 'user.get.call.settings';
   static const String getInviteByCode = 'user.get.invite.by.code';
   static const String getLatestContactDiscovery = 'user.get.latest.contact.discovery';
   static const String getMeProfile = 'user.get.me.profile';
   static const String getNotificationSettings = 'user.notification_settings.get';
+  static const String getPersonaManagementSummary = 'user.owner.sub_accounts.summary';
   static const String getPrivacySettings = 'user.settings.privacy.get';
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability = 'user.get.relationship.capability';
+  static const String getSubAccountLifecycleGuard = 'user.owner.sub_accounts.lifecycle_guard';
   static const String getSubAccountProfile = 'user.get.sub.account.profile';
   static const String getUserProfile = 'user.profile';
   static const String ignoreGreetingRequest = 'user.ignore.greeting.request';
@@ -102,7 +111,7 @@ class UserRequestPageIds {
   static const String listGreetingOutbox = 'user.list.greeting.outbox';
   static const String listMyInvites = 'user.list.my.invites';
   static const String listPersonas = 'user.personas';
-  static const String listSubAccounts = 'user.list.sub.accounts';
+  static const String listSubAccounts = 'user.owner.sub_accounts.list';
   static const String listUserLifeItems = 'user.lifeItems';
   static const String listUserLikes = 'user.likes';
   static const String listUserWorks = 'user.works';
@@ -114,6 +123,7 @@ class UserRequestPageIds {
   static const String registerDevice = 'user.register.device';
   static const String rejectProposal = 'user.reject.proposal';
   static const String replyGreetingRequest = 'user.reply.greeting.request';
+  static const String retireSubAccount = 'user.owner.sub_accounts.retire';
   static const String sendGreetingRequest = 'user.send.greeting.request';
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
@@ -123,6 +133,6 @@ class UserRequestPageIds {
   static const String updateNotificationSettings = 'user.update.notification.settings';
   static const String updatePersona = 'user.personas.update';
   static const String updatePrivacySettings = 'user.settings.privacy.patch';
-  static const String updateSubAccount = 'user.update.sub.account';
+  static const String updateSubAccount = 'user.owner.sub_accounts.update';
   static const String updateUserProfile = 'user.profile.edit';
 }

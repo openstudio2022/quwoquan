@@ -1,5 +1,7 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 圈子紧凑卡片：头像（或封面）+ 名称 + 创作数，横向布局。
 class CircleCompactCard extends StatelessWidget {
@@ -20,38 +22,31 @@ class CircleCompactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final border = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.borderPrimary,
-    );
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.16);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: ProfileIosSectionCard(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerMd,
-          vertical: AppSpacing.sm,
+          vertical: AppSpacing.containerSm,
         ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          border: Border.all(color: border.withValues(alpha: 0.2)),
-        ),
+        backgroundColor: AppColors.iosGroupedSurface(context),
+        borderColor: separator,
         child: Row(
-          children: [
+          children: <Widget>[
             CircleAvatar(
               radius: 24,
               backgroundImage: coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
+              backgroundColor: AppColors.iosFill(context),
               onBackgroundImageError: (error, stackTrace) {},
               child: coverUrl.isEmpty
-                  ? Icon(Icons.group, color: fgSecondary)
+                  ? Icon(CupertinoIcons.group, color: fgSecondary)
                   : null,
             ),
             SizedBox(width: AppSpacing.containerSm),
@@ -59,13 +54,14 @@ class CircleCompactCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: [
+                children: <Widget>[
                   Text(
                     name,
                     style: TextStyle(
-                      fontSize: AppTypography.md,
+                      fontSize: AppTypography.iosSubheadline,
                       fontWeight: AppTypography.semiBold,
                       color: fg,
+                      letterSpacing: -0.16,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -74,13 +70,19 @@ class CircleCompactCard extends StatelessWidget {
                   Text(
                     '$postCount 创作',
                     style: TextStyle(
-                      fontSize: AppTypography.sm,
+                      fontSize: AppTypography.iosFootnote,
                       fontWeight: AppTypography.normal,
                       color: fgSecondary,
                     ),
                   ),
                 ],
               ),
+            ),
+            SizedBox(width: AppSpacing.intraGroupSm),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconSmall,
+              color: AppColors.iosTertiaryLabel(context),
             ),
           ],
         ),

@@ -14,6 +14,7 @@ import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 创作 Tab：统一承载 `全部 / 微趣 / 图片 / 视频 / 文字` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
@@ -46,10 +47,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   Widget build(BuildContext context) {
     final notifier = ref.read(profileNotifierProvider(widget.userId));
     final state = ref.watch(profileNotifierProvider(widget.userId)).state;
-    final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundSecondary,
-    );
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
     final filtered = state.creations
         .where((post) => _matchesCreationFilter(post, state.activeSubTab))
         .toList(growable: false);
@@ -68,22 +66,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           else if (filtered.isEmpty)
             Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-              child: Column(
-                children: [
-                  Icon(
-                    CupertinoIcons.photo_on_rectangle,
-                    size: AppSpacing.xl * 2,
-                    color: fgSecondary,
-                  ),
-                  SizedBox(height: AppSpacing.md),
-                  Text(
-                    _emptyStateTitle(state.activeSubTab),
-                    style: TextStyle(
-                      fontSize: AppTypography.md,
-                      color: fgSecondary,
-                    ),
-                  ),
-                ],
+              child: _buildEmptyState(
+                context,
+                title: _emptyStateTitle(state.activeSubTab),
+                color: fgSecondary,
               ),
             )
           else
@@ -126,23 +112,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               ? Center(child: CupertinoActivityIndicator())
               : filtered.isEmpty
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        CupertinoIcons.photo_on_rectangle,
-                        size: AppSpacing.xl * 2,
-                        color: fgSecondary,
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      Text(
-                        _emptyStateTitle(state.activeSubTab),
-                        style: TextStyle(
-                          fontSize: AppTypography.md,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
+                  child: _buildEmptyState(
+                    context,
+                    title: _emptyStateTitle(state.activeSubTab),
+                    color: fgSecondary,
                   ),
                 )
               : CustomScrollView(
@@ -197,9 +170,42 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         onTap: (index) => notifier.setSubTab(
           _creationSubTabForId(_creationFilters[index].id),
         ),
-        variant: SecondaryCapsuleTabBarVariant.inlineMuted,
+        variant: SecondaryCapsuleTabBarVariant.iosProfile,
         onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
       ),
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required String title,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.iosFill(context),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            CupertinoIcons.photo_on_rectangle,
+            size: AppSpacing.iconMedium,
+            color: color,
+          ),
+        ),
+        SizedBox(height: AppSpacing.containerSm),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: AppTypography.iosSubheadline,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 
@@ -343,109 +349,165 @@ class _WorksPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
+    final fgPrimary = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final surface = AppColors.iosGroupedSurface(context);
     final gridMetaFontSize = AppTypography.responsive(
       context,
-      compact: AppTypography.sm,
-      regular: AppTypography.base,
-      expanded: AppTypography.base,
+      compact: AppTypography.iosFootnote,
+      regular: AppTypography.iosFootnote,
+      expanded: AppTypography.iosSubheadline,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          border: Border.all(color: separator, width: AppSpacing.hairline),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          children: <Widget>[
             AspectRatio(
               aspectRatio: _imageAspectRatio,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppSpacing.radiusTwenty),
+                ),
                 child: Stack(
                   fit: StackFit.expand,
-                  children: [
+                  children: <Widget>[
                     _coverUrl.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl: _coverUrl,
                             fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: fgSecondary.withValues(alpha: 0.15),
+                            placeholder: (context, url) => ColoredBox(
+                              color: fgSecondary.withValues(alpha: 0.12),
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              color: fgSecondary.withValues(alpha: 0.15),
+                            errorWidget: (context, url, error) => ColoredBox(
+                              color: fgSecondary.withValues(alpha: 0.12),
                             ),
                           )
-                        : Container(color: fgSecondary.withValues(alpha: 0.15)),
+                        : ColoredBox(
+                            color: fgSecondary.withValues(alpha: 0.12),
+                          ),
                     if (post.type == 'video')
                       Positioned(
                         top: AppSpacing.intraGroupSm,
                         right: AppSpacing.intraGroupSm,
-                        child: Icon(
-                          Icons.play_circle_fill,
-                          color: Colors.white,
-                          size: AppSpacing.iconLarge - AppSpacing.xs,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.36),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.play_fill,
+                            color: CupertinoColors.white,
+                            size: AppSpacing.iconSmall,
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              _title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: gridMetaFontSize, color: fgPrimary),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: AppSpacing.intraGroupMd,
-                  backgroundImage: post.avatarUrl.isNotEmpty
-                      ? NetworkImage(post.avatarUrl)
-                      : null,
-                  backgroundColor: fgSecondary.withValues(alpha: 0.2),
-                ),
-                SizedBox(width: AppSpacing.intraGroupXs),
-                Expanded(
-                  child: Text(
-                    post.displayName,
-                    maxLines: 1,
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerSm,
+                AppSpacing.containerSm,
+                AppSpacing.containerSm,
+                AppSpacing.containerSm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _title,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: gridMetaFontSize,
-                      color: fgSecondary,
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.semiBold,
+                      color: fgPrimary,
+                      letterSpacing: -0.18,
                     ),
                   ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.heart,
-                      size: gridMetaFontSize,
-                      color: fgSecondary,
-                    ),
-                    Text(
-                      ' ${post.likeCount}',
-                      style: TextStyle(
-                        fontSize: gridMetaFontSize,
-                        color: fgSecondary,
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundImage: post.avatarUrl.isNotEmpty
+                            ? NetworkImage(post.avatarUrl)
+                            : null,
+                        backgroundColor: AppColors.iosFill(context),
+                        child: post.avatarUrl.isEmpty
+                            ? Icon(
+                                CupertinoIcons.person_crop_circle_fill,
+                                size: AppSpacing.iconSmall,
+                                color: fgSecondary,
+                              )
+                            : null,
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      SizedBox(width: AppSpacing.intraGroupXs),
+                      Expanded(
+                        child: Text(
+                          post.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: gridMetaFontSize,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupXs),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                CupertinoIcons.heart,
+                                size: AppSpacing.iconSmall,
+                                color: fgSecondary,
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              Text(
+                                '${post.likeCount}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: gridMetaFontSize,
+                                  color: fgSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

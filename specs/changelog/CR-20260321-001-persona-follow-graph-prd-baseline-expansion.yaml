@@ -1,0 +1,355 @@
+id: CR-20260321-001
+title: persona follow graph prd baseline expansion
+slug: persona-follow-graph-prd-baseline-expansion
+revision: 4
+status: active
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+  - specs/feature-tree/user-identity-profile-relationship/tree.yaml
+  - specs/feature-tree/tree_index.yaml
+
+entries:
+  - timestamp: "2026-03-21T16:00:00+08:00"
+    summary: >
+      将 persona-follow-graph 收口为正式 PRD Journey baseline，新增分身公开身份与跨域透传两个
+      L3 Scenario，并明确作者分身仍归 user 域 Persona/SubAccount。
+    reason: >
+      当前分身能力在管理入口、公开身份、跨域透传和特性树拆分上均存在断裂：主入口连到 mock 页，
+      真实管理页未接路由，公开身份与 `ProfileSubject` 真相源漂移，下游 content/chat/circle/assistant
+      仅完成字段预埋但没有形成闭环。进入 `/prd` 前必须冻结领域边界、Journey/Scenario 拆分、
+      生命周期、历史归因与灰度回滚基线。
+    change_type:
+      - refine
+      - expand
+      - split
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md
+        sections:
+          - 节点定位
+          - 特性树拆分
+          - 领域划分
+          - 数据生命周期与存储合同
+          - 商业与非功能目标
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
+        sections:
+          - 功能范围
+          - 领域边界
+          - 权限边界与数据生命周期
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md
+        sections:
+          - 功能范围
+          - 领域边界
+          - 权限边界与数据生命周期
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/spec.md
+        sections:
+          - 功能范围
+          - 领域划分
+          - 权限边界与数据生命周期
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md
+        sections:
+          - 背景与动机
+      - path: specs/feature-tree/user-identity-profile-relationship/tree.yaml
+        sections:
+          - persona-follow-graph.l3
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - user-identity-profile-relationship/persona-follow-graph
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次冻结的是 `/prd` baseline，不直接产出 design.md 或 plan.yaml。
+      - 作者分身被明确为 user 域 Persona/SubAccount 的产品化表面，content/chat/circle/assistant 只消费其标识与快照。
+      - "`profile-homepage-redesign/owner-subaccount-homepage-unification` 从本次开始视为 `ProfileSubject` 契约的消费方，而非主定义方。"
+  - timestamp: "2026-03-21T16:40:00+08:00"
+    summary: >
+      补齐 follow-relationship 与 social-graph-read 两个 L3 Scenario 的正式 PRD 规格，
+      并在 Journey 层冻结业务对象、元数据真相源、存储分区、弱网与容量假设。
+    reason: >
+      第一轮 PRD baseline 已完成分身生命周期、公开身份与跨域透传主线，但 follow/social 两个场景仍停留在旧
+      `L3_story` 占位，且 `UserProfile / Persona / FollowEdge / BlockEdge` 的 DDD 边界与 metadata SSOT、
+      数据分区、弱网恢复、容量假设尚未显式冻结，不能直接进入 `/design`。
+    change_type:
+      - refine
+      - expand
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md
+        sections:
+          - 业务对象、元数据与数据划分
+          - 弱网与恢复
+          - 并发与容量假设
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md
+        sections:
+          - 业务对象划分
+          - 功能范围
+          - 元数据与接口真相源
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md
+        sections:
+          - 业务对象与数据划分
+          - 功能范围
+          - 元数据与接口真相源
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次仍属于 `/prd` 收口，不进入 `design.md / plan.yaml`。
+      - "`FollowEdge` 被明确为 user 域独立业务对象，使用 MongoDB；`UserProfile / Persona` 保持 PostgreSQL 聚合；`BlockEdge` 保持 PostgreSQL + Redis 门禁对象。"
+      - "`GetRelationshipCapability` 被明确为 `FollowEdge + BlockEdge + ProfileSubject` 的读投影，而不是新的写对象。"
+  - timestamp: "2026-03-21T18:10:00+08:00"
+    summary: >
+      完成 persona-follow-graph Journey 及 5 个 L3 Scenario 的 `/design` 基线，补齐正式 `design.md + plan.yaml`，
+      并执行 metadata verify/codegen/codegen-app 校验。
+    reason: >
+      `/prd` 已冻结领域边界、业务对象、数据分区与验收条件，但仍缺少可进入 `/dev` 的设计主轴、Scenario
+      级实施切片、迁移兼容策略、灰度回滚方案与 `T1~T4` 证据矩阵。必须把 owner plane、public plane、
+      action plane 与 graph write/read 统一到同一条 metadata-first 设计线上。
+    change_type:
+      - design
+      - plan
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/design.md
+        sections:
+          - 方案对比
+          - 选型决策
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - 字段演进、迁移/回填与兼容
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - 助手链路符合性
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - 字段演进、迁移/回填与兼容
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - 字段演进、迁移/回填与兼容
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次 `/design` 已为 Journey 与 5 个 Scenario 补齐正式 `design.md + plan.yaml`，可作为 `/dev` 的唯一实施切片来源。
+      - "`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已执行通过。"
+      - codegen 暴露出一批现有 app 侧生成物漂移（如 `app_route_paths.g.dart`、多域 `*_api_metadata.g.dart`、`app_ui_surfaces.g.dart`），本次仅记录并保留结果，不在设计文档中手工改写生成物。
+  - timestamp: "2026-03-21T19:05:00+08:00"
+    summary: >
+      启动 `/dev` 第一组切片，先完成 persona-aware metadata 真相源收口，并同步刷新 user/content/chat/assistant
+      相关 codegen 生成物。
+    reason: >
+      `plan.yaml` 的首个实施顺序要求先落 `metadata -> codegen`。现有仓库虽然已经有 `ProfileSubjectView`、
+      `ProfileSubjectMutation`、`RelationshipCapabilityView` 等半成品契约，但 owner plane、active persona
+      context、follow/block 的 profileSubject 路由、content/chat/assistant 的 persona-aware 上下文与快照字段
+      仍未统一，不能直接进入应用逻辑层实现。
+    change_type:
+      - implement
+      - codegen
+      - validate
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/_shared/types.yaml
+        sections:
+          - enums
+      - path: quwoquan_service/contracts/metadata/_shared/request_context.yaml
+        sections:
+          - user
+      - path: quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
+        sections:
+          - ActivePersonaContextView
+          - PersonaManagementItemView
+          - PersonaManagementQuotaView
+          - PersonaLifecycleGuardView
+      - path: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+        sections:
+          - ListSubAccounts
+          - GetPersonaManagementSummary
+          - GetActivePersonaContext
+          - GetSubAccountLifecycleGuard
+          - RetireSubAccount
+          - DeleteEmptySubAccount
+      - path: quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+        sections:
+          - USER.SUB_ACCOUNT.quota_reached
+          - USER.SUB_ACCOUNT.primary_guard
+          - USER.SUB_ACCOUNT.active_guard
+          - USER.SUB_ACCOUNT.retire_required
+      - path: quwoquan_service/contracts/metadata/user/follow_edge/fields.yaml
+        sections:
+          - FollowCommandRequest
+          - FollowCommandResult
+          - RelationshipView
+          - FollowingListItemView
+          - FollowerListItemView
+      - path: quwoquan_service/contracts/metadata/user/follow_edge/service.yaml
+        sections:
+          - FollowUser
+          - UnfollowUser
+          - ListFollowing
+          - ListFollowers
+          - GetRelationship
+          - GetRelationshipCapability
+      - path: quwoquan_service/contracts/metadata/user/block_edge/service.yaml
+        sections:
+          - BlockUser
+          - UnblockUser
+          - ListBlockedUsers
+      - path: quwoquan_service/contracts/metadata/content/post/fields.yaml
+        sections:
+          - Post.profileSubjectId
+          - Comment.profileSubjectId
+      - path: quwoquan_service/contracts/metadata/content/post/service.yaml
+        sections:
+          - CreatePost
+          - ListUserPosts
+          - CreateComment
+      - path: quwoquan_service/contracts/metadata/messages/conversation/fields.yaml
+        sections:
+          - Message.senderProfileSubjectId
+          - Message.personaContextVersion
+      - path: quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+        sections:
+          - SendMessage
+      - path: quwoquan_service/contracts/metadata/assistant/assistant_run/fields.yaml
+        sections:
+          - AssistantRun.profileSubjectId
+          - AssistantRun.subAccountId
+          - AssistantRun.personaContextVersion
+      - path: quwoquan_service/contracts/metadata/assistant/assistant_run/service.yaml
+        sections:
+          - CreateRun
+          - CreateRunStream
+          - ReportPageContext
+      - path: quwoquan_service/contracts/metadata/assistant/assistant_run/events.yaml
+        sections:
+          - AssistantRunStarted
+          - AssistantRunCompleted
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "`make -C quwoquan_service verify-metadata` 已两次通过，`make codegen` 与 `make codegen-app` 已执行通过。"
+      - 生成物已同步反映新的 persona-aware 路由与 page ids，例如 `user_api_metadata.g.dart`、`user_request_page_ids.g.dart`、`content_api_metadata.g.dart`、`chat_api_metadata.g.dart`、`assistant_api_metadata.g.dart`。
+      - 本次仍停留在第一组实施切片：metadata 与 codegen 已落地，但 App/provider/service 业务逻辑尚未开始消费这些新 contract。

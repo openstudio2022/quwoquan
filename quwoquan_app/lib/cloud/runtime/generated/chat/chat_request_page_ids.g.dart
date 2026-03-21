@@ -7,13 +7,16 @@ class ChatRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortChatUpload': 'chat.abort.chat.upload',
     'AddMembers': 'chat.member.add',
+    'BatchGetConversations': 'chat.conversation.batch',
     'CompleteChatUpload': 'chat.complete.chat.upload',
     'CreateConversation': 'chat.conversation.create',
+    'DissolveConversation': 'chat.conversation.dissolve',
     'GetConversation': 'chat.conversation.detail',
     'GetReceipts': 'chat.message.receipts',
     'InitChatUpload': 'chat.init.chat.upload',
     'InviteAssistant': 'chat.assistant.invite',
     'ListContacts': 'chat.contacts.list',
+    'ListConversationTimestamps': 'chat.conversation.timestamps',
     'ListConversations': 'chat.conversation.list',
     'ListInbox': 'chat.list.inbox',
     'ListMembers': 'chat.member.list',
@@ -25,18 +28,23 @@ class ChatRequestPageIds {
     'SearchContacts': 'chat.contacts.search',
     'SendMessage': 'chat.message.send',
     'SyncMessages': 'chat.message.sync',
+    'TransferOwnership': 'chat.owner.transfer',
     'UpdateConversationSettings': 'chat.settings.update',
+    'UpdateGroupAdmins': 'chat.admins.update',
   };
 
   static const String abortChatUpload = 'chat.abort.chat.upload';
   static const String addMembers = 'chat.member.add';
+  static const String batchGetConversations = 'chat.conversation.batch';
   static const String completeChatUpload = 'chat.complete.chat.upload';
   static const String createConversation = 'chat.conversation.create';
+  static const String dissolveConversation = 'chat.conversation.dissolve';
   static const String getConversation = 'chat.conversation.detail';
   static const String getReceipts = 'chat.message.receipts';
   static const String initChatUpload = 'chat.init.chat.upload';
   static const String inviteAssistant = 'chat.assistant.invite';
   static const String listContacts = 'chat.contacts.list';
+  static const String listConversationTimestamps = 'chat.conversation.timestamps';
   static const String listConversations = 'chat.conversation.list';
   static const String listInbox = 'chat.list.inbox';
   static const String listMembers = 'chat.member.list';
@@ -48,5 +56,7 @@ class ChatRequestPageIds {
   static const String searchContacts = 'chat.contacts.search';
   static const String sendMessage = 'chat.message.send';
   static const String syncMessages = 'chat.message.sync';
+  static const String transferOwnership = 'chat.owner.transfer';
   static const String updateConversationSettings = 'chat.settings.update';
+  static const String updateGroupAdmins = 'chat.admins.update';
 }

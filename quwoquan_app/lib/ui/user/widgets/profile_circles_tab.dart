@@ -7,6 +7,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/circle_compact_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 class ProfileCirclesTab extends ConsumerWidget {
   const ProfileCirclesTab({
@@ -25,10 +26,7 @@ class ProfileCirclesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(profileNotifierProvider(userId)).state;
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
     if (state.isLoading && state.circles.isEmpty) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
@@ -40,30 +38,36 @@ class ProfileCirclesTab extends ConsumerWidget {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.group_outlined,
-              size: AppSpacing.xl * 2,
-              color: fgSecondary,
+          children: <Widget>[
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.iosFill(context),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.group,
+                size: AppSpacing.iconMedium,
+                color: fgSecondary,
+              ),
             ),
-            SizedBox(height: AppSpacing.md),
+            SizedBox(height: AppSpacing.containerSm),
             Text(
               mode == ProfileMode.mine ? '还没加入圈子' : 'Ta 还没加入圈子',
-              style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
+              style: TextStyle(
+                fontSize: AppTypography.iosSubheadline,
+                color: fgSecondary,
+              ),
             ),
             if (mode == ProfileMode.mine) ...[
               SizedBox(height: AppSpacing.md),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
+              ProfileIosActionButton(
+                label: '去发现圈子',
+                icon: CupertinoIcons.compass,
                 onPressed: () => context.go(AppRoutePaths.circles),
-                child: Text(
-                  '去发现圈子',
-                  style: TextStyle(
-                    fontSize: AppTypography.md,
-                    fontWeight: AppTypography.semiBold,
-                    color: AppColors.primaryColor,
-                  ),
-                ),
+                style: ProfileIosActionStyle.tinted,
+                expand: false,
               ),
             ],
           ],

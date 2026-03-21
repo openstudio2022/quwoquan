@@ -21,6 +21,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_resonance_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
@@ -183,7 +184,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final top = renderObject.localToGlobal(Offset.zero).dy;
     final bottom = top + renderObject.size.height;
     final pinnedPrimaryInset = _primaryTabPinnedProgress(context) > 0.01
-        ? AppSpacing.tabNavigationHeight
+        ? _primaryTabBarHeight(context)
         : 0.0;
     final viewportTop = _toolbarExtent(context) + pinnedPrimaryInset;
     final viewportBottom =
@@ -281,8 +282,45 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return _baseBackgroundHeight(context);
   }
 
+  double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'Hg', style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.height;
+  }
+
+  double _compactToolbarHeight(BuildContext context) {
+    final titleHeight = _measureSingleLineTextHeight(
+      context,
+      const TextStyle(
+        fontSize: AppTypography.iosNavTitle,
+        fontWeight: AppTypography.semiBold,
+      ),
+    );
+    final adaptiveHeight = titleHeight + (AppSpacing.intraGroupSm * 2);
+    return adaptiveHeight > kToolbarHeight ? adaptiveHeight : kToolbarHeight;
+  }
+
+  double _primaryTabBarHeight(BuildContext context) {
+    final labelHeight = _measureSingleLineTextHeight(
+      context,
+      const TextStyle(
+        fontSize: AppTypography.iosSubheadline,
+        fontWeight: AppTypography.semiBold,
+      ),
+    );
+    final adaptiveHeight =
+        labelHeight + (AppSpacing.intraGroupSm * 2) + AppSpacing.intraGroupXs;
+    return adaptiveHeight > AppSpacing.tabNavigationHeight
+        ? adaptiveHeight
+        : AppSpacing.tabNavigationHeight;
+  }
+
   double _toolbarExtent(BuildContext context) {
-    return MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return MediaQuery.paddingOf(context).top + _compactToolbarHeight(context);
   }
 
   double _pinTransitionDistance() {
@@ -328,22 +366,11 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final notifier = ref.watch(profileNotifierProvider(widget.userId));
     final state = notifier.state;
     final userData = ref.watch(userDataProvider);
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-    final bgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final border = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.borderPrimary,
-    );
+    final bg = AppColors.iosPageBackground(context);
+    final bgSecondary = AppColors.iosGroupedSurfaceElevated(context);
+    final profileSurface = AppColors.iosSystemBackground(context);
+    final fg = AppColors.iosLabel(context);
+    final border = AppColors.iosSeparator(context);
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
     final avatarUrl =
@@ -421,7 +448,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                         context,
                         isDark: isDark,
                         bg: bg,
-                        border: border,
+                        surface: profileSurface,
                         avatarUrl: avatarUrl,
                         displayName: displayName,
                         bio: bio,
@@ -431,15 +458,14 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                     ),
                     SliverToBoxAdapter(
                       child: _buildPrimaryTabBarSurface(
-                        isDark: isDark,
-                        bg: bg,
+                        bg: profileSurface,
                         border: border,
                         pinned: false,
                       ),
                     ),
                     SliverToBoxAdapter(
                       child: DecoratedBox(
-                        decoration: BoxDecoration(color: bg),
+                        decoration: BoxDecoration(color: profileSurface),
                         child: Padding(
                           padding: EdgeInsets.only(bottom: bottomPadding),
                           child: ConstrainedBox(
@@ -462,9 +488,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
             ),
             _buildToolbarOverlay(
               context,
-              isDark: isDark,
               fg: fg,
-              bg: bg,
               border: border,
               displayName: displayName,
               avatarUrl: avatarUrl,
@@ -483,8 +507,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                     child: Opacity(
                       opacity: primaryPinnedProgress,
                       child: _buildPrimaryTabBarSurface(
-                        isDark: isDark,
-                        bg: bg,
+                        bg: profileSurface,
                         border: border,
                         pinned: true,
                       ),
@@ -516,88 +539,71 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     BuildContext context, {
     required bool isDark,
     required Color bg,
-    required Color border,
+    required Color surface,
     required String? avatarUrl,
     required String displayName,
     required String? bio,
     required ProfileState state,
     required ProfileNotifier notifier,
   }) {
-    final shadowColor = isDark
-        ? Colors.black.withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.08);
     return ColoredBox(
       key: _summarySectionKey,
       color: bg,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Container(
-          key: const ValueKey<String>('profile-shell-summary-card'),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(
-                AppSpacing.largeBorderRadius + AppSpacing.sm,
-              ),
-              bottom: Radius.circular(AppSpacing.largeBorderRadius),
+      child: Container(
+        key: const ValueKey<String>('profile-shell-summary-card'),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusTwentyEight),
+          ),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          0,
+          AppSpacing.containerMd,
+          AppSpacing.containerLg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ProfileHeader(
+              isDark: isDark,
+              avatarUrl: avatarUrl,
+              displayName: displayName,
+              bio: bio,
             ),
-            border: Border.all(color: border.withValues(alpha: 0.04)),
-            boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: AppSpacing.lg,
-                offset: Offset(0, AppSpacing.xs),
+            SizedBox(height: AppSpacing.md),
+            ProfileResonanceCard(
+              mode: widget.mode,
+              isDark: isDark,
+              resonanceCount: 128,
+              onTap: () => context.push(AppRoutePaths.profileResonance),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            ProfileStatsRow(
+              isDark: isDark,
+              profile: state.profile,
+              onStatTap: (type) => context.push(
+                '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
               ),
-            ],
-          ),
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            0,
-            AppSpacing.containerMd,
-            AppSpacing.containerMd,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ProfileHeader(
-                isDark: isDark,
-                avatarUrl: avatarUrl,
-                displayName: displayName,
-                bio: bio,
-              ),
-              SizedBox(height: AppSpacing.md),
-              ProfileResonanceCard(
-                mode: widget.mode,
-                isDark: isDark,
-                resonanceCount: 128,
-                onTap: () => context.push(AppRoutePaths.profileResonance),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              ProfileStatsRow(
-                isDark: isDark,
-                profile: state.profile,
-                onStatTap: (type) => context.push(
-                  '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
-                ),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              ProfileActionBar(
-                mode: widget.mode,
-                isDark: isDark,
-                isFollowing: state.isFollowing,
-                capability: state.capability,
-                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                onManagePersonas: () =>
-                    context.push(AppRoutePaths.profilePersonas),
-                onFollow: notifier.toggleFollow,
-                onMessage: () =>
-                    context.push(AppRoutePaths.chatDetail(id: widget.userId)),
-                onGreet: () => _showGreetDialog(context),
-                onVoiceCall: () => _startCall(context, 'voice'),
-                onVideoCall: () => _startCall(context, 'video'),
-              ),
-            ],
-          ),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            ProfileActionBar(
+              mode: widget.mode,
+              isDark: isDark,
+              isFollowing: state.isFollowing,
+              capability: state.capability,
+              onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+              onManagePersonas: () =>
+                  context.push(AppRoutePaths.profilePersonas),
+              onFollow: notifier.toggleFollow,
+              onMessage: () =>
+                  context.push(AppRoutePaths.chatDetail(id: widget.userId)),
+              onGreet: () => _showGreetDialog(context),
+              onVoiceCall: () => _startCall(context, 'voice'),
+              onVideoCall: () => _startCall(context, 'video'),
+            ),
+          ],
         ),
       ),
     );
@@ -640,9 +646,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 
   Widget _buildToolbarOverlay(
     BuildContext context, {
-    required bool isDark,
     required Color fg,
-    required Color bg,
     required Color border,
     required String displayName,
     required String? avatarUrl,
@@ -650,6 +654,19 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required double backgroundOpacity,
   }) {
     final topPadding = MediaQuery.paddingOf(context).top;
+    final sideSlotWidth = AppSpacing.minInteractiveSize;
+    final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
+    final compactForeground = resolvedOpacity > 0.12
+        ? fg
+        : CupertinoColors.white;
+    final toolbarChrome = Color.lerp(
+      Colors.transparent,
+      AppColors.iosSystemBackground(context),
+      resolvedOpacity,
+    )!;
+    final tintFill = resolvedOpacity > 0.14
+        ? AppColors.iosSecondaryFill(context)
+        : Colors.black.withValues(alpha: 0.24);
     return Positioned(
       top: 0,
       left: 0,
@@ -657,23 +674,34 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       child: Container(
         padding: EdgeInsets.only(top: topPadding),
         decoration: BoxDecoration(
-          color: bg.withValues(alpha: backgroundOpacity.clamp(0.0, 1.0)),
-          border: backgroundOpacity > 0.02
-              ? Border(bottom: BorderSide(color: border.withValues(alpha: 0.6)))
+          color: toolbarChrome,
+          border: resolvedOpacity > 0.02
+              ? Border(
+                  bottom: BorderSide(
+                    color: border.withValues(alpha: 0.18),
+                    width: AppSpacing.hairline,
+                  ),
+                )
               : null,
         ),
         child: SizedBox(
-          height: kToolbarHeight,
+          height: _compactToolbarHeight(context),
           child: Row(
             children: [
-              if (widget.mode == ProfileMode.other)
-                IconButton(
-                  icon: const Icon(CupertinoIcons.back),
-                  color: backgroundOpacity > 0.12 ? fg : Colors.white,
-                  onPressed: widget.onBack ?? () => context.pop(),
-                )
-              else
-                SizedBox(width: AppSpacing.minInteractiveSize),
+              SizedBox(
+                width: sideSlotWidth,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: widget.mode == ProfileMode.other
+                      ? ProfileIosIconButton(
+                          icon: CupertinoIcons.back,
+                          onPressed: widget.onBack ?? () => context.pop(),
+                          backgroundColor: tintFill,
+                          foregroundColor: compactForeground,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
               Expanded(
                 child: Opacity(
                   opacity: opacity,
@@ -682,28 +710,34 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                       'profile-shell-compact-identity',
                     ),
                     mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MainAxisSize.max,
                     children: [
                       CircleAvatar(
                         radius: AppSpacing.intraGroupLg,
+                        backgroundColor: tintFill,
                         backgroundImage:
                             avatarUrl != null && avatarUrl.isNotEmpty
                             ? NetworkImage(avatarUrl)
                             : null,
                         child: avatarUrl == null || avatarUrl.isEmpty
-                            ? Icon(Icons.person, size: AppSpacing.iconSmall)
+                            ? Icon(
+                                CupertinoIcons.person_crop_circle_fill,
+                                size: AppSpacing.iconMedium,
+                                color: compactForeground,
+                              )
                             : null,
                       ),
                       SizedBox(width: AppSpacing.sm),
-                      Flexible(
+                      Expanded(
                         child: Text(
                           displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: AppTypography.lg,
+                            fontSize: AppTypography.iosNavTitle,
                             fontWeight: AppTypography.semiBold,
-                            color: fg,
+                            color: compactForeground,
+                            letterSpacing: -0.24,
                           ),
                         ),
                       ),
@@ -711,18 +745,25 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                   ),
                 ),
               ),
-              if (widget.mode == ProfileMode.mine)
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  color: backgroundOpacity > 0.12 ? fg : Colors.white,
-                  onPressed: () => context.push(AppRoutePaths.settings),
-                )
-              else
-                IconButton(
-                  icon: const Icon(Icons.more_horiz),
-                  color: backgroundOpacity > 0.12 ? fg : Colors.white,
-                  onPressed: () => _showMoreOptions(context, isDark),
+              SizedBox(
+                width: sideSlotWidth,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: widget.mode == ProfileMode.mine
+                      ? ProfileIosIconButton(
+                          icon: CupertinoIcons.settings,
+                          onPressed: () => context.push(AppRoutePaths.settings),
+                          backgroundColor: tintFill,
+                          foregroundColor: compactForeground,
+                        )
+                      : ProfileIosIconButton(
+                          icon: CupertinoIcons.ellipsis,
+                          onPressed: () => _showMoreOptions(context),
+                          backgroundColor: tintFill,
+                          foregroundColor: compactForeground,
+                        ),
                 ),
+              ),
             ],
           ),
         ),
@@ -731,7 +772,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }
 
   Widget _buildPrimaryTabBarSurface({
-    required bool isDark,
     required Color bg,
     required Color border,
     required bool pinned,
@@ -750,29 +790,24 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           : const ValueKey<String>('profile-shell-primary-tabs-inline'),
       decoration: BoxDecoration(
         color: bg,
-        border: Border(
-          top: BorderSide(color: border.withValues(alpha: pinned ? 0.7 : 0.45)),
-          bottom: BorderSide(color: border.withValues(alpha: 0.7)),
-        ),
-        boxShadow: pinned
-            ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.06),
-                  blurRadius: AppSpacing.md,
-                  offset: Offset(0, AppSpacing.intraGroupXs / 2),
+        border: pinned
+            ? Border(
+                bottom: BorderSide(
+                  color: border.withValues(alpha: 0.16),
+                  width: AppSpacing.hairline,
                 ),
-              ]
+              )
             : null,
       ),
       child: SizedBox(
         key: pinned ? null : _primaryTabKey,
-        height: AppSpacing.tabNavigationHeight,
+        height: _primaryTabBarHeight(context),
         child: CenteredScrollableTabBar(
           tabs: tabs,
           activeTab: _activeTabId,
           onTabChange: _onPrimaryTabChange,
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
-          isDark: isDark,
+          iosProfileStyle: true,
           transparentBackground: true,
         ),
       ),
@@ -827,55 +862,27 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return _curveForName(raw).transform(value.clamp(0.0, 1.0));
   }
 
-  void _showMoreOptions(BuildContext context, bool isDark) {
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-
-    showModalBottomSheet<void>(
+  void _showMoreOptions(BuildContext context) {
+    showCupertinoModalPopup<void>(
       context: context,
-      backgroundColor: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.largeBorderRadius),
-        ),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: AppSpacing.sm),
-            Container(
-              width: AppSpacing.xl,
-              height: AppSpacing.intraGroupXs,
-              decoration: BoxDecoration(
-                color: fg.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.smallBorderRadius,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.block, color: fg),
-              title: Text('拉黑', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: Icon(Icons.flag_outlined, color: fg),
-              title: Text('举报', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: Icon(Icons.share_outlined, color: fg),
-              title: Text('分享', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
+      builder: (sheetContext) => CupertinoActionSheet(
+        actions: <Widget>[
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('拉黑'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('举报'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('分享'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: const Text('取消'),
         ),
       ),
     );

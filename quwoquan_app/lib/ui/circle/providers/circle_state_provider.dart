@@ -9,6 +9,15 @@ import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 /// 圈子内用户角色
 enum CircleRole { owner, admin, member, visitor }
 
+CircleRole _circleRoleFromRaw(dynamic value) {
+  return switch ((value ?? '').toString().trim().toLowerCase()) {
+    'owner' => CircleRole.owner,
+    'admin' => CircleRole.admin,
+    'member' => CircleRole.member,
+    _ => CircleRole.visitor,
+  };
+}
+
 class CircleState {
   const CircleState({
     required this.circleId,
@@ -92,6 +101,9 @@ class CircleStateNotifier extends ChangeNotifier {
       final stats = await repo.getCircleStats(_circleId);
       _state = _state.copyWith(
         circleData: CircleDto.fromMap(data),
+        role: _circleRoleFromRaw(data['role']),
+        joinStatus: (data['joinStatus'] ?? _state.joinStatus).toString(),
+        isFollowed: data['isFollowed'] as bool? ?? _state.isFollowed,
         stats: stats,
         isLoading: false,
       );
@@ -179,6 +191,33 @@ class CircleStateNotifier extends ChangeNotifier {
     } catch (_) {
       _state = _state.copyWith(isFollowed: wasFollowed);
       notifyListeners();
+    }
+  }
+
+  Future<bool> updateCircleDetails(Map<String, dynamic> data) async {
+    try {
+      final repo = _ref.read(circleRepositoryProvider);
+      final updated = await repo.updateCircle(_circleId, data);
+      final merged = {
+        ...?_state.circleData?.toMap(),
+        ...updated,
+      };
+      _state = _state.copyWith(
+        circleData: CircleDto.fromMap(merged),
+        role: _circleRoleFromRaw(updated['role'] ?? merged['role']),
+        joinStatus: (updated['joinStatus'] ?? merged['joinStatus'] ?? _state.joinStatus)
+            .toString(),
+        isFollowed: updated['isFollowed'] as bool? ??
+            merged['isFollowed'] as bool? ??
+            _state.isFollowed,
+        error: null,
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _state = _state.copyWith(error: e.toString());
+      notifyListeners();
+      return false;
     }
   }
 }

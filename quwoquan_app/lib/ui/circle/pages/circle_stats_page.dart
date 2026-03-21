@@ -153,6 +153,10 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     final isDark = ref.watch(isDarkProvider);
     final bg = AppColorsFunctional.getColor(
       isDark,
+      ColorType.backgroundSecondary,
+    );
+    final cardBg = AppColorsFunctional.getColor(
+      isDark,
       ColorType.backgroundPrimary,
     );
     final fg = AppColorsFunctional.getColor(
@@ -175,7 +179,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     return AppScaffold(
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
-        backgroundColor: bg,
+        backgroundColor: cardBg.withValues(alpha: 0.94),
+        border: Border(
+          bottom: BorderSide(
+            color: borderColor.withValues(alpha: 0.25),
+            width: AppSpacing.hairline,
+          ),
+        ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.back),
@@ -193,19 +203,48 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       child: Column(
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.largeBorderRadius),
-            child: CupertinoSearchTextField(
-              onChanged: (v) => setState(() => _searchQuery = v),
-              placeholder: CircleStatsPage._searchHint(_type),
-              placeholderStyle: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-              prefixIcon: Icon(CupertinoIcons.search, size: AppSpacing.iconSmall + AppSpacing.xs, color: fgSecondary),
-              backgroundColor: inputBg,
-              borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 10, // Approx vertical padding for search field
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+            ),
+            child: Container(
+              padding: EdgeInsets.all(AppSpacing.containerSm),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+                    blurRadius: AppSpacing.md,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              style: TextStyle(color: fg, fontSize: AppTypography.base),
+              child: CupertinoSearchTextField(
+                onChanged: (v) => setState(() => _searchQuery = v),
+                placeholder: CircleStatsPage._searchHint(_type),
+                placeholderStyle: TextStyle(
+                  color: fgSecondary,
+                  fontSize: AppTypography.base,
+                ),
+                prefixIcon: Icon(
+                  CupertinoIcons.search,
+                  size: AppSpacing.iconSmall + AppSpacing.xs,
+                  color: fgSecondary,
+                ),
+                backgroundColor: inputBg,
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.circularBorderRadius,
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                style: TextStyle(color: fg, fontSize: AppTypography.base),
+              ),
             ),
           ),
           Expanded(
@@ -235,11 +274,14 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         ),
       );
     }
-    return ListView.separated(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        0,
+        AppSpacing.containerMd,
+        AppSpacing.containerLg,
+      ),
       itemCount: list.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final u = list[i];
         final name = u['name'] as String? ?? '';
@@ -248,89 +290,98 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final fansCount = u['fansCount'] as String? ?? '0';
         final likesCount = u['likesCount'] as String? ?? '0';
         final isFollowed = u['isFollowed'] as bool? ?? false;
-        return CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () {},
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: AppSpacing.lg,
-                  backgroundImage: avatar.isNotEmpty
-                      ? NetworkImage(avatar)
-                      : null,
-                  onBackgroundImageError: (_, __) {},
-                  child: avatar.isEmpty
-                      ? Icon(CupertinoIcons.person, color: fgSecondary)
-                      : null,
-                ),
-                SizedBox(width: AppSpacing.largeBorderRadius),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.extraBold,
-                          color: fg,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '$worksCount 作品 · $fansCount 粉丝 · $likesCount 获赞',
-                        style: TextStyle(
-                          fontSize: AppTypography.xsPlus,
-                          fontWeight: AppTypography.bold,
-                          color: fgSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+        return Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _buildCard(
+            borderColor: borderColor,
+            backgroundColor: bg,
+            child: CupertinoButton(
+              padding: EdgeInsets.all(AppSpacing.containerSm),
+              onPressed: () {},
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: AppSpacing.lg,
+                    backgroundImage: avatar.isNotEmpty
+                        ? NetworkImage(avatar)
+                        : null,
+                    onBackgroundImageError: (_, __) {},
+                    child: avatar.isEmpty
+                        ? Icon(CupertinoIcons.person, color: fgSecondary)
+                        : null,
                   ),
-                ),
-                SizedBox(width: AppSpacing.largeBorderRadius),
-                CupertinoButton(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  color: isFollowed
-                      ? borderColor.withValues(alpha: 0.3)
-                      : AppColors.primaryColor.withValues(alpha: 0.12),
-                  minimumSize: Size(AppSpacing.largeButtonSize + AppSpacing.lg, AppSpacing.xl),
-                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-                  onPressed: () {
-                    setState(() {
-                      final idx = _users.indexWhere((e) => e['id'] == u['id']);
-                      if (idx >= 0) {
-                        final prev = _users[idx];
-                        final cur = prev['isFollowed'] as bool? ?? false;
-                        final updated = Map<String, dynamic>.from(prev);
-                        updated['isFollowed'] = !cur;
-                        _users[idx] = updated;
-                      }
-                    });
-                  },
-                  child: Text(
-                    isFollowed
-                        ? UITextConstants.following
-                        : UITextConstants.follow,
-                    style: TextStyle(
-                      fontSize: AppTypography.xsPlus,
-                      fontWeight: AppTypography.extraBold,
-                      color: isFollowed
-                          ? fgSecondary
-                          : AppColors.primaryColor,
+                  SizedBox(width: AppSpacing.largeBorderRadius),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.extraBold,
+                            color: fg,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '$worksCount 作品 · $fansCount 粉丝 · $likesCount 获赞',
+                          style: TextStyle(
+                            fontSize: AppTypography.xsPlus,
+                            fontWeight: AppTypography.bold,
+                            color: fgSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  SizedBox(width: AppSpacing.largeBorderRadius),
+                  CupertinoButton(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    color: isFollowed
+                        ? borderColor.withValues(alpha: 0.18)
+                        : AppColors.primaryColor.withValues(alpha: 0.12),
+                    minimumSize: Size(
+                      AppSpacing.largeButtonSize + AppSpacing.lg,
+                      AppSpacing.xl,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.circularBorderRadius,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        final idx = _users.indexWhere((e) => e['id'] == u['id']);
+                        if (idx >= 0) {
+                          final prev = _users[idx];
+                          final cur = prev['isFollowed'] as bool? ?? false;
+                          final updated = Map<String, dynamic>.from(prev);
+                          updated['isFollowed'] = !cur;
+                          _users[idx] = updated;
+                        }
+                      });
+                    },
+                    child: Text(
+                      isFollowed
+                          ? UITextConstants.following
+                          : UITextConstants.follow,
+                      style: TextStyle(
+                        fontSize: AppTypography.xsPlus,
+                        fontWeight: AppTypography.extraBold,
+                        color: isFollowed
+                            ? fgSecondary
+                            : AppColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -348,64 +399,77 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         ),
       );
     }
-    return ListView.separated(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        0,
+        AppSpacing.containerMd,
+        AppSpacing.containerLg,
+      ),
       itemCount: list.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final g = list[i];
         final name = g['name'] as String? ?? '';
         final count = g['memberCount'] as String? ?? '0';
-        return CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () {},
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
-              children: [
-                Container(
-                  width: AppSpacing.largeButtonSize,
-                  height: AppSpacing.largeButtonSize,
-                  decoration: BoxDecoration(
-                    color: borderColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                  ),
-                  child: Icon(CupertinoIcons.group, color: fgSecondary, size: AppSpacing.iconMedium + AppSpacing.xs),
-                ),
-                SizedBox(width: AppSpacing.largeBorderRadius),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.extraBold,
-                          color: fg,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+        return Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _buildCard(
+            borderColor: borderColor,
+            backgroundColor: Colors.transparent,
+            child: CupertinoButton(
+              padding: EdgeInsets.all(AppSpacing.containerSm),
+              onPressed: () {},
+              child: Row(
+                children: [
+                  Container(
+                    width: AppSpacing.largeButtonSize,
+                    height: AppSpacing.largeButtonSize,
+                    decoration: BoxDecoration(
+                      color: borderColor.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.largeBorderRadius,
                       ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '$count 人',
-                        style: TextStyle(
-                          fontSize: AppTypography.xsPlus,
-                          fontWeight: AppTypography.bold,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
+                    ),
+                    child: Icon(
+                      CupertinoIcons.group,
+                      color: fgSecondary,
+                      size: AppSpacing.iconMedium + AppSpacing.xs,
+                    ),
                   ),
-                ),
-                Icon(
-                  CupertinoIcons.chevron_forward,
-                  color: fgSecondary,
-                  size: AppSpacing.iconMedium,
-                ),
-              ],
+                  SizedBox(width: AppSpacing.largeBorderRadius),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.extraBold,
+                            color: fg,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '$count 人',
+                          style: TextStyle(
+                            fontSize: AppTypography.xsPlus,
+                            fontWeight: AppTypography.bold,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    color: fgSecondary,
+                    size: AppSpacing.iconMedium,
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -428,11 +492,14 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         ),
       );
     }
-    return ListView.separated(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        0,
+        AppSpacing.containerMd,
+        AppSpacing.containerLg,
+      ),
       itemCount: list.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final item = list[i];
         final userName = item['userName'] as String? ?? '';
@@ -440,90 +507,121 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final content = item['content'] as String? ?? '';
         final targetTitle = item['targetTitle'] as String? ?? '';
         final time = item['time'] as String? ?? '';
-        return CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () {},
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: AppSpacing.lg,
-                  backgroundImage: userAvatar.isNotEmpty
-                      ? NetworkImage(userAvatar)
-                      : null,
-                  onBackgroundImageError: (_, __) {},
-                  child: userAvatar.isEmpty
-                      ? Icon(CupertinoIcons.person, color: fgSecondary)
-                      : null,
-                ),
-                SizedBox(width: AppSpacing.largeBorderRadius),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            userName,
-                            style: TextStyle(
-                              fontSize: AppTypography.lg,
-                              fontWeight: AppTypography.extraBold,
-                              color: fg,
+        return Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _buildCard(
+            borderColor: borderColor,
+            backgroundColor: bg,
+            child: CupertinoButton(
+              padding: EdgeInsets.all(AppSpacing.containerSm),
+              onPressed: () {},
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: AppSpacing.lg,
+                    backgroundImage: userAvatar.isNotEmpty
+                        ? NetworkImage(userAvatar)
+                        : null,
+                    onBackgroundImageError: (_, __) {},
+                    child: userAvatar.isEmpty
+                        ? Icon(CupertinoIcons.person, color: fgSecondary)
+                        : null,
+                  ),
+                  SizedBox(width: AppSpacing.largeBorderRadius),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                userName,
+                                style: TextStyle(
+                                  fontSize: AppTypography.lg,
+                                  fontWeight: AppTypography.extraBold,
+                                  color: fg,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: AppSpacing.sm),
+                            Text(
+                              time,
+                              style: TextStyle(
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.bold,
+                                color: fgSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          content,
+                          style: TextStyle(
+                            fontSize: AppTypography.smPlus,
+                            fontWeight: AppTypography.semiBold,
+                            color: fgSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: AppSpacing.sm),
+                        Container(
+                          padding: EdgeInsets.all(AppSpacing.largeBorderRadius),
+                          decoration: BoxDecoration(
+                            color: bg.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.largeBorderRadius,
+                            ),
+                            border: Border.all(
+                              color: borderColor.withValues(alpha: 0.22),
                             ),
                           ),
-                          Text(
-                            time,
+                          child: Text(
+                            targetTitle,
                             style: TextStyle(
-                              fontSize: AppTypography.xs,
+                              fontSize: AppTypography.xsPlus,
                               fontWeight: AppTypography.bold,
                               color: fgSecondary,
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        content,
-                        style: TextStyle(
-                          fontSize: AppTypography.smPlus,
-                          fontWeight: AppTypography.semiBold,
-                          color: fgSecondary,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: AppSpacing.sm),
-                      Container(
-                        padding: EdgeInsets.all(AppSpacing.largeBorderRadius),
-                        decoration: BoxDecoration(
-                          color: bg,
-                          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                          border: Border.all(
-                            color: borderColor.withValues(alpha: 0.3),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        child: Text(
-                          targetTitle,
-                          style: TextStyle(
-                            fontSize: AppTypography.xsPlus,
-                            fontWeight: AppTypography.bold,
-                            color: fgSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCard({
+    required Color borderColor,
+    required Color backgroundColor,
+    required Widget child,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: AppSpacing.md,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

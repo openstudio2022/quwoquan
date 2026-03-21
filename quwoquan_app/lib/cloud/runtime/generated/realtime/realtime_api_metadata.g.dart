@@ -31,6 +31,13 @@ class RealtimeApiMetadata {
     'WebSocketUpgrade': 'GET',
   };
 
+  static const String channelWebhookOperation = 'ChannelWebhook';
+  static const String getRealtimeConfigOperation = 'GetRealtimeConfig';
+  static const String healthCheckOperation = 'HealthCheck';
+  static const String longPollOperation = 'LongPoll';
+  static const String metricsOperation = 'Metrics';
+  static const String webSocketUpgradeOperation = 'WebSocketUpgrade';
+
   static const String channelWebhookPathTemplate = '/v1/channel/{channelType}/webhook';
   static String channelWebhookPath({required String channelType}) {
     return _fillPath(channelWebhookPathTemplate, <String, String>{

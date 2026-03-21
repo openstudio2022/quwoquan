@@ -57,11 +57,8 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final listItems = find.byType(InkWell);
-      if (listItems.evaluate().isNotEmpty) {
-        await tester.tap(listItems.first);
-        await tester.pumpAndSettle();
-      }
+      await tester.tap(find.text('产品共创群').first);
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
 
@@ -86,13 +83,17 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      expect(find.text('输入密码以查看对话'), findsOneWidget);
+      expect(find.text(UITextConstants.secretPasswordPrompt), findsOneWidget);
 
-      await tester.fling(find.text('输入密码以查看对话'), const Offset(-420, 0), 1200);
+      await tester.fling(
+        find.text(UITextConstants.secretPasswordPrompt),
+        const Offset(-420, 0),
+        1200,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text(UITextConstants.contactsTabFunGroup), findsOneWidget);
-      expect(find.text('输入密码以查看对话'), findsNothing);
+      expect(find.text(UITextConstants.secretPasswordPrompt), findsNothing);
     });
   });
 

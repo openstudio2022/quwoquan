@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
@@ -19,6 +20,7 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
@@ -26,7 +28,7 @@ import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
-import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
+import 'package:quwoquan_app/ui/user/pages/sub_account_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
@@ -39,21 +41,6 @@ import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
-
-String _routeFromMainTabIndex(int index) {
-  switch (index) {
-    case 0:
-      return AppRoutePaths.home;
-    case 1:
-      return AppRoutePaths.assistant;
-    case 2:
-      return AppRoutePaths.chat;
-    case 3:
-      return AppRoutePaths.profile;
-    default:
-      return AppRoutePaths.chat;
-  }
-}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -76,7 +63,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.circles,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: const SizedBox.shrink(), // CirclesPage 在 MainAppShell 中渲染
+              child: const SizedBox.shrink(), // 首页中的圈子 Tab 在 MainAppShell 中渲染
             ),
           ),
           GoRoute(
@@ -340,7 +327,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutePaths.profilePersonas,
         builder: (context, state) {
-          return const PersonaManagementPage();
+          return const SubAccountManagementPage();
         },
       ),
       GoRoute(
@@ -371,22 +358,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? state.extra as AssistantOpenContext
               : null;
           final isAssistant = id == AppConceptConstants.assistantConversationId;
+          void handleBack() {
+            if (context.canPop()) {
+              context.pop();
+            } else if (isAssistant) {
+              final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
+              ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+              final route = lastTab?.routePath ?? AppRoutePaths.chat;
+              context.go(route);
+            } else {
+              context.go(AppRoutePaths.chat);
+            }
+          }
+
+          if (isAssistant) {
+            return AssistantConversationPage(
+              onBack: handleBack,
+              assistantOpenContext: assistantOpenContext,
+            );
+          }
           return ChatDetailPage(
             conversationId: id,
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else if (isAssistant) {
-                final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
-                ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-                final route = lastTab != null
-                    ? _routeFromMainTabIndex(lastTab)
-                    : '/chat';
-                context.go(route);
-              } else {
-                context.go(AppRoutePaths.chat);
-              }
-            },
+            onBack: handleBack,
             assistantOpenContext: assistantOpenContext,
           );
         },
@@ -415,21 +408,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
-            path: 'manage',
+            path: AppRoutePaths.chatManageSegment,
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               return GroupManagePage(conversationId: id);
             },
           ),
           GoRoute(
-            path: 'transfer-ownership',
+            path: AppRoutePaths.chatTransferOwnershipSegment,
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               return TransferOwnershipPage(conversationId: id);
             },
           ),
           GoRoute(
-            path: 'admins',
+            path: AppRoutePaths.chatAdminsSegment,
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               return GroupAdminsPage(conversationId: id);

@@ -1,0 +1,77 @@
+version: 1
+node: user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260321-001-persona-follow-graph-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze profile subject and visibility metadata
+    goal: 收口 `ProfileSubjectView`、`ProfileInheritanceStateView`、visibility 枚举与 retired attribution contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - "`ProfileSubjectView / InheritanceStateView` 与 visibility 枚举冻结"
+      - 公开读取与 retired persona 历史归因语义可由 metadata 表达
+      - `username` 路由语义与 `profileSubjectId` 内部主键语义分离
+    status: planned
+
+  - id: P2
+    title: establish codegen and public identity compatibility baseline
+    goal: 建立 App / service / cloud client 对 `ProfileSubject` 生成物的稳定消费，并保留旧 persona DTO 兼容读取
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - "`verify-metadata / codegen / codegen-app` 通过"
+      - 主页、内容、聊天存在消费 `ProfileSubject` 的统一接入口
+      - 旧 `PersonaDto` 只作为兼容桥接，不再直接用于公开首屏
+    status: planned
+
+  - id: P3
+    title: implement mutation, sync scope, and retired attribution
+    goal: 落地 owner 基线、persona override、apply scope 与历史快照稳定渲染
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - `ProfileSubjectMutation` 显式支持 apply scope、sync targets 与 fields mask
+      - 新分身默认继承 owner 基线，persona 只保存 override 字段
+      - retired persona 历史对象继续稳定渲染，不重绑到 owner
+    status: planned
+
+  - id: P4
+    title: validate consumers, telemetry, and rollback
+    goal: 验证主页与内容域消费者、visibility telemetry 与回滚路径，确保可安全灰度
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+      - A3
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 主页、内容、聊天只消费 user 域冻结的公开身份 contract
+      - visibility / retired attribution 指标可观测
+      - 开关关闭后可退回旧公开读取路径而不破坏 `profileSubjectId` 与历史快照
+    status: planned

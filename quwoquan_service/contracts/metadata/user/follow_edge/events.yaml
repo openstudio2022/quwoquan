@@ -3,7 +3,7 @@ entity: FollowEdge
 
 events:
   - name: UserFollowed
-    description: 用户关注
+    description: 公开主体（profileSubject）关注建立
     producer: user-service
     consumers: [recommendation-engine, notification-service]
     channel: event_store
@@ -20,7 +20,7 @@ events:
         on: followerId
 
   - name: UserUnfollowed
-    description: 用户取关
+    description: 公开主体（profileSubject）取关
     producer: user-service
     consumers: [recommendation-engine]
     channel: event_store

@@ -1,8 +1,41 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-enum SecondaryCapsuleTabBarVariant { defaultSurface, inlineMuted }
+enum SecondaryCapsuleTabBarVariant { defaultSurface, inlineMuted, iosProfile }
+
+double _secondaryCapsuleTabBarHeight(
+  BuildContext context,
+  SecondaryCapsuleTabBarVariant variant,
+  double fontSize,
+) {
+  final resolvedFontSize = variant == SecondaryCapsuleTabBarVariant.iosProfile
+      ? AppTypography.iosFootnote
+      : fontSize;
+  final verticalPadding = switch (variant) {
+    SecondaryCapsuleTabBarVariant.inlineMuted => AppSpacing.intraGroupXs,
+    SecondaryCapsuleTabBarVariant.iosProfile => AppSpacing.intraGroupXs,
+    SecondaryCapsuleTabBarVariant.defaultSurface => AppSpacing.intraGroupSm,
+  };
+  final painter = TextPainter(
+    text: TextSpan(
+      text: 'Hg',
+      style: TextStyle(
+        fontSize: resolvedFontSize,
+        fontWeight: AppTypography.semiBold,
+      ),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final measuredHeight =
+      painter.height + (verticalPadding * 2) + AppSpacing.intraGroupSm * 2;
+  return measuredHeight > AppSpacing.subTabNavigationHeight
+      ? measuredHeight
+      : AppSpacing.subTabNavigationHeight;
+}
 
 /// 统一二级胶囊 Tab：趣信与圈子首页共用同一套间距、圆角、背景与选中语义。
 class SecondaryCapsuleTabBar extends StatelessWidget {
@@ -43,7 +76,7 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgPrimary = AppColorsFunctional.getColor(
       isDark,
-      ColorType.backgroundPrimary,
+      ColorType.pageBackground,
     );
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
@@ -53,34 +86,59 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
         backgroundColor ??
         switch (variant) {
           SecondaryCapsuleTabBarVariant.inlineMuted => Colors.transparent,
+          SecondaryCapsuleTabBarVariant.iosProfile => Colors.transparent,
           SecondaryCapsuleTabBarVariant.defaultSurface =>
             isDark
                 ? Colors.white.withValues(alpha: 0.04)
                 : Colors.black.withValues(alpha: 0.03),
         };
+    final outerBackground = switch (variant) {
+      SecondaryCapsuleTabBarVariant.iosProfile => Colors.transparent,
+      _ => bgPrimary,
+    };
     final contentHorizontal =
         horizontalPadding ?? AppSpacing.feedContentHorizontal(context);
-    final verticalPadding = variant == SecondaryCapsuleTabBarVariant.inlineMuted
-        ? AppSpacing.intraGroupXs
-        : AppSpacing.intraGroupSm;
-    final selectedLightFill =
-        variant == SecondaryCapsuleTabBarVariant.inlineMuted ? 0.08 : 0.12;
-    final selectedDarkFill =
-        variant == SecondaryCapsuleTabBarVariant.inlineMuted ? 0.1 : 0.15;
-    final selectedLightBorder =
-        variant == SecondaryCapsuleTabBarVariant.inlineMuted ? 0.18 : 0.25;
-    final selectedDarkBorder =
-        variant == SecondaryCapsuleTabBarVariant.inlineMuted ? 0.16 : 0.2;
-    final unselectedBorder =
-        variant == SecondaryCapsuleTabBarVariant.inlineMuted ? 0.12 : 0.2;
-    final dividerAlpha = variant == SecondaryCapsuleTabBarVariant.inlineMuted
-        ? 0.08
-        : 0.12;
+    final verticalPadding = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => AppSpacing.intraGroupXs,
+      SecondaryCapsuleTabBarVariant.iosProfile => AppSpacing.intraGroupXs,
+      SecondaryCapsuleTabBarVariant.defaultSurface => AppSpacing.intraGroupSm,
+    };
+    final barHeight = _secondaryCapsuleTabBarHeight(context, variant, fontSize);
+    final selectedLightFill = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.08,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.12,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.12,
+    };
+    final selectedDarkFill = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.1,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.24,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.15,
+    };
+    final selectedLightBorder = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.18,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.0,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.25,
+    };
+    final selectedDarkBorder = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.16,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.0,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.2,
+    };
+    final unselectedBorder = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.12,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.0,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.2,
+    };
+    final dividerAlpha = switch (variant) {
+      SecondaryCapsuleTabBarVariant.inlineMuted => 0.08,
+      SecondaryCapsuleTabBarVariant.iosProfile => 0.0,
+      SecondaryCapsuleTabBarVariant.defaultSurface => 0.12,
+    };
 
     return SizedBox(
-      height: AppSpacing.subTabNavigationHeight,
+      height: barHeight,
       child: Container(
-        color: bgPrimary,
+        color: outerBackground,
         child: Container(
           decoration: BoxDecoration(color: barColor, border: border),
           child: Row(
@@ -122,7 +180,12 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                           AppSpacing.minInteractiveSize,
                           AppSpacing.minInteractiveSize,
                         ),
-                        onPressed: () => onTap(index),
+                        onPressed: () {
+                          if (index != activeIndex) {
+                            HapticFeedback.selectionClick();
+                          }
+                          onTap(index);
+                        },
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -136,7 +199,11 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: selected
-                                    ? (isDark
+                                    ? (variant ==
+                                              SecondaryCapsuleTabBarVariant
+                                                  .iosProfile
+                                          ? AppColors.iosTintedFill(context)
+                                          : isDark
                                           ? Colors.white.withValues(
                                               alpha: selectedDarkFill,
                                             )
@@ -149,7 +216,17 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                 ),
                                 border: Border.all(
                                   color: selected
-                                      ? (isDark
+                                      ? (variant ==
+                                                SecondaryCapsuleTabBarVariant
+                                                    .iosProfile
+                                            ? AppColors.iosAccent(
+                                                context,
+                                              ).withValues(
+                                                alpha: isDark
+                                                    ? selectedDarkBorder
+                                                    : selectedLightBorder,
+                                              )
+                                            : isDark
                                             ? Colors.white.withValues(
                                                 alpha: selectedDarkBorder,
                                               )
@@ -165,15 +242,30 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                               child: Text(
                                 tabs[index],
                                 style: TextStyle(
-                                  fontSize: fontSize,
+                                  fontSize:
+                                      variant ==
+                                          SecondaryCapsuleTabBarVariant
+                                              .iosProfile
+                                      ? AppTypography.iosFootnote
+                                      : fontSize,
                                   fontWeight: selected
                                       ? AppTypography.semiBold
                                       : AppTypography.medium,
                                   color: selected
-                                      ? (isDark
+                                      ? (variant ==
+                                                SecondaryCapsuleTabBarVariant
+                                                    .iosProfile
+                                            ? AppColors.iosAccent(context)
+                                            : isDark
                                             ? Colors.white
                                             : AppColors.primaryColor)
                                       : fgSecondary,
+                                  letterSpacing:
+                                      variant ==
+                                          SecondaryCapsuleTabBarVariant
+                                              .iosProfile
+                                      ? -0.12
+                                      : null,
                                 ),
                               ),
                             ),

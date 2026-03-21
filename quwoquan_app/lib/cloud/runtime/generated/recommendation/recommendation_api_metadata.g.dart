@@ -21,6 +21,9 @@ class RecommendationApiMetadata {
     'Score': 'POST',
   };
 
+  static const String healthOperation = 'Health';
+  static const String scoreOperation = 'Score';
+
   static const String healthPath = '/health';
   static const String scorePath = '/v1/score';
 }

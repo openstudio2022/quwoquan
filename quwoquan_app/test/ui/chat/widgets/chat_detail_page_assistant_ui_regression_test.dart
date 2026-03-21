@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 
 Widget _bubbleHarness(
   Map<String, dynamic> message, {
   void Function(Map<String, dynamic>)? onReferenceTap,
+  AssistantJourneyViewModel? journeyViewModel,
+  bool answerGateOpen = true,
+  bool isAssistantRunning = false,
+  String? runningStatusLabel,
 }) {
   return ScreenUtilInit(
     designSize: const Size(390, 844),
@@ -18,9 +24,9 @@ Widget _bubbleHarness(
       locale: const Locale('zh'),
       home: Scaffold(
         body: SingleChildScrollView(
-          child: ChatMessageBubble(
+          child: AssistantMessageBubble(
             message: message,
-            isRight: false,
+            isRight: message['isSelf'] == true,
             bubbleColor: Colors.grey.shade200,
             textColor: Colors.black,
             isSelectionMode: false,
@@ -28,6 +34,11 @@ Widget _bubbleHarness(
             onLongPressStart: (_) {},
             hideAvatarAndName: true,
             useFullWidth: true,
+            renderSelfTextWithoutBubble: true,
+            journeyViewModel: journeyViewModel,
+            answerGateOpen: answerGateOpen,
+            isAssistantRunning: isAssistantRunning,
+            runningStatusLabel: runningStatusLabel,
             onReferenceTap: onReferenceTap,
           ),
         ),
@@ -237,9 +248,7 @@ void main() {
     expect(tappedRef!['url'], equals('https://weather.cma.cn/shenzhen'));
   });
 
-  testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (
-    tester,
-  ) async {
+  testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (tester) async {
     final message = _assistantMessage(
       id: 'assistant_msg_process_reason_short',
       content: '最终回答',
@@ -262,8 +271,7 @@ void main() {
                 'status': 'completed',
                 'order': 0,
                 'headline': '先确认问题落点，后面的资料才更容易收敛。',
-                'detail':
-                    '{"contractId":"assistant_turn","queryTasks":[1]}',
+                'detail': '{"contractId":"assistant_turn","queryTasks":[1]}',
               },
             ],
             summary: '先确认问题落点，后面的资料才更容易收敛。',
@@ -391,7 +399,79 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(ChatMessageBubble), findsOneWidget);
+    expect(find.byType(AssistantMessageBubble), findsOneWidget);
     expect(find.textContaining('```card:compare'), findsNothing);
+  });
+
+  testWidgets('assistant 结构碎片前缀会在最终渲染前被清掉', (tester) async {
+    const dirtyMarkdown =
+        '[{"id":"route_recommendation","query":"九寨沟 4天 路线","dimension":"route"}]'
+        '## 4天路线建议\n\n- 只有 4 天时更推荐西线。';
+    final message = _assistantMessage(
+      id: 'assistant_msg_dirty_prefix',
+      content: dirtyMarkdown,
+      extra: {
+        'displayMarkdown': dirtyMarkdown,
+        'displayPlainText':
+            '[{"id":"route_recommendation","query":"九寨沟 4天 路线","dimension":"route"}]'
+            '只有 4 天时更推荐西线。',
+      },
+    );
+
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump();
+
+    expect(
+      find.textContaining('4天路线建议', findRichText: true),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('route_recommendation', findRichText: true), findsNothing);
+  });
+
+  testWidgets('assistant 流式答案出现后仍保留用户可理解的阶段提示', (tester) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_streaming',
+      content: '',
+      extra: {'streamFinalAnswer': '九寨沟方向备选方案已经整理出来了。'},
+    );
+
+    await tester.pumpWidget(
+      _bubbleHarness(
+        message,
+        journeyViewModel: buildAssistantJourneyViewModel(
+          journey: const AssistantJourney(
+            stages: <AssistantJourneyStage>[
+              AssistantJourneyStage(
+                stageId: JourneyStageId.answer,
+                status: JourneyStageStatus.active,
+                order: 3,
+                summary: '我在组织最终回答',
+              ),
+            ],
+            entries: <AssistantJourneyEntry>[
+              AssistantJourneyEntry(
+                entryId: 'journey.answer.streaming',
+                stageId: JourneyStageId.answer,
+                kind: JourneyEntryKind.narrative,
+                status: JourneyStageStatus.active,
+                order: 0,
+                headline: '我在组织最终回答',
+              ),
+            ],
+          ),
+          isRunning: true,
+        ),
+        answerGateOpen: true,
+        isAssistantRunning: true,
+        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('九寨沟方向备选方案'), findsAtLeastNWidgets(1));
+    expect(
+      find.text(UITextConstants.assistantProcessStageAnswer),
+      findsAtLeastNWidgets(1),
+    );
   });
 }

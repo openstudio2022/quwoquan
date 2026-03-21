@@ -10,11 +10,20 @@ import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 
-Widget _wrap(Widget child) => ProviderScope(
+Widget _wrap(Widget child, {double textScaleFactor = 1.0}) => ProviderScope(
   overrides: [
     circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
   ],
   child: MaterialApp.router(
+    builder: (context, childWidget) {
+      final mediaQuery = MediaQuery.of(context);
+      return MediaQuery(
+        data: mediaQuery.copyWith(
+          textScaler: TextScaler.linear(textScaleFactor),
+        ),
+        child: childWidget ?? const SizedBox.shrink(),
+      );
+    },
     routerConfig: GoRouter(
       initialLocation: '/',
       routes: [
@@ -47,9 +56,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SectionCreations), findsOneWidget);
       expect(find.text('点滴'), findsOneWidget);
-      expect(find.text('作品'), findsOneWidget);
+      expect(find.text('作品'), findsWidgets);
 
-      await tester.tap(find.text('作品'));
+      await tester.tap(find.text('作品').first);
       await tester.pumpAndSettle();
       expect(find.text('笔记'), findsOneWidget);
     });
@@ -90,6 +99,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('赞 '), findsWidgets);
+    });
+
+    testWidgets('窄屏大字号下网格卡片不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 690);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final capturedErrors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        capturedErrors.add(details);
+      };
+      try {
+        await tester.pumpWidget(
+          _wrap(
+            const SizedBox(
+              height: 800,
+              child: SectionCreations(
+                circleId: 'circle_photo_01',
+                isDark: false,
+                role: CircleRole.owner,
+              ),
+            ),
+            textScaleFactor: 1.4,
+          ),
+        );
+        await tester.pumpAndSettle();
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+
+      final overflowErrors = capturedErrors
+          .map((details) => details.exceptionAsString())
+          .where((message) => message.contains('A RenderFlex overflowed'))
+          .toList(growable: false);
+
+      expect(overflowErrors, isEmpty);
     });
   });
 

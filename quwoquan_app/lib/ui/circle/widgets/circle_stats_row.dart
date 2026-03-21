@@ -16,6 +16,14 @@ class CircleStatsRow extends StatelessWidget {
 
   String _formatCount(dynamic count) {
     if (count == null) return '0';
+    if (count is String) {
+      final raw = count.trim();
+      final parsed = int.tryParse(raw);
+      if (parsed == null) {
+        return raw.isEmpty ? '0' : raw;
+      }
+      return formatCompactActionCount(parsed);
+    }
     final n = count is int ? count : int.tryParse(count.toString()) ?? 0;
     return formatCompactActionCount(n);
   }
@@ -26,41 +34,67 @@ class CircleStatsRow extends StatelessWidget {
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
 
     final items = [
-      _StatItem(value: _formatCount(stats['members']), label: UITextConstants.circleMembers, type: 'members'),
-      _StatItem(value: _formatCount(stats['groups']), label: UITextConstants.circleGroups, type: 'groups'),
-      _StatItem(value: _formatCount(stats['fans']), label: UITextConstants.circleFans, type: 'fans'),
-      _StatItem(value: _formatCount(stats['likes']), label: UITextConstants.circleLikes, type: 'likes'),
+      _StatItem(
+        value: _formatCount(stats['members'] ?? stats['totalMembers']),
+        label: UITextConstants.circleMembers,
+        type: 'members',
+      ),
+      _StatItem(
+        value: _formatCount(stats['posts'] ?? stats['totalPosts']),
+        label: UITextConstants.circlePosts,
+        type: 'posts',
+      ),
+      _StatItem(
+        value: _formatCount(stats['weeklyActive'] ?? stats['active']),
+        label: UITextConstants.circleWeeklyActive,
+        type: 'weeklyActive',
+      ),
+      _StatItem(
+        value: _formatCount(stats['likes'] ?? stats['totalLikes']),
+        label: UITextConstants.circleLikes,
+        type: 'likes',
+      ),
     ];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: items.map((item) {
-        return GestureDetector(
-          onTap: onStatTap != null ? () => onStatTap!(item.type) : null,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.value,
-                  style: TextStyle(
-                    fontSize: AppTypography.xl,
-                    fontWeight: AppTypography.bold,
-                    color: fg,
+        return Expanded(
+          child: GestureDetector(
+            onTap: onStatTap != null ? () => onStatTap!(item.type) : null,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupXs / 2),
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.sm,
+                horizontal: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: fgSecondary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.value,
+                    style: TextStyle(
+                      fontSize: AppTypography.lg,
+                      fontWeight: AppTypography.bold,
+                      color: fg,
+                    ),
                   ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    fontWeight: AppTypography.medium,
-                    color: fgSecondary,
+                  SizedBox(height: AppSpacing.intraGroupXs / 2),
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      fontSize: AppTypography.xs,
+                      fontWeight: AppTypography.medium,
+                      color: fgSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

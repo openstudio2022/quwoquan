@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 编辑资料页（1:1 对应 EditProfilePage.tsx）
 /// 路由：/profile/edit
@@ -65,44 +67,78 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         final currentUserId = ref.read(currentUserIdProvider);
         ref.read(userDataProvider.notifier).loadUser(currentUserId);
         setState(() => _isSaving = false);
+        AppToast.show(context, '资料已更新');
         context.pop();
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
+        AppToast.show(context, '保存失败，请稍后再试');
       }
     }
   }
 
+  Future<void> _showMediaActionSheet(String target) async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text('更换$target'),
+        actions: <Widget>[
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              AppToast.show(context, '$target拍摄能力待接入');
+            },
+            child: const Text('拍照'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              AppToast.show(context, '$target相册选择待接入');
+            },
+            child: const Text('从照片中选择'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: const Text('取消'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
-    final fillColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundTertiary,
-    );
+    final userData = ref.watch(userDataProvider);
+    final bg = AppColors.iosPageBackground(context);
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final accent = AppColors.iosAccent(context);
 
     return AppScaffold(
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
-        backgroundColor: bg,
+        backgroundColor: AppColors.iosSystemBackground(
+          context,
+        ).withValues(alpha: 0.94),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.iosSeparator(context).withValues(alpha: 0.28),
+            width: AppSpacing.hairline,
+          ),
+        ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
-          child: const Icon(CupertinoIcons.xmark),
+          child: Icon(CupertinoIcons.xmark, color: fg),
         ),
         middle: Text(
           UITextConstants.editProfile,
           style: TextStyle(
             color: fg,
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.bold,
+            fontSize: AppTypography.iosNavTitle,
+            fontWeight: AppTypography.semiBold,
+            letterSpacing: -0.24,
           ),
         ),
         trailing: CupertinoButton(
@@ -111,149 +147,231 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           child: _isSaving
               ? const CupertinoActivityIndicator()
               : Text(
-                  UITextConstants.confirm,
+                  '保存',
                   style: TextStyle(
-                    color: AppColors.primaryColor,
+                    color: accent,
+                    fontSize: AppTypography.iosButton,
                     fontWeight: AppTypography.semiBold,
                   ),
                 ),
         ),
       ),
       body: ListView(
-        padding: EdgeInsets.all(
-          AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+        padding: EdgeInsets.fromLTRB(
+          0,
+          AppSpacing.containerSm,
+          0,
+          MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg,
         ),
-        children: [
-          Center(
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundColor: borderColor.withValues(alpha: 0.3),
-                  backgroundImage: const NetworkImage(
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-                  ),
-                  onBackgroundImageError: (_, __) {},
+        children: <Widget>[
+          _buildProfileMediaCard(userData),
+          ProfileIosGroupedSection(
+            header: '基本信息',
+            children: <Widget>[
+              _EditProfileFieldCell(
+                label: '昵称',
+                child: _buildTextField(
+                  controller: _displayNameController,
+                  placeholder: '显示名称',
                 ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () {},
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: AppColors.primaryColor,
-                      child: const Icon(
-                        CupertinoIcons.camera_fill,
-                        size: AppSpacing.eighteen,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: AppSpacing.lg),
-          _buildSectionLabel('昵称', fgSecondary),
-          SizedBox(height: AppSpacing.xs),
-          CupertinoTextField(
-            controller: _displayNameController,
-            style: TextStyle(color: fg, fontSize: AppTypography.base),
-            placeholder: '显示名称',
-            placeholderStyle: TextStyle(color: fgSecondary),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: fillColor,
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              border: Border.all(color: fillColor),
-            ),
-          ),
-          SizedBox(height: 16),
-          _buildSectionLabel('用户名', fgSecondary),
-          SizedBox(height: AppSpacing.xs),
-          CupertinoTextField(
-            controller: _usernameController,
-            style: TextStyle(color: fg, fontSize: AppTypography.base),
-            placeholder: '@username',
-            placeholderStyle: TextStyle(color: fgSecondary),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: fillColor,
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              border: Border.all(color: fillColor),
-            ),
-          ),
-          SizedBox(height: 16),
-          Row(
-            children: [
-              _buildSectionLabel('简介', fgSecondary),
-              const Spacer(),
-              CupertinoButton(
-                padding: EdgeInsets.all(AppSpacing.xs),
-                minimumSize: Size.zero,
-                onPressed: () {
-                  setState(() {
-                    _showEmojiPanel = !_showEmojiPanel;
-                    if (_showEmojiPanel) _bioFocusNode.unfocus();
-                  });
-                },
-                child: Icon(
-                  _showEmojiPanel
-                      ? CupertinoIcons.keyboard
-                      : CupertinoIcons.smiley,
-                  size: AppTypography.xxxl,
-                  color: fgSecondary,
+              ),
+              _EditProfileFieldCell(
+                label: '用户名',
+                child: _buildTextField(
+                  controller: _usernameController,
+                  placeholder: '@username',
                 ),
               ),
             ],
+            footer: _buildSectionFootnote('用户名会展示在你的主页链接中，建议保持清晰且便于识别。'),
           ),
-          SizedBox(height: AppSpacing.xs),
-          CupertinoTextField(
-            controller: _bioController,
-            focusNode: _bioFocusNode,
-            maxLines: 3,
-            style: TextStyle(color: fg, fontSize: AppTypography.base),
-            placeholder: '写点什么介绍自己',
-            placeholderStyle: TextStyle(color: fgSecondary),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: fillColor,
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              border: Border.all(color: fillColor),
-            ),
+          ProfileIosGroupedSection(
+            header: '个人简介',
+            children: <Widget>[
+              _EditProfileFieldCell(
+                label: '简介',
+                trailing: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                  onPressed: () {
+                    setState(() {
+                      _showEmojiPanel = !_showEmojiPanel;
+                      if (_showEmojiPanel) {
+                        _bioFocusNode.unfocus();
+                      }
+                    });
+                  },
+                  child: Icon(
+                    _showEmojiPanel
+                        ? CupertinoIcons.keyboard
+                        : CupertinoIcons.smiley,
+                    size: AppSpacing.iconMedium,
+                    color: fgSecondary,
+                  ),
+                ),
+                child: _buildTextField(
+                  controller: _bioController,
+                  focusNode: _bioFocusNode,
+                  placeholder: '写点什么介绍自己',
+                  maxLines: 4,
+                ),
+              ),
+              if (_showEmojiPanel)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.containerSm,
+                    0,
+                    AppSpacing.containerSm,
+                    AppSpacing.containerSm,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                    child: UnifiedEmojiPicker(
+                      showCloseButton: true,
+                      onClose: () => setState(() => _showEmojiPanel = false),
+                      onEmojiSelected: _insertEmoji,
+                    ),
+                  ),
+                ),
+              _EditProfileFieldCell(
+                label: '网站',
+                child: _buildTextField(
+                  controller: _websiteController,
+                  placeholder: 'https://',
+                ),
+              ),
+            ],
+            footer: _buildSectionFootnote('简介和链接会在用户主页上展示，建议保持简洁且具有辨识度。'),
           ),
-          if (_showEmojiPanel)
-            UnifiedEmojiPicker(
-              onEmojiSelected: (char) {
-                final pos = _bioController.selection.baseOffset.clamp(
-                  0,
-                  _bioController.text.length,
-                );
-                _bioController.text =
-                    _bioController.text.substring(0, pos) +
-                    char +
-                    _bioController.text.substring(pos);
-                _bioController.selection = TextSelection.collapsed(
-                  offset: pos + char.length,
-                );
-                setState(() {});
-              },
-            ),
-          SizedBox(height: AppSpacing.md),
-          _buildSectionLabel('网站', fgSecondary),
-          SizedBox(height: AppSpacing.xs),
-          CupertinoTextField(
-            controller: _websiteController,
-            style: TextStyle(color: fg, fontSize: AppTypography.base),
-            placeholder: 'https://',
-            placeholderStyle: TextStyle(color: fgSecondary),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: fillColor,
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              border: Border.all(color: fillColor),
+        ],
+      ),
+    );
+  }
+
+  void _insertEmoji(String char) {
+    final pos = _bioController.selection.baseOffset.clamp(
+      0,
+      _bioController.text.length,
+    );
+    _bioController.text =
+        _bioController.text.substring(0, pos) +
+        char +
+        _bioController.text.substring(pos);
+    _bioController.selection = TextSelection.collapsed(
+      offset: pos + char.length,
+    );
+    setState(() {});
+  }
+
+  Widget _buildProfileMediaCard(User? userData) {
+    final avatarUrl = userData?.avatar ?? userData?.avatarUrl;
+    final coverUrl = userData?.backgroundImage;
+    final secondary = AppColors.iosSecondaryLabel(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.intraGroupXs,
+        AppSpacing.containerMd,
+        AppSpacing.interGroupMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const ProfileIosSectionHeader(title: '头像与封面'),
+          ProfileIosSectionCard(
+            padding: EdgeInsets.zero,
+            addShadow: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                ClipRRect(
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(AppSpacing.radiusTwenty),
+                  ),
+                  child: Stack(
+                    children: <Widget>[
+                      SizedBox(
+                        height: 140,
+                        width: double.infinity,
+                        child: coverUrl != null && coverUrl.isNotEmpty
+                            ? Image.network(
+                                coverUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => _buildCoverPlaceholder(),
+                              )
+                            : _buildCoverPlaceholder(),
+                      ),
+                      Positioned(
+                        top: AppSpacing.containerSm,
+                        right: AppSpacing.containerSm,
+                        child: ProfileIosActionButton(
+                          label: '更换封面',
+                          icon: CupertinoIcons.photo,
+                          onPressed: () => _showMediaActionSheet('封面'),
+                          style: ProfileIosActionStyle.tinted,
+                          expand: false,
+                          height: 32,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(AppSpacing.containerMd),
+                  child: Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundImage:
+                            avatarUrl != null && avatarUrl.isNotEmpty
+                            ? NetworkImage(avatarUrl)
+                            : null,
+                        backgroundColor: AppColors.iosFill(context),
+                        child: avatarUrl == null || avatarUrl.isEmpty
+                            ? Icon(
+                                CupertinoIcons.person_crop_circle_fill,
+                                size: AppSpacing.iconLarge,
+                                color: secondary,
+                              )
+                            : null,
+                      ),
+                      SizedBox(width: AppSpacing.containerSm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              '主页头像',
+                              style: TextStyle(
+                                fontSize: AppTypography.iosSubheadline,
+                                fontWeight: AppTypography.semiBold,
+                                color: AppColors.iosLabel(context),
+                              ),
+                            ),
+                            SizedBox(height: AppSpacing.intraGroupXs),
+                            Text(
+                              '更新后会展示在主页、评论和互动入口中。',
+                              style: TextStyle(
+                                fontSize: AppTypography.iosFootnote,
+                                color: secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.containerSm),
+                      ProfileIosActionButton(
+                        label: '更换头像',
+                        icon: CupertinoIcons.camera,
+                        onPressed: () => _showMediaActionSheet('头像'),
+                        style: ProfileIosActionStyle.outlined,
+                        expand: false,
+                        height: 32,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -261,13 +379,111 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     );
   }
 
-  Widget _buildSectionLabel(String text, Color color) {
-    return Text(
-      text,
+  Widget _buildCoverPlaceholder() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            AppColors.iosTintedFill(context),
+            AppColors.iosGroupedSurfaceElevated(context),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          CupertinoIcons.photo_on_rectangle,
+          size: AppSpacing.iconLarge,
+          color: AppColors.iosSecondaryLabel(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String placeholder,
+    FocusNode? focusNode,
+    int maxLines = 1,
+  }) {
+    final secondary = AppColors.iosSecondaryLabel(context);
+    final label = AppColors.iosLabel(context);
+    return CupertinoTextField(
+      controller: controller,
+      focusNode: focusNode,
+      maxLines: maxLines,
+      minLines: maxLines > 1 ? maxLines : 1,
+      padding: EdgeInsets.zero,
+      placeholder: placeholder,
+      placeholderStyle: TextStyle(
+        color: secondary,
+        fontSize: AppTypography.iosBody,
+      ),
       style: TextStyle(
-        fontSize: AppTypography.sm,
-        fontWeight: FontWeight.w700,
-        color: color,
+        color: label,
+        fontSize: AppTypography.iosBody,
+        height: 1.35,
+      ),
+      decoration: const BoxDecoration(),
+    );
+  }
+
+  Widget _buildSectionFootnote(String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: AppTypography.iosFootnote,
+          color: AppColors.iosSecondaryLabel(context),
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _EditProfileFieldCell extends StatelessWidget {
+  const _EditProfileFieldCell({
+    required this.label,
+    required this.child,
+    this.trailing,
+  });
+
+  final String label;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  fontWeight: AppTypography.semiBold,
+                  color: AppColors.iosSecondaryLabel(context),
+                ),
+              ),
+              const Spacer(),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          child,
+        ],
       ),
     );
   }

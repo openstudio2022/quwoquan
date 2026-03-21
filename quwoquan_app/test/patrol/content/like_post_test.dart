@@ -1,4 +1,4 @@
-/// L4 Patrol E2E: 点赞旅程（realtime + error rollback）
+/// T4 Patrol E2E: 点赞旅程（realtime + error rollback）
 ///
 /// 对应 e2e.yaml 场景：like_post_realtime [test_type: ui_journey]
 ///
@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 const _stagingBase = String.fromEnvironment('STAGING_BASE_URL');
@@ -33,7 +34,7 @@ Future<String> _seedPhotoPost(http.Client client) async {
     },
     body: jsonEncode({
       'contentType': 'image',
-      'title': 'L4 like_post_realtime seed',
+      'title': 'T4 like_post_realtime seed',
       'body': 'patrol test fixture',
       'mediaUrls': ['https://example.com/patrol.jpg'],
       'width': 1080,
@@ -72,7 +73,7 @@ void main() {
   late String seededPostId;
 
   setUp(() async {
-    assert(_env == 'staging', 'L4 tests must run with ENV=staging');
+    assert(_env == 'staging', 'T4 tests must run with ENV=staging');
     client = http.Client();
     seededPostId = await _seedPhotoPost(client);
     await _resetLikeState(client, seededPostId);
@@ -85,7 +86,8 @@ void main() {
 
   patrolTest(
     'like_post_realtime — 乐观更新 + server 确认',
-    tags: ['l4', 'content', 'like'],
+    tags: ['t4', 'content', 'like'],
+    skip: !kRunPatrolT4,
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 10),
     ),
@@ -126,7 +128,8 @@ void main() {
 
   patrolTest(
     'like_post_realtime — 重复点赞幂等（不双计）',
-    tags: ['l4', 'content', 'like'],
+    tags: ['t4', 'content', 'like'],
+    skip: !kRunPatrolT4,
     ($) async {
       // ── App 已运行，等待点赞按钮可见 ─────────────────────────────────
       await $(TestKeys.likeButton)

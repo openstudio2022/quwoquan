@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
@@ -19,7 +18,6 @@ extension LiveKitQualityMapping on ConnectionQuality {
 class LiveKitRoomService {
   Room? _room;
   EventsListener<RoomEvent>? _listener;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   final _connectionState = ValueNotifier(RtcConnectionState.disconnected);
   final _activeSpeaker = ValueNotifier<String?>(null);
@@ -80,25 +78,10 @@ class LiveKitRoomService {
         await _room!.localParticipant?.setCameraEnabled(true);
       }
 
-      _startNetworkMonitoring();
     } catch (e) {
       _connectionState.value = RtcConnectionState.disconnected;
       rethrow;
     }
-  }
-
-  void _startNetworkMonitoring() {
-    _connectivitySub?.cancel();
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
-      if (_room == null) return;
-      final hasConnection = results.any(
-        (r) => r != ConnectivityResult.none,
-      );
-      if (hasConnection &&
-          _connectionState.value == RtcConnectionState.disconnected) {
-        _room?.engine.fullReconnectOnNext = true;
-      }
-    });
   }
 
   void _setupListeners() {
@@ -198,8 +181,6 @@ class LiveKitRoomService {
   }
 
   Future<void> disconnect() async {
-    _connectivitySub?.cancel();
-    _connectivitySub = null;
     _listener?.dispose();
     _listener = null;
     await _room?.disconnect();

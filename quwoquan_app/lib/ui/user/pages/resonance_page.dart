@@ -60,13 +60,148 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
     super.dispose();
   }
 
+  Widget _buildFriendBadge(Map<String, dynamic> user) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: Text(
+        '${user['points']} 个交集',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.xsPlus,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primaryColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFriendFollowButton() {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      color: AppColors.primaryColor.withValues(alpha: 0.12),
+      minSize: 0,
+      borderRadius: BorderRadius.circular(AppSpacing.eighteen),
+      onPressed: () {},
+      child: Text(
+        UITextConstants.follow,
+        style: TextStyle(
+          color: AppColors.primaryColor,
+          fontSize: AppTypography.base,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResonantFriendItem(
+    BuildContext context,
+    Map<String, dynamic> user,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    final textSection = Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            user['name'] as String,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.lg,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            user['bio'] as String,
+            style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+    final actions = Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [_buildFriendBadge(user), _buildFriendFollowButton()],
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.md),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final shouldStackActions =
+              constraints.maxWidth < 360 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.1;
+          if (shouldStackActions) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundImage: NetworkImage(user['avatar'] as String),
+                      onBackgroundImageError: (_, __) {},
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupLg),
+                    textSection,
+                  ],
+                ),
+                SizedBox(height: AppSpacing.sm),
+                actions,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundImage: NetworkImage(user['avatar'] as String),
+                onBackgroundImageError: (_, __) {},
+              ),
+              SizedBox(width: AppSpacing.intraGroupLg),
+              textSection,
+              SizedBox(width: AppSpacing.sm),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
 
     return AppScaffold(
       backgroundColor: bg,
@@ -89,30 +224,38 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: CupertinoSlidingSegmentedControl<int>(
-              groupValue: _currentIndex,
-              children: const {
-                0: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Text('推荐')),
-                1: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Text('交集')),
-                2: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Text('趣友')),
-              },
-              onValueChanged: (index) {
-                if (index != null) {
-                  setState(() => _currentIndex = index);
-                  _pageController.animateToPage(
-                    index,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: CupertinoSlidingSegmentedControl<int>(
+                  groupValue: _currentIndex,
+                  children: const {
+                    0: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('推荐'),
+                    ),
+                    1: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('交集'),
+                    ),
+                    2: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('趣友'),
+                    ),
+                  },
+                  onValueChanged: (index) {
+                    if (index != null) {
+                      setState(() => _currentIndex = index);
+                      _pageController.animateToPage(
+                        index,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -135,7 +278,9 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
   Widget _buildRecommendTab(Color fg, Color fgSecondary) {
     return ListView(
       padding: EdgeInsets.all(
-        AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+        AppSpacing.semantic[DesignSemanticConstants
+                .container]?[DesignSemanticConstants.md] ??
+            AppSpacing.containerMd,
       ),
       children: [
         Text(
@@ -147,78 +292,9 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
           ),
         ),
         SizedBox(height: AppSpacing.intraGroupLg),
-        ..._resonantFriends.map((u) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundImage: NetworkImage(u['avatar'] as String),
-                  onBackgroundImageError: (_, __) {},
-                ),
-                SizedBox(width: AppSpacing.intraGroupLg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        u['name'] as String,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w800,
-                          color: fg,
-                        ),
-                      ),
-                      SizedBox(height: AppSpacing.intraGroupXs),
-                      Text(
-                        u['bio'] as String,
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: fgSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                  ),
-                  child: Text(
-                    '${u['points']} 个交集',
-                    style: TextStyle(
-                      fontSize: AppTypography.xsPlus,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryColor,
-                    ),
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: AppColors.primaryColor.withValues(alpha: 0.12),
-                  minSize: 0,
-                  borderRadius: BorderRadius.circular(AppSpacing.eighteen),
-                  onPressed: () {},
-                  child: Text(
-                    UITextConstants.follow,
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontSize: AppTypography.base,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
+        ..._resonantFriends.map(
+          (user) => _buildResonantFriendItem(context, user, fg, fgSecondary),
+        ),
       ],
     );
   }
@@ -228,7 +304,11 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(CupertinoIcons.person_2, size: AppSpacing.largeAvatarSize, color: fgSecondary),
+          Icon(
+            CupertinoIcons.person_2,
+            size: AppSpacing.largeAvatarSize,
+            color: fgSecondary,
+          ),
           SizedBox(height: AppSpacing.md),
           Text(
             '交集维度：圈子、作者、生活',
