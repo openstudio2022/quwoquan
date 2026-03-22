@@ -1,0 +1,96 @@
+version: 2
+feature: recent-search-sync-and-voice-asr
+level: L3_scenario
+source_path: global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
+parent_journey: cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结最近搜索的生命周期、本地与云同步语义，以及语音 ASR 到文本查询的输入链路。
+  journey_bindings:
+    - J1
+    - J3
+  in_scope:
+    - 最近搜索记录
+    - 清空与删除单条
+    - 语音 ASR 转文本 query
+  out_of_scope:
+    - 原始音频长期存储
+    - 语音语义理解
+
+scenario_acceptance:
+  A1:
+    title: 最近搜索本地与云端同步并可由用户清除
+    scenario: recent search lifecycle
+    journey_step: view, reuse and clear recent searches
+    done_when:
+      - 普通搜索 query 记录到最近搜索
+      - 最近搜索支持本地与云同步
+      - 用户可删除单条或清空全部最近搜索
+    edge_cases:
+      - 云同步失败时本地仍可读
+      - 清空操作需要同步影响本地与云端
+      - 问小趣 query 不进入最近搜索
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - recent search sync contract test
+        - history clear regression test
+      recorded: []
+    status: pending
+  A2:
+    title: 语音入口只负责 ASR 转文本查询
+    scenario: voice to query
+    journey_step: tap voice entry and continue search
+    done_when:
+      - 语音识别成功后将文本写回搜索框
+      - 用户可基于转写文本继续执行普通搜索
+      - 语音链路不直接触发 assistant 推理
+    edge_cases:
+      - 麦克风权限被拒
+      - ASR 失败
+      - 用户取消录音
+    linked_plan_items:
+      - P2
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - voice query widget test
+        - microphone permission fallback test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 历史与语音都不阻塞文本搜索主路径
+    done_when:
+      - 历史同步失败时文本搜索仍可用
+      - 语音失败时可退回手动输入
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - fallback verification
+      recorded: []
+    status: pending

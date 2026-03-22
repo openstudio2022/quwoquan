@@ -49,6 +49,8 @@ class ProfileShell extends ConsumerStatefulWidget {
 }
 
 class _ProfileShellState extends ConsumerState<ProfileShell> {
+  static const double _profileCardRadius = AppSpacing.radiusTwenty;
+  static const double _profileSurfaceBridge = _profileCardRadius;
   late final ScrollController _scrollController;
   final GlobalKey _summarySectionKey = GlobalKey();
   final GlobalKey _primaryTabKey = GlobalKey();
@@ -260,12 +262,18 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 
   double _baseBackgroundHeight(BuildContext context) {
     return MediaQuery.sizeOf(context).height *
-        UserProfileUIConfig.headerLayout.baseHeightRatio;
+        max(
+          UserProfileUIConfig.headerLayout.baseHeightRatio,
+          AppSpacing.profileHeaderBaseHeightRatio,
+        );
   }
 
   double _maxStretchBackgroundHeight(BuildContext context) {
     return MediaQuery.sizeOf(context).height *
-        UserProfileUIConfig.headerLayout.maxStretchHeightRatio;
+        max(
+          UserProfileUIConfig.headerLayout.maxStretchHeightRatio,
+          AppSpacing.profileHeaderMaxStretchHeightRatio,
+        );
   }
 
   double _currentBackgroundHeight(BuildContext context) {
@@ -280,6 +288,87 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 
   double _summaryTopAtRest(BuildContext context) {
     return _baseBackgroundHeight(context);
+  }
+
+  double _summaryTrackerTop(BuildContext context) {
+    return _backgroundSpacerHeight(context) - _scrollOffset + _rawPullOffset;
+  }
+
+  Widget _buildConstrainedContent(Widget child) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: AppSpacing.feedMaxContentWidth,
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  BorderSide _profileSeparatorSide(Color border, {double alpha = 0.16}) {
+    return BorderSide(
+      color: border.withValues(alpha: alpha),
+      width: AppSpacing.hairline,
+    );
+  }
+
+  Widget _buildPrimaryTabContentSurface(
+    BuildContext context, {
+    required Color bg,
+    required Color border,
+    required bool isDark,
+    required double bottomPadding,
+    required double inlinePrimaryTabOpacity,
+  }) {
+    final sectionBorder = border.withValues(alpha: isDark ? 0.22 : 0.08);
+    final sectionShadow = isDark
+        ? Colors.black.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.03);
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(_profileCardRadius),
+          bottomRight: Radius.circular(_profileCardRadius),
+        ),
+        border: Border.all(color: sectionBorder, width: AppSpacing.hairline),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: sectionShadow,
+            blurRadius: AppSpacing.twenty,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: _profileSurfaceBridge),
+          _buildPrimaryTabBarSurface(
+            bg: bg,
+            border: border,
+            pinned: false,
+            opacity: inlinePrimaryTabOpacity,
+          ),
+          Padding(
+            padding: EdgeInsets.only(bottom: bottomPadding),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: max(
+                  0.0,
+                  MediaQuery.sizeOf(context).height -
+                      _toolbarExtent(context) -
+                      AppSpacing.bottomNavHeight,
+                ),
+              ),
+              child: _buildInlineTabContent(context, isDark),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
@@ -307,9 +396,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   double _primaryTabBarHeight(BuildContext context) {
     final labelHeight = _measureSingleLineTextHeight(
       context,
-      const TextStyle(
-        fontSize: AppTypography.iosSubheadline,
-        fontWeight: AppTypography.semiBold,
+      TextStyle(
+        fontSize: AppTypography.primaryTabLabelResponsive(context),
+        fontWeight: AppTypography.primaryTabSelectedWeight,
       ),
     );
     final adaptiveHeight =
@@ -367,8 +456,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final state = notifier.state;
     final userData = ref.watch(userDataProvider);
     final bg = AppColors.iosPageBackground(context);
-    final bgSecondary = AppColors.iosGroupedSurfaceElevated(context);
-    final profileSurface = AppColors.iosSystemBackground(context);
+    final backgroundBridge = AppColors.iosPageBackground(context);
+    final profileSurface = AppColors.iosProfileSurface(context);
     final fg = AppColors.iosLabel(context);
     final border = AppColors.iosSeparator(context);
     final profile = state.profile;
@@ -396,6 +485,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final toolbarBackgroundOpacity = max(
       identityPinnedProgress,
       primaryPinnedProgress * 0.82,
+    );
+    final inlinePrimaryTabOpacity = (1 - (primaryPinnedProgress * 6)).clamp(
+      0.0,
+      1.0,
     );
     final statusIconsDark = toolbarBackgroundOpacity > 0.12;
     final bottomPadding = isMine
@@ -426,7 +519,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                 child: _buildBackgroundLayer(
                   context,
                   backgroundUrl: backgroundUrl,
-                  backgroundColor: bgSecondary,
+                  backgroundColor: backgroundBridge,
                 ),
               ),
             ),
@@ -436,6 +529,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                 onNotification: _handleScrollNotification,
                 child: CustomScrollView(
                   controller: _scrollController,
+                  cacheExtent: MediaQuery.sizeOf(context).height * 4,
                   physics: const BouncingScrollPhysics(
                     parent: AlwaysScrollableScrollPhysics(),
                   ),
@@ -444,40 +538,29 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                       child: SizedBox(height: _backgroundSpacerHeight(context)),
                     ),
                     SliverToBoxAdapter(
-                      child: _buildSummarySection(
-                        context,
-                        isDark: isDark,
-                        bg: bg,
-                        surface: profileSurface,
-                        avatarUrl: avatarUrl,
-                        displayName: displayName,
-                        bio: bio,
-                        state: state,
-                        notifier: notifier,
+                      child: _buildConstrainedContent(
+                        _buildSummarySection(
+                          context,
+                          isDark: isDark,
+                          avatarUrl: avatarUrl,
+                          displayName: displayName,
+                          bio: bio,
+                          state: state,
+                          notifier: notifier,
+                        ),
                       ),
                     ),
                     SliverToBoxAdapter(
-                      child: _buildPrimaryTabBarSurface(
-                        bg: profileSurface,
-                        border: border,
-                        pinned: false,
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(color: profileSurface),
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: bottomPadding),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: max(
-                                0.0,
-                                MediaQuery.sizeOf(context).height -
-                                    _toolbarExtent(context) -
-                                    AppSpacing.bottomNavHeight,
-                              ),
-                            ),
-                            child: _buildInlineTabContent(context, isDark),
+                      child: _buildConstrainedContent(
+                        Transform.translate(
+                          offset: const Offset(0, -_profileSurfaceBridge),
+                          child: _buildPrimaryTabContentSurface(
+                            context,
+                            bg: profileSurface,
+                            border: border,
+                            isDark: isDark,
+                            bottomPadding: bottomPadding,
+                            inlinePrimaryTabOpacity: inlinePrimaryTabOpacity,
                           ),
                         ),
                       ),
@@ -495,6 +578,19 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
               opacity: identityPinnedProgress,
               backgroundOpacity: toolbarBackgroundOpacity,
             ),
+            Positioned(
+              top: _summaryTrackerTop(context),
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: _buildConstrainedContent(
+                  SizedBox(
+                    key: const ValueKey<String>('profile-shell-summary-card'),
+                    height: AppSpacing.one,
+                  ),
+                ),
+              ),
+            ),
             if (UserProfileUIConfig.scrollMotion.primaryTabStickyBelowToolbar)
               Positioned(
                 top: _toolbarExtent(context),
@@ -506,10 +602,12 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                     ignoring: primaryPinnedProgress <= 0,
                     child: Opacity(
                       opacity: primaryPinnedProgress,
-                      child: _buildPrimaryTabBarSurface(
-                        bg: profileSurface,
-                        border: border,
-                        pinned: true,
+                      child: _buildConstrainedContent(
+                        _buildPrimaryTabBarSurface(
+                          bg: profileSurface,
+                          border: border,
+                          pinned: true,
+                        ),
                       ),
                     ),
                   ),
@@ -538,72 +636,83 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   Widget _buildSummarySection(
     BuildContext context, {
     required bool isDark,
-    required Color bg,
-    required Color surface,
     required String? avatarUrl,
     required String displayName,
     required String? bio,
     required ProfileState state,
     required ProfileNotifier notifier,
   }) {
-    return ColoredBox(
+    final summarySurface = AppColors.iosProfileSurface(context);
+    final summaryBorder = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.24 : 0.08);
+    final summaryShadow = isDark
+        ? Colors.black.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.05);
+    return Container(
       key: _summarySectionKey,
-      color: bg,
       child: Container(
-        key: const ValueKey<String>('profile-shell-summary-card'),
         decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.radiusTwentyEight),
-          ),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.containerMd,
-          0,
-          AppSpacing.containerMd,
-          AppSpacing.containerLg,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ProfileHeader(
-              isDark: isDark,
-              avatarUrl: avatarUrl,
-              displayName: displayName,
-              bio: bio,
-            ),
-            SizedBox(height: AppSpacing.md),
-            ProfileResonanceCard(
-              mode: widget.mode,
-              isDark: isDark,
-              resonanceCount: 128,
-              onTap: () => context.push(AppRoutePaths.profileResonance),
-            ),
-            SizedBox(height: AppSpacing.sm),
-            ProfileStatsRow(
-              isDark: isDark,
-              profile: state.profile,
-              onStatTap: (type) => context.push(
-                '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
-              ),
-            ),
-            SizedBox(height: AppSpacing.sm),
-            ProfileActionBar(
-              mode: widget.mode,
-              isDark: isDark,
-              isFollowing: state.isFollowing,
-              capability: state.capability,
-              onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-              onManagePersonas: () =>
-                  context.push(AppRoutePaths.profilePersonas),
-              onFollow: notifier.toggleFollow,
-              onMessage: () =>
-                  context.push(AppRoutePaths.chatDetail(id: widget.userId)),
-              onGreet: () => _showGreetDialog(context),
-              onVoiceCall: () => _startCall(context, 'voice'),
-              onVideoCall: () => _startCall(context, 'video'),
+          color: summarySurface,
+          borderRadius: BorderRadius.circular(_profileCardRadius),
+          border: Border.all(color: summaryBorder, width: AppSpacing.hairline),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: summaryShadow,
+              blurRadius: AppSpacing.twenty,
+              offset: const Offset(0, 10),
             ),
           ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.feedContentHorizontal(context),
+            0,
+            AppSpacing.feedContentHorizontal(context),
+            AppSpacing.containerLg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ProfileHeader(
+                isDark: isDark,
+                avatarUrl: avatarUrl,
+                displayName: displayName,
+                bio: bio,
+              ),
+              SizedBox(height: AppSpacing.md),
+              ProfileResonanceCard(
+                mode: widget.mode,
+                isDark: isDark,
+                resonanceCount: 128,
+                onTap: () => context.push(AppRoutePaths.profileResonance),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              ProfileStatsRow(
+                isDark: isDark,
+                profile: state.profile,
+                onStatTap: (type) => context.push(
+                  '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
+                ),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              ProfileActionBar(
+                mode: widget.mode,
+                isDark: isDark,
+                isFollowing: state.isFollowing,
+                capability: state.capability,
+                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+                onManagePersonas: () =>
+                    context.push(AppRoutePaths.profilePersonas),
+                onFollow: notifier.toggleFollow,
+                onMessage: () =>
+                    context.push(AppRoutePaths.chatDetail(id: widget.userId)),
+                onGreet: () => _showGreetDialog(context),
+                onVoiceCall: () => _startCall(context, 'voice'),
+                onVideoCall: () => _startCall(context, 'video'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -615,28 +724,39 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required Color backgroundColor,
   }) {
     return Stack(
-      fit: StackFit.expand,
+      clipBehavior: Clip.none,
       children: [
-        if (backgroundUrl != null && backgroundUrl.isNotEmpty)
-          Image.network(
-            backgroundUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                ColoredBox(color: backgroundColor),
-          )
-        else
-          ColoredBox(color: backgroundColor.withValues(alpha: 0.75)),
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.08),
-                Colors.black.withValues(alpha: 0.04),
-                backgroundColor.withValues(alpha: 0.12),
-              ],
-              stops: const [0.0, 0.56, 1.0],
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: -_profileSurfaceBridge,
+          child: backgroundUrl != null && backgroundUrl.isNotEmpty
+              ? Image.network(
+                  backgroundUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      ColoredBox(color: backgroundColor),
+                )
+              : ColoredBox(color: backgroundColor.withValues(alpha: 0.75)),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: -_profileSurfaceBridge,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.08),
+                  Colors.black.withValues(alpha: 0.04),
+                  backgroundColor.withValues(alpha: 0.12),
+                ],
+                stops: const [0.0, 0.56, 1.0],
+              ),
             ),
           ),
         ),
@@ -654,7 +774,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required double backgroundOpacity,
   }) {
     final topPadding = MediaQuery.paddingOf(context).top;
-    final sideSlotWidth = AppSpacing.minInteractiveSize;
+    final sideSlotWidth =
+        AppSpacing.minInteractiveSize + AppSpacing.containerXs;
     final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
     final compactForeground = resolvedOpacity > 0.12
         ? fg
@@ -676,95 +797,113 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         decoration: BoxDecoration(
           color: toolbarChrome,
           border: resolvedOpacity > 0.02
-              ? Border(
-                  bottom: BorderSide(
-                    color: border.withValues(alpha: 0.18),
-                    width: AppSpacing.hairline,
-                  ),
-                )
+              ? Border(bottom: _profileSeparatorSide(border))
               : null,
         ),
-        child: SizedBox(
-          height: _compactToolbarHeight(context),
-          child: Row(
-            children: [
-              SizedBox(
-                width: sideSlotWidth,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: widget.mode == ProfileMode.other
-                      ? ProfileIosIconButton(
-                          icon: CupertinoIcons.back,
-                          onPressed: widget.onBack ?? () => context.pop(),
-                          backgroundColor: tintFill,
-                          foregroundColor: compactForeground,
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ),
-              Expanded(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Row(
-                    key: const ValueKey<String>(
-                      'profile-shell-compact-identity',
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.feedMaxContentWidth,
+            ),
+            child: SizedBox(
+              height: _compactToolbarHeight(context),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: sideSlotWidth,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: widget.mode == ProfileMode.other
+                          ? ProfileIosIconButton(
+                              icon: CupertinoIcons.back,
+                              onPressed: widget.onBack ?? () => context.pop(),
+                              backgroundColor: tintFill,
+                              foregroundColor: compactForeground,
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      CircleAvatar(
-                        radius: AppSpacing.intraGroupLg,
-                        backgroundColor: tintFill,
-                        backgroundImage:
-                            avatarUrl != null && avatarUrl.isNotEmpty
-                            ? NetworkImage(avatarUrl)
-                            : null,
-                        child: avatarUrl == null || avatarUrl.isEmpty
-                            ? Icon(
-                                CupertinoIcons.person_crop_circle_fill,
-                                size: AppSpacing.iconMedium,
-                                color: compactForeground,
-                              )
-                            : null,
-                      ),
-                      SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosNavTitle,
-                            fontWeight: AppTypography.semiBold,
-                            color: compactForeground,
-                            letterSpacing: -0.24,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                ),
+                  Expanded(
+                    child: Opacity(
+                      opacity: opacity,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: constraints.maxWidth,
+                              ),
+                              child: Row(
+                                key: const ValueKey<String>(
+                                  'profile-shell-compact-identity',
+                                ),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircleAvatar(
+                                    radius: AppSpacing.avatarUserSm / 2,
+                                    backgroundColor: tintFill,
+                                    backgroundImage:
+                                        avatarUrl != null &&
+                                            avatarUrl.isNotEmpty
+                                        ? NetworkImage(avatarUrl)
+                                        : null,
+                                    child:
+                                        avatarUrl == null || avatarUrl.isEmpty
+                                        ? Icon(
+                                            CupertinoIcons
+                                                .person_crop_circle_fill,
+                                            size: AppSpacing.iconMedium,
+                                            color: compactForeground,
+                                          )
+                                        : null,
+                                  ),
+                                  SizedBox(width: AppSpacing.containerSm),
+                                  Flexible(
+                                    child: Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: AppTypography.iosNavTitle,
+                                        fontWeight: AppTypography.medium,
+                                        color: compactForeground,
+                                        letterSpacing: -0.24,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: sideSlotWidth,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: widget.mode == ProfileMode.mine
+                          ? ProfileIosIconButton(
+                              icon: CupertinoIcons.settings,
+                              onPressed: () =>
+                                  context.push(AppRoutePaths.settings),
+                              backgroundColor: tintFill,
+                              foregroundColor: compactForeground,
+                            )
+                          : ProfileIosIconButton(
+                              icon: CupertinoIcons.ellipsis,
+                              onPressed: () => _showMoreOptions(context),
+                              backgroundColor: tintFill,
+                              foregroundColor: compactForeground,
+                            ),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(
-                width: sideSlotWidth,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: widget.mode == ProfileMode.mine
-                      ? ProfileIosIconButton(
-                          icon: CupertinoIcons.settings,
-                          onPressed: () => context.push(AppRoutePaths.settings),
-                          backgroundColor: tintFill,
-                          foregroundColor: compactForeground,
-                        )
-                      : ProfileIosIconButton(
-                          icon: CupertinoIcons.ellipsis,
-                          onPressed: () => _showMoreOptions(context),
-                          backgroundColor: tintFill,
-                          foregroundColor: compactForeground,
-                        ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -775,6 +914,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required Color bg,
     required Color border,
     required bool pinned,
+    double opacity = 1.0,
   }) {
     final tabs = UserProfileUIConfig.profileTabs
         .map(
@@ -784,20 +924,14 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           ),
         )
         .toList(growable: false);
-    return Container(
+    final surface = Container(
       key: pinned
           ? const ValueKey<String>('profile-shell-primary-tabs-pinned')
           : const ValueKey<String>('profile-shell-primary-tabs-inline'),
+      clipBehavior: pinned ? Clip.none : Clip.antiAlias,
       decoration: BoxDecoration(
         color: bg,
-        border: pinned
-            ? Border(
-                bottom: BorderSide(
-                  color: border.withValues(alpha: 0.16),
-                  width: AppSpacing.hairline,
-                ),
-              )
-            : null,
+        border: Border(bottom: _profileSeparatorSide(border, alpha: 0.1)),
       ),
       child: SizedBox(
         key: pinned ? null : _primaryTabKey,
@@ -807,10 +941,16 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           activeTab: _activeTabId,
           onTabChange: _onPrimaryTabChange,
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
-          iosProfileStyle: true,
           transparentBackground: true,
         ),
       ),
+    );
+    if (pinned) {
+      return surface;
+    }
+    return IgnorePointer(
+      ignoring: opacity <= 0.02,
+      child: Opacity(opacity: opacity, child: surface),
     );
   }
 
@@ -862,29 +1002,47 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return _curveForName(raw).transform(value.clamp(0.0, 1.0));
   }
 
-  void _showMoreOptions(BuildContext context) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        actions: <Widget>[
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: const Text('拉黑'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: const Text('举报'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: const Text('分享'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: const Text('取消'),
+  Future<void> _showMoreOptions(BuildContext context) async {
+    final action = await showAppActionSheet<_ProfileMoreAction>(
+      context,
+      title: '更多操作',
+      sections: const [
+        AppActionSheetSection<_ProfileMoreAction>(
+          items: [
+            AppActionSheetItem<_ProfileMoreAction>(
+              value: _ProfileMoreAction.share,
+              label: '分享',
+              icon: CupertinoIcons.share,
+            ),
+          ],
         ),
-      ),
+        AppActionSheetSection<_ProfileMoreAction>(
+          items: [
+            AppActionSheetItem<_ProfileMoreAction>(
+              value: _ProfileMoreAction.block,
+              label: '拉黑',
+              icon: CupertinoIcons.person_crop_circle_badge_xmark,
+            ),
+            AppActionSheetItem<_ProfileMoreAction>(
+              value: _ProfileMoreAction.report,
+              label: '举报',
+              icon: CupertinoIcons.flag,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
     );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case _ProfileMoreAction.share:
+        AppToast.show(context, '分享能力待接入');
+      case _ProfileMoreAction.block:
+        AppToast.show(context, '拉黑能力待接入');
+      case _ProfileMoreAction.report:
+        AppToast.show(context, '举报能力待接入');
+    }
   }
 }
+
+enum _ProfileMoreAction { share, block, report }

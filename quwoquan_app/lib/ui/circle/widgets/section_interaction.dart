@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子互动板块：点赞/评论流（含独立 loading/error 状态）
@@ -116,7 +117,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
 
     return Column(
       children: [
-        _buildSubTabs(fgPrimary, fgSecondary),
+        _buildSubTabs(),
         SizedBox(height: AppSpacing.md),
         ..._displayInteractions.map(
           (item) => _buildInteractionItem(item, fgPrimary, fgSecondary),
@@ -125,48 +126,19 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
     );
   }
 
-  Widget _buildSubTabs(Color fgPrimary, Color fgSecondary) {
+  Widget _buildSubTabs() {
     final tabs = [
       ('likes', UITextConstants.circleLikes),
       ('comments', UITextConstants.circleComments),
     ];
-    return Row(
-      children: tabs.map((t) {
-        final selected = _activeSubTab == t.$1;
-        return Padding(
-          padding: EdgeInsets.only(right: AppSpacing.sm),
-          child: GestureDetector(
-            onTap: () => setState(() => _activeSubTab = t.$1),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: selected
-                    ? (widget.isDark
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : Colors.black.withValues(alpha: 0.06))
-                    : null,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.circularBorderRadius,
-                ),
-                border: Border.all(
-                  color: widget.isDark ? Colors.white24 : Colors.black12,
-                ),
-              ),
-              child: Text(
-                t.$2,
-                style: TextStyle(
-                  fontSize: AppTypography.smPlus,
-                  fontWeight: AppTypography.extraBold,
-                  color: selected ? fgPrimary : fgSecondary,
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+    final activeIndex = tabs.indexWhere((tab) => tab.$1 == _activeSubTab);
+    return SecondaryCapsuleTabBar(
+      isDark: widget.isDark,
+      tabs: tabs.map((tab) => tab.$2).toList(growable: false),
+      activeIndex: activeIndex < 0 ? 0 : activeIndex,
+      onTap: (index) => setState(() => _activeSubTab = tabs[index].$1),
+      horizontalPadding: 0,
+      variant: SecondaryCapsuleTabBarVariant.inlineMuted,
     );
   }
 

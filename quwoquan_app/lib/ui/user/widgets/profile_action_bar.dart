@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
@@ -52,6 +51,10 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
+    final separator = AppColors.iosSeparator(context).withValues(alpha: 0.18);
+    final neutralFill = AppColors.iosProfileSurface(context);
+    final neutralForeground = AppColors.iosSecondaryLabel(context);
     final secondaryStyle = isDark
         ? ProfileIosActionStyle.outlined
         : ProfileIosActionStyle.tinted;
@@ -64,7 +67,11 @@ class ProfileActionBar extends StatelessWidget {
             label: UITextConstants.profileEditLabel,
             icon: CupertinoIcons.pencil,
             onPressed: onEditProfile,
-            style: ProfileIosActionStyle.filled,
+            style: ProfileIosActionStyle.outlined,
+            backgroundColor: neutralFill,
+            foregroundColor: neutralForeground,
+            borderColor: separator,
+            labelFontWeight: AppTypography.medium,
           ),
         ),
         Expanded(
@@ -73,7 +80,11 @@ class ProfileActionBar extends StatelessWidget {
             label: UITextConstants.profilePersonasLabel,
             icon: CupertinoIcons.person_2,
             onPressed: onManagePersonas,
-            style: secondaryStyle,
+            style: ProfileIosActionStyle.tinted,
+            backgroundColor: accent.withValues(alpha: isDark ? 0.22 : 0.1),
+            foregroundColor: accent,
+            borderColor: accent.withValues(alpha: isDark ? 0.18 : 0.12),
+            labelFontWeight: AppTypography.medium,
           ),
         ),
       ]);

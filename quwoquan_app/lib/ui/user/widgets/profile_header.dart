@@ -63,7 +63,7 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColors.iosSystemBackground(context);
+    final bg = AppColors.iosProfileSurface(context);
     final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
 
@@ -80,10 +80,10 @@ class ProfileHeader extends StatelessWidget {
               Text(
                 displayName ?? '',
                 style: TextStyle(
-                  fontSize: AppTypography.iosProfileTitle,
-                  fontWeight: AppTypography.semiBold,
-                  color: fg,
-                  letterSpacing: -0.72,
+                  fontSize: AppTypography.iosNavTitle,
+                  fontWeight: AppTypography.medium,
+                  color: fg.withValues(alpha: 0.94),
+                  letterSpacing: -0.16,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

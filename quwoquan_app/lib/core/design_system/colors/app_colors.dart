@@ -38,6 +38,11 @@ class AppColors {
   static const Color iosGroupedSurfaceElevatedLight = Color(0xFFFFFFFF);
   static const Color iosGroupedSurfaceElevatedDark = Color(0xFF2C2C2E);
 
+  /// 作者主页等强调质感的 iOS 语义白表面。
+  /// 浅色仅保留极轻微暖感，避免与纯白控件形成明显色块对比。
+  static const Color iosProfileSurfaceLight = Color(0xFFFFFDFC);
+  static const Color iosProfileSurfaceDark = Color(0xFF1C1C1E);
+
   // ==================== 欢迎页语义色 ====================
   static const Color welcomeBackground = Color(0xFF2563EB); // blue-600
   static const Color welcomeGradientStart = Color(0xFF3B82F6); // blue-500
@@ -128,6 +133,16 @@ class AppColors {
   static Color iosSystemBackground(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.systemBackground, context);
 
+  static Color iosProfileSurface(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      CupertinoDynamicColor.withBrightness(
+        color: iosProfileSurfaceLight,
+        darkColor: iosProfileSurfaceDark,
+      ),
+      context,
+    );
+  }
+
   static Color iosSeparator(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.separator, context);
 
@@ -217,6 +232,8 @@ class AppColorsFunctional {
             : const Color(0xFFF7F7FC);
       case ColorType.glassSurface:
         return isDark ? const Color(0xD92C2C2E) : const Color(0xD9FFFFFF);
+      case ColorType.modalScrim:
+        return isDark ? const Color(0x66101012) : const Color(0x40111827);
       case ColorType.separatorOpaque:
         return isDark ? const Color(0xFF3A3A3C) : const Color(0xFFD1D1D6);
       case ColorType.separatorSubtle:
@@ -283,6 +300,7 @@ enum ColorType {
   surfaceElevated,
   surfaceMuted,
   glassSurface,
+  modalScrim,
   separatorOpaque,
   separatorSubtle,
   pressedSurface,

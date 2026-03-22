@@ -83,11 +83,6 @@ l2:
       - feature: chat-group-admin-govern
   - feature: contact-and-session-governance
     l3:
-      - feature: contact-search-index
-        l4:
-          - feature: search-query-contract
-            l5:
-              - feature: privacy-filter-guard
       - feature: session-governance-actions
         l4:
           - feature: governance-action-policy

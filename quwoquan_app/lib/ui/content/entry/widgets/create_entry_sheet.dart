@@ -30,28 +30,19 @@ class CreateEntrySheet extends ConsumerWidget {
         ref.watch(contentFeatureFlagProvider('simple_create_action_sheet')) ||
         ref.watch(contentFeatureFlagProvider('enable_create_action_entry'));
 
-    return Material(
-      color: Colors.black54,
-      child: SafeArea(
-        top: false,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: useSimpleSheet
-              ? CreateActionSheet(
-                  onCreateAction: onSelect,
-                  onStartGroupChat: onClose,
-                  onAddContact: onClose,
-                  onCancel: onClose,
-                  priority: priority,
-                )
-              : _LegacyFallbackSheet(
-                  onClose: onClose,
-                  onSelect: onSelect,
-                  priority: priority,
-                ),
-        ),
-      ),
-    );
+    return useSimpleSheet
+        ? CreateActionSheet(
+            onCreateAction: onSelect,
+            onStartGroupChat: onClose,
+            onAddContact: onClose,
+            onCancel: onClose,
+            priority: priority,
+          )
+        : _LegacyFallbackSheet(
+            onClose: onClose,
+            onSelect: onSelect,
+            priority: priority,
+          );
   }
 }
 

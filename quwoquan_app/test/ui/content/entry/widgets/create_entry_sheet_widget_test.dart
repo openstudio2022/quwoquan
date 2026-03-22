@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
@@ -28,15 +29,21 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('创作'), findsOneWidget);
-    expect(find.text('连接'), findsOneWidget);
+    expect(find.text('创作'), findsNothing);
+    expect(find.text('连接'), findsNothing);
     expect(find.text('从相册选择'), findsOneWidget);
     expect(find.text('写文字'), findsOneWidget);
     expect(find.text('相机'), findsOneWidget);
     expect(find.text('发起群聊'), findsOneWidget);
     expect(find.text('添加同好'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
     expect(find.text('作品'), findsNothing);
     expect(find.text('文章'), findsNothing);
+    expect(find.byKey(TestKeys.modalBottomSheetPanel), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(TestKeys.modalBottomSheetPanel)).dy,
+      greaterThan(0),
+    );
 
     await tester.tap(find.text('相机'));
     await tester.pump();
@@ -67,5 +74,32 @@ void main() {
     final groupChatY = tester.getCenter(find.text('发起群聊')).dy;
     final galleryY = tester.getCenter(find.text('从相册选择')).dy;
     expect(groupChatY, lessThan(galleryY));
+  });
+
+  testWidgets('点击上半区空白区域可关闭全屏弹层', (tester) async {
+    var closed = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, child) => MaterialApp(
+            home: Scaffold(
+              body: CreateEntrySheet(
+                isOpen: true,
+                onClose: () => closed = true,
+                onSelect: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pump();
+
+    expect(closed, isTrue);
   });
 }

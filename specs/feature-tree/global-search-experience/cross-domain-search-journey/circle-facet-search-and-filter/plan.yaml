@@ -1,0 +1,55 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze circle search and facet contracts
+    goal: 定义 `SearchCircles`、`CircleSearchItemView` 与 `CircleFacetBucketView`
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 频道被正式收口为 facet
+      - 不存在独立 `SearchChannels` 设计
+    status: planned
+
+  - id: P2
+    title: land facet filter ui and adapter
+    goal: 让搜索页展示圈子结果和 facet buckets，并支持筛选
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - facet 可被选择和清除
+      - 结果与 facet 过滤保持一致
+    status: planned
+
+  - id: P3
+    title: verify empty states and detail navigation
+    goal: 验证 facet 为空、无结果和进入圈子详情的主路径
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - facet 空态可理解
+      - 从圈子结果可进入详情或列表页
+    status: planned

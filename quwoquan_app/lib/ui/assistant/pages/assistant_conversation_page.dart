@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,9 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/components/conversation/conversation_link_action_sheet.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
@@ -29,6 +26,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -262,7 +260,8 @@ class _AssistantConversationPageState
       imageQuality: 85,
       limit: remaining,
     );
-    return picked.map<ChatInputAttachment>(
+    return picked
+        .map<ChatInputAttachment>(
           (item) => ChatInputAttachment(
             id: item.path,
             type: ChatInputAttachmentType.image,
@@ -482,7 +481,8 @@ class _AssistantConversationPageState
             return CupertinoConversationSheet(
               child: Padding(
                 padding: EdgeInsets.all(
-                  AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ??
+                  AppSpacing.semantic[DesignSemanticConstants
+                          .container]?[DesignSemanticConstants.md] ??
                       AppSpacing.containerMd,
                 ),
                 child: Column(
@@ -513,7 +513,9 @@ class _AssistantConversationPageState
                           runSpacing: AppSpacing.xs,
                           children: reasons
                               .map((reason) {
-                                final isSelected = selected.contains(reason.key);
+                                final isSelected = selected.contains(
+                                  reason.key,
+                                );
                                 return CupertinoButton(
                                   padding: EdgeInsets.zero,
                                   minSize: AppSpacing.minInteractiveSize,
@@ -634,7 +636,8 @@ class _AssistantConversationPageState
         return CupertinoConversationSheet(
           child: Padding(
             padding: EdgeInsets.all(
-              AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ??
+              AppSpacing.semantic[DesignSemanticConstants
+                      .container]?[DesignSemanticConstants.md] ??
                   AppSpacing.containerMd,
             ),
             child: Column(
@@ -679,9 +682,7 @@ class _AssistantConversationPageState
                   children: [
                     Expanded(
                       child: CupertinoButton(
-                        padding: EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
+                        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                         color: fieldBackground,
                         borderRadius: BorderRadius.circular(
                           AppSpacing.fullBorderRadius,
@@ -693,14 +694,11 @@ class _AssistantConversationPageState
                     SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: CupertinoButton.filled(
-                        padding: EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
+                        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                         borderRadius: BorderRadius.circular(
                           AppSpacing.fullBorderRadius,
                         ),
-                        onPressed: () =>
-                            Navigator.of(popupContext).pop(true),
+                        onPressed: () => Navigator.of(popupContext).pop(true),
                         child: const Text(UITextConstants.confirm),
                       ),
                     ),
@@ -813,27 +811,24 @@ class _AssistantConversationPageState
       AppToast.show(context, UITextConstants.assistantModelUnavailable);
       return;
     }
-    final selected = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (popupContext) {
-        return CupertinoActionSheet(
-          title: const Text(UITextConstants.assistantModelSelectorTitle),
-          message: const Text(UITextConstants.assistantModelSelectorHint),
-          actions: models
+    final currentModel = ref.read(assistantGatewayProvider).currentModel();
+    final selected = await showAppActionSheet<String>(
+      context,
+      title: UITextConstants.assistantModelSelectorTitle,
+      message: UITextConstants.assistantModelSelectorHint,
+      sections: [
+        AppActionSheetSection<String>(
+          items: models
               .map(
-                (modelRef) => CupertinoActionSheetAction(
-                  onPressed: () => Navigator.of(popupContext).pop(modelRef),
-                  child: Text(modelRef),
+                (modelRef) => AppActionSheetItem<String>(
+                  value: modelRef,
+                  label: modelRef,
+                  isSelected: modelRef == currentModel,
                 ),
               )
               .toList(growable: false),
-          cancelButton: CupertinoActionSheetAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(popupContext).pop(),
-            child: const Text(UITextConstants.cancel),
-          ),
-        );
-      },
+        ),
+      ],
     );
     if (selected == null || selected.trim().isEmpty) return;
     ref.read(assistantGatewayProvider).switchModel(selected);
@@ -860,24 +855,23 @@ class _AssistantConversationPageState
     );
     if (action == null) return;
     var opened = false;
-    if (action == ConversationLinkAction.openInBrowser && allowOpen) {
-      opened = await launchUrl(uri!, mode: LaunchMode.externalApplication);
+    if (action == ConversationLinkAction.openInBrowser &&
+        allowOpen &&
+        uri != null) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
     if (action == ConversationLinkAction.copyLink || !opened) {
       await Clipboard.setData(ClipboardData(text: url));
     }
     if (!mounted) return;
-    AppToast.show(
-      context,
-      switch (action) {
-        ConversationLinkAction.copyLink => allowOpen
+    AppToast.show(context, switch (action) {
+      ConversationLinkAction.copyLink =>
+        allowOpen
             ? UITextConstants.assistantReferenceCopied
             : UITextConstants.assistantReferenceHostBlocked,
-        ConversationLinkAction.openInBrowser => opened
-            ? url
-            : UITextConstants.assistantReferenceOpenFailed,
-      },
-    );
+      ConversationLinkAction.openInBrowser =>
+        opened ? url : UITextConstants.assistantReferenceOpenFailed,
+    });
     await _recordAssistantImplicitFeedback(
       message: message,
       referenceOpened: true,
@@ -1003,7 +997,8 @@ class _AssistantConversationPageState
         .firstWhere((id) => id.isNotEmpty, orElse: () => '');
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
-          AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
+          AppSpacing.semantic[DesignSemanticConstants
+              .container]?[DesignSemanticConstants.sm] ??
           AppSpacing.containerSm,
       vertical: AppSpacing.md,
     );
@@ -1135,7 +1130,8 @@ class _AssistantConversationPageState
                       Padding(
                         padding: EdgeInsets.only(
                           bottom:
-                              AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.sm] ??
+                              AppSpacing.semantic[DesignSemanticConstants
+                                  .intraGroup]?[DesignSemanticConstants.sm] ??
                               AppSpacing.intraGroupSm,
                         ),
                         child: Center(
@@ -1143,7 +1139,9 @@ class _AssistantConversationPageState
                             timeStr,
                             style: TextStyle(
                               fontSize:
-                                  Theme.of(context).textTheme.bodySmall?.fontSize ??
+                                  Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.fontSize ??
                                   AppSpacing.containerSm,
                               color: fgPrimary.withValues(alpha: 0.5),
                             ),
@@ -1156,7 +1154,9 @@ class _AssistantConversationPageState
                       bubbleColor: msg['isSelf'] == true
                           ? bubbleSelf
                           : bubbleOther,
-                      textColor: msg['isSelf'] == true ? Colors.white : fgPrimary,
+                      textColor: msg['isSelf'] == true
+                          ? Colors.white
+                          : fgPrimary,
                       isSelectionMode: _isSelectionMode,
                       isSelected: _selectedIds.contains(msg['id']),
                       onLongPressStart: (details) =>
@@ -1206,7 +1206,9 @@ class _AssistantConversationPageState
                           ((msg['id'] as String?) ?? '') ==
                               latestAssistantTextMessageId,
                       feedbackStatus:
-                          _controller.feedbackStatusByMessageId[msg['id'] as String? ?? ''] ??
+                          _controller.feedbackStatusByMessageId[msg['id']
+                                  as String? ??
+                              ''] ??
                           '',
                       onFeedbackHelpful: isAssistantMessage
                           ? () => _submitAssistantFeedback(
@@ -1323,16 +1325,12 @@ class _AssistantConversationPageState
                                     currentUser?.username ?? currentUser?.id;
                                 if (userId != null && userId.isNotEmpty) {
                                   context.push(
-                                    AppRoutePaths.userProfile(
-                                      username: userId,
-                                    ),
+                                    AppRoutePaths.userProfile(username: userId),
                                   );
                                 }
                               } else if (senderId.isNotEmpty) {
                                 context.push(
-                                  AppRoutePaths.userProfile(
-                                    username: senderId,
-                                  ),
+                                  AppRoutePaths.userProfile(username: senderId),
                                   extra: UserProfileRouteExtra(
                                     profileSubjectId: senderId,
                                   ),
@@ -1351,7 +1349,8 @@ class _AssistantConversationPageState
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal:
-                    AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
+                    AppSpacing.semantic[DesignSemanticConstants
+                        .container]?[DesignSemanticConstants.sm] ??
                     AppSpacing.containerSm,
                 vertical: AppSpacing.sm,
               ),

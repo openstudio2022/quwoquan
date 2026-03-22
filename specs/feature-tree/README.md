@@ -51,13 +51,14 @@ specs/feature-tree/<l1-capability>/
 
 ## L1 落地范围
 
-功能 L1（5）：
+功能 L1（6）：
 
 - `discovery-content`
 - `circle-community`
 - `chat-conversation`
 - `user-identity-profile-relationship`
 - `assistant-run-learning`
+- `global-search-experience`
 
 非功能 L1（4）：
 

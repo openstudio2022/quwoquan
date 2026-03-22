@@ -1,0 +1,71 @@
+version: 2
+feature: xiaoqu-entry-handoff
+level: L3_scenario
+source_path: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
+parent_journey: cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结搜索首页中的问小趣快捷入口及其到 assistant 会话的 typed handoff。
+  journey_bindings:
+    - J1
+    - J3
+  in_scope:
+    - 问小趣入口
+    - query handoff
+    - assistant 会话承接
+  out_of_scope:
+    - AI 搜索结果混排
+    - assistant runtime 改造
+
+scenario_acceptance:
+  A1:
+    title: 问小趣作为搜索页快捷入口而非结果域
+    scenario: xiaoqu handoff
+    journey_step: tap ask xiaoqu and continue in assistant conversation
+    done_when:
+      - 搜索首页存在明确的问小趣入口
+      - 用户点击后可把当前 query 与上下文交给 assistant 会话承接
+      - 问小趣 query 不进入最近搜索
+    edge_cases:
+      - 搜索框为空时直接进入问小趣
+      - 当前 query 已输入但未发普通搜索
+      - assistant 会话页已有上下文
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - xiaoqu handoff widget test
+        - assistant conversation handoff regression test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: handoff 走 typed contract 而非 runtime 字符串路由
+    done_when:
+      - handoff 使用 assistant metadata 和既有 contract 语义承接
+      - 不新增 runtime 层字符串 contains 路由
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - assistant metadata review
+      recorded: []
+    status: pending

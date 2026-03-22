@@ -1,0 +1,55 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze user-domain social relation search contract
+    goal: 在 `user` 域定义 `SearchSocialRelations` 与 `SocialRelationSearchItemView`
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 社交关系搜索 operation 与 DTO 已定义
+      - 搜索中的“人”不再挂在 chat 域
+    status: planned
+
+  - id: P2
+    title: land app adapter and result item mapping
+    goal: 让搜索页消费 user 域结果，并复用 `RelationshipCapabilityView`
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - `SearchCoordinator` 可接入社交关系结果
+      - 结果卡能展示公开身份与关系态
+    status: planned
+
+  - id: P3
+    title: verify profile navigation and old-node cleanup
+    goal: 验证用户主页跳转稳定，并完成旧 chat 搜索节点治理退出
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 搜索到主页主路径稳定
+      - 特性树不再引用旧 contact-search-index 节点
+    status: planned

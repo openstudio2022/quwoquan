@@ -10,6 +10,9 @@ class MediaCaptionBlock extends StatelessWidget {
     required this.caption,
     required this.isExpanded,
     required this.onToggle,
+    this.header,
+    this.titleTrailing,
+    this.preCaption,
     this.footer,
   });
 
@@ -17,6 +20,9 @@ class MediaCaptionBlock extends StatelessWidget {
   final String caption;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final Widget? header;
+  final Widget? titleTrailing;
+  final Widget? preCaption;
   final Widget? footer;
 
   @override
@@ -38,13 +44,39 @@ class MediaCaptionBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (header != null) ...[
+            Align(alignment: Alignment.center, child: header!),
+            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+          ],
           if (title.isNotEmpty)
             Padding(
               padding: EdgeInsets.only(
                 bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
               ),
-              child: Text(title, style: titleStyle),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                  ),
+                  if (titleTrailing != null) ...[
+                    SizedBox(
+                      width: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                    ),
+                    titleTrailing!,
+                  ],
+                ],
+              ),
             ),
+          if (title.isEmpty && preCaption != null) ...[
+            preCaption!,
+            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+          ],
           if (caption.isNotEmpty)
             _buildExpandableCaption(
               context,

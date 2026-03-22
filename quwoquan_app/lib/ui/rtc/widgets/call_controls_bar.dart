@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/media_device_provider.dart';
@@ -168,72 +169,38 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
     );
   }
 
-  void _showAudioOutputPicker(
+  Future<void> _showAudioOutputPicker(
     BuildContext context,
     MediaDeviceState device,
-  ) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('音频输出'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              ref
-                  .read(mediaDeviceProvider.notifier)
-                  .setAudioOutput(AudioOutput.earpiece);
-              Navigator.pop(ctx);
-            },
-            child: Text(
-              '听筒',
-              style: TextStyle(
-                fontWeight: device.audioOutput == AudioOutput.earpiece
-                    ? AppTypography.semiBold
-                    : AppTypography.normal,
-              ),
+  ) async {
+    final selected = await showAppActionSheet<AudioOutput>(
+      context,
+      title: '音频输出',
+      sections: [
+        AppActionSheetSection<AudioOutput>(
+          items: [
+            AppActionSheetItem<AudioOutput>(
+              value: AudioOutput.earpiece,
+              label: '听筒',
+              isSelected: device.audioOutput == AudioOutput.earpiece,
             ),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              ref
-                  .read(mediaDeviceProvider.notifier)
-                  .setAudioOutput(AudioOutput.speaker);
-              Navigator.pop(ctx);
-            },
-            child: Text(
-              '扬声器',
-              style: TextStyle(
-                fontWeight: device.audioOutput == AudioOutput.speaker
-                    ? AppTypography.semiBold
-                    : AppTypography.normal,
-              ),
+            AppActionSheetItem<AudioOutput>(
+              value: AudioOutput.speaker,
+              label: '扬声器',
+              isSelected: device.audioOutput == AudioOutput.speaker,
             ),
-          ),
-          if (device.isBluetoothAvailable)
-            CupertinoActionSheetAction(
-              onPressed: () {
-                ref
-                    .read(mediaDeviceProvider.notifier)
-                    .setAudioOutput(AudioOutput.bluetooth);
-                Navigator.pop(ctx);
-              },
-              child: Text(
-                '蓝牙',
-                style: TextStyle(
-                  fontWeight: device.audioOutput == AudioOutput.bluetooth
-                      ? AppTypography.semiBold
-                      : AppTypography.normal,
-                ),
+            if (device.isBluetoothAvailable)
+              AppActionSheetItem<AudioOutput>(
+                value: AudioOutput.bluetooth,
+                label: '蓝牙',
+                isSelected: device.audioOutput == AudioOutput.bluetooth,
               ),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDestructiveAction: true,
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('取消'),
+          ],
         ),
-      ),
+      ],
     );
+    if (selected == null) return;
+    ref.read(mediaDeviceProvider.notifier).setAudioOutput(selected);
   }
 }
 

@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/design_system/spacing/spacing_extensions.dart'
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 
@@ -67,11 +68,12 @@ class ImageViewer extends ConsumerStatefulWidget {
   ConsumerState<ImageViewer> createState() => _ImageViewerState();
 }
 
-class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderStateMixin {
+class _ImageViewerState extends ConsumerState<ImageViewer>
+    with TickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _fadeController;
   late AnimationController _slideController;
-  
+
   int _currentIndex = 0;
   bool _showControls = true;
   bool _isLiked = false;
@@ -89,20 +91,20 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     _fadeController.value = 1.0;
-    
+
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _initializePostState();
-    
+
     // 自动隐藏控制栏
     _startAutoHideTimer();
     _applySystemUiMode();
@@ -110,13 +112,17 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
 
   void _initializePostState() {
     if (widget.post != null) {
-      _isLiked = widget.likedPosts?.contains(widget.post['id']?.toString()) ?? false;
-      _isSaved = widget.savedPosts?.contains(widget.post['id']?.toString()) ?? false;
-      _isFollowing = widget.followingUsers?.contains(widget.post['username']) ?? false;
+      _isLiked =
+          widget.likedPosts?.contains(widget.post['id']?.toString()) ?? false;
+      _isSaved =
+          widget.savedPosts?.contains(widget.post['id']?.toString()) ?? false;
+      _isFollowing =
+          widget.followingUsers?.contains(widget.post['username']) ?? false;
       _likesCount = widget.getPostLikesCount?.call(widget.post) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(widget.post) ?? 0;
       _commentsCount = widget.post['commentsCount'] ?? 0;
-      _sharesCount = widget.post['sharesCount'] ?? widget.post['shareCount'] ?? 0;
+      _sharesCount =
+          widget.post['sharesCount'] ?? widget.post['shareCount'] ?? 0;
     }
   }
 
@@ -140,6 +146,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           }
         }
       }
+
       _fadeController.addStatusListener(listener);
     } else {
       setState(() {
@@ -203,9 +210,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     if (!widget.isOpen) return const SizedBox.shrink();
-    
+
     final isDark = ref.watch(isDarkProvider);
-    
+
     return Material(
       color: AppColors.black,
       child: Stack(
@@ -223,7 +230,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                   children: [
                     MediaViewerTopBar(
                       onBack: widget.onClose,
-                      positionText: '${_currentIndex + 1}/${widget.imageUrls.length}',
+                      positionText:
+                          '${_currentIndex + 1}/${widget.imageUrls.length}',
                       authorName: _getAuthorName(),
                       authorAvatarUrl: _getAuthorAvatar(),
                       isFollowing: _isFollowing,
@@ -274,14 +282,15 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             imageProvider: NetworkImage(widget.imageUrls[index]),
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 2.0,
-            heroAttributes: PhotoViewHeroAttributes(tag: 'image_${widget.post['id']}_$index'),
+            heroAttributes: PhotoViewHeroAttributes(
+              tag: 'image_${widget.post['id']}_$index',
+            ),
           );
         },
         scrollPhysics: const BouncingScrollPhysics(),
         backgroundDecoration: const BoxDecoration(color: AppColors.black),
-        loadingBuilder: (context, event) => Center(
-          child: CupertinoActivityIndicator(),
-        ),
+        loadingBuilder: (context, event) =>
+            Center(child: CupertinoActivityIndicator()),
       ),
     );
   }
@@ -301,10 +310,12 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
 
   Widget _buildCaptionOverlay(BuildContext context) {
     final title = widget.post?['title']?.toString() ?? '';
-    final caption = (widget.post?['content'] ?? widget.post?['caption'])?.toString() ?? '';
+    final caption =
+        (widget.post?['content'] ?? widget.post?['caption'])?.toString() ?? '';
     if (title.isEmpty && caption.isEmpty) return const SizedBox.shrink();
 
-    final bottomOffset = MediaQuery.of(context).padding.bottom +
+    final bottomOffset =
+        MediaQuery.of(context).padding.bottom +
         AppSpacing.buttonHeight +
         context.safeGetIntraGroupSpacing(SpacingSize.md);
 
@@ -337,7 +348,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                   if (title.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(
-                        bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                        bottom: context.safeGetIntraGroupSpacing(
+                          SpacingSize.xs,
+                        ),
                       ),
                       child: Text(
                         title,
@@ -349,10 +362,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                       ),
                     ),
                   if (caption.isNotEmpty)
-                    _buildExpandableCaption(
-                      context,
-                      caption: caption,
-                    ),
+                    _buildExpandableCaption(context, caption: caption),
                 ],
               ),
             ),
@@ -399,11 +409,17 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 TextSpan(
                   text: _isCaptionExpanded
                       ? caption
-                      : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
+                      : _truncateCaption(
+                          caption,
+                          overflowPainter,
+                          constraints.maxWidth,
+                        ),
                   style: captionStyle,
                 ),
                 TextSpan(
-                  text: _isCaptionExpanded ? UITextConstants.collapse : UITextConstants.fullText,
+                  text: _isCaptionExpanded
+                      ? UITextConstants.collapse
+                      : UITextConstants.fullText,
                   style: captionStyle.copyWith(
                     color: AppColors.primaryColor,
                     fontWeight: AppTypography.semiBold,
@@ -417,8 +433,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     );
   }
 
-  String _truncateCaption(String caption, TextPainter textPainter, double maxWidth) {
-    final position = textPainter.getPositionForOffset(Offset(maxWidth, textPainter.height));
+  String _truncateCaption(
+    String caption,
+    TextPainter textPainter,
+    double maxWidth,
+  ) {
+    final position = textPainter.getPositionForOffset(
+      Offset(maxWidth, textPainter.height),
+    );
     final truncatedLength = (position.offset - 4).clamp(0, caption.length);
     return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
   }
@@ -435,10 +457,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.overlayStrong,
-                  Colors.transparent,
-                ],
+                colors: [AppColors.overlayStrong, Colors.transparent],
               ),
             ),
             child: SafeArea(
@@ -473,7 +492,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               children: [
                 CircleAvatar(
                   radius: 20.r,
-                  backgroundImage: widget.post['publisher']?['avatar']?.isNotEmpty == true
+                  backgroundImage:
+                      widget.post['publisher']?['avatar']?.isNotEmpty == true
                       ? NetworkImage(widget.post['publisher']['avatar'])
                       : null,
                   child: widget.post['publisher']?['avatar']?.isEmpty != false
@@ -507,7 +527,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             ),
           ),
         ),
-        
+
         // 更多选项按钮
         GestureDetector(
           onTap: _showMoreOptions,
@@ -537,8 +557,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             height: AppSpacing.sm.w,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: index == _currentIndex 
-                  ? AppColors.white 
+              color: index == _currentIndex
+                  ? AppColors.white
                   : AppColors.overlayMedium,
             ),
           );
@@ -559,10 +579,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [
-                  AppColors.overlayStrong,
-                  Colors.transparent,
-                ],
+                colors: [AppColors.overlayStrong, Colors.transparent],
               ),
             ),
             child: SafeArea(
@@ -601,9 +618,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           isActive: _isLiked,
           onTap: _handleLike,
         ),
-        
+
         SizedBox(width: AppSpacing.interGroupSm),
-        
+
         // 收藏按钮
         _buildInteractionButton(
           iconWidget: AppStarIcon(
@@ -615,9 +632,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           isActive: _isSaved,
           onTap: _handleSave,
         ),
-        
+
         SizedBox(width: AppSpacing.interGroupSm),
-        
+
         // 评论按钮
         _buildInteractionButton(
           iconWidget: AppBubbleIcon(
@@ -628,9 +645,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           isActive: false,
           onTap: _handleComment,
         ),
-        
+
         const Spacer(),
-        
+
         // 转发按钮
         GestureDetector(
           onTap: _handleShare,
@@ -710,7 +727,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               ],
             ),
           ),
-        
+
         // 评论数
         if (_commentsCount > 0)
           GestureDetector(
@@ -762,69 +779,55 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   void _showMoreOptions() {
     // 添加mounted检查，防止在widget销毁后访问ref
     if (!mounted) return;
-    
-    final isDark = ref.watch(isDarkProvider);
-    showCupertinoModalPopup(
-      context: context,
-      builder: (context) => Material(
-        type: MaterialType.transparency,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 拖拽指示器
-                Container(
-                  width: AppSpacing.forty.w,
-                  height: AppSpacing.xs.h,
-                  margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
-                    borderRadius: BorderRadius.circular(2.r),
-                  ),
-                ),
-                
-                // 功能列表
-                _buildMoreOptionItem(CupertinoIcons.gift, '打赏', isDark, () => _handleReward()),
-                _buildMoreOptionItem(CupertinoIcons.arrow_down_to_line, '保存', isDark, () => _handleSave()),
-                _buildMoreOptionItem(CupertinoIcons.chat_bubble, '私信', isDark, () => _handleMessage()),
-                _buildMoreOptionItem(CupertinoIcons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
-                _buildMoreOptionItem(CupertinoIcons.photo, '查看原图', isDark, () => _handleViewOriginal()),
-                
-                SizedBox(height: AppSpacing.twenty.h),
-              ],
+    showAppActionSheet<_ImageViewerMoreAction>(
+      context,
+      title: '更多功能',
+      sections: const [
+        AppActionSheetSection<_ImageViewerMoreAction>(
+          items: [
+            AppActionSheetItem<_ImageViewerMoreAction>(
+              value: _ImageViewerMoreAction.reward,
+              label: '打赏',
+              icon: CupertinoIcons.gift,
             ),
-          ),
+            AppActionSheetItem<_ImageViewerMoreAction>(
+              value: _ImageViewerMoreAction.save,
+              label: '保存',
+              icon: CupertinoIcons.arrow_down_to_line,
+            ),
+            AppActionSheetItem<_ImageViewerMoreAction>(
+              value: _ImageViewerMoreAction.message,
+              label: '私信',
+              icon: CupertinoIcons.chat_bubble,
+            ),
+            AppActionSheetItem<_ImageViewerMoreAction>(
+              value: _ImageViewerMoreAction.copyLink,
+              label: UITextConstants.copyLink,
+              icon: CupertinoIcons.link,
+            ),
+            AppActionSheetItem<_ImageViewerMoreAction>(
+              value: _ImageViewerMoreAction.viewOriginal,
+              label: '查看原图',
+              icon: CupertinoIcons.photo,
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  /// 构建更多选项项目
-  Widget _buildMoreOptionItem(IconData icon, String title, bool isDark, VoidCallback onTap) {
-    return CupertinoListTile(
-      leading: Icon(
-        icon,
-        color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
-        size: AppSpacing.iconMedium - AppSpacing.xs,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
-          fontSize: AppTypography.lg,
-          fontWeight: FontWeight.w500, // Cupertino typography typically uses w500 or w600
-        ),
-      ),
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
-      },
-    );
+      ],
+    ).then((action) {
+      if (!mounted || action == null) return;
+      switch (action) {
+        case _ImageViewerMoreAction.reward:
+          _handleReward();
+        case _ImageViewerMoreAction.save:
+          _handleSave();
+        case _ImageViewerMoreAction.message:
+          _handleMessage();
+        case _ImageViewerMoreAction.copyLink:
+          _handleCopyLink();
+        case _ImageViewerMoreAction.viewOriginal:
+          _handleViewOriginal();
+      }
+    });
   }
 
   // 交互处理方法
@@ -833,7 +836,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
       _isLiked = !_isLiked;
       _likesCount += _isLiked ? 1 : -1;
     });
-        widget.onLikeClick?.call(widget.post);
+    widget.onLikeClick?.call(widget.post);
   }
 
   void _handleComment() {
@@ -852,14 +855,16 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     setState(() {
       _isFollowing = !_isFollowing;
     });
-    final username = widget.post?['username']?.toString() ??
+    final username =
+        widget.post?['username']?.toString() ??
         widget.post?['publisher']?['username']?.toString();
     if (username == null || username.isEmpty) return;
     widget.onFollowClick?.call(username, _isFollowing);
   }
 
   void _handleAuthorTap() {
-    final username = widget.post?['username']?.toString() ??
+    final username =
+        widget.post?['username']?.toString() ??
         widget.post?['publisher']?['username']?.toString();
     if (username == null || username.isEmpty) return;
     widget.onUserClick(username);
@@ -892,12 +897,12 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   /// 格式化时间
   String _formatTimeAgo(dynamic createdAt) {
     if (createdAt == null) return '刚刚';
-    
+
     try {
       final now = DateTime.now();
       final created = DateTime.parse(createdAt.toString());
       final difference = now.difference(created);
-      
+
       if (difference.inMinutes < 1) {
         return '刚刚';
       } else if (difference.inMinutes < 60) {
@@ -919,3 +924,5 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     return formatCompactActionCount(count);
   }
 }
+
+enum _ImageViewerMoreAction { reward, save, message, copyLink, viewOriginal }

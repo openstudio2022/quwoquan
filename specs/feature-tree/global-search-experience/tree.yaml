@@ -1,0 +1,11 @@
+version: 1
+l1: global-search-experience
+l2:
+  - feature: cross-domain-search-journey
+    l3:
+      - feature: full-screen-search-shell-and-entry
+      - feature: multi-domain-result-composition
+      - feature: social-relationship-search-contract
+      - feature: circle-facet-search-and-filter
+      - feature: recent-search-sync-and-voice-asr
+      - feature: xiaoqu-entry-handoff

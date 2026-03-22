@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart'
     show CommentInput;
@@ -26,6 +27,7 @@ class CommentViewer {
   }) async {
     await showCupertinoModalPopup(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (ctx) => _CommentSheet(
         postId: postId,
         config: config,
@@ -58,6 +60,11 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
   final ScrollController _scrollController = ScrollController();
   bool _initialLoaded = false;
 
+  void _dismissSheet() {
+    Navigator.of(context).pop();
+    widget.onClose?.call();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,69 +93,64 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
     if (!_initialLoaded) {
       _initialLoaded = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref
-            .read(commentProviderFamily(widget.postId).notifier)
-            .loadComments();
+        ref.read(commentProviderFamily(widget.postId).notifier).loadComments();
       });
     }
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(
-              isDark, ColorType.backgroundPrimary),
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.largeBorderRadius),
+    return AppBottomModalSurface(
+      onDismiss: _dismissSheet,
+      backgroundColor: AppColorsFunctional.getColor(
+        isDark,
+        ColorType.backgroundPrimary,
+      ),
+      maxHeightRatio: AppSpacing.modalSheetMaxHeightRatio,
+      panelKey: TestKeys.modalBottomSheetPanel,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Header(
+            isDark: isDark,
+            commentCount: commentState.comments.length,
+            sortMode: commentState.sortMode,
+            onSortChanged: (mode) {
+              ref
+                  .read(commentProviderFamily(widget.postId).notifier)
+                  .switchSort(mode);
+            },
+            onClose: _dismissSheet,
           ),
-        ),
-        height: MediaQuery.of(context).size.height * 0.75, // Fixed height for iOS modal
-        child: Column(
-          children: [
-            _DragHandle(isDark: isDark),
-            _Header(
-              isDark: isDark,
-              commentCount: commentState.comments.length,
-              sortMode: commentState.sortMode,
-              onSortChanged: (mode) {
-                ref
+          Flexible(
+            fit: FlexFit.loose,
+            child: _buildCommentList(commentState, isDark, _scrollController),
+          ),
+          CommentInput(
+            config: widget.config,
+            replyTo: _replyTo,
+            onSubmit: (content) async {
+              try {
+                final confirmed = await ref
                     .read(commentProviderFamily(widget.postId).notifier)
-                    .switchSort(mode);
-              },
-              onClose: () => Navigator.of(context).pop(),
-            ),
-            Expanded(
-              child: _buildCommentList(commentState, isDark, _scrollController),
-            ),
-            CommentInput(
-              config: widget.config,
-              replyTo: _replyTo,
-              onSubmit: (content) async {
-                try {
-                  final confirmed = await ref
-                      .read(commentProviderFamily(widget.postId).notifier)
-                      .addComment(
-                        content,
-                        replyToCommentId: _replyTo?.id,
-                      );
-                  if (confirmed != null) {
-                    widget.onCommentAdded?.call(confirmed.id);
-                  }
-                  if (mounted) setState(() => _replyTo = null);
-                } catch (_) {}
-              },
-              onCancelReply: () {
-                setState(() => _replyTo = null);
-              },
-            ),
-          ],
-        ),
+                    .addComment(content, replyToCommentId: _replyTo?.id);
+                if (confirmed != null) {
+                  widget.onCommentAdded?.call(confirmed.id);
+                }
+                if (mounted) setState(() => _replyTo = null);
+              } catch (_) {}
+            },
+            onCancelReply: () {
+              setState(() => _replyTo = null);
+            },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildCommentList(
-      CommentState state, bool isDark, ScrollController scrollController) {
+    CommentState state,
+    bool isDark,
+    ScrollController scrollController,
+  ) {
     if (state.isLoading && state.comments.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
     }
@@ -157,17 +159,23 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.exclamationmark_circle,
-                size: AppSpacing.iconLarge,
-                color: AppColorsFunctional.getColor(
-                    isDark, ColorType.foregroundTertiary)),
+            Icon(
+              CupertinoIcons.exclamationmark_circle,
+              size: AppSpacing.iconLarge,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
+            ),
             SizedBox(height: AppSpacing.sm),
             Text(
               UITextConstants.loadFailed,
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 color: AppColorsFunctional.getColor(
-                    isDark, ColorType.foregroundSecondary),
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
               ),
             ),
             SizedBox(height: AppSpacing.md),
@@ -188,19 +196,26 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
           style: TextStyle(
             fontSize: AppTypography.sm,
             color: AppColorsFunctional.getColor(
-                isDark, ColorType.foregroundSecondary),
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
           ),
         ),
       );
     }
 
-    final topLevel =
-        state.comments.where((c) => c.replyToCommentId == null || c.replyToCommentId!.isEmpty).toList();
+    final topLevel = state.comments
+        .where((c) => c.replyToCommentId == null || c.replyToCommentId!.isEmpty)
+        .toList();
 
     return ListView.builder(
       controller: _scrollController,
+      shrinkWrap: true,
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      itemCount: topLevel.length + (state.status == CommentListStatus.loadingMore ? 1 : 0),
+      itemCount:
+          topLevel.length +
+          (state.status == CommentListStatus.loadingMore ? 1 : 0),
       itemBuilder: (ctx, index) {
         if (index >= topLevel.length) {
           return Padding(
@@ -235,36 +250,14 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
           },
           onDelete: comment.authorId == 'me'
               ? () => ref
-                  .read(commentProviderFamily(widget.postId).notifier)
-                  .deleteComment(comment.id)
+                    .read(commentProviderFamily(widget.postId).notifier)
+                    .deleteComment(comment.id)
               : null,
           onReplyLike: (replyId) => ref
               .read(commentProviderFamily(widget.postId).notifier)
               .toggleLike(replyId),
         );
       },
-    );
-  }
-}
-
-class _DragHandle extends StatelessWidget {
-  final bool isDark;
-  const _DragHandle({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
-      alignment: Alignment.center,
-      child: Container(
-        width: AppSpacing.thirtySix,
-        height: AppSpacing.xs,
-        decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(
-              isDark, ColorType.foregroundTertiary),
-          borderRadius: BorderRadius.circular(AppSpacing.two),
-        ),
-      ),
     );
   }
 }
@@ -295,7 +288,10 @@ class _Header extends StatelessWidget {
         children: [
           Text(
             '${UITextConstants.comment}${commentCount > 0 ? " $commentCount" : ""}',
-            style: TextStyle(fontSize: AppTypography.base, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const Spacer(),
           _SortToggle(
@@ -310,7 +306,9 @@ class _Header extends StatelessWidget {
               CupertinoIcons.xmark,
               size: AppSpacing.iconMedium,
               color: AppColorsFunctional.getColor(
-                  isDark, ColorType.foregroundSecondary),
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
             ),
           ),
         ],
@@ -335,7 +333,11 @@ class _SortToggle extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildChip(context, CommentSortMode.latest, UITextConstants.circleSortLatest),
+        _buildChip(
+          context,
+          CommentSortMode.latest,
+          UITextConstants.circleSortLatest,
+        ),
         SizedBox(width: AppSpacing.xs),
         _buildChip(context, CommentSortMode.hot, UITextConstants.circleSortHot),
       ],
@@ -364,7 +366,9 @@ class _SortToggle extends StatelessWidget {
             color: isActive
                 ? AppColors.primaryColor
                 : AppColorsFunctional.getColor(
-                    isDark, ColorType.foregroundSecondary),
+                    isDark,
+                    ColorType.foregroundSecondary,
+                  ),
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -409,15 +413,21 @@ class _CommentItem extends StatelessWidget {
               CircleAvatar(
                 radius: AppSpacing.iconMedium / 2,
                 backgroundColor: AppColorsFunctional.getColor(
-                    isDark, ColorType.backgroundSecondary),
+                  isDark,
+                  ColorType.backgroundSecondary,
+                ),
                 backgroundImage: comment.avatarUrl != null
                     ? NetworkImage(comment.avatarUrl!)
                     : null,
                 child: comment.avatarUrl == null
-                    ? Icon(CupertinoIcons.person_fill,
+                    ? Icon(
+                        CupertinoIcons.person_fill,
                         size: AppSpacing.iconSmall,
                         color: AppColorsFunctional.getColor(
-                            isDark, ColorType.foregroundTertiary))
+                          isDark,
+                          ColorType.foregroundTertiary,
+                        ),
+                      )
                     : null,
               ),
               SizedBox(width: AppSpacing.sm),
@@ -433,7 +443,9 @@ class _CommentItem extends StatelessWidget {
                             style: TextStyle(
                               fontSize: AppTypography.xs,
                               color: AppColorsFunctional.getColor(
-                                  isDark, ColorType.foregroundSecondary),
+                                isDark,
+                                ColorType.foregroundSecondary,
+                              ),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -445,10 +457,12 @@ class _CommentItem extends StatelessWidget {
                               vertical: 1,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryColor
-                                  .withValues(alpha: 0.1),
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(
-                                  AppSpacing.smallBorderRadius),
+                                AppSpacing.smallBorderRadius,
+                              ),
                             ),
                             child: Text(
                               UITextConstants.commentAuthorBadge,
@@ -461,7 +475,10 @@ class _CommentItem extends StatelessWidget {
                       ],
                     ),
                     SizedBox(height: AppSpacing.xs),
-                    Text(comment.content, style: TextStyle(fontSize: AppTypography.sm)),
+                    Text(
+                      comment.content,
+                      style: TextStyle(fontSize: AppTypography.sm),
+                    ),
                     SizedBox(height: AppSpacing.xs),
                     _buildActions(context),
                   ],
@@ -471,7 +488,9 @@ class _CommentItem extends StatelessWidget {
           ),
           if (replies.isNotEmpty)
             Padding(
-              padding: EdgeInsets.only(left: AppSpacing.iconMedium + AppSpacing.sm),
+              padding: EdgeInsets.only(
+                left: AppSpacing.iconMedium + AppSpacing.sm,
+              ),
               child: Column(
                 children: replies.take(3).map((reply) {
                   final replyLiked = likedIds.contains(reply.id);
@@ -486,7 +505,9 @@ class _CommentItem extends StatelessWidget {
             ),
           if (replies.length > 3)
             Padding(
-              padding: EdgeInsets.only(left: AppSpacing.iconMedium + AppSpacing.sm),
+              padding: EdgeInsets.only(
+                left: AppSpacing.iconMedium + AppSpacing.sm,
+              ),
               child: GestureDetector(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -513,7 +534,9 @@ class _CommentItem extends StatelessWidget {
           style: TextStyle(
             fontSize: AppTypography.xs,
             color: AppColorsFunctional.getColor(
-                isDark, ColorType.foregroundTertiary),
+              isDark,
+              ColorType.foregroundTertiary,
+            ),
           ),
         ),
         SizedBox(width: AppSpacing.md),
@@ -524,7 +547,9 @@ class _CommentItem extends StatelessWidget {
             style: TextStyle(
               fontSize: AppTypography.xs,
               color: AppColorsFunctional.getColor(
-                  isDark, ColorType.foregroundSecondary),
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
             ),
           ),
         ),
@@ -535,14 +560,14 @@ class _CommentItem extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                isLiked
-                    ? CupertinoIcons.heart_fill
-                    : CupertinoIcons.heart,
+                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                 size: AppSpacing.iconSmall,
                 color: isLiked
                     ? AppColors.error
                     : AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundTertiary),
+                        isDark,
+                        ColorType.foregroundTertiary,
+                      ),
               ),
               if (comment.likeCount > 0) ...[
                 SizedBox(width: AppSpacing.xs),
@@ -551,7 +576,9 @@ class _CommentItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: AppTypography.xs,
                     color: AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundTertiary),
+                      isDark,
+                      ColorType.foregroundTertiary,
+                    ),
                   ),
                 ),
               ],
@@ -566,7 +593,9 @@ class _CommentItem extends StatelessWidget {
               CupertinoIcons.trash,
               size: AppSpacing.iconSmall,
               color: AppColorsFunctional.getColor(
-                  isDark, ColorType.foregroundTertiary),
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
             ),
           ),
         ],
@@ -608,11 +637,17 @@ class _ReplyItem extends StatelessWidget {
           CircleAvatar(
             radius: AppSpacing.iconSmall / 2,
             backgroundColor: AppColorsFunctional.getColor(
-                isDark, ColorType.backgroundSecondary),
-            child: Icon(CupertinoIcons.person_fill,
-                size: AppSpacing.iconSmall / 2,
-                color: AppColorsFunctional.getColor(
-                    isDark, ColorType.foregroundTertiary)),
+              isDark,
+              ColorType.backgroundSecondary,
+            ),
+            child: Icon(
+              CupertinoIcons.person_fill,
+              size: AppSpacing.iconSmall / 2,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
+            ),
           ),
           SizedBox(width: AppSpacing.xs),
           Expanded(
@@ -627,7 +662,9 @@ class _ReplyItem extends StatelessWidget {
                         style: TextStyle(
                           fontSize: AppTypography.xs,
                           color: AppColorsFunctional.getColor(
-                              isDark, ColorType.foregroundSecondary),
+                            isDark,
+                            ColorType.foregroundSecondary,
+                          ),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -637,7 +674,9 @@ class _ReplyItem extends StatelessWidget {
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: AppColorsFunctional.getColor(
-                                isDark, ColorType.foregroundTertiary),
+                              isDark,
+                              ColorType.foregroundTertiary,
+                            ),
                           ),
                         ),
                         TextSpan(
@@ -663,14 +702,14 @@ class _ReplyItem extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.only(left: AppSpacing.xs),
               child: Icon(
-                isLiked
-                    ? CupertinoIcons.heart_fill
-                    : CupertinoIcons.heart,
+                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                 size: AppSpacing.iconSmall - 2,
                 color: isLiked
                     ? AppColors.error
                     : AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundTertiary),
+                        isDark,
+                        ColorType.foregroundTertiary,
+                      ),
               ),
             ),
           ),

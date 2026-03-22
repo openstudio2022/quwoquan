@@ -3,8 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
-import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -15,7 +14,7 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -82,8 +81,6 @@ class _HomePageState extends ConsumerState<HomePage>
 
   String? _routeDrivenTab(String? location) {
     switch (location) {
-      case AppRoutePaths.circles:
-        return 'circles';
       case AppRoutePaths.home:
         return 'following';
       default:
@@ -93,7 +90,6 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _syncShellRouteForTab(String id) {
     final targetLocation = switch (id) {
-      'circles' => AppRoutePaths.circles,
       'following' => AppRoutePaths.home,
       _ => null,
     };
@@ -188,11 +184,6 @@ class _HomePageState extends ConsumerState<HomePage>
       isDark,
       ColorType.separatorSubtle,
     );
-    final tabs = const <TabItem>[
-      TabItem(id: 'following', label: UITextConstants.homeTabFollowing),
-      TabItem(id: 'featured', label: UITextConstants.homeTabFeatured),
-      TabItem(id: 'circles', label: AppConceptConstants.circles),
-    ];
 
     return CupertinoPageScaffold(
       backgroundColor: bg,
@@ -216,27 +207,18 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
                 child: Stack(
                   children: [
-                    // Layer 1: Absolutely Centered Tabs
                     Positioned.fill(
                       child: Center(
-                        child: CenteredScrollableTabBar(
-                          tabs: tabs,
+                        child: HomePrimaryTabStrip(
                           activeTab: _activeTab,
                           onTabChange: _handleTabChange,
                           onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                          // Remove actions from here to ensure centering
-                          leadingActions: const [],
-                          trailingActions: const [],
-                          // Ensure background is transparent so it doesn't cover actions if expanding
-                          transparentBackground: true,
+                          isDark: isDark,
                         ),
                       ),
                     ),
-                    // Layer 2: Trailing Actions
                     Positioned(
-                      right:
-                          AppSpacing.feedContentHorizontal(context) -
-                          AppSpacing.intraGroupXs,
+                      right: AppSpacing.topBarTrailingButtonInset(context),
                       top: 0,
                       bottom: 0,
                       child: const Center(
@@ -279,7 +261,7 @@ class _HomePageState extends ConsumerState<HomePage>
         // This case is handled in the main build method now for full screen
         return const SizedBox.shrink();
       case 'circles':
-        return HomeCirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
+        return CirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
       default:
         return const SizedBox.shrink();
     }

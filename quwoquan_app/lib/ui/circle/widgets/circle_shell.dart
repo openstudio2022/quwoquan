@@ -21,11 +21,7 @@ import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 
 class CircleShell extends ConsumerStatefulWidget {
-  const CircleShell({
-    super.key,
-    required this.circleId,
-    this.onBack,
-  });
+  const CircleShell({super.key, required this.circleId, this.onBack});
 
   final String circleId;
   final VoidCallback? onBack;
@@ -67,10 +63,11 @@ class _CircleShellState extends ConsumerState<CircleShell>
 
   List<_TabSpec> _resolveTabs(CircleState? circleState) {
     final sectionConfig = circleState?.circleData?.sectionConfig ?? [];
-    final visible = sectionConfig
-        .where((section) => section.visible)
-        .toList(growable: false)
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final visible =
+        sectionConfig
+            .where((section) => section.visible)
+            .toList(growable: false)
+          ..sort((a, b) => a.order.compareTo(b.order));
     final availableTypes = visible.isNotEmpty
         ? visible.map((section) => section.sectionType).toSet()
         : <String>{'works', 'interaction', 'chat', 'storage'};
@@ -79,15 +76,17 @@ class _CircleShellState extends ConsumerState<CircleShell>
       tabs.add(_TabSpec(type: 'content', label: _sectionLabel('content')));
     }
     if (availableTypes.contains('interaction')) {
-      tabs.add(_TabSpec(type: 'discussion', label: _sectionLabel('discussion')));
+      tabs.add(
+        _TabSpec(type: 'discussion', label: _sectionLabel('discussion')),
+      );
     }
     if (availableTypes.contains('chat') || availableTypes.contains('storage')) {
       tabs.add(_TabSpec(type: 'assets', label: _sectionLabel('assets')));
     }
     return tabs.isEmpty
         ? _defaultSections
-            .map((type) => _TabSpec(type: type, label: _sectionLabel(type)))
-            .toList(growable: false)
+              .map((type) => _TabSpec(type: type, label: _sectionLabel(type)))
+              .toList(growable: false)
         : tabs;
   }
 
@@ -183,7 +182,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
   String _metaLine(CircleState state) {
     final circle = state.circleData;
     final members = _formatCount(
-      state.stats['members'] ?? state.stats['totalMembers'] ?? circle?.memberCount,
+      state.stats['members'] ??
+          state.stats['totalMembers'] ??
+          circle?.memberCount,
     );
     final posts = _formatCount(
       state.stats['posts'] ?? state.stats['totalPosts'] ?? circle?.postCount,
@@ -220,47 +221,48 @@ class _CircleShellState extends ConsumerState<CircleShell>
     BuildContext context, {
     required String circleName,
   }) async {
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        title: Text(circleName.isEmpty ? AppConceptConstants.circles : circleName),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(sheetContext).pop();
-              AppToast.show(context, UITextConstants.share);
-            },
-            child: Text(UITextConstants.share),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () async {
-              await Clipboard.setData(
-                ClipboardData(text: widget.circleId),
-              );
-              if (sheetContext.mounted) {
-                Navigator.of(sheetContext).pop();
-              }
-              if (context.mounted) {
-                AppToast.show(context, UITextConstants.copiedToClipboard);
-              }
-            },
-            child: Text(UITextConstants.copyLink),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              Navigator.of(sheetContext).pop();
-              AppToast.show(context, UITextConstants.report);
-            },
-            child: Text(UITextConstants.report),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: Text(UITextConstants.cancel),
+    final action = await showAppActionSheet<_CircleMoreAction>(
+      context,
+      title: circleName.isEmpty ? AppConceptConstants.circles : circleName,
+      sections: [
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: [
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.share,
+              label: UITextConstants.share,
+              icon: CupertinoIcons.share,
+            ),
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.copyLink,
+              label: UITextConstants.copyLink,
+              icon: CupertinoIcons.link,
+            ),
+          ],
         ),
-      ),
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: [
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.report,
+              label: UITextConstants.report,
+              icon: CupertinoIcons.flag,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
     );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case _CircleMoreAction.share:
+        AppToast.show(context, UITextConstants.share);
+      case _CircleMoreAction.copyLink:
+        await Clipboard.setData(ClipboardData(text: widget.circleId));
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.copiedToClipboard);
+        }
+      case _CircleMoreAction.report:
+        AppToast.show(context, UITextConstants.report);
+    }
   }
 
   @override
@@ -269,12 +271,18 @@ class _CircleShellState extends ConsumerState<CircleShell>
     final notifier = ref.watch(circleStateProvider(widget.circleId));
     final circleState = notifier.state;
     final circleData = circleState.circleData;
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final bgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundSecondary,
     );
-    final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
 
     final newTabs = _resolveTabs(circleState);
     if (newTabs.length != _resolvedTabs.length ||
@@ -316,7 +324,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
               return [
                 CupertinoSliverNavigationBar(
                   largeTitle: Text(
-                    circleName.isEmpty ? AppConceptConstants.circles : circleName,
+                    circleName.isEmpty
+                        ? AppConceptConstants.circles
+                        : circleName,
                   ),
                   automaticallyImplyLeading: false,
                   backgroundColor: bg.withValues(alpha: 0.92),
@@ -329,7 +339,8 @@ class _CircleShellState extends ConsumerState<CircleShell>
                   leading: CupertinoButton(
                     padding: EdgeInsets.zero,
                     minimumSize: Size.square(AppSpacing.minInteractiveSize),
-                    onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+                    onPressed:
+                        widget.onBack ?? () => Navigator.of(context).pop(),
                     child: const Icon(CupertinoIcons.back),
                   ),
                   trailing: CupertinoButton(
@@ -415,7 +426,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppSpacing.largeBorderRadius + AppSpacing.sm),
+              top: Radius.circular(
+                AppSpacing.largeBorderRadius + AppSpacing.sm,
+              ),
               bottom: Radius.circular(AppSpacing.largeBorderRadius),
             ),
             border: Border.all(color: border.withValues(alpha: 0.12)),
@@ -432,7 +445,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppSpacing.largeBorderRadius + AppSpacing.sm),
+                  top: Radius.circular(
+                    AppSpacing.largeBorderRadius + AppSpacing.sm,
+                  ),
                 ),
                 child: SizedBox(
                   height: coverHeight,
@@ -577,7 +592,8 @@ class _CircleShellState extends ConsumerState<CircleShell>
                       stats: {
                         ...state.stats,
                         if (circle != null) 'posts': circle.postCount,
-                        if (circle != null) 'weeklyActive': circle.weeklyActiveCount,
+                        if (circle != null)
+                          'weeklyActive': circle.weeklyActiveCount,
                         if (circle != null) 'members': circle.memberCount,
                       },
                     ),
@@ -644,7 +660,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
             tabs: tabs,
             activeTab: _resolvedTabs[_activeTabIndex].type,
             onTabChange: (tabId) {
-              final index = _resolvedTabs.indexWhere((tab) => tab.type == tabId);
+              final index = _resolvedTabs.indexWhere(
+                (tab) => tab.type == tabId,
+              );
               if (index < 0 || index == _activeTabIndex) return;
               setState(() => _activeTabIndex = index);
               _pageController.animateToPage(
@@ -669,65 +687,61 @@ class _CircleShellState extends ConsumerState<CircleShell>
     final circle = state.circleData;
     return switch (type) {
       'content' => Padding(
-          padding: EdgeInsets.only(
-            top: AppSpacing.sm,
-            bottom: MediaQuery.viewPaddingOf(context).bottom +
-                AppSpacing.containerLg,
-          ),
-          child: SectionCreations(
-            circleId: widget.circleId,
-            isDark: isDark,
-            role: state.role,
-          ),
+        padding: EdgeInsets.only(
+          top: AppSpacing.sm,
+          bottom:
+              MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerLg,
         ),
+        child: SectionCreations(
+          circleId: widget.circleId,
+          isDark: isDark,
+          role: state.role,
+        ),
+      ),
       'discussion' => SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerLg,
-          ),
-          child: _SectionSurface(
-            isDark: isDark,
-            child: SectionInteraction(
-              circleId: widget.circleId,
-              isDark: isDark,
-            ),
-          ),
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerLg,
         ),
+        child: _SectionSurface(
+          isDark: isDark,
+          child: SectionInteraction(circleId: widget.circleId, isDark: isDark),
+        ),
+      ),
       'assets' => SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerLg,
-          ),
-          child: Column(
-            children: [
-              _SectionSurface(
-                isDark: isDark,
-                child: SectionChat(
-                  circleId: widget.circleId,
-                  conversationId: circle?.conversationId,
-                  isDark: isDark,
-                ),
-              ),
-              SizedBox(height: AppSpacing.md),
-              _SectionSurface(
-                isDark: isDark,
-                child: SectionStorage(
-                  circleId: widget.circleId,
-                  isDark: isDark,
-                  storageUsedBytes: circle?.storageUsedBytes ?? 0,
-                  storageQuotaBytes:
-                      circle?.storageQuotaBytes ?? 1073741824,
-                ),
-              ),
-            ],
-          ),
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerLg,
         ),
+        child: Column(
+          children: [
+            _SectionSurface(
+              isDark: isDark,
+              child: SectionChat(
+                circleId: widget.circleId,
+                conversationId: circle?.conversationId,
+                isDark: isDark,
+              ),
+            ),
+            SizedBox(height: AppSpacing.md),
+            _SectionSurface(
+              isDark: isDark,
+              child: SectionStorage(
+                circleId: widget.circleId,
+                isDark: isDark,
+                storageUsedBytes: circle?.storageUsedBytes ?? 0,
+                storageQuotaBytes: circle?.storageQuotaBytes ?? 1073741824,
+              ),
+            ),
+          ],
+        ),
+      ),
       _ => const SizedBox.shrink(),
     };
   }
@@ -743,19 +757,24 @@ class _CircleShellState extends ConsumerState<CircleShell>
   }
 }
 
+enum _CircleMoreAction { share, copyLink, report }
+
 class _SectionSurface extends StatelessWidget {
-  const _SectionSurface({
-    required this.isDark,
-    required this.child,
-  });
+  const _SectionSurface({required this.isDark, required this.child});
 
   final bool isDark;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
     return Container(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
@@ -783,10 +802,7 @@ class _TabSpec {
 }
 
 class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  const _TabBarDelegate({
-    required this.child,
-    required this.height,
-  });
+  const _TabBarDelegate({required this.child, required this.height});
 
   final Widget child;
   final double height;
@@ -798,7 +814,11 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return SizedBox.expand(child: child);
   }
 

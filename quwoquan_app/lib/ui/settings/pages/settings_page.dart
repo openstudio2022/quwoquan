@@ -55,6 +55,7 @@ class SettingsPage extends ConsumerWidget {
                     trailingText: _appearanceSummary(snapshot, appearanceState),
                     onTap: () => showCupertinoModalPopup<void>(
                       context: context,
+                      barrierColor: Colors.transparent,
                       builder: (_) => const _AppearanceSettingsSheet(),
                     ),
                   ),
@@ -84,7 +85,8 @@ class SettingsPage extends ConsumerWidget {
                   _SettingsRow(
                     icon: CupertinoIcons.sparkles,
                     label: AppConceptConstants.assistantLabel,
-                    onTap: () => context.push(AppRoutePaths.assistantManagement),
+                    onTap: () =>
+                        context.push(AppRoutePaths.assistantManagement),
                   ),
                   _SettingsRow(
                     icon: CupertinoIcons.lab_flask,
@@ -201,182 +203,158 @@ class _AppearanceSettingsSheetState
       context,
     );
 
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: SafeArea(
-        top: false,
-        child: CupertinoPopupSurface(
-          isSurfacePainted: true,
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.78,
-            color: backgroundColor,
-            child: Column(
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.of(context).pop(),
+      backgroundColor: backgroundColor,
+      maxHeightRatio: 0.78,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        0,
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              0,
+              AppSpacing.md,
+              0,
+              AppSpacing.sm,
+            ),
+            child: Row(
               children: <Widget>[
-                SizedBox(height: AppSpacing.sm),
-                Container(
-                  width: AppSpacing.createEntrySheetHandleWidth,
-                  height: AppSpacing.createEntrySheetHandleHeight,
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey3,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.circularBorderRadius,
-                    ),
-                  ),
+                Text(
+                  '外观与字号',
+                  style: CupertinoTheme.of(context).textTheme.navTitleTextStyle,
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.containerMd,
-                    AppSpacing.md,
-                    AppSpacing.containerMd,
-                    AppSpacing.sm,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Text(
-                        '外观与字号',
-                        style: CupertinoTheme.of(
-                          context,
-                        ).textTheme.navTitleTextStyle,
-                      ),
-                      const Spacer(),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('完成'),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.containerMd,
-                      AppSpacing.sm,
-                      AppSpacing.containerMd,
-                      AppSpacing.lg,
-                    ),
-                    children: <Widget>[
-                      _SettingsGroup(
-                        title: '主题模式',
-                        children: AppearanceThemeMode.values
-                            .map(
-                              (mode) => _SelectionRow(
-                                label: _themeModeLabel(mode),
-                                selected: snapshot.themeMode == mode,
-                                onTap: () => controller.updateSettings(
-                                  themeMode: mode,
-                                  fontSizePreset: snapshot.fontSizePreset,
-                                  applyScope: _syncAllAccounts
-                                      ? AppearanceApplyScope.allAccounts
-                                      : AppearanceApplyScope.currentSubAccount,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      _SettingsGroup(
-                        title: '字号',
-                        children: AppearanceFontSizePreset.values
-                            .map(
-                              (preset) => _SelectionRow(
-                                label: _fontSizePresetLabel(preset),
-                                subtitle: _fontSizePresetDescription(preset),
-                                selected: snapshot.fontSizePreset == preset,
-                                onTap: () => controller.updateSettings(
-                                  themeMode: snapshot.themeMode,
-                                  fontSizePreset: preset,
-                                  applyScope: _syncAllAccounts
-                                      ? AppearanceApplyScope.allAccounts
-                                      : AppearanceApplyScope.currentSubAccount,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      _SettingsGroup(
-                        title: '作用范围',
-                        children: <Widget>[
-                          _SwitchRow(
-                            label: '同步到所有账号',
-                            value: _syncAllAccounts,
-                            subtitle: _syncAllAccounts
-                                ? '勾选后写入 Owner 默认值，并让全部子账号收敛到新的统一默认值'
-                                : '关闭后仅当前子账号生效，不改写 Owner 默认值',
-                            onChanged: (value) {
-                              setState(() {
-                                _syncAllAccounts = value;
-                              });
-                            },
-                          ),
-                          if (snapshot.hasSubAccountOverride)
-                            _ActionRow(
-                              label: '恢复继承 Owner 默认',
-                              onTap: controller.inheritOwnerDefault,
-                            ),
-                        ],
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      _SettingsGroup(
-                        title: '当前状态',
-                        children: <Widget>[
-                          _InfoRow(
-                            label: '来源',
-                            value: _sourceLabel(snapshot.source),
-                          ),
-                          _InfoRow(
-                            label: '同步状态',
-                            value: state.hasPendingSync ? '待同步，将在恢复时重试' : '已同步',
-                          ),
-                          _InfoRow(
-                            label: '版本',
-                            value: snapshot.version.toString(),
-                          ),
-                          _InfoRow(
-                            label: '更新时间',
-                            value: snapshot.updatedAt
-                                .toLocal()
-                                .toIso8601String()
-                                .substring(0, 19)
-                                .replaceFirst('T', ' '),
-                          ),
-                          _InfoRow(
-                            label: '粗体文本',
-                            value: accessibility.boldText ? '跟随系统：开' : '跟随系统：关',
-                          ),
-                          _InfoRow(
-                            label: '高对比度',
-                            value: accessibility.highContrast
-                                ? '跟随系统：开'
-                                : '跟随系统：关',
-                          ),
-                        ],
-                      ),
-                      if (state.lastError != null) ...<Widget>[
-                        SizedBox(height: AppSpacing.intraGroupLg),
-                        Text(
-                          '最近一次同步失败，已保留本地设置，恢复后会继续重试。',
-                          style: CupertinoTheme.of(context).textTheme.textStyle
-                              .copyWith(
-                                color: CupertinoColors.systemRed.resolveFrom(
-                                  context,
-                                ),
-                                fontSize: AppTypography.smPlus,
-                              ),
-                        ),
-                      ],
-                      if (state.isLoading) ...<Widget>[
-                        SizedBox(height: AppSpacing.md),
-                        const Center(child: CupertinoActivityIndicator()),
-                      ],
-                    ],
-                  ),
+                const Spacer(),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('完成'),
                 ),
               ],
             ),
           ),
-        ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                0,
+                AppSpacing.sm,
+                0,
+                AppSpacing.lg,
+              ),
+              children: <Widget>[
+                _SettingsGroup(
+                  title: '主题模式',
+                  children: AppearanceThemeMode.values
+                      .map(
+                        (mode) => _SelectionRow(
+                          label: _themeModeLabel(mode),
+                          selected: snapshot.themeMode == mode,
+                          onTap: () => controller.updateSettings(
+                            themeMode: mode,
+                            fontSizePreset: snapshot.fontSizePreset,
+                            applyScope: _syncAllAccounts
+                                ? AppearanceApplyScope.allAccounts
+                                : AppearanceApplyScope.currentSubAccount,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                SizedBox(height: AppSpacing.md),
+                _SettingsGroup(
+                  title: '字号',
+                  children: AppearanceFontSizePreset.values
+                      .map(
+                        (preset) => _SelectionRow(
+                          label: _fontSizePresetLabel(preset),
+                          subtitle: _fontSizePresetDescription(preset),
+                          selected: snapshot.fontSizePreset == preset,
+                          onTap: () => controller.updateSettings(
+                            themeMode: snapshot.themeMode,
+                            fontSizePreset: preset,
+                            applyScope: _syncAllAccounts
+                                ? AppearanceApplyScope.allAccounts
+                                : AppearanceApplyScope.currentSubAccount,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                SizedBox(height: AppSpacing.md),
+                _SettingsGroup(
+                  title: '作用范围',
+                  children: <Widget>[
+                    _SwitchRow(
+                      label: '同步到所有账号',
+                      value: _syncAllAccounts,
+                      subtitle: _syncAllAccounts
+                          ? '勾选后写入 Owner 默认值，并让全部子账号收敛到新的统一默认值'
+                          : '关闭后仅当前子账号生效，不改写 Owner 默认值',
+                      onChanged: (value) {
+                        setState(() {
+                          _syncAllAccounts = value;
+                        });
+                      },
+                    ),
+                    if (snapshot.hasSubAccountOverride)
+                      _ActionRow(
+                        label: '恢复继承 Owner 默认',
+                        onTap: controller.inheritOwnerDefault,
+                      ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.md),
+                _SettingsGroup(
+                  title: '当前状态',
+                  children: <Widget>[
+                    _InfoRow(label: '来源', value: _sourceLabel(snapshot.source)),
+                    _InfoRow(
+                      label: '同步状态',
+                      value: state.hasPendingSync ? '待同步，将在恢复时重试' : '已同步',
+                    ),
+                    _InfoRow(label: '版本', value: snapshot.version.toString()),
+                    _InfoRow(
+                      label: '更新时间',
+                      value: snapshot.updatedAt
+                          .toLocal()
+                          .toIso8601String()
+                          .substring(0, 19)
+                          .replaceFirst('T', ' '),
+                    ),
+                    _InfoRow(
+                      label: '粗体文本',
+                      value: accessibility.boldText ? '跟随系统：开' : '跟随系统：关',
+                    ),
+                    _InfoRow(
+                      label: '高对比度',
+                      value: accessibility.highContrast ? '跟随系统：开' : '跟随系统：关',
+                    ),
+                  ],
+                ),
+                if (state.lastError != null) ...<Widget>[
+                  SizedBox(height: AppSpacing.intraGroupLg),
+                  Text(
+                    '最近一次同步失败，已保留本地设置，恢复后会继续重试。',
+                    style: CupertinoTheme.of(context).textTheme.textStyle
+                        .copyWith(
+                          color: CupertinoColors.systemRed.resolveFrom(context),
+                          fontSize: AppTypography.smPlus,
+                        ),
+                  ),
+                ],
+                if (state.isLoading) ...<Widget>[
+                  SizedBox(height: AppSpacing.md),
+                  const Center(child: CupertinoActivityIndicator()),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -454,13 +432,11 @@ class _SettingsRow extends StatelessWidget {
               height: AppSpacing.buttonHeightSm,
               decoration: BoxDecoration(
                 color: AppColors.iosTintedFill(context),
-                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
               ),
-              child: Icon(
-                icon,
-                size: AppSpacing.iconSmall,
-                color: accent,
-              ),
+              child: Icon(icon, size: AppSpacing.iconSmall, color: accent),
             ),
             SizedBox(width: AppSpacing.intraGroupLg),
             Expanded(
@@ -624,8 +600,10 @@ class _SwitchRow extends StatelessWidget {
             CupertinoSwitch(
               value: value,
               onChanged: onChanged,
-              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+              activeTrackColor:
+                  SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor:
+                  SettingsSemanticConstants.switchInactiveTrackColor(isDark),
             ),
           ],
         ),

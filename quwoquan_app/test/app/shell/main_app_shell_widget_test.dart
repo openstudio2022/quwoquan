@@ -9,6 +9,7 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location) {
@@ -86,21 +87,13 @@ void main() {
       expect(find.text('圈子'), findsWidgets);
     });
 
-    testWidgets('圈子路由复用首页壳层并保留四栏底部导航', (tester) async {
+    testWidgets('圈子路由渲染独立圈子页', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.circles));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-      expect(find.text('圈子'), findsWidgets);
-      expect(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text('圈子'),
-        ),
-        findsNothing,
-      );
+      expect(find.byType(CirclesPage), findsOneWidget);
     });
 
     testWidgets('深色模式下底部导航仍展示四栏', (tester) async {

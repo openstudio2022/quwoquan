@@ -1,10 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 
 Widget _scopedApp({CircleRepository? mock}) {
@@ -118,6 +121,45 @@ void main() {
       await _pumpIgnoringTabPaintErrors(tester, frames: 1);
 
       expect(backCalled, isTrue);
+    });
+
+    testWidgets('更多按钮打开统一底部动作面板并支持复制链接', (tester) async {
+      String? copiedText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copiedText = (call.arguments as Map?)?['text']?.toString();
+          }
+          return null;
+        },
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
+      });
+
+      await tester.pumpWidget(_scopedApp());
+      await _pumpIgnoringTabPaintErrors(tester);
+
+      await tester.tap(find.byIcon(CupertinoIcons.ellipsis_circle));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AppBottomModalSurface), findsOneWidget);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.text(UITextConstants.share), findsOneWidget);
+      expect(find.text(UITextConstants.copyLink), findsOneWidget);
+      expect(find.text(UITextConstants.report), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.copyLink));
+      await tester.pumpAndSettle();
+
+      expect(copiedText, equals('circle_photo_01'));
+      expect(find.byType(AppBottomModalSurface), findsNothing);
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 

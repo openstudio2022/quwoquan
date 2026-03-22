@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-03-11T10:47:07.257844Z
+updated_at: 2026-03-22T00:00:00Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -218,20 +218,6 @@ features:
           status: specified
           tags: []
           children:
-            - id: contact-search-index
-              name: contact-search-index
-              level: L3_story
-              path: chat-conversation/contact-and-session-governance/contact-search-index
-              domain: ""
-              status: specified
-              tags: []
-            - id: contact-search-index--search-query-contract
-              name: contact-search-index--search-query-contract
-              level: L3_story
-              path: chat-conversation/contact-and-session-governance/contact-search-index--search-query-contract
-              domain: ""
-              status: specified
-              tags: []
             - id: session-audit-observability
               name: session-audit-observability
               level: L3_story
@@ -1092,6 +1078,64 @@ features:
               name: reaction-state-counter--reaction-counter-consistency
               level: L3_story
               path: discovery-content/publish-comment-reaction/reaction-state-counter--reaction-counter-consistency
+              domain: ""
+              status: specified
+              tags: []
+    - id: global-search-experience
+      name: global-search-experience
+      level: L1_capability
+      path: global-search-experience
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: cross-domain-search-journey
+          name: cross-domain-search-journey
+          level: L2_journey
+          path: global-search-experience/cross-domain-search-journey
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: full-screen-search-shell-and-entry
+              name: full-screen-search-shell-and-entry
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+              domain: ""
+              status: specified
+              tags: []
+            - id: multi-domain-result-composition
+              name: multi-domain-result-composition
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+              domain: ""
+              status: specified
+              tags: []
+            - id: social-relationship-search-contract
+              name: social-relationship-search-contract
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: circle-facet-search-and-filter
+              name: circle-facet-search-and-filter
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+              domain: ""
+              status: specified
+              tags: []
+            - id: recent-search-sync-and-voice-asr
+              name: recent-search-sync-and-voice-asr
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
+              domain: ""
+              status: specified
+              tags: []
+            - id: xiaoqu-entry-handoff
+              name: xiaoqu-entry-handoff
+              level: L3_scenario
+              path: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
               domain: ""
               status: specified
               tags: []

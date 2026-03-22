@@ -1,0 +1,69 @@
+version: 2
+feature: full-screen-search-shell-and-entry
+level: L3_scenario
+source_path: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+parent_journey: cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结全局搜索首页的全屏壳层、统一入口、默认上下文与 route/surface/page context。
+  journey_bindings:
+    - J1
+  in_scope:
+    - 首页、聊天页、圈子页、助手页统一进入全屏搜索首页
+    - 搜索框、问小趣、语音、指定搜索内容、最近搜索区块布局
+  out_of_scope:
+    - 搜索结果分组逻辑
+    - 最近搜索同步实现
+
+scenario_acceptance:
+  A1:
+    title: 全屏搜索壳层与统一入口成立
+    scenario: global search shell and entry
+    journey_step: open search landing from root surfaces
+    done_when:
+      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
+      - 搜索首页包含搜索框、问小趣入口、语音按钮、指定搜索内容、最近搜索区块
+      - 返回与取消操作不会破坏原页面上下文
+    edge_cases:
+      - 深色模式下层级不混乱
+      - 小屏与大屏断点下信息架构不跳变
+      - 从不同页面进入时默认上下文可区分
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - global search shell widget test
+        - root entry journey test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 壳层路由与上下文元数据可治理
+    done_when:
+      - 搜索页 route、surface、page context 的真相源已明确
+      - 不再在各页面手写第二套搜索入口路径
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - route surface metadata review
+      recorded: []
+    status: pending

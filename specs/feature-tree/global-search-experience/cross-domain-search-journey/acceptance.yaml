@@ -1,0 +1,129 @@
+version: 2
+feature: cross-domain-search-journey
+level: L2_journey
+source_path: global-search-experience/cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结全屏搜索首页、跨域综合结果、社交关系搜索、圈子 facet、最近搜索、
+    语音转词与问小趣 handoff 的端到端旅程。
+  composed_scenarios:
+    - full-screen-search-shell-and-entry
+    - multi-domain-result-composition
+    - social-relationship-search-contract
+    - circle-facet-search-and-filter
+    - recent-search-sync-and-voice-asr
+    - xiaoqu-entry-handoff
+  out_of_scope:
+    - AI 搜索结果混排
+    - 语音语义理解
+    - 密信账号隔离能力本身
+
+journey_acceptance:
+  J1:
+    title: 用户可从任一一级页面进入统一全屏搜索首页
+    journey: home/chat/circle/assistant -> open full-screen search -> pick scope or input query
+    scenario_refs:
+      - full-screen-search-shell-and-entry
+      - recent-search-sync-and-voice-asr
+      - xiaoqu-entry-handoff
+    done_when:
+      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
+      - 搜索首页包含搜索框、问小趣入口、语音按钮、指定搜索内容和最近搜索
+      - 用户取消、返回与重新进入时，上下文行为稳定可预期
+    release_guardrails:
+      - 全局搜索保持唯一全屏浮层语义
+      - route、surface、page context 均可追溯到 metadata
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - global search shell widget journey test
+        - route and surface traceability test
+      recorded: []
+    status: pending
+  J2:
+    title: 用户可得到按类型组织的综合搜索结果
+    journey: input query -> receive grouped results -> switch section -> enter target page
+    scenario_refs:
+      - multi-domain-result-composition
+      - social-relationship-search-contract
+      - circle-facet-search-and-filter
+    done_when:
+      - 综合搜索结果按内容、社交关系、消息、圈子与频道 facet 分组组织
+      - 单域失败时只降级该分组，不阻塞其它分组显示
+      - 结果点击可稳定进入对应详情或列表页
+    release_guardrails:
+      - 不把问小趣结果混入综合搜索结果
+      - 频道仅以 circle facet 形式出现
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - grouped result composition integration test
+        - search result navigation journey test
+      recorded: []
+    status: pending
+  J3:
+    title: 用户可在搜索页完成历史复用、语音转词与问小趣切换
+    journey: open search -> use recent history or voice -> continue search or handoff to xiaoqu
+    scenario_refs:
+      - recent-search-sync-and-voice-asr
+      - xiaoqu-entry-handoff
+    done_when:
+      - 普通搜索 query 会记录到最近搜索并支持本地与云同步
+      - 语音入口将 ASR 文本写回搜索框并参与普通搜索
+      - 问小趣 handoff 不写入最近搜索，且保存在 assistant 对话中
+    release_guardrails:
+      - 语音失败可退回手动输入
+      - 历史清除动作可本地与云端一致生效
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - recent search sync test
+        - voice to query journey test
+        - xiaoqu handoff regression test
+      recorded: []
+    status: pending
+
+release_acceptance:
+  R1:
+    title: 全局搜索可整体验收并整体回滚
+    done_when:
+      - SLO、弱网、并发与容量假设已冻结并可验证
+      - 本期按整体验收后一把上线，不保留历史节点并行治理
+      - 发生严重故障时可整体回退到旧搜索实现或整版发布回滚
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_release_rehearsal
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - rollback rehearsal
+        - weak network degrade verification
+      recorded: []
+    status: pending

@@ -1,0 +1,59 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze recent search contracts and local schema
+    goal: 定义 recent search 云同步接口与本地统一 schema
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `RecentSearchEntryView` 与同步操作已定义
+      - 本地 schema 与问小趣 query 排除规则明确
+    status: planned
+
+  - id: P2
+    title: land sync engine and voice asr adapter
+    goal: 建立 recent search local+cloud sync 与 `SearchVoiceAsrAdapter`
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 搜索 query 可写本地并触发云同步
+      - ASR 成功后能回填搜索框
+      - chat voice send 链路未被误复用
+    status: planned
+
+  - id: P3
+    title: verify reconcile and fallback behavior
+    goal: 验证清空、单条删除、云同步失败与麦克风失败回退
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - A2
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 本地/云端清理动作一致
+      - ASR 失败时仍能继续手动搜索
+      - recent search 失败不阻塞搜索主路径
+    status: planned

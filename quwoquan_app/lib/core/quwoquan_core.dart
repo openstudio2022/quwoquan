@@ -27,14 +27,23 @@ export 'design_system/spacing/spacing_extensions.dart';
 export 'design_system/typography/app_typography.dart';
 export 'design_system/icons/app_custom_icons.dart';
 
+// Core widgets
+export 'widgets/app_action_sheet.dart';
+export 'widgets/app_modal_surface.dart';
+
 // Providers
 export 'design_system/providers/theme_provider.dart';
 export 'providers/app_providers.dart';
 export 'package:quwoquan_app/app/providers/app_state_provider.dart';
 export 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.dart'
-    show VideoForceDarkState, VideoForceDarkNotifier, videoForceDarkProvider,
-        BottomNavHiddenState, BottomNavHiddenNotifier, bottomNavHiddenProvider;
+    show
+        VideoForceDarkState,
+        VideoForceDarkNotifier,
+        videoForceDarkProvider,
+        BottomNavHiddenState,
+        BottomNavHiddenNotifier,
+        bottomNavHiddenProvider;
 export 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 // Services
@@ -49,4 +58,3 @@ export 'utils/chat_time_formatter.dart';
 export 'package:quwoquan_app/core/models/post_models.dart';
 export 'package:quwoquan_app/core/models/story_models.dart';
 export 'package:quwoquan_app/core/models/user_models.dart';
-

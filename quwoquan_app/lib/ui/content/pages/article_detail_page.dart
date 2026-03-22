@@ -15,6 +15,7 @@ import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
+import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
   const ArticleDetailPage({super.key, required this.articleId});
@@ -209,12 +210,30 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                   SizedBox(height: AppSpacing.interGroupMd),
                   _ArticleSectionLabel(label: context.l10n.articleContent),
                   SizedBox(height: AppSpacing.intraGroupSm),
-                  ...article.contentBlocks.map(
-                    (block) => Padding(
-                      padding: EdgeInsets.only(bottom: AppSpacing.interGroupSm),
-                      child: ArticleContentBlockRenderer(block: block),
+                  if (article.pages.isNotEmpty)
+                    ...article.pages.asMap().entries.map(
+                      (entry) => Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
+                        child: ArticlePageShell(
+                          template: article.template,
+                          fontPreset: article.fontPreset,
+                          pageIndex: entry.key,
+                          totalPages: article.pages.length,
+                          child: ArticlePageReadOnlyView(
+                            page: entry.value,
+                            template: article.template,
+                            fontPreset: article.fontPreset,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...article.contentBlocks.map(
+                      (block) => Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.interGroupSm),
+                        child: ArticleContentBlockRenderer(block: block),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

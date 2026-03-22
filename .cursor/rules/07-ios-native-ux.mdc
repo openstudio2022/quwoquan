@@ -1,0 +1,25 @@
+---
+description: Flutter 前端 iOS 原生画质 UX 规则
+globs: quwoquan_app/**/*.dart
+alwaysApply: false
+---
+
+# iOS 原生画质 UX 规则
+
+前端 Flutter UI 在实现作者主页、沉浸式浏览器、创作编辑、post、导航、tab、sheet、弹窗时，必须遵循 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`。
+
+- 视觉字面量禁止：颜色、间距、圆角、blur、alpha、字号、导航高度、sheet 高度必须优先复用 `AppColors`、`AppSpacing`、`AppTypography`、`DesignSemanticConstants`；缺失时先补 token，再写 UI。
+- 断点字面量禁止：`compact / regular / expanded` 只能复用 `AppSpacing.compactBreakpoint`、`AppSpacing.expandedBreakpoint`、`AppSpacing.responsiveValue()`、`AppTypography.responsive()`；禁止在组件内手写第二套 breakpoint map。
+- 材质单层单义：同一视觉层只允许一种主表面；正文/标题区禁止重毛玻璃；玻璃只用于 toolbar、sheet、轻量页码指示器等浮层 chrome。
+- 内容优先密度：横向内容区优先 `feedContentHorizontal`、`postPreviewSectionPadding`、`postPreviewGridSpacing`；post 媒体默认 edge-to-edge。
+- 双模式同时设计：所有 iOS-facing UI 必须同时满足浅色/深色模式，优先使用 `AppColors` 动态色与语义表面；禁止只优化浅色、让深色模式退化成简单反色或纯黑白替换。
+- 屏幕断点自适应：必须遵循 `compact < 360`、`regular 360-599`、`expanded >= 600`；尺寸与间距优先使用 `AppSpacing.responsiveValue`、`AppTypography.responsive`，并维持同一信息架构与几何锚点，不允许因断点切换出现布局跳变。
+- 禁止 Android 泄露：iOS-facing UI 不得直接引入 Material 默认视觉/交互，如默认 ripple、FAB、Snackbar、厚阴影、下划线 tab indicator、安卓式密集排版与底栏；如必须使用 Material 组件，只能保留能力底座，视觉必须重映射到 iOS token。
+- 几何稳定：一级/二级 tab、底部导航、吸顶区的选中态只能通过颜色/透明度/字号微差表达，禁止用粗体跳变、位移跳变、重复实例表达状态。
+- 统一圆角：post、关注流卡片、圈子封面/图标、媒体缩略图统一使用 `contentPreviewCornerRadius`；大容器才使用 `largeBorderRadius`。
+- 作者主页必须遵循 `iosProfileSurface`、`feedMaxContentWidth`、`profileHeaderBaseHeightRatio`、`profileHeaderMaxStretchHeightRatio` 这组资料页语义，不允许再做第二套白色层级。
+- 沉浸式浏览器规则固定：指示器在文字之上、最多 `6` 个点、当前点与其它点共线；文章不显示媒体页码；“我的 post” 底栏隐藏作者/关注并使用三等分同行操作。
+- 全局浮层分型固定：全局搜索是唯一允许的全屏全局浮层；创作、更多功能、评论、联系人选择等必须是贴底非全屏面板，保留上半屏上下文，并统一复用 `ColorType.modalScrim`、`createEntrySheetHandle*`、`modalSheetMaxHeightRatio` 语义。
+- 自适应边界：大屏只允许放大留白、节奏、芯片宽度和内容最大宽度，不允许新造一套视觉语言；小屏只允许收紧密度，不允许破坏 44x44 触控热区和文字可读性。
+- 流程门禁：涉及视觉、导航、断点、surface 的改动时，`/prd` 必须补双模式矩阵与组件级响应式 token 表，`/design` 必须补 token 映射并执行 `make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app`，`/dev` 与 `/verify` 至少执行 `cd quwoquan_app && flutter analyze`、相关 `flutter test`，提交前通过 `make gate`，全量交付通过 `make gate-full`。
+- 如功能需求与本规则冲突，先更新 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`，再更新代码。

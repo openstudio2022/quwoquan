@@ -1,6 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
@@ -8,13 +6,13 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
+import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
 /// 创作 Tab：统一承载 `全部 / 微趣 / 图片 / 视频 / 文字` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
@@ -83,8 +81,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               ),
               child: MasonryGridView.count(
                 crossAxisCount: 2,
-                mainAxisSpacing: AppSpacing.interGroupSm,
-                crossAxisSpacing: AppSpacing.interGroupSm,
+                mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                 itemCount: filtered.length,
                 shrinkWrap: true,
                 primary: false,
@@ -132,8 +130,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                       ),
                       sliver: SliverMasonryGrid.count(
                         crossAxisCount: 2,
-                        mainAxisSpacing: AppSpacing.interGroupSm,
-                        crossAxisSpacing: AppSpacing.interGroupSm,
+                        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         childCount: filtered.length,
                         itemBuilder: (context, index) {
                           final post = filtered[index];
@@ -306,8 +304,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   }
 }
 
-/// 瀑布流卡片：与圈子页 _DiscoveryPostCard 一致的结构。
-/// 媒体图片（伪随机宽高比） → 标题（max 2行） → 作者头像 + 昵称 + 赞数。
+/// 瀑布流卡片：与圈子 post 保持同一结构，
+/// 仅底部元信息改为「赞 + 转 + 评」。
 class _WorksPostCard extends StatelessWidget {
   const _WorksPostCard({
     required this.post,
@@ -320,197 +318,94 @@ class _WorksPostCard extends StatelessWidget {
   final VoidCallback onTap;
 
   double get _imageAspectRatio {
-    final hash = post.id.hashCode;
-    const ratios = [1.0, 4 / 3, 3 / 4, 1 / 1, 9 / 16];
-    final ratio = ratios[hash.abs() % ratios.length];
-    return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
+    final ratio = post.aspectRatio;
+    if (ratio != null && ratio > 0) {
+      return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
+    }
+    if (post.isVideoLike) {
+      return 9 / 16;
+    }
+    if (post.hasVisualMedia) {
+      return 3 / 4;
+    }
+    return 1.0;
   }
 
   String get _coverUrl {
-    final map = post.toMap();
-    final urls = map['imageUrls'];
-    return (map['coverUrl'] ??
-            map['thumbnailUrl'] ??
-            (urls is List && urls.isNotEmpty ? urls[0] : null) ??
-            '')
-        .toString();
+    return post.primaryVisualUrl;
   }
 
-  String get _title {
-    final map = post.toMap();
-    final title = map['title']?.toString();
-    final body = map['body']?.toString();
-    if (title != null && title.isNotEmpty) return title;
-    if (body != null && body.isNotEmpty) {
-      return body.length > 40 ? '${body.substring(0, 40)}…' : body;
-    }
+  String get _headlineText {
+    final title = post.normalizedTitle;
+    final body = post.normalizedBody;
+    if (title.isNotEmpty) return title;
+    if (body.isNotEmpty) return body;
     return post.identity == 'moment' ? '点滴' : '作品';
+  }
+
+  String get _supportingText {
+    final title = post.normalizedTitle;
+    final body = post.normalizedBody;
+    if (title.isEmpty || body.isEmpty || title == body) {
+      return '';
+    }
+    return body;
   }
 
   @override
   Widget build(BuildContext context) {
-    final fgPrimary = AppColors.iosLabel(context);
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.22 : 0.14);
-    final surface = AppColors.iosGroupedSurface(context);
-    final gridMetaFontSize = AppTypography.responsive(
-      context,
-      compact: AppTypography.iosFootnote,
-      regular: AppTypography.iosFootnote,
-      expanded: AppTypography.iosSubheadline,
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
     );
-
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          border: Border.all(color: separator, width: AppSpacing.hairline),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            AspectRatio(
-              aspectRatio: _imageAspectRatio,
-              child: ClipRRect(
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppSpacing.radiusTwenty),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[
-                    _coverUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: _coverUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => ColoredBox(
-                              color: fgSecondary.withValues(alpha: 0.12),
-                            ),
-                            errorWidget: (context, url, error) => ColoredBox(
-                              color: fgSecondary.withValues(alpha: 0.12),
-                            ),
-                          )
-                        : ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                    if (post.type == 'video')
-                      Positioned(
-                        top: AppSpacing.intraGroupSm,
-                        right: AppSpacing.intraGroupSm,
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.36),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.play_fill,
-                            color: CupertinoColors.white,
-                            size: AppSpacing.iconSmall,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+    final metaTextStyle = TextStyle(
+      fontSize: AppTypography.iosCaption1,
+      color: fgSecondary,
+    );
+    return PostPreviewCard(
+      isDark: isDark,
+      title: _headlineText,
+      supportingText: _supportingText,
+      coverUrl: _coverUrl,
+      mediaAspectRatio: _imageAspectRatio,
+      showVideoBadge: post.isVideoLike,
+      onTap: onTap,
+      footer: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: PostCardMetric(
+                icon: CupertinoIcons.heart,
+                label: '${post.likeCount}',
+                color: fgSecondary,
+                textStyle: metaTextStyle,
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerSm,
-                AppSpacing.containerSm,
-                AppSpacing.containerSm,
-                AppSpacing.containerSm,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.semiBold,
-                      color: fgPrimary,
-                      letterSpacing: -0.18,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  Row(
-                    children: <Widget>[
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundImage: post.avatarUrl.isNotEmpty
-                            ? NetworkImage(post.avatarUrl)
-                            : null,
-                        backgroundColor: AppColors.iosFill(context),
-                        child: post.avatarUrl.isEmpty
-                            ? Icon(
-                                CupertinoIcons.person_crop_circle_fill,
-                                size: AppSpacing.iconSmall,
-                                color: fgSecondary,
-                              )
-                            : null,
-                      ),
-                      SizedBox(width: AppSpacing.intraGroupXs),
-                      Expanded(
-                        child: Text(
-                          post.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: gridMetaFontSize,
-                            color: fgSecondary,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.intraGroupXs),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Icon(
-                                CupertinoIcons.heart,
-                                size: AppSpacing.iconSmall,
-                                color: fgSecondary,
-                              ),
-                              SizedBox(width: AppSpacing.xs),
-                              Text(
-                                '${post.likeCount}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: gridMetaFontSize,
-                                  color: fgSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: PostCardMetric(
+                icon: CupertinoIcons.arrowshape_turn_up_right,
+                label: '${post.shareCount}',
+                color: fgSecondary,
+                textStyle: metaTextStyle,
               ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: PostCardMetric(
+                icon: CupertinoIcons.chat_bubble,
+                label: '${post.commentCount}',
+                color: fgSecondary,
+                textStyle: metaTextStyle,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

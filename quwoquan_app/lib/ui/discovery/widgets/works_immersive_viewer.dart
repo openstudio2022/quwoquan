@@ -16,6 +16,8 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
+import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -28,7 +30,11 @@ import 'package:quwoquan_app/components/media/video/player/video_player_widget.d
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
@@ -341,20 +347,37 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return result;
   }
 
-  int _articleCardCount(String postId) {
-    final target = _rawPostById(postId);
-    final cards = target?['cards'];
-    if (cards is List) return cards.length.clamp(1, 99);
-    return 1;
+  Map<String, dynamic> _rawArticleDataFor(PostBaseDto post) {
+    return <String, dynamic>{
+      ...?_rawPostById(post.id),
+      'postId': post.id,
+      'type': 'article',
+      'contentType': 'article',
+      'authorId': post.authorId,
+      'displayName': post.displayName,
+      'authorAvatarUrl': post.avatarUrl,
+      'title': post.title,
+      'body': post.body,
+      'coverUrl': post.coverUrl,
+      'thumbnailUrl': post.thumbnailUrl,
+      'mediaUrls': post.imageUrls,
+      'likeCount': post.likeCount,
+      'commentCount': post.commentCount,
+      'favoriteCount': post.favoriteCount,
+      'shareCount': post.shareCount,
+      'createdAt': post.createdAt,
+    };
   }
 
-  List<Map<String, dynamic>> _articleCardsForPost(String postId) {
-    final target = _rawPostById(postId);
-    final cards = target?['cards'];
-    if (cards is List) {
-      return cards.whereType<Map<String, dynamic>>().toList(growable: false);
-    }
-    return const <Map<String, dynamic>>[];
+  ArticleDetailView _articleViewFor(PostBaseDto post) {
+    return projectArticleDetailView(
+      _rawArticleDataFor(post),
+      fallbackArticleId: post.id,
+    );
+  }
+
+  int _articlePageCount(PostBaseDto post) {
+    return _articleViewFor(post).pages.length.clamp(1, 99);
   }
 
   ({int current, int total}) _innerProgress(List<PostBaseDto> posts) {
@@ -371,7 +394,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return (current: currentIndex, total: total);
     }
     if (_isArticleLikePost(current)) {
-      final total = (_articleCardCount(current.id) + 1).clamp(1, 99);
+      final total = _articlePageCount(current);
       final currentCard =
           (_articleInnerIndex[current.id] ?? 0).clamp(0, total - 1) + 1;
       return (current: currentCard, total: total);
@@ -408,6 +431,43 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return false;
     }
     return _imageUrlsForPost(post).isNotEmpty;
+  }
+
+  bool get _canSwipePrimaryTabs =>
+      widget.showTopNavigation &&
+      (widget.onSwitchToFollowing != null ||
+          widget.onSwitchToCircles != null ||
+          widget.onSwitchToMoment != null);
+
+  void _switchToPreviousPrimaryTab() {
+    if (widget.onSwitchToFollowing != null) {
+      widget.onSwitchToFollowing!();
+      return;
+    }
+    widget.onSwitchToMoment?.call();
+  }
+
+  void _switchToNextPrimaryTab() {
+    widget.onSwitchToCircles?.call();
+  }
+
+  void _handlePrimaryTabSwipe(TabSwipeDirection direction) {
+    if (!_canSwipePrimaryTabs) {
+      return;
+    }
+    if (direction == TabSwipeDirection.previous) {
+      _switchToPreviousPrimaryTab();
+      return;
+    }
+    _switchToNextPrimaryTab();
+  }
+
+  void _handlePrimaryTabSwipeDragEnd(DragEndDetails details) {
+    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
+    if (direction == null) {
+      return;
+    }
+    _handlePrimaryTabSwipe(direction);
   }
 
   List<String> _imageUrlsForPost(PostBaseDto post) {
@@ -614,6 +674,31 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
+  Widget? _mediaIndicatorForPost(
+    PostBaseDto post,
+    ({int current, int total}) progress,
+  ) {
+    if (!(_isImageLikePost(post) || _isVideoLikePost(post))) {
+      return null;
+    }
+    if (progress.total <= 1) return null;
+    return _WorksPageIndicator(
+      total: progress.total,
+      current: progress.current,
+    );
+  }
+
+  Widget? _overlayFooterForPost(BuildContext context, PostBaseDto post) {
+    final circleFooter = _circleFooterForPost(context, post);
+    return circleFooter;
+  }
+
+  bool _isSelfPost(PostBaseDto post) {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId.isEmpty) return false;
+    return post.authorProfileSubjectId == currentUserId;
+  }
+
   bool _showsCaptionOverlay(PostBaseDto post) {
     return _overlayTitleForPost(post).isNotEmpty ||
         _overlayBodyForPost(post).isNotEmpty ||
@@ -761,6 +846,23 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
     final progress = _innerProgress(posts);
+    final overlayTitle = currentPost == null
+        ? ''
+        : _overlayTitleForPost(currentPost);
+    final overlayBody = currentPost == null
+        ? ''
+        : _overlayBodyForPost(currentPost);
+    final counterIndicator = currentPost == null
+        ? null
+        : _mediaIndicatorForPost(currentPost, progress);
+    final overlayFooter = currentPost == null
+        ? null
+        : _overlayFooterForPost(context, currentPost);
+    final showStandaloneIndicator =
+        currentPost != null &&
+        counterIndicator != null &&
+        !_showsCaptionOverlay(currentPost);
+    final isSelfPost = currentPost != null && _isSelfPost(currentPost);
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       onTap: () {
@@ -774,32 +876,36 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             left: 0,
             right: 0,
             bottom: 0,
-            child: PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.vertical,
-              physics: const PageScrollPhysics(),
-              itemCount: posts.isEmpty ? 1 : posts.length,
-              onPageChanged: (index) {
-                if (_currentPage != index) {
-                  // Flush dwell time for the previous post
-                  final prevPost =
-                      posts[_currentPage.clamp(0, posts.length - 1)];
-                  _flushDwell(prevPost);
+            child: TabSwipeSwitchRegion(
+              enabled: _canSwipePrimaryTabs,
+              onSwipe: _handlePrimaryTabSwipe,
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                physics: const PageScrollPhysics(),
+                itemCount: posts.isEmpty ? 1 : posts.length,
+                onPageChanged: (index) {
+                  if (_currentPage != index) {
+                    // Flush dwell time for the previous post
+                    final prevPost =
+                        posts[_currentPage.clamp(0, posts.length - 1)];
+                    _flushDwell(prevPost);
 
-                  setState(() => _currentPage = index);
-                  // Reset + restart the follow-button timer for the new post.
-                  final newPost = posts[index.clamp(0, posts.length - 1)];
-                  _startFollowButtonTimer(newPost);
-                  _trackImpressionForPost(newPost);
-                  _pageEnterTime = DateTime.now();
-                }
-              },
-              itemBuilder: (context, index) {
-                if (posts.isEmpty) {
-                  return Center(child: CupertinoActivityIndicator());
-                }
-                return _buildPostCanvas(posts[index]);
-              },
+                    setState(() => _currentPage = index);
+                    // Reset + restart the follow-button timer for the new post.
+                    final newPost = posts[index.clamp(0, posts.length - 1)];
+                    _startFollowButtonTimer(newPost);
+                    _trackImpressionForPost(newPost);
+                    _pageEnterTime = DateTime.now();
+                  }
+                },
+                itemBuilder: (context, index) {
+                  if (posts.isEmpty) {
+                    return Center(child: CupertinoActivityIndicator());
+                  }
+                  return _buildPostCanvas(posts[index]);
+                },
+              ),
             ),
           ),
 
@@ -826,8 +932,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     onTapClose: _dismissViewer,
                     onTapMore: () => _showWorksMoreSheet(context),
                     onTapWorksArrow: _toggleFilterPanel,
-                    onTapFollowing: widget.onSwitchToFollowing,
+                    onTapFollowing:
+                        widget.onSwitchToFollowing ?? widget.onSwitchToMoment,
                     onTapCircles: widget.onSwitchToCircles,
+                    onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
                     showNavigationTabs: widget.showTopNavigation,
                   ),
                   if (widget.showTopNavigation)
@@ -855,34 +963,26 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             ),
           ),
 
-          if (currentPost != null && progress.total > 1)
+          if (showStandaloneIndicator)
             Positioned(
               left: AppSpacing.containerLg,
               right: AppSpacing.containerLg,
               bottom: _toolbarReservedHeight + AppSpacing.containerSm,
-              child: Center(
-                child: _WorksCapsuleIndicator(
-                  total: progress.total,
-                  current: progress.current,
-                ),
-              ),
+              child: Center(child: counterIndicator),
             ),
 
           if (currentPost != null && _showsCaptionOverlay(currentPost))
             Positioned(
               left: 0,
               right: 0,
-              bottom:
-                  _toolbarReservedHeight +
-                  (progress.total > 1
-                      ? AppSpacing.containerLg + AppSpacing.containerSm
-                      : AppSpacing.containerSm),
-              child: MediaBlurCaptionOverlay(
-                title: _overlayTitleForPost(currentPost),
-                caption: _overlayBodyForPost(currentPost),
+              bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+              child: MediaCaptionBlock(
+                header: counterIndicator,
+                title: overlayTitle,
+                caption: overlayBody,
                 isExpanded: _isCaptionExpanded(currentPost.id),
                 onToggle: () => _toggleCaptionExpanded(currentPost.id),
-                footer: _circleFooterForPost(context, currentPost),
+                footer: overlayFooter,
               ),
             ),
 
@@ -904,6 +1004,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 isFollowing: _followingUsers.contains(
                   currentPost.authorProfileSubjectId,
                 ),
+                isSelfPost: isSelfPost,
                 showFollowButton: _showFollowButton,
                 onUserTap: () => widget.onUserTap(
                   currentPost.authorProfileSubjectId,
@@ -941,12 +1042,20 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   Widget _buildTypedCanvas(PostBaseDto post) {
+    final onOverflowPrevious = _canSwipePrimaryTabs
+        ? _switchToPreviousPrimaryTab
+        : null;
+    final onOverflowNext = _canSwipePrimaryTabs
+        ? _switchToNextPrimaryTab
+        : null;
     if (_isImageLikePost(post)) {
       return _WorksPhotoCanvas(
         post: post,
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
         onImageChanged: (index) =>
             setState(() => _photoInnerIndex[post.id] = index),
+        onOverflowPrevious: onOverflowPrevious,
+        onOverflowNext: onOverflowNext,
       );
     }
     if (_isVideoLikePost(post)) {
@@ -956,22 +1065,34 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         episodes: episodes,
         onEpisodeChanged: (idx) =>
             setState(() => _videoInnerIndex[post.id] = idx),
+        onOverflowPrevious: onOverflowPrevious,
+        onOverflowNext: onOverflowNext,
       );
     }
     if (_isArticleLikePost(post)) {
-      final cards = _articleCardsForPost(post.id);
+      final article = _articleViewFor(post);
       return _WorksArticleCanvas(
         post: post,
-        cards: cards,
+        article: article,
+        initialPage: (_articleInnerIndex[post.id] ?? 0).clamp(
+          0,
+          article.pages.length - 1,
+        ),
         onPageChanged: (index) =>
             setState(() => _articleInnerIndex[post.id] = index),
+        onOverflowPrevious: onOverflowPrevious,
+        onOverflowNext: onOverflowNext,
       );
     }
     if (_isTextOnlyMomentPost(post)) {
-      return _WorksTextCanvas(
-        title: _titleForPost(post),
-        body: _bodyForPost(post),
-        imageUrl: _rawPostById(post.id)?['coverUrl']?.toString(),
+      return TabSwipeSwitchRegion(
+        enabled: _canSwipePrimaryTabs,
+        onSwipe: _handlePrimaryTabSwipe,
+        child: _WorksTextCanvas(
+          title: _titleForPost(post),
+          body: _bodyForPost(post),
+          imageUrl: _rawPostById(post.id)?['coverUrl']?.toString(),
+        ),
       );
     }
     return Container(color: AppColors.worksBackground);
@@ -1067,6 +1188,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
   const _WorksPrimaryTopBar({
     required this.isFilterExpanded,
     required this.onTapWorksArrow,
+    required this.onHorizontalDragEnd,
     this.showNavigationTabs = true,
     this.onTapClose,
     this.onTapMore,
@@ -1076,6 +1198,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 
   final bool isFilterExpanded;
   final VoidCallback onTapWorksArrow;
+  final GestureDragEndCallback onHorizontalDragEnd;
   final bool showNavigationTabs;
   final VoidCallback? onTapClose;
   final VoidCallback? onTapMore;
@@ -1084,27 +1207,6 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Height is pinned to tabNavigationHeight (48px) — identical to
-    // _DiscoveryPage._buildHeader — so tabs never jump vertically on switch.
-
-    // Responsive font size and tab gap follow the same breakpoints used by
-    // AppTypography.responsive / AppSpacing.responsiveValue everywhere else:
-    //   compact  < 360 px → lg (16px) / gap 16px
-    //   regular  360–599  → xl (18px) / gap 24px
-    //   expanded ≥ 600 px → xxl(20px) / gap 32px
-    final tabFontSize = AppTypography.responsive(
-      context,
-      compact: AppTypography.base,
-      regular: AppTypography.lg,
-      expanded: AppTypography.xl,
-    );
-    final tabGap = AppSpacing.responsiveValue(
-      context,
-      compact: AppSpacing.interGroupSm,
-      regular: AppSpacing.interGroupMd,
-      expanded: AppSpacing.interGroupLg,
-    );
-
     return SizedBox(
       height: AppSpacing.tabNavigationHeight,
       child: Padding(
@@ -1114,79 +1216,26 @@ class _WorksPrimaryTopBar extends StatelessWidget {
             Positioned.fill(
               child: showNavigationTabs
                   ? Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          GestureDetector(
-                            onTap: onTapFollowing,
-                            behavior: HitTestBehavior.opaque,
-                            child: Text(
-                              UITextConstants.homeTabFollowing,
-                              style: TextStyle(
-                                color: AppColors.worksBodyText.withValues(
-                                  alpha: 0.74,
-                                ),
-                                fontSize: tabFontSize,
-                                fontWeight: AppTypography.bold,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: tabGap),
-                          GestureDetector(
-                            onTap: onTapWorksArrow,
-                            behavior: HitTestBehavior.opaque,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width:
-                                      AppSpacing.iconSmall +
-                                      2 +
-                                      AppSpacing.intraGroupXs / 2,
-                                ),
-                                Text(
-                                  UITextConstants.homeTabFeatured,
-                                  style: TextStyle(
-                                    color: AppColors.worksTitle,
-                                    fontSize: tabFontSize,
-                                    fontWeight: AppTypography.bold,
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: AppSpacing.intraGroupXs / 2,
-                                ),
-                                SizedBox(
-                                  width: AppSpacing.iconSmall + 2,
-                                  child: Icon(
-                                    isFilterExpanded
-                                        ? Icons.keyboard_arrow_up
-                                        : Icons.keyboard_arrow_down,
-                                    color: AppColors.worksBodyText.withValues(
-                                      alpha: 0.8,
-                                    ),
-                                    size: AppSpacing.iconSmall + 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: tabGap),
-                          GestureDetector(
-                            onTap: onTapCircles,
-                            behavior: HitTestBehavior.opaque,
-                            child: Text(
-                              UITextConstants.homeTabCircles,
-                              style: TextStyle(
-                                color: AppColors.worksBodyText.withValues(
-                                  alpha: 0.74,
-                                ),
-                                fontSize: tabFontSize,
-                                fontWeight: AppTypography.bold,
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: HomePrimaryTabStrip(
+                        activeTab: HomePrimaryTabStrip.featuredTabId,
+                        onTabChange: (tabId) {
+                          switch (tabId) {
+                            case HomePrimaryTabStrip.followingTabId:
+                              onTapFollowing?.call();
+                              break;
+                            case HomePrimaryTabStrip.circlesTabId:
+                              onTapCircles?.call();
+                              break;
+                            case HomePrimaryTabStrip.featuredTabId:
+                              onTapWorksArrow();
+                              break;
+                          }
+                        },
+                        onHorizontalDragEnd: onHorizontalDragEnd,
+                        isDark: true,
+                        style: HomePrimaryTabStripStyle.immersive,
+                        featuredIndicatorVisible: true,
+                        featuredExpanded: isFilterExpanded,
                       ),
                     )
                   : const SizedBox.shrink(),
@@ -1347,18 +1396,28 @@ class _WorksPhotoCanvas extends StatefulWidget {
     required this.post,
     required this.onImageChanged,
     this.initialIndex = 0,
+    this.onOverflowPrevious,
+    this.onOverflowNext,
   });
 
   final PostBaseDto post;
   final void Function(int index) onImageChanged;
   final int initialIndex;
+  final VoidCallback? onOverflowPrevious;
+  final VoidCallback? onOverflowNext;
 
   @override
   State<_WorksPhotoCanvas> createState() => _WorksPhotoCanvasState();
 }
 
 class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
+  static const double _overflowSwitchVelocity = 320;
+  static const double _overflowSwitchDistance = AppSpacing.buttonHeight;
+
   late final PageController _imgController;
+  double _edgeOverflowDistance = 0;
+  TabSwipeDirection? _pendingOverflowDirection;
+  bool _overflowTriggered = false;
 
   @override
   void initState() {
@@ -1389,6 +1448,53 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
               : const <String>[]);
   }
 
+  void _triggerOverflow(TabSwipeDirection direction) {
+    final callback = direction == TabSwipeDirection.previous
+        ? widget.onOverflowPrevious
+        : widget.onOverflowNext;
+    if (callback == null || _overflowTriggered) {
+      return;
+    }
+    _overflowTriggered = true;
+    callback();
+  }
+
+  void _resetOverflowTracking() {
+    _edgeOverflowDistance = 0;
+    _pendingOverflowDirection = null;
+    _overflowTriggered = false;
+  }
+
+  void _trackEdgeOverflow(DragUpdateDetails details, List<String> images) {
+    final pageWidth = MediaQuery.of(context).size.width;
+    final maxOffset = images.length <= 1
+        ? 0.0
+        : (images.length - 1) * pageWidth;
+    final atLeadingEdge = _imgController.offset <= AppSpacing.hairline;
+    final atTrailingEdge =
+        _imgController.offset >= maxOffset - AppSpacing.hairline;
+    final swipingToPrevious = details.delta.dx > 0;
+    final swipingToNext = details.delta.dx < 0;
+    final direction = atLeadingEdge && swipingToPrevious
+        ? TabSwipeDirection.previous
+        : atTrailingEdge && swipingToNext
+        ? TabSwipeDirection.next
+        : null;
+    if (direction == null) {
+      _edgeOverflowDistance = 0;
+      _pendingOverflowDirection = null;
+      return;
+    }
+    if (_pendingOverflowDirection != direction) {
+      _pendingOverflowDirection = direction;
+      _edgeOverflowDistance = 0;
+    }
+    _edgeOverflowDistance += details.delta.dx.abs();
+    if (_edgeOverflowDistance >= _overflowSwitchDistance) {
+      _triggerOverflow(direction);
+    }
+  }
+
   // ── Horizontal gesture handlers ───────────────────────────────────────────
   // The photo canvas lives inside an outer *vertical* PageView. Flutter's
   // gesture arena separates vertical vs. horizontal recognisers, but the
@@ -1403,42 +1509,70 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     final images = _images;
-    if (images.length <= 1) return;
-    final pageWidth = MediaQuery.of(context).size.width;
-    final maxOffset = (images.length - 1) * pageWidth;
-    _imgController.jumpTo(
-      (_imgController.offset - details.delta.dx).clamp(0.0, maxOffset),
-    );
+    if (images.length > 1) {
+      final pageWidth = MediaQuery.of(context).size.width;
+      final maxOffset = (images.length - 1) * pageWidth;
+      _imgController.jumpTo(
+        (_imgController.offset - details.delta.dx).clamp(0.0, maxOffset),
+      );
+    }
+    _trackEdgeOverflow(details, images);
   }
 
   void _onHorizontalDragEnd(DragEndDetails details) {
     final images = _images;
-    if (images.length <= 1) return;
+    final pageWidth = MediaQuery.of(context).size.width;
+    final maxOffset = images.length <= 1
+        ? 0.0
+        : (images.length - 1) * pageWidth;
+    final atLeadingEdge = _imgController.offset <= AppSpacing.hairline;
+    final atTrailingEdge =
+        _imgController.offset >= maxOffset - AppSpacing.hairline;
     final velocity = details.primaryVelocity ?? 0;
-    final currentPage = _imgController.page ?? 0;
-    final int targetPage;
-    if (velocity < -500) {
-      targetPage = (currentPage.round() + 1).clamp(0, images.length - 1);
-    } else if (velocity > 500) {
-      targetPage = (currentPage.round() - 1).clamp(0, images.length - 1);
-    } else {
-      targetPage = currentPage.round().clamp(0, images.length - 1);
+
+    if (!_overflowTriggered && velocity.abs() >= _overflowSwitchVelocity) {
+      if (velocity > 0 && atLeadingEdge) {
+        _triggerOverflow(TabSwipeDirection.previous);
+      } else if (velocity < 0 && atTrailingEdge) {
+        _triggerOverflow(TabSwipeDirection.next);
+      }
     }
-    _imgController.animateToPage(
-      targetPage,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+
+    if (!_overflowTriggered && images.length > 1) {
+      final currentPage = _imgController.page ?? 0;
+      final int targetPage;
+      if (velocity < -500) {
+        targetPage = (currentPage.round() + 1).clamp(0, images.length - 1);
+      } else if (velocity > 500) {
+        targetPage = (currentPage.round() - 1).clamp(0, images.length - 1);
+      } else {
+        targetPage = currentPage.round().clamp(0, images.length - 1);
+      }
+      _imgController.animateToPage(
+        targetPage,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    _resetOverflowTracking();
   }
 
   @override
   Widget build(BuildContext context) {
     final images = _images;
-    final multiImage = images.length > 1;
+    final handlesHorizontalOverflow =
+        images.length > 1 ||
+        widget.onOverflowPrevious != null ||
+        widget.onOverflowNext != null;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: multiImage ? _onHorizontalDragUpdate : null,
-      onHorizontalDragEnd: multiImage ? _onHorizontalDragEnd : null,
+      onHorizontalDragUpdate: handlesHorizontalOverflow
+          ? _onHorizontalDragUpdate
+          : null,
+      onHorizontalDragEnd: handlesHorizontalOverflow
+          ? _onHorizontalDragEnd
+          : null,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1495,11 +1629,15 @@ class _WorksVideoCanvas extends StatefulWidget {
     required this.post,
     required this.episodes,
     required this.onEpisodeChanged,
+    this.onOverflowPrevious,
+    this.onOverflowNext,
   });
 
   final PostBaseDto post;
   final List<PostBaseDto> episodes;
   final ValueChanged<int> onEpisodeChanged;
+  final VoidCallback? onOverflowPrevious;
+  final VoidCallback? onOverflowNext;
 
   @override
   State<_WorksVideoCanvas> createState() => _WorksVideoCanvasState();
@@ -1508,6 +1646,7 @@ class _WorksVideoCanvas extends StatefulWidget {
 class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   late final PageController _episodeController;
   late int _currentEpisodeIndex;
+  bool _overflowLocked = false;
 
   int get _initialIndex {
     final idx = widget.episodes.indexWhere((e) => e.id == widget.post.id);
@@ -1538,28 +1677,44 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        PageView.builder(
-          controller: _episodeController,
-          scrollDirection: Axis.horizontal,
-          itemCount: episodes.length,
-          onPageChanged: (index) {
-            setState(() => _currentEpisodeIndex = index);
-            widget.onEpisodeChanged(index);
-          },
-          itemBuilder: (context, index) {
-            final episode = episodes[index];
-            final videoUrl = _videoUrlFor(episode);
-            if (videoUrl.isNotEmpty) {
-              return VideoPlayerWidget(
-                key: ValueKey<String>('works-video-${episode.id}-$index'),
-                videoUrl: videoUrl,
-                thumbnailUrl: _thumbnailFor(episode),
-                autoPlay: index == _currentEpisodeIndex,
-                showControls: true,
-              );
+        NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is OverscrollNotification && !_overflowLocked) {
+              if (notification.overscroll < 0) {
+                _overflowLocked = true;
+                widget.onOverflowPrevious?.call();
+              } else if (notification.overscroll > 0) {
+                _overflowLocked = true;
+                widget.onOverflowNext?.call();
+              }
+            } else if (notification is ScrollEndNotification) {
+              _overflowLocked = false;
             }
-            return Container(color: AppColors.worksBackground);
+            return false;
           },
+          child: PageView.builder(
+            controller: _episodeController,
+            scrollDirection: Axis.horizontal,
+            itemCount: episodes.length,
+            onPageChanged: (index) {
+              setState(() => _currentEpisodeIndex = index);
+              widget.onEpisodeChanged(index);
+            },
+            itemBuilder: (context, index) {
+              final episode = episodes[index];
+              final videoUrl = _videoUrlFor(episode);
+              if (videoUrl.isNotEmpty) {
+                return VideoPlayerWidget(
+                  key: ValueKey<String>('works-video-${episode.id}-$index'),
+                  videoUrl: videoUrl,
+                  thumbnailUrl: _thumbnailFor(episode),
+                  autoPlay: index == _currentEpisodeIndex,
+                  showControls: true,
+                );
+              }
+              return Container(color: AppColors.worksBackground);
+            },
+          ),
         ),
         Positioned.fill(
           child: DecoratedBox(
@@ -1588,33 +1743,85 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 }
 
-class _WorksArticleCanvas extends StatelessWidget {
+class _WorksArticleCanvas extends StatefulWidget {
   const _WorksArticleCanvas({
     required this.post,
-    required this.cards,
+    required this.article,
     required this.onPageChanged,
+    this.initialPage = 0,
+    this.onOverflowPrevious,
+    this.onOverflowNext,
   });
 
   final PostBaseDto post;
-  final List<Map<String, dynamic>> cards;
+  final ArticleDetailView article;
   final ValueChanged<int> onPageChanged;
+  final int initialPage;
+  final VoidCallback? onOverflowPrevious;
+  final VoidCallback? onOverflowNext;
+
+  @override
+  State<_WorksArticleCanvas> createState() => _WorksArticleCanvasState();
+}
+
+class _WorksArticleCanvasState extends State<_WorksArticleCanvas> {
+  late final PageController _pageController;
+  bool _overflowLocked = false;
+  List<ArticlePageData> get _pages => widget.article.pages;
+
+  int get _safeInitialPage {
+    final maxIndex = _pages.length - 1;
+    if (maxIndex <= 0) {
+      return 0;
+    }
+    return widget.initialPage.clamp(0, maxIndex);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _safeInitialPage);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onPageChanged(_safeInitialPage);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorksArticleCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentPage = _pageController.hasClients
+        ? (_pageController.page?.round() ?? _safeInitialPage)
+        : _safeInitialPage;
+    if (widget.initialPage != oldWidget.initialPage &&
+        currentPage != widget.initialPage &&
+        _pageController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) {
+          return;
+        }
+        _pageController.jumpToPage(_safeInitialPage);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pages = <Map<String, dynamic>>[
-      <String, dynamic>{'__guide__': true},
-      ...cards,
-    ];
     return Stack(
       fit: StackFit.expand,
       children: [
         Container(color: AppColors.worksBackground),
-        if (post.primaryImageUrl.isNotEmpty)
+        if (widget.post.primaryImageUrl.isNotEmpty)
           Positioned.fill(
             child: Opacity(
               opacity: 0.08,
               child: CachedNetworkImage(
-                imageUrl: post.primaryImageUrl,
+                imageUrl: widget.post.primaryImageUrl,
                 fit: BoxFit.cover,
                 placeholder: (context, url) =>
                     Container(color: AppColors.worksBackground),
@@ -1644,23 +1851,40 @@ class _WorksArticleCanvas extends StatelessWidget {
           bottom:
               _WorksImmersiveViewerState._toolbarReservedHeight +
               AppSpacing.containerMd,
-          child: PageView.builder(
-            itemCount: pages.length,
-            onPageChanged: onPageChanged,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return _ArticleGuideCard(post: post);
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is OverscrollNotification && !_overflowLocked) {
+                if (notification.overscroll < 0) {
+                  _overflowLocked = true;
+                  widget.onOverflowPrevious?.call();
+                } else if (notification.overscroll > 0) {
+                  _overflowLocked = true;
+                  widget.onOverflowNext?.call();
+                }
+              } else if (notification is ScrollEndNotification) {
+                _overflowLocked = false;
               }
-              final card = pages[index];
-              final title = card['title']?.toString() ?? post.normalizedTitle;
-              final body = card['body']?.toString() ?? post.normalizedBody;
-              return _ArticleReadingCard(
-                title: title,
-                body: body,
-                imageUrl: card['imageUrl']?.toString(),
-                caption: card['caption']?.toString(),
-              );
+              return false;
             },
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _pages.length,
+              onPageChanged: widget.onPageChanged,
+              itemBuilder: (context, index) {
+                final page = _pages[index];
+                return ArticlePageShell(
+                  template: widget.article.template,
+                  fontPreset: widget.article.fontPreset,
+                  pageIndex: index,
+                  totalPages: _pages.length,
+                  child: ArticlePageReadOnlyView(
+                    page: page,
+                    template: widget.article.template,
+                    fontPreset: widget.article.fontPreset,
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -1769,42 +1993,74 @@ class _WorksTextCanvas extends StatelessWidget {
   }
 }
 
-class _WorksCapsuleIndicator extends StatelessWidget {
-  const _WorksCapsuleIndicator({required this.total, required this.current});
+class _WorksPageIndicator extends StatelessWidget {
+  const _WorksPageIndicator({required this.total, required this.current});
 
   final int total;
   final int current;
+  static const int _maxVisibleDots = 6;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.intraGroupSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        // 中性黑背景，避免 worksDrawerBg 海军蓝在暖色图片上产生色相冲突
-        color: Colors.black.withValues(alpha: 0.26),
+    final currentIndex = (current - 1).clamp(0, total - 1).toInt();
+    final visibleCount = total.clamp(1, _maxVisibleDots).toInt();
+    final windowStart = total <= _maxVisibleDots
+        ? 0
+        : (currentIndex - 2).clamp(0, total - visibleCount).toInt();
+    final indicator = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(visibleCount, (visibleIndex) {
+        final absoluteIndex = windowStart + visibleIndex;
+        final selected = absoluteIndex == currentIndex;
+        final hasLeadingOverflow = windowStart > 0 && visibleIndex == 0;
+        final hasTrailingOverflow =
+            windowStart + visibleCount < total &&
+            visibleIndex == visibleCount - 1;
+        final alpha = selected
+            ? 0.94
+            : (absoluteIndex < currentIndex && hasLeadingOverflow) ||
+                  (absoluteIndex > currentIndex && hasTrailingOverflow)
+            ? 0.18
+            : 0.38;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(horizontal: 1.5),
+          width: 4.5,
+          height: 4.5,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: alpha),
+          ),
+        );
+      }),
+    );
+    return IgnorePointer(
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(total.clamp(1, 10), (i) {
-          final selected = i == current - 1;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            margin: EdgeInsets.symmetric(horizontal: AppSpacing.xs / 2),
-            width: selected ? AppSpacing.containerSm : AppSpacing.intraGroupSm,
-            height: AppSpacing.intraGroupSm,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: DecoratedBox(
+            key: const ValueKey<String>('works-page-indicator'),
             decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.worksTitle.withValues(alpha: 0.72)
-                  : AppColors.worksTitle.withValues(alpha: 0.32),
-              borderRadius: BorderRadius.circular(AppSpacing.intraGroupSm),
+              color: Colors.black.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(
+                AppSpacing.circularBorderRadius,
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.06),
+                width: AppSpacing.hairline,
+              ),
             ),
-          );
-        }),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.intraGroupSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
+              child: indicator,
+            ),
+          ),
+        ),
       ),
     );
   }

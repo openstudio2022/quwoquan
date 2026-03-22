@@ -172,39 +172,23 @@ class _AssistantChatSettingsPageState
     final availableBackends = remoteConfigured
         ? AssistantBackend.values
         : const <AssistantBackend>[AssistantBackend.local];
-    final selected = await showCupertinoModalPopup<AssistantBackend>(
-      context: context,
-      builder: (sheetContext) {
-        return CupertinoActionSheet(
-          title: Text(UITextConstants.assistantSettingsBackend),
-          message: Text(UITextConstants.assistantSettingsBackendHint),
-          actions: availableBackends
+    final selected = await showAppActionSheet<AssistantBackend>(
+      context,
+      title: UITextConstants.assistantSettingsBackend,
+      message: UITextConstants.assistantSettingsBackendHint,
+      sections: [
+        AppActionSheetSection<AssistantBackend>(
+          items: availableBackends
               .map(
-                (backend) => CupertinoActionSheetAction(
-                  onPressed: () => Navigator.of(sheetContext).pop(backend),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_backendLabel(backend)),
-                      if (backend == _backend) ...[
-                        SizedBox(width: AppSpacing.xs),
-                        Icon(
-                          CupertinoIcons.check_mark,
-                          size: AppSpacing.iconSmall,
-                        ),
-                      ],
-                    ],
-                  ),
+                (backend) => AppActionSheetItem<AssistantBackend>(
+                  value: backend,
+                  label: _backendLabel(backend),
+                  isSelected: backend == _backend,
                 ),
               )
               .toList(growable: false),
-          cancelButton: CupertinoActionSheetAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: Text(UITextConstants.cancel),
-          ),
-        );
-      },
+        ),
+      ],
     );
     if (selected == null || selected == _backend) return;
     final nextSessionId = await widget.onBackendSelected(selected);
@@ -236,40 +220,24 @@ class _AssistantChatSettingsPageState
       );
       return;
     }
-    final selected = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (sheetContext) {
-        final current = gateway.currentModel();
-        return CupertinoActionSheet(
-          title: Text(UITextConstants.assistantModelSelectorTitle),
-          message: Text(UITextConstants.assistantModelSelectorHint),
-          actions: models
+    final current = gateway.currentModel();
+    final selected = await showAppActionSheet<String>(
+      context,
+      title: UITextConstants.assistantModelSelectorTitle,
+      message: UITextConstants.assistantModelSelectorHint,
+      sections: [
+        AppActionSheetSection<String>(
+          items: models
               .map(
-                (modelRef) => CupertinoActionSheetAction(
-                  onPressed: () => Navigator.of(sheetContext).pop(modelRef),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_shortModelName(modelRef)),
-                      if (modelRef == current) ...[
-                        SizedBox(width: AppSpacing.xs),
-                        Icon(
-                          CupertinoIcons.check_mark,
-                          size: AppSpacing.iconSmall,
-                        ),
-                      ],
-                    ],
-                  ),
+                (modelRef) => AppActionSheetItem<String>(
+                  value: modelRef,
+                  label: _shortModelName(modelRef),
+                  isSelected: modelRef == current,
                 ),
               )
               .toList(growable: false),
-          cancelButton: CupertinoActionSheetAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: Text(UITextConstants.cancel),
-          ),
-        );
-      },
+        ),
+      ],
     );
     if (selected == null || selected.trim().isEmpty) return;
     final switched = gateway.switchModel(selected);

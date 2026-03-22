@@ -521,6 +521,8 @@ class ContentMockData {
       'mediaUrls': [
         'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
       ],
+      'articleTemplate': 'tech',
+      'articleFontPreset': 'mono',
       'cards': [
         {
           'title': '范式变化',
@@ -564,6 +566,8 @@ class ContentMockData {
           'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+      'articleTemplate': 'ritual',
+      'articleFontPreset': 'classic',
       'cards': [
         {
           'title': '起笔与呼吸',
@@ -607,6 +611,8 @@ class ContentMockData {
           'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+      'articleTemplate': 'gentle',
+      'articleFontPreset': 'rounded',
       'cards': [
         {
           'title': '博洛尼亚肉酱',
@@ -651,6 +657,8 @@ class ContentMockData {
           'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+      'articleTemplate': 'diffuse',
+      'articleFontPreset': 'clean',
       'cards': [
         {
           'title': '色彩心理',

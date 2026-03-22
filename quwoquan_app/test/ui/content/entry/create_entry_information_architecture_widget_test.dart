@@ -37,6 +37,9 @@ void main() {
     expect(find.text('相机'), findsOneWidget);
     expect(find.text('发起群聊'), findsOneWidget);
     expect(find.text('添加同好'), findsOneWidget);
+    expect(find.text('创作'), findsNothing);
+    expect(find.text('连接'), findsNothing);
+    expect(find.text('取消'), findsOneWidget);
 
     expect(find.text('发微趣'), findsNothing);
     expect(find.text('发美图'), findsNothing);

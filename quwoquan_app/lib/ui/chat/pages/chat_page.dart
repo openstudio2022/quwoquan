@@ -336,9 +336,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           ),
           // Layer 2: Trailing Actions
           Positioned(
-            right:
-                AppSpacing.feedContentHorizontal(context) -
-                AppSpacing.intraGroupXs,
+            right: AppSpacing.topBarTrailingButtonInset(context),
             top: 0,
             bottom: 0,
             child: const Center(

@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
@@ -83,6 +84,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   void _openSelectGroupChatSheet() {
     showCupertinoModalPopup<void>(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (context) => _SelectGroupChatSheet(
         groups: _groupConversations
             .map((c) => c.cast<String, String>())
@@ -114,6 +116,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   void _openSelectCircleSheet() {
     showCupertinoModalPopup<void>(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (context) => _SelectCircleSheet(
         circles: _mockCircles,
         onSelectCircle: (circle) {
@@ -147,6 +150,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }) {
     showCupertinoModalPopup<void>(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (context) => _MemberSelectSheet(
         title: title,
         members: members,
@@ -294,9 +298,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             selected: selected,
             fgPrimary: fgPrimary,
             onTap: () => setState(() => _relatedSelected[username] = !selected),
-            onAvatarTap: () => context.push(
-              AppRoutePaths.userProfile(username: username),
-            ),
+            onAvatarTap: () =>
+                context.push(AppRoutePaths.userProfile(username: username)),
           ),
         );
       }
@@ -518,7 +521,11 @@ class _SelectionIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      onPressed: onTap, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+      onPressed: onTap,
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
       child: Icon(
         selected
             ? CupertinoIcons.check_mark_circled_solid
@@ -545,16 +552,21 @@ class _SelectGroupChatSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppColors.dark.backgroundPrimary : AppColors.white;
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final fgPrimary = isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.interGroupMd),
-        ),
+    return AppBottomModalSurface(
+      onDismiss: onClose,
+      backgroundColor: bgColor,
+      maxHeightRatio: 0.7,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
       ),
       child: Column(
         children: [
@@ -651,16 +663,21 @@ class _SelectCircleSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppColors.dark.backgroundPrimary : AppColors.white;
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final fgPrimary = isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.interGroupMd),
-        ),
+    return AppBottomModalSurface(
+      onDismiss: onClose,
+      backgroundColor: bgColor,
+      maxHeightRatio: 0.7,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
       ),
       child: Column(
         children: [
@@ -778,16 +795,21 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppColors.dark.backgroundPrimary : AppColors.white;
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final fgPrimary = isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.interGroupMd),
-        ),
+    return AppBottomModalSurface(
+      onDismiss: widget.onBack,
+      backgroundColor: bgColor,
+      maxHeightRatio: 0.75,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
       ),
       child: Column(
         children: [
@@ -893,14 +915,17 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                 const Spacer(),
                 CupertinoButton(
                   padding: EdgeInsets.symmetric(
-                    horizontal: SettingsSemanticConstants
-                        .actionButtonPaddingHorizontal,
-                    vertical: SettingsSemanticConstants
-                        .actionButtonPaddingVertical,
+                    horizontal:
+                        SettingsSemanticConstants.actionButtonPaddingHorizontal,
+                    vertical:
+                        SettingsSemanticConstants.actionButtonPaddingVertical,
                   ),
-                  color: SettingsSemanticConstants.actionButtonPrimaryBackground,
-                  disabledColor: SettingsSemanticConstants
-                      .actionButtonDisabledBackground(isDark),
+                  color:
+                      SettingsSemanticConstants.actionButtonPrimaryBackground,
+                  disabledColor:
+                      SettingsSemanticConstants.actionButtonDisabledBackground(
+                        isDark,
+                      ),
                   borderRadius: BorderRadius.circular(
                     SettingsSemanticConstants.actionButtonBorderRadius,
                   ),
@@ -912,7 +937,11 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                               .toList();
                           Navigator.of(context).pop();
                           widget.onConfirm(list);
-                        }, minimumSize: Size(SettingsSemanticConstants.actionButtonHeightMedium, SettingsSemanticConstants.actionButtonHeightMedium),
+                        },
+                  minimumSize: Size(
+                    SettingsSemanticConstants.actionButtonHeightMedium,
+                    SettingsSemanticConstants.actionButtonHeightMedium,
+                  ),
                   child: Text(
                     UITextConstants.selectAction,
                     style: TextStyle(

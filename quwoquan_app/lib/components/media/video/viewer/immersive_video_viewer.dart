@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,7 +29,13 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final int initialIndex;
   final List<PostSummaryView> posts;
   final int initialPostIndex;
-  final void Function(String username, {String? avatarUrl, String? displayName, String? backgroundUrl}) onUserClick;
+  final void Function(
+    String username, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  })
+  onUserClick;
   final Function(String, bool)? onFollowClick;
   final Function(PostSummaryView)? onCommentsClick;
   final Function(PostSummaryView)? onMoreClick;
@@ -48,10 +55,13 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final bool enableHeroAnimation;
   final Map<String, dynamic>? heroAnimationSource;
   final Function(String)? onHeroAnimationComplete;
+
   /// 私人助理入口（中间图标，点击跳转助理主页）
   final VoidCallback? onAssistantClick;
+
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
+
   /// 'full'（默认）| 'backOnly'：backOnly 时顶栏仅返回、更多
   final String toolbarMode;
 
@@ -89,21 +99,23 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ImmersiveVideoViewer> createState() => _ImmersiveVideoViewerState();
+  ConsumerState<ImmersiveVideoViewer> createState() =>
+      _ImmersiveVideoViewerState();
 }
 
-class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer> 
+class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     with TickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _fadeController;
   late AnimationController _controlsController;
-  final TextEditingController _assistantInputController = TextEditingController();
+  final TextEditingController _assistantInputController =
+      TextEditingController();
   final ScrollController _assistantScrollController = ScrollController();
   final FocusNode _assistantInputFocusNode = FocusNode();
-  
+
   int _currentPostIndex = 0;
   bool _showControls = true;
-  
+
   // 本地状态
   bool _isLiked = false;
   bool _isSaved = false;
@@ -123,20 +135,20 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void initState() {
     super.initState();
     _currentPostIndex = widget.initialPostIndex;
-    
+
     _pageController = PageController(initialPage: _currentPostIndex);
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _controlsController = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
     _controlsController.value = 1.0; // 默认显示工具栏
-    
+
     _initializePostState();
     _startAutoHideTimer();
     _applySystemUiMode();
@@ -218,6 +230,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           }
         }
       }
+
       _controlsController.addStatusListener(listener);
     }
   }
@@ -283,7 +296,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         _likesCount = (_likesCount - 1).clamp(0, double.infinity).toInt();
       }
     });
-    
+
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       widget.onLikeClick?.call(widget.posts[_currentPostIndex]);
     }
@@ -298,7 +311,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         _savesCount = (_savesCount - 1).clamp(0, double.infinity).toInt();
       }
     });
-    
+
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       widget.onSaveClick?.call(widget.posts[_currentPostIndex]);
     }
@@ -319,7 +332,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void _handleCommentsClick() {
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       final currentPost = widget.posts[_currentPostIndex];
-      
+
       // 显示评论弹窗
       final commentConfig = CommentConfig();
 
@@ -354,7 +367,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void _handleMoreClick() {
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       final currentPost = widget.posts[_currentPostIndex];
-      
+
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
         post: currentPost,
@@ -365,9 +378,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           final link = 'https://quwoquan.app/post/${currentPost.id}';
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(UITextConstants.copyLink)),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(UITextConstants.copyLink)));
           }
         },
         onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),
@@ -379,10 +392,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         onReport: () => debugPrint('Report post: ${currentPost.id}'),
       );
 
-      MoreActionPopup.show(
-        context: context,
-        config: config,
-      );
+      MoreActionPopup.show(context: context, config: config);
     }
   }
 
@@ -394,7 +404,8 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   }
 
   void _handleAssistantClick() {
-    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
+    final currentPost =
+        widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
         ? widget.posts[_currentPostIndex]
         : null;
     _showAssistantPanel(currentPost);
@@ -416,10 +427,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       summaryText: summaryText,
       cards: summaryCards,
     );
-    showModalBottomSheet(
+    showCupertinoModalPopup(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
       builder: (context) {
         return MediaAssistantPanel(
           isDark: isDark,
@@ -476,7 +486,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   }
 
   void _handleAuthorTap() {
-    if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) return;
+    if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) {
+      return;
+    }
     final currentPost = widget.posts[_currentPostIndex];
     final username = currentPost.authorId;
     if (username.isEmpty) return;
@@ -546,7 +558,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
+        final horizontalPadding = context.safeGetContainerSpacing(
+          SpacingSize.md,
+        );
         final maxTextWidth = constraints.maxWidth - horizontalPadding * 2;
         final titleStyle = TextStyle(
           color: AppColors.white,
@@ -579,13 +593,17 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
             ? context.safeGetIntraGroupSpacing(SpacingSize.xs)
             : 0.0;
         final textBlockHeight = titleHeight + captionHeight + textSpacing;
-        final captionBottomOffset = MediaQuery.of(context).padding.bottom +
+        final captionBottomOffset =
+            MediaQuery.of(context).padding.bottom +
             AppSpacing.buttonHeight +
             context.safeGetIntraGroupSpacing(SpacingSize.md);
-        final captionReservedHeight = hasTextLayout ? (textBlockHeight + captionBottomOffset) : 0.0;
+        final captionReservedHeight = hasTextLayout
+            ? (textBlockHeight + captionBottomOffset)
+            : 0.0;
 
         final availableHeight = constraints.maxHeight;
-        final imageAspectRatio = _imageAspectRatios[imageUrl] ??
+        final imageAspectRatio =
+            _imageAspectRatios[imageUrl] ??
             mediaItem.aspectRatio ??
             (constraints.maxWidth / constraints.maxHeight);
         final naturalImageHeight = constraints.maxWidth / imageAspectRatio;
@@ -594,9 +612,14 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         final imageHeight = canPlaceTextBelow
             ? math.min(naturalImageHeight, availableForImage)
             : availableHeight;
-        final remainingHeight = canPlaceTextBelow ? (availableForImage - imageHeight) : 0.0;
-        final topBottomPadding = remainingHeight > 0 ? remainingHeight / 2 : 0.0;
-        final shouldOverlayText = hasTextLayout && (!canPlaceTextBelow || remainingHeight <= 0);
+        final remainingHeight = canPlaceTextBelow
+            ? (availableForImage - imageHeight)
+            : 0.0;
+        final topBottomPadding = remainingHeight > 0
+            ? remainingHeight / 2
+            : 0.0;
+        final shouldOverlayText =
+            hasTextLayout && (!canPlaceTextBelow || remainingHeight <= 0);
 
         return Stack(
           children: [
@@ -718,7 +741,8 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     if (!widget.isOpen) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
+    final currentPost =
+        widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
         ? widget.posts[_currentPostIndex]
         : null;
 
@@ -767,7 +791,8 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
                 children: [
                   MediaViewerTopBar(
                     onBack: widget.onClose,
-                    positionText: '${_currentPostIndex + 1}/${widget.posts.length}',
+                    positionText:
+                        '${_currentPostIndex + 1}/${widget.posts.length}',
                     authorName: _getAuthorName(currentPost),
                     authorAvatarUrl: _getAuthorAvatar(currentPost),
                     isFollowing: _isFollowing,

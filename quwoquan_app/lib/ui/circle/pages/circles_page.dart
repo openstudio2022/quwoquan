@@ -12,6 +12,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -35,23 +36,67 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     with AutomaticKeepAliveClientMixin {
   static const double _circleCoverAspectRatio = 4 / 3;
   static const String _channelPrefsKey = 'circles.selected_channels.v1';
+  static const String _expandedMenuMineId = '__mine__';
+  static const String _expandedMenuAllId = '__all__';
   static const Set<String> _defaultUnselectedChannelIds = <String>{
     'car',
     'humanity',
     'sports',
   };
   static const List<String> _fixedCategoryOrder = <String>['following', 'all'];
+  static const Set<String> _myCircleIds = <String>{
+    'c-photo-owner',
+    'c-tech-admin',
+    'c1',
+    'c2',
+    'c3',
+    'c-human-1',
+  };
 
   String _selectedDimension = 'all';
   String _selectedSubCategory = UITextConstants.circleSubAll;
+  String _selectedExpandedMenuId = _expandedMenuAllId;
   bool _isChannelPanelOpen = false;
   String? _draggingChannelId;
   List<String>? _selectedCategoryIds;
   final Map<String, String> _subCategoryByDimension = {};
   late PageController _primaryPageController;
+  bool _routeContextApplied = false;
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeContextApplied) return;
+    _routeContextApplied = true;
+
+    final params = _routeQueryParameters;
+    final dimensionId = params['category'];
+    final requestedMode = params['mode'];
+    final requestedSub = params['sub'];
+
+    if (dimensionId != null &&
+        _allCategories.any((entry) => entry['id'] == dimensionId)) {
+      _selectedDimension = dimensionId;
+    }
+
+    final menuIds = _expandedMenuItemsFor(
+      _selectedDimension,
+    ).map((entry) => entry.id).toSet();
+    if (requestedMode == 'mine') {
+      _selectedExpandedMenuId = _expandedMenuMineId;
+    } else if (requestedSub != null && menuIds.contains(requestedSub)) {
+      _selectedExpandedMenuId = requestedSub;
+    } else {
+      _selectedExpandedMenuId = _expandedMenuAllId;
+    }
+
+    _selectedSubCategory =
+        _subCategoryByDimension[_selectedDimension] ??
+        UITextConstants.circleSubAll;
+  }
 
   void _recordCirclesVisit(String dimensionId) {
     ref
@@ -68,12 +113,8 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           .clamp(0, _primaryTabIds.length - 1),
     );
     unawaited(_restoreChannelSelection());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _recordCirclesVisit(_selectedDimension);
-        _loadCirclesFromRepo();
-      }
-    });
+    _recordCirclesVisit(_selectedDimension);
+    unawaited(_loadCirclesFromRepo());
   }
 
   @override
@@ -467,6 +508,23 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     _switchSecondaryByDelta(velocity < 0 ? 1 : -1);
   }
 
+  Map<String, String> get _routeQueryParameters {
+    try {
+      return GoRouterState.of(context).uri.queryParameters;
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  void _handleExpandedPageBack() {
+    final router = GoRouter.maybeOf(context);
+    if (router != null && router.canPop()) {
+      context.pop();
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
   double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
     final painter = TextPainter(
       text: TextSpan(text: 'Hg', style: style),
@@ -513,6 +571,83 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         : AppSpacing.bottomNavHeight;
   }
 
+  List<_ExpandedCircleMenuItem> _expandedMenuItemsFor(String dimensionId) {
+    final subCategories = _getSubCategoriesFor(
+      dimensionId,
+    ).where((item) => item != '热门').toList(growable: false);
+    final items = <_ExpandedCircleMenuItem>[
+      _ExpandedCircleMenuItem(
+        id: _expandedMenuMineId,
+        label: UITextConstants.homeCirclesMy,
+      ),
+      _ExpandedCircleMenuItem(
+        id: _expandedMenuAllId,
+        label: UITextConstants.circleSubAll,
+      ),
+      ...subCategories.map(
+        (item) => _ExpandedCircleMenuItem(id: item, label: item),
+      ),
+    ];
+    final seen = <String>{};
+    return items.where((item) => seen.add(item.id)).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _expandedCirclesForSelectedMenu() {
+    final source = List<Map<String, dynamic>>.from(
+      _filteredCirclesFor(_selectedDimension),
+    );
+    source.sort((a, b) {
+      final right = (b['memberCount'] as num?)?.toInt() ?? 0;
+      final left = (a['memberCount'] as num?)?.toInt() ?? 0;
+      return right.compareTo(left);
+    });
+
+    if (_selectedExpandedMenuId == _expandedMenuMineId) {
+      return source
+          .where((item) => _myCircleIds.contains(item['id']?.toString() ?? ''))
+          .toList(growable: false);
+    }
+    if (_selectedExpandedMenuId == _expandedMenuAllId) {
+      return source;
+    }
+    return source
+        .where(
+          (item) => item['subCategory']?.toString() == _selectedExpandedMenuId,
+        )
+        .toList(growable: false);
+  }
+
+  String _expandedPageTitle() {
+    final label = _categoryLabelMap[_selectedDimension] ?? '圈子';
+    return _selectedDimension == 'all' ? '圈子' : '$label圈子';
+  }
+
+  String _expandedSectionTitle() {
+    if (_selectedExpandedMenuId == _expandedMenuMineId) {
+      return '我的圈子';
+    }
+    if (_selectedExpandedMenuId == _expandedMenuAllId) {
+      return _expandedPageTitle();
+    }
+    return '$_selectedExpandedMenuId 圈子';
+  }
+
+  bool _isMyCircle(Map<String, dynamic> circle) {
+    return _myCircleIds.contains(circle['id']?.toString() ?? '');
+  }
+
+  String _formatCircleMetric(num? rawCount, {required String suffix}) {
+    final count = rawCount?.toInt() ?? 0;
+    if (count >= 10000) {
+      final scaled = count / 10000;
+      final value = scaled >= 100 || scaled == scaled.roundToDouble()
+          ? scaled.toStringAsFixed(0)
+          : scaled.toStringAsFixed(1);
+      return '$value万$suffix';
+    }
+    return '$count$suffix';
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -533,6 +668,17 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       isDark,
       ColorType.borderPrimary,
     );
+    final surfaceColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final menuBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final accentBlue = CupertinoColors.activeBlue.resolveFrom(context);
+    final menuItems = _expandedMenuItemsFor(_selectedDimension);
+    final circles = _expandedCirclesForSelectedMenu();
 
     return AppScaffold(
       backgroundColor: bgPrimary,
@@ -540,56 +686,305 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context, isDark, fgSecondary),
-            Expanded(
-              child: Stack(
-                children: [
-                  PageView(
-                    controller: _primaryPageController,
-                    // 禁用 PageView 自带的滑动切换，一级 Tab 切换完全由
-                    // 各区域的 GestureDetector 通过 animateToPage 程序驱动
-                    physics: const NeverScrollableScrollPhysics(),
-                    onPageChanged: (index) {
-                      final id = _primaryTabIds[index];
-                      if (id != _selectedDimension) {
-                        setState(() {
-                          _selectedDimension = id;
-                          _selectedSubCategory =
-                              _subCategoryByDimension[id] ??
-                              UITextConstants.circleSubAll;
-                          _recordCirclesVisit(id);
-                        });
-                      }
-                    },
-                    children: _primaryTabIds.map((id) {
-                      if (id == 'following') {
-                        // 关注页无二级 Tab，整页水平拖拽切换一级 Tab
-                        return GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onHorizontalDragEnd: _onPrimaryDragEnd,
-                          child: _buildFollowingPlaceholder(fgSecondary),
-                        );
-                      }
-                      return _buildDimensionContent(
-                        context,
-                        id,
-                        isDark,
-                        fgPrimary,
-                        fgSecondary,
-                        borderColor,
-                      );
-                    }).toList(),
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerSm,
+                AppSpacing.intraGroupSm,
+                AppSpacing.containerSm,
+                AppSpacing.containerSm,
+              ),
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                border: Border(
+                  bottom: BorderSide(
+                    color: borderColor.withValues(alpha: 0.18),
+                    width: AppSpacing.hairline,
                   ),
-                  if (_isChannelPanelOpen)
-                    Positioned.fill(
-                      child: _buildChannelPanel(
-                        context,
-                        isDark,
-                        bottomInset:
-                            MediaQuery.viewPaddingOf(context).bottom +
-                            AppSpacing.bottomNavHeight,
+                ),
+              ),
+              child: Row(
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: _handleExpandedPageBack,
+                    child: Icon(
+                      CupertinoIcons.back,
+                      color: fgPrimary,
+                      size: AppSpacing.iconMedium,
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        _expandedPageTitle(),
+                        style: TextStyle(
+                          fontSize: AppTypography.iosTitle3,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
                       ),
                     ),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: () {},
+                    child: Icon(
+                      CupertinoIcons.search,
+                      color: fgPrimary,
+                      size: AppSpacing.iconMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    width: 96,
+                    color: menuBackground,
+                    child: ListView.separated(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.intraGroupXs,
+                        AppSpacing.containerMd,
+                        AppSpacing.intraGroupXs,
+                        AppSpacing.containerMd,
+                      ),
+                      itemCount: menuItems.length,
+                      separatorBuilder: (_, __) =>
+                          SizedBox(height: AppSpacing.intraGroupSm),
+                      itemBuilder: (context, index) {
+                        final item = menuItems[index];
+                        final selected = item.id == _selectedExpandedMenuId;
+                        return CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          onPressed: () {
+                            setState(() {
+                              _selectedExpandedMenuId = item.id;
+                              if (item.id == _expandedMenuAllId) {
+                                _selectedSubCategory =
+                                    UITextConstants.circleSubAll;
+                              } else if (item.id != _expandedMenuMineId) {
+                                _selectedSubCategory = item.label;
+                                _subCategoryByDimension[_selectedDimension] =
+                                    item.label;
+                              }
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.intraGroupSm,
+                              vertical: AppSpacing.containerSm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? surfaceColor
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.largeBorderRadius,
+                              ),
+                              border: selected
+                                  ? Border.all(
+                                      color: accentBlue.withValues(alpha: 0.18),
+                                    )
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  width: 3,
+                                  height: AppSpacing.largeButtonSize,
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? accentBlue
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    item.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.smPlus,
+                                      fontWeight: selected
+                                          ? AppTypography.semiBold
+                                          : AppTypography.medium,
+                                      color: selected ? accentBlue : fgPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  VerticalDivider(
+                    width: AppSpacing.hairline,
+                    thickness: AppSpacing.hairline,
+                    color: borderColor.withValues(alpha: 0.16),
+                  ),
+                  Expanded(
+                    child: circles.isEmpty
+                        ? Center(
+                            child: Text(
+                              '${_expandedSectionTitle()} ${UITextConstants.noData}',
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                color: fgSecondary,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: EdgeInsets.fromLTRB(
+                              AppSpacing.containerMd,
+                              AppSpacing.containerMd,
+                              AppSpacing.containerMd,
+                              AppSpacing.containerLg +
+                                  MediaQuery.viewPaddingOf(context).bottom,
+                            ),
+                            itemCount: circles.length,
+                            separatorBuilder: (_, __) => Divider(
+                              height: AppSpacing.containerMd,
+                              color: borderColor.withValues(alpha: 0.14),
+                            ),
+                            itemBuilder: (context, index) {
+                              final circle = circles[index];
+                              final joined = _isMyCircle(circle);
+                              final coverUrl =
+                                  (circle['coverUrl'] ??
+                                          circle['cover'] ??
+                                          circle['avatar'] ??
+                                          '')
+                                      .toString();
+                              final name = (circle['name'] ?? '圈子').toString();
+                              final members = _formatCircleMetric(
+                                circle['memberCount'] as num?,
+                                suffix: '人',
+                              );
+                              final posts = _formatCircleMetric(
+                                circle['postCount'] as num?,
+                                suffix: '件作品',
+                              );
+                              return CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                onPressed: () => context.push(
+                                  AppRoutePaths.circleDetail(
+                                    id: circle['id']?.toString() ?? '',
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        AppSpacing.contentPreviewCornerRadius,
+                                      ),
+                                      child: SizedBox(
+                                        width: AppSpacing.bottomNavHeight + 8,
+                                        height: AppSpacing.bottomNavHeight + 8,
+                                        child: coverUrl.isNotEmpty
+                                            ? Image.network(
+                                                coverUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    ColoredBox(
+                                                      color: fgSecondary
+                                                          .withValues(
+                                                            alpha: 0.12,
+                                                          ),
+                                                      child: Icon(
+                                                        CupertinoIcons
+                                                            .person_3_fill,
+                                                        color: fgSecondary,
+                                                      ),
+                                                    ),
+                                              )
+                                            : ColoredBox(
+                                                color: fgSecondary.withValues(
+                                                  alpha: 0.12,
+                                                ),
+                                                child: Icon(
+                                                  CupertinoIcons.person_3_fill,
+                                                  color: fgSecondary,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    SizedBox(width: AppSpacing.containerSm),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  AppTypography.iosSubheadline,
+                                              fontWeight:
+                                                  AppTypography.semiBold,
+                                              color: fgPrimary,
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            height: AppSpacing.intraGroupXs,
+                                          ),
+                                          Text(
+                                            '$members · $posts',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  AppTypography.iosFootnote,
+                                              color: fgSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(width: AppSpacing.sm),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.containerSm,
+                                        vertical: AppSpacing.intraGroupSm,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: joined
+                                            ? accentBlue.withValues(alpha: 0.12)
+                                            : accentBlue,
+                                        borderRadius: BorderRadius.circular(
+                                          AppSpacing.circularBorderRadius,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        joined ? '已加入' : '加入',
+                                        style: TextStyle(
+                                          fontSize: AppTypography.sm,
+                                          fontWeight: AppTypography.semiBold,
+                                          color: joined
+                                              ? accentBlue
+                                              : Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ],
               ),
             ),
@@ -642,15 +1037,21 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         },
         // Tab 栏区域：手指滑动只滚动 Tab 栏，不切换 Tab
         trailingActions: [
-          SizedBox(
-            width: AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _toggleChannelPanel,
-              child: Icon(
-                CupertinoIcons.line_horizontal_3_decrease,
-                size: AppSpacing.iconMedium,
-                color: fgSecondary,
+          Padding(
+            padding: EdgeInsets.only(
+              right: AppSpacing.topBarTrailingButtonInset(context),
+            ),
+            child: SizedBox(
+              width: AppSpacing.minInteractiveSize,
+              height: AppSpacing.minInteractiveSize,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _toggleChannelPanel,
+                child: Icon(
+                  CupertinoIcons.line_horizontal_3_decrease,
+                  size: AppSpacing.iconMedium,
+                  color: fgSecondary,
+                ),
               ),
             ),
           ),
@@ -1096,7 +1497,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                             aspectRatio: _circleCoverAspectRatio,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                AppSpacing.borderRadius,
+                                AppSpacing.contentPreviewCornerRadius,
                               ),
                               child: Image.network(
                                 c['avatar'] as String,
@@ -1181,7 +1582,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(
-                        AppSpacing.borderRadius,
+                        AppSpacing.contentPreviewCornerRadius,
                       ),
                       child: Image.network(
                         a['image'] as String? ?? '',
@@ -1291,8 +1692,8 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       ),
       sliver: SliverMasonryGrid.count(
         crossAxisCount: 2,
-        mainAxisSpacing: AppSpacing.interGroupSm,
-        crossAxisSpacing: AppSpacing.interGroupSm,
+        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
         childCount: posts.length,
         itemBuilder: (context, i) {
           final p = posts[i];
@@ -1309,7 +1710,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 }
 
-/// 简化版宫格卡片：媒体 + 标题 + 作者头像/名字 + 右侧爱心
+class _ExpandedCircleMenuItem {
+  const _ExpandedCircleMenuItem({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+/// 圈子瀑布流卡片：复用组件库中的 Post 预览卡片，
+/// 底部插槽保留为「作者头像 + 作者名 + 点赞」。
 class _DiscoveryPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final bool isDark;
@@ -1333,25 +1742,92 @@ class _DiscoveryPostCard extends StatelessWidget {
     return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
   }
 
+  String get _coverUrl {
+    final primary =
+        (post['image'] ?? post['coverUrl'] ?? post['thumbnailUrl'] ?? '')
+            .toString()
+            .trim();
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+    final imageUrls = post['imageUrls'];
+    if (imageUrls is List && imageUrls.isNotEmpty) {
+      return imageUrls.first.toString();
+    }
+    return '';
+  }
+
+  String get _bodyText {
+    final candidates = <Object?>[
+      post['body'],
+      post['description'],
+      post['content'],
+      post['caption'],
+    ];
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  String get _headlineText {
+    final title = (post['title'] ?? '').toString().trim();
+    final body = _bodyText;
+    if (title.isNotEmpty) {
+      return title;
+    }
+    if (body.isNotEmpty) {
+      return body;
+    }
+    return '帖子';
+  }
+
+  String get _supportingText {
+    final title = (post['title'] ?? '').toString().trim();
+    final body = _bodyText;
+    if (title.isEmpty || body.isEmpty || title == body) {
+      return '';
+    }
+    return body;
+  }
+
+  String get _authorName {
+    final user = post['user'] as Map<String, dynamic>? ?? {};
+    final authorName =
+        (user['name'] ??
+                post['authorNickname'] ??
+                post['displayName'] ??
+                post['username'] ??
+                post['authorId'] ??
+                '')
+            .toString();
+    return authorName.isEmpty ? UITextConstants.unknownUser : authorName;
+  }
+
+  String? get _authorAvatarUrl {
+    final user = post['user'] as Map<String, dynamic>? ?? {};
+    final avatarUrl =
+        (user['avatar'] ?? post['authorAvatarUrl'] ?? post['avatarUrl'] ?? '')
+            .toString()
+            .trim();
+    return avatarUrl.isEmpty ? null : avatarUrl;
+  }
+
+  int get _likeCount {
+    return (post['likes'] as num?)?.toInt() ??
+        (post['likeCount'] as num?)?.toInt() ??
+        0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cardBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
     );
-    final user = post['user'] as Map<String, dynamic>? ?? {};
     final gridMetaFontSize = AppTypography.responsive(
       context,
       compact: AppTypography.sm,
@@ -1359,113 +1835,45 @@ class _DiscoveryPostCard extends StatelessWidget {
       expanded: AppTypography.base,
     );
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
+    return PostPreviewCard(
+      isDark: isDark,
+      title: _headlineText,
+      supportingText: _supportingText,
+      coverUrl: _coverUrl,
+      mediaAspectRatio: _imageAspectRatio,
+      showVideoBadge: post['type'] == 'video',
+      onTap: onTap,
       onHorizontalDragEnd: onHorizontalDragEnd,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          border: Border.all(color: borderColor),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
-              blurRadius: AppSpacing.containerMd,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: CupertinoButton(
-          padding: EdgeInsets.all(AppSpacing.intraGroupSm),
-          minimumSize: Size.zero,
-          onPressed: onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 媒体图片（按模拟宽高比，最大 9:16）
-              AspectRatio(
-                aspectRatio: _imageAspectRatio,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.network(
-                        post['image'] as String,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: fgSecondary.withValues(alpha: 0.15),
-                        ),
-                      ),
-                      if (post['type'] == 'video')
-                        Positioned(
-                          top: AppSpacing.intraGroupSm,
-                          right: AppSpacing.intraGroupSm,
-                          child: Icon(
-                            CupertinoIcons.play_circle_fill,
-                            color: Colors.white,
-                            size: AppSpacing.iconLarge - AppSpacing.xs,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              // 标题（最多2行，正常色）
-              Text(
-                post['title'] as String,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.semiBold,
-                  color: fgPrimary,
-                ),
-              ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              // 底部行：左侧三动作，右侧转发（宫格保持更紧凑字号）。
-              Row(
-                children: [
-                  _buildUserAvatar(
-                    user['avatar'] as String?,
-                    fgSecondary,
-                    radius: AppSpacing.intraGroupMd,
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupXs),
-                  Expanded(
-                    child: Text(
-                      user['name'] as String? ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosCaption1,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.heart,
-                        size: gridMetaFontSize,
-                        color: fgSecondary,
-                      ),
-                      Text(
-                        ' ${post['likes'] ?? 0}',
-                        style: TextStyle(
-                          fontSize: AppTypography.iosCaption1,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+      footer: Row(
+        children: [
+          _buildUserAvatar(
+            _authorAvatarUrl,
+            fgSecondary,
+            radius: AppSpacing.intraGroupMd,
           ),
-        ),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          Expanded(
+            child: Text(
+              _authorName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+          PostCardMetric(
+            icon: CupertinoIcons.heart,
+            iconSize: gridMetaFontSize,
+            label: '$_likeCount',
+            color: fgSecondary,
+            textStyle: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }

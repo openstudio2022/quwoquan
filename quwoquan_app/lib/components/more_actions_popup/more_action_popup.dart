@@ -1,8 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 
 /// 更多操作弹窗组件
@@ -21,6 +22,7 @@ class MoreActionPopup extends StatelessWidget {
     if (config is MediaPostMoreActionConfig) {
       await showCupertinoModalPopup(
         context: context,
+        barrierColor: Colors.transparent,
         builder: (context) => _MediaPostMoreActionSheet(config: config),
       );
     }
@@ -54,6 +56,7 @@ class _BottomAction {
   final String label;
   final String? description;
   final VoidCallback? onTap;
+  final bool isDestructive;
 
   const _BottomAction({
     required this.id,
@@ -61,6 +64,7 @@ class _BottomAction {
     required this.label,
     this.description,
     this.onTap,
+    this.isDestructive = false,
   });
 }
 
@@ -78,7 +82,7 @@ class _MediaPostMoreActionSheet extends ConsumerStatefulWidget {
 class _MediaPostMoreActionSheetState
     extends ConsumerState<_MediaPostMoreActionSheet> {
   List<_ScrollAction> _buildScrollActions(bool isDark) {
-    return [
+    final actions = <_ScrollAction>[
       _ScrollAction(
         id: 'reward',
         icon: CupertinoIcons.gift,
@@ -104,18 +108,6 @@ class _MediaPostMoreActionSheetState
         onTap: widget.config.onCopyLink,
       ),
       _ScrollAction(
-        id: 'share',
-        icon: CupertinoIcons.share,
-        label: UITextConstants.share,
-        onTap: widget.config.onShare,
-      ),
-      _ScrollAction(
-        id: 'viewOriginal',
-        icon: CupertinoIcons.photo,
-        label: AppStrings.viewOriginal,
-        onTap: widget.config.onViewOriginal,
-      ),
-      _ScrollAction(
         id: 'fontSettings',
         icon: CupertinoIcons.textformat,
         label: AppStrings.fontSettings,
@@ -134,6 +126,29 @@ class _MediaPostMoreActionSheetState
         onTap: widget.config.onFeedback,
       ),
     ];
+    if (widget.config.showShareAction) {
+      actions.insert(
+        5,
+        _ScrollAction(
+          id: 'share',
+          icon: CupertinoIcons.share,
+          label: UITextConstants.share,
+          onTap: widget.config.onShare,
+        ),
+      );
+    }
+    if (widget.config.showViewOriginalAction) {
+      actions.insert(
+        widget.config.showShareAction ? 6 : 5,
+        _ScrollAction(
+          id: 'viewOriginal',
+          icon: CupertinoIcons.photo,
+          label: AppStrings.viewOriginal,
+          onTap: widget.config.onViewOriginal,
+        ),
+      );
+    }
+    return actions;
   }
 
   List<_BottomAction> _buildBottomActions() {
@@ -165,8 +180,53 @@ class _MediaPostMoreActionSheetState
         label: AppStrings.report,
         description: AppStrings.reportDescription,
         onTap: widget.config.onReport,
+        isDestructive: true,
       ),
     ];
+  }
+
+  VoidCallback? _fallbackScrollAction(String actionId) {
+    switch (actionId) {
+      case 'reward':
+        return () => _showToast(AppStrings.rewardFeatureDeveloping);
+      case 'save':
+        return () => _showToast(AppStrings.saveFeatureDeveloping);
+      case 'message':
+        return () => _showToast(AppStrings.messageFeatureDeveloping);
+      case 'viewOriginal':
+        return () => _showToast(AppStrings.viewOriginalFeatureDeveloping);
+      case 'fontSettings':
+        return () => _showToast(AppStrings.fontSettingsFeatureDeveloping);
+      case 'darkMode':
+        return () {
+          Future<void>.delayed(const Duration(milliseconds: 80), () {
+            ref.read(themeProvider.notifier).toggleTheme();
+          });
+        };
+      case 'feedback':
+        return () => _showToast(AppStrings.feedbackFeatureDeveloping);
+    }
+    return null;
+  }
+
+  void _showToast(String message) {
+    final navigatorContext = Navigator.of(context, rootNavigator: true).context;
+    AppToast.show(
+      navigatorContext,
+      message,
+      duration: const Duration(milliseconds: 1600),
+    );
+  }
+
+  void _handleScrollActionTap(_ScrollAction action) {
+    final callback = action.onTap ?? _fallbackScrollAction(action.id);
+    Navigator.pop(context);
+    callback?.call();
+  }
+
+  void _handleBottomActionTap(_BottomAction action) {
+    Navigator.pop(context);
+    action.onTap?.call();
   }
 
   @override
@@ -174,238 +234,318 @@ class _MediaPostMoreActionSheetState
     final isDark = ref.watch(isDarkProvider);
     final scrollActions = _buildScrollActions(isDark);
     final bottomActions = _buildBottomActions();
+    final preferenceActions = bottomActions
+        .where((action) => !action.isDestructive)
+        .toList(growable: false);
+    final destructiveActions = bottomActions
+        .where((action) => action.isDestructive)
+        .toList(growable: false);
+    final panelBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.pageBackground,
+    );
+    final cardBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final iconSurface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceMuted,
+    );
+    final iconBorder = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    ).withValues(alpha: isDark ? 0.72 : 0.9);
+    final divider = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    final primaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final destructiveColor = AppColors.iosDestructive(context);
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.backgroundPrimary,
-          ),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20.r),
-            topRight: Radius.circular(20.r),
-          ),
-        ),
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.pop(context),
+      backgroundColor: panelBackground,
+      panelKey: TestKeys.modalBottomSheetPanel,
+      contentPadding: EdgeInsets.only(
+        left: AppSpacing.containerXs,
+        right: AppSpacing.containerXs,
+        bottom: AppSpacing.containerXs,
+      ),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 标题和关闭按钮
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.md.w,
-                right: AppSpacing.md.w,
-                top: AppSpacing.md.h,
+            SizedBox(
+              height: AppSpacing.modalHeaderHeight,
+              child: Center(
+                child: Text(
+                  AppStrings.moreActionsTitle,
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
+                    color: primaryText,
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        AppStrings.moreActionsTitle,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg.sp,
-                          fontWeight: FontWeight.normal,
-                          color: AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundPrimary,
+            ),
+            if (scrollActions.isNotEmpty) ...[
+              _MoreActionQuickSection(
+                actions: scrollActions,
+                cardBackground: cardBackground,
+                iconSurface: iconSurface,
+                iconBorder: iconBorder,
+                primaryText: primaryText,
+                secondaryText: secondaryText,
+                onTap: _handleScrollActionTap,
+              ),
+              SizedBox(height: AppSpacing.interGroupSm),
+            ],
+            if (preferenceActions.isNotEmpty) ...[
+              _MoreActionListSection(
+                actions: preferenceActions,
+                cardBackground: cardBackground,
+                divider: divider,
+                primaryText: primaryText,
+                secondaryText: secondaryText,
+                onTap: _handleBottomActionTap,
+              ),
+              SizedBox(height: AppSpacing.interGroupSm),
+            ],
+            if (destructiveActions.isNotEmpty) ...[
+              _MoreActionListSection(
+                actions: destructiveActions,
+                cardBackground: cardBackground,
+                divider: divider,
+                primaryText: destructiveColor,
+                secondaryText: destructiveColor.withValues(alpha: 0.75),
+                onTap: _handleBottomActionTap,
+              ),
+              SizedBox(height: AppSpacing.interGroupSm),
+            ],
+            _MoreActionCancelSection(
+              backgroundColor: cardBackground,
+              foregroundColor: secondaryText,
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreActionQuickSection extends StatelessWidget {
+  const _MoreActionQuickSection({
+    required this.actions,
+    required this.cardBackground,
+    required this.iconSurface,
+    required this.iconBorder,
+    required this.primaryText,
+    required this.secondaryText,
+    required this.onTap,
+  });
+
+  final List<_ScrollAction> actions;
+  final Color cardBackground;
+  final Color iconSurface;
+  final Color iconBorder;
+  final Color primaryText;
+  final Color secondaryText;
+  final ValueChanged<_ScrollAction> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+      child: SizedBox(
+        height: 116,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+          itemBuilder: (context, index) {
+            final action = actions[index];
+            return SizedBox(
+              width: 76,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onTap(action),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: AppSpacing.avatarUserLg,
+                      height: AppSpacing.avatarUserLg,
+                      decoration: BoxDecoration(
+                        color: iconSurface,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: iconBorder,
+                          width: AppSpacing.hairline,
+                        ),
+                      ),
+                      child: Icon(
+                        action.icon,
+                        size: AppSpacing.iconMedium,
+                        color: secondaryText,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupSm),
+                    Text(
+                      action.label,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: primaryText,
+                        fontWeight: AppTypography.medium,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          separatorBuilder: (context, index) =>
+              SizedBox(width: AppSpacing.intraGroupXs),
+          itemCount: actions.length,
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreActionListSection extends StatelessWidget {
+  const _MoreActionListSection({
+    required this.actions,
+    required this.cardBackground,
+    required this.divider,
+    required this.primaryText,
+    required this.secondaryText,
+    required this.onTap,
+  });
+
+  final List<_BottomAction> actions;
+  final Color cardBackground;
+  final Color divider;
+  final Color primaryText;
+  final Color secondaryText;
+  final ValueChanged<_BottomAction> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: Column(
+        children: actions.asMap().entries.map((entry) {
+          final index = entry.key;
+          final action = entry.value;
+          return Column(
+            children: [
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => onTap(action),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerMd,
+                    vertical: AppSpacing.containerSm,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        action.icon,
+                        size: AppSpacing.twenty,
+                        color: primaryText,
+                      ),
+                      SizedBox(width: AppSpacing.containerSm),
+                      Expanded(
+                        child: Text(
+                          action.label,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.medium,
+                            color: primaryText,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () => Navigator.pop(context), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
-                    child: Icon(
-                      CupertinoIcons.xmark,
-                      size: AppSpacing.twenty.sp,
-                      color: AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: AppSpacing.lg.h,
-            ),
-
-            // 滚动行区域
-            if (scrollActions.isNotEmpty) ...[
-              SizedBox(
-                height: AppSpacing.oneHundred.h,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-                  itemCount: scrollActions.length,
-                  itemBuilder: (context, index) {
-                    final action = scrollActions[index];
-                    return Container(
-                      width: AppSpacing.storyHeight.w,
-                      margin: EdgeInsets.only(
-                        right: index < scrollActions.length - 1
-                            ? AppSpacing.xs.w
-                            : 0,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 圆形按钮
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              action.onTap?.call();
-                            },
-                            child: Container(
-                              width: AppSpacing.avatarUserLg.w,
-                              height: AppSpacing.avatarUserLg.w,
-                              decoration: BoxDecoration(
-                                color: AppColorsFunctional.getColor(
-                                  isDark,
-                                  ColorType.backgroundSecondary,
-                                ),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                action.icon,
-                                size: AppSpacing.iconMedium.sp,
-                                color: AppColorsFunctional.getColor(
-                                  isDark,
-                                  ColorType.foregroundSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.sm.h),
-                          // 文字标签
-                          Text(
-                            action.label,
+                      if (action.description != null)
+                        Flexible(
+                          child: Text(
+                            action.description!,
                             style: TextStyle(
-                              fontSize: AppTypography.sm.sp,
-                              color: AppColorsFunctional.getColor(
-                                isDark,
-                                ColorType.foregroundPrimary,
-                              ),
+                              fontSize: AppTypography.base,
+                              color: secondaryText,
                             ),
-                            textAlign: TextAlign.center,
+                            textAlign: TextAlign.right,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              SizedBox(height: AppSpacing.lg.h),
-            ],
-
-            // 分隔线
-            if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
-              Container(
-                height: AppSpacing.hairline,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.foregroundTertiary,
-                ).withValues(alpha: 0.3),
-                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-              ),
-              SizedBox(height: AppSpacing.md.h),
-            ],
-
-            // 底部操作项区域
-            if (bottomActions.isNotEmpty) ...[
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-                decoration: BoxDecoration(
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.backgroundSecondary,
-                  ).withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius.r,
+                        ),
+                    ],
                   ),
                 ),
-                child: Column(
-                  children: bottomActions.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final action = entry.value;
-                    return Column(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            action.onTap?.call();
-                          },
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md.w,
-                              vertical: AppSpacing.md.h,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  action.icon,
-                                  size: AppSpacing.twenty.sp,
-                                  color: AppColorsFunctional.getColor(
-                                    isDark,
-                                    ColorType.foregroundPrimary,
-                                  ),
-                                ),
-                                SizedBox(width: AppSpacing.sm.w),
-                                Expanded(
-                                  child: Text(
-                                    action.label,
-                                    style: TextStyle(
-                                      fontSize: AppTypography.lg.sp,
-                                      fontWeight: FontWeight.normal,
-                                      color: AppColorsFunctional.getColor(
-                                        isDark,
-                                        ColorType.foregroundPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (action.description != null)
-                                  Text(
-                                    action.description!,
-                                    style: TextStyle(
-                                      fontSize: AppTypography.base.sp,
-                                      color: AppColorsFunctional.getColor(
-                                        isDark,
-                                        ColorType.foregroundSecondary,
-                                      ),
-                                    ),
-                                    textAlign: TextAlign.right,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        // 分隔线 (除了最后一个选项)
-                        if (index < bottomActions.length - 1)
-                          Container(
-                            height: AppSpacing.hairline,
-                            color: AppColorsFunctional.getColor(
-                              isDark,
-                              ColorType.foregroundTertiary,
-                            ).withValues(alpha: 0.2),
-                            margin: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md.w,
-                            ),
-                          ),
-                      ],
-                    );
-                  }).toList(),
-                ),
               ),
-              SizedBox(height: AppSpacing.lg.h),
+              if (index < actions.length - 1)
+                Container(
+                  height: AppSpacing.hairline,
+                  margin: EdgeInsets.only(
+                    left: AppSpacing.containerMd + AppSpacing.twenty,
+                    right: AppSpacing.containerMd,
+                  ),
+                  color: divider.withValues(alpha: 0.9),
+                ),
             ],
-          ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _MoreActionCancelSection extends StatelessWidget {
+  const _MoreActionCancelSection({
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onTap,
+  });
+
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+        onPressed: onTap,
+        child: Text(
+          UITextConstants.cancel,
+          style: TextStyle(
+            fontSize: AppTypography.lg,
+            fontWeight: AppTypography.medium,
+            color: foregroundColor,
+          ),
         ),
       ),
     );

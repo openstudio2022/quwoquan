@@ -45,7 +45,8 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   final List<AssetEntity> _assets = <AssetEntity>[];
 
   final List<CreateMediaItem> _selectedItems = <CreateMediaItem>[];
-  final Map<String, CreateMediaItem> _selectedById = <String, CreateMediaItem>{};
+  final Map<String, CreateMediaItem> _selectedById =
+      <String, CreateMediaItem>{};
 
   @override
   void initState() {
@@ -95,7 +96,8 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
 
   void _onScroll() {
     if (_scrollController.position.pixels >
-        (_scrollController.position.maxScrollExtent - AppSpacing.buttonHeight)) {
+        (_scrollController.position.maxScrollExtent -
+            AppSpacing.buttonHeight)) {
       _loadMore();
     }
   }
@@ -208,52 +210,23 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
 
   Future<void> _selectAlbum() async {
     if (_albums.isEmpty) return;
-    final picked = await showCupertinoModalPopup<AssetPathEntity>(
-      context: context,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Material(
-          type: MaterialType.transparency,
-          child: Container(
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
-            ),
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-            child: SafeArea(
-              child: ListView.separated(
-                itemCount: _albums.length,
-                separatorBuilder: (_, _) => Container(
-                  height: AppSpacing.hairline,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.borderSecondary,
-                  ),
-                  margin: EdgeInsets.only(left: AppSpacing.containerMd),
+    final picked = await showAppActionSheet<AssetPathEntity>(
+      context,
+      title: '选择相册',
+      maxHeightRatio: 0.6,
+      sections: [
+        AppActionSheetSection<AssetPathEntity>(
+          items: _albums
+              .map(
+                (album) => AppActionSheetItem<AssetPathEntity>(
+                  value: album,
+                  label: album.name,
+                  isSelected: album.id == _selectedAlbum?.id,
                 ),
-                itemBuilder: (context, index) {
-                  final album = _albums[index];
-                  final selected = album.id == _selectedAlbum?.id;
-                  return CupertinoListTile(
-                    onTap: () => Navigator.of(context).pop(album),
-                    title: Text(
-                      album.name,
-                      style: TextStyle(
-                        color: selected ? AppColors.primaryColor : CupertinoColors.label.resolveFrom(context),
-                        fontSize: AppTypography.lg,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    ),
-                    trailing: selected
-                        ? Icon(CupertinoIcons.checkmark, color: AppColors.primaryColor)
-                        : null,
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
+              )
+              .toList(growable: false),
+        ),
+      ],
     );
     if (picked == null || !mounted) return;
     if (picked.id == _selectedAlbum?.id) return;
@@ -272,7 +245,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
 
   void _reorderSelected(int from, int to) {
     if (from == to) return;
-    if (from < 0 || to < 0 || from >= _selectedItems.length || to >= _selectedItems.length) {
+    if (from < 0 ||
+        to < 0 ||
+        from >= _selectedItems.length ||
+        to >= _selectedItems.length) {
       return;
     }
     setState(() {
@@ -284,15 +260,22 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final sub = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final sub = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     if (_loading) {
       return AppScaffold(
         backgroundColor: bg,
-        child: Center(
-          child: CupertinoActivityIndicator(),
-        ),
+        child: Center(child: CupertinoActivityIndicator()),
       );
     }
     if (!_hasPermission) {
@@ -326,9 +309,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           children: [
             _buildTopBar(fg, sub),
             _buildCategoryTabs(isDark),
-            Expanded(
-              child: _buildGrid(list, isDark),
-            ),
+            Expanded(child: _buildGrid(list, isDark)),
             if (_selectedItems.isNotEmpty) _buildSelectedStrip(sub, isDark),
             _buildBottomActions(),
           ],
@@ -338,14 +319,19 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Widget _buildTopBar(Color fg, Color sub) {
-    final albumName = _selectedAlbum?.name ?? UITextConstants.mediaPickerAlbumAll;
+    final albumName =
+        _selectedAlbum?.name ?? UITextConstants.mediaPickerAlbumAll;
     return SizedBox(
       height: AppSpacing.toolbarHeight,
       child: Row(
         children: [
           CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: () => Navigator.of(context).pop(), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+            onPressed: () => Navigator.of(context).pop(),
+            minimumSize: Size(
+              AppSpacing.minInteractiveSize,
+              AppSpacing.minInteractiveSize,
+            ),
             child: Icon(CupertinoIcons.xmark, color: fg),
           ),
           Expanded(
@@ -363,7 +349,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Icon(Icons.keyboard_arrow_down, color: sub, size: AppSpacing.iconMedium),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      color: sub,
+                      size: AppSpacing.iconMedium,
+                    ),
                   ],
                 ),
               ),
@@ -394,7 +384,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           return GestureDetector(
             onTap: () => setState(() => _category = cat),
             child: Container(
-              constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
+              constraints: BoxConstraints(
+                minHeight: AppSpacing.minInteractiveSize,
+              ),
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
               alignment: Alignment.center,
               child: Column(
@@ -405,7 +397,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                     style: TextStyle(
                       color: selected
                           ? AppColors.primaryColor
-                          : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                          : AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundSecondary,
+                            ),
                       fontSize: AppTypography.base,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -417,7 +412,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                     height: AppSpacing.intraGroupXs / 2,
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor,
-                      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.circularBorderRadius,
+                      ),
                     ),
                   ),
                 ],
@@ -466,9 +463,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Positioned.fill(
-                child: _buildAssetThumb(entity, isDark),
-              ),
+              Positioned.fill(child: _buildAssetThumb(entity, isDark)),
               if (entity.type == AssetType.video)
                 Positioned(
                   left: AppSpacing.intraGroupSm,
@@ -480,11 +475,16 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.black54,
-                      borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.smallBorderRadius,
+                      ),
                     ),
                     child: Text(
                       _formatVideoDuration(entity.duration),
-                      style: TextStyle(color: Colors.white, fontSize: AppTypography.sm),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: AppTypography.sm,
+                      ),
                     ),
                   ),
                 ),
@@ -504,20 +504,29 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     return GestureDetector(
       onTap: _openCamera,
       child: Container(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundSecondary,
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.photo_camera_outlined,
               size: AppSpacing.iconLarge + AppSpacing.iconSmall,
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundPrimary,
+              ),
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
               UITextConstants.mediaPickerCameraEntry,
               style: TextStyle(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundPrimary,
+                ),
                 fontSize: AppTypography.base,
               ),
             ),
@@ -580,18 +589,24 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
               child: _selectedItemThumb(item: item, isDark: isDark),
             ),
             child: DragTarget<int>(
-              onAcceptWithDetails: (details) => _reorderSelected(details.data, index),
+              onAcceptWithDetails: (details) =>
+                  _reorderSelected(details.data, index),
               builder: (context, candidate, rejected) {
                 return AnimatedScale(
                   scale: candidate.isNotEmpty ? 1.08 : 1,
                   duration: const Duration(milliseconds: 120),
-                  child: _selectedItemThumb(item: item, isDark: isDark, onDelete: () => _removeSelectedAt(index)),
+                  child: _selectedItemThumb(
+                    item: item,
+                    isDark: isDark,
+                    onDelete: () => _removeSelectedAt(index),
+                  ),
                 );
               },
             ),
           );
         },
-        separatorBuilder: (context, index) => SizedBox(width: AppSpacing.intraGroupSm),
+        separatorBuilder: (context, index) =>
+            SizedBox(width: AppSpacing.intraGroupSm),
       ),
     );
   }
@@ -613,20 +628,30 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
             border: Border.all(
-              color: AppColorsFunctional.getColor(isDark, ColorType.borderSecondary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.borderSecondary,
+              ),
             ),
           ),
           clipBehavior: Clip.antiAlias,
           child: item.isVideo
               ? Container(
                   color: Colors.black87,
-                  child: Icon(Icons.videocam_outlined, color: Colors.white, size: AppSpacing.iconMedium),
+                  child: Icon(
+                    Icons.videocam_outlined,
+                    color: Colors.white,
+                    size: AppSpacing.iconMedium,
+                  ),
                 )
               : Image.file(
                   file,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.backgroundSecondary,
+                    ),
                   ),
                 ),
         ),
@@ -643,7 +668,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                   shape: BoxShape.circle,
                   color: Colors.black87,
                 ),
-                child: Icon(Icons.close, color: Colors.white, size: AppSpacing.iconSmall),
+                child: Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: AppSpacing.iconSmall,
+                ),
               ),
             ),
           ),
@@ -666,9 +695,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           Expanded(
             child: CupertinoButton(
               padding: EdgeInsets.zero,
-              onPressed: canNext
-                  ? _openOneTapMoviePreview
-                  : null,
+              onPressed: canNext ? _openOneTapMoviePreview : null,
               child: Container(
                 height: AppSpacing.buttonHeight,
                 decoration: BoxDecoration(
@@ -678,11 +705,18 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.movie_creation_outlined, size: AppSpacing.iconMedium, color: AppColors.primaryColor),
+                    Icon(
+                      Icons.movie_creation_outlined,
+                      size: AppSpacing.iconMedium,
+                      color: AppColors.primaryColor,
+                    ),
                     SizedBox(width: AppSpacing.intraGroupSm),
                     Text(
                       UITextConstants.mediaPickerOneTapMovie,
-                      style: TextStyle(fontSize: AppTypography.base, color: AppColors.primaryColor),
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: AppColors.primaryColor,
+                      ),
                     ),
                   ],
                 ),
@@ -707,7 +741,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                 alignment: Alignment.center,
                 child: Text(
                   '${UITextConstants.mediaPickerNextStep}($selectionCount)',
-                  style: TextStyle(fontSize: AppTypography.base, fontWeight: FontWeight.w700, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -741,12 +779,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       ),
     );
     if (!mounted || goNext != true) return;
-    Navigator.of(context).pop(
-      CreateMediaPickerResult(
-        items: selected,
-        openOneTapMovie: true,
-      ),
-    );
+    Navigator.of(
+      context,
+    ).pop(CreateMediaPickerResult(items: selected, openOneTapMovie: true));
   }
 
   Widget _buildAssetThumb(AssetEntity entity, bool isDark) {
@@ -758,7 +793,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           return Image.memory(bytes, fit: BoxFit.cover);
         }
         return Container(
-          color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundSecondary,
+          ),
         );
       },
     );

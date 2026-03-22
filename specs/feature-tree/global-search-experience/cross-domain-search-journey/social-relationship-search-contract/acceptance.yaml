@@ -1,0 +1,69 @@
+version: 2
+feature: social-relationship-search-contract
+level: L3_scenario
+source_path: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+parent_journey: cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结搜索中的“社交关系”对象边界、user 域真相源与结果跳转语义。
+  journey_bindings:
+    - J2
+  in_scope:
+    - “社交关系”命名与展示
+    - user 域 metadata 真相源
+    - 社交关系结果跳转
+  out_of_scope:
+    - follow 写侧行为
+    - 私密账号能力本身
+
+scenario_acceptance:
+  A1:
+    title: 搜索中的“人”统一收口为社交关系
+    scenario: social relationship search contract
+    journey_step: display and navigate social relationship results
+    done_when:
+      - 搜索结果中不再使用“朋友”作为领域定义，而统一为“社交关系”
+      - 结果对象真相源归 user 域，而不是 chat contact
+      - 用户可从社交关系结果稳定进入对应主页或后续互动路径
+    edge_cases:
+      - 查询结果为空
+      - 仅存在 chat 联系痕迹但无正式社交关系结果
+      - 当前登录主体切换为子账号
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - social relationship search contract test
+        - profile navigation regression test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 历史 chat 搜索节点彻底退场
+    done_when:
+      - contact-search-index 相关历史节点已从特性树移除
+      - 新 Journey 不再复用 chat 搜索节点作为治理入口
+    evidence:
+      primary:
+        - T1_schema
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - feature tree cleanup audit
+      recorded: []
+    status: pending

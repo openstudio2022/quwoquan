@@ -38,7 +38,7 @@ class CenteredScrollableTabBar extends ConsumerStatefulWidget {
   /// 不显示蓝色下划线的 Tab ID（如作品），保持深色模式样式
   final List<String> excludeUnderlineTabIds;
 
-  /// 用户主页使用：更接近 iOS 导航条的字号、字重与下划线。
+  /// 兼容参数：一级 Tab 现已统一语义 token，不再为作者主页维护独立字号/间距例外。
   final bool iosProfileStyle;
 
   const CenteredScrollableTabBar({
@@ -89,15 +89,15 @@ class _CenteredScrollableTabBarState
       : AppSpacing.tabChipBaseWidth;
 
   /// 芯片步进宽度（芯片 + 间距），用于计算滚动偏移
-  double get _chipStep => _chipWidth + AppSpacing.primaryTabChipGap;
+  double get _chipStep => _chipWidth + AppSpacing.primaryTabGroupGap(context);
 
   double _staticChipSlotWidth(BuildContext context, TabItem tab) {
     final width = _measureTabLabelWidth(
       context,
       tab.label,
-      AppTypography.primaryTabLabelWeight,
+      AppTypography.primaryTabSelectedWeight,
     );
-    final horizontalInset = AppSpacing.intraGroupSm * 2;
+    final horizontalInset = AppSpacing.primaryTabSlotSidePadding(context) * 2;
     final minWidth = AppSpacing.minInteractiveSize;
     final maxWidth = _chipWidth;
     return (width + horizontalInset).clamp(minWidth, maxWidth);
@@ -108,14 +108,7 @@ class _CenteredScrollableTabBarState
     String label,
     FontWeight weight,
   ) {
-    final chipFontSize = widget.iosProfileStyle
-        ? AppTypography.iosSubheadline
-        : AppTypography.responsive(
-            context,
-            compact: AppTypography.base,
-            regular: AppTypography.lg,
-            expanded: AppTypography.xl,
-          );
+    final chipFontSize = AppTypography.primaryTabLabelResponsive(context);
     final painter = TextPainter(
       text: TextSpan(
         text: label,
@@ -449,7 +442,10 @@ class _CenteredScrollableTabBarState
     Color bg,
     double availableWidth,
   ) {
-    final contentWidth = widget.tabs.length * _chipStep;
+    final gap = AppSpacing.primaryTabGroupGap(context);
+    final contentWidth = widget.tabs.isEmpty
+        ? 0.0
+        : (widget.tabs.length * _chipWidth) + ((widget.tabs.length - 1) * gap);
     // 内容未超过可用宽度时使用居中静态布局，保证发现/圈子/趣聊一级 Tab 居中且切换不位移。
     if (contentWidth <= availableWidth + AppSpacing.primaryTabAnchorTolerance) {
       return Center(
@@ -459,9 +455,7 @@ class _CenteredScrollableTabBarState
             for (int i = 0; i < widget.tabs.length; i++)
               Padding(
                 padding: EdgeInsets.only(
-                  right: i == widget.tabs.length - 1
-                      ? 0
-                      : AppSpacing.intraGroupSm,
+                  right: i == widget.tabs.length - 1 ? 0 : gap,
                 ),
                 child: SizedBox(
                   width: _staticChipSlotWidth(context, widget.tabs[i]),
@@ -617,23 +611,8 @@ class _CenteredScrollableTabBarState
     required VoidCallback onTap,
   }) {
     final isExcluded = widget.excludeUnderlineTabIds.contains(tab.id);
-    final chipFontSize = AppTypography.responsive(
-      context,
-      compact: widget.iosProfileStyle
-          ? AppTypography.iosSubheadline
-          : AppTypography.base,
-      regular: widget.iosProfileStyle
-          ? AppTypography.iosSubheadline
-          : AppTypography.lg,
-      expanded: widget.iosProfileStyle
-          ? AppTypography.iosBody
-          : AppTypography.xl,
-    );
-    final selectedColor = widget.iosProfileStyle
-        ? fg
-        : isDark
-        ? fg
-        : Colors.black;
+    final chipFontSize = AppTypography.primaryTabLabelResponsive(context);
+    final selectedColor = fg;
     final showBlueUnderline = selected && !isExcluded;
     final underlineColor = showBlueUnderline
         ? (isDark ? AppColors.iosAccentDark : AppColors.primaryColor)
@@ -642,14 +621,9 @@ class _CenteredScrollableTabBarState
     final textStyle = TextStyle(
       fontSize: chipFontSize,
       fontWeight: selected
-          ? (widget.iosProfileStyle
-                ? AppTypography.semiBold
-                : AppTypography.primaryTabLabelWeight)
-          : (widget.iosProfileStyle
-                ? AppTypography.medium
-                : AppTypography.normal),
+          ? AppTypography.primaryTabSelectedWeight
+          : AppTypography.primaryTabUnselectedWeight,
       color: selected ? selectedColor : fgUnselected,
-      letterSpacing: widget.iosProfileStyle ? -0.18 : null,
     );
     final textPainter = TextPainter(
       text: TextSpan(text: tab.label, style: textStyle),
@@ -690,13 +664,13 @@ class _CenteredScrollableTabBarState
                   width: underlineWidth,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    height: widget.iosProfileStyle
-                        ? AppSpacing.oneHalf
-                        : AppSpacing.intraGroupXs / 2,
+                    height: showBlueUnderline
+                        ? AppSpacing.primaryTabUnderlineHeight
+                        : 0,
                     decoration: BoxDecoration(
                       color: isExcluded ? Colors.transparent : underlineColor,
                       borderRadius: BorderRadius.circular(
-                        AppSpacing.intraGroupXs / 4,
+                        AppSpacing.primaryTabUnderlineHeight / 2,
                       ),
                     ),
                   ),

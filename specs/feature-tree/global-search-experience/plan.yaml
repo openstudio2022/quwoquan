@@ -1,0 +1,60 @@
+version: 1
+node: global-search-experience
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze capability-level metadata topology
+    goal: 收口全局搜索的 route、surface、request context、域级 `Search*` contract 与 assistant handoff 真相源
+    depends_on: []
+    acceptance_refs:
+      - C1
+      - C2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `_shared` 与四个业务域的搜索 contract 拓扑明确
+      - 搜索历史与问小趣 handoff 的 contract 归属清晰
+      - 历史 chat 搜索节点不再作为治理入口
+    status: planned
+
+  - id: P2
+    title: establish journey and scenario design baseline
+    goal: 为 `cross-domain-search-journey` 及 6 个 Scenario 建立完整设计、计划与 G1 codegen 基线
+    depends_on:
+      - P1
+    acceptance_refs:
+      - C1
+      - C2
+      - C3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - Journey / Scenario 的 `design.md + plan.yaml` 完整
+      - `verify-metadata / codegen / codegen-app` 已执行并通过
+      - dev 切片顺序固定为 `metadata -> codegen -> 业务逻辑 -> 测试`
+    status: planned
+
+  - id: P3
+    title: validate release guardrails and rollback posture
+    goal: 固化整版上线、观测、SLO 校验与回滚口径，确保 capability 可以安全进入 `/dev`
+    depends_on:
+      - P2
+    acceptance_refs:
+      - C2
+      - C3
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 关键观测指标与 SLO 验证路径明确
+      - 无细粒度 feature flag 的整版发布口径清晰
+      - 旧实现与新设计之间的回滚边界明确
+    status: planned

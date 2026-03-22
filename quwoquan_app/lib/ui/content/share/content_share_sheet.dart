@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
@@ -26,12 +28,23 @@ class ContentShareSheet extends StatefulWidget {
         const DefaultContentShareActionHandler(),
     Future<void> Function(ContentShareActionResult result)? onActionCompleted,
   }) {
-    return showModalBottomSheet<void>(
+    return showCupertinoModalPopup<void>(
       context: context,
-      builder: (_) => ContentShareSheet(
-        template: template,
-        actionHandler: actionHandler,
-        onActionCompleted: onActionCompleted,
+      barrierColor: Colors.transparent,
+      builder: (sheetContext) => AppBottomModalSurface(
+        onDismiss: () => Navigator.of(sheetContext).pop(),
+        backgroundColor: AppColors.iosPageBackground(context),
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          0,
+          AppSpacing.containerMd,
+          AppSpacing.containerMd,
+        ),
+        child: ContentShareSheet(
+          template: template,
+          actionHandler: actionHandler,
+          onActionCompleted: onActionCompleted,
+        ),
       ),
     );
   }
@@ -45,89 +58,146 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
+    final secondaryText = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final destructiveText = AppColors.iosDestructive(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: AppSpacing.modalHeaderHeight,
+          child: Center(
+            child: Text(
               widget.template.title,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.lg,
                 fontWeight: AppTypography.semiBold,
               ),
             ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              widget.template.subtitle,
+          ),
+        ),
+        Text(
+          widget.template.subtitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: AppTypography.sm, color: secondaryText),
+        ),
+        if ((widget.template.notice ?? '').trim().isNotEmpty) ...[
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Text(
+            widget.template.notice!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              color: widget.template.isBlocked
+                  ? destructiveText
+                  : secondaryText,
+            ),
+          ),
+        ],
+        SizedBox(height: AppSpacing.interGroupSm),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.iosGroupedSurface(context),
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          ),
+          padding: EdgeInsets.all(AppSpacing.containerMd),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.template.shareTitle.trim().isNotEmpty)
+                Text(
+                  widget.template.shareTitle,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: AppTypography.medium,
+                  ),
+                ),
+              if (widget.template.shareSummary.trim().isNotEmpty) ...[
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  widget.template.shareSummary,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: secondaryText,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        SizedBox(height: AppSpacing.interGroupSm),
+        if (widget.template.isBlocked)
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.iosGroupedSurface(context),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            ),
+            padding: EdgeInsets.all(AppSpacing.containerMd),
+            child: Text(
+              UITextConstants.sharePrivateBlocked,
               style: TextStyle(
                 fontSize: AppTypography.sm,
-                color: Colors.black54,
+                color: destructiveText,
               ),
             ),
-            if ((widget.template.notice ?? '').trim().isNotEmpty) ...[
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(
-                widget.template.notice!,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: widget.template.isBlocked
-                      ? Colors.redAccent
-                      : Colors.black54,
-                ),
-              ),
-            ],
-            if (widget.template.shareTitle.trim().isNotEmpty) ...[
-              SizedBox(height: AppSpacing.interGroupSm),
-              Text(
-                widget.template.shareTitle,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ],
-            if (widget.template.shareSummary.trim().isNotEmpty) ...[
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                widget.template.shareSummary,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: Colors.black54,
-                ),
-              ),
-            ],
-            SizedBox(height: AppSpacing.interGroupMd),
-            if (widget.template.isBlocked)
-              Text(
-                UITextConstants.sharePrivateBlocked,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: Colors.redAccent,
-                ),
-              )
-            else
-              ...widget.template.actions.map(
-                (action) => ListTile(
-                  leading: Icon(_iconForAction(action.id)),
-                  title: Text(action.label),
-                  trailing: _busyActionId == action.id
-                      ? const SizedBox(
-                          width: AppSpacing.eighteen,
-                          height: AppSpacing.eighteen,
-                          child: CupertinoActivityIndicator(),
-                        )
-                      : null,
-                  onTap: _busyActionId != null
-                      ? null
-                      : () => _handleAction(action),
-                ),
-              ),
-          ],
-        ),
-      ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.iosGroupedSurface(context),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            ),
+            child: Column(
+              children: widget.template.actions.asMap().entries.map((entry) {
+                final index = entry.key;
+                final action = entry.value;
+                return Column(
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _busyActionId != null
+                          ? null
+                          : () => _handleAction(action),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.containerMd,
+                          vertical: AppSpacing.containerSm,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(_iconForAction(action.id)),
+                            SizedBox(width: AppSpacing.containerSm),
+                            Expanded(child: Text(action.label)),
+                            if (_busyActionId == action.id)
+                              const SizedBox(
+                                width: AppSpacing.eighteen,
+                                height: AppSpacing.eighteen,
+                                child: CupertinoActivityIndicator(),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (index < widget.template.actions.length - 1)
+                      Container(
+                        height: AppSpacing.hairline,
+                        margin: EdgeInsets.only(
+                          left:
+                              AppSpacing.containerMd +
+                              AppSpacing.twenty +
+                              AppSpacing.containerSm,
+                          right: AppSpacing.containerMd,
+                        ),
+                        color: AppColors.iosSeparator(context),
+                      ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+      ],
     );
   }
 

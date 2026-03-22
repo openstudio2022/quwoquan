@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -213,7 +215,7 @@ Widget _buildTestApp({double textScaleFactor = 1.0}) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const Scaffold(body: HomeCirclesHubPage()),
+        builder: (context, state) => const Scaffold(body: CirclesHubPage()),
       ),
       GoRoute(
         path: '/media-viewer/:category/:index',
@@ -224,6 +226,11 @@ Widget _buildTestApp({double textScaleFactor = 1.0}) {
         path: '/video-viewer/:index',
         builder: (context, state) =>
             const Scaffold(body: Center(child: Text('video-viewer'))),
+      ),
+      GoRoute(
+        path: '/circles',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('circles-page'))),
       ),
     ],
   );
@@ -255,33 +262,35 @@ void main() {
     HttpOverrides.global = _FakeHttpOverrides();
   });
 
-  testWidgets('推荐内容图片入口跳转到 unified media viewer', (tester) async {
+  testWidgets('频道管理按钮右缘保持统一安全边距', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     await tester.pumpAndSettle();
     _consumeImageLoadExceptions(tester);
 
-    expect(find.text('清晨光影练习'), findsWidgets);
+    final page = find.byType(CirclesHubPage);
+    final channelIcon = find.byIcon(CupertinoIcons.line_horizontal_3_decrease);
+    final screenWidth = tester.getSize(page).width;
+    final iconRightInset = screenWidth - tester.getTopRight(channelIcon).dx;
+    final expectedInset = AppSpacing.topBarTrailingVisualInset(
+      tester.element(page),
+    );
 
-    await tester.tap(find.text('清晨光影练习').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('media-viewer'), findsOneWidget);
+    expect(channelIcon, findsOneWidget);
+    expect(iconRightInset, closeTo(expectedInset, 2.0));
   });
 
-  testWidgets('推荐内容视频入口跳转到 unified video viewer', (tester) async {
+  testWidgets('查看更多跳转到圈子展开页', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     await tester.pumpAndSettle();
     _consumeImageLoadExceptions(tester);
 
-    expect(find.text('夜色车流延时'), findsWidgets);
-
-    await tester.tap(find.text('夜色车流延时').first);
+    await tester.tap(find.text('查看更多'));
     await tester.pumpAndSettle();
 
-    expect(find.text('video-viewer'), findsOneWidget);
+    expect(find.text('circles-page'), findsOneWidget);
   });
 
-  testWidgets('一级 tab post 网格点击进入 unified media viewer', (tester) async {
+  testWidgets('一级 tab 图片作品点击进入 unified media viewer', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     await tester.pumpAndSettle();
     _consumeImageLoadExceptions(tester);
@@ -300,6 +309,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('media-viewer'), findsOneWidget);
+  });
+
+  testWidgets('一级 tab 视频作品点击进入 unified video viewer', (tester) async {
+    await tester.pumpWidget(_buildTestApp());
+    await tester.pumpAndSettle();
+    _consumeImageLoadExceptions(tester);
+
+    final gridPost = find.byKey(
+      const ValueKey('home-circle-grid-post-circle_post_video_1'),
+    );
+    await tester.dragUntilVisible(
+      gridPost,
+      find.byType(Scrollable).last,
+      const Offset(0, -300),
+    );
+    await tester.ensureVisible(gridPost);
+    await tester.pumpAndSettle();
+    await tester.tap(gridPost);
+    await tester.pumpAndSettle();
+
+    expect(find.text('video-viewer'), findsOneWidget);
   });
 
   testWidgets('圈子横向卡片在窄屏大字号下保持自适应不溢出', (tester) async {

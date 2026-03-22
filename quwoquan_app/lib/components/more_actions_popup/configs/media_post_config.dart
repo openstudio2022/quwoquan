@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 /// 媒体帖子更多操作配置
 class MediaPostMoreActionConfig {
   final dynamic post;
+  final bool showShareAction;
+  final bool showViewOriginalAction;
   final VoidCallback? onReward;
   final VoidCallback? onSave;
   final VoidCallback? onMessage;
@@ -19,6 +21,8 @@ class MediaPostMoreActionConfig {
 
   const MediaPostMoreActionConfig({
     required this.post,
+    this.showShareAction = false,
+    this.showViewOriginalAction = false,
     this.onReward,
     this.onSave,
     this.onMessage,

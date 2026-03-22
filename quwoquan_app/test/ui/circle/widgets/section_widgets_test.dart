@@ -80,6 +80,44 @@ void main() {
       expect(find.byType(SectionCreations), findsOneWidget);
     });
 
+    testWidgets('窄高容器空态不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 560);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final capturedErrors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        capturedErrors.add(details);
+      };
+      try {
+        await tester.pumpWidget(
+          _wrap(
+            const SizedBox(
+              height: 220,
+              child: SectionCreations(
+                circleId: 'empty',
+                isDark: false,
+                role: CircleRole.owner,
+              ),
+            ),
+            textScaleFactor: 1.3,
+          ),
+        );
+        await tester.pumpAndSettle();
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+
+      final overflowErrors = capturedErrors
+          .map((details) => details.exceptionAsString())
+          .where((message) => message.contains('A RenderFlex overflowed'))
+          .toList(growable: false);
+
+      expect(overflowErrors, isEmpty);
+    });
+
     testWidgets('owner 模式可切换列表视图', (tester) async {
       await tester.pumpWidget(
         _wrap(

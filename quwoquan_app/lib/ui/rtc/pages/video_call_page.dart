@@ -24,10 +24,7 @@ import 'package:quwoquan_app/ui/rtc/widgets/speaker_highlight_layout.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/video_grid_layout.dart';
 
 class VideoCallPage extends ConsumerStatefulWidget {
-  const VideoCallPage({
-    super.key,
-    required this.callId,
-  });
+  const VideoCallPage({super.key, required this.callId});
 
   final String callId;
 
@@ -248,11 +245,13 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                   ref.read(callTimerProvider.notifier).reset();
                 },
                 onInvite: () {
-                  context.push(AppRoutePaths.rtcPickParticipants, extra: {
-                    'callId': widget.callId,
-                    'maxParticipants':
-                        session.session?.maxParticipants ?? 32,
-                  });
+                  context.push(
+                    AppRoutePaths.rtcPickParticipants,
+                    extra: {
+                      'callId': widget.callId,
+                      'maxParticipants': session.session?.maxParticipants ?? 32,
+                    },
+                  );
                 },
               ),
             ),
@@ -291,27 +290,19 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       onTap: () {
         showCupertinoModalPopup<void>(
           context: context,
-          builder: (_) => Material(
-            type: MaterialType.transparency,
-            child: Container(
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemBackground.resolveFrom(context),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
-              ),
-              child: ParticipantListSheet(
-                maxParticipants: session.session?.maxParticipants ?? 32,
-                onInviteMore: () {
-                  Navigator.of(context).pop();
-                  context.push(
-                    AppRoutePaths.rtcPickParticipants,
-                    extra: <String, dynamic>{
-                      'callId': widget.callId,
-                      'maxParticipants': session.session?.maxParticipants ?? 32,
-                    },
-                  );
+          barrierColor: Colors.transparent,
+          builder: (_) => ParticipantListSheet(
+            maxParticipants: session.session?.maxParticipants ?? 32,
+            onInviteMore: () {
+              Navigator.of(context).pop();
+              context.push(
+                AppRoutePaths.rtcPickParticipants,
+                extra: <String, dynamic>{
+                  'callId': widget.callId,
+                  'maxParticipants': session.session?.maxParticipants ?? 32,
                 },
-              ),
-            ),
+              );
+            },
           ),
         );
       },

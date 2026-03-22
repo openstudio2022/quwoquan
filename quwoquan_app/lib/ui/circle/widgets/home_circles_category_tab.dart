@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
@@ -32,17 +32,9 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
       isDark,
       ColorType.surfaceElevated,
     );
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
-    );
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
     );
 
     if (posts.isEmpty) {
@@ -68,11 +60,11 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.all(AppSpacing.containerMd),
+      padding: const EdgeInsets.all(AppSpacing.postPreviewSectionPadding),
       sliver: SliverMasonryGrid.count(
         crossAxisCount: 2,
-        mainAxisSpacing: AppSpacing.intraGroupMd,
-        crossAxisSpacing: AppSpacing.intraGroupMd,
+        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
         childCount: posts.length,
         itemBuilder: (context, index) {
           final post = posts[index];
@@ -85,108 +77,52 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
           final isLiked = (post['isLiked'] as bool?) ?? false;
           final aspectRatio = _coverAspectRatioFor(post);
 
-          return CupertinoButton(
+          final headline = title.isNotEmpty
+              ? title
+              : (body.isNotEmpty ? body : '帖子');
+          final supportingText =
+              title.isNotEmpty && body.isNotEmpty && title != body ? body : '';
+
+          return PostPreviewCard(
             key: ValueKey(
               'home-circle-grid-post-${post['postId'] ?? post['id']}',
             ),
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            onPressed: () => onPostTap(post, posts),
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
+            isDark: isDark,
+            title: headline,
+            supportingText: supportingText,
+            coverUrl: coverUrl,
+            mediaAspectRatio: aspectRatio,
+            showVideoBadge:
+                (post['videoUrl']?.toString().trim() ?? '').isNotEmpty,
+            onTap: () => onPostTap(post, posts),
+            footer: Row(
+              children: [
+                _AvatarBubble(
+                  avatarUrl: avatarUrl,
+                  fallbackColor: fgSecondary.withValues(alpha: 0.2),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (coverUrl.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(AppSpacing.borderRadius),
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: aspectRatio,
-                        child: AppCachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    authorName,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosCaption1,
+                      color: fgSecondary,
                     ),
-                  Padding(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (title.isNotEmpty)
-                          Text(
-                            title,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosSubheadline,
-                              fontWeight: AppTypography.semiBold,
-                              color: fgPrimary,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        if (title.isNotEmpty && body.isNotEmpty)
-                          const SizedBox(height: AppSpacing.intraGroupXs),
-                        if (body.isNotEmpty)
-                          Text(
-                            body,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosCaption1,
-                              color: fgSecondary,
-                              height: AppTypography.lineHeightRelaxed,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Row(
-                          children: [
-                            _AvatarBubble(
-                              avatarUrl: avatarUrl,
-                              fallbackColor: fgSecondary.withValues(alpha: 0.2),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Expanded(
-                              child: Text(
-                                authorName,
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosCaption1,
-                                  color: fgSecondary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Icon(
-                              isLiked
-                                  ? CupertinoIcons.heart_fill
-                                  : CupertinoIcons.heart,
-                              size: AppSpacing.iconSmall,
-                              color: isLiked
-                                  ? AppColors.worksLike
-                                  : fgSecondary,
-                            ),
-                            const SizedBox(width: AppSpacing.intraGroupXs / 2),
-                            Text(
-                              '$likeCount',
-                              style: TextStyle(
-                                fontSize: AppTypography.iosCaption1,
-                                color: fgSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
-              ),
+                ),
+                PostCardMetric(
+                  icon: isLiked
+                      ? CupertinoIcons.heart_fill
+                      : CupertinoIcons.heart,
+                  iconSize: AppSpacing.iconSmall,
+                  label: '$likeCount',
+                  color: fgSecondary,
+                  iconColor: isLiked ? AppColors.worksLike : fgSecondary,
+                ),
+              ],
             ),
           );
         },

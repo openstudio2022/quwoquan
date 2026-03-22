@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -52,7 +51,10 @@ class ProfileStatsRow extends StatelessWidget {
 
     return ProfileIosSectionCard(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-      backgroundColor: AppColors.iosGroupedSurfaceElevated(context),
+      backgroundColor: AppColors.iosProfileSurface(context),
+      borderColor: AppColors.iosSeparator(
+        context,
+      ).withValues(alpha: isDark ? 0.24 : 0.1),
       child: Row(
         children: <Widget>[
           for (var i = 0; i < items.length; i += 1) ...<Widget>[

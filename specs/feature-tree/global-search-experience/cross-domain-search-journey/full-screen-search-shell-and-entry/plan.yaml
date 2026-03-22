@@ -1,0 +1,57 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze landing route and surface metadata
+    goal: 收口搜索首页的 route、surface 与 page context 真相源
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `globalSearch` route 与 landing/result surfaces 已定义
+      - 搜索页 page ids 已进入 request context 真相源
+    status: planned
+
+  - id: P2
+    title: land route-driven global search page
+    goal: 用 `GlobalSearchPage` 取代 imperative 搜索 sheet，并统一四个一级入口
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 首页、聊天页、圈子页、助手页进入同一搜索页
+      - landing 四段式结构稳定可见
+      - 返回与取消逻辑稳定
+    status: planned
+
+  - id: P3
+    title: verify shell stability and responsive behavior
+    goal: 验证重入、断点、深浅色与默认上下文行为
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 小屏、大屏、深色模式下壳层不跳变
+      - 多入口默认上下文正确
+      - 不再有第二套搜索入口路径
+    status: planned

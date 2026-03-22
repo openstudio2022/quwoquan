@@ -1,0 +1,75 @@
+version: 1
+feature: global-search-experience
+level: L1_capability
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结全局搜索作为独立一级能力的边界、领域划分、统一入口、跨域结果编排、
+    最近搜索生命周期与问小趣 handoff 规则。
+  owned_journeys:
+    - cross-domain-search-journey
+  out_of_scope:
+    - 域内索引实现与搜索引擎选型
+    - 助手 runtime / skill / tool 改造
+    - 密信账号分割能力本身
+
+level_acceptance:
+  C1:
+    title: 全局搜索能力归属与历史节点清理完成冻结
+    done_when:
+      - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
+      - chat 历史搜索节点从特性树中移除，不再保留平行治理路径
+      - content、messages、circle、user、assistant 的职责边界在新 L1 中明确
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - feature tree path audit
+        - l1 index consistency review
+      recorded: []
+    status: pending
+  C2:
+    title: 全局搜索的 metadata 真相源边界冻结
+    done_when:
+      - route、surface、request context 与 search operation 的真相源边界已定义
+      - 社交关系搜索归 user 域，频道归 circle 分类投影
+      - 问小趣入口只作为 assistant handoff，不进入综合结果混排
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - metadata ownership review
+        - route and surface traceability review
+      recorded: []
+    status: pending
+  C3:
+    title: 商用基线与发布边界可判定
+    done_when:
+      - SLO、弱网、并发、容量假设已冻结
+      - 最近搜索、语音 ASR、问小趣会话的生命周期边界已冻结
+      - 整体上线与整体回滚口径明确
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - prd baseline checklist review
+        - release readiness checklist review
+      recorded: []
+    status: pending

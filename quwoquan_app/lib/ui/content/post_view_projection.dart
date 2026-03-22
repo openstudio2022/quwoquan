@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 统一投射入口：raw post map → [PostSummaryView]（DTO 驱动，无写死字段名）
@@ -46,6 +47,17 @@ ArticleDetailView projectArticleDetailView(
     body: body,
     cards: cards,
   );
+  final pages = _projectArticlePages(
+    raw: raw,
+    postTitle: post.title ?? '',
+    body: body,
+    coverImage: post.coverUrl?.isNotEmpty == true
+        ? post.coverUrl!
+        : (post.thumbnailUrl?.isNotEmpty == true
+            ? post.thumbnailUrl!
+            : (images.isNotEmpty ? images.first : '')),
+    cards: cards,
+  );
 
   return ArticleDetailView(
     id: post.id.isNotEmpty ? post.id : fallbackArticleId,
@@ -73,7 +85,152 @@ ArticleDetailView projectArticleDetailView(
     ),
     contentBlocks: contentBlocks,
     cards: cards,
+    pages: pages,
+    template: articleTemplatePresetFromString(raw['articleTemplate']?.toString()),
+    fontPreset: articleFontPresetFromString(
+      raw['articleFontPreset']?.toString(),
+    ),
   );
+}
+
+List<ArticlePageData> _projectArticlePages({
+  required Map<String, dynamic> raw,
+  required String postTitle,
+  required String body,
+  required String coverImage,
+  required List<ArticleCardView> cards,
+}) {
+  final rawPages = (raw['articlePages'] as List?) ?? const <dynamic>[];
+  if (rawPages.isNotEmpty) {
+    final pages = rawPages
+        .whereType<Map>()
+        .map((entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)))
+        .where((page) => page.id.trim().isNotEmpty)
+        .toList(growable: false);
+    if (pages.isNotEmpty) {
+      return <ArticlePageData>[
+        pages.first.copyWith(
+          title: pages.first.title.trim().isEmpty ? postTitle : pages.first.title,
+          imageUrl: pages.first.imageUrl.trim().isEmpty
+              ? coverImage
+              : pages.first.imageUrl,
+        ),
+        ...pages.skip(1),
+      ];
+    }
+  }
+
+  final rawBlocks = (raw['articleBlocks'] as List?) ?? const <dynamic>[];
+  if (rawBlocks.isNotEmpty) {
+    final pages = <ArticlePageData>[];
+    var current = ArticlePageData(id: 'page_0', title: postTitle.trim());
+    var pageIndex = 1;
+    var orderedIndex = 0;
+
+    void flushCurrent() {
+      if (current.title.trim().isEmpty &&
+          current.body.trim().isEmpty &&
+          current.imageUrl.trim().isEmpty) {
+        return;
+      }
+      pages.add(current);
+      current = ArticlePageData(id: 'page_$pageIndex');
+      pageIndex += 1;
+    }
+
+    String appendText(String existing, String addition) {
+      if (addition.trim().isEmpty) {
+        return existing;
+      }
+      if (existing.trim().isEmpty) {
+        return addition.trim();
+      }
+      return '$existing\n${addition.trim()}';
+    }
+
+    for (final entry in rawBlocks.whereType<Map>()) {
+      final block = Map<String, dynamic>.from(entry);
+      final type = (block['type'] ?? 'paragraph').toString().trim();
+      final text = (block['text'] ?? '').toString().trim();
+      final imagePath = (block['imagePath'] ?? '').toString().trim();
+      final imageLayout = (block['imageLayout'] ?? 'fullWidth').toString().trim();
+      switch (type) {
+        case 'image':
+          if (current.body.trim().isNotEmpty || current.imageUrl.trim().isNotEmpty) {
+            flushCurrent();
+          }
+          current = current.copyWith(
+            imageUrl: imagePath,
+            imageLayout: imageLayout,
+          );
+          orderedIndex = 0;
+          break;
+        case 'orderedItem':
+          orderedIndex += 1;
+          current = current.copyWith(
+            body: appendText(current.body, '$orderedIndex. $text'),
+          );
+          break;
+        case 'paragraph':
+        default:
+          orderedIndex = 0;
+          current = current.copyWith(body: appendText(current.body, text));
+          break;
+      }
+    }
+    flushCurrent();
+    if (pages.isNotEmpty) {
+      final hasInlineImage = pages.any((page) => page.imageUrl.trim().isNotEmpty);
+      return <ArticlePageData>[
+        pages.first.copyWith(
+          title: pages.first.title.trim().isEmpty ? postTitle.trim() : pages.first.title,
+          imageUrl: !hasInlineImage && coverImage.trim().isNotEmpty
+              ? coverImage.trim()
+              : pages.first.imageUrl,
+        ),
+        ...pages.skip(1),
+      ];
+    }
+  }
+
+  final pages = <ArticlePageData>[];
+  if (postTitle.trim().isNotEmpty ||
+      body.trim().isNotEmpty ||
+      coverImage.trim().isNotEmpty) {
+    pages.add(
+      ArticlePageData(
+        id: 'page_0',
+        title: postTitle.trim(),
+        body: body.trim(),
+        imageUrl: coverImage.trim(),
+      ),
+    );
+  }
+
+  for (var index = 0; index < cards.length; index += 1) {
+    final card = cards[index];
+    final usesWrap = card.layout == 'half' || card.layout == 'third';
+    pages.add(
+      ArticlePageData(
+        id: 'card_page_$index',
+        title: card.title,
+        body: card.body,
+        imageUrl: card.imageUrl ?? '',
+        imageLayout: usesWrap
+            ? (index.isOdd ? 'wrapRight' : 'wrapLeft')
+            : 'fullWidth',
+        caption: card.caption ?? '',
+      ),
+    );
+  }
+
+  if (pages.isNotEmpty) {
+    return pages;
+  }
+
+  return <ArticlePageData>[
+    ArticlePageData(id: 'page_0', title: postTitle.trim(), body: body.trim()),
+  ];
 }
 
 List<ArticleContentBlockView> _projectArticleContentBlocks({

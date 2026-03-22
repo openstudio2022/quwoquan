@@ -59,7 +59,7 @@ void main() {
         'settings': const <String, dynamic>{},
       });
 
-      expect(draft.state.body, '第一段\n第二条');
+      expect(draft.state.body, '第一段\n1. 第二条');
       expect(draft.state.imagePaths, <String>['inline.png']);
       expect(draft.state.activeArticleBlockId, 'o1');
       expect(

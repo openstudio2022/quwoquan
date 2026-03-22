@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -51,10 +52,13 @@ class ImageEditorPage extends ConsumerStatefulWidget {
   final String source;
   final int index;
   final int total;
+
   /// 多图时传入全部路径，用于大图左右滑动与缩略图联动
   final List<String>? imagePaths;
+
   /// 嵌入式时使用：返回/取消时调用，不执行 context.pop
   final VoidCallback? onBack;
+
   /// 嵌入式时使用：完成时传入结果（String 或 Map），不执行 context.pop
   final void Function(Object? result)? onDone;
 
@@ -114,11 +118,15 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     if (_paths.isEmpty) {
       _currentIndex = 0;
     } else if (resetIndex) {
-      _currentIndex =
-          widget.index.clamp(0, (_paths.length - 1).clamp(0, 0x7fffffff));
+      _currentIndex = widget.index.clamp(
+        0,
+        (_paths.length - 1).clamp(0, 0x7fffffff),
+      );
     } else {
-      _currentIndex =
-          _currentIndex.clamp(0, (_paths.length - 1).clamp(0, 0x7fffffff));
+      _currentIndex = _currentIndex.clamp(
+        0,
+        (_paths.length - 1).clamp(0, 0x7fffffff),
+      );
     }
     if (_paths.length > 1) {
       _pageController ??= PageController(initialPage: _currentIndex);
@@ -156,13 +164,16 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _filterUsageCountByPresetId
       ..clear()
       ..addAll(usageCounts);
-    final filteredCategories = config.categories
-        .where((entry) =>
-            entry.enabled &&
-            entry.id != 'recommended' &&
-            entry.id != 'common')
-        .toList(growable: false)
-      ..sort((a, b) => a.sort.compareTo(b.sort));
+    final filteredCategories =
+        config.categories
+            .where(
+              (entry) =>
+                  entry.enabled &&
+                  entry.id != 'recommended' &&
+                  entry.id != 'common',
+            )
+            .toList(growable: false)
+          ..sort((a, b) => a.sort.compareTo(b.sort));
 
     final commonIds = _resolveCommonPresetIds(
       presetById: presetById,
@@ -220,13 +231,16 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       allowEmpty: true,
     );
     for (final category in filteredCategories) {
-      final categoryPresets = presetById.values
-          .where((entry) =>
-              entry.categoryId == category.id &&
-              !commonIds.contains(entry.id) &&
-              !recommendedIds.contains(entry.id))
-          .toList(growable: false)
-        ..sort((a, b) => a.sort.compareTo(b.sort));
+      final categoryPresets =
+          presetById.values
+              .where(
+                (entry) =>
+                    entry.categoryId == category.id &&
+                    !commonIds.contains(entry.id) &&
+                    !recommendedIds.contains(entry.id),
+              )
+              .toList(growable: false)
+            ..sort((a, b) => a.sort.compareTo(b.sort));
       appendCategory(category, categoryPresets);
     }
     if (builtCategories.isEmpty) {
@@ -234,17 +248,17 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     }
 
     final currentPresetId = _selectedFilterPresetId;
-    final fallbackIndex = _filterTemplateIndex.clamp(
-      0,
-      math.max(0, builtPresets.length - 1),
-    ).toInt();
-    final fallbackPreset =
-        builtPresets.isEmpty ? null : builtPresets[fallbackIndex];
+    final fallbackIndex = _filterTemplateIndex
+        .clamp(0, math.max(0, builtPresets.length - 1))
+        .toInt();
+    final fallbackPreset = builtPresets.isEmpty
+        ? null
+        : builtPresets[fallbackIndex];
     final currentStrength = currentPresetId == null
         ? 100.0
         : (_filterStrengthByPresetId[currentPresetId] ??
-                (fallbackPreset?.defaultStrength ?? 100))
-            .toDouble();
+                  (fallbackPreset?.defaultStrength ?? 100))
+              .toDouble();
 
     setState(() {
       _filterCategories = builtCategories;
@@ -254,8 +268,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       if (currentPresetId == null || builtPresets.isEmpty) {
         _filterTemplateIndex = -1;
       } else {
-        final foundIndex =
-            builtPresets.indexWhere((entry) => entry.id == currentPresetId);
+        final foundIndex = builtPresets.indexWhere(
+          (entry) => entry.id == currentPresetId,
+        );
         _filterTemplateIndex = foundIndex < 0
             ? 0
             : foundIndex.clamp(0, builtPresets.length - 1);
@@ -273,22 +288,23 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     required Map<String, int> usageCounts,
     required int maxCount,
   }) {
-    final pairs = usageCounts.entries
-        .where((entry) => entry.value > 0 && presetById.containsKey(entry.key))
-        .toList(growable: false)
-      ..sort((a, b) {
-        final usage = b.value.compareTo(a.value);
-        if (usage != 0) return usage;
-        final ai = recentIds.indexOf(a.key);
-        final bi = recentIds.indexOf(b.key);
-        if (ai < 0 && bi < 0) return 0;
-        if (ai < 0) return 1;
-        if (bi < 0) return -1;
-        return ai.compareTo(bi);
-      });
-    final ids = <String>[
-      ...pairs.map((entry) => entry.key),
-    ];
+    final pairs =
+        usageCounts.entries
+            .where(
+              (entry) => entry.value > 0 && presetById.containsKey(entry.key),
+            )
+            .toList(growable: false)
+          ..sort((a, b) {
+            final usage = b.value.compareTo(a.value);
+            if (usage != 0) return usage;
+            final ai = recentIds.indexOf(a.key);
+            final bi = recentIds.indexOf(b.key);
+            if (ai < 0 && bi < 0) return 0;
+            if (ai < 0) return 1;
+            if (bi < 0) return -1;
+            return ai.compareTo(bi);
+          });
+    final ids = <String>[...pairs.map((entry) => entry.key)];
     if (ids.length < maxCount) {
       for (final id in recentIds) {
         if (presetById.containsKey(id) && !ids.contains(id)) {
@@ -317,7 +333,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   }
 
   Future<ImageEditorFilterImageFeatures> _resolveFilterImageFeatures() async {
-    if (_filterImageFeatures != null && _filterImageFeaturesPath == _currentPath) {
+    if (_filterImageFeatures != null &&
+        _filterImageFeaturesPath == _currentPath) {
       return _filterImageFeatures!;
     }
     final features = await _analyzeImageFeatures(_currentPath);
@@ -326,7 +343,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     return features;
   }
 
-  Future<ImageEditorFilterImageFeatures> _analyzeImageFeatures(String path) async {
+  Future<ImageEditorFilterImageFeatures> _analyzeImageFeatures(
+    String path,
+  ) async {
     if (path.isEmpty) return const ImageEditorFilterImageFeatures();
     try {
       final bytes = await _loadImageBytes(path);
@@ -412,10 +431,11 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final presetId = _selectedFilterPresetId;
     if (presetId == null || presetId.isEmpty) {
       if (_filterPresets.isEmpty) return;
-      final fallback = _filterPresets[_filterTemplateIndex.clamp(
-        0,
-        _filterPresets.length - 1,
-      )];
+      final fallback =
+          _filterPresets[_filterTemplateIndex.clamp(
+            0,
+            _filterPresets.length - 1,
+          )];
       _selectedFilterPresetId = fallback.id;
     }
     setState(() {
@@ -450,10 +470,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final safeEnd = end.clamp(safeStart, _filterPresets.length - 1);
     _filterVisibleIndices
       ..clear()
-      ..addAll(List<int>.generate(
-        safeEnd - safeStart + 1,
-        (i) => safeStart + i,
-      ));
+      ..addAll(
+        List<int>.generate(safeEnd - safeStart + 1, (i) => safeStart + i),
+      );
     for (var i = safeStart; i <= safeEnd; i++) {
       if (_filterTemplatePreviewBytes.containsKey(i) ||
           _filterTemplatePreviewLoading.contains(i) ||
@@ -490,7 +509,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   }
 
   Future<Uint8List?> _buildFilterPreviewBytes(int presetIndex) async {
-    if (_currentPath.isEmpty || presetIndex < 0 || presetIndex >= _filterPresets.length) {
+    if (_currentPath.isEmpty ||
+        presetIndex < 0 ||
+        presetIndex >= _filterPresets.length) {
       return null;
     }
     final preset = _filterPresets[presetIndex];
@@ -505,7 +526,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final height = ratio >= 1 ? (previewTarget / ratio).round() : previewTarget;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final srcRect = Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     final dstRect = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
     final paint = Paint()
       ..filterQuality = FilterQuality.low
@@ -546,17 +572,17 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       if (step.type == 'proTools') {
         final sub = step.params['subType'] as String?;
         if (sub == 'baseAdjustments') {
-          final values = (step.params['values'] as Map?)?.map(
-                (key, value) => MapEntry(
-                  key.toString(),
-                  (value as num?)?.toDouble() ?? 0,
-                ),
+          final values =
+              (step.params['values'] as Map?)?.map(
+                (key, value) =>
+                    MapEntry(key.toString(), (value as num?)?.toDouble() ?? 0),
               ) ??
               const <String, double>{};
           _selectedToolIndex = kImageEditorToolPro;
           _selectedProCategory = kImageEditorProCategoryOverall;
           _selectedProBaseToolIndex =
-              (step.params['selectedIndex'] as int?) ?? _selectedProBaseToolIndex;
+              (step.params['selectedIndex'] as int?) ??
+              _selectedProBaseToolIndex;
           _proBaseValues
             ..clear()
             ..addAll({
@@ -567,7 +593,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           return;
         }
         if (sub == 'hslAdjustments') {
-          final valuesRaw = (step.params['values'] as Map?)?.map(
+          final valuesRaw =
+              (step.params['values'] as Map?)?.map(
                 (key, value) => MapEntry(key.toString(), value),
               ) ??
               const <String, Object?>{};
@@ -586,7 +613,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           }
           _selectedToolIndex = kImageEditorToolPro;
           _selectedProCategory = kImageEditorProCategoryHsl;
-          _selectedHslChannel = (step.params['selectedChannel'] as String?) ??
+          _selectedHslChannel =
+              (step.params['selectedChannel'] as String?) ??
               kImageEditorHslChannels.first.key;
           _proHslValues = restored;
           _prepareProPanelSnapshot();
@@ -595,8 +623,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         if (sub == 'bwLevelsAdjustments') {
           _selectedToolIndex = kImageEditorToolPro;
           _selectedProCategory = kImageEditorProCategoryBwLevels;
-          _bwWhiteLevel = (step.params['whiteLevel'] as num?)?.toDouble() ?? _bwWhiteLevel;
-          _bwBlackLevel = (step.params['blackLevel'] as num?)?.toDouble() ?? _bwBlackLevel;
+          _bwWhiteLevel =
+              (step.params['whiteLevel'] as num?)?.toDouble() ?? _bwWhiteLevel;
+          _bwBlackLevel =
+              (step.params['blackLevel'] as num?)?.toDouble() ?? _bwBlackLevel;
           _prepareProPanelSnapshot();
           return;
         }
@@ -606,7 +636,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           for (final raw in anchorsRaw) {
             if (raw is! Map) continue;
             final map = raw.cast<dynamic, dynamic>();
-            final valuesRaw = (map['values'] as Map?)?.cast<dynamic, dynamic>() ?? const {};
+            final valuesRaw =
+                (map['values'] as Map?)?.cast<dynamic, dynamic>() ?? const {};
             restored.add(
               LocalAnchor(
                 id: (map['id'] as num?)?.toInt() ?? (_localAnchorIdSeed += 1),
@@ -614,12 +645,16 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                   ((map['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
                   ((map['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
                 ),
-                radius: ((map['radius'] as num?)?.toDouble() ?? 0.18).clamp(0.06, 0.45),
+                radius: ((map['radius'] as num?)?.toDouble() ?? 0.18).clamp(
+                  0.06,
+                  0.45,
+                ),
                 values: <String, double>{
                   for (final key in kLocalParamOrder)
                     key: (valuesRaw[key] as num?)?.toDouble() ?? 0,
                 },
-                selectedParam: (map['selectedParam'] as String?) ?? kLocalParamBrightness,
+                selectedParam:
+                    (map['selectedParam'] as String?) ?? kLocalParamBrightness,
               ),
             );
           }
@@ -633,35 +668,41 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                 .map((anchor) => anchor.id)
                 .reduce(math.max);
           }
-          _selectedLocalAnchorId = (step.params['selectedAnchorId'] as num?)?.toInt() ??
+          _selectedLocalAnchorId =
+              (step.params['selectedAnchorId'] as num?)?.toInt() ??
               (restored.isNotEmpty ? restored.last.id : null);
           _prepareProPanelSnapshot();
           return;
         }
-        final i = kImageEditorProToolEntries.indexWhere((entry) => entry.type == sub);
+        final i = kImageEditorProToolEntries.indexWhere(
+          (entry) => entry.type == sub,
+        );
         if (i >= 0) {
           _selectedToolIndex = kImageEditorToolPro;
           _selectedProToolIndex = i;
           _selectedProCategory = kImageEditorProToolEntries[i].categoryIndex;
           _curveBrightness =
               (step.params['curveBrightness'] as num?)?.toDouble() ??
-                  _curveBrightness;
+              _curveBrightness;
           _curveContrast =
               (step.params['curveContrast'] as num?)?.toDouble() ??
-                  _curveContrast;
+              _curveContrast;
           _whiteBalanceTemp =
               (step.params['whiteBalanceTemp'] as num?)?.toDouble() ??
-                  _whiteBalanceTemp;
+              _whiteBalanceTemp;
         }
       } else {
         if (step.type == 'filter') {
           final presetId = step.params['presetId'] as String?;
-          final intensity = (step.params['intensity'] as num?)?.toDouble() ?? 100;
+          final intensity =
+              (step.params['intensity'] as num?)?.toDouble() ?? 100;
           _selectedFilterPresetId = presetId;
           _filterIntensity = intensity.clamp(0, 100);
           if (presetId != null && presetId.isNotEmpty) {
             _filterStrengthByPresetId[presetId] = _filterIntensity;
-            final index = _filterPresets.indexWhere((entry) => entry.id == presetId);
+            final index = _filterPresets.indexWhere(
+              (entry) => entry.id == presetId,
+            );
             _filterTemplateIndex = index >= 0 ? index : -1;
             if (index >= 0) {
               _syncFilterCategoryFromTemplateIndex(index);
@@ -754,6 +795,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Rect _cropImageRect = Rect.zero;
   Offset _cropImageOffset = Offset.zero;
   Offset _cropInitialImageOffset = Offset.zero;
+
   /// 滤镜：分类索引、模板索引、强度 0~100
   int _filterCategoryIndex = 0;
   int _filterTemplateIndex = -1;
@@ -773,8 +815,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   final ImageEditorFilterRecommender _filterRecommender =
       const ImageEditorFilterRecommender();
   ImageEditorFilterConfig? _filterConfig;
-  List<ImageEditorFilterCategory> _filterCategories = const <ImageEditorFilterCategory>[];
-  List<ImageEditorFilterPreset> _filterPresets = const <ImageEditorFilterPreset>[];
+  List<ImageEditorFilterCategory> _filterCategories =
+      const <ImageEditorFilterCategory>[];
+  List<ImageEditorFilterPreset> _filterPresets =
+      const <ImageEditorFilterPreset>[];
   List<int> _filterCategoryAnchors = const <int>[];
   final ScrollController _filterTemplateScrollController = ScrollController();
   final Map<int, Uint8List> _filterTemplatePreviewBytes = <int, Uint8List>{};
@@ -785,45 +829,61 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   bool _processingFilterPreviewQueue = false;
   ImageEditorFilterImageFeatures? _filterImageFeatures;
   String? _filterImageFeaturesPath;
+
   /// 马赛克：类型索引、笔刷大小 0~1
   int _mosaicTypeIndex = 0;
   double _mosaicBrushSize = 0.5;
+
   /// 相框：模板索引
   int _frameTemplateIndex = 0;
+
   /// 文字：样式/颜色索引（占位）
   int _textStyleIndex = 0;
   int _textColorIndex = 0;
+
   /// 旋转：当前角度（度）
   int _rotateDegrees = 0;
 
   /// 专业修图：当前二级分组（整体/局部/HSL/曲线）
   int _selectedProCategory = kImageEditorProCategoryOverall;
+
   /// 专业修图：当前选中的工具索引（为空表示停留在工具列表面板）
   int? _selectedProToolIndex;
+
   /// 专业修图基础分组：当前选中的调节项索引（默认光感）
   int _selectedProBaseToolIndex = 0;
+
   /// 专业修图基础分组：各调节项值（-100~100）
   final Map<String, double> _proBaseValues = {
     for (final entry in kImageEditorProBaseEntries) entry.type: 0,
   };
+
   /// 专业修图会话快照：用于 X 取消时回滚
   Map<String, double> _proBaseSnapshotValues = {
     for (final entry in kImageEditorProBaseEntries) entry.type: 0,
   };
+
   /// HSL：当前选中的颜色通道
   String _selectedHslChannel = kImageEditorHslChannels.first.key;
+
   /// HSL：通道 -> (hue/saturation/luminance)
   Map<String, Map<String, double>> _proHslValues = createDefaultHslValues();
+
   /// HSL：进入本次专业面板时的快照
-  Map<String, Map<String, double>> _proHslSnapshotValues = createDefaultHslValues();
+  Map<String, Map<String, double>> _proHslSnapshotValues =
+      createDefaultHslValues();
+
   /// HSL：会话基线（用于对比原图）
-  Map<String, Map<String, double>> _hslSessionBaselineValues = createDefaultHslValues();
+  Map<String, Map<String, double>> _hslSessionBaselineValues =
+      createDefaultHslValues();
+
   /// HSL：会话撤回/重做栈
   final List<Map<String, Map<String, double>>> _hslSessionStack = [];
   int _hslSessionCursor = -1;
   bool _isComparingSessionBaseline = false;
   bool _hslPickerActive = false;
   Offset? _hslPickerPoint;
+
   /// 局部：锚点与会话状态
   final List<LocalAnchor> _localAnchors = <LocalAnchor>[];
   List<LocalAnchor> _localSnapshotAnchors = <LocalAnchor>[];
@@ -844,16 +904,20 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   int _proBaseToolSnapshot = 0;
   bool _showProToolbox = false;
   String? _proPlaceholderTitle;
+
   /// 专业修图工具横向滚动控制器
   final ScrollController _proToolScrollController = ScrollController();
+
   /// 剪裁比例列表横向滚动，重置时滚回「原始」
   final ScrollController _cropRatioScrollController = ScrollController();
 
   /// 曲线参数（简化：亮度/对比度占位）
   double _curveBrightness = 0.5;
   double _curveContrast = 0.5;
+
   /// 白平衡参数（色温占位）
   double _whiteBalanceTemp = 0.5;
+
   /// 黑白色阶参数（-100..100）
   double _bwWhiteLevel = 0;
   double _bwBlackLevel = 0;
@@ -863,8 +927,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   double _bwSessionBaselineBlackLevel = 0;
   final List<Map<String, double>> _bwSessionStack = <Map<String, double>>[];
   int _bwSessionCursor = -1;
+
   /// 旋转精细角度（约 ±45° 或更大，度）
   double _rotateFineDegrees = 0;
+
   /// 水平/垂直翻转状态（用于旋转工具）
   bool _flipHorizontal = false;
   bool _flipVertical = false;
@@ -874,9 +940,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     const isDark = true;
     final baseBg = AppColors.black;
     final panelBg = AppColors.black;
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final topPad = MediaQuery.paddingOf(context).top;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
     final isToolEditing = _selectedToolIndex != null;
@@ -884,8 +955,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final topBarBg = AppColors.black;
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
-      overlays:
-          isToolEditing ? [SystemUiOverlay.bottom] : SystemUiOverlay.values,
+      overlays: isToolEditing
+          ? [SystemUiOverlay.bottom]
+          : SystemUiOverlay.values,
     );
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
@@ -906,275 +978,285 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           children: [
             Column(
               children: [
-            // 1. 顶栏：仅在图片编辑器主界面显示；进入工具编辑页（剪裁等）时隐藏，保持图片上方整洁
-            if (!isToolEditing)
-              ImageEditorTopBar(
-                backgroundColor: topBarBg,
-                foregroundColor: fg,
-                foregroundSecondary: fgSecondary,
-                topPadding: topPad,
-                positionText:
-                    '${_currentIndex + 1}/${_paths.isEmpty ? widget.total : _paths.length}',
-                onBack: _handleBack,
-                onHistory: _showHistorySheet,
-                historyEnabled: _steps.isNotEmpty,
-              )
-            else
-              const SizedBox.shrink(),
-            // 2. 中部：工具编辑页仅对当前图编辑、不可左右滑动；主界面可多图滑动
-            Expanded(
-              child: _showCurveOverlayBelowImage
-                  ? Column(
-                      children: [
-                        Expanded(
-                          child: _buildMiddleImage(fgSecondary),
-                        ),
-                        ImageEditorCurveOverlayBar(
-                          backgroundColor: panelBg,
-                          foregroundColor: fg,
-                          foregroundSecondary: fgSecondary,
-                          brightness: _curveBrightness,
-                          contrast: _curveContrast,
-                          onBrightnessChanged: (v) =>
-                              setState(() => _curveBrightness = v),
-                          onContrastChanged: (v) =>
-                              setState(() => _curveContrast = v),
-                          onCancel: () =>
-                              setState(() => _selectedProToolIndex = null),
-                          onConfirm: () {
-                            _pushStep(ImageEditorStep(
-                              type: 'proTools',
-                              params: {
-                                'subType': 'curve',
-                                'curveBrightness': _curveBrightness,
-                                'curveContrast': _curveContrast,
+                // 1. 顶栏：仅在图片编辑器主界面显示；进入工具编辑页（剪裁等）时隐藏，保持图片上方整洁
+                if (!isToolEditing)
+                  ImageEditorTopBar(
+                    backgroundColor: topBarBg,
+                    foregroundColor: fg,
+                    foregroundSecondary: fgSecondary,
+                    topPadding: topPad,
+                    positionText:
+                        '${_currentIndex + 1}/${_paths.isEmpty ? widget.total : _paths.length}',
+                    onBack: _handleBack,
+                    onHistory: _showHistorySheet,
+                    historyEnabled: _steps.isNotEmpty,
+                  )
+                else
+                  const SizedBox.shrink(),
+                // 2. 中部：工具编辑页仅对当前图编辑、不可左右滑动；主界面可多图滑动
+                Expanded(
+                  child: _showCurveOverlayBelowImage
+                      ? Column(
+                          children: [
+                            Expanded(child: _buildMiddleImage(fgSecondary)),
+                            ImageEditorCurveOverlayBar(
+                              backgroundColor: panelBg,
+                              foregroundColor: fg,
+                              foregroundSecondary: fgSecondary,
+                              brightness: _curveBrightness,
+                              contrast: _curveContrast,
+                              onBrightnessChanged: (v) =>
+                                  setState(() => _curveBrightness = v),
+                              onContrastChanged: (v) =>
+                                  setState(() => _curveContrast = v),
+                              onCancel: () =>
+                                  setState(() => _selectedProToolIndex = null),
+                              onConfirm: () {
+                                _pushStep(
+                                  ImageEditorStep(
+                                    type: 'proTools',
+                                    params: {
+                                      'subType': 'curve',
+                                      'curveBrightness': _curveBrightness,
+                                      'curveContrast': _curveContrast,
+                                    },
+                                  ),
+                                );
+                                setState(() => _selectedProToolIndex = null);
                               },
-                            ));
-                            setState(() => _selectedProToolIndex = null);
-                          },
-                        ),
-                      ],
-                    )
-                  : _selectedToolIndex != null
+                            ),
+                          ],
+                        )
+                      : _selectedToolIndex != null
                       ? _buildMiddleImage(fgSecondary)
                       : _isMultiImage && _pageController != null
-                          ? PageView.builder(
-                              controller: _pageController,
-                              itemCount: _paths.length,
-                              onPageChanged: (int index) {
-                                setState(() => _currentIndex = index);
-                                _scrollThumbToIndex(index);
-                                _loadImageAspectRatio(_paths[index]);
-                                _clearFilterPreviewCache();
-                              },
-                              itemBuilder: (context, index) {
-                                return _buildMiddleImageForPath(
-                                    _paths[index], fgSecondary);
-                              },
-                            )
-                          : _buildMiddleImage(fgSecondary),
-            ),
-            // 多图时仅在主界面显示缩略图；工具编辑页不左右滑动
-            if (_isMultiImage && _selectedToolIndex == null)
-              _buildThumbnailStrip(panelBg, fgSecondary),
-            if (_selectedToolIndex != null && !_showCurveOverlayBelowImage)
-              ImageEditorOperationPanel(
-                backgroundColor: panelBg,
-                foregroundColor: fg,
-                foregroundSecondary: fgSecondary,
-                bottomInset: bottomPad,
-                toolIndex: _selectedToolIndex ?? kImageEditorToolCrop,
-                selectedProToolIndex: _selectedProToolIndex,
-                selectedProCategory: _selectedProCategory,
-                proPlaceholderTitle: _proPlaceholderTitle,
-                proToolScrollController: _proToolScrollController,
-                onSelectProTool: (index) => setState(() {
-                  _selectedProToolIndex = index;
-                  _selectedProBaseToolIndex = index;
-                }),
-                onSelectProCategory: (index) {
-                  setState(() {
-                    _selectedProCategory = index;
-                    _proPlaceholderTitle = null;
-                    _hslPickerActive = false;
-                    _hslPickerPoint = null;
-                    _localShowAnchorMenu = false;
-                    _localAddMode = false;
-                    _localRangeVisible = false;
-                    if (index == kImageEditorProCategoryHsl) {
-                      _resetHslSessionHistory();
-                    }
-                    if (index == kImageEditorProCategoryBwLevels) {
-                      _resetBwSessionHistory();
-                    }
-                    if (index == kImageEditorProCategoryOverall ||
-                        index == kImageEditorProCategoryLocal) {
-                      _resetLocalSessionHistory();
-                    }
-                  });
-                },
-                onProToolScrollSync: (viewportWidth, itemWidth) {},
-                onExitProPanel: _cancelProPanel,
-                onConfirmProPanel: _confirmProPanel,
-                onCancelProTool: () =>
-                    _cancelProPanel(),
-                onConfirmProTool: _confirmProPanel,
-                onCancelPanel: _selectedToolIndex == kImageEditorToolCrop
-                    ? _cancelCropAndExit
-                    : _selectedToolIndex == kImageEditorToolRotate
+                      ? PageView.builder(
+                          controller: _pageController,
+                          itemCount: _paths.length,
+                          onPageChanged: (int index) {
+                            setState(() => _currentIndex = index);
+                            _scrollThumbToIndex(index);
+                            _loadImageAspectRatio(_paths[index]);
+                            _clearFilterPreviewCache();
+                          },
+                          itemBuilder: (context, index) {
+                            return _buildMiddleImageForPath(
+                              _paths[index],
+                              fgSecondary,
+                            );
+                          },
+                        )
+                      : _buildMiddleImage(fgSecondary),
+                ),
+                // 多图时仅在主界面显示缩略图；工具编辑页不左右滑动
+                if (_isMultiImage && _selectedToolIndex == null)
+                  _buildThumbnailStrip(panelBg, fgSecondary),
+                if (_selectedToolIndex != null && !_showCurveOverlayBelowImage)
+                  ImageEditorOperationPanel(
+                    backgroundColor: panelBg,
+                    foregroundColor: fg,
+                    foregroundSecondary: fgSecondary,
+                    bottomInset: bottomPad,
+                    toolIndex: _selectedToolIndex ?? kImageEditorToolCrop,
+                    selectedProToolIndex: _selectedProToolIndex,
+                    selectedProCategory: _selectedProCategory,
+                    proPlaceholderTitle: _proPlaceholderTitle,
+                    proToolScrollController: _proToolScrollController,
+                    onSelectProTool: (index) => setState(() {
+                      _selectedProToolIndex = index;
+                      _selectedProBaseToolIndex = index;
+                    }),
+                    onSelectProCategory: (index) {
+                      setState(() {
+                        _selectedProCategory = index;
+                        _proPlaceholderTitle = null;
+                        _hslPickerActive = false;
+                        _hslPickerPoint = null;
+                        _localShowAnchorMenu = false;
+                        _localAddMode = false;
+                        _localRangeVisible = false;
+                        if (index == kImageEditorProCategoryHsl) {
+                          _resetHslSessionHistory();
+                        }
+                        if (index == kImageEditorProCategoryBwLevels) {
+                          _resetBwSessionHistory();
+                        }
+                        if (index == kImageEditorProCategoryOverall ||
+                            index == kImageEditorProCategoryLocal) {
+                          _resetLocalSessionHistory();
+                        }
+                      });
+                    },
+                    onProToolScrollSync: (viewportWidth, itemWidth) {},
+                    onExitProPanel: _cancelProPanel,
+                    onConfirmProPanel: _confirmProPanel,
+                    onCancelProTool: () => _cancelProPanel(),
+                    onConfirmProTool: _confirmProPanel,
+                    onCancelPanel: _selectedToolIndex == kImageEditorToolCrop
+                        ? _cancelCropAndExit
+                        : _selectedToolIndex == kImageEditorToolRotate
                         ? _cancelRotateAndExit
                         : _selectedToolIndex == kImageEditorToolFilter
-                            ? _cancelFilterAndExit
+                        ? _cancelFilterAndExit
                         : _closePanel,
-                onConfirmPanel: _selectedToolIndex == kImageEditorToolCrop
-                    ? _confirmCropAndExit
-                    : _confirmToolPanel,
-                showCropReset: _cropEdited,
-                onCropReset: _resetCropPanel,
-                cropRatioScrollController: _cropRatioScrollController,
-                cropRatio: _cropRatio,
-                onCropRatioChanged: _onCropRatioChanged,
-                filterCategoryIndex: _filterCategoryIndex,
-                filterTemplateIndex: _filterTemplateIndex,
-                filterIntensity: _filterIntensity,
-                onFilterCategoryChanged: _onFilterCategoryChanged,
-                onFilterTemplateChanged: _onFilterTemplateChanged,
-                onFilterIntensityChanged: _onFilterIntensityChanged,
-                filterCategories: _filterCategories,
-                filterCategoryAnchors: _filterCategoryAnchors,
-                filterPresets: _filterPresets,
-                filterTemplatePreviewBytes: _filterTemplatePreviewBytes,
-                filterTemplatePreviewLoadingIndices: _filterTemplatePreviewLoading,
-                filterTemplateScrollController: _filterTemplateScrollController,
-                onFilterVisibleRangeChanged: _onFilterVisibleRangeChanged,
-                onFilterRemove: _onFilterRemove,
-                mosaicTypeIndex: _mosaicTypeIndex,
-                mosaicBrushSize: _mosaicBrushSize,
-                onMosaicTypeChanged: (i) =>
-                    setState(() => _mosaicTypeIndex = i),
-                onMosaicBrushSizeChanged: (v) =>
-                    setState(() => _mosaicBrushSize = v),
-                frameTemplateIndex: _frameTemplateIndex,
-                onFrameTemplateChanged: (i) =>
-                    setState(() => _frameTemplateIndex = i),
-                textStyleIndex: _textStyleIndex,
-                textColorIndex: _textColorIndex,
-                onTextStyleChanged: (i) => setState(() => _textStyleIndex = i),
-                onTextColorChanged: (i) => setState(() => _textColorIndex = i),
-                rotateDegrees: _rotateDegrees,
-                rotateFineDegrees: _rotateFineDegrees,
-                flipHorizontal: _flipHorizontal,
-                flipVertical: _flipVertical,
-                onRotateLeft: () => setState(() =>
-                    _rotateDegrees = (_rotateDegrees - 90) % 360),
-                onRotateRight: () => setState(() =>
-                    _rotateDegrees = (_rotateDegrees + 90) % 360),
-                onRotateFineChanged: _setRotateFineDegrees,
-                onFlipHorizontal: () =>
-                    setState(() => _flipHorizontal = !_flipHorizontal),
-                onFlipVertical: () =>
-                    setState(() => _flipVertical = !_flipVertical),
-                showRotateReset: _isRotateEdited,
-                onRotateReset: _resetRotateState,
-                curveBrightness: _curveBrightness,
-                curveContrast: _curveContrast,
-                whiteBalanceTemp: _whiteBalanceTemp,
-                onCurveBrightnessChanged: (v) =>
-                    setState(() => _curveBrightness = v),
-                onCurveContrastChanged: (v) =>
-                    setState(() => _curveContrast = v),
-                onWhiteBalanceTempChanged: (v) =>
-                    setState(() => _whiteBalanceTemp = v),
-                bwWhiteLevel: _bwWhiteLevel,
-                bwBlackLevel: _bwBlackLevel,
-                onBwWhiteLevelChanged: (v) => _onBwLevelChanged(isWhite: true, value: v),
-                onBwBlackLevelChanged: (v) => _onBwLevelChanged(isWhite: false, value: v),
-                proBaseSelectedIndex: _selectedProBaseToolIndex,
-                proBaseValues: _proBaseValues,
-                onProBaseSelectedIndexChanged: (index) => setState(() {
-                  _selectedProBaseToolIndex = index;
-                  if (_selectedProCategory == kImageEditorProCategoryLocal &&
-                      _selectedLocalAnchor != null) {
-                    final selected = _selectedLocalAnchor!;
-                    final entry = kImageEditorProBaseEntries[index];
-                    final localIndex = _localAnchors.indexWhere(
-                      (anchor) => anchor.id == selected.id,
-                    );
-                    if (localIndex >= 0) {
-                      _localAnchors[localIndex] = selected.copyWith(
-                        selectedParam: entry.type,
-                      );
-                    }
-                  }
-                }),
-                onProBaseValueChanged: _onProBaseValueChanged,
-                hslSelectedChannel: _selectedHslChannel,
-                hslValues: _proHslValues,
-                hslPickerActive: _hslPickerActive,
-                onSelectHslChannel: (channelKey) => setState(
-                  () => _selectedHslChannel = channelKey,
-                ),
-                onHslValueChanged: _onProHslValueChanged,
-                onToggleHslPicker: () => setState(
-                  () => _hslPickerActive = !_hslPickerActive,
-                ),
-                localValues: _selectedLocalValues,
-                hasSelectedLocalAnchor: _selectedLocalAnchor != null,
-                localShowAllAnchors: _localShowAllAnchors,
-                localAddMode: _localAddMode,
-                onToggleLocalAddMode: _toggleLocalAddMode,
-                onToggleLocalShowAll: () => setState(
-                  () => _localShowAllAnchors = !_localShowAllAnchors,
-                ),
-                localRangeVisible: _localRangeVisible,
-                onToggleLocalRangeVisible: () => setState(
-                  () => _localRangeVisible = !_localRangeVisible,
-                ),
-                onCopyLocalAnchor: _copySelectedLocalAnchor,
-                onDeleteLocalAnchor: _deleteSelectedLocalAnchor,
-              ),
-            if (_selectedToolIndex == null)
-              ImageEditorBottomBar(
-                backgroundColor: panelBg,
-                foregroundColor: fg,
-                foregroundSecondary: fgSecondary,
-                bottomPadding: bottomPad,
-                selectedToolIndex: _showProToolbox ? kImageEditorToolPro : _selectedToolIndex,
-                onToolSelected: (index) {
-                  setState(() {
-                    _showProToolbox = false;
-                    _selectedToolIndex = index;
-                    _selectedProToolIndex = null;
-                    if (index == kImageEditorToolCrop) {
-                      _prepareCropSnapshot();
-                    }
-                    if (index == kImageEditorToolRotate) {
-                      _applyRotateReset();
-                    }
-                    if (index == kImageEditorToolFilter) {
-                      _prepareFilterSnapshot();
-                      _clearFilterPreviewCache();
-                      _ensureFilterSelectionForEditing();
-                    }
-                    if (index == kImageEditorToolPro) {
-                      _selectedToolIndex = null;
-                      _selectedProCategory = kImageEditorProCategoryOverall;
-                      _selectedProToolIndex = null;
-                      _proPlaceholderTitle = null;
-                      _hslPickerActive = false;
-                      _hslPickerPoint = null;
-                      _localAddMode = false;
-                      _localShowAnchorMenu = false;
-                      _localRangeVisible = false;
-                      _showProToolbox = true;
-                      _prepareProPanelSnapshot();
-                    }
-                  });
-                  if (index == kImageEditorToolFilter) {
-                    _rebuildFilterData();
-                  }
-                },
-              ),
+                    onConfirmPanel: _selectedToolIndex == kImageEditorToolCrop
+                        ? _confirmCropAndExit
+                        : _confirmToolPanel,
+                    showCropReset: _cropEdited,
+                    onCropReset: _resetCropPanel,
+                    cropRatioScrollController: _cropRatioScrollController,
+                    cropRatio: _cropRatio,
+                    onCropRatioChanged: _onCropRatioChanged,
+                    filterCategoryIndex: _filterCategoryIndex,
+                    filterTemplateIndex: _filterTemplateIndex,
+                    filterIntensity: _filterIntensity,
+                    onFilterCategoryChanged: _onFilterCategoryChanged,
+                    onFilterTemplateChanged: _onFilterTemplateChanged,
+                    onFilterIntensityChanged: _onFilterIntensityChanged,
+                    filterCategories: _filterCategories,
+                    filterCategoryAnchors: _filterCategoryAnchors,
+                    filterPresets: _filterPresets,
+                    filterTemplatePreviewBytes: _filterTemplatePreviewBytes,
+                    filterTemplatePreviewLoadingIndices:
+                        _filterTemplatePreviewLoading,
+                    filterTemplateScrollController:
+                        _filterTemplateScrollController,
+                    onFilterVisibleRangeChanged: _onFilterVisibleRangeChanged,
+                    onFilterRemove: _onFilterRemove,
+                    mosaicTypeIndex: _mosaicTypeIndex,
+                    mosaicBrushSize: _mosaicBrushSize,
+                    onMosaicTypeChanged: (i) =>
+                        setState(() => _mosaicTypeIndex = i),
+                    onMosaicBrushSizeChanged: (v) =>
+                        setState(() => _mosaicBrushSize = v),
+                    frameTemplateIndex: _frameTemplateIndex,
+                    onFrameTemplateChanged: (i) =>
+                        setState(() => _frameTemplateIndex = i),
+                    textStyleIndex: _textStyleIndex,
+                    textColorIndex: _textColorIndex,
+                    onTextStyleChanged: (i) =>
+                        setState(() => _textStyleIndex = i),
+                    onTextColorChanged: (i) =>
+                        setState(() => _textColorIndex = i),
+                    rotateDegrees: _rotateDegrees,
+                    rotateFineDegrees: _rotateFineDegrees,
+                    flipHorizontal: _flipHorizontal,
+                    flipVertical: _flipVertical,
+                    onRotateLeft: () => setState(
+                      () => _rotateDegrees = (_rotateDegrees - 90) % 360,
+                    ),
+                    onRotateRight: () => setState(
+                      () => _rotateDegrees = (_rotateDegrees + 90) % 360,
+                    ),
+                    onRotateFineChanged: _setRotateFineDegrees,
+                    onFlipHorizontal: () =>
+                        setState(() => _flipHorizontal = !_flipHorizontal),
+                    onFlipVertical: () =>
+                        setState(() => _flipVertical = !_flipVertical),
+                    showRotateReset: _isRotateEdited,
+                    onRotateReset: _resetRotateState,
+                    curveBrightness: _curveBrightness,
+                    curveContrast: _curveContrast,
+                    whiteBalanceTemp: _whiteBalanceTemp,
+                    onCurveBrightnessChanged: (v) =>
+                        setState(() => _curveBrightness = v),
+                    onCurveContrastChanged: (v) =>
+                        setState(() => _curveContrast = v),
+                    onWhiteBalanceTempChanged: (v) =>
+                        setState(() => _whiteBalanceTemp = v),
+                    bwWhiteLevel: _bwWhiteLevel,
+                    bwBlackLevel: _bwBlackLevel,
+                    onBwWhiteLevelChanged: (v) =>
+                        _onBwLevelChanged(isWhite: true, value: v),
+                    onBwBlackLevelChanged: (v) =>
+                        _onBwLevelChanged(isWhite: false, value: v),
+                    proBaseSelectedIndex: _selectedProBaseToolIndex,
+                    proBaseValues: _proBaseValues,
+                    onProBaseSelectedIndexChanged: (index) => setState(() {
+                      _selectedProBaseToolIndex = index;
+                      if (_selectedProCategory ==
+                              kImageEditorProCategoryLocal &&
+                          _selectedLocalAnchor != null) {
+                        final selected = _selectedLocalAnchor!;
+                        final entry = kImageEditorProBaseEntries[index];
+                        final localIndex = _localAnchors.indexWhere(
+                          (anchor) => anchor.id == selected.id,
+                        );
+                        if (localIndex >= 0) {
+                          _localAnchors[localIndex] = selected.copyWith(
+                            selectedParam: entry.type,
+                          );
+                        }
+                      }
+                    }),
+                    onProBaseValueChanged: _onProBaseValueChanged,
+                    hslSelectedChannel: _selectedHslChannel,
+                    hslValues: _proHslValues,
+                    hslPickerActive: _hslPickerActive,
+                    onSelectHslChannel: (channelKey) =>
+                        setState(() => _selectedHslChannel = channelKey),
+                    onHslValueChanged: _onProHslValueChanged,
+                    onToggleHslPicker: () =>
+                        setState(() => _hslPickerActive = !_hslPickerActive),
+                    localValues: _selectedLocalValues,
+                    hasSelectedLocalAnchor: _selectedLocalAnchor != null,
+                    localShowAllAnchors: _localShowAllAnchors,
+                    localAddMode: _localAddMode,
+                    onToggleLocalAddMode: _toggleLocalAddMode,
+                    onToggleLocalShowAll: () => setState(
+                      () => _localShowAllAnchors = !_localShowAllAnchors,
+                    ),
+                    localRangeVisible: _localRangeVisible,
+                    onToggleLocalRangeVisible: () => setState(
+                      () => _localRangeVisible = !_localRangeVisible,
+                    ),
+                    onCopyLocalAnchor: _copySelectedLocalAnchor,
+                    onDeleteLocalAnchor: _deleteSelectedLocalAnchor,
+                  ),
+                if (_selectedToolIndex == null)
+                  ImageEditorBottomBar(
+                    backgroundColor: panelBg,
+                    foregroundColor: fg,
+                    foregroundSecondary: fgSecondary,
+                    bottomPadding: bottomPad,
+                    selectedToolIndex: _showProToolbox
+                        ? kImageEditorToolPro
+                        : _selectedToolIndex,
+                    onToolSelected: (index) {
+                      setState(() {
+                        _showProToolbox = false;
+                        _selectedToolIndex = index;
+                        _selectedProToolIndex = null;
+                        if (index == kImageEditorToolCrop) {
+                          _prepareCropSnapshot();
+                        }
+                        if (index == kImageEditorToolRotate) {
+                          _applyRotateReset();
+                        }
+                        if (index == kImageEditorToolFilter) {
+                          _prepareFilterSnapshot();
+                          _clearFilterPreviewCache();
+                          _ensureFilterSelectionForEditing();
+                        }
+                        if (index == kImageEditorToolPro) {
+                          _selectedToolIndex = null;
+                          _selectedProCategory = kImageEditorProCategoryOverall;
+                          _selectedProToolIndex = null;
+                          _proPlaceholderTitle = null;
+                          _hslPickerActive = false;
+                          _hslPickerPoint = null;
+                          _localAddMode = false;
+                          _localShowAnchorMenu = false;
+                          _localRangeVisible = false;
+                          _showProToolbox = true;
+                          _prepareProPanelSnapshot();
+                        }
+                      });
+                      if (index == kImageEditorToolFilter) {
+                        _rebuildFilterData();
+                      }
+                    },
+                  ),
               ],
             ),
             if (_selectedToolIndex == null && _showProToolbox)
@@ -1334,11 +1416,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                   ),
                   itemBuilder: (context, index) {
                     final entry = entries[index];
-                    final unselectedColor =
-                        AppColors.white.withValues(alpha: 0.6);
+                    final unselectedColor = AppColors.white.withValues(
+                      alpha: 0.6,
+                    );
                     return InkWell(
                       onTap: () => _openProEditorFromToolbox(entry),
-                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -1354,7 +1439,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                               size: AppSpacing.iconLarge,
                               color: unselectedColor,
                             ),
-                          SizedBox(height: AppSpacing.toolPanelItemIconLabelGap),
+                          SizedBox(
+                            height: AppSpacing.toolPanelItemIconLabelGap,
+                          ),
                           Text(
                             entry.label,
                             textAlign: TextAlign.center,
@@ -1423,8 +1510,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         ..clear()
         ..addAll(cloneLocalAnchors(_localSnapshotAnchors));
       if (_selectedLocalAnchorId != null &&
-          _localAnchors.every((anchor) => anchor.id != _selectedLocalAnchorId)) {
-        _selectedLocalAnchorId = _localAnchors.isNotEmpty ? _localAnchors.last.id : null;
+          _localAnchors.every(
+            (anchor) => anchor.id != _selectedLocalAnchorId,
+          )) {
+        _selectedLocalAnchorId = _localAnchors.isNotEmpty
+            ? _localAnchors.last.id
+            : null;
       }
       _hslPickerActive = false;
       _hslPickerPoint = null;
@@ -1458,7 +1549,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           _selectedProCategory == kImageEditorProCategoryLocal &&
           _selectedLocalAnchor != null) {
         final selected = _selectedLocalAnchor!;
-        final index = _localAnchors.indexWhere((anchor) => anchor.id == selected.id);
+        final index = _localAnchors.indexWhere(
+          (anchor) => anchor.id == selected.id,
+        );
         if (index >= 0) {
           final values = Map<String, double>.from(selected.values);
           values[toolType] = clamped;
@@ -1476,7 +1569,11 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _showLocalHint(String message) {
     if (!mounted) return;
-    AppToast.show(context, message, duration: const Duration(milliseconds: 1400));
+    AppToast.show(
+      context,
+      message,
+      duration: const Duration(milliseconds: 1400),
+    );
   }
 
   void _toggleLocalAddMode() {
@@ -1514,10 +1611,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     }
     final imageRect = _resolveImageRect(imageSize);
     if (!imageRect.contains(localPosition)) return;
-    final nx =
-        ((localPosition.dx - imageRect.left) / imageRect.width).clamp(0.0, 1.0);
-    final ny =
-        ((localPosition.dy - imageRect.top) / imageRect.height).clamp(0.0, 1.0);
+    final nx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final ny = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
     final safeIndex = _selectedProBaseToolIndex.clamp(
       0,
       kImageEditorProBaseEntries.length - 1,
@@ -1540,13 +1641,25 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     });
   }
 
-  void _updateLocalAnchorPosition(int anchorId, Offset localPosition, Rect imageRect) {
-    final dx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(0.0, 1.0);
-    final dy = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(0.0, 1.0);
+  void _updateLocalAnchorPosition(
+    int anchorId,
+    Offset localPosition,
+    Rect imageRect,
+  ) {
+    final dx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final dy = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
     final index = _localAnchors.indexWhere((anchor) => anchor.id == anchorId);
     if (index < 0) return;
     setState(() {
-      _localAnchors[index] = _localAnchors[index].copyWith(center: Offset(dx, dy));
+      _localAnchors[index] = _localAnchors[index].copyWith(
+        center: Offset(dx, dy),
+      );
       _selectedLocalAnchorId = anchorId;
       _localShowAnchorMenu = false;
     });
@@ -1594,8 +1707,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     if (selected == null) return;
     setState(() {
       _localAnchors.removeWhere((anchor) => anchor.id == selected.id);
-      _selectedLocalAnchorId =
-          _localAnchors.isNotEmpty ? _localAnchors.last.id : null;
+      _selectedLocalAnchorId = _localAnchors.isNotEmpty
+          ? _localAnchors.last.id
+          : null;
       _localShowAnchorMenu = false;
       _recordLocalSessionStep();
     });
@@ -1646,11 +1760,27 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   }
 
   List<double> _identityColorMatrix() => const <double>[
-        1, 0, 0, 0, 0,
-        0, 1, 0, 0, 0,
-        0, 0, 1, 0, 0,
-        0, 0, 0, 1, 0,
-      ];
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
 
   List<double> _multiplyColorMatrices(List<double> a, List<double> b) {
     final out = List<double>.filled(20, 0);
@@ -1658,13 +1788,15 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final rowOffset = row * 5;
       for (var col = 0; col < 5; col++) {
         if (col == 4) {
-          out[rowOffset + col] = a[rowOffset] * b[4] +
+          out[rowOffset + col] =
+              a[rowOffset] * b[4] +
               a[rowOffset + 1] * b[9] +
               a[rowOffset + 2] * b[14] +
               a[rowOffset + 3] * b[19] +
               a[rowOffset + 4];
         } else {
-          out[rowOffset + col] = a[rowOffset] * b[col] +
+          out[rowOffset + col] =
+              a[rowOffset] * b[col] +
               a[rowOffset + 1] * b[col + 5] +
               a[rowOffset + 2] * b[col + 10] +
               a[rowOffset + 3] * b[col + 15];
@@ -1677,10 +1809,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   List<double> _brightnessMatrix(double value) {
     final offset = value / 100 * 255;
     return <double>[
-      1, 0, 0, 0, offset,
-      0, 1, 0, 0, offset,
-      0, 0, 1, 0, offset,
-      0, 0, 0, 1, 0,
+      1,
+      0,
+      0,
+      0,
+      offset,
+      0,
+      1,
+      0,
+      0,
+      offset,
+      0,
+      0,
+      1,
+      0,
+      offset,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1688,10 +1836,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final factor = (1 + value / 100).clamp(0.0, 3.0);
     final translate = 128 * (1 - factor);
     return <double>[
-      factor, 0, 0, 0, translate,
-      0, factor, 0, 0, translate,
-      0, 0, factor, 0, translate,
-      0, 0, 0, 1, 0,
+      factor,
+      0,
+      0,
+      0,
+      translate,
+      0,
+      factor,
+      0,
+      0,
+      translate,
+      0,
+      0,
+      factor,
+      0,
+      translate,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1701,10 +1865,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     const lG = 0.7152;
     const lB = 0.0722;
     return <double>[
-      lR * (1 - s) + s, lG * (1 - s), lB * (1 - s), 0, 0,
-      lR * (1 - s), lG * (1 - s) + s, lB * (1 - s), 0, 0,
-      lR * (1 - s), lG * (1 - s), lB * (1 - s) + s, 0, 0,
-      0, 0, 0, 1, 0,
+      lR * (1 - s) + s,
+      lG * (1 - s),
+      lB * (1 - s),
+      0,
+      0,
+      lR * (1 - s),
+      lG * (1 - s) + s,
+      lB * (1 - s),
+      0,
+      0,
+      lR * (1 - s),
+      lG * (1 - s),
+      lB * (1 - s) + s,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1713,10 +1893,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final redScale = (1 + t * 0.18).clamp(0.7, 1.3);
     final blueScale = (1 - t * 0.18).clamp(0.7, 1.3);
     return <double>[
-      redScale, 0, 0, 0, 0,
-      0, 1, 0, 0, 0,
-      0, 0, blueScale, 0, 0,
-      0, 0, 0, 1, 0,
+      redScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      blueScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1725,10 +1921,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final greenScale = (1 - t * 0.12).clamp(0.75, 1.25);
     final redBlueScale = (1 + t * 0.08).clamp(0.75, 1.25);
     return <double>[
-      redBlueScale, 0, 0, 0, 0,
-      0, greenScale, 0, 0, 0,
-      0, 0, redBlueScale, 0, 0,
-      0, 0, 0, 1, 0,
+      redBlueScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      greenScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      redBlueScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1742,10 +1954,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final scale = 255.0 / (safeWhite - inBlack);
     final offset = -inBlack * scale;
     return <double>[
-      scale, 0, 0, 0, offset,
-      0, scale, 0, 0, offset,
-      0, 0, scale, 0, offset,
-      0, 0, 0, 1, 0,
+      scale,
+      0,
+      0,
+      0,
+      offset,
+      0,
+      scale,
+      0,
+      0,
+      offset,
+      0,
+      0,
+      scale,
+      0,
+      offset,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1753,10 +1981,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final ev = (value / 100).clamp(-1.5, 1.5);
     final factor = math.pow(2, ev).toDouble();
     return <double>[
-      factor, 0, 0, 0, 0,
-      0, factor, 0, 0, 0,
-      0, 0, factor, 0, 0,
-      0, 0, 0, 1, 0,
+      factor,
+      0,
+      0,
+      0,
+      0,
+      0,
+      factor,
+      0,
+      0,
+      0,
+      0,
+      0,
+      factor,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -1853,7 +2097,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     return matrix;
   }
 
-  List<double> _buildProBaseColorMatrix() => _buildBaseColorMatrixFromValues(_proBaseValues);
+  List<double> _buildProBaseColorMatrix() =>
+      _buildBaseColorMatrixFromValues(_proBaseValues);
 
   List<double> _buildProHslColorMatrix(
     Map<String, Map<String, double>> values,
@@ -1890,7 +2135,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final weight = (anchor.radius * anchor.radius).clamp(0.0, 1.0);
       sumWeight += weight;
       for (final key in kLocalParamOrder) {
-        weighted[key] = (weighted[key] ?? 0) + (anchor.values[key] ?? 0) * weight;
+        weighted[key] =
+            (weighted[key] ?? 0) + (anchor.values[key] ?? 0) * weight;
       }
     }
     if (sumWeight <= 0) return _identityColorMatrix();
@@ -1910,12 +2156,18 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     if (_hasProBaseAdjustments) {
       matrix = _multiplyColorMatrices(_buildProBaseColorMatrix(), matrix);
     }
-    final hslSource = useHslSessionBaseline ? _hslSessionBaselineValues : _proHslValues;
+    final hslSource = useHslSessionBaseline
+        ? _hslSessionBaselineValues
+        : _proHslValues;
     final hasHsl = hslSource.values.any(
-      (channelValues) => channelValues.values.any((value) => value.abs() > 0.001),
+      (channelValues) =>
+          channelValues.values.any((value) => value.abs() > 0.001),
     );
     if (hasHsl) {
-      matrix = _multiplyColorMatrices(_buildProHslColorMatrix(hslSource), matrix);
+      matrix = _multiplyColorMatrices(
+        _buildProHslColorMatrix(hslSource),
+        matrix,
+      );
     }
     if (_hasBwLevelsAdjustments || useBwLevelsSessionBaseline) {
       final white = useBwLevelsSessionBaseline
@@ -1930,12 +2182,17 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       );
     }
     if (includeLocal) {
-      final localSource = useLocalSessionBaseline ? _localSnapshotAnchors : _localAnchors;
+      final localSource = useLocalSessionBaseline
+          ? _localSnapshotAnchors
+          : _localAnchors;
       final hasLocal = localSource.any(
         (anchor) => anchor.values.values.any((value) => value.abs() > 0.001),
       );
       if (hasLocal) {
-        matrix = _multiplyColorMatrices(_buildLocalApproxColorMatrix(localSource), matrix);
+        matrix = _multiplyColorMatrices(
+          _buildLocalApproxColorMatrix(localSource),
+          matrix,
+        );
       }
     }
     return matrix;
@@ -2011,8 +2268,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Widget _wrapWithFilterAdjustments(Widget imageWidget) {
     final preset = _selectedFilterPreset;
     if (preset == null) return imageWidget;
-    final strength =
-        (_filterStrengthByPresetId[preset.id] ?? _filterIntensity).clamp(0, 100);
+    final strength = (_filterStrengthByPresetId[preset.id] ?? _filterIntensity)
+        .clamp(0, 100);
     if (strength <= 0.001) return imageWidget;
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
@@ -2062,10 +2319,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _bwSessionBaselineBlackLevel = _bwBlackLevel;
     _bwSessionStack
       ..clear()
-      ..add(<String, double>{
-        'white': _bwWhiteLevel,
-        'black': _bwBlackLevel,
-      });
+      ..add(<String, double>{'white': _bwWhiteLevel, 'black': _bwBlackLevel});
     _bwSessionCursor = 0;
     _isComparingSessionBaseline = false;
   }
@@ -2078,7 +2332,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       return;
     }
     if (_hslSessionCursor < _hslSessionStack.length - 1) {
-      _hslSessionStack.removeRange(_hslSessionCursor + 1, _hslSessionStack.length);
+      _hslSessionStack.removeRange(
+        _hslSessionCursor + 1,
+        _hslSessionStack.length,
+      );
     }
     _hslSessionStack.add(snapshot);
     _hslSessionCursor = _hslSessionStack.length - 1;
@@ -2126,7 +2383,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _bwSessionCursor = _bwSessionStack.length - 1;
   }
 
-
   void _resetLocalSessionHistory() {
     _localSessionStack
       ..clear()
@@ -2139,7 +2395,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final snapshot = cloneLocalAnchors(_localAnchors);
     if (_localSessionCursor >= 0 &&
         _localSessionCursor < _localSessionStack.length &&
-        _localSessionStack[_localSessionCursor].toString() == snapshot.toString()) {
+        _localSessionStack[_localSessionCursor].toString() ==
+            snapshot.toString()) {
       return;
     }
     if (_localSessionCursor < _localSessionStack.length - 1) {
@@ -2166,8 +2423,13 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   bool _isProHslSessionEdited() {
     for (final channel in kImageEditorHslChannels) {
       final current = _proHslValues[channel.key] ?? const <String, double>{};
-      final initial = _proHslSnapshotValues[channel.key] ?? const <String, double>{};
-      for (final axis in const [kHslAxisHue, kHslAxisSaturation, kHslAxisLuminance]) {
+      final initial =
+          _proHslSnapshotValues[channel.key] ?? const <String, double>{};
+      for (final axis in const [
+        kHslAxisHue,
+        kHslAxisSaturation,
+        kHslAxisLuminance,
+      ]) {
         if (((current[axis] ?? 0) - (initial[axis] ?? 0)).abs() > 0.001) {
           return true;
         }
@@ -2195,7 +2457,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         return true;
       }
       for (final key in kLocalParamOrder) {
-        if (((current.values[key] ?? 0) - (initial.values[key] ?? 0)).abs() > 0.001) {
+        if (((current.values[key] ?? 0) - (initial.values[key] ?? 0)).abs() >
+            0.001) {
           return true;
         }
       }
@@ -2228,14 +2491,16 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           params: {
             'subType': 'localAdjustments',
             'anchors': _localAnchors
-                .map((anchor) => <String, dynamic>{
-                      'id': anchor.id,
-                      'x': anchor.center.dx,
-                      'y': anchor.center.dy,
-                      'radius': anchor.radius,
-                      'selectedParam': anchor.selectedParam,
-                      'values': Map<String, double>.from(anchor.values),
-                    })
+                .map(
+                  (anchor) => <String, dynamic>{
+                    'id': anchor.id,
+                    'x': anchor.center.dx,
+                    'y': anchor.center.dy,
+                    'radius': anchor.radius,
+                    'selectedParam': anchor.selectedParam,
+                    'values': Map<String, double>.from(anchor.values),
+                  },
+                )
                 .toList(growable: false),
             'selectedAnchorId': _selectedLocalAnchorId,
           },
@@ -2351,22 +2616,18 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _loadImageAspectRatio(String path) {
     if (path.isEmpty) return;
-    final isFile = path.startsWith('/') ||
-        (path.length > 1 && path[1] == ':');
+    final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
     final ImageProvider provider = isFile
         ? FileImage(File(path))
         : NetworkImage(path);
     final stream = provider.resolve(ImageConfiguration.empty);
     late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        stream.removeListener(listener);
-        if (!mounted) return;
-        final ratio = info.image.width / info.image.height;
-        setState(() => _imageAspectRatio = ratio);
-      },
-      onError: (error, stackTrace) => stream.removeListener(listener),
-    );
+    listener = ImageStreamListener((info, _) {
+      stream.removeListener(listener);
+      if (!mounted) return;
+      final ratio = info.image.width / info.image.height;
+      setState(() => _imageAspectRatio = ratio);
+    }, onError: (error, stackTrace) => stream.removeListener(listener));
     stream.addListener(listener);
   }
 
@@ -2380,8 +2641,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   bool _offsetEquals(Offset a, Offset b) {
     const tolerance = 0.5;
-    return (a.dx - b.dx).abs() <= tolerance &&
-        (a.dy - b.dy).abs() <= tolerance;
+    return (a.dx - b.dx).abs() <= tolerance && (a.dy - b.dy).abs() <= tolerance;
   }
 
   bool _isCropStateDirty() {
@@ -2418,9 +2678,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final canvas = Canvas(recorder);
       final dstRect = Rect.fromLTWH(0, 0, srcRect.width, srcRect.height);
       canvas.drawImageRect(image, srcRect, dstRect, Paint());
-      final croppedImage = await recorder
-          .endRecording()
-          .toImage(srcRect.width.round(), srcRect.height.round());
+      final croppedImage = await recorder.endRecording().toImage(
+        srcRect.width.round(),
+        srcRect.height.round(),
+      );
       final data = await croppedImage.toByteData(
         format: ui.ImageByteFormat.png,
       );
@@ -2468,9 +2729,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       );
       canvas.translate(-image.width / 2, -image.height / 2);
       canvas.drawImage(image, Offset.zero, Paint());
-      final rotatedImage = await recorder
-          .endRecording()
-          .toImage(outputWidth.round(), outputHeight.round());
+      final rotatedImage = await recorder.endRecording().toImage(
+        outputWidth.round(),
+        outputHeight.round(),
+      );
       final data = await rotatedImage.toByteData(
         format: ui.ImageByteFormat.png,
       );
@@ -2502,13 +2764,19 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final image = frame.image;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final dstRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final dstRect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
       final paint = Paint()
         ..colorFilter = ColorFilter.matrix(_buildCombinedProColorMatrix());
       canvas.drawImageRect(image, dstRect, dstRect, paint);
-      final adjusted = await recorder
-          .endRecording()
-          .toImage(image.width, image.height);
+      final adjusted = await recorder.endRecording().toImage(
+        image.width,
+        image.height,
+      );
       final data = await adjusted.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return null;
       final tempDir = await getTemporaryDirectory();
@@ -2525,8 +2793,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Future<String?> _applyFilterToCurrentImage() async {
     final preset = _selectedFilterPreset;
     if (preset == null) return _currentPath;
-    final strength =
-        (_filterStrengthByPresetId[preset.id] ?? _filterIntensity).clamp(0, 100);
+    final strength = (_filterStrengthByPresetId[preset.id] ?? _filterIntensity)
+        .clamp(0, 100);
     if (strength <= 0.001) return _currentPath;
     if (_currentPath.isEmpty) return null;
     try {
@@ -2537,13 +2805,21 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final image = frame.image;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final rect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final rect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
       final paint = Paint()
         ..colorFilter = ColorFilter.matrix(
           _buildFilterColorMatrix(preset, strength.toDouble()),
         );
       canvas.drawImageRect(image, rect, rect, paint);
-      final adjusted = await recorder.endRecording().toImage(image.width, image.height);
+      final adjusted = await recorder.endRecording().toImage(
+        image.width,
+        image.height,
+      );
       final data = await adjusted.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return null;
       final tempDir = await getTemporaryDirectory();
@@ -2558,8 +2834,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   }
 
   Future<Uint8List> _loadImageBytes(String path) async {
-    final isFile = path.startsWith('/') ||
-        (path.length > 1 && path[1] == ':');
+    final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
     if (isFile) {
       final file = File(path);
       if (!file.existsSync()) return Uint8List(0);
@@ -2672,10 +2947,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _loadImageAspectRatio(croppedPath);
     _clearFilterPreviewCache();
     _prepareCropSnapshot();
-    _pushStep(ImageEditorStep(type: 'crop', params: {
-      'ratio': _cropRatio,
-      'path': croppedPath,
-    }));
+    _pushStep(
+      ImageEditorStep(
+        type: 'crop',
+        params: {'ratio': _cropRatio, 'path': croppedPath},
+      ),
+    );
     if (!mounted) return;
     setState(() => _selectedToolIndex = null);
   }
@@ -2684,12 +2961,13 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final c = _thumbScrollController;
     if (c == null || !c.hasClients) return;
     final thumbWidth = AppSpacing.bottomNavHeight + AppSpacing.intraGroupSm;
-    final offset = (index * thumbWidth) - c.position.viewportDimension / 2 + thumbWidth / 2;
+    final offset =
+        (index * thumbWidth) -
+        c.position.viewportDimension / 2 +
+        thumbWidth / 2;
     c.animateTo(
       offset.clamp(0.0, c.position.maxScrollExtent),
-      duration: Duration(
-        milliseconds: (AppSpacing.buttonSize * 4).round(),
-      ),
+      duration: Duration(milliseconds: (AppSpacing.buttonSize * 4).round()),
       curve: Curves.easeOut,
     );
   }
@@ -2711,8 +2989,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         controller: _thumbScrollController,
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.semantic[DesignSemanticConstants.container]
-                  ?[DesignSemanticConstants.sm] ??
+          horizontal:
+              AppSpacing.semantic[DesignSemanticConstants
+                  .container]?[DesignSemanticConstants.sm] ??
               AppSpacing.containerSm,
         ),
         itemCount: _paths.length,
@@ -2734,8 +3013,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                 height: thumbSize,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(
-                    AppSpacing.semantic[DesignSemanticConstants.button]
-                            ?[DesignSemanticConstants.sm] ??
+                    AppSpacing.semantic[DesignSemanticConstants
+                            .button]?[DesignSemanticConstants.sm] ??
                         AppSpacing.smallBorderRadius,
                   ),
                   border: Border.all(
@@ -2747,9 +3026,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(
-                    (AppSpacing.semantic[DesignSemanticConstants.button]
-                            ?[DesignSemanticConstants.sm] ??
-                        AppSpacing.smallBorderRadius) -
+                    (AppSpacing.semantic[DesignSemanticConstants
+                                .button]?[DesignSemanticConstants.sm] ??
+                            AppSpacing.smallBorderRadius) -
                         1,
                   ),
                   child: _buildThumbnailImage(path, fgSecondary),
@@ -2763,15 +3042,18 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   }
 
   Widget _buildThumbnailImage(String path, Color fgSecondary) {
-    final isFile = path.startsWith('/') ||
-        (path.length > 1 && path[1] == ':');
+    final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
     if (isFile && File(path).existsSync()) {
       return Image.file(File(path), fit: BoxFit.cover);
     }
     if (!isFile) {
       return Image.network(path, fit: BoxFit.cover);
     }
-    return Icon(Icons.broken_image_outlined, size: AppSpacing.iconMedium, color: fgSecondary);
+    return Icon(
+      Icons.broken_image_outlined,
+      size: AppSpacing.iconMedium,
+      color: fgSecondary,
+    );
   }
 
   Widget _buildMiddleImageForPath(String path, Color fgSecondary) {
@@ -2783,8 +3065,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         ),
       );
     }
-    final isFile = path.startsWith('/') ||
-        (path.length > 1 && path[1] == ':');
+    final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
     Widget imageWidget;
     if (isFile && File(path).existsSync()) {
       imageWidget = Image.file(
@@ -2827,28 +3108,22 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final content = _selectedToolIndex == kImageEditorToolCrop
         ? _buildCropImageLayer(previewWidget)
         : (isHslEditing || isBwEditing || isLocalEditing)
-            ? Center(child: previewWidget)
-            : InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4,
-                child: Center(child: previewWidget),
-              );
+        ? Center(child: previewWidget)
+        : InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4,
+            child: Center(child: previewWidget),
+          );
     if (_selectedToolIndex == kImageEditorToolCrop) {
       return Stack(
         alignment: Alignment.center,
-        children: [
-          content,
-          _buildCropOverlay(),
-        ],
+        children: [content, _buildCropOverlay()],
       );
     }
     if (_selectedToolIndex == kImageEditorToolRotate) {
       return Stack(
         fit: StackFit.expand,
-        children: [
-          content,
-          _buildRotateGridOverlay(),
-        ],
+        children: [content, _buildRotateGridOverlay()],
       );
     }
     if (isHslEditing) {
@@ -2872,7 +3147,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         ),
       );
     }
-    final isFile = _currentPath.startsWith('/') ||
+    final isFile =
+        _currentPath.startsWith('/') ||
         (_currentPath.length > 1 && _currentPath[1] == ':');
     Widget imageWidget;
     if (isFile && File(_currentPath).existsSync()) {
@@ -2916,28 +3192,22 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final content = _selectedToolIndex == kImageEditorToolCrop
         ? _buildCropImageLayer(previewWidget)
         : (isHslEditing || isBwEditing || isLocalEditing)
-            ? Center(child: previewWidget)
-            : InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4,
-                child: Center(child: previewWidget),
-              );
+        ? Center(child: previewWidget)
+        : InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4,
+            child: Center(child: previewWidget),
+          );
     if (_selectedToolIndex == kImageEditorToolCrop) {
       return Stack(
         alignment: Alignment.center,
-        children: [
-          content,
-          _buildCropOverlay(),
-        ],
+        children: [content, _buildCropOverlay()],
       );
     }
     if (_selectedToolIndex == kImageEditorToolRotate) {
       return Stack(
         fit: StackFit.expand,
-        children: [
-          content,
-          _buildRotateGridOverlay(),
-        ],
+        children: [content, _buildRotateGridOverlay()],
       );
     }
     if (isHslEditing) {
@@ -2955,7 +3225,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Widget _buildCropImageLayer(Widget imageWidget) {
     final canDrag = _cropRatio != 'free';
     return GestureDetector(
-      onPanUpdate: canDrag ? (details) => _updateCropImageOffset(details.delta) : null,
+      onPanUpdate: canDrag
+          ? (details) => _updateCropImageOffset(details.delta)
+          : null,
       child: Transform.translate(
         offset: _cropImageOffset,
         child: Center(child: imageWidget),
@@ -2980,7 +3252,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTapDown: _hslPickerActive
-              ? (details) => _handleHslPickerTap(details.localPosition, imageSize)
+              ? (details) =>
+                    _handleHslPickerTap(details.localPosition, imageSize)
               : null,
           child: Stack(
             fit: StackFit.expand,
@@ -3013,12 +3286,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                   child: EditorSessionOpsStrip(
                     supportsCompare: true,
                     isComparing: _isComparingSessionBaseline,
-                    onCompareStart: () => setState(
-                      () => _isComparingSessionBaseline = true,
-                    ),
-                    onCompareEnd: () => setState(
-                      () => _isComparingSessionBaseline = false,
-                    ),
+                    onCompareStart: () =>
+                        setState(() => _isComparingSessionBaseline = true),
+                    onCompareEnd: () =>
+                        setState(() => _isComparingSessionBaseline = false),
                   ),
                 ),
               ),
@@ -3042,12 +3313,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
             child: EditorSessionOpsStrip(
               supportsCompare: true,
               isComparing: _isComparingSessionBaseline,
-              onCompareStart: () => setState(
-                () => _isComparingSessionBaseline = true,
-              ),
-              onCompareEnd: () => setState(
-                () => _isComparingSessionBaseline = false,
-              ),
+              onCompareStart: () =>
+                  setState(() => _isComparingSessionBaseline = true),
+              onCompareEnd: () =>
+                  setState(() => _isComparingSessionBaseline = false),
             ),
           ),
         ),
@@ -3086,12 +3355,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                   child: EditorSessionOpsStrip(
                     supportsCompare: true,
                     isComparing: _isComparingSessionBaseline,
-                    onCompareStart: () => setState(
-                      () => _isComparingSessionBaseline = true,
-                    ),
-                    onCompareEnd: () => setState(
-                      () => _isComparingSessionBaseline = false,
-                    ),
+                    onCompareStart: () =>
+                        setState(() => _isComparingSessionBaseline = true),
+                    onCompareEnd: () =>
+                        setState(() => _isComparingSessionBaseline = false),
                   ),
                 ),
               ),
@@ -3108,18 +3375,24 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   List<Widget> _buildLocalPreviewLayers(Widget content, Rect imageRect) {
     if (imageRect.isEmpty) return const [];
-    final sourceAnchors = _isComparingSessionBaseline ? _localSnapshotAnchors : _localAnchors;
+    final sourceAnchors = _isComparingSessionBaseline
+        ? _localSnapshotAnchors
+        : _localAnchors;
     final layers = <Widget>[];
     for (final anchor in sourceAnchors) {
-      final hasEffect =
-          anchor.values.values.any((value) => value.abs() > 0.001);
+      final hasEffect = anchor.values.values.any(
+        (value) => value.abs() > 0.001,
+      );
       if (!hasEffect) continue;
       final center = Offset(
         imageRect.left + anchor.center.dx * imageRect.width,
         imageRect.top + anchor.center.dy * imageRect.height,
       );
-      final radius = (anchor.radius * math.min(imageRect.width, imageRect.height))
-          .clamp(AppSpacing.iconLarge.toDouble(), imageRect.longestSide);
+      final radius =
+          (anchor.radius * math.min(imageRect.width, imageRect.height)).clamp(
+            AppSpacing.iconLarge.toDouble(),
+            imageRect.longestSide,
+          );
       layers.add(
         Positioned.fill(
           child: IgnorePointer(
@@ -3138,7 +3411,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                 const <double>[0.0, 0.22, 0.56, 0.84, 1.0],
               ),
               child: ColorFiltered(
-                colorFilter: ColorFilter.matrix(_buildLocalAnchorColorMatrix(anchor)),
+                colorFilter: ColorFilter.matrix(
+                  _buildLocalAnchorColorMatrix(anchor),
+                ),
                 child: content,
               ),
             ),
@@ -3157,8 +3432,11 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         imageRect.left + anchor.center.dx * imageRect.width,
         imageRect.top + anchor.center.dy * imageRect.height,
       );
-      final radius = (anchor.radius * math.min(imageRect.width, imageRect.height))
-          .clamp(AppSpacing.iconLarge.toDouble(), imageRect.longestSide);
+      final radius =
+          (anchor.radius * math.min(imageRect.width, imageRect.height)).clamp(
+            AppSpacing.iconLarge.toDouble(),
+            imageRect.longestSide,
+          );
       overlays.add(
         Positioned(
           left: center.dx - radius,
@@ -3195,14 +3473,15 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final visibleAnchors = _localShowAllAnchors
         ? _localAnchors
         : _localAnchors
-            .where((anchor) => anchor.id == selectedId)
-            .toList(growable: false);
+              .where((anchor) => anchor.id == selectedId)
+              .toList(growable: false);
     for (final anchor in visibleAnchors) {
       final anchorCenter = Offset(
         imageRect.left + anchor.center.dx * imageRect.width,
         imageRect.top + anchor.center.dy * imageRect.height,
       );
-      final center = _draggingAnchorId == anchor.id && _draggingAnchorCenter != null
+      final center =
+          _draggingAnchorId == anchor.id && _draggingAnchorCenter != null
           ? _draggingAnchorCenter!
           : anchorCenter;
       final isSelected = anchor.id == selectedId;
@@ -3240,10 +3519,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
               }
               final base = _draggingAnchorCenter ?? anchorCenter;
               final next = Offset(
-                (base.dx + details.focalPointDelta.dx)
-                    .clamp(imageRect.left, imageRect.right),
-                (base.dy + details.focalPointDelta.dy)
-                    .clamp(imageRect.top, imageRect.bottom),
+                (base.dx + details.focalPointDelta.dx).clamp(
+                  imageRect.left,
+                  imageRect.right,
+                ),
+                (base.dy + details.focalPointDelta.dy).clamp(
+                  imageRect.top,
+                  imageRect.bottom,
+                ),
               );
               setState(() {
                 _draggingAnchorCenter = next;
@@ -3322,15 +3605,15 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     required bool selected,
     required double size,
   }) {
-    final value = (anchor.values[anchor.selectedParam] ?? 0).clamp(-100.0, 100.0);
+    final value = (anchor.values[anchor.selectedParam] ?? 0).clamp(
+      -100.0,
+      100.0,
+    );
     return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _LocalAnchorRingPainter(
-          value: value,
-          selected: selected,
-        ),
+        painter: _LocalAnchorRingPainter(value: value, selected: selected),
         child: Center(
           child: Container(
             width: AppSpacing.iconMedium + AppSpacing.xs,
@@ -3394,8 +3677,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       setState(() => _hslPickerPoint = null);
       return;
     }
-    final nx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(0.0, 1.0);
-    final ny = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(0.0, 1.0);
+    final nx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final ny = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
     final hue = await _sampleImageHueAt(Offset(nx, ny));
     if (!mounted || hue == null) return;
     setState(() {
@@ -3413,8 +3702,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final image = frame.image;
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (data == null) return null;
-      final x = (normalized.dx * (image.width - 1)).round().clamp(0, image.width - 1);
-      final y = (normalized.dy * (image.height - 1)).round().clamp(0, image.height - 1);
+      final x = (normalized.dx * (image.width - 1)).round().clamp(
+        0,
+        image.width - 1,
+      );
+      final y = (normalized.dy * (image.height - 1)).round().clamp(
+        0,
+        image.height - 1,
+      );
       final offset = (y * image.width + x) * 4;
       final r = data.getUint8(offset);
       final g = data.getUint8(offset + 1);
@@ -3492,10 +3787,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final lineWidth = AppSpacing.xs / 4;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(
-          color: gridColor,
-          width: AppSpacing.xs / 2,
-        ),
+        border: Border.all(color: gridColor, width: AppSpacing.xs / 2),
       ),
       child: Column(
         children: [
@@ -3600,8 +3892,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         imageRect.top + _cropRect.bottom * imageRect.height,
       );
     }
-    final ratio = _ratioForCrop(_cropRatio) ??
-        (imageRect.width / imageRect.height);
+    final ratio =
+        _ratioForCrop(_cropRatio) ?? (imageRect.width / imageRect.height);
     double width = imageRect.width;
     double height = width / ratio;
     if (height > imageRect.height) {
@@ -3700,10 +3992,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     final minDx = cropRect.right - baseRect.right;
     final maxDy = cropRect.top - baseRect.top;
     final minDy = cropRect.bottom - baseRect.bottom;
-    return Offset(
-      offset.dx.clamp(minDx, maxDx),
-      offset.dy.clamp(minDy, maxDy),
-    );
+    return Offset(offset.dx.clamp(minDx, maxDx), offset.dy.clamp(minDy, maxDy));
   }
 
   Widget _buildRotateGridOverlay() {
@@ -3765,24 +4054,36 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _showHistorySheet() {
     const isDark = true;
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    showModalBottomSheet<void>(
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    showCupertinoModalPopup<void>(
       context: context,
-      backgroundColor: bg,
+      barrierColor: Colors.transparent,
       builder: (context) {
-        return SafeArea(
+        return AppBottomModalSurface(
+          onDismiss: () => Navigator.of(context).pop(),
+          backgroundColor: bg,
+          maxHeightRatio: 0.65,
+          contentPadding: EdgeInsets.all(
+            AppSpacing.semantic[DesignSemanticConstants
+                    .container]?[DesignSemanticConstants.md] ??
+                AppSpacing.containerMd,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: EdgeInsets.all(
-                  AppSpacing.semantic[DesignSemanticConstants.container]
-                          ?[DesignSemanticConstants.md] ??
-                      AppSpacing.containerMd,
-                ),
+                padding: EdgeInsets.only(bottom: AppSpacing.containerSm),
                 child: Row(
                   children: [
                     Text(
@@ -3854,10 +4155,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 }
 
 class _LocalAnchorRingPainter extends CustomPainter {
-  const _LocalAnchorRingPainter({
-    required this.value,
-    required this.selected,
-  });
+  const _LocalAnchorRingPainter({required this.value, required this.selected});
 
   final double value;
   final bool selected;
@@ -3879,8 +4177,9 @@ class _LocalAnchorRingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = AppSpacing.xs / 2
       ..strokeCap = StrokeCap.round
-      ..color = (value >= 0 ? AppColors.white : AppColors.black)
-          .withValues(alpha: selected ? 0.95 : 0.60);
+      ..color = (value >= 0 ? AppColors.white : AppColors.black).withValues(
+        alpha: selected ? 0.95 : 0.60,
+      );
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2,

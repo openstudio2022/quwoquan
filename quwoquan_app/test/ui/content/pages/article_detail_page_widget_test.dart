@@ -113,8 +113,8 @@ void main() {
     expect(find.text('连续阅读标题'), findsWidgets);
     expect(find.text('这里是摘要'), findsOneWidget);
     expect(find.text('文章内容'), findsOneWidget);
-    expect(find.text('第一段内容'), findsOneWidget);
-    expect(find.text('第二条清单'), findsOneWidget);
+    expect(find.textContaining('第一段内容'), findsOneWidget);
+    expect(find.textContaining('1. 第二条清单'), findsOneWidget);
     expect(find.byType(CachedNetworkImage), findsNWidgets(3));
     expect(find.text('分享'), findsOneWidget);
   });

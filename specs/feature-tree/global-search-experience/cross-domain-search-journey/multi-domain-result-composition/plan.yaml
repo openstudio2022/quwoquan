@@ -1,0 +1,57 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze domain search contracts and unified result model
+    goal: 收口四域 `Search*` contract、DTO 与统一 `SearchSection / SearchResultItem` 模型
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - content/user/messages/circle 的搜索 DTO 明确
+      - unified result model 不再依赖松散 `Map`
+    status: planned
+
+  - id: P2
+    title: land search coordinator and section composition
+    goal: 建立 query debounce、parallel fan-out、section composition 与局部降级
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - `SearchCoordinator` 成为唯一编排中心
+      - 各域结果可并发汇总并分组展示
+      - 单域失败只降级该 section
+    status: planned
+
+  - id: P3
+    title: verify navigation and degrade behavior
+    goal: 验证结果点击跳转、空态与降级态
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 结果点击稳定进入详情或列表
+      - 空态与 degraded state 可被用户理解
+      - 不存在 assistant 混排和 channel 主域误建
+    status: planned

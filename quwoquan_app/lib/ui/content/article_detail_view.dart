@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+
 /// 文章详情投射视图 — 由 projectArticleDetailView 生成，供 ArticleDetailPage 消费。
 ///
 /// 取代原来从 `Map<String, dynamic>` 中 article['stats']['likes']、
@@ -16,6 +18,9 @@ class ArticleDetailView {
     required this.stats,
     required this.contentBlocks,
     required this.cards,
+    required this.pages,
+    required this.template,
+    required this.fontPreset,
   });
 
   final String id;
@@ -32,6 +37,9 @@ class ArticleDetailView {
   final ArticleStatsView stats;
   final List<ArticleContentBlockView> contentBlocks;
   final List<ArticleCardView> cards;
+  final List<ArticlePageData> pages;
+  final ArticleTemplatePreset template;
+  final ArticleFontPreset fontPreset;
 }
 
 class ArticleAuthorView {

@@ -1,0 +1,58 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze assistant handoff contract
+    goal: 在 assistant metadata 中定义搜索到问小趣的 trigger/context 语义
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - handoff triggerType 已定义
+      - source context 与 request contract 真相源明确
+      - 不需要新增 skill/tool/phase 文档
+    status: planned
+
+  - id: P2
+    title: land xiaoqu entry and cloud client adapter
+    goal: 让搜索页问小趣入口完成参数组装、导航与 assistant run 调用
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 搜索页可稳定进入问小趣对话
+      - query 不进入 recent search
+      - cloud client 只承担 typed 参数适配
+    status: planned
+
+  - id: P3
+    title: verify conversation continuity and routing compliance
+    goal: 验证 assistant 会话接续稳定，且无 runtime 字符串路由
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 从搜索页进入问小趣的主路径稳定
+      - assistant 侧没有新增字符串驱动行为判断
+      - handoff 失败可被观测和回滚
+    status: planned

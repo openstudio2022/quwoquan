@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 
@@ -70,6 +72,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
+    });
+
+    testWidgets('右上入口向内收至统一安全边距', (tester) async {
+      await tester.pumpWidget(_scopedApp());
+      await tester.pumpAndSettle();
+
+      final page = find.byType(ChatPage);
+      final addIcon = find.byIcon(CupertinoIcons.add).first;
+      final screenWidth = tester.getSize(page).width;
+      final addRightInset = screenWidth - tester.getTopRight(addIcon).dx;
+      final expectedInset = AppSpacing.topBarTrailingVisualInset(
+        tester.element(page),
+      );
+
+      expect(addRightInset, closeTo(expectedInset, 2.0));
     });
 
     testWidgets('列表区左滑先切二级 Tab，二级越界后再切一级 Tab', (tester) async {

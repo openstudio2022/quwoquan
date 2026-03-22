@@ -1,0 +1,250 @@
+id: CR-20260322-001
+title: global search experience prd baseline
+slug: global-search-experience-prd-baseline
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/global-search-experience
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
+  - specs/feature-tree/chat-conversation/contact-and-session-governance
+  - specs/feature-tree/tree_index.yaml
+
+entries:
+  - timestamp: "2026-03-22T12:00:00+08:00"
+    summary: >
+      新建独立 L1 `global-search-experience`，冻结全屏搜索首页、跨域综合搜索、
+      社交关系搜索、圈子 facet、最近搜索、语音转词与问小趣 handoff 的 PRD baseline，
+      并统一清理 chat 历史搜索节点。
+    reason: >
+      现有搜索能力同时存在归属错误、壳层原型化、对象边界漂移与历史节点失真四个问题：
+      全局搜索不能继续挂在 discovery-content，也不能再沿用 chat-only 的 contact-search-index
+      作为治理入口。进入 design 前必须先冻结新的一级能力、Journey/Scenario 拆分、业务对象、
+      metadata 真相源边界、生命周期与发布口径。
+    change_type:
+      - refine
+      - expand
+      - split
+      - migrate
+      - cleanup
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/tree.yaml
+        sections:
+          - cross-domain-search-journey.l3
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 能力边界
+          - 领域服务与业务对象
+          - 既有 Story 覆盖矩阵
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C1
+          - C2
+          - C3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/spec.md
+        sections:
+          - 核心旅程
+          - 特性树拆分
+          - 数据生命周期合同
+          - 迁移、灰度与回滚要求
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/spec.md
+        sections:
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/spec.md
+        sections:
+          - 功能范围
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/spec.md
+        sections:
+          - 功能范围
+          - 既有 Story 覆盖矩阵
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/spec.md
+        sections:
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/spec.md
+        sections:
+          - 数据生命周期合同
+          - 约束
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/spec.md
+        sections:
+          - 功能范围
+          - 小趣 / 权限 / 分享边界
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/chat-conversation/tree.yaml
+        sections:
+          - contact-and-session-governance.l3
+      - path: specs/feature-tree/README.md
+        sections:
+          - L1 落地范围
+      - path: specs/l1_index.yaml
+        sections:
+          - global-search-experience
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - global-search-experience
+          - chat-conversation/contact-and-session-governance
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次为 `/prd` 基线冻结，不进入 `design.md / plan.yaml`。
+      - 历史节点 `contact-search-index` 与 `contact-search-index--search-query-contract` 已从特性树治理中移除，不再保留。
+      - L1 owner 正式冻结为 `global-search-experience`，不再挂在 `discovery-content`。
+  - timestamp: "2026-03-22T12:45:00+08:00"
+    summary: >
+      为 `global-search-experience`、`cross-domain-search-journey` 及 6 个 L3 Scenario
+      补齐正式 `design.md + plan.yaml`，并执行一次真实 G1 metadata/codegen 校验。
+    reason: >
+      `/prd` 已冻结能力边界、对象语义、生命周期与 NFR，但仍缺少可进入 `/dev` 的方案主轴、
+      metadata/codegen 变更路径、切片顺序、助手 handoff 符合性说明与 `T1~T4` 证据矩阵。
+      必须先把全局搜索能力、Journey 与 6 个 Scenario 的实施切片正式化。
+    change_type:
+      - design
+      - plan
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/design.md
+        sections:
+          - 方案对比
+          - 选型决策
+          - 架构总览
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - plan slice 与 T1~T4 证据矩阵映射
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - 符合性说明
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 已实际执行 `make -C quwoquan_service verify-metadata && make codegen && make codegen-app` 并通过。
+      - 本次 design 不引入新的业务 feature flag，继续按整版上线与整版回滚设计。
+      - 问小趣 handoff 被限定在 `UI + application + cloud client`，不新增 runtime / skill / tool / prompt 逻辑。

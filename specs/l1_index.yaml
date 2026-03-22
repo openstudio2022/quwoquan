@@ -44,6 +44,14 @@ l1:
     services: [assistant-service, user-service, product-ops, platform-ops]
     app_modules: [assistant.assistant_home, assistant.assistant_management]
 
+  - category: functional
+    title: "全局搜索体验"
+    key: "global-search-experience"
+    directory: "specs/feature-tree/global-search-experience"
+    feature_path_prefix: "capability.global-search-experience"
+    services: [gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service]
+    app_modules: [home.discovery, chat.chat_page, circles.circles_page, assistant.assistant_home]
+
   - category: nonfunctional
     title: "产品运营增长"
     key: "product-ops-growth"

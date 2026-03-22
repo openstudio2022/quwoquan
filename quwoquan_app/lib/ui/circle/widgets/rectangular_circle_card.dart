@@ -25,7 +25,9 @@ class RectangularCircleCard extends StatelessWidget {
       child: Container(
         width: width,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          borderRadius: BorderRadius.circular(
+            AppSpacing.contentPreviewCornerRadius,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),

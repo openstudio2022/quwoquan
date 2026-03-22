@@ -44,7 +44,7 @@ class ProfileIosSectionHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          if (trailing != null) trailing!,
+          trailing ?? const SizedBox.shrink(),
         ],
       ),
     );
@@ -251,7 +251,7 @@ class ProfileIosGroupedCell extends StatelessWidget {
               ),
               SizedBox(width: AppSpacing.intraGroupSm),
             ],
-            if (trailing != null) trailing!,
+            trailing ?? const SizedBox.shrink(),
             if (showChevron) ...<Widget>[
               if (trailing != null) SizedBox(width: AppSpacing.intraGroupSm),
               Icon(
@@ -343,6 +343,10 @@ class ProfileIosActionButton extends StatelessWidget {
     this.style = ProfileIosActionStyle.tinted,
     this.height = 36,
     this.expand = true,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderColor,
+    this.labelFontWeight,
   });
 
   final String label;
@@ -351,18 +355,26 @@ class ProfileIosActionButton extends StatelessWidget {
   final ProfileIosActionStyle style;
   final double height;
   final bool expand;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final Color? borderColor;
+  final FontWeight? labelFontWeight;
 
   @override
   Widget build(BuildContext context) {
     final accent = AppColors.iosAccent(context);
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final foreground = switch (style) {
+    final foreground =
+        foregroundColor ??
+        switch (style) {
       ProfileIosActionStyle.filled => CupertinoColors.white,
       ProfileIosActionStyle.tinted => accent,
       ProfileIosActionStyle.outlined => AppColors.iosLabel(context),
       ProfileIosActionStyle.plain => accent,
     };
-    final background = switch (style) {
+    final background =
+        backgroundColor ??
+        switch (style) {
       ProfileIosActionStyle.filled => accent,
       ProfileIosActionStyle.tinted => accent.withValues(
           alpha: isDark ? 0.24 : 0.12,
@@ -370,7 +382,9 @@ class ProfileIosActionButton extends StatelessWidget {
       ProfileIosActionStyle.outlined => AppColors.iosSystemBackground(context),
       ProfileIosActionStyle.plain => Colors.transparent,
     };
-    final borderColor = switch (style) {
+    final resolvedBorderColor =
+        borderColor ??
+        switch (style) {
       ProfileIosActionStyle.outlined => AppColors.iosSeparator(
           context,
         ).withValues(alpha: 0.24),
@@ -386,7 +400,10 @@ class ProfileIosActionButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(color: borderColor, width: AppSpacing.hairline),
+        border: Border.all(
+          color: resolvedBorderColor,
+          width: AppSpacing.hairline,
+        ),
       ),
       child: Center(
         child: FittedBox(
@@ -405,7 +422,7 @@ class ProfileIosActionButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: AppTypography.iosButton,
-                  fontWeight: AppTypography.semiBold,
+                  fontWeight: labelFontWeight ?? AppTypography.semiBold,
                   color: foreground,
                   letterSpacing: -0.18,
                 ),

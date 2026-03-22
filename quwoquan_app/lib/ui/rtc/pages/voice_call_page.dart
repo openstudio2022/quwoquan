@@ -20,10 +20,7 @@ import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 
 class VoiceCallPage extends ConsumerStatefulWidget {
-  const VoiceCallPage({
-    super.key,
-    required this.callId,
-  });
+  const VoiceCallPage({super.key, required this.callId});
 
   final String callId;
 
@@ -106,10 +103,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.overlayDark,
-                  AppColors.overlayStrong,
-                ],
+                colors: [AppColors.overlayDark, AppColors.overlayStrong],
               ),
             ),
             child: SafeArea(
@@ -139,29 +133,22 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                           onTap: () {
                             showCupertinoModalPopup<void>(
                               context: context,
-                              builder: (_) => Material(
-                                type: MaterialType.transparency,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: CupertinoColors.systemBackground.resolveFrom(context),
-                                    borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
-                                  ),
-                                  child: ParticipantListSheet(
-                                    maxParticipants:
-                                        session.session?.maxParticipants ?? 32,
-                                    onInviteMore: () {
-                                      Navigator.of(context).pop();
-                                      context.push(
-                                        AppRoutePaths.rtcPickParticipants,
-                                        extra: <String, dynamic>{
-                                          'callId': widget.callId,
-                                          'maxParticipants':
-                                              session.session?.maxParticipants ?? 32,
-                                        },
-                                      );
+                              barrierColor: Colors.transparent,
+                              builder: (_) => ParticipantListSheet(
+                                maxParticipants:
+                                    session.session?.maxParticipants ?? 32,
+                                onInviteMore: () {
+                                  Navigator.of(context).pop();
+                                  context.push(
+                                    AppRoutePaths.rtcPickParticipants,
+                                    extra: <String, dynamic>{
+                                      'callId': widget.callId,
+                                      'maxParticipants':
+                                          session.session?.maxParticipants ??
+                                          32,
                                     },
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             );
                           },
@@ -188,11 +175,14 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                             ref.read(callTimerProvider.notifier).reset();
                           },
                           onInvite: () {
-                            context.push(AppRoutePaths.rtcPickParticipants, extra: {
-                              'callId': widget.callId,
-                              'maxParticipants':
-                                  session.session?.maxParticipants ?? 32,
-                            });
+                            context.push(
+                              AppRoutePaths.rtcPickParticipants,
+                              extra: {
+                                'callId': widget.callId,
+                                'maxParticipants':
+                                    session.session?.maxParticipants ?? 32,
+                              },
+                            );
                           },
                         ),
                       ),
@@ -207,9 +197,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     );
   }
 
-  Widget _buildParticipantAvatars(
-    List<CallParticipantDto> participants,
-  ) {
+  Widget _buildParticipantAvatars(List<CallParticipantDto> participants) {
     if (participants.isEmpty) {
       return Icon(
         CupertinoIcons.phone,
@@ -283,10 +271,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
 }
 
 class _TopActionButton extends StatelessWidget {
-  const _TopActionButton({
-    required this.icon,
-    required this.onTap,
-  });
+  const _TopActionButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -302,11 +287,7 @@ class _TopActionButton extends StatelessWidget {
           color: AppColors.overlayMedium,
           borderRadius: BorderRadius.circular(AppSpacing.sm),
         ),
-        child: Icon(
-          icon,
-          color: AppColors.white,
-          size: AppSpacing.iconMedium,
-        ),
+        child: Icon(icon, color: AppColors.white, size: AppSpacing.iconMedium),
       ),
     );
   }

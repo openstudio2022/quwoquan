@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
@@ -253,6 +254,31 @@ void main() {
       await tester.tap(_inlinePrimaryTab('互动'));
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
+    });
+
+    testWidgets('other 模式更多按钮打开统一底部动作面板', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
+      await _pumpFrames(tester);
+
+      await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AppBottomModalSurface), findsOneWidget);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.text('分享'), findsOneWidget);
+      expect(find.text('拉黑'), findsOneWidget);
+      expect(find.text('举报'), findsOneWidget);
+
+      await tester.tap(find.text('分享'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppBottomModalSurface), findsNothing);
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('互动二级 Tab 跟随内容滚动并可回显', (tester) async {

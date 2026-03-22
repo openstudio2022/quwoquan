@@ -417,6 +417,7 @@ class UITextConstants {
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';
   static const String addContact = '加联系';
+  static const String addSameInterest = '添加同好';
   static const String globalActionSheetTitle = '发起';
   static const String globalSearchTitle = '搜索';
   static const String createActionCamera = '从摄像';
@@ -622,11 +623,11 @@ class UITextConstants {
   static const String createExitConfirmDesc = '如果不保存，当前编辑的内容将会丢失。';
   static const String discard = '放弃';
   static const String saveDraft = '保存草稿';
-  static const String createActionGallery = '从相册选';
+  static const String createActionGallery = '从相册选择';
   static const String createActionGalleryHint = '先挑素材，再决定发成点滴还是作品';
-  static const String createActionWrite = '写点什么';
+  static const String createActionWrite = '写文字';
   static const String createActionWriteHint = '快速记录当下，也能随时升级成作品';
-  static const String createActionCapture = '拍一下';
+  static const String createActionCapture = '相机';
   static const String createActionCaptureHint = '直接拍照或录视频，立刻开始创作';
   static const String createIdentityMoment = '点滴';
   static const String createIdentityWork = '作品';

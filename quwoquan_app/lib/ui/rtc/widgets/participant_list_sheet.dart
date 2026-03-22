@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 
@@ -22,21 +23,19 @@ class ParticipantListSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final participantsState = ref.watch(callParticipantsProvider);
     final participants = participantsState.participants;
-
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.6,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.borderRadius),
-        ),
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.of(context).pop(),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      maxHeightRatio: 0.6,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHandle(),
           _buildHeader(participants.length),
           Flexible(
             child: ListView.builder(
@@ -49,22 +48,7 @@ class ParticipantListSheet extends ConsumerWidget {
             ),
           ),
           _buildInviteButton(context),
-          SizedBox(height: MediaQuery.paddingOf(context).bottom + AppSpacing.sm),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHandle() {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Container(
-        width: AppSpacing.forty,
-        height: AppSpacing.xs,
-        decoration: BoxDecoration(
-          color: AppColors.overlayLight,
-          borderRadius: BorderRadius.circular(AppSpacing.xs / 2),
-        ),
       ),
     );
   }

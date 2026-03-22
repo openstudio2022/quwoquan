@@ -6,6 +6,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -209,7 +211,9 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   }
 }
 
-PhotoPostDto _photoPost() {
+PhotoPostDto _photoPost({
+  List<String> imageUrls = const ['https://example.com/photo.jpg'],
+}) {
   return PhotoPostDto(
     id: 'photo-1',
     type: 'image',
@@ -220,7 +224,27 @@ PhotoPostDto _photoPost() {
     avatarUrl: 'https://example.com/avatar.jpg',
     body: 'dto body',
     coverUrl: 'https://example.com/photo.jpg',
-    imageUrls: const ['https://example.com/photo.jpg'],
+    imageUrls: imageUrls,
+    likeCount: 0,
+    commentCount: 0,
+    favoriteCount: 0,
+    shareCount: 0,
+    createdAt: DateTime.now(),
+  );
+}
+
+ArticlePostDto _articlePost() {
+  return ArticlePostDto(
+    id: 'article-1',
+    type: 'article',
+    identity: 'work',
+    assistantUsePolicy: 'inherit',
+    authorId: 'author-3',
+    displayName: '写作者',
+    avatarUrl: 'https://example.com/avatar-3.jpg',
+    title: '图文翻页',
+    body: '文章摘要',
+    coverUrl: 'https://example.com/article-cover.jpg',
     likeCount: 0,
     commentCount: 0,
     favoriteCount: 0,
@@ -272,7 +296,18 @@ void main() {
   });
 
   testWidgets('photo post 在 unified viewer 中展示 raw title/body', (tester) async {
-    final post = _photoPost();
+    final post = _photoPost(
+      imageUrls: const [
+        'https://example.com/photo.jpg',
+        'https://example.com/photo-2.jpg',
+        'https://example.com/photo-3.jpg',
+        'https://example.com/photo-4.jpg',
+        'https://example.com/photo-5.jpg',
+        'https://example.com/photo-6.jpg',
+        'https://example.com/photo-7.jpg',
+        'https://example.com/photo-8.jpg',
+      ],
+    );
     await tester.pumpWidget(
       _wrap(
         WorksImmersiveViewer(
@@ -309,8 +344,26 @@ void main() {
 
     expect(find.text('封面标题'), findsOneWidget);
     expect(find.textContaining('封面正文'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('works-page-indicator')),
+      findsOneWidget,
+    );
+    expect(find.text('1/2'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('works-page-indicator')),
+        matching: find.byType(AnimatedContainer),
+      ),
+      findsNWidgets(6),
+    );
+    final indicatorRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-page-indicator')),
+    );
+    final titleRect = tester.getRect(find.text('封面标题'));
+    expect(indicatorRect.bottom, lessThan(titleRect.top));
     expect(find.text('测试圈子A'), findsOneWidget);
     expect(find.text('测试圈子B'), findsOneWidget);
+    expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
   });
 
   testWidgets('text-only moment 使用文本画布展示 title/body', (tester) async {
@@ -344,5 +397,131 @@ void main() {
 
     expect(find.text('临时改地点提醒'), findsOneWidget);
     expect(find.textContaining('今天风有点大'), findsOneWidget);
+  });
+
+  testWidgets('沉浸式浏览器更多功能使用贴底非全屏面板', (tester) async {
+    final post = _photoPost();
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+
+    final panel = find.byKey(TestKeys.modalBottomSheetPanel);
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    expect(panel, findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+    expect(tester.getTopLeft(panel).dy, greaterThan(0));
+    expect(tester.getBottomRight(panel).dy, closeTo(screenHeight, 2.0));
+  });
+
+  testWidgets('图片滑到边界后继续横滑会切换主 tab', (tester) async {
+    final post = _photoPost(
+      imageUrls: const [
+        'https://example.com/photo.jpg',
+        'https://example.com/photo-2.jpg',
+      ],
+    );
+    var switchedToCircles = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          initialImageIndex: 1,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onSwitchToCircles: () {
+            switchedToCircles = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byType(WorksImmersiveViewer)),
+      const Offset(-220, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(switchedToCircles, isTrue);
+  });
+
+  testWidgets('文章翻页到边界后继续横滑会切换主 tab', (tester) async {
+    final post = _articlePost();
+    var switchedToCircles = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: <String, Map<String, dynamic>>{
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          },
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onSwitchToCircles: () {
+            switchedToCircles = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final articlePager = find.byType(PageView).last;
+
+    await tester.flingFrom(
+      tester.getCenter(articlePager),
+      const Offset(-320, 0),
+      1400,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页标题'), findsOneWidget);
+
+    await tester.flingFrom(
+      tester.getCenter(articlePager),
+      const Offset(-320, 0),
+      1400,
+    );
+    await tester.pumpAndSettle();
+
+    expect(switchedToCircles, isTrue);
   });
 }

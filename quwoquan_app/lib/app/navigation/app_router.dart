@@ -63,7 +63,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.circles,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: const SizedBox.shrink(), // 首页中的圈子 Tab 在 MainAppShell 中渲染
+              child: const SizedBox.shrink(), // 圈子独立列表页在 MainAppShell 中渲染
             ),
           ),
           GoRoute(
@@ -93,8 +93,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.createEntry,
-        builder: (context, state) {
-          return const _CreateEntryRoutePage();
+        pageBuilder: (context, state) {
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            opaque: false,
+            barrierColor: Colors.transparent,
+            child: const _CreateEntryRoutePage(),
+            transitionDuration: const Duration(milliseconds: 280),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  );
+                },
+          );
         },
       ),
       GoRoute(
@@ -492,15 +514,12 @@ class _CreateEntryRoutePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Material(
-      color: Colors.transparent,
-      child: CreateEntrySheet(
-        isOpen: true,
-        onClose: () => context.pop(),
-        onSelect: (EditorStartAction action) {
-          context.go(AppRoutePaths.create(type: action.name));
-        },
-      ),
+    return CreateEntrySheet(
+      isOpen: true,
+      onClose: () => context.pop(),
+      onSelect: (EditorStartAction action) {
+        context.go(AppRoutePaths.create(type: action.name));
+      },
     );
   }
 }

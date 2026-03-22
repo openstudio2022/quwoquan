@@ -38,9 +38,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _usernameController = TextEditingController(
       text: userData?.username ?? 'my_account',
     );
-    _bioController = TextEditingController(
-      text: userData?.bio ?? '分享美好生活...',
-    );
+    _bioController = TextEditingController(text: userData?.bio ?? '分享美好生活...');
   }
 
   @override
@@ -79,32 +77,33 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 
   Future<void> _showMediaActionSheet(String target) async {
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        title: Text('更换$target'),
-        actions: <Widget>[
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(sheetContext).pop();
-              AppToast.show(context, '$target拍摄能力待接入');
-            },
-            child: const Text('拍照'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(sheetContext).pop();
-              AppToast.show(context, '$target相册选择待接入');
-            },
-            child: const Text('从照片中选择'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: const Text('取消'),
+    final action = await showAppActionSheet<_EditProfileMediaAction>(
+      context,
+      title: '更换$target',
+      sections: const [
+        AppActionSheetSection<_EditProfileMediaAction>(
+          items: [
+            AppActionSheetItem<_EditProfileMediaAction>(
+              value: _EditProfileMediaAction.camera,
+              label: '拍照',
+              icon: CupertinoIcons.camera,
+            ),
+            AppActionSheetItem<_EditProfileMediaAction>(
+              value: _EditProfileMediaAction.photoLibrary,
+              label: '从照片中选择',
+              icon: CupertinoIcons.photo_on_rectangle,
+            ),
+          ],
         ),
-      ),
+      ],
     );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _EditProfileMediaAction.camera:
+        AppToast.show(context, '$target拍摄能力待接入');
+      case _EditProfileMediaAction.photoLibrary:
+        AppToast.show(context, '$target相册选择待接入');
+    }
   }
 
   @override
@@ -225,7 +224,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     AppSpacing.containerSm,
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusTwenty,
+                    ),
                     child: UnifiedEmojiPicker(
                       showCloseButton: true,
                       onClose: () => setState(() => _showEmojiPanel = false),
@@ -297,7 +298,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             ? Image.network(
                                 coverUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _buildCoverPlaceholder(),
+                                errorBuilder: (_, _, _) =>
+                                    _buildCoverPlaceholder(),
                               )
                             : _buildCoverPlaceholder(),
                       ),
@@ -443,6 +445,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     );
   }
 }
+
+enum _EditProfileMediaAction { camera, photoLibrary }
 
 class _EditProfileFieldCell extends StatelessWidget {
   const _EditProfileFieldCell({

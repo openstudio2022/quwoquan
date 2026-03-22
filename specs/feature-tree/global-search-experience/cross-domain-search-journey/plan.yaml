@@ -1,0 +1,109 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze search metadata topology
+    goal: 收口 `_shared` 路由/surface/request context 与四个业务域 `Search*` contract 的 metadata 真相源
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `globalSearch` route、landing/result surfaces、page ids 已定义
+      - `SearchPosts / SearchSocialRelations / SearchConversations / SearchMessages / SearchCircles` contract 结构明确
+      - recent search sync 与 xiaoqu handoff 的 metadata 落点明确
+    status: planned
+
+  - id: P2
+    title: establish codegen baseline
+    goal: 让 search route、DTO、request page ids 与 assistant handoff contract 都能由 codegen 产出
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - `make codegen` 与 `make codegen-app` 产出新的搜索生成物
+      - App / cloud client 不再手写第二套 route、surface、page context 或 operation 常量
+    status: planned
+
+  - id: P3
+    title: land full-screen shell and unified entry
+    goal: 以 route-driven `GlobalSearchPage` 取代 imperative 原型，并统一四个一级入口
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 首页、聊天页、圈子页、助手页进入同一搜索页
+      - landing 页保持四段式结构
+      - 取消、返回和重入行为稳定
+    status: planned
+
+  - id: P4
+    title: land search coordinator and result composition
+    goal: 建立 `SearchCoordinator`、typed result model 与四域并发编排
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - query debounce、fan-out、局部降级与分组展示成立
+      - 社交关系与圈子 facet 的对象边界在结果页稳定可见
+      - 结果点击可稳定进入详情或列表
+    status: planned
+
+  - id: P5
+    title: land recent search, voice query, and xiaoqu handoff
+    goal: 完成 recent search 双写、ASR 转词与问小趣 typed handoff
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J1
+      - J3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - recent search 可本地读写并触发云同步
+      - 语音输入成功后回填搜索框
+      - 问小趣 handoff 不写入 recent search，且走 typed contract
+    status: planned
+
+  - id: P6
+    title: validate observability, slo, and rollback posture
+    goal: 为整版上线建立可验证的观测、SLO 与回滚动作
+    depends_on:
+      - P5
+    acceptance_refs:
+      - R1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - query latency、section degrade、history sync、ASR、xiaoqu handoff 指标可观测
+      - 弱网降级和整版回滚演练路径明确
+      - Journey 级主路径回归清单可执行
+    status: planned

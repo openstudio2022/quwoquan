@@ -25,7 +25,7 @@ class RoundedSquareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = borderRadius ?? AppSpacing.borderRadius;
+    final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
 
     Widget avatar = ClipRRect(

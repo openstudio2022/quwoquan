@@ -10,6 +10,7 @@ import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 
 /// 主 App 壳
@@ -115,7 +116,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             IndexedStack(
               index: _currentIndex,
               children: [
-                HomePage(routeLocation: _currentLocation),
+                _buildPrimarySurface(),
                 const AssistantTabPage(),
                 const ChatPage(),
                 const MyProfilePage(),
@@ -126,14 +127,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewPaddingOf(context).bottom,
-                  ),
-                  child: BottomNavigationWidget(
-                    currentIndex: bottomNavIndexFromLocation(_currentLocation),
-                    onTap: _handleBottomNavTap,
-                  ),
+                child: BottomNavigationWidget(
+                  currentIndex: bottomNavIndexFromLocation(_currentLocation),
+                  onTap: _handleBottomNavTap,
                 ),
               ),
           ],
@@ -192,6 +188,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go(AppRoutePaths.circles);
         break;
     }
+  }
+
+  Widget _buildPrimarySurface() {
+    if (_currentLocation == AppRoutePaths.circles) {
+      return const CirclesPage();
+    }
+    return HomePage(routeLocation: _currentLocation);
   }
 
   String _routeNameFromLocation(String location) {

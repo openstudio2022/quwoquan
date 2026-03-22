@@ -21,17 +21,18 @@ class BottomNavigationWidget extends ConsumerWidget {
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final navBackground = forceDark
         ? AppColors.worksBackground.withValues(alpha: 0.9)
         : AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     final activeColor = forceDark
-        ? AppColors.worksAccent
-        : AppColors.iosAccent(context);
+        ? CupertinoColors.white
+        : AppColors.iosLabel(context);
     final inactiveColor = forceDark
-        ? AppColors.worksBodyText
+        ? CupertinoColors.systemGrey
         : AppColors.iosSecondaryLabel(context);
     final borderColor = forceDark
-        ? AppColors.worksAccent.withValues(alpha: 0.24)
+        ? CupertinoColors.systemGrey.withValues(alpha: 0.28)
         : AppColorsFunctional.getColor(
             isDark,
             ColorType.separatorOpaque,
@@ -73,32 +74,36 @@ class BottomNavigationWidget extends ConsumerWidget {
             ),
           ),
           child: SizedBox(
-            height: AppSpacing.bottomNavHeight + AppSpacing.sm,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: List<Widget>.generate(destinations.length, (index) {
-                final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
-                final destination = destinations[index];
-                return Expanded(
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size.fromHeight(
-                      AppSpacing.bottomNavHeight + AppSpacing.sm,
+            height: AppSpacing.bottomNavHeight + bottomInset,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: List<Widget>.generate(destinations.length, (index) {
+                  final selected =
+                      (currentIndex < 0 ? 0 : currentIndex) == index;
+                  final destination = destinations[index];
+                  return Expanded(
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size.fromHeight(
+                        AppSpacing.bottomNavHeight,
+                      ),
+                      onPressed: () {
+                        if (selected) return;
+                        HapticFeedback.selectionClick();
+                        onTap(index);
+                      },
+                      child: _BottomNavItem(
+                        destination: destination,
+                        selected: selected,
+                        activeColor: activeColor,
+                        inactiveColor: inactiveColor,
+                      ),
                     ),
-                    onPressed: () {
-                      if (selected) return;
-                      HapticFeedback.selectionClick();
-                      onTap(index);
-                    },
-                    child: _BottomNavItem(
-                      destination: destination,
-                      selected: selected,
-                      activeColor: activeColor,
-                      inactiveColor: inactiveColor,
-                    ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
           ),
         ),
@@ -149,15 +154,10 @@ class _BottomNavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedScale(
-            scale: selected ? 1 : 0.94,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            child: Icon(
-              selected ? destination.selectedIcon : destination.icon,
-              size: selected ? AppSpacing.iconMedium : AppSpacing.iconSmall + 6,
-              color: selected ? activeColor : inactiveColor,
-            ),
+          Icon(
+            selected ? destination.selectedIcon : destination.icon,
+            size: AppSpacing.iconSmall + 6,
+            color: selected ? activeColor : inactiveColor,
           ),
           SizedBox(height: AppSpacing.oneHalf),
           AnimatedDefaultTextStyle(
@@ -168,19 +168,6 @@ class _BottomNavItem extends StatelessWidget {
               destination.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          SizedBox(height: AppSpacing.oneHalf),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            width: selected ? AppSpacing.eighteen : AppSpacing.one,
-            height: AppSpacing.oneHalf,
-            decoration: BoxDecoration(
-              color: selected ? activeColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(
-                AppSpacing.circularBorderRadius,
-              ),
             ),
           ),
         ],

@@ -28,8 +28,35 @@ class AppTypography {
   /// 一级 Tab 字号（发现/圈子/趣聊统一，与正文一致）
   static const double primaryTabLabel = lg;
 
+  /// 一级 Tab 统一响应式字号。
+  static double primaryTabLabelResponsive(BuildContext context) => responsive(
+    context,
+    compact: base,
+    regular: primaryTabLabel,
+    expanded: xl,
+  );
+
   /// 一级 Tab 字重（选中/未选中统一，避免切换时布局抖动）
   static const FontWeight primaryTabLabelWeight = medium;
+
+  /// 一级 Tab 选中/未选中统一字重，保证视觉稳定。
+  static const FontWeight primaryTabSelectedWeight = primaryTabLabelWeight;
+  static const FontWeight primaryTabUnselectedWeight = primaryTabLabelWeight;
+
+  /// 二级 Tab 基础字号。
+  static const double secondaryTabLabel = smPlus;
+
+  /// 二级 Tab 统一响应式字号。
+  static double secondaryTabLabelResponsive(BuildContext context) => responsive(
+    context,
+    compact: sm,
+    regular: secondaryTabLabel,
+    expanded: base,
+  );
+
+  /// 二级 Tab 选中态略加重，未选中保持中黑。
+  static const FontWeight secondaryTabSelectedWeight = semiBold;
+  static const FontWeight secondaryTabUnselectedWeight = medium;
 
   /// 底部栏未选中字号（与一级 Tab 一致）
   static const double bottomNavLabelUnselected = primaryTabLabel;

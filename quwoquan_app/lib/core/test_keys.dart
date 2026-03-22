@@ -20,6 +20,12 @@ class TestKeys {
   static const createPage = ValueKey<String>('create_page');
   static const assistantTabPage = ValueKey<String>('assistant_tab_page');
   static const assistantDialogPage = ValueKey<String>('assistant_dialog_page');
+  static const fullscreenModalSurface = ValueKey<String>(
+    'fullscreen_modal_surface',
+  );
+  static const modalBottomSheetPanel = ValueKey<String>(
+    'modal_bottom_sheet_panel',
+  );
 
   // ── Feed / Grid ──────────────────────────────────────────────────────
   static const photoFeedGrid = ValueKey<String>('photo_feed_grid');
@@ -56,7 +62,9 @@ class TestKeys {
   );
 
   // ── Assistant Internal Tabs ─────────────────────────────────────────
-  static const assistantScheduleTab = ValueKey<String>('assistant_schedule_tab');
+  static const assistantScheduleTab = ValueKey<String>(
+    'assistant_schedule_tab',
+  );
   static const assistantDialogTab = ValueKey<String>('assistant_dialog_tab');
   static const assistantSkillsTab = ValueKey<String>('assistant_skills_tab');
 
@@ -91,7 +99,9 @@ class TestKeys {
   static const createTitleToggle = ValueKey<String>('create_title_toggle');
   static const createTitleInput = ValueKey<String>('create_title_input');
   static const createBodyInput = ValueKey<String>('create_body_input');
-  static const createMediaAddButton = ValueKey<String>('create_media_add_button');
+  static const createMediaAddButton = ValueKey<String>(
+    'create_media_add_button',
+  );
   static const createPublishConfirmSheet = ValueKey<String>(
     'create_publish_confirm_sheet',
   );
@@ -107,7 +117,9 @@ class TestKeys {
   static const createMediaRemoveButton = ValueKey<String>(
     'create_media_remove_button',
   );
-  static const createSettingsSummary = ValueKey<String>('create_settings_summary');
+  static const createSettingsSummary = ValueKey<String>(
+    'create_settings_summary',
+  );
   static const createSettingsPage = ValueKey<String>('create_settings_page');
   static const createTitleHint = ValueKey<String>('create_title_hint');
   static const createSaveAndExitButton = ValueKey<String>(

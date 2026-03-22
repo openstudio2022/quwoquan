@@ -11,6 +11,44 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// PostCircleReshare domain model.
+type PostCircleReshare struct {
+	ID             string    `json:"_id" bson:"_id"`
+	PostId         string    `json:"postId" bson:"postId"`
+	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
+	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
+	CircleId       string    `json:"circleId" bson:"circleId"`
+	QuoteText      string    `json:"quoteText" bson:"quoteText"`
+	State          string    `json:"state" bson:"state"`
+	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// DeletedPostTombstone domain model.
+type DeletedPostTombstone struct {
+	ID        string    `json:"_id" bson:"_id"`
+	PostId    string    `json:"postId" bson:"postId"`
+	AuthorId  string    `json:"authorId" bson:"authorId"`
+	Reason    string    `json:"reason" bson:"reason"`
+	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
+	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
+}
+
+// ProfileInteractionActivityView domain model.
+type ProfileInteractionActivityView struct {
+	ActivityId             string    `json:"activityId" bson:"activityId"`
+	ActivityType           string    `json:"activityType" bson:"activityType"`
+	Direction              string    `json:"direction" bson:"direction"`
+	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
+	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
+	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
+	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
+	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
+	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
+	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
+}
+
 // Post domain model.
 type Post struct {
 	ID                        string         `json:"_id" bson:"_id"`
@@ -119,42 +157,4 @@ type PostCircleDistribution struct {
 	State         string    `json:"state" bson:"state"`
 	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleReshare domain model.
-type PostCircleReshare struct {
-	ID             string    `json:"_id" bson:"_id"`
-	PostId         string    `json:"postId" bson:"postId"`
-	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
-	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
-	CircleId       string    `json:"circleId" bson:"circleId"`
-	QuoteText      string    `json:"quoteText" bson:"quoteText"`
-	State          string    `json:"state" bson:"state"`
-	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// DeletedPostTombstone domain model.
-type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
-	PostId    string    `json:"postId" bson:"postId"`
-	AuthorId  string    `json:"authorId" bson:"authorId"`
-	Reason    string    `json:"reason" bson:"reason"`
-	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
-	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
-}
-
-// ProfileInteractionActivityView domain model.
-type ProfileInteractionActivityView struct {
-	ActivityId             string    `json:"activityId" bson:"activityId"`
-	ActivityType           string    `json:"activityType" bson:"activityType"`
-	Direction              string    `json:"direction" bson:"direction"`
-	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
-	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
-	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
-	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
-	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
-	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
-	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
-	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
 }

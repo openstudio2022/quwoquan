@@ -50,6 +50,7 @@
 
 | 入口 | 说明 |
 |------|------|
+| `02_IOS_NATIVE_FRONTEND_UX_SPEC.md` | iOS 原生前端 UX 规范（作者主页、沉浸式浏览器、创作编辑、post、导航、tab、sheet，含组件级响应式清单与门禁） |
 | `quwoquan_app/.cursor/rules/` | App 编码/设计/测试/状态管理/语义审计 |
 | `quwoquan_app/openspec/specs/` | App 能力规格（personal-assistant 等） |
 

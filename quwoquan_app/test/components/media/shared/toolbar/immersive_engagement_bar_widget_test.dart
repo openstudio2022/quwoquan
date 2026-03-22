@@ -49,6 +49,44 @@ void main() {
     expect((likeToShare - shareToComment).abs(), lessThan(4));
     expect((rightMargin - AppSpacing.containerMd).abs(), lessThan(1));
   });
+
+  testWidgets('我的 post 使用无作者栏的一行三等分工具栏', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: '我的名字',
+          circleName: '',
+          likeCount: 12,
+          shareCount: 8,
+          commentCount: 5,
+          isLiked: true,
+          isFollowing: false,
+          isSelfPost: true,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('immersive-self-actions-group')),
+      findsOneWidget,
+    );
+    expect(find.byType(CircleAvatar), findsNothing);
+    expect(find.text('12'), findsOneWidget);
+    expect(find.text('8'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+
+    final selfGroupRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-self-actions-group')),
+    );
+    final rootRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+    expect((selfGroupRect.center.dy - rootRect.center.dy).abs(), lessThan(4));
+  });
 }
 
 void _noop() {}

@@ -18,13 +18,18 @@ import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class HomeCirclesHubPage extends ConsumerStatefulWidget {
-  const HomeCirclesHubPage({super.key, this.onPrimaryOverflowSwipe});
+class CirclesHubPage extends ConsumerStatefulWidget {
+  const CirclesHubPage({super.key, this.onPrimaryOverflowSwipe});
 
   final ValueChanged<TabSwipeDirection>? onPrimaryOverflowSwipe;
 
   @override
-  ConsumerState<HomeCirclesHubPage> createState() => _HomeCirclesHubPageState();
+  ConsumerState<CirclesHubPage> createState() => _CirclesHubPageState();
+}
+
+@Deprecated('Use CirclesHubPage instead.')
+class HomeCirclesHubPage extends CirclesHubPage {
+  const HomeCirclesHubPage({super.key, super.onPrimaryOverflowSwipe});
 }
 
 const double _homeCircleCoverAspectRatio = 4 / 3;
@@ -66,7 +71,7 @@ double _homeCircleChannelTileHeight(BuildContext context) {
 
 enum _HomeCirclesModuleTab { recommended, mine }
 
-class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
+class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   static const Set<String> _myCircleIds = <String>{
     'c-photo-owner',
     'c-tech-admin',
@@ -594,25 +599,6 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
-              SliverToBoxAdapter(
-                child: _CirclesGlobalHeader(
-                  isDark: isDark,
-                  activeModuleTab: _activeModuleTab,
-                  circles: circles,
-                  stories: stories,
-                  onStoryTap: (item, items) => _openCircleFeedViewer(
-                    context,
-                    item.rawPost,
-                    items.map((entry) => entry.rawPost).toList(growable: false),
-                  ),
-                  onModuleTabChanged: (nextTab) {
-                    if (nextTab == _activeModuleTab) return;
-                    setState(() {
-                      _activeModuleTab = nextTab;
-                    });
-                  },
-                ),
-              ),
               SliverPersistentHeader(
                 floating: true,
                 delegate: _StickyTabBarDelegate(
@@ -632,6 +618,34 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
                     onHorizontalDragEnd: _handleCategorySwipeDragEnd,
                     onChannelSelectorTap: _toggleChannelPanel,
                   ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: _CirclesGlobalHeader(
+                  isDark: isDark,
+                  activeModuleTab: _activeModuleTab,
+                  circles: circles,
+                  stories: stories,
+                  onStoryTap: (item, items) => _openCircleFeedViewer(
+                    context,
+                    item.rawPost,
+                    items.map((entry) => entry.rawPost).toList(growable: false),
+                  ),
+                  onModuleTabChanged: (nextTab) {
+                    if (nextTab == _activeModuleTab) return;
+                    setState(() {
+                      _activeModuleTab = nextTab;
+                    });
+                  },
+                  onSeeMoreTap: () {
+                    final uri = Uri(
+                      path: AppRoutePaths.circles,
+                      queryParameters: <String, String>{
+                        'category': effectiveActiveCategoryId,
+                      },
+                    );
+                    context.push(uri.toString());
+                  },
                 ),
               ),
               HomeCirclesCategoryTab(
@@ -692,6 +706,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
     required this.stories,
     required this.onStoryTap,
     required this.onModuleTabChanged,
+    required this.onSeeMoreTap,
   });
 
   final bool isDark;
@@ -704,6 +719,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
   )
   onStoryTap;
   final ValueChanged<_HomeCirclesModuleTab> onModuleTabChanged;
+  final VoidCallback onSeeMoreTap;
 
   double _circleCardWidth(BuildContext context) {
     return AppSpacing.responsiveValue(
@@ -763,13 +779,16 @@ class _CirclesGlobalHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _HomeCirclesModuleTabs(
-                isDark: isDark,
-                activeTab: activeModuleTab,
-                onTabChanged: onModuleTabChanged,
+              Text(
+                '热门',
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  fontWeight: AppTypography.medium,
+                  color: fgSecondary.withValues(alpha: 0.78),
+                ),
               ),
               CupertinoButton(
-                onPressed: () => context.go(AppRoutePaths.circles),
+                onPressed: onSeeMoreTap,
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 child: Text(
@@ -803,42 +822,6 @@ class _CirclesGlobalHeader extends StatelessWidget {
               },
             ),
           ),
-          SizedBox(height: AppSpacing.interGroupMd),
-          if (stories.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(AppSpacing.containerMd),
-              decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundSecondary,
-                ),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
-                ),
-              ),
-              child: Text(
-                UITextConstants.noData,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: fgSecondary,
-                ),
-              ),
-            )
-          else
-            Column(
-              children: [
-                for (int index = 0; index < stories.length; index++) ...[
-                  _HomeCircleStoryCard(
-                    item: stories[index],
-                    isDark: isDark,
-                    onTap: () => onStoryTap(stories[index], stories),
-                  ),
-                  if (index < stories.length - 1)
-                    SizedBox(height: AppSpacing.intraGroupSm),
-                ],
-              ],
-            ),
         ],
       ),
     );
@@ -912,15 +895,21 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
       onTap: onCategoryTap,
       onHorizontalDragEnd: onHorizontalDragEnd,
       fontSize: AppTypography.smPlus,
-      trailing: SizedBox(
-        width: AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd,
-        child: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: onChannelSelectorTap,
-          child: Icon(
-            CupertinoIcons.line_horizontal_3_decrease,
-            size: AppSpacing.iconMedium,
-            color: fgSecondary,
+      trailing: Padding(
+        padding: EdgeInsets.only(
+          right: AppSpacing.topBarTrailingButtonInset(context),
+        ),
+        child: SizedBox(
+          width: AppSpacing.minInteractiveSize,
+          height: AppSpacing.minInteractiveSize,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: onChannelSelectorTap,
+            child: Icon(
+              CupertinoIcons.line_horizontal_3_decrease,
+              size: AppSpacing.iconMedium,
+              color: fgSecondary,
+            ),
           ),
         ),
       ),
@@ -1061,7 +1050,9 @@ class _HomeCircleRailCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.max,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.contentPreviewCornerRadius,
+                ),
                 child: AspectRatio(
                   aspectRatio: _homeCircleCoverAspectRatio,
                   child: AppCachedNetworkImage(
@@ -1165,7 +1156,9 @@ class _HomeCircleStoryCard extends StatelessWidget {
             SizedBox(
               width: thumbnailWidth,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.contentPreviewCornerRadius,
+                ),
                 child: AspectRatio(
                   aspectRatio: _homeCircleCoverAspectRatio,
                   child: AppCachedNetworkImage(

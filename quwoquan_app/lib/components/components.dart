@@ -1,7 +1,7 @@
 // ignore_for_file: dangling_library_doc_comments
 
 /// 组件模块统一导出门面
-/// 
+///
 /// 提供应用中使用的所有通用组件，包括：
 /// - 内容卡片组件（图片、视频、媒体基类）
 /// - 导航组件（标签导航、子标签导航）
@@ -10,19 +10,19 @@
 /// - 媒体查看器组件（图片、视频、沉浸式）
 /// - 评论系统组件
 /// - 更多操作弹窗组件
-/// 
+///
 /// 注意：底部导航（BottomNavigationWidget）已迁移至 lib/app/shell/，
 /// 由 MainAppShell 直接引用，不再通过此门面导出。
-/// 
+///
 /// 使用示例：
 /// ```dart
 /// import 'package:quwoquan_app/components/components.dart';
-/// 
+///
 /// ImagePostCard(...)
 /// VideoPostCard(...)
 /// TabNavigationWidget(...)
 /// ```
-/// 
+///
 /// 依赖关系：
 /// - 依赖 core 模块（设计系统、常量、服务等）
 /// - 不依赖 features 模块（避免循环依赖）
@@ -32,6 +32,10 @@
 export 'content/image_post_card.dart';
 export 'content/video_post_card.dart';
 export 'content/media_post_card.dart';
+
+// ==================== Post 组件 ====================
+export 'post/post_preview_card.dart';
+export 'post/post_preview_list_tile.dart';
 
 // ==================== 导航组件 ====================
 export 'navigation/tab_navigation.dart';
