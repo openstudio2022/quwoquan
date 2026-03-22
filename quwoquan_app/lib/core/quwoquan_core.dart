@@ -56,5 +56,6 @@ export 'utils/chat_time_formatter.dart';
 
 // Models
 export 'package:quwoquan_app/core/models/post_models.dart';
+export 'package:quwoquan_app/core/models/search_models.dart';
 export 'package:quwoquan_app/core/models/story_models.dart';
 export 'package:quwoquan_app/core/models/user_models.dart';

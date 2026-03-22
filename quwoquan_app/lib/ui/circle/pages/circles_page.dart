@@ -16,6 +16,7 @@ import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -729,7 +730,13 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
-                    onPressed: () {},
+                    onPressed: () => GlobalSearchLauncher.open(
+                      context,
+                      launchContext: SearchLaunchContext(
+                        entrySurfaceId: AppRoutePaths.circles,
+                        initialScope: SearchScope.circles,
+                      ),
+                    ),
                     child: Icon(
                       CupertinoIcons.search,
                       color: fgPrimary,
@@ -743,7 +750,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
               child: Row(
                 children: [
                   Container(
-                    width: 96,
+                    width: AppSpacing.largeButtonSize * 2,
                     color: menuBackground,
                     child: ListView.separated(
                       padding: EdgeInsets.fromLTRB(
@@ -797,13 +804,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                               children: [
                                 AnimatedContainer(
                                   duration: const Duration(milliseconds: 180),
-                                  width: 3,
+                                  width: AppSpacing.three,
                                   height: AppSpacing.largeButtonSize,
                                   decoration: BoxDecoration(
                                     color: selected
                                         ? accentBlue
                                         : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(999),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.circularBorderRadius,
+                                    ),
                                   ),
                                 ),
                                 SizedBox(width: AppSpacing.sm),

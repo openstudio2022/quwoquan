@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 
 String? _normalizeCircleFeedType(String? type) {
   final normalized = (type ?? '').trim().toLowerCase();
@@ -35,6 +36,13 @@ abstract class CircleRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String? sort,
+  });
+
+  Future<CircleSearchResultView> searchCircles({
+    required String query,
+    String? categoryId,
+    String? subCategory,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<Map<String, dynamic>> getCircle(String circleId);
@@ -148,6 +156,84 @@ class MockCircleRepository implements CircleRepository {
           .toList(growable: false);
     }
     return result.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<CircleSearchResultView> searchCircles({
+    required String query,
+    String? categoryId,
+    String? subCategory,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const CircleSearchResultView();
+    }
+    final filtered = CircleMockData.circles.where((circle) {
+      if (categoryId != null &&
+          categoryId.isNotEmpty &&
+          circle['categoryId']?.toString() != categoryId) {
+        return false;
+      }
+      if (subCategory != null &&
+          subCategory.isNotEmpty &&
+          circle['subCategory']?.toString() != subCategory) {
+        return false;
+      }
+      final name = (circle['name'] ?? '').toString().toLowerCase();
+      final description = (circle['description'] ?? '').toString().toLowerCase();
+      return name.contains(normalizedQuery) ||
+          description.contains(normalizedQuery);
+    }).toList(growable: false);
+    final items = filtered
+        .take(limit)
+        .map((circle) {
+          final name = (circle['name'] ?? '').toString();
+          return CircleSearchItemView.fromMap(<String, dynamic>{
+            ...circle,
+            'circleId': circle['circleId'] ?? circle['id'],
+            'highlightText': name,
+            'matchedField': 'name',
+          });
+        })
+        .toList(growable: false);
+    final facetCounts = <String, int>{};
+    for (final circle in filtered) {
+      final key = (circle['subCategory'] ?? circle['categoryId'] ?? '')
+          .toString()
+          .trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      facetCounts.update(key, (value) => value + 1, ifAbsent: () => 1);
+    }
+    final facetBuckets = filtered
+        .map((circle) => <String, dynamic>{
+          'facetKey': (circle['subCategory'] ?? circle['categoryId'] ?? '')
+              .toString(),
+          'label': (circle['subCategory'] ?? circle['categoryId'] ?? '')
+              .toString(),
+          'categoryId': circle['categoryId']?.toString(),
+          'subCategory': circle['subCategory']?.toString(),
+        })
+        .where((facet) => (facet['facetKey'] ?? '').toString().isNotEmpty)
+        .fold<Map<String, Map<String, dynamic>>>(
+          <String, Map<String, dynamic>>{},
+          (accumulator, facet) {
+            accumulator.putIfAbsent(
+              facet['facetKey']!.toString(),
+              () => <String, dynamic>{
+                ...facet,
+                'facetCount': facetCounts[facet['facetKey']] ?? 0,
+              },
+            );
+            return accumulator;
+          },
+        )
+        .values
+        .map(CircleFacetBucketView.fromMap)
+        .toList(growable: false);
+    return CircleSearchResultView(items: items, facetBuckets: facetBuckets);
   }
 
   @override
@@ -375,6 +461,30 @@ class RemoteCircleRepository implements CircleRepository {
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
     );
     return _decodeList(resp);
+  }
+
+  @override
+  Future<CircleSearchResultView> searchCircles({
+    required String query,
+    String? categoryId,
+    String? subCategory,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final resp = await _client.get(
+      _uri(
+        CircleApiMetadata.searchCirclesPath,
+        queryParameters: <String, String>{
+          'query': query,
+          if (categoryId != null && categoryId.isNotEmpty)
+            'categoryId': categoryId,
+          if (subCategory != null && subCategory.isNotEmpty)
+            'subCategory': subCategory,
+          'limit': '$limit',
+        },
+      ),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.searchCircles),
+    );
+    return CircleSearchResultView.fromMap(_decodeObject(resp));
   }
 
   @override

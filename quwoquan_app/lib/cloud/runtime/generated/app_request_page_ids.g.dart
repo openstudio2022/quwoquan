@@ -7,6 +7,8 @@ class AppRequestPageIds {
   static const Map<String, String> ids = <String, String>{
     'createLocationNearby': 'create.location.nearby',
     'createLocationSearch': 'create.location.search',
+    'globalSearchLanding': 'global.search.landing',
+    'globalSearchResults': 'global.search.results',
     'mediaUploadComplete': 'media.upload.complete',
     'mediaUploadInit': 'media.upload.init',
     'rtcSignal': 'rtc.signal',
@@ -14,6 +16,8 @@ class AppRequestPageIds {
 
   static const String createLocationNearby = 'create.location.nearby';
   static const String createLocationSearch = 'create.location.search';
+  static const String globalSearchLanding = 'global.search.landing';
+  static const String globalSearchResults = 'global.search.results';
   static const String mediaUploadComplete = 'media.upload.complete';
   static const String mediaUploadInit = 'media.upload.init';
   static const String rtcSignal = 'rtc.signal';

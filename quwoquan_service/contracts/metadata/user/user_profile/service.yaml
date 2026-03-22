@@ -157,6 +157,42 @@ api_routes:
     response_entity: ProfileSubjectView
     response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
 
+  - method: GET
+    path: /v1/user/search/social-relations
+    operation: SearchSocialRelations
+    description: 全局搜索社交关系结果，统一承接“人”的搜索对象
+    query_params: [query, cursor, limit]
+    response_entity: SocialRelationSearchItemView
+    auth: required
+
+  - method: GET
+    path: /v1/user/search/recent
+    operation: ListRecentSearches
+    description: 获取当前账号最近搜索历史
+    response_entity: RecentSearchEntryView
+    auth: required
+
+  - method: PUT
+    path: /v1/user/search/recent/{entryId}
+    operation: UpsertRecentSearch
+    description: 新增或更新最近搜索记录
+    request_entity: RecentSearchEntryView
+    request_fields: [query, scope, facet, updatedAt]
+    response_entity: RecentSearchEntryView
+    auth: required
+
+  - method: DELETE
+    path: /v1/user/search/recent/{entryId}
+    operation: DeleteRecentSearch
+    description: 删除单条最近搜索记录
+    auth: required
+
+  - method: DELETE
+    path: /v1/user/search/recent
+    operation: ClearRecentSearches
+    description: 清空当前账号最近搜索记录
+    auth: required
+
   # ── 原有 API（保持兼容，逐步迁移到上方路径） ──────────────────────────────
 
   - method: GET

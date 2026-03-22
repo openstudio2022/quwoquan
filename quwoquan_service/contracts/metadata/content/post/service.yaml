@@ -15,6 +15,14 @@ api_routes:
     query_params: [identity, type, sort, cursor, limit, subCategory]
     response_entity: Post
 
+  - method: GET
+    path: /v1/content/posts/search
+    operation: SearchPosts
+    description: 全局搜索内容结果（返回内容搜索项视图，不直接返回完整 Post）
+    query_params: [query, identity, type, cursor, limit]
+    response_entity: PostSearchItemView
+    auth: required
+
   - method: POST
     path: /v1/content/posts
     operation: CreatePost

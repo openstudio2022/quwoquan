@@ -5,13 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildApp() {
@@ -38,6 +39,12 @@ Widget _buildApp() {
             GoRoute(
               path: '/chat/:id',
               builder: (context, state) => const SizedBox(),
+            ),
+            GoRoute(
+              path: '/search',
+              builder: (context, state) => const GlobalSearchPage(
+                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
+              ),
             ),
             GoRoute(
               path: '/user/:username',
@@ -270,14 +277,15 @@ void main() {
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(CupertinoIcons.search).first);
+      await tester.tap(find.byKey(TestKeys.globalSearchLauncherButton));
       await tester.pumpAndSettle();
 
-      final page = find.byType(HomePage);
       final searchPanel = find.byKey(TestKeys.fullscreenModalSurface);
+      final logicalSize =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
 
       expect(searchPanel, findsOneWidget);
-      expect(tester.getSize(searchPanel), equals(tester.getSize(page)));
+      expect(tester.getSize(searchPanel), equals(logicalSize));
     });
 
     testWidgets('点击圈子切换到首页内整合的圈子页', (tester) async {

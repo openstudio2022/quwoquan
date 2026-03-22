@@ -48,8 +48,10 @@ scenario_acceptance:
       planned:
         - social relationship search contract test
         - profile navigation regression test
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+    status: implemented
 
 story_readiness:
   S1:
@@ -65,5 +67,7 @@ story_readiness:
     tests:
       planned:
         - feature tree cleanup audit
-      recorded: []
-    status: pending
+      recorded:
+        - make gate
+        - make verify-metadata
+    status: implemented

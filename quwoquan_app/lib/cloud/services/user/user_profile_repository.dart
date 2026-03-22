@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -37,6 +38,23 @@ abstract class UserProfileRepository {
     int limit = CloudApiDefaults.userCirclesLimit,
   });
   Future<Map<String, dynamic>> getUserStats(String userId);
+
+  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  Future<List<RecentSearchEntryView>> listRecentSearches();
+
+  Future<RecentSearchEntryView> upsertRecentSearch({
+    required String query,
+    required SearchScope scope,
+    String? facet,
+  });
+
+  Future<void> deleteRecentSearch(String entryId);
+
+  Future<void> clearRecentSearches();
 
   // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────
   Future<void> followUser(String targetUserId);
@@ -127,6 +145,9 @@ abstract class UserProfileRepository {
 class MockUserProfileRepository extends UserProfileRepository {
   const MockUserProfileRepository();
 
+  static final List<Map<String, dynamic>> _recentSearchEntries =
+      <Map<String, dynamic>>[];
+
   @override
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
     return _mockProfiles[userId] ?? _defaultProfile(userId);
@@ -195,6 +216,82 @@ class MockUserProfileRepository extends UserProfileRepository {
       'followerCount': 1200,
       'likeCount': 4800,
     };
+  }
+
+  @override
+  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const <SocialRelationSearchItemView>[];
+    }
+    return _mockRelationUsers
+        .where((user) {
+          final displayName =
+              (user['displayName'] ?? user['nickname'] ?? '').toString();
+          final headline = (user['headline'] ?? user['bio'] ?? '').toString();
+          return displayName.toLowerCase().contains(normalizedQuery) ||
+              headline.toLowerCase().contains(normalizedQuery);
+        })
+        .take(limit)
+        .map((user) {
+          final isFollowing = user['isFollowing'] == true;
+          return SocialRelationSearchItemView.fromMap(<String, dynamic>{
+            ...user,
+            'profileSubjectId': user['profileSubjectId'] ?? user['userId'],
+            'username': user['username'] ?? user['nickname'],
+            'displayName': user['displayName'] ?? user['nickname'],
+            'headline': user['headline'] ?? user['bio'],
+            'chatAvailable': true,
+            'relationshipCapability': <String, dynamic>{
+              'relationState': isFollowing ? 'following' : 'not_following',
+              'canFollow': !isFollowing,
+              'canUnfollow': isFollowing,
+              'canOpenConversation': true,
+            },
+          });
+        })
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<RecentSearchEntryView>> listRecentSearches() async {
+    return _recentSearchEntries
+        .map(RecentSearchEntryView.fromMap)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<RecentSearchEntryView> upsertRecentSearch({
+    required String query,
+    required SearchScope scope,
+    String? facet,
+  }) async {
+    final scopeValue = scope.wireValue;
+    final seed = '$scopeValue|${facet ?? ''}|${query.trim().toLowerCase()}';
+    final entryId = 'recent_${seed.hashCode.abs().toRadixString(16)}';
+    _recentSearchEntries.removeWhere((entry) => entry['entryId'] == entryId);
+    final entry = <String, dynamic>{
+      'entryId': entryId,
+      'query': query,
+      'scope': scopeValue,
+      'facet': facet,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    _recentSearchEntries.insert(0, entry);
+    return RecentSearchEntryView.fromMap(entry);
+  }
+
+  @override
+  Future<void> deleteRecentSearch(String entryId) async {
+    _recentSearchEntries.removeWhere((entry) => entry['entryId'] == entryId);
+  }
+
+  @override
+  Future<void> clearRecentSearches() async {
+    _recentSearchEntries.clear();
   }
 
   @override
@@ -533,6 +630,18 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
   }
 
+  Map<String, dynamic> _decodeObject(http.Response resp) {
+    final data = json.decode(resp.body);
+    if (data is Map<String, dynamic>) {
+      final payload = data['data'];
+      if (payload is Map<String, dynamic>) {
+        return payload;
+      }
+      return data;
+    }
+    throw FormatException('Expected JSON object, got ${data.runtimeType}');
+  }
+
   static String _normalizeRelationshipState(Map<String, dynamic> map) {
     final state =
         map['relationState']?.toString() ??
@@ -742,6 +851,99 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       'followerCount': profile['followerCount'] ?? 0,
       'likeCount': profile['likeCount'] ?? 0,
     };
+  }
+
+  @override
+  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final url = _uri(
+      UserApiMetadata.searchSocialRelationsPath,
+      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
+    );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.searchSocialRelations,
+      ),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('searchSocialRelations failed: ${resp.statusCode}');
+    }
+    return _decodeItems(resp)
+        .map(SocialRelationSearchItemView.fromMap)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<RecentSearchEntryView>> listRecentSearches() async {
+    final url = _uri(UserApiMetadata.listRecentSearchesPath);
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listRecentSearches),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('listRecentSearches failed: ${resp.statusCode}');
+    }
+    return _decodeItems(resp)
+        .map(RecentSearchEntryView.fromMap)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<RecentSearchEntryView> upsertRecentSearch({
+    required String query,
+    required SearchScope scope,
+    String? facet,
+  }) async {
+    final scopeValue = scope.wireValue;
+    final seed = '$scopeValue|${facet ?? ''}|${query.trim().toLowerCase()}';
+    final entryId = 'recent_${seed.hashCode.abs().toRadixString(16)}';
+    final url = _uri(UserApiMetadata.upsertRecentSearchPath(entryId: entryId));
+    final resp = await _client.put(
+      url,
+      headers: {
+        ...CloudRequestHeaders.forPage(UserRequestPageIds.upsertRecentSearch),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(<String, dynamic>{
+        'query': query,
+        'scope': scopeValue,
+        'facet': facet,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }),
+    );
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
+      throw Exception('upsertRecentSearch failed: ${resp.statusCode}');
+    }
+    return RecentSearchEntryView.fromMap(_decodeObject(resp));
+  }
+
+  @override
+  Future<void> deleteRecentSearch(String entryId) async {
+    final url = _uri(UserApiMetadata.deleteRecentSearchPath(entryId: entryId));
+    final resp = await _client.delete(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteRecentSearch),
+    );
+    if (resp.statusCode != 200 && resp.statusCode != 204) {
+      throw Exception('deleteRecentSearch failed: ${resp.statusCode}');
+    }
+  }
+
+  @override
+  Future<void> clearRecentSearches() async {
+    final url = _uri(UserApiMetadata.clearRecentSearchesPath);
+    final resp = await _client.delete(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.clearRecentSearches,
+      ),
+    );
+    if (resp.statusCode != 200 && resp.statusCode != 204) {
+      throw Exception('clearRecentSearches failed: ${resp.statusCode}');
+    }
   }
 
   // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────

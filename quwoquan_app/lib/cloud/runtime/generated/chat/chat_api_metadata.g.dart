@@ -33,6 +33,8 @@ class ChatApiMetadata {
     'RemoveAssistant': '/v1/chat/conversations/{conversationId}/assistant',
     'RemoveMember': '/v1/chat/conversations/{conversationId}/members/{userId}',
     'SearchContacts': '/v1/chat/contacts/search',
+    'SearchConversations': '/v1/chat/conversations/search',
+    'SearchMessages': '/v1/chat/messages/search',
     'SendMessage': '/v1/chat/conversations/{conversationId}/messages',
     'SyncMessages': '/v1/chat/conversations/{conversationId}/sync',
     'TransferOwnership': '/v1/chat/conversations/{conversationId}/owner',
@@ -62,6 +64,8 @@ class ChatApiMetadata {
     'RemoveAssistant': 'DELETE',
     'RemoveMember': 'DELETE',
     'SearchContacts': 'GET',
+    'SearchConversations': 'GET',
+    'SearchMessages': 'GET',
     'SendMessage': 'POST',
     'SyncMessages': 'POST',
     'TransferOwnership': 'PATCH',
@@ -90,6 +94,8 @@ class ChatApiMetadata {
   static const String removeAssistantOperation = 'RemoveAssistant';
   static const String removeMemberOperation = 'RemoveMember';
   static const String searchContactsOperation = 'SearchContacts';
+  static const String searchConversationsOperation = 'SearchConversations';
+  static const String searchMessagesOperation = 'SearchMessages';
   static const String sendMessageOperation = 'SendMessage';
   static const String syncMessagesOperation = 'SyncMessages';
   static const String transferOwnershipOperation = 'TransferOwnership';
@@ -176,6 +182,8 @@ class ChatApiMetadata {
     });
   }
   static const String searchContactsPath = '/v1/chat/contacts/search';
+  static const String searchConversationsPath = '/v1/chat/conversations/search';
+  static const String searchMessagesPath = '/v1/chat/messages/search';
   static const String sendMessagePathTemplate = '/v1/chat/conversations/{conversationId}/messages';
   static String sendMessagePath({required String conversationId}) {
     return _fillPath(sendMessagePathTemplate, <String, String>{

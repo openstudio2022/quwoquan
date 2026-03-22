@@ -183,8 +183,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
-          width: 56,
-          height: 56,
+          width: AppSpacing.avatarUserLg,
+          height: AppSpacing.avatarUserLg,
           decoration: BoxDecoration(
             color: AppColors.iosFill(context),
             shape: BoxShape.circle,

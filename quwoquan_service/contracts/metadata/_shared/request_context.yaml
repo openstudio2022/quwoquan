@@ -18,7 +18,9 @@ domain_operation_page_ids:
     RecallMessage: chat.message.recall
     RemoveAssistant: chat.assistant.remove
     RemoveMember: chat.member.remove
+    SearchConversations: chat.conversation.search
     SearchContacts: chat.contacts.search
+    SearchMessages: chat.message.search
     SendMessage: chat.message.send
     SyncMessages: chat.message.sync
     TransferOwnership: chat.owner.transfer
@@ -43,6 +45,7 @@ domain_operation_page_ids:
     ListUserCircles: circle.user.list
     PinCirclePost: circle.post.pin
     ReportCircleBehavior: circle.behaviors.report
+    SearchCircles: circle.search
     UpdateCircle: circle.update
     UpdateCircleFile: circle.files.update
     UpdateCircleSections: circle.sections.update
@@ -76,6 +79,7 @@ domain_operation_page_ids:
     RepostToCircle: content.post.repost
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual
+    SearchPosts: content.search
     UnfavoritePost: content.post.unfavorite
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
@@ -108,8 +112,10 @@ domain_operation_page_ids:
     ActivateSubAccount: user.owner.sub_accounts.activate
     ActivatePersona: user.personas.activate
     BlockUser: user.block.create
+    ClearRecentSearches: user.search.history.clear
     CreateSubAccount: user.owner.sub_accounts.create
     CreatePersona: user.personas.create
+    DeleteRecentSearch: user.search.history.delete
     DeleteEmptySubAccount: user.owner.sub_accounts.delete_empty
     DeletePersona: user.personas.delete
     DeleteSubAccount: user.owner.sub_accounts.delete
@@ -128,14 +134,17 @@ domain_operation_page_ids:
     ListBlockedUsers: user.block.list
     ListFollowers: user.followers
     ListFollowing: user.following
+    ListRecentSearches: user.search.history.list
     ListSubAccounts: user.owner.sub_accounts.list
     ListPersonas: user.personas
     ListUserLifeItems: user.lifeItems
     ListUserLikes: user.likes
     ListUserWorks: user.works
     RetireSubAccount: user.owner.sub_accounts.retire
+    SearchSocialRelations: user.social.search
     UnblockUser: user.block.delete
     UnfollowUser: user.unfollow
+    UpsertRecentSearch: user.search.history.upsert
     UpdateAppearanceSettings: user.settings.appearance.patch
     UpdatePersona: user.personas.update
     UpdateSubAccount: user.owner.sub_accounts.update
@@ -143,6 +152,8 @@ domain_operation_page_ids:
     UpdateUserProfile: user.profile.edit
 
 standalone_page_ids:
+  globalSearchLanding: global.search.landing
+  globalSearchResults: global.search.results
   createLocationNearby: create.location.nearby
   createLocationSearch: create.location.search
   mediaUploadInit: media.upload.init

@@ -38,6 +38,7 @@ class ContentRequestPageIds {
     'ReportBehaviors': 'content.behaviors.report',
     'RepostToCircle': 'content.post.repost',
     'ResolveReport': 'content.resolve.report',
+    'SearchPosts': 'content.search',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
     'UnfavoritePost': 'content.post.unfavorite',
@@ -81,6 +82,7 @@ class ContentRequestPageIds {
   static const String reportBehaviors = 'content.behaviors.report';
   static const String repostToCircle = 'content.post.repost';
   static const String resolveReport = 'content.resolve.report';
+  static const String searchPosts = 'content.search';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String unfavoritePost = 'content.post.unfavorite';

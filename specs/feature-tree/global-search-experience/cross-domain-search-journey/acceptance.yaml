@@ -50,8 +50,10 @@ journey_acceptance:
       planned:
         - global search shell widget journey test
         - route and surface traceability test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+    status: implemented
   J2:
     title: 用户可得到按类型组织的综合搜索结果
     journey: input query -> receive grouped results -> switch section -> enter target page
@@ -77,8 +79,10 @@ journey_acceptance:
       planned:
         - grouped result composition integration test
         - search result navigation journey test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented
   J3:
     title: 用户可在搜索页完成历史复用、语音转词与问小趣切换
     journey: open search -> use recent history or voice -> continue search or handoff to xiaoqu
@@ -104,8 +108,10 @@ journey_acceptance:
         - recent search sync test
         - voice to query journey test
         - xiaoqu handoff regression test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - flutter test test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+    status: implemented
 
 release_acceptance:
   R1:
@@ -125,5 +131,7 @@ release_acceptance:
       planned:
         - rollback rehearsal
         - weak network degrade verification
-      recorded: []
-    status: pending
+      recorded:
+        - make gate
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+    status: implemented

@@ -219,6 +219,9 @@ class AssistantHttpGateway {
             channel: (json['channel'] as String?) ?? 'app',
             traceId: json['traceId'] as String?,
             maxIterations: (json['maxIterations'] as int?) ?? 6,
+            sourceSurfaceId: json['sourceSurfaceId'] as String?,
+            sourceQuery: json['sourceQuery'] as String?,
+            fromGlobalSearch: json['fromGlobalSearch'] == true,
           ),
         );
         final includeTraces = json['includeTraces'] == true;
@@ -262,6 +265,9 @@ class AssistantHttpGateway {
           channel: (json['channel'] as String?) ?? 'app',
           traceId: json['traceId'] as String?,
           maxIterations: (json['maxIterations'] as int?) ?? 6,
+          sourceSurfaceId: json['sourceSurfaceId'] as String?,
+          sourceQuery: json['sourceQuery'] as String?,
+          fromGlobalSearch: json['fromGlobalSearch'] == true,
         );
         final response = await _gateway.runWithTraceStream(
           runRequest,

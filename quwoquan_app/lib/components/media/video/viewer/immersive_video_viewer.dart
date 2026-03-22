@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
@@ -378,9 +379,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           final link = 'https://quwoquan.app/post/${currentPost.id}';
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(UITextConstants.copyLink)));
+            AppToast.show(context, UITextConstants.copyLink);
           }
         },
         onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),

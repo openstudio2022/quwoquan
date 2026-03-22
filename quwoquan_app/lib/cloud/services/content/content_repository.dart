@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 
 const String kFeedSortRecommend = 'recommend';
 
@@ -42,6 +43,13 @@ abstract class ContentRepository {
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
+  });
+
+  Future<List<PostSearchItemView>> searchPosts({
+    required String query,
+    String? identity,
+    String? type,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<Map<String, dynamic>> getPost({required String postId});
@@ -311,6 +319,79 @@ class MockContentRepository implements ContentRepository {
       sort: sort,
     );
     return page.items;
+  }
+
+  @override
+  Future<List<PostSearchItemView>> searchPosts({
+    required String query,
+    String? identity,
+    String? type,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const <PostSearchItemView>[];
+    }
+    final expectedIdentity = (identity ?? '').trim().toLowerCase();
+    final expectedType = (type ?? '').trim().toLowerCase();
+    final allRaw = <Map<String, dynamic>>[
+      ...ContentMockData.discoveryPhotoData,
+      ...ContentMockData.discoveryVideoData,
+      ...ContentMockData.discoveryMomentData,
+      ...ContentMockData.discoveryArticleData,
+    ];
+    final results = <PostSearchItemView>[];
+    for (final item in allRaw) {
+      final itemIdentity =
+          (item['contentIdentity'] ??
+                  (item['contentType'] == 'micro' ? 'moment' : 'work'))
+              .toString()
+              .toLowerCase();
+      final itemType = (item['contentType'] ?? item['type'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
+        continue;
+      }
+      if (expectedType.isNotEmpty && itemType != expectedType) {
+        continue;
+      }
+      final searchable = <String>[
+        item['title']?.toString() ?? '',
+        item['body']?.toString() ?? '',
+        item['summary']?.toString() ?? '',
+        item['locationName']?.toString() ?? '',
+        item['displayName']?.toString() ?? '',
+      ];
+      final matched = searchable.firstWhere(
+        (value) => value.toLowerCase().contains(normalizedQuery),
+        orElse: () => '',
+      );
+      if (matched.isEmpty) {
+        continue;
+      }
+      results.add(
+        PostSearchItemView.fromMap(<String, dynamic>{
+          ...item,
+          'highlightText': matched,
+          'matchedField': matched == (item['title']?.toString() ?? '')
+              ? 'title'
+              : matched == (item['displayName']?.toString() ?? '')
+              ? 'author'
+              : 'body',
+          'authorProfileSubjectId':
+              item['profileSubjectId'] ?? item['authorId'] ?? '',
+          'authorDisplayName':
+              item['displayName'] ?? item['authorDisplayNameSnapshot'] ?? '',
+          'authorAvatarUrl':
+              item['authorAvatarUrl'] ?? item['authorAvatarUrlSnapshot'] ?? '',
+        }),
+      );
+      if (results.length >= limit) {
+        break;
+      }
+    }
+    return results;
   }
 
   @override
@@ -1443,6 +1524,35 @@ class RemoteContentRepository implements ContentRepository {
       items: dtoItems,
       nextCursor: rawPage.nextCursor,
     );
+  }
+
+  @override
+  Future<List<PostSearchItemView>> searchPosts({
+    required String query,
+    String? identity,
+    String? type,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final uri = _uri(
+      ContentApiMetadata.searchPostsPath,
+      queryParameters: <String, String>{
+        'query': query,
+        if (identity != null && identity.isNotEmpty) 'identity': identity,
+        if (type != null && type.isNotEmpty) 'type': type,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.searchPosts),
+    );
+    final rawPage = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: ContentRequestPageIds.searchPosts,
+    );
+    return rawPage.items
+        .map(PostSearchItemView.fromMap)
+        .toList(growable: false);
   }
 
   String? _mapCategoryToFeedType(String category) {

@@ -503,7 +503,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   color: AppColors.worksBodyText,
                   fontSize: AppTypography.sm,
                   fontWeight: AppTypography.medium,
-                  height: 1,
+                  height: AppSpacing.one,
                 ),
               ),
             ],

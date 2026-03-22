@@ -139,7 +139,10 @@ void main() {
     expect(repository.createCallCount, 1);
     expect(repository.publishCallCount, 1);
     expect(repository.lastCreatePayload?['contentType'], 'article');
-    expect(repository.lastCreatePayload?['body'], longText);
+    expect(
+      (repository.lastCreatePayload?['body'] as String).replaceAll('\n', ''),
+      longText,
+    );
     expect(
       repository.lastCreatePayload?.containsKey('contentIdentity'),
       isFalse,

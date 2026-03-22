@@ -23,6 +23,9 @@ class TestKeys {
   static const fullscreenModalSurface = ValueKey<String>(
     'fullscreen_modal_surface',
   );
+  static const globalSearchLauncherButton = ValueKey<String>(
+    'global_search_launcher_button',
+  );
   static const modalBottomSheetPanel = ValueKey<String>(
     'modal_bottom_sheet_panel',
   );

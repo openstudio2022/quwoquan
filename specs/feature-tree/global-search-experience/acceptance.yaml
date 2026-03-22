@@ -35,8 +35,10 @@ level_acceptance:
       planned:
         - feature tree path audit
         - l1 index consistency review
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - make gate
+    status: implemented
   C2:
     title: 全局搜索的 metadata 真相源边界冻结
     done_when:
@@ -53,8 +55,11 @@ level_acceptance:
       planned:
         - metadata ownership review
         - route and surface traceability review
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented
   C3:
     title: 商用基线与发布边界可判定
     done_when:
@@ -71,5 +76,7 @@ level_acceptance:
       planned:
         - prd baseline checklist review
         - release readiness checklist review
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+        - make gate
+    status: implemented

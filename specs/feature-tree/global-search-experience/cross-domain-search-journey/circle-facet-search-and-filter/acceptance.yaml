@@ -48,8 +48,10 @@ scenario_acceptance:
       planned:
         - circle facet contract test
         - circle result filter widget test
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+    status: implemented
 
 story_readiness:
   S1:
@@ -65,5 +67,7 @@ story_readiness:
     tests:
       planned:
         - facet model audit
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - make gate
+    status: implemented

@@ -134,3 +134,31 @@ surfaces:
     operation_ids:
       - ReportInteractionEvent
       - ReportScorecard
+
+  - id: globalSearchLanding
+    owner: search
+    route_id: globalSearch
+    path_template: /search
+    description: 全局搜索首页（搜索框、问小趣、语音、指定搜索内容、最近搜索）
+    operation_ids:
+      - ListRecentSearches
+      - UpsertRecentSearch
+      - DeleteRecentSearch
+      - ClearRecentSearches
+      - CreateRun
+      - CreateRunStream
+
+  - id: globalSearchResults
+    owner: search
+    route_id: globalSearch
+    path_template: /search
+    description: 全局搜索结果页（四域 fan-out 与局部分组降级）
+    operation_ids:
+      - SearchPosts
+      - SearchSocialRelations
+      - SearchConversations
+      - SearchMessages
+      - SearchCircles
+      - UpsertRecentSearch
+      - CreateRun
+      - CreateRunStream

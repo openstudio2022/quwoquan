@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 
 /// Chat 域 Repository：会话、消息、成员、联系人等业务对象入口。
 /// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
@@ -21,6 +22,11 @@ abstract class ChatRepository {
 
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  Future<List<ConversationSearchItemView>> searchConversations({
+    required String query,
     int limit = CloudApiDefaults.pageLimit,
   });
 
@@ -37,6 +43,11 @@ abstract class ChatRepository {
   Future<List<Map<String, dynamic>>> listMessages({
     required String conversationId,
     String? before,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  Future<List<MessageSearchItemView>> searchMessages({
+    required String query,
     int limit = CloudApiDefaults.pageLimit,
   });
 
@@ -180,6 +191,44 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<ConversationSearchItemView>> searchConversations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const <ConversationSearchItemView>[];
+    }
+    return ChatMockData.conversations
+        .where((conversation) {
+          final title = (conversation['title'] ?? '').toString().toLowerCase();
+          final preview = (conversation['lastMessagePreview'] ?? '')
+              .toString()
+              .toLowerCase();
+          return title.contains(normalizedQuery) ||
+              preview.contains(normalizedQuery);
+        })
+        .take(limit)
+        .map((conversation) {
+          final title = (conversation['title'] ?? '').toString();
+          final preview = (conversation['lastMessagePreview'] ?? '').toString();
+          final highlight = title.toLowerCase().contains(normalizedQuery)
+              ? title
+              : preview;
+          return ConversationSearchItemView.fromMap(<String, dynamic>{
+            ...conversation,
+            'conversationId':
+                conversation['conversationId'] ?? conversation['_id'],
+            'highlightText': highlight,
+            'matchedField': title.toLowerCase().contains(normalizedQuery)
+                ? 'title'
+                : 'last_message',
+          });
+        })
+        .toList(growable: false);
+  }
+
+  @override
   Future<Map<String, dynamic>> createConversation({
     required String type,
     String? title,
@@ -215,6 +264,58 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.messagesFor(conversationId);
+  }
+
+  @override
+  Future<List<MessageSearchItemView>> searchMessages({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const <MessageSearchItemView>[];
+    }
+    final results = <MessageSearchItemView>[];
+    for (final conversation in ChatMockData.conversations) {
+      final conversationId =
+          (conversation['_id'] ?? conversation['conversationId'] ?? '')
+              .toString();
+      final conversationTitle = conversation['title']?.toString();
+      final conversationAvatarUrl = conversation['avatarUrl']?.toString();
+      final messages = ChatMockData.messagesFor(conversationId);
+      for (final message in messages) {
+        final content = (message['content'] ?? '').toString();
+        final senderName =
+            (message['senderDisplayName'] ??
+                    message['senderDisplayNameSnapshot'] ??
+                    message['senderName'] ??
+                    '')
+                .toString();
+        if (!content.toLowerCase().contains(normalizedQuery) &&
+            !senderName.toLowerCase().contains(normalizedQuery)) {
+          continue;
+        }
+        results.add(
+          MessageSearchItemView.fromMap(<String, dynamic>{
+            ...message,
+            'conversationId': conversationId,
+            'conversationTitle': conversationTitle,
+            'conversationAvatarUrl': conversationAvatarUrl,
+            'contentPreview': content,
+            'highlightText': content.toLowerCase().contains(normalizedQuery)
+                ? content
+                : senderName,
+            'matchedField': content.toLowerCase().contains(normalizedQuery)
+                ? 'content'
+                : 'sender',
+          }),
+        );
+        if (results.length >= limit) {
+          return results;
+        }
+      }
+    }
+    return results;
   }
 
   @override
@@ -514,6 +615,35 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<ConversationSearchItemView>> searchConversations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final uri = _uri(
+      ChatApiMetadata.searchConversationsPath,
+      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: _headersForSurface(
+        AppUiSurfaces.globalSearchResults,
+        operationId: ChatApiMetadata.searchConversationsOperation,
+        legacyPageId: ChatRequestPageIds.searchConversations,
+      ),
+    );
+    final page = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: _contextForSurface(
+        AppUiSurfaces.globalSearchResults,
+        operationId: ChatApiMetadata.searchConversationsOperation,
+      ),
+    );
+    return page.items
+        .map(ConversationSearchItemView.fromMap)
+        .toList(growable: false);
+  }
+
+  @override
   Future<Map<String, dynamic>> createConversation({
     required String type,
     String? title,
@@ -582,6 +712,35 @@ class RemoteChatRepository implements ChatRepository {
         operationId: ChatApiMetadata.listMessagesOperation,
       ),
     ).items;
+  }
+
+  @override
+  Future<List<MessageSearchItemView>> searchMessages({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final uri = _uri(
+      ChatApiMetadata.searchMessagesPath,
+      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: _headersForSurface(
+        AppUiSurfaces.globalSearchResults,
+        operationId: ChatApiMetadata.searchMessagesOperation,
+        legacyPageId: ChatRequestPageIds.searchMessages,
+      ),
+    );
+    final page = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: _contextForSurface(
+        AppUiSurfaces.globalSearchResults,
+        operationId: ChatApiMetadata.searchMessagesOperation,
+      ),
+    );
+    return page.items
+        .map(MessageSearchItemView.fromMap)
+        .toList(growable: false);
   }
 
   @override

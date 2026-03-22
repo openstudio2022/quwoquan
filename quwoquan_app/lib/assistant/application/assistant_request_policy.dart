@@ -72,6 +72,9 @@ class AssistantRequestPolicy {
       privacyProfile: request.privacyProfile,
       privacyPolicy: nextPrivacyPolicy,
       userProfileSnapshot: request.userProfileSnapshot,
+      sourceSurfaceId: request.sourceSurfaceId,
+      sourceQuery: request.sourceQuery,
+      fromGlobalSearch: request.fromGlobalSearch,
       rewriteInstruction: request.rewriteInstruction,
     );
   }

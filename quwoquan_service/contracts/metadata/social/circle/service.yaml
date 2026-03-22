@@ -15,6 +15,14 @@ api_routes:
     query_params: [category, domainId, recommendFor, cursor, limit, sort]
     response_entity: Circle
 
+  - method: GET
+    path: /v1/circles/search
+    operation: SearchCircles
+    description: 全局搜索圈子结果与 facet buckets
+    query_params: [query, categoryId, subCategory, cursor, limit]
+    response_entity: CircleSearchResultView
+    auth: required
+
   - method: POST
     path: /v1/circles
     operation: CreateCircle

@@ -98,6 +98,9 @@ class AppRoutePaths {
   static const String assistant = '/assistant';
   static const String assistantSegment = 'assistant';
 
+  static const String globalSearch = '/search';
+  static const String globalSearchSegment = 'search';
+
   static const String assistantManagement = '/assistant/management';
   static const String assistantManagementSegment = 'management';
 

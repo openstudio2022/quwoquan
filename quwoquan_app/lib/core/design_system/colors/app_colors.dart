@@ -91,6 +91,10 @@ class AppColors {
   /// 作品频道 — 收藏激活色（琥珀棕，业界通行星标色调）
   static const Color worksSave = Color(0xFFE0A850);
 
+  /// 创作页媒体错误占位渐变
+  static const Color createMediaFallbackGradientTop = Color(0xFF343434);
+  static const Color createMediaFallbackGradientBottom = Color(0xFF141414);
+
   /// 聊天页专用（1:1 图一）：对话区域背景、气泡色
   static const Color chatBackground = Color(0xFFF5F5F5);
   static const Color chatBubbleIncoming = Color(0xFFFFFFFF);
@@ -180,6 +184,102 @@ class AppColors {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return iosAccent(context).withValues(alpha: isDark ? 0.22 : 0.12);
   }
+}
+
+class ArticleTemplateColors {
+  ArticleTemplateColors._();
+
+  static const Color ritualStageDark = Color(0xFF171411);
+  static const Color ritualStageLight = Color(0xFFF6F0E7);
+  static const Color ritualPaperDark = Color(0xFF2A241D);
+  static const Color ritualPaperLight = Color(0xFFFDF8EF);
+  static const Color ritualPaperBorderDark = Color(0xFF564739);
+  static const Color ritualPaperBorderLight = Color(0xFFE0D1BC);
+  static const Color ritualTextDark = Color(0xFFF8ECDD);
+  static const Color ritualTextLight = Color(0xFF3A2C22);
+  static const Color ritualSecondaryTextDark = Color(0xFFD1BFA9);
+  static const Color ritualSecondaryTextLight = Color(0xFF8A6E56);
+  static const Color ritualAccentDark = Color(0xFFD3A96D);
+  static const Color ritualAccentLight = Color(0xFFB6874C);
+  static const Color ritualBadgeBackgroundDark = Color(0xE646382C);
+  static const Color ritualBadgeBackgroundLight = Color(0xCCFFFFFF);
+  static const Color ritualBadgeTextDark = Color(0xFFF8ECDD);
+  static const Color ritualBadgeTextLight = Color(0xFF6B4E34);
+  static const Color ritualOverlayDark = Color(0x14000000);
+  static const Color ritualOverlayLight = Color(0x10C79C6E);
+
+  static const Color diffuseStageDark = Color(0xFF16192A);
+  static const Color diffuseStageLight = Color(0xFFF6F4FF);
+  static const Color diffusePaperDark = Color(0xFF252A43);
+  static const Color diffusePaperLight = Color(0xFFFDFBFF);
+  static const Color diffusePaperBorderDark = Color(0xFF48507A);
+  static const Color diffusePaperBorderLight = Color(0xFFE6DAFF);
+  static const Color diffuseTextDark = Color(0xFFF4F1FF);
+  static const Color diffuseTextLight = Color(0xFF31274D);
+  static const Color diffuseSecondaryTextDark = Color(0xFFC7BFEE);
+  static const Color diffuseSecondaryTextLight = Color(0xFF7D6EA1);
+  static const Color diffuseAccentDark = Color(0xFFA9B5FF);
+  static const Color diffuseAccentLight = Color(0xFF8B8AF5);
+  static const Color diffuseBadgeBackgroundDark = Color(0xE634395A);
+  static const Color diffuseBadgeBackgroundLight = Color(0xCCFFFFFF);
+  static const Color diffuseBadgeTextDark = Color(0xFFF5F3FF);
+  static const Color diffuseBadgeTextLight = Color(0xFF6660A8);
+  static const Color diffuseOverlayDark = Color(0x145A66A3);
+  static const Color diffuseOverlayLight = Color(0x14C3C8FF);
+
+  static const Color journalStageDark = Color(0xFF202322);
+  static const Color journalStageLight = Color(0xFFF7F3EA);
+  static const Color journalPaperDark = Color(0xFFFAF2E2);
+  static const Color journalPaperLight = Color(0xFFFFFBF5);
+  static const Color journalPaperBorderDark = Color(0xFFD9C6A8);
+  static const Color journalPaperBorderLight = Color(0xFFE8DCC8);
+  static const Color journalTextDark = Color(0xFF2B2016);
+  static const Color journalTextLight = Color(0xFF3A2C22);
+  static const Color journalSecondaryTextDark = Color(0xFF7D6753);
+  static const Color journalSecondaryTextLight = Color(0xFF8E7865);
+  static const Color journalAccentDark = Color(0xFFFF5D7A);
+  static const Color journalAccentLight = Color(0xFFFF4A6B);
+  static const Color journalBadgeBackgroundDark = Color(0xE6FBF0DE);
+  static const Color journalBadgeBackgroundLight = Color(0xCCFFFFFF);
+  static const Color journalBadgeTextDark = Color(0xFF6B5644);
+  static const Color journalBadgeTextLight = Color(0xFF7D6A59);
+  static const Color journalOverlayDark = Color(0x1024C6A2);
+  static const Color journalOverlayLight = Color(0x1438DCC7);
+
+  static const Color techStage = Color(0xFF0B1019);
+  static const Color techPaper = Color(0xFF141C2B);
+  static const Color techPaperBorder = Color(0xFF314462);
+  static const Color techText = Color(0xFFE8F2FF);
+  static const Color techSecondaryText = Color(0xFF8FB0D9);
+  static const Color techAccent = Color(0xFF4EE0FF);
+  static const Color techBadgeBackground = Color(0xCC18273E);
+  static const Color techBadgeText = Color(0xFFE8F2FF);
+  static const Color techOverlay = Color(0x1237A4C8);
+
+  static const Color gentleStageDark = Color(0xFF1D1E26);
+  static const Color gentleStageLight = Color(0xFFF7F8F5);
+  static const Color gentlePaperDark = Color(0xFF2A2D36);
+  static const Color gentlePaperLight = Color(0xFFFFFEFB);
+  static const Color gentlePaperBorderDark = Color(0xFF454956);
+  static const Color gentlePaperBorderLight = Color(0xFFE8E7DF);
+  static const Color gentleTextDark = Color(0xFFF4F4F0);
+  static const Color gentleTextLight = Color(0xFF2F3136);
+  static const Color gentleSecondaryTextDark = Color(0xFFC7C9CE);
+  static const Color gentleSecondaryTextLight = Color(0xFF7A7D86);
+  static const Color gentleAccentDark = Color(0xFFFFB0BE);
+  static const Color gentleAccentLight = Color(0xFFFF7A95);
+  static const Color gentleBadgeBackgroundDark = Color(0xCC343840);
+  static const Color gentleBadgeBackgroundLight = Color(0xCCFFFFFF);
+  static const Color gentleBadgeTextDark = Color(0xFFF4F4F0);
+  static const Color gentleBadgeTextLight = Color(0xFF6F7280);
+  static const Color gentleOverlayDark = Color(0x10B7F0D7);
+  static const Color gentleOverlayLight = Color(0x10BFE9D2);
+
+  static const Color gentleBackdropMint = Color(0xFFB6E8D6);
+  static const Color diffuseBackdropLavender = Color(0xFFBBC7FF);
+  static const Color diffuseBackdropPink = Color(0xFFFFC7EB);
+  static const Color journalTape = Color(0x99A5B4FF);
+  static const Color journalSticker = Color(0x88A7B8FF);
 }
 
 class AppColorsTheme {

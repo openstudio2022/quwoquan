@@ -22,6 +22,7 @@ class CircleRequestPageIds {
     'ListUserCircles': 'circle.user.list',
     'PinCirclePost': 'circle.post.pin',
     'ReportCircleBehavior': 'circle.behaviors.report',
+    'SearchCircles': 'circle.search',
     'UpdateCircle': 'circle.update',
     'UpdateCircleFile': 'circle.files.update',
     'UpdateCircleSections': 'circle.sections.update',
@@ -45,6 +46,7 @@ class CircleRequestPageIds {
   static const String listUserCircles = 'circle.user.list';
   static const String pinCirclePost = 'circle.post.pin';
   static const String reportCircleBehavior = 'circle.behaviors.report';
+  static const String searchCircles = 'circle.search';
   static const String updateCircle = 'circle.update';
   static const String updateCircleFile = 'circle.files.update';
   static const String updateCircleSections = 'circle.sections.update';

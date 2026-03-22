@@ -12,11 +12,13 @@ class UserRequestPageIds {
     'BindCredential': 'user.bind.credential',
     'BlockUser': 'user.block.create',
     'CancelGreetingRequest': 'user.cancel.greeting.request',
+    'ClearRecentSearches': 'user.search.history.clear',
     'ConfirmProposal': 'user.confirm.proposal',
     'CreatePersona': 'user.personas.create',
     'CreateSubAccount': 'user.owner.sub_accounts.create',
     'DeleteEmptySubAccount': 'user.owner.sub_accounts.delete_empty',
     'DeletePersona': 'user.personas.delete',
+    'DeleteRecentSearch': 'user.search.history.delete',
     'DeleteSubAccount': 'user.owner.sub_accounts.delete',
     'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'FollowUser': 'user.follow',
@@ -45,6 +47,7 @@ class UserRequestPageIds {
     'ListGreetingOutbox': 'user.list.greeting.outbox',
     'ListMyInvites': 'user.list.my.invites',
     'ListPersonas': 'user.personas',
+    'ListRecentSearches': 'user.search.history.list',
     'ListSubAccounts': 'user.owner.sub_accounts.list',
     'ListUserLifeItems': 'user.lifeItems',
     'ListUserLikes': 'user.likes',
@@ -58,6 +61,7 @@ class UserRequestPageIds {
     'RejectProposal': 'user.reject.proposal',
     'ReplyGreetingRequest': 'user.reply.greeting.request',
     'RetireSubAccount': 'user.owner.sub_accounts.retire',
+    'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
@@ -69,6 +73,7 @@ class UserRequestPageIds {
     'UpdatePrivacySettings': 'user.settings.privacy.patch',
     'UpdateSubAccount': 'user.owner.sub_accounts.update',
     'UpdateUserProfile': 'user.profile.edit',
+    'UpsertRecentSearch': 'user.search.history.upsert',
   };
 
   static const String acceptInvite = 'user.accept.invite';
@@ -78,11 +83,13 @@ class UserRequestPageIds {
   static const String bindCredential = 'user.bind.credential';
   static const String blockUser = 'user.block.create';
   static const String cancelGreetingRequest = 'user.cancel.greeting.request';
+  static const String clearRecentSearches = 'user.search.history.clear';
   static const String confirmProposal = 'user.confirm.proposal';
   static const String createPersona = 'user.personas.create';
   static const String createSubAccount = 'user.owner.sub_accounts.create';
   static const String deleteEmptySubAccount = 'user.owner.sub_accounts.delete_empty';
   static const String deletePersona = 'user.personas.delete';
+  static const String deleteRecentSearch = 'user.search.history.delete';
   static const String deleteSubAccount = 'user.owner.sub_accounts.delete';
   static const String dismissContactDiscovery = 'user.dismiss.contact.discovery';
   static const String followUser = 'user.follow';
@@ -111,6 +118,7 @@ class UserRequestPageIds {
   static const String listGreetingOutbox = 'user.list.greeting.outbox';
   static const String listMyInvites = 'user.list.my.invites';
   static const String listPersonas = 'user.personas';
+  static const String listRecentSearches = 'user.search.history.list';
   static const String listSubAccounts = 'user.owner.sub_accounts.list';
   static const String listUserLifeItems = 'user.lifeItems';
   static const String listUserLikes = 'user.likes';
@@ -124,6 +132,7 @@ class UserRequestPageIds {
   static const String rejectProposal = 'user.reject.proposal';
   static const String replyGreetingRequest = 'user.reply.greeting.request';
   static const String retireSubAccount = 'user.owner.sub_accounts.retire';
+  static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
@@ -135,4 +144,5 @@ class UserRequestPageIds {
   static const String updatePrivacySettings = 'user.settings.privacy.patch';
   static const String updateSubAccount = 'user.owner.sub_accounts.update';
   static const String updateUserProfile = 'user.profile.edit';
+  static const String upsertRecentSearch = 'user.search.history.upsert';
 }

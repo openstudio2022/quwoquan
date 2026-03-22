@@ -91,6 +91,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: sourceSurfaceId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 触发来源 surfaceId；全局搜索 handoff 使用该字段传递入口来源
+
+      - name: sourceQuery
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        description: 来源页当前 query 快照，仅用于 typed handoff 上下文
+
+      - name: fromGlobalSearch
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否由全局搜索入口触发
+
       - name: userQuery
         type: string
         constraints: [NULLABLE]

@@ -424,6 +424,9 @@ class AssistantApiGateway {
           privacyPolicy:
               (payload['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{},
+          sourceSurfaceId: payload['sourceSurfaceId'] as String?,
+          sourceQuery: payload['sourceQuery'] as String?,
+          fromGlobalSearch: payload['fromGlobalSearch'] == true,
         );
         final requestedModelRef =
             (payload['modelRef'] as String?)?.trim() ?? '';
@@ -580,6 +583,9 @@ class AssistantApiGateway {
           privacyPolicy:
               (payload['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{},
+          sourceSurfaceId: payload['sourceSurfaceId'] as String?,
+          sourceQuery: payload['sourceQuery'] as String?,
+          fromGlobalSearch: payload['fromGlobalSearch'] == true,
         );
         final runRes = await _assistantGateway.run(runReq);
         request.response.headers.set(

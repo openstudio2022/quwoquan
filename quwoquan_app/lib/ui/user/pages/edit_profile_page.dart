@@ -166,6 +166,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           _buildProfileMediaCard(userData),
           ProfileIosGroupedSection(
             header: '基本信息',
+            footer: _buildSectionFootnote('用户名会展示在你的主页链接中，建议保持清晰且便于识别。'),
             children: <Widget>[
               _EditProfileFieldCell(
                 label: '昵称',
@@ -182,10 +183,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 ),
               ),
             ],
-            footer: _buildSectionFootnote('用户名会展示在你的主页链接中，建议保持清晰且便于识别。'),
           ),
           ProfileIosGroupedSection(
             header: '个人简介',
+            footer: _buildSectionFootnote('简介和链接会在用户主页上展示，建议保持简洁且具有辨识度。'),
             children: <Widget>[
               _EditProfileFieldCell(
                 label: '简介',
@@ -242,7 +243,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 ),
               ),
             ],
-            footer: _buildSectionFootnote('简介和链接会在用户主页上展示，建议保持简洁且具有辨识度。'),
           ),
         ],
       ),
@@ -292,7 +292,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                   child: Stack(
                     children: <Widget>[
                       SizedBox(
-                        height: 140,
+                        height: AppSpacing.oneHundred + AppSpacing.forty,
                         width: double.infinity,
                         child: coverUrl != null && coverUrl.isNotEmpty
                             ? Image.network(
@@ -312,7 +312,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           onPressed: () => _showMediaActionSheet('封面'),
                           style: ProfileIosActionStyle.tinted,
                           expand: false,
-                          height: 32,
+                          height: AppSpacing.buttonHeightSm,
                         ),
                       ),
                     ],
@@ -368,7 +368,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         onPressed: () => _showMediaActionSheet('头像'),
                         style: ProfileIosActionStyle.outlined,
                         expand: false,
-                        height: 32,
+                        height: AppSpacing.buttonHeightSm,
                       ),
                     ],
                   ),
@@ -425,7 +425,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       style: TextStyle(
         color: label,
         fontSize: AppTypography.iosBody,
-        height: 1.35,
+        height: AppSpacing.textLineHeightBody,
       ),
       decoration: const BoxDecoration(),
     );
@@ -439,7 +439,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         style: TextStyle(
           fontSize: AppTypography.iosFootnote,
           color: AppColors.iosSecondaryLabel(context),
-          height: 1.35,
+          height: AppSpacing.textLineHeightBody,
         ),
       ),
     );
@@ -482,7 +482,7 @@ class _EditProfileFieldCell extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
           SizedBox(height: AppSpacing.intraGroupSm),

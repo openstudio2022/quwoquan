@@ -29,10 +29,11 @@ class GlobalTopActions extends StatelessWidget {
       children: [
         if (showSearch)
           _TopActionIcon(
+            key: TestKeys.globalSearchLauncherButton,
             icon: CupertinoIcons.search,
-            onTap: () => GlobalSearchSheet.show(
+            onTap: () => GlobalSearchLauncher.open(
               context,
-              initialScope: initialSearchScope,
+              initialScope: initialSearchScope.searchScope,
             ),
           ),
         if (showSearch) SizedBox(width: AppSpacing.intraGroupXs),
@@ -48,8 +49,43 @@ class GlobalTopActions extends StatelessWidget {
   }
 }
 
+class GlobalSearchLauncher {
+  const GlobalSearchLauncher._();
+
+  static Future<void> open(
+    BuildContext context, {
+    SearchLaunchContext? launchContext,
+    SearchScope initialScope = SearchScope.all,
+    String prefilledQuery = '',
+  }) {
+    final effectiveLaunchContext =
+        launchContext ??
+        SearchLaunchContext(
+          entrySurfaceId: _entrySurfaceIdForContext(context),
+          initialScope: initialScope,
+          prefilledQuery: prefilledQuery,
+        );
+    return context.push(
+      AppRoutePaths.globalSearch,
+      extra: effectiveLaunchContext,
+    );
+  }
+
+  static String _entrySurfaceIdForContext(BuildContext context) {
+    try {
+      return GoRouterState.of(context).uri.path;
+    } catch (_) {
+      return AppRoutePaths.globalSearch;
+    }
+  }
+}
+
 class _TopActionIcon extends StatelessWidget {
-  const _TopActionIcon({required this.icon, required this.onTap});
+  const _TopActionIcon({
+    super.key,
+    required this.icon,
+    required this.onTap,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
@@ -262,15 +298,24 @@ class GlobalSearchSheet {
     BuildContext context, {
     GlobalSearchScope initialScope = GlobalSearchScope.all,
   }) {
-    return showCupertinoModalPopup<void>(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (_) => _GlobalSearchPanel(initialScope: initialScope),
+    return GlobalSearchLauncher.open(
+      context,
+      initialScope: initialScope.searchScope,
     );
   }
 }
 
 enum GlobalSearchScope { all, content, circles, contacts, messages }
+
+extension GlobalSearchScopeX on GlobalSearchScope {
+  SearchScope get searchScope => switch (this) {
+    GlobalSearchScope.all => SearchScope.all,
+    GlobalSearchScope.content => SearchScope.content,
+    GlobalSearchScope.circles => SearchScope.circles,
+    GlobalSearchScope.contacts => SearchScope.socialRelation,
+    GlobalSearchScope.messages => SearchScope.messages,
+  };
+}
 
 class _GlobalSearchPanel extends ConsumerStatefulWidget {
   const _GlobalSearchPanel({required this.initialScope});

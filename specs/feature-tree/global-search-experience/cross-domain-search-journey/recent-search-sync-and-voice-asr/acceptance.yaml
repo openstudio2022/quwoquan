@@ -49,8 +49,10 @@ scenario_acceptance:
       planned:
         - recent search sync contract test
         - history clear regression test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented
   A2:
     title: 语音入口只负责 ASR 转文本查询
     scenario: voice to query
@@ -75,8 +77,10 @@ scenario_acceptance:
       planned:
         - voice query widget test
         - microphone permission fallback test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented
 
 story_readiness:
   S1:
@@ -92,5 +96,7 @@ story_readiness:
     tests:
       planned:
         - fallback verification
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented

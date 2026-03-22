@@ -48,8 +48,10 @@ scenario_acceptance:
       planned:
         - grouped result integration test
         - result navigation journey test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - make gate
+    status: implemented
 
 story_readiness:
   S1:
@@ -66,5 +68,7 @@ story_readiness:
     tests:
       planned:
         - result model contract review
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - make gate
+    status: implemented

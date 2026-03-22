@@ -540,7 +540,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                                   fontWeight: AppTypography.medium,
                                   color: fg,
                                   letterSpacing: -0.16,
-                                  height: 1.02,
+                                  height: AppSpacing.textLineHeightDense,
                                 ),
                               ),
                             ),
@@ -553,7 +553,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.two),
                         Text(
                           _buildMetaLine(context),
                           maxLines: 1,
@@ -562,7 +562,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                             fontSize: AppTypography.iosFootnote,
                             color: muted,
                             letterSpacing: -0.04,
-                            height: 1.0,
+                            height: AppSpacing.one,
                           ),
                         ),
                       ],
@@ -673,7 +673,7 @@ class _ExpandableText extends StatelessWidget {
     final textStyle = TextStyle(
       fontSize: AppTypography.iosBody,
       color: fg,
-      height: 1.36,
+      height: AppSpacing.textLineHeightBodyRelaxed,
       letterSpacing: -0.18,
     );
 

@@ -97,6 +97,17 @@ class _AssistantConversationPageState
     _inputController.addListener(_onInputChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _controller.initialize();
+      if (!mounted) {
+        return;
+      }
+      final autoSendQuery =
+          widget.assistantOpenContext?.hints['autoSendQuery']
+              ?.toString()
+              .trim() ??
+          '';
+      if (autoSendQuery.isNotEmpty) {
+        await _sendMessage(draftText: autoSendQuery);
+      }
     });
   }
 

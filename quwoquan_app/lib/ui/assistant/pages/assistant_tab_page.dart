@@ -10,6 +10,7 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 
@@ -133,6 +134,28 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     );
   }
 
+  Widget _buildSearchAction(Color color) {
+    return SizedBox(
+      width: AppSpacing.iconButtonMinSizeSm,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+        onPressed: () => GlobalSearchLauncher.open(
+          context,
+          launchContext: SearchLaunchContext(
+            entrySurfaceId: AppRoutePaths.assistant,
+            initialScope: SearchScope.all,
+          ),
+        ),
+        child: Icon(
+          CupertinoIcons.search,
+          size: AppSpacing.iconMedium,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   double _embeddedBottomInset(BuildContext context) {
     return AppSpacing.bottomNavHeight +
         AppSpacing.xs +
@@ -210,7 +233,10 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
           onTabChange: _handleTabChange,
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
           leadingActions: [_buildBackAction(fgSecondary)],
-          trailingActions: [_buildSettingsAction(fgSecondary)],
+          trailingActions: [
+            _buildSearchAction(fgSecondary),
+            _buildSettingsAction(fgSecondary),
+          ],
           transparentBackground: true,
         ),
       ),

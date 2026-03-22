@@ -455,8 +455,8 @@ class _ArticleAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipOval(
       child: SizedBox(
-        width: 40,
-        height: 40,
+        width: AppSpacing.avatarUserMd,
+        height: AppSpacing.avatarUserMd,
         child: ArticleAdaptiveImage(imageUrl: imageUrl),
       ),
     );

@@ -83,6 +83,28 @@ class AppSpacing {
   /// 统一可点击区域最低标准（WCAG 触控建议）
   static const double minInteractiveSize = 44.0;
 
+  // ==================== 文本行高语义 ====================
+  /// 紧凑文案行高，适用于 badge / 紧凑标签
+  static const double textLineHeightCompact = 1.2;
+
+  /// 极紧标题行高，适用于用户名/时间等单行紧凑排版
+  static const double textLineHeightDense = 1.02;
+
+  /// 默认正文行高，适用于表单与说明文案
+  static const double textLineHeightBody = 1.35;
+
+  /// 宽松正文行高，适用于 feed 文本内容
+  static const double textLineHeightBodyRelaxed = 1.36;
+
+  /// 标题行高，适用于中大字号标题
+  static const double textLineHeightHeadline = 1.4;
+
+  /// 标签/说明行高，适用于 footnote / caption
+  static const double textLineHeightLabel = 1.5;
+
+  /// 长文正文行高，适用于文章分页阅读场景
+  static const double textLineHeightArticleBody = 1.82;
+
   /// 获取文案按钮内边距（按断点适配，不受容器约束）
   static EdgeInsets buttonPadding(BuildContext context, String size) {
     final horizontal = getSpacing(

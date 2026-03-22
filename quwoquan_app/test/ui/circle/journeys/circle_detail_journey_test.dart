@@ -69,7 +69,7 @@ Future<void> _pumpIgnoringTabPaintErrors(
     }
   };
   for (var i = 0; i < frames; i++) {
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
   }
   FlutterError.onError = original;
 }
@@ -88,7 +88,9 @@ Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
   try {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
   } catch (_) {
-    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
   }
   FlutterError.onError = original;
 }
@@ -115,9 +117,9 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
       router.push('/circle/circle_photo_01');
-      await _pumpIgnoringTabPaintErrors(tester, frames: 5);
+      await _settleIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(find.byType(CircleShell), findsOneWidget);
       expect(find.text(UITextConstants.circleWorksTab), findsWidgets);
     });
 
@@ -127,11 +129,16 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
       router.push('/circle/circle_photo_01');
-      await _pumpIgnoringTabPaintErrors(tester, frames: 5);
+      await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.back));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CircleShell),
+          matching: find.byIcon(CupertinoIcons.back),
+        ),
+      );
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CirclesPage), findsOneWidget);
@@ -215,11 +222,12 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
       router.push('/circle/circle_photo_01');
-      await _pumpIgnoringTabPaintErrors(tester, frames: 5);
+      await _settleIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(find.byType(CircleShell), findsOneWidget);
+      expect(find.text(UITextConstants.circleWorksTab), findsWidgets);
 
-      await _pumpIgnoringTabPaintErrors(tester, frames: 5);
+      await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
     });

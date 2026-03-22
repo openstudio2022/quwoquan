@@ -51,7 +51,7 @@ void main() {
 
     expect(find.byKey(TestKeys.createIdentityWork), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatImage), findsNothing);
-    expect(find.text('添加标题（可选）'), findsOneWidget);
+    expect(find.text('输入标题（可选）'), findsOneWidget);
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
     expect(find.text('从相册加图'), findsNothing);
     expect(find.text('相机补图'), findsNothing);
@@ -72,7 +72,7 @@ void main() {
     expect(find.byKey(TestKeys.createWorkFormatVideo), findsNothing);
   });
 
-  testWidgets('正文输入限制为 5000 字', (tester) async {
+  testWidgets('长正文会按分页软上限拆分到文章页中', (tester) async {
     await tester.pumpWidget(_buildCreatePageApp());
     await tester.pumpAndSettle();
 
@@ -80,10 +80,22 @@ void main() {
     await tester.enterText(find.byKey(TestKeys.createMomentInput), text);
     await tester.pump();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    final state = container.read(createEditorProvider);
     final bodyField = tester.widget<CupertinoTextField>(
       find.byKey(TestKeys.createMomentInput),
     );
-    expect(bodyField.controller?.text.length, 5000);
+    expect(bodyField.controller?.text.length, kArticlePageSoftCharacterLimit);
+    expect(state.articlePages.length, greaterThan(1));
+    expect(
+      state.articlePages
+          .map((page) => page.body)
+          .where((body) => body.isNotEmpty)
+          .join(),
+      text,
+    );
   });
 
   testWidgets('写文字入口进入沉浸式文章编辑页', (tester) async {
@@ -95,7 +107,8 @@ void main() {
     expect(find.text('文章编辑'), findsOneWidget);
     expect(find.text('草稿'), findsOneWidget);
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);
-    expect(find.text('正文'), findsOneWidget);
+    expect(find.text('输入标题（可选）'), findsOneWidget);
+    expect(find.text('继续写内容，支持 emoji、图片、序号和模板'), findsOneWidget);
   });
 
   testWidgets('媒体区改为多行拖拽网格且不显示图片封面语义', (tester) async {

@@ -371,14 +371,14 @@ class _MoreActionQuickSection extends StatelessWidget {
       ),
       padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
       child: SizedBox(
-        height: 116,
+        height: AppSpacing.oneHundred + AppSpacing.md,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
           itemBuilder: (context, index) {
             final action = actions[index];
             return SizedBox(
-              width: 76,
+              width: AppSpacing.avatarUserLg + AppSpacing.twenty,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onTap(action),

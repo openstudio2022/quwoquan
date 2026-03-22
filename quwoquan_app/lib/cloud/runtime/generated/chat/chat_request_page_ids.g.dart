@@ -26,6 +26,8 @@ class ChatRequestPageIds {
     'RemoveAssistant': 'chat.assistant.remove',
     'RemoveMember': 'chat.member.remove',
     'SearchContacts': 'chat.contacts.search',
+    'SearchConversations': 'chat.conversation.search',
+    'SearchMessages': 'chat.message.search',
     'SendMessage': 'chat.message.send',
     'SyncMessages': 'chat.message.sync',
     'TransferOwnership': 'chat.owner.transfer',
@@ -54,6 +56,8 @@ class ChatRequestPageIds {
   static const String removeAssistant = 'chat.assistant.remove';
   static const String removeMember = 'chat.member.remove';
   static const String searchContacts = 'chat.contacts.search';
+  static const String searchConversations = 'chat.conversation.search';
+  static const String searchMessages = 'chat.message.search';
   static const String sendMessage = 'chat.message.send';
   static const String syncMessages = 'chat.message.sync';
   static const String transferOwnership = 'chat.owner.transfer';

@@ -178,6 +178,22 @@ api_routes:
     operation: SearchContacts
     description: 联系人搜索
 
+  - method: GET
+    path: /v1/chat/conversations/search
+    operation: SearchConversations
+    description: 全局搜索会话结果
+    query_params: [query, cursor, limit]
+    response_entity: ConversationSearchItemView
+    auth: required
+
+  - method: GET
+    path: /v1/chat/messages/search
+    operation: SearchMessages
+    description: 全局搜索消息结果
+    query_params: [query, cursor, limit]
+    response_entity: MessageSearchItemView
+    auth: required
+
 consumers:
   - name: app
     capabilities: [list_conversations, list_inbox, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts]

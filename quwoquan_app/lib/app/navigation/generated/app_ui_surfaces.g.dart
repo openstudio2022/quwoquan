@@ -192,6 +192,40 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface globalSearchLanding = AppUiSurface(
+    id: 'globalSearchLanding',
+    owner: 'search',
+    routeId: 'globalSearch',
+    pathTemplate: '/search',
+    description: '全局搜索首页（搜索框、问小趣、语音、指定搜索内容、最近搜索）',
+    operationIds: <String>[
+      'ListRecentSearches',
+      'UpsertRecentSearch',
+      'DeleteRecentSearch',
+      'ClearRecentSearches',
+      'CreateRun',
+      'CreateRunStream',
+    ],
+  );
+
+  static const AppUiSurface globalSearchResults = AppUiSurface(
+    id: 'globalSearchResults',
+    owner: 'search',
+    routeId: 'globalSearch',
+    pathTemplate: '/search',
+    description: '全局搜索结果页（四域 fan-out 与局部分组降级）',
+    operationIds: <String>[
+      'SearchPosts',
+      'SearchSocialRelations',
+      'SearchConversations',
+      'SearchMessages',
+      'SearchCircles',
+      'UpsertRecentSearch',
+      'CreateRun',
+      'CreateRunStream',
+    ],
+  );
+
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
     chatDetail,
@@ -205,6 +239,8 @@ class AppUiSurfaces {
     assistantSettings,
     assistantHistory,
     assistantFeedback,
+    globalSearchLanding,
+    globalSearchResults,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
@@ -220,5 +256,7 @@ class AppUiSurfaces {
     'assistantSettings': assistantSettings,
     'assistantHistory': assistantHistory,
     'assistantFeedback': assistantFeedback,
+    'globalSearchLanding': globalSearchLanding,
+    'globalSearchResults': globalSearchResults,
   };
 }

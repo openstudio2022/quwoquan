@@ -30,6 +30,7 @@ class CircleApiMetadata {
     'ListUserCircles': '/v1/users/{userId}/circles',
     'PinCirclePost': '/v1/circles/{circleId}/feed/{postId}/pin',
     'ReportCircleBehavior': '/v1/circles/behaviors',
+    'SearchCircles': '/v1/circles/search',
     'UpdateCircle': '/v1/circles/{circleId}',
     'UpdateCircleFile': '/v1/circles/{circleId}/files/{fileId}',
     'UpdateCircleSections': '/v1/circles/{circleId}/sections',
@@ -54,6 +55,7 @@ class CircleApiMetadata {
     'ListUserCircles': 'GET',
     'PinCirclePost': 'PATCH',
     'ReportCircleBehavior': 'POST',
+    'SearchCircles': 'GET',
     'UpdateCircle': 'PATCH',
     'UpdateCircleFile': 'PATCH',
     'UpdateCircleSections': 'PATCH',
@@ -77,6 +79,7 @@ class CircleApiMetadata {
   static const String listUserCirclesOperation = 'ListUserCircles';
   static const String pinCirclePostOperation = 'PinCirclePost';
   static const String reportCircleBehaviorOperation = 'ReportCircleBehavior';
+  static const String searchCirclesOperation = 'SearchCircles';
   static const String updateCircleOperation = 'UpdateCircle';
   static const String updateCircleFileOperation = 'UpdateCircleFile';
   static const String updateCircleSectionsOperation = 'UpdateCircleSections';
@@ -173,6 +176,7 @@ class CircleApiMetadata {
     });
   }
   static const String reportCircleBehaviorPath = '/v1/circles/behaviors';
+  static const String searchCirclesPath = '/v1/circles/search';
   static const String updateCirclePathTemplate = '/v1/circles/{circleId}';
   static String updateCirclePath({required String circleId}) {
     return _fillPath(updateCirclePathTemplate, <String, String>{

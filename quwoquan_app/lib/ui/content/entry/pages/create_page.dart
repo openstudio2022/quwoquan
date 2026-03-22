@@ -2073,8 +2073,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
                                       colors: <Color>[
-                                        Color(0xFF343434),
-                                        Color(0xFF141414),
+                                        AppColors.createMediaFallbackGradientTop,
+                                        AppColors.createMediaFallbackGradientBottom,
                                       ],
                                     ),
                                   ),

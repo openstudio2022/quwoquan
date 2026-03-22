@@ -27,6 +27,7 @@ import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
+import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/sub_account_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
@@ -90,6 +91,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutePaths.globalSearch,
+        pageBuilder: (context, state) {
+          final launchContext = state.extra is SearchLaunchContext
+              ? state.extra! as SearchLaunchContext
+              : SearchLaunchContext(
+                  entrySurfaceId: AppRoutePaths.globalSearch,
+                );
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: GlobalSearchPage(launchContext: launchContext),
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.02),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          );
+        },
       ),
       GoRoute(
         path: AppRoutePaths.createEntry,

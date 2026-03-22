@@ -2026,8 +2026,8 @@ class _WorksPageIndicator extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           margin: const EdgeInsets.symmetric(horizontal: 1.5),
-          width: 4.5,
-          height: 4.5,
+          width: AppSpacing.xs + AppSpacing.hairline,
+          height: AppSpacing.xs + AppSpacing.hairline,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: alpha),

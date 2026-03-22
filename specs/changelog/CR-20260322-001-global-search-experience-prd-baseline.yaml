@@ -1,8 +1,8 @@
 id: CR-20260322-001
 title: global search experience prd baseline
 slug: global-search-experience-prd-baseline
-revision: 2
-status: active
+revision: 3
+status: delivered
 
 affected_nodes:
   - specs/feature-tree/global-search-experience
@@ -248,3 +248,70 @@ entries:
       - 已实际执行 `make -C quwoquan_service verify-metadata && make codegen && make codegen-app` 并通过。
       - 本次 design 不引入新的业务 feature flag，继续按整版上线与整版回滚设计。
       - 问小趣 handoff 被限定在 `UI + application + cloud client`，不新增 runtime / skill / tool / prompt 逻辑。
+  - timestamp: "2026-03-22T23:52:48+08:00"
+    summary: >
+      完成 `global-search-experience` 全量 `/deliver`：落地 route-driven 全屏搜索、
+      四域 fan-out 结果编排、recent search local+cloud sync、语音 ASR 转词、问小趣 typed handoff，
+      并补齐 feature-tree 任务/验收证据，最终整仓 `make gate` 通过。
+    reason: >
+      `/design` 与 `plan.yaml` 已冻结，但进入入库前仍需把 metadata/codegen、App 交互壳层、
+      Repository typed search、assistant handoff、最近搜索生命周期、T1~T4 证据与整仓门禁一起收口。
+      在最终验证阶段还暴露出增量语义门禁与旧测试断言失配，必须一并修复后才能标记为 deliver 完成。
+    change_type:
+      - implement
+      - validate
+      - test
+      - cleanup
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C1
+          - C2
+          - C3
+      - path: specs/feature-tree/global-search-experience/tasks.md
+        sections:
+          - current delivery tasks
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/tasks.md
+        sections:
+          - current delivery tasks
+      - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
+        sections:
+          - search shell
+          - quick actions
+          - recent history
+          - result composition
+      - path: quwoquan_app/lib/ui/search/providers/search_coordinator.dart
+        sections:
+          - repository fan-out
+          - recent search reconcile
+          - assistant handoff prep
+      - path: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+        sections:
+          - landing history
+          - mixed result rendering
+          - assistant handoff
+      - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+        sections:
+          - A2
+          - A3
+          - C3
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 已实际执行 `python3 scripts/verify_dart_semantic.py --targets quwoquan_app/lib` 并通过。
+      - 已实际执行全局搜索相关 widget/journey 回归与 gate 中失败用例回归，并重新跑通整仓 `make gate`。
+      - 整仓 gate 仍保留若干 advisory WARN，但不再存在失败项；本 CR 至此进入 deliver 完成态。

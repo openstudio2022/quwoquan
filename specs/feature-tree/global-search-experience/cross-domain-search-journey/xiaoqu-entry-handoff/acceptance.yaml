@@ -49,8 +49,10 @@ scenario_acceptance:
       planned:
         - xiaoqu handoff widget test
         - assistant conversation handoff regression test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - flutter test test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+    status: implemented
 
 story_readiness:
   S1:
@@ -67,5 +69,7 @@ story_readiness:
     tests:
       planned:
         - assistant metadata review
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - make gate
+    status: implemented

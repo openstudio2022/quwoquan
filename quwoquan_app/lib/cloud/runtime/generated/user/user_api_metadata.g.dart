@@ -24,11 +24,13 @@ class UserApiMetadata {
     'BindCredential': '/v1/owner/credentials/bind',
     'BlockUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/block',
     'CancelGreetingRequest': '/v1/user/greeting-request/{requestId}',
+    'ClearRecentSearches': '/v1/user/search/recent',
     'ConfirmProposal': '/v1/user/profile/proposals/{id}/confirm',
     'CreatePersona': '/v1/user/personas',
     'CreateSubAccount': '/v1/owner/sub-accounts',
     'DeleteEmptySubAccount': '/v1/owner/sub-accounts/{subAccountId}:delete-empty',
     'DeletePersona': '/v1/user/personas/{personaId}',
+    'DeleteRecentSearch': '/v1/user/search/recent/{entryId}',
     'DeleteSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'DismissContactDiscovery': '/v1/owner/contact-discovery/{id}',
     'FollowUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/follow',
@@ -57,6 +59,7 @@ class UserApiMetadata {
     'ListGreetingOutbox': '/v1/user/greeting-request/outbox',
     'ListMyInvites': '/v1/me/invites',
     'ListPersonas': '/v1/user/personas',
+    'ListRecentSearches': '/v1/user/search/recent',
     'ListSubAccounts': '/v1/owner/sub-accounts',
     'ListUserLifeItems': '/v1/users/{userId}/life-items',
     'ListUserLikes': '/v1/users/{userId}/likes',
@@ -70,6 +73,7 @@ class UserApiMetadata {
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
     'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
     'RetireSubAccount': '/v1/owner/sub-accounts/{subAccountId}:retire',
+    'SearchSocialRelations': '/v1/user/search/social-relations',
     'SendGreetingRequest': '/v1/user/greeting-request',
     'UnbindCredential': '/v1/owner/credentials/{credentialType}',
     'UnblockUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/block',
@@ -81,6 +85,7 @@ class UserApiMetadata {
     'UpdatePrivacySettings': '/v1/user/settings/privacy',
     'UpdateSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'UpdateUserProfile': '/v1/user/profile',
+    'UpsertRecentSearch': '/v1/user/search/recent/{entryId}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -91,11 +96,13 @@ class UserApiMetadata {
     'BindCredential': 'POST',
     'BlockUser': 'POST',
     'CancelGreetingRequest': 'DELETE',
+    'ClearRecentSearches': 'DELETE',
     'ConfirmProposal': 'POST',
     'CreatePersona': 'POST',
     'CreateSubAccount': 'POST',
     'DeleteEmptySubAccount': 'POST',
     'DeletePersona': 'DELETE',
+    'DeleteRecentSearch': 'DELETE',
     'DeleteSubAccount': 'DELETE',
     'DismissContactDiscovery': 'DELETE',
     'FollowUser': 'POST',
@@ -124,6 +131,7 @@ class UserApiMetadata {
     'ListGreetingOutbox': 'GET',
     'ListMyInvites': 'GET',
     'ListPersonas': 'GET',
+    'ListRecentSearches': 'GET',
     'ListSubAccounts': 'GET',
     'ListUserLifeItems': 'GET',
     'ListUserLikes': 'GET',
@@ -137,6 +145,7 @@ class UserApiMetadata {
     'RejectProposal': 'POST',
     'ReplyGreetingRequest': 'POST',
     'RetireSubAccount': 'POST',
+    'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
     'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
@@ -148,6 +157,7 @@ class UserApiMetadata {
     'UpdatePrivacySettings': 'PATCH',
     'UpdateSubAccount': 'PATCH',
     'UpdateUserProfile': 'PATCH',
+    'UpsertRecentSearch': 'PUT',
   };
 
   static const String acceptInviteOperation = 'AcceptInvite';
@@ -157,11 +167,13 @@ class UserApiMetadata {
   static const String bindCredentialOperation = 'BindCredential';
   static const String blockUserOperation = 'BlockUser';
   static const String cancelGreetingRequestOperation = 'CancelGreetingRequest';
+  static const String clearRecentSearchesOperation = 'ClearRecentSearches';
   static const String confirmProposalOperation = 'ConfirmProposal';
   static const String createPersonaOperation = 'CreatePersona';
   static const String createSubAccountOperation = 'CreateSubAccount';
   static const String deleteEmptySubAccountOperation = 'DeleteEmptySubAccount';
   static const String deletePersonaOperation = 'DeletePersona';
+  static const String deleteRecentSearchOperation = 'DeleteRecentSearch';
   static const String deleteSubAccountOperation = 'DeleteSubAccount';
   static const String dismissContactDiscoveryOperation = 'DismissContactDiscovery';
   static const String followUserOperation = 'FollowUser';
@@ -190,6 +202,7 @@ class UserApiMetadata {
   static const String listGreetingOutboxOperation = 'ListGreetingOutbox';
   static const String listMyInvitesOperation = 'ListMyInvites';
   static const String listPersonasOperation = 'ListPersonas';
+  static const String listRecentSearchesOperation = 'ListRecentSearches';
   static const String listSubAccountsOperation = 'ListSubAccounts';
   static const String listUserLifeItemsOperation = 'ListUserLifeItems';
   static const String listUserLikesOperation = 'ListUserLikes';
@@ -203,6 +216,7 @@ class UserApiMetadata {
   static const String rejectProposalOperation = 'RejectProposal';
   static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
   static const String retireSubAccountOperation = 'RetireSubAccount';
+  static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
   static const String unbindCredentialOperation = 'UnbindCredential';
   static const String unblockUserOperation = 'UnblockUser';
@@ -214,6 +228,7 @@ class UserApiMetadata {
   static const String updatePrivacySettingsOperation = 'UpdatePrivacySettings';
   static const String updateSubAccountOperation = 'UpdateSubAccount';
   static const String updateUserProfileOperation = 'UpdateUserProfile';
+  static const String upsertRecentSearchOperation = 'UpsertRecentSearch';
 
   static const String acceptInvitePathTemplate = '/v1/invites/{linkCode}/accept';
   static String acceptInvitePath({required String linkCode}) {
@@ -252,6 +267,7 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
+  static const String clearRecentSearchesPath = '/v1/user/search/recent';
   static const String confirmProposalPathTemplate = '/v1/user/profile/proposals/{id}/confirm';
   static String confirmProposalPath({required String id}) {
     return _fillPath(confirmProposalPathTemplate, <String, String>{
@@ -270,6 +286,12 @@ class UserApiMetadata {
   static String deletePersonaPath({required String personaId}) {
     return _fillPath(deletePersonaPathTemplate, <String, String>{
       'personaId': personaId,
+    });
+  }
+  static const String deleteRecentSearchPathTemplate = '/v1/user/search/recent/{entryId}';
+  static String deleteRecentSearchPath({required String entryId}) {
+    return _fillPath(deleteRecentSearchPathTemplate, <String, String>{
+      'entryId': entryId,
     });
   }
   static const String deleteSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}';
@@ -360,6 +382,7 @@ class UserApiMetadata {
   static const String listGreetingOutboxPath = '/v1/user/greeting-request/outbox';
   static const String listMyInvitesPath = '/v1/me/invites';
   static const String listPersonasPath = '/v1/user/personas';
+  static const String listRecentSearchesPath = '/v1/user/search/recent';
   static const String listSubAccountsPath = '/v1/owner/sub-accounts';
   static const String listUserLifeItemsPathTemplate = '/v1/users/{userId}/life-items';
   static String listUserLifeItemsPath({required String userId}) {
@@ -403,6 +426,7 @@ class UserApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String searchSocialRelationsPath = '/v1/user/search/social-relations';
   static const String sendGreetingRequestPath = '/v1/user/greeting-request';
   static const String unbindCredentialPathTemplate = '/v1/owner/credentials/{credentialType}';
   static String unbindCredentialPath({required String credentialType}) {
@@ -439,6 +463,12 @@ class UserApiMetadata {
     });
   }
   static const String updateUserProfilePath = '/v1/user/profile';
+  static const String upsertRecentSearchPathTemplate = '/v1/user/search/recent/{entryId}';
+  static String upsertRecentSearchPath({required String entryId}) {
+    return _fillPath(upsertRecentSearchPathTemplate, <String, String>{
+      'entryId': entryId,
+    });
+  }
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

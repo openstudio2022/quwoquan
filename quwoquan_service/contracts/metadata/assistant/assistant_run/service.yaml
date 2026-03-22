@@ -12,14 +12,14 @@ api_routes:
     path: /v1/assistant/runs
     operation: CreateRun
     description: 同步执行
-    request_fields: [userQuery, triggerType, skillId, profileSubjectId, subAccountId, personaContextVersion]
+    request_fields: [userQuery, triggerType, skillId, profileSubjectId, subAccountId, personaContextVersion, sourceSurfaceId, sourceQuery, fromGlobalSearch]
     response_entity: AssistantRun
 
   - method: POST
     path: /v1/assistant/runs/stream
     operation: CreateRunStream
     description: 流式执行（SSE）
-    request_fields: [userQuery, triggerType, skillId, profileSubjectId, subAccountId, personaContextVersion]
+    request_fields: [userQuery, triggerType, skillId, profileSubjectId, subAccountId, personaContextVersion, sourceSurfaceId, sourceQuery, fromGlobalSearch]
 
   - method: POST
     path: /v1/assistant/page-context

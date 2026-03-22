@@ -193,9 +193,9 @@ class ArticleTemplateThumbnail extends StatelessWidget {
           AnimatedContainer(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            width: 72,
-            height: 104,
-            padding: const EdgeInsets.all(2),
+            width: AppSpacing.avatarUserXl,
+            height: AppSpacing.oneHundred + AppSpacing.xs,
+            padding: const EdgeInsets.all(AppSpacing.two),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
               border: Border.all(color: borderColor, width: selected ? 2 : 1),
@@ -266,68 +266,140 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
   switch (template) {
     case ArticleTemplatePreset.ritual:
       return ArticleTemplatePalette(
-        stageBackground: isDark ? const Color(0xFF171411) : const Color(0xFFF6F0E7),
-        paperColor: isDark ? const Color(0xFF2A241D) : const Color(0xFFFDF8EF),
-        paperBorderColor: isDark ? const Color(0xFF564739) : const Color(0xFFE0D1BC),
-        textColor: isDark ? const Color(0xFFF8ECDD) : const Color(0xFF3A2C22),
-        secondaryTextColor: isDark ? const Color(0xFFD1BFA9) : const Color(0xFF8A6E56),
-        accentColor: isDark ? const Color(0xFFD3A96D) : const Color(0xFFB6874C),
-        badgeBackground: isDark ? const Color(0xE646382C) : const Color(0xCCFFFFFF),
-        badgeTextColor: isDark ? const Color(0xFFF8ECDD) : const Color(0xFF6B4E34),
+        stageBackground: isDark
+            ? ArticleTemplateColors.ritualStageDark
+            : ArticleTemplateColors.ritualStageLight,
+        paperColor: isDark
+            ? ArticleTemplateColors.ritualPaperDark
+            : ArticleTemplateColors.ritualPaperLight,
+        paperBorderColor: isDark
+            ? ArticleTemplateColors.ritualPaperBorderDark
+            : ArticleTemplateColors.ritualPaperBorderLight,
+        textColor: isDark
+            ? ArticleTemplateColors.ritualTextDark
+            : ArticleTemplateColors.ritualTextLight,
+        secondaryTextColor: isDark
+            ? ArticleTemplateColors.ritualSecondaryTextDark
+            : ArticleTemplateColors.ritualSecondaryTextLight,
+        accentColor: isDark
+            ? ArticleTemplateColors.ritualAccentDark
+            : ArticleTemplateColors.ritualAccentLight,
+        badgeBackground: isDark
+            ? ArticleTemplateColors.ritualBadgeBackgroundDark
+            : ArticleTemplateColors.ritualBadgeBackgroundLight,
+        badgeTextColor: isDark
+            ? ArticleTemplateColors.ritualBadgeTextDark
+            : ArticleTemplateColors.ritualBadgeTextLight,
         shadowColor: Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
-        overlayColor: isDark ? const Color(0x14000000) : const Color(0x10C79C6E),
+        overlayColor: isDark
+            ? ArticleTemplateColors.ritualOverlayDark
+            : ArticleTemplateColors.ritualOverlayLight,
       );
     case ArticleTemplatePreset.diffuse:
       return ArticleTemplatePalette(
-        stageBackground: isDark ? const Color(0xFF16192A) : const Color(0xFFF6F4FF),
-        paperColor: isDark ? const Color(0xFF252A43) : const Color(0xFFFDFBFF),
-        paperBorderColor: isDark ? const Color(0xFF48507A) : const Color(0xFFE6DAFF),
-        textColor: isDark ? const Color(0xFFF4F1FF) : const Color(0xFF31274D),
-        secondaryTextColor: isDark ? const Color(0xFFC7BFEE) : const Color(0xFF7D6EA1),
-        accentColor: isDark ? const Color(0xFFA9B5FF) : const Color(0xFF8B8AF5),
-        badgeBackground: isDark ? const Color(0xE634395A) : const Color(0xCCFFFFFF),
-        badgeTextColor: isDark ? const Color(0xFFF5F3FF) : const Color(0xFF6660A8),
+        stageBackground: isDark
+            ? ArticleTemplateColors.diffuseStageDark
+            : ArticleTemplateColors.diffuseStageLight,
+        paperColor: isDark
+            ? ArticleTemplateColors.diffusePaperDark
+            : ArticleTemplateColors.diffusePaperLight,
+        paperBorderColor: isDark
+            ? ArticleTemplateColors.diffusePaperBorderDark
+            : ArticleTemplateColors.diffusePaperBorderLight,
+        textColor: isDark
+            ? ArticleTemplateColors.diffuseTextDark
+            : ArticleTemplateColors.diffuseTextLight,
+        secondaryTextColor: isDark
+            ? ArticleTemplateColors.diffuseSecondaryTextDark
+            : ArticleTemplateColors.diffuseSecondaryTextLight,
+        accentColor: isDark
+            ? ArticleTemplateColors.diffuseAccentDark
+            : ArticleTemplateColors.diffuseAccentLight,
+        badgeBackground: isDark
+            ? ArticleTemplateColors.diffuseBadgeBackgroundDark
+            : ArticleTemplateColors.diffuseBadgeBackgroundLight,
+        badgeTextColor: isDark
+            ? ArticleTemplateColors.diffuseBadgeTextDark
+            : ArticleTemplateColors.diffuseBadgeTextLight,
         shadowColor: Colors.black.withValues(alpha: isDark ? 0.34 : 0.11),
-        overlayColor: isDark ? const Color(0x145A66A3) : const Color(0x14C3C8FF),
+        overlayColor: isDark
+            ? ArticleTemplateColors.diffuseOverlayDark
+            : ArticleTemplateColors.diffuseOverlayLight,
       );
     case ArticleTemplatePreset.journal:
       return ArticleTemplatePalette(
-        stageBackground: isDark ? const Color(0xFF202322) : const Color(0xFFF7F3EA),
-        paperColor: isDark ? const Color(0xFFFAF2E2) : const Color(0xFFFFFBF5),
-        paperBorderColor: isDark ? const Color(0xFFD9C6A8) : const Color(0xFFE8DCC8),
-        textColor: isDark ? const Color(0xFF2B2016) : const Color(0xFF3A2C22),
-        secondaryTextColor: isDark ? const Color(0xFF7D6753) : const Color(0xFF8E7865),
-        accentColor: isDark ? const Color(0xFFFF5D7A) : const Color(0xFFFF4A6B),
-        badgeBackground: isDark ? const Color(0xE6FBF0DE) : const Color(0xCCFFFFFF),
-        badgeTextColor: isDark ? const Color(0xFF6B5644) : const Color(0xFF7D6A59),
+        stageBackground: isDark
+            ? ArticleTemplateColors.journalStageDark
+            : ArticleTemplateColors.journalStageLight,
+        paperColor: isDark
+            ? ArticleTemplateColors.journalPaperDark
+            : ArticleTemplateColors.journalPaperLight,
+        paperBorderColor: isDark
+            ? ArticleTemplateColors.journalPaperBorderDark
+            : ArticleTemplateColors.journalPaperBorderLight,
+        textColor: isDark
+            ? ArticleTemplateColors.journalTextDark
+            : ArticleTemplateColors.journalTextLight,
+        secondaryTextColor: isDark
+            ? ArticleTemplateColors.journalSecondaryTextDark
+            : ArticleTemplateColors.journalSecondaryTextLight,
+        accentColor: isDark
+            ? ArticleTemplateColors.journalAccentDark
+            : ArticleTemplateColors.journalAccentLight,
+        badgeBackground: isDark
+            ? ArticleTemplateColors.journalBadgeBackgroundDark
+            : ArticleTemplateColors.journalBadgeBackgroundLight,
+        badgeTextColor: isDark
+            ? ArticleTemplateColors.journalBadgeTextDark
+            : ArticleTemplateColors.journalBadgeTextLight,
         shadowColor: Colors.black.withValues(alpha: isDark ? 0.28 : 0.14),
-        overlayColor: isDark ? const Color(0x1024C6A2) : const Color(0x1438DCC7),
+        overlayColor: isDark
+            ? ArticleTemplateColors.journalOverlayDark
+            : ArticleTemplateColors.journalOverlayLight,
       );
     case ArticleTemplatePreset.tech:
       return ArticleTemplatePalette(
-        stageBackground: const Color(0xFF0B1019),
-        paperColor: const Color(0xFF141C2B),
-        paperBorderColor: const Color(0xFF314462),
-        textColor: const Color(0xFFE8F2FF),
-        secondaryTextColor: const Color(0xFF8FB0D9),
-        accentColor: const Color(0xFF4EE0FF),
-        badgeBackground: const Color(0xCC18273E),
-        badgeTextColor: const Color(0xFFE8F2FF),
+        stageBackground: ArticleTemplateColors.techStage,
+        paperColor: ArticleTemplateColors.techPaper,
+        paperBorderColor: ArticleTemplateColors.techPaperBorder,
+        textColor: ArticleTemplateColors.techText,
+        secondaryTextColor: ArticleTemplateColors.techSecondaryText,
+        accentColor: ArticleTemplateColors.techAccent,
+        badgeBackground: ArticleTemplateColors.techBadgeBackground,
+        badgeTextColor: ArticleTemplateColors.techBadgeText,
         shadowColor: Colors.black.withValues(alpha: 0.42),
-        overlayColor: const Color(0x1237A4C8),
+        overlayColor: ArticleTemplateColors.techOverlay,
       );
     case ArticleTemplatePreset.gentle:
       return ArticleTemplatePalette(
-        stageBackground: isDark ? const Color(0xFF1D1E26) : const Color(0xFFF7F8F5),
-        paperColor: isDark ? const Color(0xFF2A2D36) : const Color(0xFFFFFEFB),
-        paperBorderColor: isDark ? const Color(0xFF454956) : const Color(0xFFE8E7DF),
-        textColor: isDark ? const Color(0xFFF4F4F0) : const Color(0xFF2F3136),
-        secondaryTextColor: isDark ? const Color(0xFFC7C9CE) : const Color(0xFF7A7D86),
-        accentColor: isDark ? const Color(0xFFFFB0BE) : const Color(0xFFFF7A95),
-        badgeBackground: isDark ? const Color(0xCC343840) : const Color(0xCCFFFFFF),
-        badgeTextColor: isDark ? const Color(0xFFF4F4F0) : const Color(0xFF6F7280),
+        stageBackground: isDark
+            ? ArticleTemplateColors.gentleStageDark
+            : ArticleTemplateColors.gentleStageLight,
+        paperColor: isDark
+            ? ArticleTemplateColors.gentlePaperDark
+            : ArticleTemplateColors.gentlePaperLight,
+        paperBorderColor: isDark
+            ? ArticleTemplateColors.gentlePaperBorderDark
+            : ArticleTemplateColors.gentlePaperBorderLight,
+        textColor: isDark
+            ? ArticleTemplateColors.gentleTextDark
+            : ArticleTemplateColors.gentleTextLight,
+        secondaryTextColor: isDark
+            ? ArticleTemplateColors.gentleSecondaryTextDark
+            : ArticleTemplateColors.gentleSecondaryTextLight,
+        accentColor: isDark
+            ? ArticleTemplateColors.gentleAccentDark
+            : ArticleTemplateColors.gentleAccentLight,
+        badgeBackground: isDark
+            ? ArticleTemplateColors.gentleBadgeBackgroundDark
+            : ArticleTemplateColors.gentleBadgeBackgroundLight,
+        badgeTextColor: isDark
+            ? ArticleTemplateColors.gentleBadgeTextDark
+            : ArticleTemplateColors.gentleBadgeTextLight,
         shadowColor: Colors.black.withValues(alpha: isDark ? 0.28 : 0.09),
-        overlayColor: isDark ? const Color(0x10B7F0D7) : const Color(0x10BFE9D2),
+        overlayColor: isDark
+            ? ArticleTemplateColors.gentleOverlayDark
+            : ArticleTemplateColors.gentleOverlayLight,
       );
   }
 }
@@ -395,24 +467,27 @@ ArticleTypographySpec resolveArticleTypography(
     titleStyle: base(
       size: AppTypography.xl,
       weight: AppTypography.semiBold,
-      height: 1.4,
+      height: AppSpacing.textLineHeightHeadline,
     ),
-    bodyStyle: base(size: AppTypography.base, height: 1.82),
+    bodyStyle: base(
+      size: AppTypography.base,
+      height: AppSpacing.textLineHeightArticleBody,
+    ),
     captionStyle: base(
       size: AppTypography.xs,
       weight: AppTypography.medium,
-      height: 1.5,
+      height: AppSpacing.textLineHeightLabel,
       color: palette.secondaryTextColor,
     ),
     placeholderStyle: base(
       size: AppTypography.base,
-      height: 1.82,
+      height: AppSpacing.textLineHeightArticleBody,
       color: palette.secondaryTextColor.withValues(alpha: 0.72),
     ),
     badgeStyle: base(
       size: AppTypography.xs,
       weight: AppTypography.semiBold,
-      height: 1.2,
+      height: AppSpacing.textLineHeightCompact,
       color: palette.badgeTextColor,
     ),
   );
@@ -438,8 +513,8 @@ class _ArticleBackdrop extends StatelessWidget {
               top: -20,
               left: -10,
               child: _BackdropBlob(
-                width: 120,
-                height: 80,
+                width: AppSpacing.oneHundred + AppSpacing.twenty,
+                height: AppSpacing.storyHeight,
                 color: palette.accentColor.withValues(alpha: 0.16),
               ),
             ),
@@ -447,9 +522,11 @@ class _ArticleBackdrop extends StatelessWidget {
               bottom: 10,
               right: -14,
               child: _BackdropBlob(
-                width: 132,
-                height: 88,
-                color: const Color(0xFFB6E8D6).withValues(alpha: 0.26),
+                width: AppSpacing.oneHundred + AppSpacing.buttonHeightSm,
+                height: AppSpacing.storyHeight + AppSpacing.sm,
+                color: ArticleTemplateColors.gentleBackdropMint.withValues(
+                  alpha: 0.26,
+                ),
               ),
             ),
           ],
@@ -462,18 +539,22 @@ class _ArticleBackdrop extends StatelessWidget {
               top: -18,
               right: -18,
               child: _BackdropBlob(
-                width: 150,
-                height: 120,
-                color: const Color(0xFFBBC7FF).withValues(alpha: 0.3),
+                width: AppSpacing.oneHundred + AppSpacing.forty + AppSpacing.ten,
+                height: AppSpacing.oneHundred + AppSpacing.twenty,
+                color: ArticleTemplateColors.diffuseBackdropLavender.withValues(
+                  alpha: 0.3,
+                ),
               ),
             ),
             Positioned(
               bottom: -12,
               left: -10,
               child: _BackdropBlob(
-                width: 140,
-                height: 96,
-                color: const Color(0xFFFFC7EB).withValues(alpha: 0.26),
+                width: AppSpacing.oneHundred + AppSpacing.forty,
+                height: AppSpacing.largeButtonSize * 2,
+                color: ArticleTemplateColors.diffuseBackdropPink.withValues(
+                  alpha: 0.26,
+                ),
               ),
             ),
           ],
@@ -579,7 +660,7 @@ class _ArticleWrappedTextImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = SizedBox(
-      width: 108,
+      width: AppSpacing.oneHundred + AppSpacing.sm,
       child: _ArticlePageImage(
         imageUrl: imageUrl,
         borderRadius: AppSpacing.radiusTwenty,
@@ -617,8 +698,8 @@ class _TemplatePreviewFiller extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Container(
-          width: 28,
-          height: 6,
+          width: AppSpacing.buttonHeightXs,
+          height: AppSpacing.six,
           decoration: BoxDecoration(
             color: typography.captionStyle.color?.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
@@ -703,7 +784,7 @@ class _JournalBackdropPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
     }
 
-    final tapePaint = Paint()..color = const Color(0x99A5B4FF);
+    final tapePaint = Paint()..color = ArticleTemplateColors.journalTape;
     canvas.save();
     canvas.translate(18, 18);
     canvas.rotate(-0.18);
@@ -719,7 +800,7 @@ class _JournalBackdropPainter extends CustomPainter {
     final stickerPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = const Color(0x88A7B8FF);
+      ..color = ArticleTemplateColors.journalSticker;
     canvas.drawArc(
       Rect.fromCircle(
         center: Offset(size.width - 34, size.height - 32),

@@ -46,6 +46,7 @@ class ContentApiMetadata {
     'ReportBehaviors': '/v1/content/behaviors',
     'RepostToCircle': '/v1/content/posts/{postId}/repost',
     'ResolveReport': '/v1/content/reports/{reportId}',
+    'SearchPosts': '/v1/content/posts/search',
     'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
     'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
@@ -90,6 +91,7 @@ class ContentApiMetadata {
     'ReportBehaviors': 'POST',
     'RepostToCircle': 'POST',
     'ResolveReport': 'PATCH',
+    'SearchPosts': 'GET',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
     'UnfavoritePost': 'DELETE',
@@ -133,6 +135,7 @@ class ContentApiMetadata {
   static const String reportBehaviorsOperation = 'ReportBehaviors';
   static const String repostToCircleOperation = 'RepostToCircle';
   static const String resolveReportOperation = 'ResolveReport';
+  static const String searchPostsOperation = 'SearchPosts';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String unfavoritePostOperation = 'UnfavoritePost';
@@ -291,6 +294,7 @@ class ContentApiMetadata {
       'reportId': reportId,
     });
   }
+  static const String searchPostsPath = '/v1/content/posts/search';
   static const String selectAutoVideoCoverPathTemplate = '/v1/content/media/{mediaId}/cover:auto';
   static String selectAutoVideoCoverPath({required String mediaId}) {
     return _fillPath(selectAutoVideoCoverPathTemplate, <String, String>{

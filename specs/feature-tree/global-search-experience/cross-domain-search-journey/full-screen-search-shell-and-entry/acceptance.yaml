@@ -47,8 +47,10 @@ scenario_acceptance:
       planned:
         - global search shell widget test
         - root entry journey test
-      recorded: []
-    status: pending
+      recorded:
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+    status: implemented
 
 story_readiness:
   S1:
@@ -65,5 +67,7 @@ story_readiness:
     tests:
       planned:
         - route surface metadata review
-      recorded: []
-    status: pending
+      recorded:
+        - make verify-metadata
+        - make gate
+    status: implemented

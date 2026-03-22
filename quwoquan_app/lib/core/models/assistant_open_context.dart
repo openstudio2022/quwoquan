@@ -8,6 +8,7 @@ enum AssistantSource {
   profile,
   chat,
   create,
+  search,
 }
 
 /// 打开小趣时的上下文，供半弹窗与会话页共用。

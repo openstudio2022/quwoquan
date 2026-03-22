@@ -97,6 +97,9 @@ class AssistantRunRequest {
     this.privacyPolicy = const <String, dynamic>{},
     this.userProfileSnapshot = const <String, dynamic>{},
     this.rewriteInstruction,
+    this.sourceSurfaceId,
+    this.sourceQuery,
+    this.fromGlobalSearch = false,
   });
 
   final List<AssistantRunMessage> messages;
@@ -118,6 +121,9 @@ class AssistantRunRequest {
   final Map<String, dynamic> privacyPolicy;
   final Map<String, dynamic> userProfileSnapshot;
   final RewriteInstruction? rewriteInstruction;
+  final String? sourceSurfaceId;
+  final String? sourceQuery;
+  final bool fromGlobalSearch;
 
   bool get isRewrite => rewriteInstruction != null;
 
@@ -144,6 +150,9 @@ class AssistantRunRequest {
       'privacyProfile': privacyProfile,
       'privacyPolicy': privacyPolicy,
       'userProfileSnapshot': userProfileSnapshot,
+      'sourceSurfaceId': sourceSurfaceId,
+      'sourceQuery': sourceQuery,
+      'fromGlobalSearch': fromGlobalSearch,
       if (rewriteInstruction != null)
         'rewriteInstruction': rewriteInstruction!.toJson(),
     };
@@ -195,6 +204,9 @@ class AssistantRunRequest {
       userProfileSnapshot:
           (json['userProfileSnapshot'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
+      sourceSurfaceId: (json['sourceSurfaceId'] as String?)?.trim(),
+      sourceQuery: (json['sourceQuery'] as String?)?.trim(),
+      fromGlobalSearch: json['fromGlobalSearch'] == true,
       rewriteInstruction: json['rewriteInstruction'] is Map
           ? RewriteInstruction.fromJson(
               (json['rewriteInstruction'] as Map).cast<String, dynamic>(),

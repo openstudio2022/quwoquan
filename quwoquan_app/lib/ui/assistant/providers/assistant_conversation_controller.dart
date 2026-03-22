@@ -431,6 +431,14 @@ class AssistantConversationController extends ChangeNotifier {
         buildContextScope(),
         activeContext: activeContext,
       );
+      final sourceQueryHint =
+          openContext?.hints['sourceQuery']?.toString().trim() ?? '';
+      final sourceSurfaceIdHint =
+          openContext?.hints['sourceSurfaceId']?.toString().trim() ?? '';
+      final fromGlobalSearch =
+          openContext?.hints['fromGlobalSearch'] == true &&
+          sourceQueryHint.isNotEmpty &&
+          sourceQueryHint == trimmed;
       final request = AssistantRunRequest(
         messages: assistantMessages,
         sessionId: effectiveAssistantSessionId,
@@ -446,6 +454,11 @@ class AssistantConversationController extends ChangeNotifier {
         privacyPolicy:
             (contextScope['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{},
+        sourceSurfaceId: fromGlobalSearch && sourceSurfaceIdHint.isNotEmpty
+            ? sourceSurfaceIdHint
+            : null,
+        sourceQuery: fromGlobalSearch ? sourceQueryHint : null,
+        fromGlobalSearch: fromGlobalSearch,
       );
       AssistantRunResponse? response;
       try {
@@ -1841,6 +1854,8 @@ class AssistantConversationController extends ChangeNotifier {
         return 'chat';
       case AssistantSource.create:
         return 'create';
+      case AssistantSource.search:
+        return 'search';
       case null:
         return 'chat';
     }
