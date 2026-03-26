@@ -76,6 +76,38 @@ void main() {
     expect(groupChatY, lessThan(galleryY));
   });
 
+  testWidgets('社交动作组支持新建圈子入口', (tester) async {
+    var createCircleTapped = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, child) => MaterialApp(
+            home: Scaffold(
+              body: CreateActionSheet(
+                onCreateAction: (_) {},
+                onStartGroupChat: () {},
+                onAddContact: () {},
+                onCreateCircle: () => createCircleTapped = true,
+                onCancel: () {},
+                priority: CreateActionSheetPriority.socialPrimary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('创建圈子'), findsOneWidget);
+
+    await tester.tap(find.text('创建圈子'));
+    await tester.pump();
+
+    expect(createCircleTapped, isTrue);
+  });
+
   testWidgets('点击上半区空白区域可关闭全屏弹层', (tester) async {
     var closed = false;
 

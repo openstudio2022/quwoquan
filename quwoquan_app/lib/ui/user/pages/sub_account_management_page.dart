@@ -108,6 +108,7 @@ class _SubAccountManagementPageState
     } catch (_) {
       guard = null;
     }
+    if (!mounted) return;
     if (guard != null && !guard.canDelete) {
       if (guard.canRetire) {
         final retire = await showCupertinoDialog<bool>(
@@ -143,11 +144,14 @@ class _SubAccountManagementPageState
         return;
       }
       _showError(
-        guard.message.isNotEmpty ? guard.message : UITextConstants.profileSubAccountDeleteFailed,
+        guard.message.isNotEmpty
+            ? guard.message
+            : UITextConstants.profileSubAccountDeleteFailed,
       );
       return;
     }
 
+    if (!mounted) return;
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
@@ -249,7 +253,9 @@ class _SubAccountManagementPageState
                   );
                   await _loadSubAccounts();
                 } catch (e) {
-                  _showError('${UITextConstants.profileSubAccountCreateFailed}: $e');
+                  _showError(
+                    '${UITextConstants.profileSubAccountCreateFailed}: $e',
+                  );
                 }
               },
               child: const Text(UITextConstants.create),
@@ -302,15 +308,10 @@ class _SubAccountManagementPageState
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _subAccounts.length < _maxSubAccounts ? _createNew : null,
-          child: Icon(
-            CupertinoIcons.add,
-            color: AppColors.iosAccent(context),
-          ),
+          child: Icon(CupertinoIcons.add, color: AppColors.iosAccent(context)),
         ),
       ),
-      child: SafeArea(
-        child: _buildBody(),
-      ),
+      child: SafeArea(child: _buildBody()),
     );
   }
 
@@ -345,7 +346,8 @@ class _SubAccountManagementPageState
     return ListView(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
-        bottom: MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg,
+        bottom:
+            MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg,
       ),
       children: <Widget>[
         Padding(
@@ -358,7 +360,7 @@ class _SubAccountManagementPageState
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,
                 color: AppColors.iosSecondaryLabel(context),
-                height: 1.35,
+                height: AppSpacing.textLineHeightBody,
               ),
             ),
           ),
@@ -471,13 +473,13 @@ class _IsolationBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (level) {
       'strict' => CupertinoColors.systemRed,
-      'semi'   => CupertinoColors.systemOrange,
-      _        => CupertinoColors.activeBlue,
+      'semi' => CupertinoColors.systemOrange,
+      _ => CupertinoColors.activeBlue,
     };
     final icon = switch (level) {
       'strict' => CupertinoIcons.lock_shield_fill,
-      'semi'   => CupertinoIcons.eye_slash_fill,
-      _        => CupertinoIcons.person_fill,
+      'semi' => CupertinoIcons.eye_slash_fill,
+      _ => CupertinoIcons.person_fill,
     };
     return Container(
       width: AppSpacing.minInteractiveSize,
@@ -486,11 +488,7 @@ class _IsolationBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
-      child: Icon(
-        icon,
-        color: color,
-        size: AppSpacing.iconMedium,
-      ),
+      child: Icon(icon, color: color, size: AppSpacing.iconMedium),
     );
   }
 }

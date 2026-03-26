@@ -27,7 +27,7 @@ api_routes:
     operation: CreateConversation
     description: 创建会话（自动创建 ConversationMember + ConversationUserState）
     request_entity: Conversation
-    writable_fields: [type, title, circleId, maxGroupSize]
+    writable_fields: [type, title, circleId, circleGroupId, maxGroupSize, initialMemberIds]
 
   - method: POST
     path: /v1/chat/conversations/batch
@@ -176,7 +176,10 @@ api_routes:
   - method: GET
     path: /v1/chat/contacts/search
     operation: SearchContacts
-    description: 联系人搜索
+    description: 全局搜索联系人结果，直接承接“联系人”联想分组
+    query_params: [query, cursor, limit]
+    response_entity: ContactSearchItemView
+    auth: required
 
   - method: GET
     path: /v1/chat/conversations/search
@@ -196,7 +199,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list_conversations, list_inbox, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts]
+    capabilities: [list_conversations, list_inbox, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts, search_conversations, search_messages]
   - name: platform-ops
     capabilities: [read_conversation, read_messages, read_members]
   - name: assistant-service
@@ -321,6 +324,7 @@ contract_test:
 
   coverage_requirements:
     - all conversation types (direct/group/circle/encrypted) covered
+    - circleGroupId compatibility link covered
     - message seq monotonicity verified under concurrent sends
     - clientMsgId dedup verified
     - sync gap fill boundary conditions

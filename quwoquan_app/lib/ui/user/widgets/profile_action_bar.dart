@@ -12,7 +12,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 /// | not_following | 关注 / 私信                                      |
 /// | following     | 已关注 / 私信                                    |
 /// | followed_by   | 回关 / 私信                                      |
-/// | mutual        | 私信 / 视频通话 / 语音通话 三等分                  |
+/// | mutual        | 消息 / 视频通话 / 语音通话 三等分                  |
 class ProfileActionBar extends StatelessWidget {
   const ProfileActionBar({
     super.key,
@@ -51,40 +51,57 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    final separator = AppColors.iosSeparator(context).withValues(alpha: 0.18);
-    final neutralFill = AppColors.iosProfileSurface(context);
-    final neutralForeground = AppColors.iosSecondaryLabel(context);
-    final secondaryStyle = isDark
-        ? ProfileIosActionStyle.outlined
-        : ProfileIosActionStyle.tinted;
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final neutralFill = AppColors.iosSecondaryFill(context);
+    final neutralForeground = AppColors.iosLabel(context);
+
+    Widget neutralAction({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return ProfileIosActionButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        style: ProfileIosActionStyle.outlined,
+        backgroundColor: neutralFill,
+        foregroundColor: neutralForeground,
+        borderColor: separator,
+        labelFontWeight: AppTypography.medium,
+      );
+    }
+
+    Widget primaryFollowAction({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return ProfileIosActionButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        style: ProfileIosActionStyle.filled,
+        labelFontWeight: AppTypography.medium,
+      );
+    }
 
     if (mode == ProfileMode.mine) {
       return _buildButtonRow(<Widget>[
         Expanded(
-          flex: 6,
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.profileEditLabel,
             icon: CupertinoIcons.pencil,
             onPressed: onEditProfile,
-            style: ProfileIosActionStyle.outlined,
-            backgroundColor: neutralFill,
-            foregroundColor: neutralForeground,
-            borderColor: separator,
-            labelFontWeight: AppTypography.medium,
           ),
         ),
         Expanded(
-          flex: 5,
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.profilePersonasLabel,
             icon: CupertinoIcons.person_2,
             onPressed: onManagePersonas,
-            style: ProfileIosActionStyle.tinted,
-            backgroundColor: accent.withValues(alpha: isDark ? 0.22 : 0.1),
-            foregroundColor: accent,
-            borderColor: accent.withValues(alpha: isDark ? 0.18 : 0.12),
-            labelFontWeight: AppTypography.medium,
           ),
         ),
       ]);
@@ -95,28 +112,24 @@ class ProfileActionBar extends StatelessWidget {
     if (cap != null && cap.isMutual) {
       return _buildButtonRow(<Widget>[
         Expanded(
-          flex: 6,
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.profileDirectMessage,
             icon: CupertinoIcons.chat_bubble,
-            onPressed: onMessage,
-            style: ProfileIosActionStyle.filled,
+            onPressed: cap.canMessage ? onMessage : null,
           ),
         ),
         Expanded(
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.callVideo,
             icon: CupertinoIcons.video_camera,
             onPressed: cap.canStartVideoCall ? onVideoCall : null,
-            style: secondaryStyle,
           ),
         ),
         Expanded(
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.callVoice,
             icon: CupertinoIcons.phone,
             onPressed: cap.canStartVoiceCall ? onVoiceCall : null,
-            style: secondaryStyle,
           ),
         ),
       ]);
@@ -125,47 +138,43 @@ class ProfileActionBar extends StatelessWidget {
     if (cap != null && cap.isFollowedBy) {
       return _buildButtonRow(<Widget>[
         Expanded(
-          child: ProfileIosActionButton(
+          child: primaryFollowAction(
             label: UITextConstants.followBack,
             icon: CupertinoIcons.add,
             onPressed: onFollow,
-            style: ProfileIosActionStyle.filled,
           ),
         ),
         Expanded(
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.profileDirectMessage,
             icon: CupertinoIcons.chat_bubble,
-            onPressed: onMessage,
-            style: secondaryStyle,
+            onPressed: cap.canMessage ? onMessage : null,
           ),
         ),
       ]);
     }
 
     if (cap != null && (cap.isFollowing || cap.isNotFollowing)) {
-      final alreadyFollowing = cap.isFollowing;
+      final alreadyFollowing = cap.viewerFollowsTarget;
       return _buildButtonRow(<Widget>[
         Expanded(
-          child: ProfileIosActionButton(
-            label: alreadyFollowing
-                ? UITextConstants.following
-                : UITextConstants.follow,
-            icon: alreadyFollowing
-                ? CupertinoIcons.check_mark
-                : CupertinoIcons.add,
-            onPressed: onFollow,
-            style: alreadyFollowing
-                ? secondaryStyle
-                : ProfileIosActionStyle.filled,
-          ),
+          child: alreadyFollowing
+              ? neutralAction(
+                  label: UITextConstants.following,
+                  icon: CupertinoIcons.check_mark,
+                  onPressed: onFollow,
+                )
+              : primaryFollowAction(
+                  label: UITextConstants.follow,
+                  icon: CupertinoIcons.add,
+                  onPressed: onFollow,
+                ),
         ),
         Expanded(
-          child: ProfileIosActionButton(
+          child: neutralAction(
             label: UITextConstants.profileDirectMessage,
             icon: CupertinoIcons.chat_bubble,
-            onPressed: onMessage,
-            style: secondaryStyle,
+            onPressed: cap.canMessage ? onMessage : null,
           ),
         ),
       ]);
@@ -174,21 +183,23 @@ class ProfileActionBar extends StatelessWidget {
     // fallback：旧版 isFollowing 逻辑（capability 未载入时）
     return _buildButtonRow(<Widget>[
       Expanded(
-        child: ProfileIosActionButton(
-          label: isFollowing
-              ? UITextConstants.following
-              : UITextConstants.follow,
-          icon: isFollowing ? CupertinoIcons.check_mark : CupertinoIcons.add,
-          onPressed: onFollow,
-          style: isFollowing ? secondaryStyle : ProfileIosActionStyle.filled,
-        ),
+        child: isFollowing
+            ? neutralAction(
+                label: UITextConstants.following,
+                icon: CupertinoIcons.check_mark,
+                onPressed: onFollow,
+              )
+            : primaryFollowAction(
+                label: UITextConstants.follow,
+                icon: CupertinoIcons.add,
+                onPressed: onFollow,
+              ),
       ),
       Expanded(
-        child: ProfileIosActionButton(
+        child: neutralAction(
           label: UITextConstants.profileDirectMessage,
           icon: CupertinoIcons.chat_bubble,
           onPressed: onMessage,
-          style: secondaryStyle,
         ),
       ),
     ]);

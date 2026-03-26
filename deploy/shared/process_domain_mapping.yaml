@@ -17,6 +17,8 @@ environments:
   dev:
     content-service:
       domains: [content]
+    entity-service:
+      domains: [entity]
     product-ops-service:
       domains: [ops]
     circle-service:
@@ -43,6 +45,8 @@ environments:
       domains: [turn]
 
   integration:
+    entity-service:
+      domains: [entity]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -59,6 +63,8 @@ environments:
       domains: [content, integration, chat, user, circle, assistant, notification, gateway, orchestrator]
 
   prod:
+    entity-service:
+      domains: [entity]
     product-ops-service:
       domains: [ops]
     recommendation-service:

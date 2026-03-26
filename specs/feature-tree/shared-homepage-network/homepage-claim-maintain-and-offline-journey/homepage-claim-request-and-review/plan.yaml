@@ -1,0 +1,70 @@
+version: 1
+node: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-claim-request-and-review
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage claim tier and review schema
+    goal: 冻结认领分层、材料字段、审核状态与错误码
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - basic 与 verified claim 边界明确
+      - 审核状态字段可治理
+    status: planned
+
+  - id: P2
+    title: land claim request submission flow
+    goal: 提供主页认领入口、材料表单和申请提交流程
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 用户可提交分层材料
+      - 材料不全时可明确提示
+    status: planned
+
+  - id: P3
+    title: wire claim review result to homepage claimed state
+    goal: 打通审核结果与主页 claimed 状态、维护入口之间的关系
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 审核前不展示认领标识
+      - 审核通过后主页进入 claimed 并可维护
+    status: planned
+
+  - id: P4
+    title: harden claim review regression tests
+    goal: 为认领申请、补件、驳回和通过补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - claim request / review 主链路有稳定测试
+      - 认领状态变更与维护入口联动可回归
+    status: planned

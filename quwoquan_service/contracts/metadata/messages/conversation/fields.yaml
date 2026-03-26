@@ -48,6 +48,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: initialMemberIds
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+        description: 建群时一次性写入的初始成员 ID 列表（不包含创建者）
+
       - name: circleId
         type: string
         constraints: [NULLABLE]
@@ -56,6 +65,15 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 关联圈子（type=circle 时）
+
+      - name: circleGroupId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）
 
       - name: maxSeq
         type: int64
@@ -641,6 +659,75 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+  ContactSearchItemView:
+    description: 联系人搜索结果项视图，用于全局搜索“联系人”联想分组
+    fields:
+      - name: contactId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: conversationId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 可直接打开的既有会话 ID；若为空，由 App 进入建联/创建会话流程
+
+      - name: conversationType
+        type: enum
+        enum_ref: ConversationType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: subtitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: highlightText
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: matchedField
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
   ConversationSearchItemView:
     description: 会话搜索结果项视图，用于全局搜索消息分组中的会话命中
     fields:
@@ -710,6 +797,14 @@ entities:
         ops_exposure: read
 
       - name: circleId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleGroupId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

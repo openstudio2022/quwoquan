@@ -1,0 +1,70 @@
+version: 2
+feature: missing-homepage-suggestion-and-review
+level: L3_scenario
+source_path: shared-homepage-network/homepage-discovery-and-attach-journey/missing-homepage-suggestion-and-review
+parent_journey: homepage-discovery-and-attach-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结“搜索不到主页时补充主页并返回当前上下文”的链路。
+  journey_bindings:
+    - J2
+  in_scope:
+    - 空态补充主页入口
+    - 最小表单提交
+    - 候选状态写入
+  out_of_scope:
+    - 候选审核后台
+    - 认领
+
+scenario_acceptance:
+  A1:
+    title: 用户可补充缺失主页并返回当前上下文
+    scenario: missing homepage suggestion and review
+    journey_step: search homepage -> no result -> submit suggestion -> return
+    done_when:
+      - 搜索无结果或不匹配时可发起补充主页
+      - 补充主页进入候选/待校验状态
+      - 用户返回当前发布上下文时不丢失已写内容
+    edge_cases:
+      - 网络失败时保留表单内容
+      - 审核前候选主页不公开
+      - 重复提交有提示
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - missing homepage suggestion flow test
+        - compose context restore test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 候选主页状态与审核前边界清晰
+    done_when:
+      - 候选主页不会直接进入正式搜索结果
+      - 候选状态字段与审核边界已冻结
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - candidate status contract review
+      recorded: []
+    status: pending

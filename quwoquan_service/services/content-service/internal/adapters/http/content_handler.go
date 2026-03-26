@@ -67,6 +67,7 @@ func (h *ContentHandler) Routes() http.Handler {
 	})
 	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/received", h.handleListProfileInteractionActivitiesReceived)
 	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/sent", h.handleListProfileInteractionActivitiesSent)
+	mux.HandleFunc("GET /v1/content/posts/search", h.handleSearchPosts)
 	RegisterGeneratedRoutes(mux, h)
 	return mux
 }
@@ -98,6 +99,35 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		return
+	}
+	q := r.URL.Query()
+	limit, err := strconv.Atoi(q.Get("limit"))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	items, nextCursor, err := h.postService.SearchPosts(r.Context(), application.SearchPostsRequest{
+		Query:         q.Get("query"),
+		Identity:      q.Get("identity"),
+		RequestedType: q.Get("type"),
+		CategoryID:    q.Get("categoryId"),
+		SubCategory:   q.Get("subCategory"),
+		Cursor:        q.Get("cursor"),
+		Limit:         limit,
+	})
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  items,
+		"cursor": nextCursor,
+	})
 }
 
 func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {

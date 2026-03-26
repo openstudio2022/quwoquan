@@ -8,8 +8,22 @@
 
 ```text
 explore → prd → design → dev → verify → commit → deploy
-                 └──────────── deliver（= dev + verify + commit）────────────┘
+                 └──────────── deliver（= dev + commit，dev 内含 verify/archive 闭环）────────────┘
 ```
+
+AI Agent 执行 `/dev` 任务时，默认采用增强闭环：
+
+```text
+任务级 plan mode 审视 → 实施 → 自修复 → verify 等价检查 → archive 等价回写 → 等待 /commit
+```
+
+### 快捷链路
+
+```text
+explore → baseline → dev → verify → commit → deploy
+```
+
+仅适用于：需求边界、验收、商用约束已稳定，且方案明显收敛到现有模式或单一路径的场景。
 
 ### 原型链路
 
@@ -21,9 +35,9 @@ try → land → commit → deploy
 
 | 层级 | 作用 | 对应阶段 |
 |------|------|---------|
-| `L1_capability` | 能力边界、关键旅程、NFR、发布治理 | explore / prd / design / deploy |
-| `L2_journey` | 端到端用户旅程、跨场景组合验收、发布 guardrails | explore / prd / design / verify / deploy |
-| `L3_scenario` | 单环节场景、异常边界、最小实施与验证单元 | prd / design / dev / verify / commit |
+| `L1_capability` | 能力边界、关键旅程、NFR、发布治理 | explore / prd / design / baseline / deploy |
+| `L2_journey` | 端到端用户旅程、跨场景组合验收、发布 guardrails | explore / prd / design / baseline / verify / deploy |
+| `L3_scenario` | 单环节场景、异常边界、最小实施与验证单元 | prd / design / baseline / dev / verify / commit |
 
 ## 二、非协商原则
 
@@ -32,9 +46,11 @@ try → land → commit → deploy
 - `metadata-first`：契约、字段、错误码、route、surface、operation 一律先改 metadata，再 codegen，再改业务逻辑。
 - `test-first`：进入 `/dev`、`/deliver`、`/try` 后默认执行 `Red → Green → Refactor`。
 - `benchmark-driven`：对标必须落到“借鉴 / 不借鉴 / 适用边界 / 当前差距 / 收敛计划”。
-- `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，`/prd` 与 `/design` 必须冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚方案。
+- `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须通过 `/prd` + `/design` 或 `/baseline` 冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚方案。
 - `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`、`specs/changelog/CR-*.yaml`、metadata 各自有唯一真相源。
 - 缺少对标输入、真实网络条件、容量假设、权限边界或回滚条件时，直接 `GATE_BLOCK`。
+- `dev-autonomy`：AI Agent 执行 `/dev` 时必须先进入任务级 plan mode，完整审视 spec/design/plan/acceptance/CR，自动补齐缺口后再实施。
+- `full-commercial-closure`：`/dev` 不得以“完成部分切片”作为结束条件，必须把目标 scenario 所需的前后端、metadata/codegen、四层测试、验收证据与商用条件闭环到可归档状态。
 
 ## 三、阶段 Gate
 
@@ -126,7 +142,38 @@ make codegen-app
 - feature flag、观测、SLO 验证与回滚方案
 - `T1~T4` 证据矩阵与 plan slices
 
-### 3.4 `/dev`（G2）
+### 3.4 `/baseline`（G0 + G1）
+
+进入 `/baseline` 前必须同时满足：
+
+- `/explore` 已完成，且 `L1/L2/L3` 与涉及业务对象已明确
+- `/prd` 的进入条件全部满足
+- 需求边界、验收、商用约束足够稳定，不需要先单独冻结一次 `spec.md`
+- 方案已明显收敛到现有模式或单一可行路径，不存在需要单独评审的重大架构分叉
+- 已能直接形成 `design.md`、`plan.yaml` 与 `T1~T4` 证据矩阵
+
+自动执行 G0 + G1：
+
+```bash
+make -C quwoquan_service verify-metadata
+make codegen
+make codegen-app
+```
+
+产出物：
+
+- `spec.md`
+- `acceptance.yaml`
+- `design.md`
+- `plan.yaml`
+- 关联或新建 `specs/changelog/CR-*.yaml`
+- metadata / codegen 基线
+- 测试证据矩阵
+- 灰度发布设计
+
+若在执行中发现方案并未真正收敛：停止 `/baseline`，退回标准链路 `/prd` → `/design`。
+
+### 3.5 `/dev`（G2）
 
 进入 `/dev` 前必须满足：
 
@@ -140,10 +187,16 @@ make codegen-app
 每次会话实施顺序：
 
 ```text
-1. 读取 `plan.yaml` 与对应 CR
-2. 派生本次会话 todo（仅本次会话有效）
-3. 逐条 todo 执行 Red → Green → Refactor
-4. 回填 `acceptance.yaml` 与 CR 证据
+1. 进入任务级 plan mode，读取 `spec.md`、`design.md`、`plan.yaml`、`acceptance.yaml` 与对应 CR
+2. 审视前后端、metadata/codegen、权限、生命周期、灰度/回滚、观测与 `T1~T4` 缺口
+3. 若规格、设计、切片、验收或商用条件存在缺口，先自动修复相关文档与计划
+4. 派生覆盖全部未完成 slices 的会话 todo（仅本次会话有效）
+5. 逐条 todo 执行 Red → Green → Refactor
+6. 补齐目标 scenario 所需的前后端功能、配置、观测、权限、非功能验证与四层测试证据
+7. 回填 `acceptance.yaml`、`plan.yaml` 与 CR 证据
+8. 执行 verify 等价检查并修复所有 BLOCKING 项
+9. 验证通过后自动执行 archive 等价回写
+10. 停在待 `/commit` 状态
 ```
 
 每完成一组 slice：
@@ -159,14 +212,21 @@ make -C quwoquan_service test-contract
 cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 ```
 
-### 3.5 `/verify`（G3）
+禁止：
+
+- 只完成部分 slice、部分端或部分测试后就宣布 `/dev` 完成
+- 明知验收、商用条件、灰度回滚、观测或四层测试未闭环，仍停止等待下一条指令
+- 把原本应在 `/dev` 内自动修复的问题推迟到 `/commit`
+
+### 3.6 `/verify`（G3）
 
 - 检查 `L3_scenario` 完成度与 `scenario_acceptance` 闭环
 - 检查 `L2_journey` 的组合验收是否因本次增量受影响
 - 检查 `plan.yaml` 覆盖率、CR 影响项、`T1~T4` 证据
 - 执行 `make gate-full`
+- 当 `/dev` 已完成 verify 等价检查时，`/verify` 可作为显式复核或返工后的独立重跑命令
 
-### 3.6 `/commit`（G4）
+### 3.7 `/commit`（G4）
 
 - 只提交已完成的 slice 与对应 CR 范围
 - 提交前必须执行端侧 `T1/T2` 与仓库 `make gate`
@@ -178,14 +238,14 @@ make gate
 
 - 门禁、验收、证据、CR 更新状态全部闭环后才可提交
 
-### 3.7 `/deploy`（G5）
+### 3.8 `/deploy`（G5）
 
 - 先 integration，再灰度 prod
 - 必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练
 - 发布对象是 release batch / CR 范围，不再只看单个 Scenario
 - 未达到 SLO 或回滚条件不清时不得放量
 
-### 3.8 `/try`
+### 3.9 `/try`
 
 - 不要求创建特性树节点
 - 其余约束一条不豁免
@@ -230,10 +290,12 @@ make gate
 以下文档必须与本主线保持一致：
 
 - `.cursor/commands/explore.md`
+- `.cursor/commands/baseline.md`
 - `.cursor/commands/prd.md`
 - `.cursor/commands/design.md`
 - `.cursor/commands/dev.md`
 - `.cursor/commands/verify.md`
+- `.cursor/commands/archive.md`
 - `.cursor/commands/commit.md`
 - `.cursor/commands/deliver.md`
 - `.cursor/commands/deploy.md`

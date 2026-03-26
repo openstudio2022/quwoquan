@@ -9,6 +9,10 @@ environments:
       bindings:
         - domain: content
           planes: [user-plane]
+    entity-service:
+      bindings:
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -58,6 +62,10 @@ environments:
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   integration:
+    entity-service:
+      bindings:
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -91,6 +99,10 @@ environments:
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   prod:
+    entity-service:
+      bindings:
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
     product-ops-service:
       bindings:
         - domain: ops

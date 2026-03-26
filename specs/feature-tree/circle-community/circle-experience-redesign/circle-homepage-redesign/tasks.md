@@ -2,6 +2,11 @@
 
 ## 当前交付任务
 
+> 状态同步（2026-03-26）
+> - 已完成：DTO、状态管理与 `CircleShell` 基础壳层。
+> - 进行中：模板信息去硬编码、共享壳层接入双模板。
+> - 未完成：群主页、组织节点主页与父节点聚合主路径。
+
 ### Phase 1: DTO 类型化（metadata 已存在 → 手写 DTO）
 
 - [ ] T1: [DTO] 创建 `lib/cloud/runtime/generated/circle/circle_dto.dart`（CircleDto，字段与 fields.yaml Circle 一致）

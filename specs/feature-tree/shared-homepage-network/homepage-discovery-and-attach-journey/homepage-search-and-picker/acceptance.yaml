@@ -1,0 +1,70 @@
+version: 2
+feature: homepage-search-and-picker
+level: L3_scenario
+source_path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-search-and-picker
+parent_journey: homepage-discovery-and-attach-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结主页搜索结果与主页选择器，确保用户能找到、区分并选中正确主页。
+  journey_bindings:
+    - J1
+  in_scope:
+    - 主页搜索输入
+    - 候选结果列表
+    - 结果摘要与选择器回填
+  out_of_scope:
+    - 补充主页
+    - 发布写入
+
+scenario_acceptance:
+  A1:
+    title: 主页搜索与选择器可稳定工作
+    scenario: homepage search and picker
+    journey_step: search homepage -> inspect result -> choose target homepage
+    done_when:
+      - 结果展示名称、类目、位置或品牌系列、评分摘要等关键区分信息
+      - 用户可选择主页并把结果回填到当前上下文
+      - 选择器返回不会破坏原页面状态
+    edge_cases:
+      - 同名主页可区分
+      - 搜索为空时有明确空态
+      - 弱网下先显示 skeleton
+    linked_plan_items:
+      - P1
+      - P3
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - homepage search picker widget test
+        - search result disambiguation test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 搜索与选择器元数据归属清晰
+    done_when:
+      - 主页搜索与选择器的 route、surface、request context 已明确
+      - 不在 UI 手写第二套主页搜索入口路径
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - homepage picker metadata review
+      recorded: []
+    status: pending

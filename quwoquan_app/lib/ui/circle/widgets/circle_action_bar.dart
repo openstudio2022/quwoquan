@@ -10,156 +10,257 @@ class CircleActionBar extends StatelessWidget {
     required this.role,
     required this.joinStatus,
     this.isFollowed = false,
+    this.joinPolicy = 'open',
+    this.hasConversation = false,
     this.onEditCircle,
     this.onManageCenter,
     this.onFollow,
     this.onJoinCircle,
+    this.onOpenChat,
   });
 
   final bool isDark;
   final CircleRole role;
   final String joinStatus;
   final bool isFollowed;
+  final String joinPolicy;
+  final bool hasConversation;
   final VoidCallback? onEditCircle;
   final VoidCallback? onManageCenter;
   final VoidCallback? onFollow;
   final VoidCallback? onJoinCircle;
+  final VoidCallback? onOpenChat;
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final neutralFill = AppColors.iosSecondaryFill(context);
+    final neutralForeground = AppColors.iosLabel(context);
+    final joinLabel = joinPolicy == 'approval'
+        ? UITextConstants.circleJoinApproval
+        : UITextConstants.joinCircle;
+    final isManager = role == CircleRole.owner || role == CircleRole.admin;
+    final isMemberLike = isManager || role == CircleRole.member || joinStatus == 'joined';
+    final isPending = joinStatus == 'pending';
 
-    if (role == CircleRole.owner || role == CircleRole.admin) {
+    Widget neutralAction({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return _CircleIosActionButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        style: _CircleIosActionStyle.outlined,
+        backgroundColor: neutralFill,
+        foregroundColor: neutralForeground,
+        borderColor: separator,
+        labelFontWeight: AppTypography.medium,
+      );
+    }
+
+    Widget primaryAction({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return _CircleIosActionButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        style: _CircleIosActionStyle.filled,
+        labelFontWeight: AppTypography.medium,
+      );
+    }
+
+    Widget secondaryAccentAction({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return _CircleIosActionButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        style: _CircleIosActionStyle.tinted,
+        labelFontWeight: AppTypography.medium,
+      );
+    }
+
+    if (isManager) {
       return Row(
         children: [
           Expanded(
-            child: _ActionButton(
+            child: neutralAction(
               label: UITextConstants.editCircle,
               icon: CupertinoIcons.pencil,
-              onTap: onEditCircle,
-              fg: fg,
-              border: border,
+              onPressed: onEditCircle,
             ),
           ),
           SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: _ActionButton(
+            child: neutralAction(
               label: UITextConstants.manageCenter,
               icon: CupertinoIcons.slider_horizontal_3,
-              onTap: onManageCenter,
-              fg: fg,
-              border: border,
+              onPressed: onManageCenter,
             ),
           ),
         ],
       );
     }
 
-    final isJoined = joinStatus == 'joined';
-    final isPending = joinStatus == 'pending';
+    if (isMemberLike) {
+      return Row(
+        children: [
+          Expanded(
+            child: neutralAction(
+              label: UITextConstants.circleGroups,
+              icon: CupertinoIcons.chat_bubble_2,
+              onPressed: hasConversation ? onOpenChat : null,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: neutralAction(
+              label: UITextConstants.joinedCircle,
+              icon: CupertinoIcons.check_mark_circled,
+              onPressed: null,
+            ),
+          ),
+        ],
+      );
+    }
 
     return Row(
       children: [
         Expanded(
-          child: _ActionButton(
-            label: isFollowed ? UITextConstants.following : UITextConstants.follow,
-            icon: isFollowed ? CupertinoIcons.check_mark : CupertinoIcons.add,
-            onTap: onFollow,
-            fg: isFollowed ? fgSecondary : Colors.white,
-            border: isFollowed ? border : AppColors.primaryColor,
-            filled: !isFollowed,
-          ),
+          child: isPending
+              ? neutralAction(
+                  label: UITextConstants.joinPending,
+                  icon: CupertinoIcons.time,
+                  onPressed: null,
+                )
+              : primaryAction(
+                  label: joinLabel,
+                  icon: CupertinoIcons.person_add,
+                  onPressed: onJoinCircle,
+                ),
         ),
         SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: _ActionButton(
-            label: isJoined
-                ? UITextConstants.joinedCircle
-                : isPending
-                    ? UITextConstants.joinPending
-                    : UITextConstants.joinCircle,
-            icon: isJoined
-                ? CupertinoIcons.check_mark_circled
-                : isPending
-                    ? CupertinoIcons.time
-                    : CupertinoIcons.person_add,
-            onTap: onJoinCircle,
-            fg: isJoined ? fgSecondary : (isPending ? fgSecondary : Colors.white),
-            border: isJoined ? border : (isPending ? border : AppColors.primaryColor),
-            filled: !isJoined && !isPending,
-          ),
+          child: isFollowed
+              ? neutralAction(
+                  label: UITextConstants.followedCircle,
+                  icon: CupertinoIcons.check_mark,
+                  onPressed: onFollow,
+                )
+              : secondaryAccentAction(
+                  label: UITextConstants.followCircle,
+                  icon: CupertinoIcons.add,
+                  onPressed: onFollow,
+                ),
         ),
       ],
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
+enum _CircleIosActionStyle { filled, tinted, outlined }
+
+class _CircleIosActionButton extends StatelessWidget {
+  const _CircleIosActionButton({
     required this.label,
-    required this.icon,
-    this.onTap,
-    required this.fg,
-    required this.border,
-    this.filled = false,
+    this.icon,
+    this.onPressed,
+    this.style = _CircleIosActionStyle.tinted,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderColor,
+    this.labelFontWeight,
   });
 
   final String label;
-  final IconData icon;
-  final VoidCallback? onTap;
-  final Color fg;
-  final Color border;
-  final bool filled;
+  final IconData? icon;
+  final VoidCallback? onPressed;
+  final _CircleIosActionStyle style;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final Color? borderColor;
+  final FontWeight? labelFontWeight;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppSpacing.minInteractiveSize,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        color: filled ? AppColors.primaryColor : null,
-        onPressed: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: filled ? AppColors.primaryColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: filled
-                ? null
-                : Border.all(color: border.withValues(alpha: 0.45)),
-            boxShadow: filled
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryColor.withValues(alpha: 0.2),
-                      blurRadius: AppSpacing.md,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
+    final accent = AppColors.iosAccent(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final foreground =
+        foregroundColor ??
+        switch (style) {
+          _CircleIosActionStyle.filled => CupertinoColors.white,
+          _CircleIosActionStyle.tinted => accent,
+          _CircleIosActionStyle.outlined => AppColors.iosLabel(context),
+        };
+    final background =
+        backgroundColor ??
+        switch (style) {
+          _CircleIosActionStyle.filled => accent,
+          _CircleIosActionStyle.tinted => accent.withValues(
+            alpha: isDark ? 0.24 : 0.12,
           ),
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          child: Center(
+          _CircleIosActionStyle.outlined => AppColors.iosSystemBackground(context),
+        };
+    final resolvedBorderColor =
+        borderColor ??
+        switch (style) {
+          _CircleIosActionStyle.outlined => AppColors.iosSeparator(
+            context,
+          ).withValues(alpha: 0.24),
+          _ => Colors.transparent,
+        };
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      onPressed: onPressed,
+      child: Container(
+        height: AppSpacing.minInteractiveSize,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.intraGroupXs,
+        ),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          border: Border.all(
+            color: resolvedBorderColor,
+            width: AppSpacing.hairline,
+          ),
+        ),
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: AppSpacing.iconSmall, color: fg),
-                SizedBox(width: AppSpacing.xs),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.md,
-                      fontWeight: AppTypography.semiBold,
-                      color: fg,
-                    ),
+              children: <Widget>[
+                if (icon != null) ...<Widget>[
+                  Icon(icon, size: AppSpacing.iconSmall, color: foreground),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                ],
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosButton,
+                    fontWeight: labelFontWeight ?? AppTypography.semiBold,
+                    color: foreground,
+                    letterSpacing: -0.18,
                   ),
                 ),
               ],

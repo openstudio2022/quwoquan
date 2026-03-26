@@ -8,14 +8,14 @@
 
 | 输入 | 当前结论 |
 |---|---|
-| `circle-facet-search-and-filter/spec.md` | 已冻结频道只作为圈子 facet |
+| `circle-facet-search-and-filter/spec.md` | 已冻结频道只作为群组 facet |
 | `circle-facet-search-and-filter/acceptance.yaml` | `A1/S1` 足以承接实施切片 |
 | 现有 circle UI | 已存在 `categoryId / subCategory / sectionConfig` 等投影，可作为 facet 真相源输入 |
 
 ## 对标输入分析
 
 - 对标可吸收的是“内容结果和分类联动”的展示方式。
-- 不能吸收的是把频道当成与圈子并列的独立对象。
+- 不能吸收的是把频道当成与群组并列的独立对象。
 
 ## 方案对比
 
@@ -29,7 +29,7 @@
 
 - 直接违反 PRD 冻结的对象边界。
 
-### 方案 B：只返回圈子结果，App 从本地配置拼 facet
+### 方案 B：只返回群组结果，App 从本地配置拼 facet
 
 优点：
 
@@ -40,11 +40,11 @@
 - facet 与真实搜索结果容易漂移。
 - App 会维护第二套分类真相源。
 
-### 方案 C：`SearchCircles` 返回圈子项 + facet buckets
+### 方案 C：`SearchCircles` 返回群组项 + facet buckets
 
 优点：
 
-- 圈子对象与频道 facet 语义清晰。
+- 群组对象与频道 facet 语义清晰。
 - App 不需要维护第二套频道定义。
 
 缺点：
@@ -75,7 +75,7 @@
 ### KD4：App 侧只维护当前选中的 facet，不维护 facet 真相源
 
 - result page 只负责筛选和展示。
-- facet bucket 的定义来自 circle 搜索结果。
+- facet bucket 的定义来自群组搜索结果。
 
 ### KD5：metadata / codegen 方案
 
@@ -106,7 +106,7 @@
 - `T1_schema`：circle search DTO 与 facet bucket
 - `T2_module_interaction`：facet chip / section 交互
 - `T3_cross_service_integration`：circle 搜索 + facet 过滤
-- `T4_user_journey`：从 facet 进入圈子详情
+- `T4_user_journey`：从 facet 进入群组详情
 
 ## plan slice 与 T1~T4 证据矩阵映射
 
@@ -118,4 +118,4 @@
 
 ## 未来演进
 
-- 若圈子分类体系后续升级，也只扩展 facet bucket，不引入独立 channel 主域。
+- 若群组分类体系后续升级，也只扩展 facet bucket，不引入独立 channel 主域。

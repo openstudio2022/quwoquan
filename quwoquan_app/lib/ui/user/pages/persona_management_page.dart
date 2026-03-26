@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -112,8 +111,8 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
               child: Row(
                 children: <Widget>[
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: AppSpacing.buttonSize,
+                    height: AppSpacing.buttonSize,
                     decoration: BoxDecoration(
                       color: AppColors.iosTintedFill(context),
                       shape: BoxShape.circle,
@@ -144,7 +143,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                           style: TextStyle(
                             fontSize: AppTypography.iosFootnote,
                             color: fgSecondary,
-                            height: 1.35,
+                            height: AppSpacing.textLineHeightBody,
                           ),
                         ),
                       ],
@@ -175,7 +174,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                     onPressed: () => AppToast.show(context, '新增分身能力待接入'),
                     style: secondaryStyle,
                     expand: false,
-                    height: 32,
+                    height: AppSpacing.buttonHeightSm,
                   ),
               ],
             ),
@@ -255,8 +254,8 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                           top: -AppSpacing.two,
                           right: -AppSpacing.two,
                           child: Container(
-                            width: 20,
-                            height: 20,
+                            width: AppSpacing.twenty,
+                            height: AppSpacing.twenty,
                             decoration: BoxDecoration(
                               color: CupertinoColors.systemYellow.resolveFrom(
                                 context,
@@ -265,7 +264,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                             ),
                             child: const Icon(
                               CupertinoIcons.star_fill,
-                              size: 12,
+                              size: AppSpacing.ten + AppSpacing.two,
                               color: CupertinoColors.white,
                             ),
                           ),

@@ -1,14 +1,84 @@
 version: 1
 feature: group-create-flow
-level: "L3_story"
-template: A1-A8
+level: L3_story
+status: specified
+archived: false
+template: '2026-03-24'
 focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+level_acceptance:
+  A1:
+    criteria: 全局添加入口进入独立 `startGroupChat` 页面，不再复用旧加成员路由语义
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+
+  A2:
+    criteria: 单独选同好列表与联系人列表同语义，支持搜索、字母分组、右侧 A-Z 索引定位
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+
+  A3:
+    criteria: 发起页搜索框下方展示已选成员头像区，最多三行，超过折叠，可展开，可逐个删除
+    status: pending
+    test_layers:
+      T2: required
+
+  A4:
+    criteria: 选择群聊中的同好来源 sheet 使用真实群会话列表，显示群名与可选人数，点击后进入成员选择 sheet
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+
+  A5:
+    criteria: 选择圈子中的同好来源 sheet 使用真实已加入圈子列表，且圈子必须已有 `conversationId` 绑定；点击后进入成员选择 sheet
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+
+  A6:
+    criteria: 图三成员选择 sheet 中，底部按钮默认 disabled；选中成员后变为 enabled，并展示选中数量；支持全选
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+
+  A7:
+    criteria: 所有可选成员都必须是与当前用户互关的对象；跨来源重复成员按 `userId` 去重
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+
+  A8:
+    criteria: 点击“完成”后，私建群以原子方式创建成功，并立即出现在消息列表中
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+      T4: required
+
+  A9:
+    criteria: 私建群创建上限冻结为 500 人，超过上限时服务端拒绝创建并保留当前选人状态
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+
+  A10:
+    criteria: 图一、图二、图三均满足蓝色主题、浅色/深色双模和 iOS 原画质体验，整体观感优于微信基线
+    status: pending
+    test_layers:
+      T2: required
+      T4: required

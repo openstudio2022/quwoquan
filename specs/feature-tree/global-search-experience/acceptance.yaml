@@ -9,8 +9,8 @@ execution:
 
 scope:
   summary: >
-    冻结全局搜索作为独立一级能力的边界、领域划分、统一入口、跨域结果编排、
-    最近搜索生命周期与问小趣 handoff 规则。
+    冻结全局搜索作为独立一级能力的边界、领域划分、两段式统一入口、
+    独立网络结果页编排、最近搜索生命周期与小趣搜 assistant 结果规则。
   owned_journeys:
     - cross-domain-search-journey
   out_of_scope:
@@ -24,7 +24,7 @@ level_acceptance:
     done_when:
       - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
       - chat 历史搜索节点从特性树中移除，不再保留平行治理路径
-      - content、messages、circle、user、assistant 的职责边界在新 L1 中明确
+      - content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `群组`
     evidence:
       primary:
         - T1_schema
@@ -38,13 +38,13 @@ level_acceptance:
       recorded:
         - make verify-metadata
         - make gate
-    status: implemented
+    status: pending
   C2:
     title: 全局搜索的 metadata 真相源边界冻结
     done_when:
       - route、surface、request context 与 search operation 的真相源边界已定义
-      - 社交关系搜索归 user 域，频道归 circle 分类投影
-      - 问小趣入口只作为 assistant handoff，不进入综合结果混排
+      - 联系人/聊天记录联想、群组结果、群组分类 facet 与小趣搜结果的 contract 归属明确
+      - 小趣搜只作为独立网络结果页左侧 tab，不进入联想页混排
     evidence:
       primary:
         - T1_schema
@@ -59,13 +59,13 @@ level_acceptance:
         - make verify-metadata
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - make gate
-    status: implemented
+    status: pending
   C3:
     title: 商用基线与发布边界可判定
     done_when:
       - SLO、弱网、并发、容量假设已冻结
-      - 最近搜索、语音 ASR、问小趣会话的生命周期边界已冻结
-      - 整体上线与整体回滚口径明确
+      - 最近搜索、语音 ASR、小趣搜 assistant continuation 的生命周期边界已冻结
+      - 整体上线与整体回滚口径明确，且“群组”用户词不再回退为“圈子”总称
     evidence:
       primary:
         - T2_module_interaction
@@ -79,4 +79,4 @@ level_acceptance:
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
         - make gate
-    status: implemented
+    status: pending

@@ -6,6 +6,7 @@ description: 需求规格基线（面向 Journey / Scenario，先冻结商用要
 ---
 
 > SDD 主流程：explore → **prd** → design → dev → commit → deploy
+> 需求已非常明确且方案已收敛时，可直接使用 `/baseline` 一次完成规格与设计基线。
 
 ## PRD Gate
 
@@ -35,6 +36,8 @@ GATE_BLOCK（PRD 准入未满足）
 ## 执行对象
 
 `/prd` 创建或更新 `L2_journey`、`L3_scenario` 的规格与验收，并创建或续写对应 `CR`。
+
+若确认本次需求无需拆成两轮评审，也可改走 `/baseline`。
 
 ## 产出
 

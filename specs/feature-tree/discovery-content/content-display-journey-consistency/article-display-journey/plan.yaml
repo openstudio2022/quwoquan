@@ -1,0 +1,166 @@
+version: 1
+node: discovery-content/content-display-journey-consistency/article-display-journey
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260322-002-article-book-display-prd.yaml
+
+slices:
+  - id: P1
+    title: freeze article presentation metadata
+    goal: 冻结文章展示真相源字段、UI config 与发布后 presentation 更新边界
+    depends_on: []
+    acceptance_refs:
+      - A3
+      - A4
+      - A6
+      - A7
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - fields.yaml 声明 articleDocument/articleTemplate/articleFontPreset/articlePresentationVersion
+      - service.yaml 写路径与发布后设置更新边界冻结
+      - ui_config.yaml 冻结 article distribution profile、reader profile、template recommendation 与 feature flags
+    status: planned
+
+  - id: P2
+    title: regenerate codegen and projection baseline
+    goal: 生成 app / service 侧的 article metadata 与 UIConfig 基线产物
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A6
+      - A7
+      - A8
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - ArticlePostDto 与 content_ui_config.g.dart 含新增字段
+      - metadata/codegen 基线命令通过
+      - 无新增第二真相源常量表
+    status: planned
+
+  - id: P3
+    title: build article mock matrix and fallback fixtures
+    goal: 在 discovery、circle、reader/editor 三类 surface 中补齐 5 模板 x 2 封面状态的评测矩阵
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - A2
+      - A7
+      - A8
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+    done_when:
+      - 至少 10 条 canonical article template 样本进入 content mock data
+      - 至少 4 条 legacy fallback 样本进入 projection / reader fixture
+      - discovery、circle、reader/editor 三类 surface 都可直接评测全部模板和存在形态
+    status: planned
+
+  - id: P4
+    title: ship distribution cards for follow and circle
+    goal: 落地关注流文章卡与圈子双列文章卡的正式布局与频道模板推荐
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+      - A2
+      - A8
+    planned_evidence:
+      - T2_app_mock
+      - T4_user_journey
+    done_when:
+      - 关注流 article card 支持有封面/无封面正式样式
+      - 圈子双列 article card 支持有封面卡与高质感文字卡
+      - 频道模板默认推荐可见且作者已选模板优先
+    status: planned
+
+  - id: P5
+    title: launch immersive article reader shell
+    goal: 建立全屏书页舞台、reader hydration、顶部返回加页码导航和扉页式第一页
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A3
+      - A4
+      - A5
+      - A8
+    planned_evidence:
+      - T2_app_mock
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - reader 首帧可用分发快照打开并异步水合 articleDocument
+      - 顶部导航统一为返回加页码，正文不侵入工具栏区
+      - 有封面时第一页为扉页式布局，无封面时直接标题正文
+    status: planned
+
+  - id: P6
+    title: deliver book chrome and page curl with degrade path
+    goal: 落地书页边缘、书脊气质、真实翻页与可控降级
+    depends_on:
+      - P5
+    acceptance_refs:
+      - A3
+      - A5
+      - A7
+    planned_evidence:
+      - T2_app_mock
+      - T4_user_journey
+    done_when:
+      - journal/ritual/diffuse/tech/gentle 五套 reader chrome 可切换
+      - 真实翻页支持四角热区与中间停留态
+      - reduced motion / 低性能下可自动降级为 book-style pager
+    status: planned
+
+  - id: P7
+    title: align editor presentation settings and preview
+    goal: 让编辑态正式承载封面、模板、字体与阅读器同源分页效果
+    depends_on:
+      - P2
+      - P5
+    acceptance_refs:
+      - A4
+      - A6
+      - A7
+    planned_evidence:
+      - T2_app_mock
+      - T3_app_api_integration
+    done_when:
+      - 编辑器可配置封面/模板/字体
+      - 预览分页与 reader 同源
+      - 模板切换后编辑态、预览态、阅读态表现一致
+    status: planned
+
+  - id: P8
+    title: harden tests observability and rollout
+    goal: 建立从 contract 到 journey 的看护网，并冻结灰度与回滚路径
+    depends_on:
+      - P4
+      - P5
+      - P6
+      - P7
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - feed card / reader shell / editor preview / fallback projection 都有稳定测试
+      - 观测指标可用，能区分 hydration / page curl / fallback 问题
+      - enable_article_book_reader / enable_article_page_curl / enable_article_distribution_profiles 可独立灰度与回滚
+    status: planned

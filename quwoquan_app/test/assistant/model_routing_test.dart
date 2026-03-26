@@ -281,5 +281,66 @@ void main() {
         expect(requestCount, equals(2));
       },
     );
+
+    test('native reasoning field deltas 会实时透出到 onDelta', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+      server.listen((request) async {
+        expect(request.uri.path, equals('/v1/chat/completions'));
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.set('content-type', 'text/event-stream; charset=utf-8');
+        request.response.add(
+          utf8.encode(
+            'data: ${jsonEncode(<String, dynamic>{
+              'choices': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'delta': <String, dynamic>{
+                    'reasoning_content': '先确认问题焦点',
+                  },
+                },
+              ],
+            })}\n\n',
+          ),
+        );
+        request.response.add(
+          utf8.encode(
+            'data: ${jsonEncode(<String, dynamic>{
+              'choices': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'delta': <String, dynamic>{
+                    'reasoning_content': '，再核对最新信息',
+                  },
+                },
+              ],
+            })}\n\n',
+          ),
+        );
+        request.response.add(utf8.encode('data: [DONE]\n\n'));
+        await request.response.close();
+      });
+
+      final provider = OpenAiCompatibleLlmProvider(
+        modelId: 'mimo-v2-flash',
+        baseUrl: 'http://127.0.0.1:${server.port}/v1',
+        apiKey: 'test-key',
+        templateRuntime: buildTemplateRuntime(),
+        modelRef: 'mimo/mimo-v2-flash',
+      );
+      final deltas = <String>[];
+
+      final output = await provider.reason(
+        messages: const <Map<String, String>>[
+          <String, String>{'role': 'user', 'content': '深圳天气怎么样'},
+        ],
+        availableTools: const <String>[],
+        onDelta: deltas.add,
+      );
+
+      expect(deltas.join(), equals('先确认问题焦点，再核对最新信息'));
+      expect(output.reasoningText, contains('先确认问题焦点，再核对最新信息'));
+    });
   });
 }

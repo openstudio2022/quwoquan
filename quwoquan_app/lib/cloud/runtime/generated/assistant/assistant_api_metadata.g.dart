@@ -23,6 +23,7 @@ class AssistantApiMetadata {
     'ReportPageContext': '/v1/assistant/page-context',
     'ReportScorecard': '/v1/assistant/learning/scorecards',
     'RevokeSkillConsent': '/v1/assistant/skills/{skillId}/consent',
+    'SearchXiaoquResults': '/v1/assistant/search/xiaoqu',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -37,6 +38,7 @@ class AssistantApiMetadata {
     'ReportPageContext': 'POST',
     'ReportScorecard': 'POST',
     'RevokeSkillConsent': 'DELETE',
+    'SearchXiaoquResults': 'POST',
   };
 
   static const String createRunOperation = 'CreateRun';
@@ -50,6 +52,7 @@ class AssistantApiMetadata {
   static const String reportPageContextOperation = 'ReportPageContext';
   static const String reportScorecardOperation = 'ReportScorecard';
   static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
+  static const String searchXiaoquResultsOperation = 'SearchXiaoquResults';
 
   static const String createRunPath = '/v1/assistant/runs';
   static const String createRunStreamPath = '/v1/assistant/runs/stream';
@@ -72,6 +75,7 @@ class AssistantApiMetadata {
       'skillId': skillId,
     });
   }
+  static const String searchXiaoquResultsPath = '/v1/assistant/search/xiaoqu';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

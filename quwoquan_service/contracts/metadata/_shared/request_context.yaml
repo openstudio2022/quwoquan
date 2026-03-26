@@ -1,6 +1,19 @@
 version: 1
 
 domain_operation_page_ids:
+  assistant:
+    CreateRun: assistant.run.create
+    CreateRunStream: assistant.run.stream
+    SearchXiaoquResults: assistant.search.xiaoqu
+    ReportPageContext: assistant.page_context.report
+    GetSuggestedActions: assistant.suggested_actions.get
+    ReportInteractionEvent: assistant.learning.events.report
+    ReportScorecard: assistant.learning.scorecards.report
+    GetPolicy: assistant.policy.get
+    ListSkills: assistant.skills.list
+    GrantSkillConsent: assistant.skills.consent.grant
+    RevokeSkillConsent: assistant.skills.consent.revoke
+
   chat:
     AddMembers: chat.member.add
     BatchGetConversations: chat.conversation.batch
@@ -87,6 +100,21 @@ domain_operation_page_ids:
     UpdatePostSettings: content.post.settings
     PromotePostToWork: content.post.promote
 
+  entity:
+    CreateHomepageClaimRequest: entity.homepage.claim.create
+    CreateHomepageStatusReport: entity.homepage.status_report.create
+    GetHomepageDetail: entity.homepage.detail
+    GetHomepageRelatedGroups: entity.homepage.related_groups
+    GetHomepageReviewSummary: entity.homepage.review_summary
+    GetHomepageShell: entity.homepage.shell
+    IntakeHomepageCandidate: entity.homepage.candidate.intake
+    PublishHomepageCandidate: entity.homepage.candidate.publish
+    ReviewHomepageClaimRequest: entity.homepage.claim.review
+    ReviewHomepageStatusReport: entity.homepage.status_report.review
+    SearchHomepages: entity.homepage.search
+    SuggestHomepageCandidate: entity.homepage.suggest
+    UpdateClaimedHomepageBasics: entity.homepage.basics.update
+
   realtime:
     GetRealtimeConfig: realtime.config.get
     LongPoll: chat.longpoll
@@ -153,7 +181,14 @@ domain_operation_page_ids:
 
 standalone_page_ids:
   globalSearchLanding: global.search.landing
-  globalSearchResults: global.search.results
+  globalSearchSuggestions: global.search.suggestions
+  globalSearchNetworkResults: global.search.network_results
+  homepagePicker: entity.homepage.picker
+  suggestHomepage: entity.homepage.suggest.page
+  homepageDetail: entity.homepage.detail.page
+  homepageClaim: entity.homepage.claim.page
+  homepageMaintenance: entity.homepage.maintenance.page
+  homepageStatusReport: entity.homepage.status_report.page
   createLocationNearby: create.location.nearby
   createLocationSearch: create.location.search
   mediaUploadInit: media.upload.init

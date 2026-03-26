@@ -1,0 +1,84 @@
+version: 1
+node: shared-homepage-network
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze capability naming and metadata topology
+    goal: >
+      冻结共享主页能力域、服务边界、前台命名、metadata 路由/surface/request context
+      的唯一真相源归属。
+    depends_on: []
+    acceptance_refs:
+      - C1
+      - C5
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `shared-homepage-network` 作为独立 L1 能力域建立完成
+      - 前台、PRD、技术三层命名分层明确
+      - 主页相关 route、surface、request context 的归属路径冻结
+    status: planned
+
+  - id: P2
+    title: establish homepage domain model and lifecycle
+    goal: >
+      冻结主页主档、类目模板、口碑模板、认领请求、状态上报与下线合同，
+      并明确 baseline 四类主页的页面骨架与业务对象。
+    depends_on:
+      - P1
+    acceptance_refs:
+      - C2
+      - C4
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - 主页生命周期与业务对象边界清晰
+      - 口碑、认领、下线合同冻结
+      - baseline 类目范围与页面骨架冻结
+    status: planned
+
+  - id: P3
+    title: freeze content attach and group integration contract
+    goal: >
+      冻结发布内容与共享主页挂载契约，以及群组消费主页摘要的跨域边界，
+      确保内容、主页、群组三方不存在第二真相源。
+    depends_on:
+      - P2
+    acceptance_refs:
+      - C3
+      - C5
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 内容挂载主页与口碑依附主页的规则冻结
+      - 群组只消费主页摘要的边界明确
+      - 发布器、主页选择器、主页详情之间的端云契约方向清晰
+    status: planned
+
+  - id: P4
+    title: validate ios baseline and release guardrails
+    goal: >
+      固化 iOS 原生体验基线、KPI/SLO、下线历史保留与整版回滚口径，
+      确保共享主页主线可以安全进入后续 `/prd` 深化与 `/design`。
+    depends_on:
+      - P3
+    acceptance_refs:
+      - C4
+      - C5
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 主页详情与主页选择器的 iOS 体验要求明确
+      - KPI/SLO、灰度与回滚口径明确
+      - 已下线主页历史保留原则不可逆回退
+    status: planned

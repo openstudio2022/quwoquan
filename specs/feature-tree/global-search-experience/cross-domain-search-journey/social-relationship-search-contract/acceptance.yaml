@@ -11,29 +11,29 @@ execution:
 
 scope:
   summary: >
-    冻结搜索中的“社交关系”对象边界、user 域真相源与结果跳转语义。
+    冻结搜索中的“联系人”对象边界、会话绑定信息与结果跳转语义。
   journey_bindings:
     - J2
   in_scope:
-    - “社交关系”命名与展示
-    - user 域 metadata 真相源
-    - 社交关系结果跳转
+    - “联系人”命名与展示
+    - 联系人结果的会话绑定 contract
+    - 联系人结果跳转
   out_of_scope:
     - follow 写侧行为
     - 私密账号能力本身
 
 scenario_acceptance:
   A1:
-    title: 搜索中的“人”统一收口为社交关系
+    title: 搜索中的“人”统一收口为联系人并直达会话
     scenario: social relationship search contract
-    journey_step: display and navigate social relationship results
+    journey_step: display and navigate contact suggestions
     done_when:
-      - 搜索结果中不再使用“朋友”作为领域定义，而统一为“社交关系”
-      - 结果对象真相源归 user 域，而不是 chat contact
-      - 用户可从社交关系结果稳定进入对应主页或后续互动路径
+      - 搜索结果中不再混用“朋友 / 联系人 / 社交关系”作为当前入口定义，而统一为“联系人”
+      - 联系人结果携带稳定的会话绑定信息，而不是依赖额外中间页推导
+      - 用户可从联系人结果稳定进入对应单聊或群聊
     edge_cases:
       - 查询结果为空
-      - 仅存在 chat 联系痕迹但无正式社交关系结果
+      - 仅存在联系人身份信息但缺少首选单聊时需要回退已有会话
       - 当前登录主体切换为子账号
     linked_plan_items:
       - P1

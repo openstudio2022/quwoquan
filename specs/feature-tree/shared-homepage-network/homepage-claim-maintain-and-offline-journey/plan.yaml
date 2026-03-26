@@ -1,0 +1,135 @@
+version: 1
+node: shared-homepage-network/homepage-claim-maintain-and-offline-journey
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage lifecycle and governance metadata
+    goal: >
+      冻结 candidate/published/offline 生命周期、claim tier、status report、
+      maintenance boundary 与错误码的 metadata 真相源。
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `entity/homepage` 中 lifecycle、claim、status report fields 已定义
+      - `errors.yaml` 中越权维护、认领材料、下线合同错误码已定义
+      - `ui_config` 中 claim tier、可维护字段与 offline 展示策略已冻结
+    status: planned
+
+  - id: P2
+    title: establish governance codegen baseline
+    goal: >
+      让候选主页、认领请求、状态上报、错误码与 request context 的生成物都能由 codegen 产出。
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - `make codegen` 与 `make codegen-app` 生成 lifecycle / claim / offline 相关产物
+      - App 和 service 不再手写第二套治理状态常量
+    status: planned
+
+  - id: P3
+    title: land candidate intake and publish workflow
+    goal: >
+      建立抓取、导入、用户补充、内容反抽统一进入 candidate pipeline，
+      并支持审核发布为正式主页。
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 多来源主页都进入统一 candidate 状态机
+      - 审核通过前候选主页不对普通浏览用户公开
+      - 发布后主页可被搜索、挂载和浏览
+    status: planned
+
+  - id: P4
+    title: land claim request and review workflow
+    goal: >
+      建立分层认领材料、审核状态与认领结果，让主页进入正式可维护状态。
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 用户可提交 basic / verified claim
+      - 审核状态可跟踪、可驳回、可补件
+      - 审核通过后主页进入 claimed 状态
+    status: planned
+
+  - id: P5
+    title: land claimed homepage maintenance and audit boundary
+    goal: >
+      落认领后基础维护面，并明确可维护字段、不可维护字段和审计边界。
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 已认领主页可更新基础信息、状态和官方说明
+      - 用户口碑与历史内容不可被直接修改
+      - 维护操作具备审计记录
+    status: planned
+
+  - id: P6
+    title: land offline report and history retention contract
+    goal: >
+      落地下线上报、审核、已下线展示、搜索降级与历史保留合同。
+    depends_on:
+      - P5
+    acceptance_refs:
+      - J3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 用户或认领方可上报下线
+      - 审核通过后主页进入 offline 并展示原因标签
+      - 原 URL、历史内容、历史口碑和相关群组关系继续可见
+    status: planned
+
+  - id: P7
+    title: harden governance observability slo and rollback
+    goal: >
+      建立候选发布、认领审核、维护越权、下线历史保留的观测、SLO 与回滚动作。
+    depends_on:
+      - P6
+    acceptance_refs:
+      - R1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - claim / offline / candidate publish 都具备观测指标
+      - 认领 SLA 与下线 SLA 可验证
+      - 即使回滚治理入口，也不会破坏已发布主页与已下线历史页
+    status: planned

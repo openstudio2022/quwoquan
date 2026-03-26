@@ -34,7 +34,9 @@ abstract class ChatRepository {
     required String type,
     String? title,
     String? circleId,
+    String? circleGroupId,
     int? maxGroupSize,
+    List<String>? initialMemberIds,
   });
 
   Future<Map<String, dynamic>> getConversation(String conversationId);
@@ -127,7 +129,10 @@ abstract class ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<Map<String, dynamic>>> searchContacts({required String query});
+  Future<List<Map<String, dynamic>>> searchContacts({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  });
 
   // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> getConversationTimestamps();
@@ -155,6 +160,15 @@ abstract class ChatRepository {
 
 class MockChatRepository implements ChatRepository {
   int _seqCounter = 100;
+  final List<Map<String, dynamic>> _conversationCache = ChatMockData
+      .conversations
+      .map((conversation) => Map<String, dynamic>.from(conversation))
+      .toList(growable: true);
+  final Map<String, Map<String, dynamic>> _inboxOverrides = {
+    for (final item in ChatMockData.inboxItems)
+      ((item['conversationId'] ?? item['id'] ?? item['_id']) as String):
+          Map<String, dynamic>.from(item),
+  };
 
   // 实例级可变成员缓存（key: conversationId），首次访问时从 ChatMockData 深拷贝初始化
   // 使用实例级（非 static）保证测试隔离；在同一 ProviderContainer 内 Provider 返回同一实例，故应用内有效
@@ -170,12 +184,46 @@ class MockChatRepository implements ChatRepository {
     'privacyShieldAdminOnly': false,
   };
 
+  static String _conversationIdOf(Map<String, dynamic> conversation) {
+    return (conversation['_id'] ?? conversation['id'] ?? '').toString();
+  }
+
+  List<Map<String, dynamic>> _ensureMembersCache(String conversationId) {
+    if (!_membersCache.containsKey(conversationId)) {
+      _membersCache[conversationId] = ChatMockData.membersFor(
+        conversationId,
+      ).map((member) => Map<String, dynamic>.from(member)).toList();
+    }
+    return _membersCache[conversationId]!;
+  }
+
+  void _updateConversationMemberCount(String conversationId, int memberCount) {
+    final index = _conversationCache.indexWhere(
+      (conversation) => _conversationIdOf(conversation) == conversationId,
+    );
+    if (index < 0) {
+      return;
+    }
+    _conversationCache[index] = <String, dynamic>{
+      ..._conversationCache[index],
+      'memberCount': memberCount,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+  }
+
   @override
   Future<List<ChatInboxDto>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final rows = ChatMockData.inboxItems;
+    final rows = _conversationCache
+        .where((conversation) => conversation['status'] == 'active')
+        .map((conversation) {
+          final conversationId = _conversationIdOf(conversation);
+          final override = _inboxOverrides[conversationId] ?? const {};
+          return <String, dynamic>{...conversation, ...override};
+        })
+        .toList(growable: false);
     final capped = limit > 0 && limit < rows.length
         ? rows.take(limit).toList(growable: false)
         : rows;
@@ -187,7 +235,14 @@ class MockChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return ChatMockData.conversations;
+    final rows = _conversationCache
+        .where((conversation) => conversation['status'] == 'active')
+        .map((conversation) => Map<String, dynamic>.from(conversation))
+        .toList(growable: false);
+    if (limit > 0 && limit < rows.length) {
+      return rows.take(limit).toList(growable: false);
+    }
+    return rows;
   }
 
   @override
@@ -199,7 +254,7 @@ class MockChatRepository implements ChatRepository {
     if (normalizedQuery.isEmpty) {
       return const <ConversationSearchItemView>[];
     }
-    return ChatMockData.conversations
+    return _conversationCache
         .where((conversation) {
           final title = (conversation['title'] ?? '').toString().toLowerCase();
           final preview = (conversation['lastMessagePreview'] ?? '')
@@ -233,27 +288,57 @@ class MockChatRepository implements ChatRepository {
     required String type,
     String? title,
     String? circleId,
+    String? circleGroupId,
     int? maxGroupSize,
+    List<String>? initialMemberIds,
   }) async {
-    return {
-      '_id': 'conv_new_${DateTime.now().millisecondsSinceEpoch}',
+    final conversationId = 'conv_new_${DateTime.now().millisecondsSinceEpoch}';
+    final now = DateTime.now().toIso8601String();
+    final conversation = <String, dynamic>{
+      '_id': conversationId,
+      'id': conversationId,
       'type': type,
       'title': title ?? '',
       'circleId': circleId,
-      'maxGroupSize': maxGroupSize ?? 1000,
+      'circleGroupId': circleGroupId,
+      'maxGroupSize': maxGroupSize ?? 500,
       'status': 'active',
-      'memberCount': 1,
+      'memberCount': (initialMemberIds?.length ?? 0) + 1,
       'maxSeq': 0,
-      'createdAt': DateTime.now().toIso8601String(),
-      'updatedAt': DateTime.now().toIso8601String(),
+      'createdAt': now,
+      'updatedAt': now,
+      'creatorId': ChatMockData.currentUserProfileId,
+      'lastMessagePreview': '',
+      'lastMessageTime': now,
     };
+    _conversationCache.insert(0, conversation);
+    _membersCache[conversationId] = [
+      <String, dynamic>{
+        'userId': ChatMockData.currentUserProfileId,
+        'displayName': '我',
+        'avatarUrl': ChatMockData.avatarFor(ChatMockData.currentUserProfileId),
+        'role': 'owner',
+        'isCurrentUser': true,
+      },
+      for (final userId in initialMemberIds ?? const <String>[])
+        <String, dynamic>{
+          'userId': userId,
+          'displayName': userId,
+          'avatarUrl': ChatMockData.avatarFor(userId),
+          'role': 'member',
+          'isCurrentUser': false,
+        },
+    ];
+    return Map<String, dynamic>.from(conversation);
   }
 
   @override
   Future<Map<String, dynamic>> getConversation(String conversationId) async {
-    return ChatMockData.conversations.firstWhere(
-      (c) => c['_id'] == conversationId,
-      orElse: () => ChatMockData.conversations.first,
+    return Map<String, dynamic>.from(
+      _conversationCache.firstWhere(
+        (conversation) => _conversationIdOf(conversation) == conversationId,
+        orElse: () => _conversationCache.first,
+      ),
     );
   }
 
@@ -378,27 +463,44 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
     String? role,
   }) async {
-    if (!_membersCache.containsKey(conversationId)) {
-      _membersCache[conversationId] = ChatMockData.membersFor(
-        conversationId,
-      ).map((m) => Map<String, dynamic>.from(m)).toList();
-    }
-    return _membersCache[conversationId]!
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
+    return _ensureMembersCache(
+      conversationId,
+    ).map((m) => Map<String, dynamic>.from(m)).toList();
   }
 
   @override
   Future<void> addMembers({
     required String conversationId,
     required List<String> userIds,
-  }) async {}
+  }) async {
+    final members = _ensureMembersCache(conversationId);
+    final existingIds = members
+        .map((member) => (member['userId'] ?? '').toString())
+        .toSet();
+    for (final userId in userIds) {
+      if (existingIds.contains(userId)) {
+        continue;
+      }
+      members.add(<String, dynamic>{
+        'userId': userId,
+        'displayName': userId,
+        'avatarUrl': ChatMockData.avatarFor(userId),
+        'role': 'member',
+        'isCurrentUser': false,
+      });
+    }
+    _updateConversationMemberCount(conversationId, members.length);
+  }
 
   @override
   Future<void> removeMember({
     required String conversationId,
     required String userId,
-  }) async {}
+  }) async {
+    final members = _ensureMembersCache(conversationId)
+      ..removeWhere((member) => member['userId'] == userId);
+    _updateConversationMemberCount(conversationId, members.length);
+  }
 
   @override
   Future<void> inviteAssistant({
@@ -427,43 +529,71 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<List<Map<String, dynamic>>> searchContacts({
     required String query,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
+    final normalizedQuery = query.trim().toLowerCase();
     return ChatMockData.contacts
         .where(
           (c) =>
               (c['displayName'] as String?)?.toLowerCase().contains(
-                query.toLowerCase(),
+                normalizedQuery,
               ) ??
               false,
         )
-        .toList();
+        .take(limit)
+        .map((contact) {
+          final displayName = (contact['displayName'] ?? '').toString();
+          final matchedConversation = ChatMockData.conversations.firstWhere(
+            (conversation) =>
+                (conversation['type'] == 'direct' ||
+                    conversation['type'] == 'encrypted') &&
+                (conversation['title']?.toString().trim() == displayName),
+            orElse: () => <String, dynamic>{},
+          );
+          return <String, dynamic>{
+            ...contact,
+            'contactId': contact['userId'],
+            'conversationId':
+                matchedConversation['_id'] ?? matchedConversation['id'] ?? '',
+            'conversationType': matchedConversation['type'] ?? 'direct',
+            'subtitle': '联系人',
+            'highlightText': displayName,
+            'matchedField': 'displayName',
+          };
+        })
+        .toList(growable: false);
   }
 
   @override
   Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
-    return ChatMockData.conversations.map((c) {
-      return {
-        'id': c['_id'] ?? c['id'],
-        'updatedAt': c['updatedAt'] ?? DateTime.now().toIso8601String(),
-        'type': c['type'] ?? 'direct',
-      };
-    }).toList();
+    return _conversationCache
+        .where((conversation) => conversation['status'] == 'active')
+        .map((c) {
+          return {
+            'id': c['_id'] ?? c['id'],
+            'updatedAt': c['updatedAt'] ?? DateTime.now().toIso8601String(),
+            'type': c['type'] ?? 'direct',
+          };
+        })
+        .toList();
   }
 
   @override
   Future<List<Map<String, dynamic>>> batchGetConversations(
     List<String> ids,
   ) async {
-    return ChatMockData.conversations
+    return _conversationCache
         .where((c) => ids.contains(c['_id'] ?? c['id']))
         .toList();
   }
 
   @override
   Future<Map<String, dynamic>> getGroupSettings(String conversationId) async {
-    return Map<String, dynamic>.from(
-      _settingsCache[conversationId] ?? _defaultSettings,
-    );
+    final conversation = await getConversation(conversationId);
+    return Map<String, dynamic>.from({
+      ...conversation,
+      ...(_settingsCache[conversationId] ?? _defaultSettings),
+    });
   }
 
   @override
@@ -505,7 +635,14 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<void> dissolveConversation(String conversationId) async {}
+  Future<void> dissolveConversation(String conversationId) async {
+    _conversationCache.removeWhere(
+      (conversation) => _conversationIdOf(conversation) == conversationId,
+    );
+    _membersCache.remove(conversationId);
+    _settingsCache.remove(conversationId);
+    _inboxOverrides.remove(conversationId);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -626,7 +763,7 @@ class RemoteChatRepository implements ChatRepository {
     final decoded = await _httpClient.getJson(
       uri,
       headers: _headersForSurface(
-        AppUiSurfaces.globalSearchResults,
+        AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchConversationsOperation,
         legacyPageId: ChatRequestPageIds.searchConversations,
       ),
@@ -634,7 +771,7 @@ class RemoteChatRepository implements ChatRepository {
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
       context: _contextForSurface(
-        AppUiSurfaces.globalSearchResults,
+        AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchConversationsOperation,
       ),
     );
@@ -648,22 +785,31 @@ class RemoteChatRepository implements ChatRepository {
     required String type,
     String? title,
     String? circleId,
+    String? circleGroupId,
     int? maxGroupSize,
+    List<String>? initialMemberIds,
   }) async {
     final uri = _uri(ChatApiMetadata.createConversationPath);
+    final body = <String, dynamic>{
+      'type': type,
+      if (title != null && title.isNotEmpty) 'title': title,
+      if (circleId != null && circleId.isNotEmpty) 'circleId': circleId,
+      if (circleGroupId != null && circleGroupId.isNotEmpty)
+        'circleGroupId': circleGroupId,
+      if (initialMemberIds != null && initialMemberIds.isNotEmpty)
+        'initialMemberIds': initialMemberIds,
+    };
+    if (maxGroupSize != null) {
+      body['maxGroupSize'] = maxGroupSize;
+    }
     return await _httpClient.postJson(
       uri,
       headers: _headersForSurface(
-        AppUiSurfaces.chatList,
+        AppUiSurfaces.startGroupChat,
         operationId: ChatApiMetadata.createConversationOperation,
         legacyPageId: ChatRequestPageIds.createConversation,
       ),
-      body: {
-        'type': type,
-        'title': ?title,
-        'circleId': ?circleId,
-        'maxGroupSize': ?maxGroupSize,
-      },
+      body: body,
     );
   }
 
@@ -726,7 +872,7 @@ class RemoteChatRepository implements ChatRepository {
     final decoded = await _httpClient.getJson(
       uri,
       headers: _headersForSurface(
-        AppUiSurfaces.globalSearchResults,
+        AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchMessagesOperation,
         legacyPageId: ChatRequestPageIds.searchMessages,
       ),
@@ -734,7 +880,7 @@ class RemoteChatRepository implements ChatRepository {
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
       context: _contextForSurface(
-        AppUiSurfaces.globalSearchResults,
+        AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchMessagesOperation,
       ),
     );
@@ -1040,15 +1186,16 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<Map<String, dynamic>>> searchContacts({
     required String query,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     final uri = _uri(
       ChatApiMetadata.searchContactsPath,
-      queryParameters: <String, String>{'q': query},
+      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
     );
     final decoded = await _httpClient.getJson(
       uri,
       headers: _headersForSurface(
-        AppUiSurfaces.chatList,
+        AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchContactsOperation,
         legacyPageId: ChatRequestPageIds.searchContacts,
       ),

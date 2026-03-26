@@ -56,22 +56,21 @@ void main() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
 
-  testWidgets('主页创作容器暴露 metadata 定义的五个筛选项', (tester) async {
+  testWidgets('主页创作容器暴露 metadata 定义的四个筛选项', (tester) async {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
     expect(find.text('全部'), findsOneWidget);
-    expect(find.text('点滴'), findsOneWidget);
     expect(find.text('图片'), findsOneWidget);
     expect(find.text('视频'), findsOneWidget);
-    expect(find.text('文章'), findsOneWidget);
+    expect(find.text('文字'), findsOneWidget);
   });
 
-  testWidgets('切到文章后可筛到文章作品', (tester) async {
+  testWidgets('切到文字后可筛到文字作品', (tester) async {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
-    await tester.tap(find.text('文章'));
+    await tester.tap(find.text('文字'));
     await _pumpFrames(tester, count: 4);
 
     expect(find.text('极简摄影的真谛'), findsOneWidget);

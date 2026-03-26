@@ -95,7 +95,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         widget.currentLocation == AppRoutePaths.assistant &&
         assistantInternalTab == 'dialog';
     final bottomNavHidden =
-        ref.watch(bottomNavHiddenProvider).hidden || assistantImmersive;
+        ref.watch(bottomNavHiddenProvider).hidden ||
+        assistantImmersive ||
+        widget.currentLocation == AppRoutePaths.circles;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

@@ -1,0 +1,26 @@
+version: 1
+aggregate: Homepage
+layer: e2e
+
+description: |
+  共享主页端云集成验证。覆盖搜索、挂载后的阅读壳层和治理入口。
+
+scenarios:
+  - name: search_attach_read_homepage
+    steps:
+      - user opens homepage picker
+      - user searches and selects a homepage
+      - user publishes content with canonical homepage reference
+      - user opens homepage detail
+    assertions:
+      - selected_homepage_persisted
+      - homepage_shell_returns_summary
+
+  - name: claim_and_offline_report
+    steps:
+      - user submits homepage claim
+      - reviewer approves or rejects
+      - user submits offline report
+    assertions:
+      - claim_status_transition_valid
+      - offline_report_status_transition_valid

@@ -17,6 +17,10 @@ class CircleDto {
   final String status;
   final String visibility;
   final String joinPolicy;
+  final String kind;
+  final String displaySubjectType;
+  final bool followEnabled;
+  final String? defaultPublicGroupId;
   final String? conversationId;
   final bool autoSyncChat;
   final List<CircleSectionConfigDto> sectionConfig;
@@ -41,6 +45,10 @@ class CircleDto {
     this.status = 'active',
     this.visibility = 'public',
     this.joinPolicy = 'open',
+    this.kind = 'interest',
+    this.displaySubjectType = 'circle',
+    this.followEnabled = true,
+    this.defaultPublicGroupId,
     this.conversationId,
     this.autoSyncChat = true,
     this.sectionConfig = const [],
@@ -60,7 +68,8 @@ class CircleDto {
       coverUrl: (m['coverUrl'] ?? m['cover']) as String?,
       ownerId: (m['ownerId'] ?? '').toString(),
       category: m['category'] ?? m['categoryId'] as String?,
-      tags: (m['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+      tags:
+          (m['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           const [],
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
       postCount: (m['postCount'] as num?)?.toInt() ?? 0,
@@ -68,9 +77,14 @@ class CircleDto {
       status: (m['status'] ?? 'active').toString(),
       visibility: (m['visibility'] ?? 'public').toString(),
       joinPolicy: (m['joinPolicy'] ?? 'open').toString(),
+      kind: (m['kind'] ?? 'interest').toString(),
+      displaySubjectType: (m['displaySubjectType'] ?? 'circle').toString(),
+      followEnabled: m['followEnabled'] as bool? ?? true,
+      defaultPublicGroupId: m['defaultPublicGroupId']?.toString(),
       conversationId: m['conversationId'] as String?,
       autoSyncChat: m['autoSyncChat'] as bool? ?? true,
-      sectionConfig: (m['sectionConfig'] as List<dynamic>?)
+      sectionConfig:
+          (m['sectionConfig'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(CircleSectionConfigDto.fromMap)
               .toList() ??
@@ -86,29 +100,34 @@ class CircleDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        if (description != null) 'description': description,
-        if (coverUrl != null) 'coverUrl': coverUrl,
-        'ownerId': ownerId,
-        if (category != null) 'category': category,
-        'tags': tags,
-        'memberCount': memberCount,
-        'postCount': postCount,
-        'weeklyActiveCount': weeklyActiveCount,
-        'status': status,
-        'visibility': visibility,
-        'joinPolicy': joinPolicy,
-        if (conversationId != null) 'conversationId': conversationId,
-        'autoSyncChat': autoSyncChat,
-        'sectionConfig': sectionConfig.map((s) => s.toMap()).toList(),
-        'storageUsedBytes': storageUsedBytes,
-        'storageQuotaBytes': storageQuotaBytes,
-        if (domainId != null) 'domainId': domainId,
-        if (subCategory != null) 'subCategory': subCategory,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    if (description != null) 'description': description,
+    if (coverUrl != null) 'coverUrl': coverUrl,
+    'ownerId': ownerId,
+    if (category != null) 'category': category,
+    'tags': tags,
+    'memberCount': memberCount,
+    'postCount': postCount,
+    'weeklyActiveCount': weeklyActiveCount,
+    'status': status,
+    'visibility': visibility,
+    'joinPolicy': joinPolicy,
+    'kind': kind,
+    'displaySubjectType': displaySubjectType,
+    'followEnabled': followEnabled,
+    if (defaultPublicGroupId != null)
+      'defaultPublicGroupId': defaultPublicGroupId,
+    if (conversationId != null) 'conversationId': conversationId,
+    'autoSyncChat': autoSyncChat,
+    'sectionConfig': sectionConfig.map((s) => s.toMap()).toList(),
+    'storageUsedBytes': storageUsedBytes,
+    'storageQuotaBytes': storageQuotaBytes,
+    if (domainId != null) 'domainId': domainId,
+    if (subCategory != null) 'subCategory': subCategory,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   static DateTime _parseDateTime(dynamic v) {
     if (v is DateTime) return v;
@@ -130,6 +149,10 @@ class CircleDto {
     String? status,
     String? visibility,
     String? joinPolicy,
+    String? kind,
+    String? displaySubjectType,
+    bool? followEnabled,
+    String? defaultPublicGroupId,
     String? conversationId,
     bool? autoSyncChat,
     List<CircleSectionConfigDto>? sectionConfig,
@@ -154,6 +177,10 @@ class CircleDto {
       status: status ?? this.status,
       visibility: visibility ?? this.visibility,
       joinPolicy: joinPolicy ?? this.joinPolicy,
+      kind: kind ?? this.kind,
+      displaySubjectType: displaySubjectType ?? this.displaySubjectType,
+      followEnabled: followEnabled ?? this.followEnabled,
+      defaultPublicGroupId: defaultPublicGroupId ?? this.defaultPublicGroupId,
       conversationId: conversationId ?? this.conversationId,
       autoSyncChat: autoSyncChat ?? this.autoSyncChat,
       sectionConfig: sectionConfig ?? this.sectionConfig,

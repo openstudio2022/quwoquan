@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -968,7 +969,15 @@ void _openChatContactTarget(BuildContext context, Map<String, dynamic> item) {
     context.push(AppRoutePaths.chatDetail(id: conversationId));
     return;
   }
-  context.push(AppRoutePaths.userProfile(username: userId));
+  context.push(
+    AppRoutePaths.userProfile(username: userId),
+    extra: UserProfileRouteExtra(
+      profileSubjectId: userId,
+      avatar: item['avatarUrl']?.toString(),
+      displayName: item['displayName']?.toString(),
+      backgroundImage: item['backgroundImage']?.toString(),
+    ),
+  );
 }
 
 /// 同好列表带右侧字母索引（1:1 ContactsList.tsx ContactsContent）

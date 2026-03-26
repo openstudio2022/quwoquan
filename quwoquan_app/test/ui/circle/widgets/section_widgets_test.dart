@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
@@ -55,12 +56,31 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SectionCreations), findsOneWidget);
-      expect(find.text('点滴'), findsOneWidget);
+      expect(find.text('点滴'), findsAtLeastNWidgets(1));
       expect(find.text('作品'), findsWidgets);
 
       await tester.tap(find.text('作品').first);
       await tester.pumpAndSettle();
       expect(find.text('笔记'), findsOneWidget);
+    });
+
+    test('圈子文章 mock 覆盖封面/标题四种组合', () {
+      final items = CircleMockData.circleFeedItems
+          .where((item) => (item['contentType'] ?? '').toString() == 'article')
+          .toList(growable: false);
+      bool hasCase({required bool expectCover, required bool expectTitle}) {
+        return items.any((raw) {
+          final hasCover = (raw['coverUrl'] ?? '').toString().trim().isNotEmpty;
+          final hasTitle = (raw['title'] ?? '').toString().trim().isNotEmpty;
+          final hasBody = (raw['body'] ?? '').toString().trim().isNotEmpty;
+          return hasBody && hasCover == expectCover && hasTitle == expectTitle;
+        });
+      }
+
+      expect(hasCase(expectCover: true, expectTitle: true), isTrue);
+      expect(hasCase(expectCover: false, expectTitle: true), isTrue);
+      expect(hasCase(expectCover: true, expectTitle: false), isTrue);
+      expect(hasCase(expectCover: false, expectTitle: false), isTrue);
     });
 
     testWidgets('空数据安全渲染', (tester) async {
@@ -175,6 +195,43 @@ void main() {
           .toList(growable: false);
 
       expect(overflowErrors, isEmpty);
+    });
+
+    testWidgets('笔记双列区分封面卡与文字卡并展示频道推荐', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const SizedBox(
+            height: 800,
+            child: SectionCreations(
+              circleId: 'circle_photo_01',
+              isDark: false,
+              role: CircleRole.owner,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('作品').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('笔记'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-article-grid-circle_journal_cover'),
+        ),
+        findsOneWidget,
+      );
+      await tester.drag(find.byType(GridView), const Offset(0, -320));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-article-grid-circle_ritual_plain'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('频道推荐'), findsWidgets);
     });
   });
 

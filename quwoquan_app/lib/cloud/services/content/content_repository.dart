@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
@@ -49,6 +50,8 @@ abstract class ContentRepository {
     required String query,
     String? identity,
     String? type,
+    String? categoryId,
+    String? subCategory,
     int limit = CloudApiDefaults.pageLimit,
   });
 
@@ -199,10 +202,9 @@ class CommentDto {
       postId: (m['postId'] ?? '').toString(),
       authorId: (m['profileSubjectId'] ?? m['authorId'] ?? '').toString(),
       personaId: (m['personaId'] ?? m['subAccountId'])?.toString(),
-      displayName:
-          (m['authorDisplayNameSnapshot'] ?? m['displayName'])?.toString(),
-      avatarUrl:
-          (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
+      displayName: (m['authorDisplayNameSnapshot'] ?? m['displayName'])
+          ?.toString(),
+      avatarUrl: (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
       content: (m['content'] ?? '').toString(),
       replyToCommentId: m['replyToCommentId']?.toString(),
       replyToUserId: m['replyToUserId']?.toString(),
@@ -326,6 +328,8 @@ class MockContentRepository implements ContentRepository {
     required String query,
     String? identity,
     String? type,
+    String? categoryId,
+    String? subCategory,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
@@ -334,6 +338,8 @@ class MockContentRepository implements ContentRepository {
     }
     final expectedIdentity = (identity ?? '').trim().toLowerCase();
     final expectedType = (type ?? '').trim().toLowerCase();
+    final expectedCategoryId = (categoryId ?? '').trim().toLowerCase();
+    final expectedSubCategory = (subCategory ?? '').trim().toLowerCase();
     final allRaw = <Map<String, dynamic>>[
       ...ContentMockData.discoveryPhotoData,
       ...ContentMockData.discoveryVideoData,
@@ -342,6 +348,44 @@ class MockContentRepository implements ContentRepository {
     ];
     final results = <PostSearchItemView>[];
     for (final item in allRaw) {
+      final circleIds = <String>{
+        if ((item['circleId'] ?? '').toString().trim().isNotEmpty)
+          (item['circleId'] ?? '').toString().trim(),
+        ...((item['circleIds'] as List?)
+                ?.map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty) ??
+            const <String>[]),
+      };
+      final associatedCircles = circleIds
+          .map<Map<String, dynamic>?>(
+            (id) =>
+                CircleMockData.circles.cast<Map<String, dynamic>?>().firstWhere(
+                  (candidate) =>
+                      (candidate?['id'] ?? candidate?['circleId'])
+                          ?.toString()
+                          .trim() ==
+                      id,
+                  orElse: () => null,
+                ),
+          )
+          .whereType<Map<String, dynamic>>()
+          .toList(growable: false);
+      final matchedCircle = associatedCircles
+          .where(
+            (circle) =>
+                (expectedCategoryId.isEmpty ||
+                    (circle['categoryId'] ?? '').toString().toLowerCase() ==
+                        expectedCategoryId) &&
+                (expectedSubCategory.isEmpty ||
+                    (circle['subCategory'] ?? '').toString().toLowerCase() ==
+                        expectedSubCategory),
+          )
+          .cast<Map<String, dynamic>?>()
+          .firstWhere(
+            (_) => true,
+            orElse: () =>
+                associatedCircles.isEmpty ? null : associatedCircles.first,
+          );
       final itemIdentity =
           (item['contentIdentity'] ??
                   (item['contentType'] == 'micro' ? 'moment' : 'work'))
@@ -350,10 +394,26 @@ class MockContentRepository implements ContentRepository {
       final itemType = (item['contentType'] ?? item['type'] ?? '')
           .toString()
           .toLowerCase();
+      final itemCategoryId =
+          (item['categoryId'] ?? matchedCircle?['categoryId'] ?? '')
+              .toString()
+              .toLowerCase();
+      final itemSubCategory =
+          (item['subCategory'] ?? matchedCircle?['subCategory'] ?? '')
+              .toString()
+              .toLowerCase();
       if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
         continue;
       }
       if (expectedType.isNotEmpty && itemType != expectedType) {
+        continue;
+      }
+      if (expectedCategoryId.isNotEmpty &&
+          itemCategoryId != expectedCategoryId) {
+        continue;
+      }
+      if (expectedSubCategory.isNotEmpty &&
+          itemSubCategory != expectedSubCategory) {
         continue;
       }
       final searchable = <String>[
@@ -373,6 +433,8 @@ class MockContentRepository implements ContentRepository {
       results.add(
         PostSearchItemView.fromMap(<String, dynamic>{
           ...item,
+          'categoryId': item['categoryId'] ?? matchedCircle?['categoryId'],
+          'subCategory': item['subCategory'] ?? matchedCircle?['subCategory'],
           'highlightText': matched,
           'matchedField': matched == (item['title']?.toString() ?? '')
               ? 'title'
@@ -547,6 +609,9 @@ class MockContentRepository implements ContentRepository {
           'progressive_title_prompt': true,
           'enable_identity_based_surfaces': true,
           'enable_identity_share_template': true,
+          'enable_article_distribution_profiles': true,
+          'enable_article_book_reader': true,
+          'enable_article_page_curl': true,
           'enable_assistant_content_identity_index': true,
         },
         'gray_release': {
@@ -1531,6 +1596,8 @@ class RemoteContentRepository implements ContentRepository {
     required String query,
     String? identity,
     String? type,
+    String? categoryId,
+    String? subCategory,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final uri = _uri(
@@ -1539,6 +1606,10 @@ class RemoteContentRepository implements ContentRepository {
         'query': query,
         if (identity != null && identity.isNotEmpty) 'identity': identity,
         if (type != null && type.isNotEmpty) 'type': type,
+        if (categoryId != null && categoryId.isNotEmpty)
+          'categoryId': categoryId,
+        if (subCategory != null && subCategory.isNotEmpty)
+          'subCategory': subCategory,
         'limit': '$limit',
       },
     );

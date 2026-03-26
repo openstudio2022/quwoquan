@@ -156,11 +156,15 @@ class CreateCircleService {
               (item) => CreateCircleOption(
                 id: (item['id'] ?? '').toString(),
                 name: (item['name'] ?? item['title'] ?? '').toString(),
-                memberCount: item['memberCount'] is int
-                    ? item['memberCount'] as int
-                    : item['member_count'] is int
-                    ? item['member_count'] as int
-                    : null,
+                memberCount: _readCircleCount(
+                  item['memberCount'] ?? item['member_count'],
+                ),
+                postCount: _readCircleCount(
+                  item['postCount'] ?? item['post_count'],
+                ),
+                coverUrl: _readCircleCover(
+                  item['coverUrl'] ?? item['cover'] ?? item['avatar'],
+                ),
               ),
             )
             .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
@@ -173,17 +177,70 @@ class CreateCircleService {
   }
 }
 
+int? _readCircleCount(dynamic raw) {
+  if (raw is int) {
+    return raw;
+  }
+  if (raw is num) {
+    return raw.toInt();
+  }
+  return int.tryParse((raw ?? '').toString());
+}
+
+String? _readCircleCover(dynamic raw) {
+  final value = (raw ?? '').toString().trim();
+  return value.isEmpty ? null : value;
+}
+
 const List<CreateCircleOption> _mockCircles = <CreateCircleOption>[
-  CreateCircleOption(id: 'circle-photo', name: '摄影圈', memberCount: 123),
-  CreateCircleOption(id: 'circle-travel', name: '旅行圈', memberCount: 56),
-  CreateCircleOption(id: 'circle-food', name: '美食圈', memberCount: 89),
+  CreateCircleOption(
+    id: 'circle-photo',
+    name: '摄影圈',
+    memberCount: 123,
+    postCount: 48,
+    coverUrl:
+        'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+  ),
+  CreateCircleOption(
+    id: 'circle-travel',
+    name: '旅行圈',
+    memberCount: 56,
+    postCount: 31,
+    coverUrl:
+        'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+  ),
+  CreateCircleOption(
+    id: 'circle-food',
+    name: '美食圈',
+    memberCount: 89,
+    postCount: 27,
+    coverUrl:
+        'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+  ),
   CreateCircleOption(
     id: 'circle-citywalk',
     name: 'CityWalk圈',
     memberCount: 234,
+    postCount: 63,
+    coverUrl:
+        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400',
   ),
-  CreateCircleOption(id: 'circle-video', name: '短视频创作圈', memberCount: 156),
-  CreateCircleOption(id: 'circle-article', name: '图文写作圈', memberCount: 78),
+  CreateCircleOption(
+    id: 'circle-video',
+    name: '短视频创作圈',
+    memberCount: 156,
+    postCount: 72,
+    coverUrl:
+        'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=400',
+  ),
+  CreateCircleOption(
+    id: 'circle-article',
+    name: '图文写作圈',
+    memberCount: 78,
+    postCount: 45,
+    coverUrl:
+        'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=400',
+  ),
 ];
 
 /// Mock 推荐圈子，用于选择页「推荐加入」区（design §3.7）
@@ -192,6 +249,9 @@ const List<CreateCircleOption> mockRecommendedCircles = <CreateCircleOption>[
     id: 'rec-city',
     name: '城市探索',
     memberCount: 890,
+    postCount: 126,
+    coverUrl:
+        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400',
     recommendationReason: '与你兴趣相似',
     isJoined: false,
   ),
@@ -199,6 +259,9 @@ const List<CreateCircleOption> mockRecommendedCircles = <CreateCircleOption>[
     id: 'rec-run',
     name: '跑步日记',
     memberCount: 312,
+    postCount: 58,
+    coverUrl:
+        'https://images.unsplash.com/photo-1486218119243-13883505764c?q=80&w=400',
     recommendationReason: '同城热门',
     isJoined: false,
   ),

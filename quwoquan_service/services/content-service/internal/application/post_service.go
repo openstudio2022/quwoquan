@@ -1926,6 +1926,110 @@ func (s *PostService) ListUserPosts(
 	return filtered, nextCursor, nil
 }
 
+type SearchPostsRequest struct {
+	Query         string
+	Identity      string
+	RequestedType string
+	CategoryID    string
+	SubCategory   string
+	Cursor        string
+	Limit         int
+}
+
+func (s *PostService) SearchPosts(
+	ctx context.Context,
+	req SearchPostsRequest,
+) ([]postmodel.PostSearchItemView, string, error) {
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	query := strings.TrimSpace(strings.ToLower(req.Query))
+	expectedIdentity := normalizeRequestedIdentity(req.Identity)
+	expectedType := normalizeRequestType(req.RequestedType)
+	posts := s.store.ListPublished(ctx, limit*8, req.Cursor)
+	results := make([]postmodel.PostSearchItemView, 0, limit)
+	for _, stored := range posts {
+		post := *normalizePostForRead(&stored)
+		postIdentity := strings.TrimSpace(strings.ToLower(post.ContentIdentity))
+		if expectedIdentity != "" && postIdentity != expectedIdentity {
+			continue
+		}
+		if expectedType != "" {
+			viewType := mapContentTypeToViewType(post.ContentType)
+			if expectedIdentity != "moment" && viewType != expectedType {
+				continue
+			}
+		}
+		matchedField := ""
+		highlight := ""
+		if query != "" {
+			candidates := []struct {
+				field string
+				value string
+			}{
+				{field: "title", value: post.Title},
+				{field: "summary", value: post.Summary},
+				{field: "body", value: post.Body},
+				{field: "authorDisplayName", value: post.AuthorDisplayNameSnapshot},
+				{field: "locationName", value: post.LocationName},
+			}
+			for _, candidate := range candidates {
+				if strings.Contains(strings.ToLower(strings.TrimSpace(candidate.value)), query) {
+					matchedField = candidate.field
+					highlight = strings.TrimSpace(candidate.value)
+					break
+				}
+			}
+			if matchedField == "" {
+				continue
+			}
+		}
+		primaryCircleID := strings.TrimSpace(post.CircleId)
+		if primaryCircleID == "" {
+			circleIDs := asStringSlice(post.CircleIds)
+			if len(circleIDs) > 0 {
+				primaryCircleID = strings.TrimSpace(circleIDs[0])
+			}
+		}
+		summary := strings.TrimSpace(post.Summary)
+		if summary == "" {
+			summary = strings.TrimSpace(post.Body)
+		}
+		coverURL := strings.TrimSpace(post.CoverUrl)
+		if coverURL == "" {
+			coverURL = strings.TrimSpace(post.VideoUrl)
+		}
+		results = append(results, postmodel.PostSearchItemView{
+			PostId:                 post.ID,
+			ContentType:            post.ContentType,
+			ContentIdentity:        post.ContentIdentity,
+			Title:                  post.Title,
+			Summary:                summary,
+			CoverUrl:               coverURL,
+			AuthorProfileSubjectId: post.ProfileSubjectId,
+			AuthorDisplayName:      post.AuthorDisplayNameSnapshot,
+			AuthorAvatarUrl:        post.AuthorAvatarUrlSnapshot,
+			CircleId:               primaryCircleID,
+			CircleName:             "",
+			CategoryId:             strings.TrimSpace(req.CategoryID),
+			SubCategory:            strings.TrimSpace(req.SubCategory),
+			LikeCount:              post.LikeCount,
+			HighlightText:          highlight,
+			MatchedField:           matchedField,
+			PublishedAt:            post.PublishedAt,
+		})
+		if len(results) >= limit {
+			break
+		}
+	}
+	nextCursor := ""
+	if len(results) == limit {
+		nextCursor = results[len(results)-1].PostId
+	}
+	return results, nextCursor, nil
+}
+
 func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {

@@ -130,8 +130,47 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
+        description: 作者显式设置的文章封面；分发卡与阅读器扉页共享同一真相源
+
+      - name: articleDocument
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 文章连续文档 canonical payload（标题、正文、图片资产、语义块）
+
+      - name: articleTemplate
+        type: enum
+        enum_ref: ArticleTemplatePreset
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 文章书本模板真相源（gentle/ritual/diffuse/journal/tech）
+
+      - name: articleFontPreset
+        type: enum
+        enum_ref: ArticleFontPreset
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 文章阅读与编辑共享的字体预设
+
+      - name: articlePresentationVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 文章展示版本，用于模板/分页/灰度演进
 
       - name: videoUrl
         type: string
@@ -159,6 +198,34 @@ entities:
         ops_exposure: read
         recommend_feature: true
         search_field: true
+
+      - name: primaryHomepageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 内容绑定的 canonical 共享主页 ID
+
+      - name: primaryHomepageType
+        type: enum
+        enum_ref: HomepageType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 绑定主页的类型快照
+
+      - name: primaryHomepageSnapshot
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 绑定主页的轻量快照（标题、副标题、封面）
 
       - name: status
         type: enum
@@ -197,7 +264,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         recommend_feature: true
-        description: 兼容字段（历史单圈子）。新写入请使用 circleIds 与分发表
+        description: 兼容字段（历史单圈子）。新写入请使用 circleIds + groupId/nodeId 与分发表
 
       - name: circleIds
         type: "[]string"
@@ -207,6 +274,24 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 作者主动分发圈子列表（发布后可增删，最终以分发表为准）
+
+      - name: groupId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 发布归属的群组 ID（默认公共群 / 自建群 / 组织节点）
+
+      - name: nodeId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 发布归属的组织节点 ID（父节点聚合时使用）
 
       - name: sourcePostId
         type: ObjectId
@@ -360,6 +445,16 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
+
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 最近活跃时间（发帖 / 评论 / 回复都会刷新）
 
       - name: deletedAt
         type: timestamp
@@ -772,6 +867,22 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: groupId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 命中的群组上下文（默认公共群 / 自建群 / 组织节点）
+      - name: nodeId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 命中的组织节点上下文（可与 groupId 相同或为空）
       - name: state
         type: enum
         enum_ref: DistributionState
@@ -780,6 +891,42 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read_write
+      - name: pinned
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+      - name: pinnedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: featured
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+      - name: featuredAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 节点 / 父节点聚合排序真相源
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -1071,6 +1218,46 @@ entities:
       - name: authorAvatarUrl
         type: string
         constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleName
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: categoryId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: subCategory
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: likeCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read

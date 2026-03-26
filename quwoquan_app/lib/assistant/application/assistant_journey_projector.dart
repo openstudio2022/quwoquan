@@ -64,11 +64,15 @@ class AssistantJourneyProjector {
           (data['phase'] as String?)?.trim() ?? '',
         );
         _activateStage(stageId);
-        final message = _sanitizeThinkingStreamText(event.message);
+        final message = _sanitizeThinkingStreamText(
+          event.message,
+          stageHint: stageId.name,
+        );
         final isStreaming =
             data['streaming'] == true || data['extracted'] == true;
         final supportsProcessStreaming =
             stageId == JourneyStageId.analyze ||
+            stageId == JourneyStageId.search ||
             stageId == JourneyStageId.answer;
         if (isStreaming && supportsProcessStreaming && message.isNotEmpty) {
           _appendTraceNarrativeEntry(
@@ -945,7 +949,7 @@ class AssistantJourneyProjector {
     if (prefix.isEmpty || _normalizedCompact(prefix) == _normalizedCompact(query)) {
       return '- $query';
     }
-    return '- $prefix：$query';
+    return '- $prefix';
   }
 
   String _queryTaskDisplayLabel(
@@ -1139,22 +1143,13 @@ class AssistantJourneyProjector {
     return text;
   }
 
-  String _sanitizeThinkingStreamText(String raw) {
-    final text = AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(
+  String _sanitizeThinkingStreamText(String raw, {String stageHint = ''}) {
+    final text = AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(
       raw,
+      stageHint: stageHint,
     ).trim();
     if (text.isEmpty) return '';
     if (_looksLikeRomanizedQueryFragment(text)) return '';
-    if (AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-          text,
-        ) ||
-        AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
-          text,
-        ) ||
-        AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
-        AssistantContentFilters.isJsonEnvelope(text)) {
-      return '';
-    }
     return text;
   }
 

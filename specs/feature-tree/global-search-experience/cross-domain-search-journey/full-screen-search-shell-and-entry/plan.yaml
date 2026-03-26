@@ -7,6 +7,7 @@ derived_from:
   acceptance: acceptance.yaml
   changelog:
     - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
 
 slices:
   - id: P1
@@ -34,7 +35,7 @@ slices:
       - T2_module_interaction
       - T4_user_journey
     done_when:
-      - 首页、聊天页、圈子页、助手页进入同一搜索页
+      - 首页、聊天页、群组页、助手页进入同一搜索页
       - landing 四段式结构稳定可见
       - 返回与取消逻辑稳定
     status: planned

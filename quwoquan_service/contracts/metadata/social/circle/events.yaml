@@ -34,6 +34,36 @@ events:
     channel: event_store
     payload_fields: [circleId, userId]
 
+  - name: CircleGroupCreated
+    description: 群组 / 组织节点创建
+    producer: circle-service
+    consumers: [chat-service, notification-service]
+    channel: event_store
+    payload_entity: CircleGroup
+    payload_fields: [_id, circleId, groupType, nodeType, name, visibility, joinPolicy, isDefaultPublicGroup]
+
+  - name: CircleGroupUpdated
+    description: 群组 / 组织节点更新
+    producer: circle-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: CircleGroup
+    payload_fields: [_id, circleId, name, description, visibility, joinPolicy, managerIds, updatedAt]
+
+  - name: CircleGroupMemberJoined
+    description: 成员加入群组
+    producer: circle-service
+    consumers: [chat-service, notification-service]
+    channel: event_store
+    payload_fields: [circleId, groupId, userId, role]
+
+  - name: CircleGroupMemberLeft
+    description: 成员退出群组
+    producer: circle-service
+    consumers: [chat-service]
+    channel: event_store
+    payload_fields: [circleId, groupId, userId]
+
   - name: CircleArchived
     description: 圈子归档
     producer: circle-service
@@ -50,11 +80,18 @@ events:
     recommend_impact: hot_path_signal
 
   - name: CircleConversationLinked
-    description: 圈子关联群聊（chat-service 创建 Conversation 后回写）
+    description: 兼容字段回写：圈子默认公共群关联的 Conversation
     producer: chat-service
     consumers: [circle-service]
     channel: event_store
     payload_fields: [circleId, conversationId]
+
+  - name: CircleGroupConversationLinked
+    description: 群组关联群聊（chat-service 创建 Conversation 后回写）
+    producer: chat-service
+    consumers: [circle-service]
+    channel: event_store
+    payload_fields: [circleId, groupId, conversationId]
 
   - name: CircleFileUploaded
     description: 文件上传完成

@@ -2,10 +2,10 @@
 name: /archive
 id: archive
 category: Workflow
-description: 兼容归档入口（标准流由 /verify + /commit 收口；本命令仅用于手动补归档或修复）
+description: 兼容归档入口（/dev 验证通过后默认自动归档；本命令仅用于手动补归档或修复）
 ---
 
-> 标准流：`/verify` 与 `/commit` 完成后闭环。本命令仅用于兼容历史流程、手动补归档或修复回写。
+> 标准流：`/dev` 在验证通过后自动完成 archive 等价回写，随后等待 `/commit`。本命令仅用于兼容历史流程、手动补归档或修复回写。
 
 ## 使用场景
 
@@ -44,7 +44,7 @@ description: 兼容归档入口（标准流由 /verify + /commit 收口；本命
 □ [ ] 非功能验收闭环：补齐实时性/弱网/并发/弹性/体验证据
 □ [ ] 灰度生产闭环：补齐 SLO、放量、回滚条件与观测项
 
-补全后重新执行：/verify → /archive
+补全后重新执行：/dev（自动 verify + archive）或 `/verify` → `/archive`
 ```
 
 ---
@@ -124,7 +124,7 @@ status: completed
 
 | 命令 | 职责 | 与 /archive 关系 |
 |------|------|----------------|
-| `/verify` | 漂移检测 + gate-full | archive 的前置（推荐先 verify 再 archive） |
+| `/verify` | 漂移检测 + gate-full | 手动补归档时的常见前置；标准流通常由 `/dev` 内置完成 |
 | `/archive` | **兼容补归档**：G3 + 回写状态 | 非标准流程，仅修复时使用 |
-| `/commit` | 提交入库 | commit 在发现未归档时可兜底执行 archive 等价逻辑 |
-| `/deliver` | dev + commit 一气呵成 | deliver 标准流复用自动归档，不单独调用 archive |
+| `/commit` | 提交入库 | commit 以前提是 `/dev` 已自动归档；发现缺口时可兜底执行 archive 等价逻辑 |
+| `/deliver` | dev + commit 一气呵成 | deliver 复用 `/dev` 的自动 verify / archive，不单独调用 archive |

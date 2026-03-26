@@ -36,3 +36,21 @@ entities:
     canonical: contracts/metadata/integration/location/aggregate.yaml
     storage: mongodb
     description: External location provider normalized poi
+
+  - name: Homepage
+    domain: entity
+    canonical: contracts/metadata/entity/homepage/aggregate.yaml
+    storage: mongodb
+    description: Shared homepage master record
+
+  - name: HomepageClaimRequest
+    domain: entity
+    canonical: contracts/metadata/entity/homepage/aggregate.yaml
+    storage: mongodb
+    description: Shared homepage ownership claim request
+
+  - name: HomepageStatusReport
+    domain: entity
+    canonical: contracts/metadata/entity/homepage/aggregate.yaml
+    storage: mongodb
+    description: Shared homepage offline or correction report

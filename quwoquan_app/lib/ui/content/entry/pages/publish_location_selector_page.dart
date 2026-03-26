@@ -134,31 +134,32 @@ class _PublishLocationSelectorPageState
         child: SafeArea(
           child: _loading
               ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CupertinoActivityIndicator(),
-                    SizedBox(height: AppSpacing.interGroupMd),
-                    Text(
-                      l10n.locationFetchingResult,
-                      style: TextStyle(
-                        fontSize: AppTypography.body,
-                        color: isDark
-                            ? CupertinoColors.white
-                            : CupertinoColors.black,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CupertinoActivityIndicator(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      Text(
+                        l10n.locationFetchingResult,
+                        style: TextStyle(
+                          fontSize: AppTypography.body,
+                          color: isDark
+                              ? CupertinoColors.white
+                              : CupertinoColors.black,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              )
+                    ],
+                  ),
+                )
               : _error != null
               ? Center(child: _buildErrorCard(l10n, isDark))
               : ListView(
                   children: [
                     CupertinoListTile(
                       title: Text(l10n.locationHidden),
-                      onTap: () =>
-                          Navigator.of(context).pop(CreateLocationOption.hidden),
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pop(CreateLocationOption.hidden),
                     ),
                     for (final item in _items) _buildLocationTile(item),
                   ],
@@ -342,7 +343,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
             children: [
               Padding(
                 padding: EdgeInsets.all(AppSpacing.interGroupMd),
-                child: CupertinoSearchTextField(
+                child: AppSearchField(
                   controller: _controller,
                   autofocus: true,
                   onChanged: _onQueryChanged,

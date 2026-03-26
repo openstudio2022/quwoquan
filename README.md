@@ -27,6 +27,8 @@ quwoquan/
 - **全局入口**：`specs/README.md`
 - **Agent 入口**：`specs/00_AGENT_MASTER_SPEC.md`
 - **唯一主线**：`specs/00_MASTER_DEVELOPMENT_FLOW.md`
+- **产品概念基线**：`specs/00_PRODUCT_CONCEPT_SYSTEM.md`（品牌定位、身份、主页、群组、群、内容、会话、小趣与跨域对象关系）
+- **全局术语表**：`specs/00_GLOBAL_TERMINOLOGY.md`（用户语言、PRD 语言、技术语言、禁用词与旧词迁移映射）
 - **业务对象设计**：`quwoquan_service/contracts/metadata/DESIGN.md`
 
 ## 端云一体化交付（特性粒度）

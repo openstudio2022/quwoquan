@@ -1,0 +1,112 @@
+version: 1
+node: chat-conversation/group-creation-member-management
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-001-group-create-lifecycle-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze journey metadata topology
+    goal: 冻结发起群聊的新 route / surface / request context 与候选源 contract 真相源边界
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `startGroupChat` route 与 surface 已明确
+      - `chatAddMembers` 与建群入口语义分离
+      - 候选源与成员资格 contract 落到 metadata 真相源
+    status: planned
+
+  - id: P2
+    title: establish codegen baseline
+    goal: 让 route、surface、request context 与群创建相关 operation 可由 codegen 产出
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - 需要新增的 codegen 产物已稳定
+      - App 不再手写第二套路由与 surface 常量
+    status: planned
+
+  - id: P3
+    title: land start group chat page and source sheets
+    goal: 落地图一正式页面与图二/图三 sheet，完成搜索、A-Z、已选区和三行折叠
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 发起页完成深浅色双模与蓝色主题
+      - 三类来源入口都可进入候选选择流程
+      - 已选成员反馈区可折叠、展开、删除
+    status: planned
+
+  - id: P4
+    title: land atomic create and inbox consistency
+    goal: 原子建群并确保消息列表、聊天详情页与聊天信息页一致
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 点击完成后私建群原子创建
+      - 新群立即出现在消息列表
+      - 群详情与成员列表与创建结果一致
+    status: planned
+
+  - id: P5
+    title: land member lifecycle and destructive boundaries
+    goal: 收口后续加人、圈子群不可解散、私建群可解散与 inbox 清理
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 后续加人继续执行互关准入
+      - 圈子群隐藏解散入口且服务端拒绝解散
+      - 私建群解散后消息列表移除
+    status: planned
+
+  - id: P6
+    title: validate ios quality and release posture
+    goal: 完成 iOS 原画质体验校验、SLO 验证与整版升级检查
+    depends_on:
+      - P5
+    acceptance_refs:
+      - R1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_release_rehearsal
+    done_when:
+      - 浅色/深色、compact/regular/expanded 三档体验稳定
+      - 一把升级口径、无兼容分支与整版发布回退说明明确
+      - `/dev` 可按固定切片顺序执行
+    status: planned

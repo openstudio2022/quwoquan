@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
@@ -60,8 +61,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
 
   void _showEditGroupNameDialog() {
     final controller = TextEditingController(text: _groupName);
-    final membersState =
-        ref.read(conversationMembersProvider(widget.conversationId));
+    final membersState = ref.read(
+      conversationMembersProvider(widget.conversationId),
+    );
     final isAdminOrOwner = membersState.isAdminOrOwner;
     final nameEditableByAdminOnly =
         membersState.settings['nameEditableByAdminOnly'] as bool? ?? false;
@@ -131,8 +133,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final membersState =
-        ref.watch(conversationMembersProvider(widget.conversationId));
+    final membersState = ref.watch(
+      conversationMembersProvider(widget.conversationId),
+    );
     final members = membersState.members;
     final isAdminOrOwner = membersState.isAdminOrOwner;
     final privacyShield =
@@ -166,14 +169,18 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        trailing: memberCount > 5 ? CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.search),
-          onPressed: () {
-            AppToast.show(context, '${UITextConstants.search}（开发中）');
-          },
-        ) : null,
-        border: Border(bottom: BorderSide(color: dividerColor, width: AppSpacing.one)),
+        trailing: memberCount > 5
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                child: const Icon(CupertinoIcons.search),
+                onPressed: () {
+                  AppToast.show(context, '${UITextConstants.search}（开发中）');
+                },
+              )
+            : null,
+        border: Border(
+          bottom: BorderSide(color: dividerColor, width: AppSpacing.one),
+        ),
       ),
       body: SizedBox.expand(
         child: ListView(
@@ -242,6 +249,15 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             role: m['role'] as String?,
                             onTap: () => context.push(
                               AppRoutePaths.userProfile(username: username),
+                              extra: UserProfileRouteExtra(
+                                profileSubjectId: username,
+                                avatar:
+                                    (m['avatarUrl'] as String?) ??
+                                    (m['avatar'] as String?),
+                                displayName:
+                                    (m['displayName'] as String?) ??
+                                    (m['name'] as String?),
+                              ),
                             ),
                           );
                         },
@@ -409,7 +425,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                       widget.conversationId,
                                     ).notifier,
                                   )
-                                  .updateSettings({'privacyShieldAdminOnly': v});
+                                  .updateSettings({
+                                    'privacyShieldAdminOnly': v,
+                                  });
                             }
                           : null,
                     ),
@@ -454,26 +472,29 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
-                  AppToast.show(context, '${UITextConstants.exitGroupChat}（开发中）');
+                  AppToast.show(
+                    context,
+                    '${UITextConstants.exitGroupChat}（开发中）',
+                  );
                 },
                 child: SizedBox(
-                    width: double.infinity,
-                    height: AppSpacing.buttonHeight,
-                    child: Center(
-                      child: Text(
-                        UITextConstants.exitGroupChat,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w500,
-                          color: SettingsSemanticConstants.exitActionColor(
-                            isDark,
-                          ),
+                  width: double.infinity,
+                  height: AppSpacing.buttonHeight,
+                  child: Center(
+                    child: Text(
+                      UITextConstants.exitGroupChat,
+                      style: TextStyle(
+                        fontSize: AppTypography.lg,
+                        fontWeight: FontWeight.w500,
+                        color: SettingsSemanticConstants.exitActionColor(
+                          isDark,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -530,7 +551,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       value: value,
       onChanged: onChanged,
       activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-      inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+      inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(
+        isDark,
+      ),
     );
   }
 }
@@ -559,8 +582,8 @@ class _MemberAvatar extends StatelessWidget {
     final roleLabel = role == 'owner'
         ? UITextConstants.owner
         : role == 'admin'
-            ? UITextConstants.admin
-            : null;
+        ? UITextConstants.admin
+        : null;
     return GestureDetector(
       onTap: onTap,
       child: Column(

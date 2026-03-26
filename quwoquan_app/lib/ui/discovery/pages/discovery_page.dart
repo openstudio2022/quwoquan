@@ -1211,7 +1211,9 @@ class _MomentPostCardState extends State<_MomentPostCard>
                   },
                   child: _actionChip(
                     _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                    formatCompactActionCount(item.likeCount + (_isLiked ? 1 : 0)),
+                    formatCompactActionCount(
+                      item.likeCount + (_isLiked ? 1 : 0),
+                    ),
                     isDark,
                     iconColor: likeColor,
                   ),
@@ -1315,6 +1317,15 @@ class _ArticleCardPlaceholder extends StatelessWidget {
             bottomRight: Radius.circular(AppSpacing.borderRadius),
           )
         : BorderRadius.circular(AppSpacing.borderRadius);
+    final headline = article.normalizedTitle.isNotEmpty
+        ? article.normalizedTitle
+        : (article.normalizedBody.isNotEmpty ? article.normalizedBody : '文章');
+    final supportingText =
+        article.normalizedTitle.isNotEmpty &&
+            article.normalizedBody.isNotEmpty &&
+            article.normalizedTitle != article.normalizedBody
+        ? article.normalizedBody
+        : '';
 
     return InkWell(
       onTap: onTap,
@@ -1368,20 +1379,22 @@ class _ArticleCardPlaceholder extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
             Text(
-              article.title,
+              headline,
               style: TextStyle(
                 fontSize: AppTypography.lg,
                 fontWeight: AppTypography.semiBold,
                 color: fg,
               ),
             ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Text(
-              article.body ?? '',
-              style: TextStyle(fontSize: AppTypography.base, color: fg),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            if (supportingText.isNotEmpty) ...[
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                supportingText,
+                style: TextStyle(fontSize: AppTypography.base, color: fg),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             SizedBox(height: AppSpacing.interGroupXs),
             Row(
               children: [

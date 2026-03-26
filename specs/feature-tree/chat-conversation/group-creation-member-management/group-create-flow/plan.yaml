@@ -1,0 +1,104 @@
+version: 1
+node: chat-conversation/group-creation-member-management/group-create-flow
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-001-group-create-lifecycle-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze route and candidate contracts
+    goal: 冻结 `startGroupChat` route / surface，以及联系人、来源、来源成员三类 candidate contract
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A4
+      - A5
+      - A7
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 新 route / surface 可被 codegen 产出
+      - 三类 candidate contract 明确
+      - 互关过滤与去重规则可追溯到 metadata
+    status: planned
+
+  - id: P2
+    title: land start page shell and selected tray
+    goal: 落地图一正式页面、搜索框、同好列表、A-Z 索引与已选成员三行折叠区
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A10
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 独立页面可进入
+      - 已选成员区可折叠、展开、删除
+      - 深浅色与蓝色主题稳定
+    status: planned
+
+  - id: P3
+    title: land source and member selection sheets
+    goal: 落地图二来源 sheet 与图三成员选择 sheet
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A4
+      - A5
+      - A6
+      - A7
+      - A10
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 群聊与圈子来源都来自真实数据
+      - 成员选择按钮状态与数量反馈正确
+      - 来源成员已做互关过滤
+    status: planned
+
+  - id: P4
+    title: land atomic create conversation
+    goal: 完成私建群原子创建、500 人校验和提交失败保留状态
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A7
+      - A8
+      - A9
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 提交动作服务端原子完成
+      - 超限或校验失败时保留当前页面状态
+      - 新群创建后消息列表立即可见
+    status: planned
+
+  - id: P5
+    title: validate visual polish and journey completion
+    goal: 校验微信级主路径已达成且视觉、交互、稳定性高于基线
+    depends_on:
+      - P4
+    acceptance_refs:
+      - A2
+      - A6
+      - A8
+      - A10
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 真机完成完整建群路径
+      - 浅色/深色均无明显回退
+      - 与消息页回流体验一致
+    status: planned

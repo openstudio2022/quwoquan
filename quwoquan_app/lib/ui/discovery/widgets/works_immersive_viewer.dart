@@ -25,12 +25,14 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
@@ -114,6 +116,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   // Dwell tracking：记录当前帖子进入时间
   DateTime? _pageEnterTime;
+  final DateTime _viewerOpenedAt = DateTime.now();
+  final Map<String, Map<String, dynamic>> _hydratedRawPostsById =
+      <String, Map<String, dynamic>>{};
+  final Set<String> _hydratingArticleIds = <String>{};
 
   Timer? _autoCollapseTimer;
   // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
@@ -347,25 +353,58 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return result;
   }
 
+  bool _hasStructuredArticlePayload(Map<String, dynamic>? raw) {
+    if (raw == null) {
+      return false;
+    }
+    if (raw['articleDocument'] is Map &&
+        (raw['articleDocument'] as Map).isNotEmpty) {
+      return true;
+    }
+    if (raw['articleBlocks'] is List &&
+        (raw['articleBlocks'] as List).isNotEmpty) {
+      return true;
+    }
+    if (raw['cards'] is List && (raw['cards'] as List).isNotEmpty) {
+      return true;
+    }
+    return false;
+  }
+
+  Map<String, dynamic>? _effectiveRawPostById(String postId) {
+    return _hydratedRawPostsById[postId] ?? _rawPostById(postId);
+  }
+
   Map<String, dynamic> _rawArticleDataFor(PostBaseDto post) {
+    final raw = _effectiveRawPostById(post.id);
+    final hasStructuredPayload = _hasStructuredArticlePayload(raw);
+    final rawTitle = raw?['title']?.toString().trim() ?? '';
+    final rawBody = raw?['body']?.toString().trim() ?? '';
     return <String, dynamic>{
-      ...?_rawPostById(post.id),
+      ...?raw,
       'postId': post.id,
-      'type': 'article',
-      'contentType': 'article',
-      'authorId': post.authorId,
-      'displayName': post.displayName,
-      'authorAvatarUrl': post.avatarUrl,
-      'title': post.title,
-      'body': post.body,
-      'coverUrl': post.coverUrl,
-      'thumbnailUrl': post.thumbnailUrl,
-      'mediaUrls': post.imageUrls,
-      'likeCount': post.likeCount,
-      'commentCount': post.commentCount,
-      'favoriteCount': post.favoriteCount,
-      'shareCount': post.shareCount,
-      'createdAt': post.createdAt,
+      'type': (raw?['type'] ?? raw?['contentType'] ?? 'article').toString(),
+      'contentType': (raw?['contentType'] ?? raw?['type'] ?? 'article')
+          .toString(),
+      'authorId': (raw?['authorId'] ?? post.authorId).toString(),
+      'displayName':
+          (raw?['displayName'] ?? raw?['authorNickname'] ?? post.displayName)
+              .toString(),
+      'authorAvatarUrl': (raw?['authorAvatarUrl'] ?? post.avatarUrl).toString(),
+      'title': rawTitle.isNotEmpty
+          ? rawTitle
+          : (hasStructuredPayload ? '' : post.title),
+      'body': rawBody.isNotEmpty
+          ? rawBody
+          : (hasStructuredPayload ? '' : post.body),
+      'coverUrl': (raw?['coverUrl'] ?? post.coverUrl).toString(),
+      'thumbnailUrl': (raw?['thumbnailUrl'] ?? post.thumbnailUrl).toString(),
+      'mediaUrls': raw?['mediaUrls'] ?? post.imageUrls,
+      'likeCount': raw?['likeCount'] ?? post.likeCount,
+      'commentCount': raw?['commentCount'] ?? post.commentCount,
+      'favoriteCount': raw?['favoriteCount'] ?? post.favoriteCount,
+      'shareCount': raw?['shareCount'] ?? post.shareCount,
+      'createdAt': raw?['createdAt'] ?? post.createdAt,
     };
   }
 
@@ -533,7 +572,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   String _titleForPost(PostBaseDto post) {
-    final raw = _rawPostById(post.id);
+    final raw = _effectiveRawPostById(post.id);
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     if (rawTitle.isNotEmpty) return rawTitle;
     final summary = _summaryForPost(post.id);
@@ -543,7 +582,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   String _bodyForPost(PostBaseDto post) {
-    final raw = _rawPostById(post.id);
+    final raw = _effectiveRawPostById(post.id);
     final rawBody =
         raw?['body']?.toString().trim() ??
         raw?['description']?.toString().trim() ??
@@ -572,7 +611,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   List<_PostCircleTarget> _circlesForPost(PostBaseDto post) {
-    final raw = _rawPostById(post.id);
+    final raw = _effectiveRawPostById(post.id);
     if (raw == null) {
       if (widget.defaultCircleId != null &&
           widget.defaultCircleId!.isNotEmpty) {
@@ -674,18 +713,18 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  Widget? _mediaIndicatorForPost(
+  String? _topProgressLabelForPost(
     PostBaseDto post,
     ({int current, int total}) progress,
   ) {
+    if (_isArticleLikePost(post)) {
+      return '${progress.current}/${progress.total}';
+    }
     if (!(_isImageLikePost(post) || _isVideoLikePost(post))) {
       return null;
     }
     if (progress.total <= 1) return null;
-    return _WorksPageIndicator(
-      total: progress.total,
-      current: progress.current,
-    );
+    return '${progress.current}/${progress.total}';
   }
 
   Widget? _overlayFooterForPost(BuildContext context, PostBaseDto post) {
@@ -730,6 +769,168 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _trackImpressionForPost(PostBaseDto post) {
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackImpression(post.id);
+    if (!_isArticleLikePost(post)) {
+      return;
+    }
+    final bookReaderEnabled = ref.read(
+      contentFeatureFlagProvider('enable_article_book_reader'),
+    );
+    final article = _articleViewFor(post);
+    ref
+        .read(articleReaderObservabilityProvider)
+        .trackReaderOpen(
+          postId: post.id,
+          durationMs: DateTime.now().difference(_viewerOpenedAt).inMilliseconds,
+          source: widget.source,
+          template: article.template.name,
+          fontPreset: article.fontPreset.name,
+          pageCount: article.pages.length.clamp(1, 99),
+          bookReaderEnabled: bookReaderEnabled,
+        );
+    if (!bookReaderEnabled) {
+      ref
+          .read(articleReaderObservabilityProvider)
+          .trackReaderFallback(
+            postId: post.id,
+            reason: 'feature_flag_disabled',
+            bookReaderEnabled: false,
+          );
+    }
+    _trackLegacyDocumentFallback(
+      post: post,
+      article: article,
+      hydrated: _hydratedRawPostsById.containsKey(post.id),
+    );
+    unawaited(_maybeHydrateArticleDetail(post));
+  }
+
+  String _documentSourceName(ArticleDetailDocumentSource source) {
+    return switch (source) {
+      ArticleDetailDocumentSource.articleDocument => 'article_document',
+      ArticleDetailDocumentSource.articleBlocks => 'article_blocks',
+      ArticleDetailDocumentSource.cards => 'cards',
+      ArticleDetailDocumentSource.body => 'body',
+      ArticleDetailDocumentSource.empty => 'empty',
+    };
+  }
+
+  void _trackLegacyDocumentFallback({
+    required PostBaseDto post,
+    required ArticleDetailView article,
+    required bool hydrated,
+  }) {
+    if (article.documentSource == ArticleDetailDocumentSource.articleDocument) {
+      return;
+    }
+    ref
+        .read(articleReaderObservabilityProvider)
+        .trackLegacyDocumentFallback(
+          postId: post.id,
+          source: _documentSourceName(article.documentSource),
+          hydrated: hydrated,
+        );
+  }
+
+  Future<void> _maybeHydrateArticleDetail(PostBaseDto post) async {
+    final raw = _effectiveRawPostById(post.id);
+    if (_hasStructuredArticlePayload(raw) ||
+        _hydratingArticleIds.contains(post.id)) {
+      return;
+    }
+    _hydratingArticleIds.add(post.id);
+    final startedAt = DateTime.now();
+    try {
+      final detail = await ref
+          .read(contentRepositoryProvider)
+          .getPost(postId: post.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _hydratedRawPostsById[post.id] = <String, dynamic>{...?raw, ...detail};
+      });
+      final hydratedArticle = _articleViewFor(post);
+      _trackLegacyDocumentFallback(
+        post: post,
+        article: hydratedArticle,
+        hydrated: true,
+      );
+      ref
+          .read(articleReaderObservabilityProvider)
+          .trackHydration(
+            postId: post.id,
+            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+            result: 'success',
+            trigger: 'get_post',
+            hadStructuredPayload: false,
+          );
+    } catch (_) {
+      ref
+          .read(articleReaderObservabilityProvider)
+          .trackHydration(
+            postId: post.id,
+            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+            result: 'error',
+            trigger: 'get_post',
+            hadStructuredPayload: false,
+          );
+    } finally {
+      _hydratingArticleIds.remove(post.id);
+    }
+  }
+
+  String _fallbackReasonName(ArticleReaderFallbackReason reason) {
+    return switch (reason) {
+      ArticleReaderFallbackReason.forcedDegradedPager =>
+        'forced_degraded_pager',
+      ArticleReaderFallbackReason.pageCurlDisabled => 'page_curl_disabled',
+      ArticleReaderFallbackReason.accessibilityDisableAnimations =>
+        'accessibility_disable_animations',
+      ArticleReaderFallbackReason.longDocument => 'long_document',
+    };
+  }
+
+  void _trackArticleReaderFallback(
+    PostBaseDto post,
+    ArticleReaderFallbackReason reason, {
+    required bool bookReaderEnabled,
+  }) {
+    ref
+        .read(articleReaderObservabilityProvider)
+        .trackReaderFallback(
+          postId: post.id,
+          reason: _fallbackReasonName(reason),
+          bookReaderEnabled: bookReaderEnabled,
+        );
+  }
+
+  void _trackArticlePageFlipCommit(
+    PostBaseDto post,
+    ArticleReaderPageFlipCommit event,
+  ) {
+    ref
+        .read(articleReaderObservabilityProvider)
+        .trackPageFlipCommit(
+          postId: post.id,
+          durationMs: event.durationMs,
+          mechanism: event.mechanism,
+          direction: event.direction,
+          fromPage: event.fromPage,
+          toPage: event.toPage,
+        );
+  }
+
+  void _trackArticlePageCurlAbort(
+    PostBaseDto post,
+    ArticleReaderPageCurlAbort event,
+  ) {
+    ref
+        .read(articleReaderObservabilityProvider)
+        .trackPageCurlAbort(
+          postId: post.id,
+          corner: event.corner,
+          progress: event.progress,
+        );
   }
 
   void _flushDwell(PostBaseDto post) {
@@ -852,16 +1053,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final overlayBody = currentPost == null
         ? ''
         : _overlayBodyForPost(currentPost);
-    final counterIndicator = currentPost == null
+    final topProgressLabel = currentPost == null
         ? null
-        : _mediaIndicatorForPost(currentPost, progress);
+        : _topProgressLabelForPost(currentPost, progress);
+    final Widget? counterIndicator = null;
     final overlayFooter = currentPost == null
         ? null
         : _overlayFooterForPost(context, currentPost);
-    final showStandaloneIndicator =
-        currentPost != null &&
-        counterIndicator != null &&
-        !_showsCaptionOverlay(currentPost);
     final isSelfPost = currentPost != null && _isSelfPost(currentPost);
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
@@ -929,6 +1127,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 children: [
                   _WorksPrimaryTopBar(
                     isFilterExpanded: _isFilterExpanded,
+                    progressLabel: topProgressLabel,
                     onTapClose: _dismissViewer,
                     onTapMore: () => _showWorksMoreSheet(context),
                     onTapWorksArrow: _toggleFilterPanel,
@@ -962,14 +1161,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               ),
             ),
           ),
-
-          if (showStandaloneIndicator)
-            Positioned(
-              left: AppSpacing.containerLg,
-              right: AppSpacing.containerLg,
-              bottom: _toolbarReservedHeight + AppSpacing.containerSm,
-              child: Center(child: counterIndicator),
-            ),
 
           if (currentPost != null && _showsCaptionOverlay(currentPost))
             Positioned(
@@ -1048,6 +1239,12 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final onOverflowNext = _canSwipePrimaryTabs
         ? _switchToNextPrimaryTab
         : null;
+    final enableArticleBookReader = ref.watch(
+      contentFeatureFlagProvider('enable_article_book_reader'),
+    );
+    final enableArticlePageCurl = ref.watch(
+      contentFeatureFlagProvider('enable_article_page_curl'),
+    );
     if (_isImageLikePost(post)) {
       return _WorksPhotoCanvas(
         post: post,
@@ -1071,15 +1268,34 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     }
     if (_isArticleLikePost(post)) {
       final article = _articleViewFor(post);
+      final safeInitialPage = (_articleInnerIndex[post.id] ?? 0)
+          .clamp(0, article.pages.length - 1)
+          .toInt();
+      if (!enableArticleBookReader) {
+        return _WorksLegacyArticleCanvas(
+          post: post,
+          article: article,
+          initialPage: safeInitialPage,
+          onPageChanged: (index) =>
+              setState(() => _articleInnerIndex[post.id] = index),
+          onPageFlipCommitted: (event) =>
+              _trackArticlePageFlipCommit(post, event),
+          onOverflowPrevious: onOverflowPrevious,
+          onOverflowNext: onOverflowNext,
+        );
+      }
       return _WorksArticleCanvas(
         post: post,
         article: article,
-        initialPage: (_articleInnerIndex[post.id] ?? 0).clamp(
-          0,
-          article.pages.length - 1,
-        ),
+        enablePageCurl: enableArticlePageCurl,
+        initialPage: safeInitialPage,
         onPageChanged: (index) =>
             setState(() => _articleInnerIndex[post.id] = index),
+        onFallbackResolved: (reason) =>
+            _trackArticleReaderFallback(post, reason, bookReaderEnabled: true),
+        onPageFlipCommitted: (event) =>
+            _trackArticlePageFlipCommit(post, event),
+        onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
         onOverflowPrevious: onOverflowPrevious,
         onOverflowNext: onOverflowNext,
       );
@@ -1187,6 +1403,7 @@ class _PostCircleTarget {
 class _WorksPrimaryTopBar extends StatelessWidget {
   const _WorksPrimaryTopBar({
     required this.isFilterExpanded,
+    required this.progressLabel,
     required this.onTapWorksArrow,
     required this.onHorizontalDragEnd,
     this.showNavigationTabs = true,
@@ -1197,6 +1414,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
   });
 
   final bool isFilterExpanded;
+  final String? progressLabel;
   final VoidCallback onTapWorksArrow;
   final GestureDragEndCallback onHorizontalDragEnd;
   final bool showNavigationTabs;
@@ -1247,6 +1465,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               bottom: 0,
               child: Center(
                 child: SizedBox(
+                  key: const ValueKey<String>('works-top-back'),
                   width: AppSpacing.iconButtonMinSizeSm,
                   child: IconButton(
                     onPressed: onTapClose,
@@ -1264,6 +1483,16 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                 ),
               ),
             ),
+
+            if (progressLabel?.isNotEmpty == true)
+              Positioned(
+                left: AppSpacing.iconButtonMinSizeSm + AppSpacing.intraGroupSm,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _WorksTopProgressLabel(label: progressLabel!),
+                ),
+              ),
 
             // More Button (Right)
             Positioned(
@@ -1288,6 +1517,49 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorksTopProgressLabel extends StatelessWidget {
+  const _WorksTopProgressLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: DecoratedBox(
+          key: const ValueKey<String>('works-top-progress-label'),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(
+              AppSpacing.circularBorderRadius,
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: AppSpacing.hairline,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: AppSpacing.intraGroupXs,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: AppColors.worksBodyText,
+                fontSize: AppTypography.xsPlus,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1743,11 +2015,16 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 }
 
-class _WorksArticleCanvas extends StatefulWidget {
+class _WorksArticleCanvas extends StatelessWidget {
   const _WorksArticleCanvas({
+    super.key,
     required this.post,
     required this.article,
+    required this.enablePageCurl,
     required this.onPageChanged,
+    this.onFallbackResolved,
+    this.onPageFlipCommitted,
+    this.onPageCurlAborted,
     this.initialPage = 0,
     this.onOverflowPrevious,
     this.onOverflowNext,
@@ -1755,73 +2032,35 @@ class _WorksArticleCanvas extends StatefulWidget {
 
   final PostBaseDto post;
   final ArticleDetailView article;
+  final bool enablePageCurl;
   final ValueChanged<int> onPageChanged;
+  final ValueChanged<ArticleReaderFallbackReason>? onFallbackResolved;
+  final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
+  final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
   final int initialPage;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
 
   @override
-  State<_WorksArticleCanvas> createState() => _WorksArticleCanvasState();
-}
-
-class _WorksArticleCanvasState extends State<_WorksArticleCanvas> {
-  late final PageController _pageController;
-  bool _overflowLocked = false;
-  List<ArticlePageData> get _pages => widget.article.pages;
-
-  int get _safeInitialPage {
-    final maxIndex = _pages.length - 1;
-    if (maxIndex <= 0) {
-      return 0;
-    }
-    return widget.initialPage.clamp(0, maxIndex);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: _safeInitialPage);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onPageChanged(_safeInitialPage);
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _WorksArticleCanvas oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final currentPage = _pageController.hasClients
-        ? (_pageController.page?.round() ?? _safeInitialPage)
-        : _safeInitialPage;
-    if (widget.initialPage != oldWidget.initialPage &&
-        currentPage != widget.initialPage &&
-        _pageController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_pageController.hasClients) {
-          return;
-        }
-        _pageController.jumpToPage(_safeInitialPage);
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final estimatedPages = ArticlePaginationEngine.paginateSnapshot(
+      document: article.document,
+      fontPreset: article.fontPreset,
+    );
+    final maxIndex = max(article.pages.length, estimatedPages.length) - 1;
+    final safeInitialPage = maxIndex <= 0
+        ? 0
+        : initialPage.clamp(0, maxIndex).toInt();
     return Stack(
       fit: StackFit.expand,
       children: [
         Container(color: AppColors.worksBackground),
-        if (widget.post.primaryImageUrl.isNotEmpty)
+        if (post.primaryImageUrl.isNotEmpty)
           Positioned.fill(
             child: Opacity(
               opacity: 0.08,
               child: CachedNetworkImage(
-                imageUrl: widget.post.primaryImageUrl,
+                imageUrl: post.primaryImageUrl,
                 fit: BoxFit.cover,
                 placeholder: (context, url) =>
                     Container(color: AppColors.worksBackground),
@@ -1845,46 +2084,254 @@ class _WorksArticleCanvasState extends State<_WorksArticleCanvas> {
           ),
         ),
         Positioned(
-          left: AppSpacing.containerMd,
-          right: AppSpacing.containerMd,
-          top: MediaQuery.of(context).padding.top + AppSpacing.containerLg,
+          left: AppSpacing.intraGroupSm,
+          right: AppSpacing.intraGroupSm,
+          top:
+              MediaQuery.of(context).padding.top +
+              AppSpacing.tabNavigationHeight +
+              AppSpacing.intraGroupSm,
           bottom:
               _WorksImmersiveViewerState._toolbarReservedHeight +
               AppSpacing.containerMd,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is OverscrollNotification && !_overflowLocked) {
-                if (notification.overscroll < 0) {
-                  _overflowLocked = true;
-                  widget.onOverflowPrevious?.call();
-                } else if (notification.overscroll > 0) {
-                  _overflowLocked = true;
-                  widget.onOverflowNext?.call();
-                }
-              } else if (notification is ScrollEndNotification) {
-                _overflowLocked = false;
-              }
-              return false;
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final pages = resolvePaginatedArticlePages(
+                context: context,
+                constraints: constraints,
+                document: article.document,
+                template: article.template,
+                fontPreset: article.fontPreset,
+                fallbackPages: article.pages,
+                variant: ArticleCanvasVariant.immersive,
+              );
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.immersive,
+              );
+              return ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: article.template,
+                fontPreset: article.fontPreset,
+                metrics: metrics,
+                coverUrl: post.primaryImageUrl,
+                initialPage: safeInitialPage,
+                enablePageCurl: enablePageCurl,
+                onPageChanged: onPageChanged,
+                onOverflowPrevious: onOverflowPrevious,
+                onOverflowNext: onOverflowNext,
+                onFallbackResolved: onFallbackResolved,
+                onPageFlipCommitted: onPageFlipCommitted,
+                onPageCurlAborted: onPageCurlAborted,
+              );
             },
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _pages.length,
-              onPageChanged: widget.onPageChanged,
-              itemBuilder: (context, index) {
-                final page = _pages[index];
-                return ArticlePageShell(
-                  template: widget.article.template,
-                  fontPreset: widget.article.fontPreset,
-                  pageIndex: index,
-                  totalPages: _pages.length,
-                  child: ArticlePageReadOnlyView(
-                    page: page,
-                    template: widget.article.template,
-                    fontPreset: widget.article.fontPreset,
-                  ),
-                );
-              },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorksLegacyArticleCanvas extends StatefulWidget {
+  const _WorksLegacyArticleCanvas({
+    required this.post,
+    required this.article,
+    required this.onPageChanged,
+    this.onPageFlipCommitted,
+    this.initialPage = 0,
+    this.onOverflowPrevious,
+    this.onOverflowNext,
+  });
+
+  final PostBaseDto post;
+  final ArticleDetailView article;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
+  final int initialPage;
+  final VoidCallback? onOverflowPrevious;
+  final VoidCallback? onOverflowNext;
+
+  @override
+  State<_WorksLegacyArticleCanvas> createState() =>
+      _WorksLegacyArticleCanvasState();
+}
+
+class _WorksLegacyArticleCanvasState extends State<_WorksLegacyArticleCanvas> {
+  late final PageController _pageController;
+  DateTime? _pageTransitionStartedAt;
+  bool _overflowLocked = false;
+  late int _currentPage;
+
+  int get _safeInitialPage {
+    final estimatedPages = ArticlePaginationEngine.paginateSnapshot(
+      document: widget.article.document,
+      fontPreset: widget.article.fontPreset,
+    );
+    final maxIndex =
+        max(widget.article.pages.length, estimatedPages.length) - 1;
+    if (maxIndex <= 0) {
+      return 0;
+    }
+    return widget.initialPage.clamp(0, maxIndex).toInt();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = _safeInitialPage;
+    _pageController = PageController(initialPage: _currentPage);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onPageChanged(_currentPage);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null &&
+        _pageTransitionStartedAt == null) {
+      _pageTransitionStartedAt = DateTime.now();
+    } else if (notification is OverscrollNotification && !_overflowLocked) {
+      if (notification.overscroll < 0) {
+        _overflowLocked = true;
+        widget.onOverflowPrevious?.call();
+      } else if (notification.overscroll > 0) {
+        _overflowLocked = true;
+        widget.onOverflowNext?.call();
+      }
+    } else if (notification is ScrollEndNotification) {
+      _overflowLocked = false;
+      _pageTransitionStartedAt = null;
+    }
+    return false;
+  }
+
+  void _emitPageFlipCommit({required int fromPage, required int toPage}) {
+    final startedAt = _pageTransitionStartedAt;
+    _pageTransitionStartedAt = null;
+    if (startedAt == null || fromPage == toPage) {
+      return;
+    }
+    widget.onPageFlipCommitted?.call(
+      ArticleReaderPageFlipCommit(
+        fromPage: fromPage,
+        toPage: toPage,
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        mechanism: 'legacy_pager',
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final post = widget.post;
+    final article = widget.article;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: AppColors.worksBackground),
+        if (post.primaryImageUrl.isNotEmpty)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.08,
+              child: CachedNetworkImage(
+                imageUrl: post.primaryImageUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) =>
+                    Container(color: AppColors.worksBackground),
+                errorWidget: (context, url, error) =>
+                    Container(color: AppColors.worksBackground),
+              ),
             ),
+          ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.08),
+                  AppColors.worksBackground.withValues(alpha: 0.92),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: AppSpacing.intraGroupSm,
+          right: AppSpacing.intraGroupSm,
+          top:
+              MediaQuery.of(context).padding.top +
+              AppSpacing.tabNavigationHeight +
+              AppSpacing.intraGroupSm,
+          bottom:
+              _WorksImmersiveViewerState._toolbarReservedHeight +
+              AppSpacing.containerMd,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final pages = resolvePaginatedArticlePages(
+                context: context,
+                constraints: constraints,
+                document: article.document,
+                template: article.template,
+                fontPreset: article.fontPreset,
+                fallbackPages: article.pages,
+                variant: ArticleCanvasVariant.immersive,
+              );
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.immersive,
+              );
+              return NotificationListener<ScrollNotification>(
+                onNotification: _handleScrollNotification,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: pages.length,
+                  onPageChanged: (index) {
+                    final previousPage = _currentPage;
+                    setState(() {
+                      _currentPage = index;
+                    });
+                    _emitPageFlipCommit(fromPage: previousPage, toPage: index);
+                    widget.onPageChanged(index);
+                  },
+                  itemBuilder: (context, index) {
+                    final page = pages[index];
+                    return Padding(
+                      padding: EdgeInsets.zero,
+                      child: ArticlePageShell(
+                        template: article.template,
+                        fontPreset: article.fontPreset,
+                        pageIndex: index,
+                        totalPages: pages.length,
+                        aspectRatio: metrics.aspectRatio,
+                        contentPadding: metrics.contentPadding,
+                        showIndicator: false,
+                        child: index == 0 && post.primaryImageUrl.isNotEmpty
+                            ? ArticleFrontispieceView(
+                                page: page,
+                                template: article.template,
+                                fontPreset: article.fontPreset,
+                                coverUrl: post.primaryImageUrl,
+                              )
+                            : ArticlePageReadOnlyView(
+                                page: page,
+                                template: article.template,
+                                fontPreset: article.fontPreset,
+                              ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           ),
         ),
       ],

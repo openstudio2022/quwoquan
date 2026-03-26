@@ -171,11 +171,6 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final inputBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundTertiary,
-    );
-
     return AppScaffold(
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
@@ -209,42 +204,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
               AppSpacing.containerMd,
               AppSpacing.containerSm,
             ),
-            child: Container(
-              padding: EdgeInsets.all(AppSpacing.containerSm),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                border: Border.all(color: borderColor.withValues(alpha: 0.12)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
-                    blurRadius: AppSpacing.md,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: CupertinoSearchTextField(
-                onChanged: (v) => setState(() => _searchQuery = v),
-                placeholder: CircleStatsPage._searchHint(_type),
-                placeholderStyle: TextStyle(
-                  color: fgSecondary,
-                  fontSize: AppTypography.base,
-                ),
-                prefixIcon: Icon(
-                  CupertinoIcons.search,
-                  size: AppSpacing.iconSmall + AppSpacing.xs,
-                  color: fgSecondary,
-                ),
-                backgroundColor: inputBg,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.circularBorderRadius,
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                style: TextStyle(color: fg, fontSize: AppTypography.base),
-              ),
+            child: AppSearchField(
+              onChanged: (v) => setState(() => _searchQuery = v),
+              placeholder: CircleStatsPage._searchHint(_type),
             ),
           ),
           Expanded(
@@ -357,7 +319,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     ),
                     onPressed: () {
                       setState(() {
-                        final idx = _users.indexWhere((e) => e['id'] == u['id']);
+                        final idx = _users.indexWhere(
+                          (e) => e['id'] == u['id'],
+                        );
                         if (idx >= 0) {
                           final prev = _users[idx];
                           final cur = prev['isFollowed'] as bool? ?? false;

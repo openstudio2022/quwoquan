@@ -28,10 +28,8 @@ import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 
 class AssistantConversationController extends ChangeNotifier {
-  AssistantConversationController({
-    required WidgetRef ref,
-    this.openContext,
-  }) : _ref = ref;
+  AssistantConversationController({required WidgetRef ref, this.openContext})
+    : _ref = ref;
 
   static const int _assistantHistoryPageSize = 18;
 
@@ -252,8 +250,7 @@ class AssistantConversationController extends ChangeNotifier {
                 : AppConceptConstants.assistantSenderId,
             'senderName': isUser ? '我' : AppConceptConstants.assistantLabel,
             'senderAvatar': '',
-            'timestamp':
-                '${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+            'timestamp': '${now.hour}:${now.minute.toString().padLeft(2, '0')}',
             'isRead': true,
             'isSelf': isUser,
           };
@@ -341,8 +338,9 @@ class AssistantConversationController extends ChangeNotifier {
       'type': 'text',
       'content': trimmed,
       'senderId': activeContext.profileSubjectId,
-      'senderName':
-          activeContext.displayName.isNotEmpty ? activeContext.displayName : '我',
+      'senderName': activeContext.displayName.isNotEmpty
+          ? activeContext.displayName
+          : '我',
       'senderAvatar': activeContext.avatarUrl,
       if (activeContext.subAccountId.isNotEmpty)
         'senderPersonaId': activeContext.subAccountId,
@@ -351,13 +349,12 @@ class AssistantConversationController extends ChangeNotifier {
       'isRead': true,
       'isSelf': true,
     });
-    String? streamingAssistantMessageId;
     final streamNow = DateTime.now();
     final streamTs =
         '${streamNow.hour}:${streamNow.minute.toString().padLeft(2, '0')}';
     _resetStreamingAnswerDecoder();
     _ensureMessagesGrowable();
-    streamingAssistantMessageId =
+    final streamingAssistantMessageId =
         'assistant_stream_${DateTime.now().millisecondsSinceEpoch}';
     _activeAssistantStreamingMessageId = streamingAssistantMessageId;
     _answerGateOpen = false;
@@ -398,9 +395,7 @@ class AssistantConversationController extends ChangeNotifier {
           await _ref.read(assistantGatewayProvider).ensureRemoteConfigLoaded();
         } catch (error) {
           if (kDebugMode) {
-            debugPrint(
-              'Assistant remote config load failed, continue: $error',
-            );
+            debugPrint('Assistant remote config load failed, continue: $error');
           }
         }
       }
@@ -518,12 +513,17 @@ class AssistantConversationController extends ChangeNotifier {
       final runResponse = response;
       final displayText = _resolveAssistantDisplayText(runResponse);
       final displayPlainText = _resolveAssistantDisplayPlainText(runResponse);
+      final artifactMarkdown = _responseArtifactDisplayMarkdown(runResponse);
       final displayMarkdown =
           AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-            runResponse.displayMarkdown.trim().isNotEmpty
-                ? runResponse.displayMarkdown
-                : displayText,
-            allowJsonExtraction: runResponse.displayMarkdown.trim().isNotEmpty,
+            artifactMarkdown.isNotEmpty
+                ? artifactMarkdown
+                : (runResponse.displayMarkdown.trim().isNotEmpty
+                      ? runResponse.displayMarkdown
+                      : displayText),
+            allowJsonExtraction:
+                artifactMarkdown.isNotEmpty ||
+                runResponse.displayMarkdown.trim().isNotEmpty,
           );
       _resetStreamingAnswerDecoder();
       final resolvedSessionId =
@@ -543,7 +543,8 @@ class AssistantConversationController extends ChangeNotifier {
           const <String, dynamic>{};
       final elapsedMs = DateTime.now().difference(runStartedAt).inMilliseconds;
       final replyTime = ChatTimeFormatter.format(DateTime.now());
-      final assistantMessageId = 'assistant_${DateTime.now().millisecondsSinceEpoch}';
+      final assistantMessageId =
+          'assistant_${DateTime.now().millisecondsSinceEpoch}';
       final uiReferences =
           (runResponse.structuredResponse['uiReferences'] as List?)
               ?.whereType<Map>()
@@ -582,55 +583,50 @@ class AssistantConversationController extends ChangeNotifier {
         elapsedMs: elapsedMs,
       );
       _ensureMessagesGrowable();
-      if (streamingAssistantMessageId != null) {
-        final existingIndex = _messages.indexWhere(
-          (item) => (item['id'] as String?) == streamingAssistantMessageId,
+      final existingIndex = _messages.indexWhere(
+        (item) => (item['id'] as String?) == streamingAssistantMessageId,
+      );
+      if (existingIndex >= 0) {
+        final existingMessage = _messages[existingIndex];
+        final effectiveDisplayText = _reconcileCompletedAnswerText(
+          streamedText: (existingMessage['streamFinalAnswer'] as String?) ?? '',
+          completedText: displayText,
         );
-        if (existingIndex >= 0) {
-          final existingMessage = _messages[existingIndex];
-          final effectiveDisplayText = _reconcileCompletedAnswerText(
-            streamedText:
-                (existingMessage['streamFinalAnswer'] as String?) ?? '',
-            completedText: displayText,
-          );
-          _messages[existingIndex] = <String, dynamic>{
-            ...existingMessage,
-            'content': effectiveDisplayText,
-            'timestamp': replyTime,
-            'runId': runResponse.runId ?? '',
-            'traceId': runResponse.traceId ?? '',
-            'sourceQuery': trimmed,
-            'templateVersionUsed':
-                (runResponse.structuredResponse['templateVersionUsed']
-                    as String?) ??
-                '',
-            'phaseOneRoutingDiagnostics':
-                (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
-                        as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'degraded': runResponse.degraded,
-            'qualityMetrics':
-                (runResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'heuristicFallbackUsed':
-                (((runResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
-                true,
-            'runArtifacts':
-                runResponse.runArtifacts?.toJson() ??
-                const <String, dynamic>{},
-            'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
-            'dialogueState': dialogueRuntime,
-            'uiReferences': uiReferences,
-            'uiActions': uiActions,
-            'uiUsageStats': uiUsageStats,
-            ...persistedTurnFields,
-            'streamFinalAnswer': '',
-            'streaming': false,
-          };
-        }
+        _messages[existingIndex] = <String, dynamic>{
+          ...existingMessage,
+          'content': effectiveDisplayText,
+          'timestamp': replyTime,
+          'runId': runResponse.runId ?? '',
+          'traceId': runResponse.traceId ?? '',
+          'sourceQuery': trimmed,
+          'templateVersionUsed':
+              (runResponse.structuredResponse['templateVersionUsed']
+                  as String?) ??
+              '',
+          'phaseOneRoutingDiagnostics':
+              (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
+                      as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
+          'degraded': runResponse.degraded,
+          'qualityMetrics':
+              (runResponse.structuredResponse['qualityMetrics'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
+          'heuristicFallbackUsed':
+              (((runResponse.structuredResponse['qualityMetrics'] as Map?)
+                  ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
+              true,
+          'runArtifacts': _responseRunArtifactsMap(runResponse),
+          'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
+          'dialogueState': dialogueRuntime,
+          'uiReferences': uiReferences,
+          'uiActions': uiActions,
+          'uiUsageStats': uiUsageStats,
+          ...persistedTurnFields,
+          'streamFinalAnswer': '',
+          'streaming': false,
+        };
       } else {
         _messages.add({
           'id': assistantMessageId,
@@ -664,9 +660,7 @@ class AssistantConversationController extends ChangeNotifier {
               (((runResponse.structuredResponse['qualityMetrics'] as Map?)
                   ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
               true,
-          'runArtifacts':
-              runResponse.runArtifacts?.toJson() ??
-              const <String, dynamic>{},
+          'runArtifacts': _responseRunArtifactsMap(runResponse),
           'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
           'dialogueState': dialogueRuntime,
           'uiReferences': uiReferences,
@@ -726,11 +720,9 @@ class AssistantConversationController extends ChangeNotifier {
       _assistantResponding = false;
       _assistantPhaseLabel = '';
       _activeAssistantStreamingMessageId = null;
-      if (streamingAssistantMessageId != null) {
-        _messages.removeWhere(
-          (item) => (item['id'] as String?) == streamingAssistantMessageId,
-        );
-      }
+      _messages.removeWhere(
+        (item) => (item['id'] as String?) == streamingAssistantMessageId,
+      );
       final errorHint = kDebugMode ? '助手异常: ${e.runtimeType}' : '助手出现异常，请重试。';
       _messages.add({
         'id': 'assistant_err_${DateTime.now().millisecondsSinceEpoch}',
@@ -791,7 +783,8 @@ class AssistantConversationController extends ChangeNotifier {
     String? streamingAssistantMessageId;
     _resetStreamingAnswerDecoder();
     _ensureMessagesGrowable();
-    streamingAssistantMessageId = 'assistant_rewrite_${now.millisecondsSinceEpoch}';
+    streamingAssistantMessageId =
+        'assistant_rewrite_${now.millisecondsSinceEpoch}';
     _activeAssistantStreamingMessageId = streamingAssistantMessageId;
     _answerGateOpen = false;
     _assistantResponding = true;
@@ -832,9 +825,7 @@ class AssistantConversationController extends ChangeNotifier {
           await _ref.read(assistantGatewayProvider).ensureRemoteConfigLoaded();
         } catch (error) {
           if (kDebugMode) {
-            debugPrint(
-              'Assistant remote config load failed, continue: $error',
-            );
+            debugPrint('Assistant remote config load failed, continue: $error');
           }
         }
       }
@@ -880,24 +871,30 @@ class AssistantConversationController extends ChangeNotifier {
         final displayPlainText = _resolveAssistantDisplayPlainText(
           finalResponse,
         );
+        final artifactMarkdown = _responseArtifactDisplayMarkdown(
+          finalResponse,
+        );
         final displayMarkdown =
             AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-              finalResponse.displayMarkdown.trim().isNotEmpty
-                  ? finalResponse.displayMarkdown
-                  : finalText,
-              allowJsonExtraction: finalResponse.displayMarkdown
-                  .trim()
-                  .isNotEmpty,
+              artifactMarkdown.isNotEmpty
+                  ? artifactMarkdown
+                  : (finalResponse.displayMarkdown.trim().isNotEmpty
+                        ? finalResponse.displayMarkdown
+                        : finalText),
+              allowJsonExtraction:
+                  artifactMarkdown.isNotEmpty ||
+                  finalResponse.displayMarkdown.trim().isNotEmpty,
             );
         _resetStreamingAnswerDecoder();
         _currentJourney = effectiveJourney;
-        final persistedTurnFields = _buildAssistantPersistedTurnFieldsForResponse(
-          response: finalResponse,
-          journey: effectiveJourney,
-          displayMarkdown: displayMarkdown,
-          displayPlainText: displayPlainText,
-          elapsedMs: _currentJourneyElapsedMs,
-        );
+        final persistedTurnFields =
+            _buildAssistantPersistedTurnFieldsForResponse(
+              response: finalResponse,
+              journey: effectiveJourney,
+              displayMarkdown: displayMarkdown,
+              displayPlainText: displayPlainText,
+              elapsedMs: _currentJourneyElapsedMs,
+            );
         _ensureMessagesGrowable();
         final idx = _messages.indexWhere(
           (item) => (item['id'] as String?) == streamingAssistantMessageId,
@@ -933,9 +930,7 @@ class AssistantConversationController extends ChangeNotifier {
                 (((finalResponse.structuredResponse['qualityMetrics'] as Map?)
                     ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
                 true,
-            'runArtifacts':
-                finalResponse.runArtifacts?.toJson() ??
-                const <String, dynamic>{},
+            'runArtifacts': _responseRunArtifactsMap(finalResponse),
             'uiUsageStats': uiUsageStats,
             ...persistedTurnFields,
           };
@@ -1107,7 +1102,8 @@ class AssistantConversationController extends ChangeNotifier {
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await _ref.read(activePersonaContextProvider.future);
-    if (_assistantBackend == AssistantBackend.remote && activeContext.isFallback) {
+    if (_assistantBackend == AssistantBackend.remote &&
+        activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
     return activeContext;
@@ -1119,10 +1115,9 @@ class AssistantConversationController extends ChangeNotifier {
   }) {
     final resolvedContext =
         activeContext ??
-        _ref.read(activePersonaContextProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => null,
-        );
+        _ref
+            .read(activePersonaContextProvider)
+            .maybeWhen(data: (value) => value, orElse: () => null);
     final profileSubjectId =
         resolvedContext?.profileSubjectId.isNotEmpty == true
         ? resolvedContext!.profileSubjectId
@@ -1216,7 +1211,8 @@ class AssistantConversationController extends ChangeNotifier {
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
       if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
-      if (latestRunArtifacts != null) 'runArtifacts': latestRunArtifacts.toJson(),
+      if (latestRunArtifacts != null)
+        'runArtifacts': latestRunArtifacts.toJson(),
       if (latestDialogueState['suggestedNextStateId'] is String &&
           (latestDialogueState['suggestedNextStateId'] as String)
               .trim()
@@ -1285,8 +1281,9 @@ class AssistantConversationController extends ChangeNotifier {
         if (_disposed || !_assistantResponding) return;
         final startedAt = _assistantProgressStartedAt;
         if (startedAt == null) return;
-        _currentJourneyElapsedMs =
-            DateTime.now().difference(startedAt).inMilliseconds;
+        _currentJourneyElapsedMs = DateTime.now()
+            .difference(startedAt)
+            .inMilliseconds;
         _notify();
       },
     );
@@ -1298,8 +1295,9 @@ class AssistantConversationController extends ChangeNotifier {
     final startedAt = _assistantProgressStartedAt;
     _assistantProgressStartedAt = null;
     if (_disposed || startedAt == null) return;
-    _currentJourneyElapsedMs =
-        DateTime.now().difference(startedAt).inMilliseconds;
+    _currentJourneyElapsedMs = DateTime.now()
+        .difference(startedAt)
+        .inMilliseconds;
   }
 
   void _ensureMessagesGrowable() {
@@ -1331,7 +1329,9 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantBackend = _resolveAvailableAssistantBackend(_assistantBackend);
     switch (_assistantBackend) {
       case AssistantBackend.local:
-        return _ref.read(localAssistantEntryProvider).runStream(request: request);
+        return _ref
+            .read(localAssistantEntryProvider)
+            .runStream(request: request);
       case AssistantBackend.remote:
         return _ref
             .read(remoteAssistantEntryProvider)
@@ -1435,10 +1435,7 @@ class AssistantConversationController extends ChangeNotifier {
     if (existingIndex >= 0) {
       final prev =
           (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
-      final merged = _mergeStreamingAnswerText(
-        previous: prev,
-        incoming: value,
-      );
+      final merged = _mergeStreamingAnswerText(previous: prev, incoming: value);
       if (merged == prev) {
         return;
       }
@@ -1462,7 +1459,8 @@ class AssistantConversationController extends ChangeNotifier {
         'streaming': true,
       });
     }
-    if (_shouldOpenAnswerGateForJourney(_currentJourney)) {
+    if (value.trim().isNotEmpty ||
+        _shouldOpenAnswerGateForJourney(_currentJourney)) {
       _answerGateOpen = true;
     }
     _notify();
@@ -1590,8 +1588,8 @@ class AssistantConversationController extends ChangeNotifier {
           (message['id'] as String?) == excludeMessageId) {
         continue;
       }
-      final usageStats =
-          (message['uiUsageStats'] as Map?)?.cast<String, dynamic>();
+      final usageStats = (message['uiUsageStats'] as Map?)
+          ?.cast<String, dynamic>();
       if (usageStats == null || usageStats.isEmpty) continue;
       prevCalls += _usageInt(
         usageStats['runModelCallCount'] ?? usageStats['modelCallCount'],
@@ -1699,8 +1697,7 @@ class AssistantConversationController extends ChangeNotifier {
           AppConceptConstants.assistantSenderId) {
         continue;
       }
-      final state =
-          (message['dialogueState'] as Map?)?.cast<String, dynamic>();
+      final state = (message['dialogueState'] as Map?)?.cast<String, dynamic>();
       if (state != null && state.isNotEmpty) return state;
     }
     return const <String, dynamic>{};
@@ -1724,8 +1721,31 @@ class AssistantConversationController extends ChangeNotifier {
     return null;
   }
 
+  Map<String, dynamic> _responseRunArtifactsMap(AssistantRunResponse response) {
+    final structured =
+        (response.structuredResponse['runArtifacts'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    if (structured.isNotEmpty) {
+      return structured;
+    }
+    return response.runArtifacts?.toJson() ?? const <String, dynamic>{};
+  }
+
+  String _responseArtifactDisplayMarkdown(AssistantRunResponse response) {
+    final runArtifacts = _responseRunArtifactsMap(response);
+    return (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '';
+  }
+
+  String _responseArtifactDisplayPlainText(AssistantRunResponse response) {
+    final runArtifacts = _responseRunArtifactsMap(response);
+    return (runArtifacts['displayPlainText'] as String?)?.trim() ?? '';
+  }
+
   String _resolveAssistantDisplayText(AssistantRunResponse response) {
     final displayText = _firstCompletedDisplayCandidate(<String>[
+      _responseArtifactDisplayMarkdown(response),
+      _responseArtifactDisplayPlainText(response),
       response.displayMarkdown,
       response.displayPlainText,
     ]);
@@ -1742,7 +1762,9 @@ class AssistantConversationController extends ChangeNotifier {
   String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
     final artifactPlain =
         AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          response.displayPlainText,
+          _responseArtifactDisplayPlainText(response).isNotEmpty
+              ? _responseArtifactDisplayPlainText(response)
+              : response.displayPlainText,
           allowJsonExtraction: false,
         );
     if (artifactPlain.isNotEmpty) {
@@ -1750,7 +1772,9 @@ class AssistantConversationController extends ChangeNotifier {
     }
     final artifactMarkdown =
         AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          response.displayMarkdown,
+          _responseArtifactDisplayMarkdown(response).isNotEmpty
+              ? _responseArtifactDisplayMarkdown(response)
+              : response.displayMarkdown,
           allowJsonExtraction: false,
         );
     if (artifactMarkdown.isNotEmpty) {
@@ -1877,12 +1901,12 @@ class AssistantConversationController extends ChangeNotifier {
       'query': query,
       'answer': _resolveAssistantDisplayText(response),
       'displayPlainText': _resolveAssistantDisplayPlainText(response),
-      'runArtifacts': response.runArtifacts?.toJson() ?? const <String, dynamic>{},
+      'runArtifacts': _responseRunArtifactsMap(response),
       'createdAt': DateTime.now().toIso8601String(),
       'uiReferences':
           (structured['uiReferences'] as List?)?.whereType<Map>().toList(
-                growable: false,
-              ) ??
+            growable: false,
+          ) ??
           const <Map>[],
       'uiUsageStats':
           (structured['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
@@ -1918,13 +1942,12 @@ class AssistantConversationController extends ChangeNotifier {
       if (trace.type != AssistantTraceEventType.toolResult) continue;
       final data = trace.data ?? const <String, dynamic>{};
       final queryPlan = (data['queryPlan'] as Map?)?.cast<String, dynamic>();
-      final policyDecision =
-          (data['policyDecision'] as Map?)?.cast<String, dynamic>();
-      final roundTraces =
-          (data['roundTraces'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false);
+      final policyDecision = (data['policyDecision'] as Map?)
+          ?.cast<String, dynamic>();
+      final roundTraces = (data['roundTraces'] as List?)
+          ?.whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
       if (queryPlan != null || policyDecision != null || roundTraces != null) {
         return <String, dynamic>{
           'queryPlan': queryPlan ?? const <String, dynamic>{},

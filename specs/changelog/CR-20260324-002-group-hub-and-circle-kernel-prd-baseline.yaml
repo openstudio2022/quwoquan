@@ -1,0 +1,254 @@
+id: CR-20260324-002
+title: group hub and circle kernel prd baseline
+slug: group-hub-and-circle-kernel-prd-baseline
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/circle-community
+  - specs/feature-tree/circle-community/circle-experience-redesign
+  - specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign
+  - specs/feature-tree/circle-community/circle-collaboration-tools
+  - specs/feature-tree/global-search-experience
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+
+entries:
+  - timestamp: "2026-03-24T20:20:00+08:00"
+    summary: >
+      完成群组主线 `/design` 基线：冻结 CircleGroup 子单元模型、双模板详情页、
+      组织节点内容聚合、公共群/自建群治理边界，以及搜索侧“群组”用户词与统一
+      Search 接口口径，并补齐对应 `plan.yaml`。
+    reason: >
+      `/prd` 已解决命名和边界问题，但在真正进入 `/dev` 前，仍缺少可实施的设计层真相源：
+      其一，群仍可能被误当成 Conversation；其二，圈子详情和组织主页还没有共享壳层与
+      模板分流设计；其三，搜索侧虽已改名为“群组”，但尚未冻结统一 Search 接口与内部
+      provider 的关系。为确保后续开发切片可执行、测试证据可映射、metadata/codegen
+      路径可落地，本次补齐 `/design` 与 `plan.yaml`，并完成 G1 校验。
+    change_type:
+      - design
+      - replan
+      - refine
+    changed_documents:
+      - path: specs/feature-tree/circle-community/design.md
+        sections:
+          - 设计动因
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/circle-community/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/design.md
+        sections:
+          - 设计动因
+          - 方案对比
+          - 关键设计决策
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/design.md
+        sections:
+          - 设计动因
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/circle-community/circle-collaboration-tools/design.md
+        sections:
+          - 设计动因
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/circle-community/circle-collaboration-tools/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/design.md
+        sections:
+          - 关键设计决策
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/design.md
+        sections:
+          - 设计动因
+          - 方案对比
+          - 关键设计决策
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/plan.yaml
+        sections:
+          - slices
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次已正式进入 `/design`，相关 `design.md / plan.yaml` 已补齐。
+      - 搜索对用户与页面层暴露统一 `Search` 接口；域级 `Search*` contract 退到内部 provider 层。
+      - `make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已执行并通过。
+  - timestamp: "2026-03-24T18:30:00+08:00"
+    summary: >
+      重新冻结群组主线 PRD：把首页与搜索中的统一入口词从“圈子”收口为“群组”，
+      并将 circle-community 基线升级为“群组入口 + 圈子内核 + 组织主页模板”，
+      同时明确内容、成员、群与具体事物的边界。
+    reason: >
+      继续推进圈子开发前，现有规格在三个层面已经出现认知断裂：其一，学校、院系、班级、
+      公司、部门并不适合作为“圈子”总称，却又需要和兴趣圈共享一个全局入口；
+      其二，详情页仍只有单一兴趣圈模板，无法承接组织型关系主页；其三，内容发布、
+      成员层级、公共群/自建群、以及具体事物关联边界仍未冻结。为了后续拆出“具体事物”
+      独立会话，同时保证当前圈子主线可以继续进入设计与实现，必须先完成一次新的 `/prd`
+      基线重写。
+    change_type:
+      - refine
+      - rename
+      - expand
+    changed_documents:
+      - path: specs/feature-tree/circle-community/spec.md
+        sections:
+          - 背景与动机
+          - 核心定义
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/circle-community/acceptance.yaml
+        sections:
+          - A3
+          - A4
+          - A5
+          - A6
+          - A8
+          - A9
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - 约束
+          - 验收重点
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+          - A7
+      - path: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/circle-community/circle-collaboration-tools/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 背景与动机
+          - 能力边界
+          - 领域服务与业务对象
+          - 约束与适用边界
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C1
+          - C2
+          - C3
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/spec.md
+        sections:
+          - 背景与动机
+          - 核心旅程
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/spec.md
+        sections:
+          - 目标用户
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/spec.md
+        sections:
+          - 功能范围
+          - 约束
+          - 验收重点
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - 约束
+          - 验收重点
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/acceptance.yaml
+        sections:
+          - A1
+          - S1
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次为 `/prd` 基线冻结，不进入 `design.md / plan.yaml`。
+      - “群组”只作为全局入口层用户词；详情页层继续保留圈子模板与组织主页模板的差异化命名。
+      - “实体”只保留在系统与规格抽象层，不作为前台统一用户词。

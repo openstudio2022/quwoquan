@@ -1,0 +1,35 @@
+version: 1
+aggregate: Homepage
+
+events:
+  - name: HomepageCandidateIntaken
+    description: 候选共享主页创建
+    producer: entity-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_entity: Homepage
+    payload_fields: [_id, title, homepageType, status, sourceType, createdAt]
+
+  - name: HomepagePublished
+    description: 候选共享主页发布
+    producer: entity-service
+    consumers: [content-service, circle-service, recommendation-engine]
+    channel: event_store
+    payload_entity: Homepage
+    payload_fields: [_id, title, homepageType, status, claimStatus, publishedAt]
+
+  - name: HomepageClaimRequested
+    description: 共享主页认领申请提交
+    producer: entity-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_entity: HomepageClaimRequest
+    payload_fields: [_id, homepageId, requesterUserId, claimTier, status, createdAt]
+
+  - name: HomepageStatusReported
+    description: 共享主页下线/纠错上报提交
+    producer: entity-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_entity: HomepageStatusReport
+    payload_fields: [_id, homepageId, reporterUserId, reason, status, createdAt]

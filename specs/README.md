@@ -11,6 +11,15 @@
 
 ---
 
+## 产品基线与术语
+
+| 文件 | 说明 |
+|------|------|
+| **`00_PRODUCT_CONCEPT_SYSTEM.md`** | 全 App 产品概念基线：品牌定位、身份、主页、群组、群、内容、会话、小趣与跨域对象关系 |
+| **`00_GLOBAL_TERMINOLOGY.md`** | 全局术语与命名规则：用户语言、PRD 语言、技术语言、禁用词与旧词迁移映射 |
+
+---
+
 ## Runtime 规范
 
 | 文件 | 说明 |
@@ -27,7 +36,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `feature-tree/` | 三层目录化特性树（`L1_capability -> L2_journey -> L3_scenario`），9 大能力域 |
+| `feature-tree/` | 三层目录化特性树（`L1_capability -> L2_journey -> L3_scenario`） |
 | `feature-tree/tree_index.yaml` | L1 机器可读索引 |
 | `changelog/` | 增量变更流（`CR-YYYYMMDD-NNN-<slug>.yaml`），不嵌入特性树节点目录 |
 | `l1_index.yaml` | L1 目录与服务映射 |

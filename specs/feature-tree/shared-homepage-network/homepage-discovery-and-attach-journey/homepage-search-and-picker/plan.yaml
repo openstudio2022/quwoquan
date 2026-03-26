@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-search-and-picker
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage picker search contract
+    goal: 冻结主页搜索 operation、结果摘要字段、picker route 与 surface
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 搜索结果字段足以区分同名主页
+      - picker 不再依赖第二套 UI 常量
+    status: planned
+
+  - id: P2
+    title: land homepage search results and empty states
+    goal: 提供主页搜索输入、结果列表、空态和 skeleton 体验
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 搜索为空与弱网都有明确反馈
+      - 结果展示名称、类目、摘要和状态信息
+    status: planned
+
+  - id: P3
+    title: return canonical homepage selection to caller
+    goal: 让 picker 稳定回填 canonical homepage reference，并保留调用方上下文
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 选择结果能回填到发布器或当前页面
+      - 返回后原页面状态不被破坏
+    status: planned
+
+  - id: P4
+    title: harden disambiguation and picker regression tests
+    goal: 为同名主页区分、空态和回填补齐测试与回滚动作
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 同名主页区分有测试覆盖
+      - picker 回填与空态主路径可回归
+    status: planned

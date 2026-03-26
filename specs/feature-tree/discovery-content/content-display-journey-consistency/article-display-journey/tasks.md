@@ -1,5 +1,7 @@
 # 开发任务：article-display-journey
 
+> 2026-03-22 更新：以下任务基于旧版“文章详情页”假设，已不再对应最新 `/prd`。进入 `/design` 后必须按新的文章分发卡 / 沉浸式阅读器 / 编辑态模板体系重建任务清单。
+
 ## 单一数据源
 
 - [ ] D1：DiscoveryFeedProvider 增加 category=article

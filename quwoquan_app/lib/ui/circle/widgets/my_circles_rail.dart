@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 TextStyle _myCirclesRailLabelStyle() {
   return const TextStyle(fontSize: AppTypography.xsPlus);
@@ -74,8 +74,8 @@ class MyCirclesRail extends StatelessWidget {
               ),
             ),
             child: ClipOval(
-              child: AppCachedNetworkImage(
-                imageUrl: circle.coverUrl ?? '',
+              child: CircleMediaImage(
+                imageSource: circle.coverUrl ?? '',
                 fit: BoxFit.cover,
               ),
             ),

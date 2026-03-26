@@ -1,0 +1,68 @@
+version: 2
+feature: homepage-claim-request-and-review
+level: L3_scenario
+source_path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-claim-request-and-review
+parent_journey: homepage-claim-maintain-and-offline-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结主页认领申请、材料分层和审核状态。
+  journey_bindings:
+    - J2
+  in_scope:
+    - 认领入口
+    - 材料提交
+    - 审核状态
+  out_of_scope:
+    - 维护后台
+    - 多门店批量认领
+
+scenario_acceptance:
+  A1:
+    title: 认领申请与审核状态可用
+    scenario: homepage claim request and review
+    journey_step: submit claim -> review materials -> return result
+    done_when:
+      - 用户可提交分层材料
+      - 审核前不显示认领标识
+      - 审核通过后主页进入已认领状态
+    edge_cases:
+      - 材料不全可补件或驳回
+      - 审核中不影响主页浏览
+    linked_plan_items:
+      - P2
+      - P4
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - homepage claim request review test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 认领材料分层与状态字段已冻结
+    done_when:
+      - 基础认领与强验证认领边界明确
+      - 认领状态字段和审核结果字段已明确
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - claim material schema review
+      recorded: []
+    status: pending

@@ -1,0 +1,63 @@
+version: 1
+node: chat-conversation/group-creation-member-management/member-add-remove-policy
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-001-group-create-lifecycle-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze member qualification and errors
+    goal: 冻结继续加人的互关准入、去重、500 人上限与错误码语义
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 加人资格 contract 明确
+      - 超限与不满足互关的错误语义明确
+    status: planned
+
+  - id: P2
+    title: land add-member flow on chat settings
+    goal: 让聊天信息页继续加人复用建群 candidate engine
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A7
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 继续加人候选源不再依赖 mock
+      - 失败态保留当前已选成员
+    status: planned
+
+  - id: P3
+    title: land dissolve boundaries and inbox cleanup
+    goal: 收口私建群可解散、圈子群不可解散与消息列表移除
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A4
+      - A5
+      - A6
+      - A7
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 危险操作入口与服务端约束一致
+      - 私建群解散后消息列表移除
+      - 圈子群解散请求被稳定拒绝
+    status: planned

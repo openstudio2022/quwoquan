@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage detail route and preview context contract
+    goal: 冻结主页详情 route、surface、request context 与返回上下文字段
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 主页详情 route 唯一
+      - 不同入口不再各写一套详情跳转规则
+    status: planned
+
+  - id: P2
+    title: land shared homepage summary preview
+    goal: 让搜索结果、内容卡片和发布器预览共用同一份主页摘要
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 名称、类目、摘要、封面和状态信息可用于预览
+      - 详情首帧可消费同一份 summary
+    status: planned
+
+  - id: P3
+    title: preserve return context across homepage detail entry
+    goal: 保证从搜索、内容和发布器进入详情后能稳定返回原上下文
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 返回后 query、tab 或发布上下文不丢失
+      - 详情失败时可回退上一步
+    status: planned
+
+  - id: P4
+    title: harden entry preview regression coverage
+    goal: 为主页详情入口、预览和返回语义补齐测试与回滚动作
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 主页入口和返回路径有稳定测试
+      - 回滚到仅选择模式时不破坏主链路
+    status: planned

@@ -5,28 +5,30 @@ class AssistantRequestPageIds {
   const AssistantRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'CreateRun': 'assistant.create.run',
-    'CreateRunStream': 'assistant.create.run.stream',
-    'GetPolicy': 'assistant.get.policy',
-    'GetSuggestedActions': 'assistant.get.suggested.actions',
-    'GrantSkillConsent': 'assistant.grant.skill.consent',
+    'CreateRun': 'assistant.run.create',
+    'CreateRunStream': 'assistant.run.stream',
+    'GetPolicy': 'assistant.policy.get',
+    'GetSuggestedActions': 'assistant.suggested_actions.get',
+    'GrantSkillConsent': 'assistant.skills.consent.grant',
     'ListConsents': 'assistant.list.consents',
-    'ListSkills': 'assistant.list.skills',
-    'ReportInteractionEvent': 'assistant.report.interaction.event',
-    'ReportPageContext': 'assistant.report.page.context',
-    'ReportScorecard': 'assistant.report.scorecard',
-    'RevokeSkillConsent': 'assistant.revoke.skill.consent',
+    'ListSkills': 'assistant.skills.list',
+    'ReportInteractionEvent': 'assistant.learning.events.report',
+    'ReportPageContext': 'assistant.page_context.report',
+    'ReportScorecard': 'assistant.learning.scorecards.report',
+    'RevokeSkillConsent': 'assistant.skills.consent.revoke',
+    'SearchXiaoquResults': 'assistant.search.xiaoqu',
   };
 
-  static const String createRun = 'assistant.create.run';
-  static const String createRunStream = 'assistant.create.run.stream';
-  static const String getPolicy = 'assistant.get.policy';
-  static const String getSuggestedActions = 'assistant.get.suggested.actions';
-  static const String grantSkillConsent = 'assistant.grant.skill.consent';
+  static const String createRun = 'assistant.run.create';
+  static const String createRunStream = 'assistant.run.stream';
+  static const String getPolicy = 'assistant.policy.get';
+  static const String getSuggestedActions = 'assistant.suggested_actions.get';
+  static const String grantSkillConsent = 'assistant.skills.consent.grant';
   static const String listConsents = 'assistant.list.consents';
-  static const String listSkills = 'assistant.list.skills';
-  static const String reportInteractionEvent = 'assistant.report.interaction.event';
-  static const String reportPageContext = 'assistant.report.page.context';
-  static const String reportScorecard = 'assistant.report.scorecard';
-  static const String revokeSkillConsent = 'assistant.revoke.skill.consent';
+  static const String listSkills = 'assistant.skills.list';
+  static const String reportInteractionEvent = 'assistant.learning.events.report';
+  static const String reportPageContext = 'assistant.page_context.report';
+  static const String reportScorecard = 'assistant.learning.scorecards.report';
+  static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
+  static const String searchXiaoquResults = 'assistant.search.xiaoqu';
 }

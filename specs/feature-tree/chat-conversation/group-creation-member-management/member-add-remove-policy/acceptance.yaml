@@ -1,14 +1,63 @@
 version: 1
 feature: member-add-remove-policy
-level: "L3_story"
-template: A1-A8
+level: L3_story
+status: specified
+archived: false
+template: '2026-03-24'
 focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
+
+level_acceptance:
+  A1:
+    criteria: 聊天信息页继续加人时，候选成员仍只展示与当前用户互关的对象
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+
+  A2:
+    criteria: 后续加人与初始建群复用同一去重规则，跨来源重复成员按 `userId` 合并
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+
+  A3:
+    criteria: 私建群继续加人和初始建群都受 500 人上限约束，超限时服务端拒绝并保留当前选人状态
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+
+  A4:
+    criteria: 私建群仅群主可见并可执行“解散群聊”危险操作
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+
+  A5:
+    criteria: 圈子群不显示“解散群聊”入口，且即使收到解散请求，服务端也会按 `type=circle` 拒绝
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+
+  A6:
+    criteria: 私建群解散成功后，该会话从消息列表中移除，用户无法再从普通消息列表进入该群
+    status: pending
+    test_layers:
+      T3: required
+      T4: required
+
+  A7:
+    criteria: 加人失败或解散失败时，端侧保留当前上下文和必要状态，不出现误清空或假成功
+    status: pending
+    test_layers:
+      T2: required
+      T4: required

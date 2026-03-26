@@ -13,6 +13,7 @@
 ## 目标用户
 
 - 在发现页浏览图片、视频、微趣媒体并进入沉浸式浏览器的用户。
+- 在发现页文章频道或圈子频道浏览文章，并进入沉浸式文章阅读器的用户。
 - 在圈子流中浏览 post 并进入沉浸式浏览器的用户。
 - 从沉浸式浏览器点击作者头像进入作者主页，并期望返回后状态无漂移的用户。
 - 在弱网、反复点击与重入场景下仍要求界面即时反馈且状态最终一致的用户。
@@ -22,7 +23,7 @@
 ### F1：多来源统一 handoff
 
 - 正式覆盖 `discovery feed` 与 `circle feed` 两类来源。
-- 两类来源进入媒体浏览器时都必须传入：
+- 两类来源进入媒体浏览器或文章阅读器时都必须传入：
   - canonical post 标识
   - canonical author 标识
   - post 文案与媒体资源
@@ -59,12 +60,11 @@
 
 ### F6：文案与展示一致性
 
-- 图片、视频、微趣进入浏览器后，标题（可选）和正文（可选）必须与对应 post 展示一致。
+- 图片、视频、微趣、文章进入浏览器/阅读器后，标题（可选）和正文（可选）必须与对应 post 展示一致。
 - viewer 中作者头像、昵称、圈子来源、关注态、点赞态、计数展示与 feed / profile 一致。
 
 ## Out of Scope
 
-- 文章沉浸式浏览器重新设计。
 - RTC 语音/视频能力本身的产品化重做。
 - 圈子 feed 排序、推荐与召回策略。
 - profile 壳层、背景拉伸、Tab 吸顶等已有 story 的视觉重构。
@@ -111,7 +111,7 @@
 |----------|----------|--------------|
 | `feed-item-dto-contract` | DTO 类型化与 projections 一致性 | 继续作为前置依赖，不重复定义 DTO 真相源 |
 | `content-action-intent-contract` | like/save/follow 乐观更新基础 | 扩展为 provider + outbox + 批同步策略的依赖基线 |
-| `photo-display-journey` / `video-display-journey` / `moment-display-journey` | 各内容类型的来源-浏览器-作者页旅程 | 继续保留，消费本次新增的 handoff / sync contract |
+| `photo-display-journey` / `video-display-journey` / `moment-display-journey` / `article-display-journey` | 各内容类型的来源-浏览器/阅读器-作者页旅程 | 继续保留，消费本次新增的 handoff / sync contract |
 | `dual-rail-discovery-redesign/works-immersive-viewer` | 作品轨沉浸浏览交互壳层 | 继续负责表现层，不负责多来源状态真相源 |
 | `owner-subaccount-homepage-unification` | profile 按钮矩阵与 `RelationshipCapabilityView` 真相源 | 作为被依赖节点，不作为本次主归属 |
 

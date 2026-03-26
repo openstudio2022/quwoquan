@@ -38,6 +38,20 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface startGroupChat = AppUiSurface(
+    id: 'startGroupChat',
+    owner: 'chat',
+    routeId: 'startGroupChat',
+    pathTemplate: '/chat/start-group',
+    description: '全局添加入口的发起群聊页',
+    operationIds: <String>[
+      'CreateConversation',
+      'ListConversations',
+      'SearchSocialRelations',
+      'ListUserCircles',
+    ],
+  );
+
   static const AppUiSurface chatDetail = AppUiSurface(
     id: 'chatDetail',
     owner: 'chat',
@@ -197,37 +211,123 @@ class AppUiSurfaces {
     owner: 'search',
     routeId: 'globalSearch',
     pathTemplate: '/search',
-    description: '全局搜索首页（搜索框、问小趣、语音、指定搜索内容、最近搜索）',
+    description: '全局搜索历史页与历史管理态',
     operationIds: <String>[
       'ListRecentSearches',
       'UpsertRecentSearch',
       'DeleteRecentSearch',
       'ClearRecentSearches',
-      'CreateRun',
-      'CreateRunStream',
     ],
   );
 
-  static const AppUiSurface globalSearchResults = AppUiSurface(
-    id: 'globalSearchResults',
+  static const AppUiSurface globalSearchSuggestions = AppUiSurface(
+    id: 'globalSearchSuggestions',
     owner: 'search',
     routeId: 'globalSearch',
     pathTemplate: '/search',
-    description: '全局搜索结果页（四域 fan-out 与局部分组降级）',
+    description: '输入后的实时联想页（最常使用、联系人、聊天记录、搜索网络结果）',
     operationIds: <String>[
-      'SearchPosts',
+      'SearchContacts',
       'SearchSocialRelations',
       'SearchConversations',
       'SearchMessages',
       'SearchCircles',
+      'UpsertRecentSearch',
+    ],
+  );
+
+  static const AppUiSurface globalSearchNetworkResults = AppUiSurface(
+    id: 'globalSearchNetworkResults',
+    owner: 'search',
+    routeId: 'globalSearchNetworkResults',
+    pathTemplate: '/search/network',
+    description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
+    operationIds: <String>[
+      'SearchPosts',
+      'SearchCircles',
+      'SearchXiaoquResults',
       'UpsertRecentSearch',
       'CreateRun',
       'CreateRunStream',
     ],
   );
 
+  static const AppUiSurface homepagePicker = AppUiSurface(
+    id: 'homepagePicker',
+    owner: 'entity',
+    routeId: 'homepagePicker',
+    pathTemplate: '/homepages/picker',
+    description: '共享主页搜索与选择器',
+    operationIds: <String>[
+      'SearchHomepages',
+      'SuggestHomepageCandidate',
+    ],
+  );
+
+  static const AppUiSurface suggestHomepage = AppUiSurface(
+    id: 'suggestHomepage',
+    owner: 'entity',
+    routeId: 'suggestHomepage',
+    pathTemplate: '/homepages/suggest',
+    description: '补充缺失共享主页',
+    operationIds: <String>[
+      'SuggestHomepageCandidate',
+    ],
+  );
+
+  static const AppUiSurface homepageDetail = AppUiSurface(
+    id: 'homepageDetail',
+    owner: 'entity',
+    routeId: 'homepageDetail',
+    pathTemplate: '/homepages/{id}',
+    description: '共享主页详情与阅读壳层',
+    operationIds: <String>[
+      'GetHomepageDetail',
+      'GetHomepageShell',
+      'GetHomepageReviewSummary',
+      'GetHomepageRelatedGroups',
+    ],
+  );
+
+  static const AppUiSurface homepageClaim = AppUiSurface(
+    id: 'homepageClaim',
+    owner: 'entity',
+    routeId: 'homepageClaim',
+    pathTemplate: '/homepages/{id}/claim',
+    description: '共享主页认领申请页',
+    operationIds: <String>[
+      'GetHomepageDetail',
+      'CreateHomepageClaimRequest',
+    ],
+  );
+
+  static const AppUiSurface homepageMaintenance = AppUiSurface(
+    id: 'homepageMaintenance',
+    owner: 'entity',
+    routeId: 'homepageMaintenance',
+    pathTemplate: '/homepages/{id}/manage',
+    description: '已认领共享主页基础维护页',
+    operationIds: <String>[
+      'GetHomepageDetail',
+      'UpdateClaimedHomepageBasics',
+    ],
+  );
+
+  static const AppUiSurface homepageStatusReport = AppUiSurface(
+    id: 'homepageStatusReport',
+    owner: 'entity',
+    routeId: 'homepageStatusReport',
+    pathTemplate: '/homepages/{id}/status-report',
+    description: '共享主页下线与纠错上报页',
+    operationIds: <String>[
+      'GetHomepageDetail',
+      'CreateHomepageStatusReport',
+    ],
+  );
+
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
+    startGroupChat,
     chatDetail,
     chatSettings,
     chatManage,
@@ -240,11 +340,19 @@ class AppUiSurfaces {
     assistantHistory,
     assistantFeedback,
     globalSearchLanding,
-    globalSearchResults,
+    globalSearchSuggestions,
+    globalSearchNetworkResults,
+    homepagePicker,
+    suggestHomepage,
+    homepageDetail,
+    homepageClaim,
+    homepageMaintenance,
+    homepageStatusReport,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
     'chatList': chatList,
+    'startGroupChat': startGroupChat,
     'chatDetail': chatDetail,
     'chatSettings': chatSettings,
     'chatManage': chatManage,
@@ -257,6 +365,13 @@ class AppUiSurfaces {
     'assistantHistory': assistantHistory,
     'assistantFeedback': assistantFeedback,
     'globalSearchLanding': globalSearchLanding,
-    'globalSearchResults': globalSearchResults,
+    'globalSearchSuggestions': globalSearchSuggestions,
+    'globalSearchNetworkResults': globalSearchNetworkResults,
+    'homepagePicker': homepagePicker,
+    'suggestHomepage': suggestHomepage,
+    'homepageDetail': homepageDetail,
+    'homepageClaim': homepageClaim,
+    'homepageMaintenance': homepageMaintenance,
+    'homepageStatusReport': homepageStatusReport,
   };
 }

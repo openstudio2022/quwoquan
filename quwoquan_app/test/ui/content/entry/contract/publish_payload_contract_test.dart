@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
 /// L1a 契约测试：创作入口发布 payload 与 content/post metadata 对齐
 ///
@@ -10,26 +12,69 @@ void main() {
   const writable = GeneratedPostRuntimeMetadata.createWritableFields;
 
   group('PublishPayload — 常规契约', () {
-    test('createWritableFields 包含 visibility location locationName circleIds', () {
-      expect(writable, contains('visibility'));
-      expect(writable, contains('location'));
-      expect(writable, contains('locationName'));
-      expect(writable, contains('circleIds'));
+    test(
+      'createWritableFields 包含 visibility location locationName circleIds',
+      () {
+        expect(writable, contains('visibility'));
+        expect(writable, contains('location'));
+        expect(writable, contains('locationName'));
+        expect(writable, contains('circleIds'));
+        expect(writable, contains('primaryHomepageId'));
+        expect(writable, contains('primaryHomepageType'));
+        expect(writable, contains('primaryHomepageSnapshot'));
+      },
+    );
+
+    test('文章发布 payload 可写字段包含封面与展示真相源', () {
+      expect(writable, contains('coverUrl'));
+      expect(writable, contains('articleDocument'));
+      expect(writable, contains('articleTemplate'));
+      expect(writable, contains('articleFontPreset'));
+      expect(writable, contains('articlePresentationVersion'));
     });
 
     test('payload 公开+位置+圈子组合结构正确', () {
       final payload = <String, dynamic>{
         'contentType': 'micro',
         'visibility': 'public',
-        'location': {'type': 'Point', 'coordinates': [104.06, 30.65]},
+        'location': {
+          'type': 'Point',
+          'coordinates': [104.06, 30.65],
+        },
         'locationName': '成都·天府广场',
         'circleIds': <String>['c1', 'c2'],
       };
       for (final k in payload.keys) {
-        expect(writable, contains(k), reason: 'payload 字段 $k 应在 createWritableFields 中');
+        expect(
+          writable,
+          contains(k),
+          reason: 'payload 字段 $k 应在 createWritableFields 中',
+        );
       }
       expect(payload['visibility'], 'public');
       expect((payload['circleIds'] as List).length, 2);
+    });
+
+    test('payload 可携带 canonical homepage reference', () {
+      const settings = PublishSettings(
+        homepage: HomepageCanonicalReference(
+          id: 'homepage_sight_west_lake',
+          homepageType: 'sight',
+          title: '西湖景区',
+          subtitle: '杭州西湖核心游览区',
+          coverUrl: 'https://example.com/west-lake.jpg',
+          status: 'published',
+        ),
+      );
+      final payload = settings.toPayloadFields();
+      expect(payload['primaryHomepageId'], 'homepage_sight_west_lake');
+      expect(payload['primaryHomepageType'], 'sight');
+      expect(payload['primaryHomepageSnapshot'], <String, dynamic>{
+        'title': '西湖景区',
+        'subtitle': '杭州西湖核心游览区',
+        'coverUrl': 'https://example.com/west-lake.jpg',
+        'status': 'published',
+      });
     });
 
     test('payload 私密时 circleIds 必须为空', () {
@@ -57,7 +102,10 @@ void main() {
         'visibility': 'public',
         'locationName': '',
       };
-      expect(payload.containsKey('location') || payload['location'] == null, isTrue);
+      expect(
+        payload.containsKey('location') || payload['location'] == null,
+        isTrue,
+      );
       expect(payload['locationName'], '');
     });
 

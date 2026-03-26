@@ -1,0 +1,23 @@
+version: 1
+aggregate: Homepage
+layer: app_side
+
+description: |
+  端侧共享主页 mock 契约。覆盖 picker 搜索、详情壳层、认领和下线上报。
+
+scenarios:
+  - name: picker_search_returns_homepages
+    assertions:
+      - items_match_schema
+      - first_item_title_non_empty
+
+  - name: homepage_detail_contains_modules
+    assertions:
+      - review_summary_present
+      - content_preview_present
+      - related_groups_present
+
+  - name: claim_and_status_report_submit
+    assertions:
+      - claim_request_created
+      - status_report_created

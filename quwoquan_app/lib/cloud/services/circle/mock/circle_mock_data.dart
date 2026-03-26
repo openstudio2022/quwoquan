@@ -16,11 +16,12 @@ class CircleMockData {
     'coverUrl':
         'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
     'desc': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
-    'description':
-        '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
+    'description': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
     'tags': ['城市漫步', '胶片', '人像', '风光'],
     'visibility': 'public',
     'joinPolicy': 'approval',
+    'categoryId': 'humanity',
+    'subCategory': '影像',
     'memberCount': 128,
     'postCount': 1024,
     'weeklyActiveCount': 45,
@@ -490,6 +491,262 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
       'likeCount': 89,
       'favoriteCount': 14,
+      'shareCount': 4,
+    },
+    {
+      'id': 'circle_journal_cover',
+      'postId': 'circle_journal_cover',
+      'circleId': 'circle_photo_01',
+      'type': 'article',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'authorId': 'u5',
+      'authorNickname': '山川手账',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+      'title': '山路晨雾手账：把徒步笔记做成可翻页的旅途册',
+      'body': '把路标、票据和雾气里的第一束光整理成一张真正适合在圈子里分发的手账扉页。',
+      'summary': '把路标、票据和雾气里的第一束光整理成一张真正适合在圈子里分发的手账扉页。',
+      'articleTemplate': 'journal',
+      'articleFontPreset': 'handwritten',
+      'articlePresentationVersion': 1,
+      'circleIds': ['circle_photo_01', 'c2'],
+      'circleNames': ['光影摄影社', '旅行手账'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c2', 'name': '旅行手账'},
+      ],
+      'circleName': '光影摄影社',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+      'articleDocument': {
+        'title': '山路晨雾手账：把徒步笔记做成可翻页的旅途册',
+        'body':
+            '凌晨出发时，山路像一张还没晒干的纸。\n把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。\n真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。',
+        'blocks': [
+          {
+            'id': 'circle_journal_cover_p0',
+            'type': 'paragraph',
+            'text': '凌晨出发时，山路像一张还没晒干的纸。',
+          },
+          {'id': 'circle_journal_cover_h2', 'type': 'heading2', 'text': '边走边贴'},
+          {
+            'id': 'circle_journal_cover_img',
+            'type': 'image',
+            'imageUrl':
+                'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+            'imageLayout': 'wrapRight',
+            'caption': '晨雾扉页',
+          },
+          {
+            'id': 'circle_journal_cover_p1',
+            'type': 'paragraph',
+            'text': '把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。',
+          },
+          {
+            'id': 'circle_journal_cover_section',
+            'type': 'sectionTitle',
+            'text': '收束',
+          },
+          {
+            'id': 'circle_journal_cover_p2',
+            'type': 'paragraph',
+            'text': '真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。',
+          },
+        ],
+      },
+      'likeCount': 164,
+      'favoriteCount': 28,
+      'shareCount': 11,
+    },
+    {
+      'id': 'circle_ritual_plain',
+      'postId': 'circle_ritual_plain',
+      'circleId': 'circle_photo_01',
+      'type': 'article',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'authorId': 'u6',
+      'authorNickname': '纸上居',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=200',
+      'title': '雨夜读帖：为什么东方卷页总能让人慢下来',
+      'body': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来，没有封面也能成立为一张完整文字卡。',
+      'summary': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来，没有封面也能成立为一张完整文字卡。',
+      'articleTemplate': 'ritual',
+      'articleFontPreset': 'classic',
+      'articlePresentationVersion': 1,
+      'circleIds': ['circle_photo_01', 'c-human-1'],
+      'circleNames': ['光影摄影社', '电影放映室'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c-human-1', 'name': '电影放映室'},
+      ],
+      'circleName': '光影摄影社',
+      'articleDocument': {
+        'title': '雨夜读帖：为什么东方卷页总能让人慢下来',
+        'body':
+            '展开手卷时，视线被主动限制在一小段距离里。\n纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来。\n当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。',
+        'blocks': [
+          {
+            'id': 'circle_ritual_plain_p0',
+            'type': 'paragraph',
+            'text': '展开手卷时，视线被主动限制在一小段距离里。',
+          },
+          {'id': 'circle_ritual_plain_h2', 'type': 'heading2', 'text': '节奏控制'},
+          {
+            'id': 'circle_ritual_plain_p1',
+            'type': 'paragraph',
+            'text': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来。',
+          },
+          {
+            'id': 'circle_ritual_plain_section',
+            'type': 'sectionTitle',
+            'text': '收束',
+          },
+          {
+            'id': 'circle_ritual_plain_p2',
+            'type': 'paragraph',
+            'text': '当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。',
+          },
+        ],
+      },
+      'likeCount': 117,
+      'favoriteCount': 17,
+      'shareCount': 6,
+    },
+    {
+      'id': 'circle_diffuse_cover_body_only',
+      'postId': 'circle_diffuse_cover_body_only',
+      'circleId': 'circle_photo_01',
+      'type': 'article',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'authorId': 'u7',
+      'authorNickname': '夜色便签',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+      'title': '',
+      'body': '把路线、风向和最后一班地铁时间都塞进一段正文里，封面负责气氛，正文负责把人带回活动现场。',
+      'summary': '把路线、风向和最后一班地铁时间都塞进一段正文里，封面负责气氛，正文负责把人带回活动现场。',
+      'articleTemplate': 'diffuse',
+      'articleFontPreset': 'clean',
+      'articlePresentationVersion': 1,
+      'circleIds': ['circle_photo_01', 'c-meet-1'],
+      'circleNames': ['光影摄影社', '魔都搭子集合'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c-meet-1', 'name': '魔都搭子集合'},
+      ],
+      'circleName': '光影摄影社',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+      'articleDocument': {
+        'title': '',
+        'body':
+            '散场前，站台的风比人群更早一步安静下来。\n把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。\n封面先定住情绪，正文再把那一晚重新讲清楚。',
+        'blocks': [
+          {
+            'id': 'circle_diffuse_cover_body_only_p0',
+            'type': 'paragraph',
+            'text': '散场前，站台的风比人群更早一步安静下来。',
+          },
+          {
+            'id': 'circle_diffuse_cover_body_only_h2',
+            'type': 'heading2',
+            'text': '把信息写进气氛',
+          },
+          {
+            'id': 'circle_diffuse_cover_body_only_img',
+            'type': 'image',
+            'imageUrl':
+                'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+            'imageLayout': 'wrapRight',
+            'caption': '夜色出站口',
+          },
+          {
+            'id': 'circle_diffuse_cover_body_only_p1',
+            'type': 'paragraph',
+            'text': '把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。',
+          },
+          {
+            'id': 'circle_diffuse_cover_body_only_section',
+            'type': 'sectionTitle',
+            'text': '收束',
+          },
+          {
+            'id': 'circle_diffuse_cover_body_only_p2',
+            'type': 'paragraph',
+            'text': '封面先定住情绪，正文再把那一晚重新讲清楚。',
+          },
+        ],
+      },
+      'likeCount': 96,
+      'favoriteCount': 13,
+      'shareCount': 5,
+    },
+    {
+      'id': 'circle_gentle_plain_body_only',
+      'postId': 'circle_gentle_plain_body_only',
+      'circleId': 'circle_photo_01',
+      'type': 'article',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'authorId': 'u8',
+      'authorNickname': '慢速纪要',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+      'title': '',
+      'body': '没有标题也没封面，只保留一段真正想被圈友读到的正文，作为最轻的一张文字卡。',
+      'summary': '没有标题也没封面，只保留一段真正想被圈友读到的正文，作为最轻的一张文字卡。',
+      'articleTemplate': 'gentle',
+      'articleFontPreset': 'rounded',
+      'articlePresentationVersion': 1,
+      'circleIds': ['circle_photo_01', 'c2'],
+      'circleNames': ['光影摄影社', '旅行手账'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c2', 'name': '旅行手账'},
+      ],
+      'circleName': '光影摄影社',
+      'articleDocument': {
+        'title': '',
+        'body':
+            '回家路上，我把路灯下那几句还没散掉的话先记下来。\n没有标题也没有封面，正文自己决定了这一页要从哪里开始。\n如果一段内容真的足够完整，它本身就能成为一张轻巧的圈子卡片。',
+        'blocks': [
+          {
+            'id': 'circle_gentle_plain_body_only_p0',
+            'type': 'paragraph',
+            'text': '回家路上，我把路灯下那几句还没散掉的话先记下来。',
+          },
+          {
+            'id': 'circle_gentle_plain_body_only_h2',
+            'type': 'heading2',
+            'text': '从正文起笔',
+          },
+          {
+            'id': 'circle_gentle_plain_body_only_p1',
+            'type': 'paragraph',
+            'text': '没有标题也没有封面，正文自己决定了这一页要从哪里开始。',
+          },
+          {
+            'id': 'circle_gentle_plain_body_only_section',
+            'type': 'sectionTitle',
+            'text': '收束',
+          },
+          {
+            'id': 'circle_gentle_plain_body_only_p2',
+            'type': 'paragraph',
+            'text': '如果一段内容真的足够完整，它本身就能成为一张轻巧的圈子卡片。',
+          },
+        ],
+      },
+      'likeCount': 83,
+      'favoriteCount': 11,
       'shareCount': 4,
     },
   ];

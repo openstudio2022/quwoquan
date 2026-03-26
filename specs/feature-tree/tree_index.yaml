@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-03-22T00:00:00Z
+updated_at: 2026-03-26T05:40:17.791632Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -718,26 +718,19 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: circle-feed-viewer-handoff-contract
+              name: circle-feed-viewer-handoff-contract
+              level: L3_story
+              path: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
+              domain: ""
+              status: completed
+              tags: []
             - id: content-action-intent-contract
               name: content-action-intent-contract
               level: L3_story
               path: discovery-content/content-display-journey-consistency/content-action-intent-contract
               domain: ""
               status: in_progress
-              tags: []
-            - id: viewer-profile-state-sync-contract
-              name: viewer-profile-state-sync-contract
-              level: L3_scenario
-              path: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
-              domain: ""
-              status: specified
-              tags: []
-            - id: circle-feed-viewer-handoff-contract
-              name: circle-feed-viewer-handoff-contract
-              level: L3_scenario
-              path: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
-              domain: ""
-              status: specified
               tags: []
             - id: feed-item-dto-contract
               name: feed-item-dto-contract
@@ -766,6 +759,13 @@ features:
               path: discovery-content/content-display-journey-consistency/video-display-journey
               domain: ""
               status: in_progress
+              tags: []
+            - id: viewer-profile-state-sync-contract
+              name: viewer-profile-state-sync-contract
+              level: L3_story
+              path: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+              domain: ""
+              status: completed
               tags: []
         - id: content-service-cloud-production
           name: content-service-cloud-production
@@ -823,7 +823,7 @@ features:
               level: L3_story
               path: discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
               domain: ""
-              status: completed
+              status: specified
               tags: []
         - id: dual-rail-discovery-redesign
           name: dual-rail-discovery-redesign
@@ -1081,64 +1081,6 @@ features:
               domain: ""
               status: specified
               tags: []
-    - id: global-search-experience
-      name: global-search-experience
-      level: L1_capability
-      path: global-search-experience
-      domain: ""
-      status: specified
-      tags: []
-      children:
-        - id: cross-domain-search-journey
-          name: cross-domain-search-journey
-          level: L2_journey
-          path: global-search-experience/cross-domain-search-journey
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: full-screen-search-shell-and-entry
-              name: full-screen-search-shell-and-entry
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
-              domain: ""
-              status: specified
-              tags: []
-            - id: multi-domain-result-composition
-              name: multi-domain-result-composition
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/multi-domain-result-composition
-              domain: ""
-              status: specified
-              tags: []
-            - id: social-relationship-search-contract
-              name: social-relationship-search-contract
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
-              domain: ""
-              status: specified
-              tags: []
-            - id: circle-facet-search-and-filter
-              name: circle-facet-search-and-filter
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
-              domain: ""
-              status: specified
-              tags: []
-            - id: recent-search-sync-and-voice-asr
-              name: recent-search-sync-and-voice-asr
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
-              domain: ""
-              status: specified
-              tags: []
-            - id: xiaoqu-entry-handoff
-              name: xiaoqu-entry-handoff
-              level: L3_scenario
-              path: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
-              domain: ""
-              status: specified
-              tags: []
     - id: gateway-orchestrator-foundation
       name: gateway-orchestrator-foundation
       level: L1_capability
@@ -1303,6 +1245,64 @@ features:
               path: gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection--user-ip-quota-policy
               domain: ""
               status: specified
+              tags: []
+    - id: global-search-experience
+      name: global-search-experience
+      level: L1_capability
+      path: global-search-experience
+      domain: ""
+      status: in_progress
+      tags: []
+      children:
+        - id: cross-domain-search-journey
+          name: cross-domain-search-journey
+          level: L2_feature
+          path: global-search-experience/cross-domain-search-journey
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: circle-facet-search-and-filter
+              name: circle-facet-search-and-filter
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+              domain: ""
+              status: in_progress
+              tags: []
+            - id: full-screen-search-shell-and-entry
+              name: full-screen-search-shell-and-entry
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+              domain: ""
+              status: in_progress
+              tags: []
+            - id: multi-domain-result-composition
+              name: multi-domain-result-composition
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+              domain: ""
+              status: in_progress
+              tags: []
+            - id: recent-search-sync-and-voice-asr
+              name: recent-search-sync-and-voice-asr
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr
+              domain: ""
+              status: in_progress
+              tags: []
+            - id: social-relationship-search-contract
+              name: social-relationship-search-contract
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+              domain: ""
+              status: in_progress
+              tags: []
+            - id: xiaoqu-entry-handoff
+              name: xiaoqu-entry-handoff
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
+              domain: ""
+              status: in_progress
               tags: []
     - id: platform-ops-governance
       name: platform-ops-governance
@@ -2377,6 +2377,129 @@ features:
               domain: ""
               status: specified
               tags: []
+    - id: shared-homepage-network
+      name: shared-homepage-network
+      level: L1_capability
+      path: shared-homepage-network
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: homepage-claim-maintain-and-offline-journey
+          name: homepage-claim-maintain-and-offline-journey
+          level: L2_feature
+          path: shared-homepage-network/homepage-claim-maintain-and-offline-journey
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: claimed-homepage-basic-maintenance
+              name: claimed-homepage-basic-maintenance
+              level: L3_story
+              path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/claimed-homepage-basic-maintenance
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-candidate-intake-and-publish
+              name: homepage-candidate-intake-and-publish
+              level: L3_story
+              path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-candidate-intake-and-publish
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-claim-request-and-review
+              name: homepage-claim-request-and-review
+              level: L3_story
+              path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-claim-request-and-review
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-offline-report-and-history-retention
+              name: homepage-offline-report-and-history-retention
+              level: L3_story
+              path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-offline-report-and-history-retention
+              domain: ""
+              status: specified
+              tags: []
+        - id: homepage-discovery-and-attach-journey
+          name: homepage-discovery-and-attach-journey
+          level: L2_feature
+          path: shared-homepage-network/homepage-discovery-and-attach-journey
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: homepage-attach-in-publish-flow
+              name: homepage-attach-in-publish-flow
+              level: L3_story
+              path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-attach-in-publish-flow
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-entry-and-preview
+              name: homepage-entry-and-preview
+              level: L3_story
+              path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-search-and-picker
+              name: homepage-search-and-picker
+              level: L3_story
+              path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-search-and-picker
+              domain: ""
+              status: specified
+              tags: []
+            - id: missing-homepage-suggestion-and-review
+              name: missing-homepage-suggestion-and-review
+              level: L3_story
+              path: shared-homepage-network/homepage-discovery-and-attach-journey/missing-homepage-suggestion-and-review
+              domain: ""
+              status: specified
+              tags: []
+        - id: homepage-review-and-content-journey
+          name: homepage-review-and-content-journey
+          level: L2_feature
+          path: shared-homepage-network/homepage-review-and-content-journey
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: homepage-content-and-question-aggregation
+              name: homepage-content-and-question-aggregation
+              level: L3_story
+              path: shared-homepage-network/homepage-review-and-content-journey/homepage-content-and-question-aggregation
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-contextual-publish-entry
+              name: homepage-contextual-publish-entry
+              level: L3_story
+              path: shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-overview-and-module-shell
+              name: homepage-overview-and-module-shell
+              level: L3_story
+              path: shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell
+              domain: ""
+              status: specified
+              tags: []
+            - id: homepage-review-read-and-score-summary
+              name: homepage-review-read-and-score-summary
+              level: L3_story
+              path: shared-homepage-network/homepage-review-and-content-journey/homepage-review-read-and-score-summary
+              domain: ""
+              status: specified
+              tags: []
+    - id: templates
+      name: templates
+      level: L1_capability
+      path: templates
+      domain: ""
+      status: specified
+      tags: []
     - id: user-identity-profile-relationship
       name: user-identity-profile-relationship
       level: L1_capability
@@ -2487,68 +2610,68 @@ features:
               tags: []
         - id: persona-follow-graph
           name: persona-follow-graph
-          level: L2_journey
+          level: L2_feature
           path: user-identity-profile-relationship/persona-follow-graph
-          domain: user
+          domain: ""
           status: specified
-          tags: [persona, sub-account, identity]
+          tags: []
           children:
-            - id: persona-management
-              name: persona-management
-              level: L3_scenario
-              path: user-identity-profile-relationship/persona-follow-graph/persona-management
-              domain: user
-              status: specified
-              tags: [management, owner-plane]
-            - id: persona-profile-subject-and-visibility
-              name: persona-profile-subject-and-visibility
-              level: L3_scenario
-              path: user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
-              domain: user
-              status: specified
-              tags: [profile-subject, visibility, inheritance]
-            - id: persona-context-propagation
-              name: persona-context-propagation
-              level: L3_scenario
-              path: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
-              domain: user
-              status: specified
-              tags: [context, propagation, attribution]
             - id: follow-relationship
               name: follow-relationship
-              level: L3_scenario
+              level: L3_story
               path: user-identity-profile-relationship/persona-follow-graph/follow-relationship
-              domain: user
+              domain: ""
               status: specified
-              tags: [relationship, graph-write]
-            - id: social-graph-read
-              name: social-graph-read
-              level: L3_scenario
-              path: user-identity-profile-relationship/persona-follow-graph/social-graph-read
-              domain: user
-              status: specified
-              tags: [relationship, graph-read]
+              tags: []
             - id: follow-relationship--follow-unfollow-contract
               name: follow-relationship--follow-unfollow-contract
-              level: L3_scenario
+              level: L3_story
               path: user-identity-profile-relationship/persona-follow-graph/follow-relationship--follow-unfollow-contract
-              domain: user
+              domain: ""
               status: specified
-              tags: [relationship, graph-write]
+              tags: []
+            - id: persona-context-propagation
+              name: persona-context-propagation
+              level: L3_story
+              path: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+              domain: ""
+              status: specified
+              tags: []
+            - id: persona-management
+              name: persona-management
+              level: L3_story
+              path: user-identity-profile-relationship/persona-follow-graph/persona-management
+              domain: ""
+              status: specified
+              tags: []
             - id: persona-management--persona-lifecycle-contract
               name: persona-management--persona-lifecycle-contract
-              level: L3_scenario
+              level: L3_story
               path: user-identity-profile-relationship/persona-follow-graph/persona-management--persona-lifecycle-contract
-              domain: user
+              domain: ""
               status: specified
-              tags: [management, owner-plane]
+              tags: []
+            - id: persona-profile-subject-and-visibility
+              name: persona-profile-subject-and-visibility
+              level: L3_story
+              path: user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility
+              domain: ""
+              status: specified
+              tags: []
+            - id: social-graph-read
+              name: social-graph-read
+              level: L3_story
+              path: user-identity-profile-relationship/persona-follow-graph/social-graph-read
+              domain: ""
+              status: specified
+              tags: []
             - id: social-graph-read--followers-following-pagination
               name: social-graph-read--followers-following-pagination
-              level: L3_scenario
+              level: L3_story
               path: user-identity-profile-relationship/persona-follow-graph/social-graph-read--followers-following-pagination
-              domain: user
+              domain: ""
               status: specified
-              tags: [relationship, graph-read]
+              tags: []
         - id: profile-homepage-redesign
           name: profile-homepage-redesign
           level: L2_feature
@@ -2557,19 +2680,19 @@ features:
           status: specified
           tags: []
           children:
-            - id: profile-commercial-readiness
-              name: profile-commercial-readiness
-              level: L3_story
-              path: user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
-              domain: ""
-              status: in_progress
-              tags: []
             - id: owner-subaccount-homepage-unification
               name: owner-subaccount-homepage-unification
               level: L3_story
               path: user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
               domain: ""
               status: specified
+              tags: []
+            - id: profile-commercial-readiness
+              name: profile-commercial-readiness
+              level: L3_story
+              path: user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
+              domain: ""
+              status: in_progress
               tags: []
         - id: settings-and-device-token
           name: settings-and-device-token

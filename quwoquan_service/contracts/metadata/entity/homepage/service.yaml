@@ -1,0 +1,138 @@
+version: 1
+aggregate: Homepage
+
+service:
+  name: entity-service
+  domain: entity
+  owner: backend-team
+  description: 共享主页主档、搜索选择、认领与下线治理
+
+api_routes:
+  - method: GET
+    path: /v1/homepages/search
+    operation: SearchHomepages
+    description: 搜索共享主页
+    query_params: [query, homepageType, city, status, cursor, limit]
+    response_entity: HomepageSearchItemView
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/candidates
+    operation: IntakeHomepageCandidate
+    description: 创建候选共享主页
+    request_entity: Homepage
+    writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/candidates/suggest
+    operation: SuggestHomepageCandidate
+    description: 补充缺失共享主页
+    request_entity: Homepage
+    writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/candidates/{homepageId}:publish
+    operation: PublishHomepageCandidate
+    description: 将候选共享主页发布为正式主页
+    auth: required
+
+  - method: GET
+    path: /v1/homepages/{homepageId}
+    operation: GetHomepageDetail
+    description: 获取共享主页详情
+    response_entity: Homepage
+
+  - method: GET
+    path: /v1/homepages/{homepageId}/shell
+    operation: GetHomepageShell
+    description: 获取共享主页阅读壳层
+    response_entity: HomepageShellView
+
+  - method: GET
+    path: /v1/homepages/{homepageId}/review-summary
+    operation: GetHomepageReviewSummary
+    description: 获取共享主页评分与口碑摘要
+    response_entity: HomepageReviewSummaryView
+
+  - method: GET
+    path: /v1/homepages/{homepageId}/related-groups
+    operation: GetHomepageRelatedGroups
+    description: 获取共享主页相关群组摘要
+    response_entity: HomepageRelatedGroupSummaryView
+
+  - method: POST
+    path: /v1/homepages/{homepageId}/claim-requests
+    operation: CreateHomepageClaimRequest
+    description: 发起主页认领申请
+    request_entity: HomepageClaimRequest
+    writable_fields: [claimTier, businessLicenseUrl, contactPhone, identityCardFrontUrl, identityCardBackUrl, note]
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review
+    operation: ReviewHomepageClaimRequest
+    description: 审核主页认领申请
+    writable_fields: [status, reviewNote]
+    auth: required
+
+  - method: PATCH
+    path: /v1/homepages/{homepageId}/claimed-basics
+    operation: UpdateClaimedHomepageBasics
+    description: 更新已认领主页的基础资料
+    writable_fields: [title, subtitle, categoryTags, coverUrl, address, city, location]
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/{homepageId}/status-reports
+    operation: CreateHomepageStatusReport
+    description: 提交主页下线/纠错上报
+    request_entity: HomepageStatusReport
+    writable_fields: [reason, description, evidenceUrls]
+    auth: required
+
+  - method: POST
+    path: /v1/homepages/{homepageId}/status-reports/{reportId}:review
+    operation: ReviewHomepageStatusReport
+    description: 审核主页下线/纠错上报
+    writable_fields: [status, reviewNote]
+    auth: required
+
+consumers:
+  - name: app
+    capabilities: [search, suggest, read_homepage, claim, maintain, report_status]
+  - name: platform-ops
+    capabilities: [publish_candidate, review_claim, review_status_report]
+  - name: content-service
+    capabilities: [read_homepage]
+  - name: circle-service
+    capabilities: [read_homepage]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: entity-service API
+      scenarios:
+        - name: search_homepages
+          route: GET /v1/homepages/search
+          assertions: [status_200, items_match_schema]
+        - name: claim_homepage
+          route: POST /v1/homepages/{homepageId}/claim-requests
+          assertions: [status_201, claim_request_created]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      spy_targets: [event_publisher]
+      data_management:
+        seed: fixture 工厂预制主页候选与已发布主页
+        cleanup: "DeleteMany for homepages, homepage_claim_requests, homepage_status_reports"
+      scenarios:
+        - name: intake_publish_search
+          command: IntakeHomepageCandidate -> PublishHomepageCandidate -> SearchHomepages
+          seed: []
+          assertions:
+            - "published homepage appears in search results"
+            - "eventSpy.AssertPublished('HomepagePublished')"

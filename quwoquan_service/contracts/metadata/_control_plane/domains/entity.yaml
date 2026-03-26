@@ -1,0 +1,46 @@
+version: 1
+domain: entity
+display_name: Entity
+template_role: replica_ready
+rollout_group: wave_1_copy
+acceptance_status: integration_pass
+metadata_paths:
+  - entity/homepage
+service_names:
+  - entity-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, gate_rule]
+    config_prefixes: [sys.entity.]
+  product:
+    enabled: true
+    object_types: [moderation_case, homepage_claim_policy, homepage_offline_policy]
+    config_prefixes: [ops.entity.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/entity/homepage/service.yaml
+    - contracts/metadata/entity/homepage/tests/contract.yaml
+    - contracts/metadata/entity/homepage/tests/mock.yaml
+    - contracts/metadata/entity/homepage/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/entity/homepage/service.yaml
+      - contracts/metadata/entity/homepage/errors.yaml
+    t2:
+      - services/entity-service/tests/homepage_handler_test.go
+      - ../quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+    t3:
+      - contracts/metadata/entity/homepage/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: entity
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: circle
+  next_copy_targets: []
+  copy_notes:
+    - Reuse circle/content packaging constraints while keeping homepage lifecycle contracts in entity/homepage.
+blocking_gaps: []

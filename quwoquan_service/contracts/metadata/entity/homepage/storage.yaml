@@ -1,0 +1,28 @@
+version: 1
+aggregate: Homepage
+backend: mongodb
+
+collections:
+  homepages:
+    entity: Homepage
+    indexes:
+      - { name: idx_homepages_status_updated, keys: { status: 1, updatedAt: -1 } }
+      - { name: idx_homepages_type_city, keys: { homepageType: 1, city: 1, updatedAt: -1 }, sparse: true }
+      - { name: idx_homepages_location, keys: { location: "2dsphere" }, sparse: true }
+    search_indexes:
+      - name: search_homepages_text
+        type: text
+        fields: [title, subtitle, address, city]
+        weights: { title: 10, subtitle: 5, address: 3, city: 2 }
+
+  homepage_claim_requests:
+    entity: HomepageClaimRequest
+    indexes:
+      - { name: idx_claim_requests_homepage_status, keys: { homepageId: 1, status: 1, createdAt: -1 } }
+      - { name: idx_claim_requests_requester, keys: { requesterUserId: 1, createdAt: -1 } }
+
+  homepage_status_reports:
+    entity: HomepageStatusReport
+    indexes:
+      - { name: idx_status_reports_homepage_status, keys: { homepageId: 1, status: 1, createdAt: -1 } }
+      - { name: idx_status_reports_reporter, keys: { reporterUserId: 1, createdAt: -1 } }

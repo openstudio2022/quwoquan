@@ -7,6 +7,8 @@ routes:
     path: /circles
   - id: chat
     path: /chat
+  - id: startGroupChat
+    path: /chat/start-group
   - id: profile
     path: /profile
   - id: createEntry
@@ -34,6 +36,23 @@ routes:
     path: /assistant
   - id: globalSearch
     path: /search
+  - id: globalSearchNetworkResults
+    path: /search/network
+    query_params: [query, tab]
+  - id: homepagePicker
+    path: /homepages/picker
+    query_params: [query]
+  - id: suggestHomepage
+    path: /homepages/suggest
+    query_params: [query]
+  - id: homepageDetail
+    path: /homepages/{id}
+  - id: homepageClaim
+    path: /homepages/{id}/claim
+  - id: homepageMaintenance
+    path: /homepages/{id}/manage
+  - id: homepageStatusReport
+    path: /homepages/{id}/status-report
   - id: assistantManagement
     path: /assistant/management
   - id: assistantSkills

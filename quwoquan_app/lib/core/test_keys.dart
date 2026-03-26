@@ -26,6 +26,90 @@ class TestKeys {
   static const globalSearchLauncherButton = ValueKey<String>(
     'global_search_launcher_button',
   );
+  static const globalSearchObjectSelector = ValueKey<String>(
+    'global_search_object_selector',
+  );
+  static const searchContentSelectorButton = ValueKey<String>(
+    'search_content_selector_button',
+  );
+  static const searchContentSheet = ValueKey<String>('search_content_sheet');
+  static const searchContentSheetDoneButton = ValueKey<String>(
+    'search_content_sheet_done_button',
+  );
+  static const searchContentSheetResetButton = ValueKey<String>(
+    'search_content_sheet_reset_button',
+  );
+  static const searchContentArticleToggle = ValueKey<String>(
+    'search_content_article_toggle',
+  );
+  static const searchContentImageToggle = ValueKey<String>(
+    'search_content_image_toggle',
+  );
+  static const searchContentVideoToggle = ValueKey<String>(
+    'search_content_video_toggle',
+  );
+  static const searchContentMomentToggle = ValueKey<String>(
+    'search_content_moment_toggle',
+  );
+  static const globalSearchScopeRail = ValueKey<String>(
+    'global_search_scope_rail',
+  );
+  static const globalSearchContentTypeRail = ValueKey<String>(
+    'global_search_content_type_rail',
+  );
+  static const searchScopeAllChip = ValueKey<String>('search_scope_all_chip');
+  static const searchScopeContactsChip = ValueKey<String>(
+    'search_scope_contacts_chip',
+  );
+  static const searchScopeChatRecordsChip = ValueKey<String>(
+    'search_scope_chat_records_chip',
+  );
+  static const searchScopeDirectChatChip = ValueKey<String>(
+    'search_scope_direct_chat_chip',
+  );
+  static const searchScopeGroupChatChip = ValueKey<String>(
+    'search_scope_group_chat_chip',
+  );
+  static const searchScopeCirclesChip = ValueKey<String>(
+    'search_scope_circles_chip',
+  );
+  static const searchScopeContentChip = ValueKey<String>(
+    'search_scope_content_chip',
+  );
+  static const searchContentTypeAllChip = ValueKey<String>(
+    'search_content_type_all_chip',
+  );
+  static const searchContentTypeArticleChip = ValueKey<String>(
+    'search_content_type_article_chip',
+  );
+  static const searchContentTypeImageChip = ValueKey<String>(
+    'search_content_type_image_chip',
+  );
+  static const searchContentTypeVideoChip = ValueKey<String>(
+    'search_content_type_video_chip',
+  );
+  static const searchContentTypeMomentChip = ValueKey<String>(
+    'search_content_type_moment_chip',
+  );
+  static const searchObjectSheet = ValueKey<String>('search_object_sheet');
+  static const searchObjectResetButton = ValueKey<String>(
+    'search_object_reset_button',
+  );
+  static const searchObjectDoneButton = ValueKey<String>(
+    'search_object_done_button',
+  );
+  static const searchHistoryExpandButton = ValueKey<String>(
+    'search_history_expand_button',
+  );
+  static const searchHistoryManageButton = ValueKey<String>(
+    'search_history_manage_button',
+  );
+  static const searchHistoryClearButton = ValueKey<String>(
+    'search_history_clear_button',
+  );
+  static const searchHistoryDoneButton = ValueKey<String>(
+    'search_history_done_button',
+  );
   static const modalBottomSheetPanel = ValueKey<String>(
     'modal_bottom_sheet_panel',
   );
@@ -60,6 +144,22 @@ class TestKeys {
     'assistant_chat_input_field',
   );
   static const assistantSendButton = ValueKey<String>('assistant_send_button');
+  static const chatInputVoiceToggleButton = ValueKey<String>(
+    'chat_input_voice_toggle_button',
+  );
+  static const chatInputEmojiToggleButton = ValueKey<String>(
+    'chat_input_emoji_toggle_button',
+  );
+  static const chatInputMoreButton = ValueKey<String>('chat_input_more_button');
+  static const chatInputExpandButton = ValueKey<String>(
+    'chat_input_expand_button',
+  );
+  static const chatInputCollapseButton = ValueKey<String>(
+    'chat_input_collapse_button',
+  );
+  static const chatInputExpandedEmojiToggleButton = ValueKey<String>(
+    'chat_input_expanded_emoji_toggle_button',
+  );
   static const assistantProcessHeader = ValueKey<String>(
     'assistant_process_header',
   );
@@ -111,6 +211,38 @@ class TestKeys {
   static const createPublishConfirmButton = ValueKey<String>(
     'create_publish_confirm_button',
   );
+  static const homepagePickerPage = ValueKey<String>('homepage_picker_page');
+  static const homepagePickerSearchField = ValueKey<String>(
+    'homepage_picker_search_field',
+  );
+  static const homepagePickerCancelButton = ValueKey<String>(
+    'homepage_picker_cancel_button',
+  );
+  static const homepagePickerConfirmButton = ValueKey<String>(
+    'homepage_picker_confirm_button',
+  );
+  static const homepagePickerClearSelectionTile = ValueKey<String>(
+    'homepage_picker_clear_selection_tile',
+  );
+  static const homepagePickerResultTile = ValueKey<String>(
+    'homepage_picker_result_tile',
+  );
+  static const homepagePickerSuggestButton = ValueKey<String>(
+    'homepage_picker_suggest_button',
+  );
+  static const publishCircleSelectPage = ValueKey<String>(
+    'publish_circle_select_page',
+  );
+  static const publishCircleCancelButton = ValueKey<String>(
+    'publish_circle_cancel_button',
+  );
+  static const publishCircleConfirmButton = ValueKey<String>(
+    'publish_circle_confirm_button',
+  );
+  static const homepageDetailPage = ValueKey<String>('homepage_detail_page');
+  static const homepageDetailAttachButton = ValueKey<String>(
+    'homepage_detail_attach_button',
+  );
   static const createMediaModeAddImage = ValueKey<String>(
     'create_media_mode_add_image',
   );
@@ -149,5 +281,56 @@ class TestKeys {
   );
   static const createArticleBodyInput = ValueKey<String>(
     'create_article_body_input',
+  );
+  static const createAccessoryBar = ValueKey<String>('create_accessory_bar');
+  static const createAccessoryPanel = ValueKey<String>(
+    'create_accessory_panel',
+  );
+  static const createAccessoryImageButton = ValueKey<String>(
+    'create_accessory_image_button',
+  );
+  static const createAccessoryEmojiButton = ValueKey<String>(
+    'create_accessory_emoji_button',
+  );
+  static const createAccessoryStructureButton = ValueKey<String>(
+    'create_accessory_structure_button',
+  );
+  static const createAccessoryTemplateButton = ValueKey<String>(
+    'create_accessory_template_button',
+  );
+  static const createAccessoryFontButton = ValueKey<String>(
+    'create_accessory_font_button',
+  );
+  static const createEmojiPanel = ValueKey<String>('create_emoji_panel');
+  static const createStructurePanel = ValueKey<String>(
+    'create_structure_panel',
+  );
+  static const createTemplatePanel = ValueKey<String>('create_template_panel');
+  static const createFontPanel = ValueKey<String>('create_font_panel');
+  static const createArticleCoverNoneOption = ValueKey<String>(
+    'create_article_cover_none_option',
+  );
+
+  // ── Article Reader / Preview ─────────────────────────────────────────
+  static const articlePageCurlLayer = ValueKey<String>(
+    'article_page_curl_layer',
+  );
+  static const articleBookStylePager = ValueKey<String>(
+    'article_book_style_pager',
+  );
+  static const articlePageCurlHotzoneTopLeft = ValueKey<String>(
+    'article_page_curl_hotzone_top_left',
+  );
+  static const articlePageCurlHotzoneTopRight = ValueKey<String>(
+    'article_page_curl_hotzone_top_right',
+  );
+  static const articlePageCurlHotzoneBottomLeft = ValueKey<String>(
+    'article_page_curl_hotzone_bottom_left',
+  );
+  static const articlePageCurlHotzoneBottomRight = ValueKey<String>(
+    'article_page_curl_hotzone_bottom_right',
+  );
+  static const articlePreviewCoverStrip = ValueKey<String>(
+    'article_preview_cover_strip',
   );
 }

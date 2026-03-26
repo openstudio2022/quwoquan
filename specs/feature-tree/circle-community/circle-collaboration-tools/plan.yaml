@@ -1,0 +1,78 @@
+version: 1
+node: circle-collaboration-tools
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze circle group kernel metadata
+    goal: 冻结 `CircleGroup`、`CircleGroupMember`、审批、可见性与节点类型元数据
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 群不再被建模为 `Conversation`
+      - 公共群 / 自建群 / 组织节点的模型边界清晰
+      - 角色与审批状态可类型化表达
+    status: in_progress
+
+  - id: P2
+    title: establish chat and content codegen baseline
+    goal: 完成 `circleGroupId`、`groupId/nodeId` 等关联字段的 codegen 与兼容策略
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - chat 与 content 能消费新的群关联字段
+      - 默认公共群兼容迁移策略明确
+    status: in_progress
+
+  - id: P3
+    title: deliver public and self-built group workflows
+    goal: 落地公共群申请、自建群创建、私有群搜索和治理边界
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - A4
+      - A5
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 公共群只能申请加入
+      - 私有群只在圈内按精确或模糊搜索命中
+      - 上位治理者与私有群治理边界明确
+    status: pending
+
+  - id: P4
+    title: deliver group files notices and node aggregation
+    goal: 落地群资料、公告、节点内容归属与聚合逻辑
+    depends_on:
+      - P2
+      - P3
+    acceptance_refs:
+      - A3
+      - A6
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 群资料和公告绑定 `CircleGroup`
+      - 节点内容可被父节点聚合
+      - 相关链路满足协作场景要求
+    status: pending

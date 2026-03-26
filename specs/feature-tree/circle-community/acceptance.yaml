@@ -23,32 +23,39 @@ level_acceptance:
   - path: quwoquan_app/lib/cloud/services/circle/circle_repository.dart
   - path: quwoquan_app/lib/core/providers/app_providers.dart
 - id: A3
-  description: '统一领域标签体系建立：圈子频道配置与个人助理 domain_routing_catalog.json 共享同一套领域 ID（至少 travel/local_life/health_wellness/tech/education
-    5 个领域对齐）， 圈子频道数据由领域标签驱动而非硬编码 Map。
+  description: '首页一级入口与全局搜索一级筛选统一显示为“群组”； 群组列表和搜索结果可同时承接兴趣型圈子与组织型主页， 并继续由统一领域标签体系驱动（至少 travel/local_life/health_wellness/tech/education
+    5 个领域对齐）。
 
     '
   status: pending
-  tests: []
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
+  - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
 - id: A4
-  description: '圈子详情页重构为板块式结构，至少包含 4 个功能区： 作品发布区（支持瀑布流+列表视图切换）、群聊入口、存储空间入口、互动区。 各板块独立加载，单板块加载失败不影响其他板块渲染。
+  description: '群组详情模板冻结完成：通用圈子模板使用“首页/内容/群/成员”， 组织主页模板使用“首页/内容/组织/成员”； 首页至少包含头部信息、公告、内容精选、群/组织入口、成员摘要， 单模块失败不影响其他模块渲染。
 
     '
   status: pending
   tests:
   - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
 - id: A5
-  description: '圈子存储空间支持基础 CRUD 操作：创建文件夹、上传文件（≤50MB）、 下载文件、删除文件、浏览文件列表；权限控制生效 （圈主完全控制、管理员可管理、成员可上传下载、访客只读）。
+  description: '群组内容模型统一完成：用户动作统一为“发布内容”； 一级内容类型冻结为笔记/作品/提问/口碑， 表达形式冻结为图文笔记/视频/文章； 全局添加入口与群组内入口共用同一发布页； 口碑必须绑定
+    1 个主具体事物，群不作为公开内容主分发面。
 
     '
   status: pending
-  tests: []
+  tests:
+  - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
 - id: A6
-  description: '圈子群聊集成可用：圈子详情页显示群聊入口，点击可跳转到对应 IM 会话； 加入圈子触发 CircleMemberJoined 事件后用户自动进群，
-    退出圈子触发 CircleMemberLeft 事件后用户自动退群（可在圈子设置中关闭）。
+  description: '群模型与角色分层成立：圈级使用圈主/圈管，组织型使用负责人/管理员，群级使用群主/群管； 群分为公共群与自建群； 小型群组默认
+    1 个公共群，大型群组支持多个公共群或组织节点； 成员默认加入 1 个公共群并可加入多个自建群。
 
     '
   status: pending
-  tests: []
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+  - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
 - id: A7
   description: '圈子详情页所有硬编码视觉字面量清零： 字号使用 AppTypography.*、间距使用 AppSpacing.*、颜色使用 AppColors/AppColorsFunctional、
     圆角使用 AppSpacing.*BorderRadius， python3 scripts/verify_dart_semantic.py 对 ui/circle/
@@ -60,14 +67,18 @@ level_acceptance:
   - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
 - id: A8
   description: '云侧 circle-service 核心 API 实现并通过契约测试： ListCircles、CreateCircle、GetCircle、JoinCircle、LeaveCircle、
-    GetCircleFeed、GetCircleStats 7 个端点与 service.yaml 契约一致， make test-contract 通过。
+    GetCircleFeed、GetCircleStats 7 个端点与 service.yaml 契约一致， 并能支撑群组首页、内容、成员与群摘要的 typed
+    contract 读取语义。
 
     '
   status: pending
   tests: []
 - id: A9
-  description: '圈子主页同频发现推荐可用：基于用户兴趣画像（领域标签权重） 推荐排序圈子列表，推荐结果与用户近 7 天活跃领域相关度 ≥ 60% （通过离线评测验证）。
+  description: '首页“群组”推荐与搜索“群组”结果口径一致： 基于用户兴趣画像（领域标签权重） 推荐排序群组列表，结果可同时返回兴趣型圈子与组织型主页； 推荐结果与用户近
+    7 天活跃领域相关度 ≥ 60%（通过离线评测验证）， 推荐服务不可用时自动降级到按热度排序。
 
     '
   status: pending
-  tests: []
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
+  - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart

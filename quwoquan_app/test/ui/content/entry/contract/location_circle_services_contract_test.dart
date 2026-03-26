@@ -127,7 +127,13 @@ void main() {
       const service = CreateCircleService();
       final fake = _FakeCircleRepository(
         circles: <Map<String, dynamic>>[
-          <String, dynamic>{'id': 'c1', 'name': '测试圈子A'},
+          <String, dynamic>{
+            'id': 'c1',
+            'name': '测试圈子A',
+            'coverUrl': 'https://example.com/c1.jpg',
+            'memberCount': 88,
+            'postCount': 12,
+          },
           <String, dynamic>{'id': 'c2', 'name': '测试圈子B'},
         ],
       );
@@ -135,6 +141,9 @@ void main() {
       expect(result.length, 2);
       expect(result.first.id, 'c1');
       expect(result.first.name, '测试圈子A');
+      expect(result.first.coverUrl, 'https://example.com/c1.jpg');
+      expect(result.first.memberCount, 88);
+      expect(result.first.postCount, 12);
     });
   });
 }

@@ -11,30 +11,30 @@ execution:
 
 scope:
   summary: >
-    冻结圈子搜索结果与频道 facet 的对象边界、过滤关系与跳转语义。
+    冻结独立网络结果页中群组分类 facet 的对象边界、过滤关系与跳转语义。
   journey_bindings:
     - J2
   in_scope:
-    - 圈子结果
-    - 频道 facet
+    - 群组分类 facet tab
     - facet 过滤
+    - 分类过滤后的内容结果承接
   out_of_scope:
     - channel 独立对象
     - 圈子频道管理
 
 scenario_acceptance:
   A1:
-    title: 频道仅作为圈子分类投影出现在搜索结果中
+    title: 群组分类仅作为网络结果页中的 circle 分类投影 tab 出现
     scenario: circle facet search and filter
-    journey_step: search circles and refine with facets
+    journey_step: open network results and refine with category tabs
     done_when:
-      - 搜索结果中可展示圈子结果与频道 facet
+      - 网络结果页中可展示 `小趣搜` 之外的群组分类 facet tab
       - 频道 facet 只作为筛选或分组信息出现，不作为独立业务对象
-      - 用户可通过圈子结果或 facet 进入对应圈子详情或列表
+      - 用户切换 facet tab 后，当前 query 保持不变且内容结果按分类刷新
     edge_cases:
       - 没有可用 facet
       - facet 有值但无结果
-      - query 为空时仅展示默认指定搜索内容，不直出结果
+      - query 为空时不直出网络结果
     linked_plan_items:
       - P1
       - P2
@@ -51,13 +51,13 @@ scenario_acceptance:
       recorded:
         - make verify-metadata
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-    status: implemented
+    status: pending
 
 story_readiness:
   S1:
     title: 搜索层不再维护第二套 channel 定义
     done_when:
-      - channel 被明确为 circle facet
+      - channel 被明确为群组结果页中的 circle facet
       - 搜索结果模型中不存在独立 channel 主实体
     evidence:
       primary:
@@ -70,4 +70,4 @@ story_readiness:
       recorded:
         - make verify-metadata
         - make gate
-    status: implemented
+    status: pending

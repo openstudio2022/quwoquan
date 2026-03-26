@@ -79,6 +79,64 @@ class ShareTemplateProfileConfig {
   });
 }
 
+class ArticleDistributionProfileConfig {
+  final String id;
+  final String surface;
+  final String layout;
+  final String coverMode;
+  final int summaryLineLimit;
+
+  const ArticleDistributionProfileConfig({
+    required this.id,
+    required this.surface,
+    required this.layout,
+    required this.coverMode,
+    required this.summaryLineLimit,
+  });
+}
+
+class ArticleReaderProfileConfig {
+  final String id;
+  final String stageLayout;
+  final String pageIndicatorAnchor;
+  final String edgeTreatment;
+  final bool supportsPageCurl;
+
+  const ArticleReaderProfileConfig({
+    required this.id,
+    required this.stageLayout,
+    required this.pageIndicatorAnchor,
+    required this.edgeTreatment,
+    required this.supportsPageCurl,
+  });
+}
+
+class ArticleTemplateConfig {
+  final String id;
+  final String defaultFontPreset;
+  final String paperTexture;
+  final String decorationStyle;
+  final String chromeStyle;
+
+  const ArticleTemplateConfig({
+    required this.id,
+    required this.defaultFontPreset,
+    required this.paperTexture,
+    required this.decorationStyle,
+    required this.chromeStyle,
+  });
+}
+
+class ArticleTemplateRecommendationConfig {
+  final String categoryId;
+  final List<String> recommendedArticleTemplates;
+
+  const ArticleTemplateRecommendationConfig({
+    required this.categoryId,
+    required this.recommendedArticleTemplates,
+  });
+}
+
 // ignore: avoid_classes_with_only_static_members
 class ContentUIConfig {
   const ContentUIConfig._();
@@ -113,7 +171,36 @@ class ContentUIConfig {
     ShareTemplateProfileConfig(id: "work", titleKey: "share_template_work_title", subtitleKey: "share_template_work_subtitle", layout: "work_card", coverStrategy: "cover_or_first_media", includeAuthor: true, includeTimeContext: false, includeCircleContext: false, includeTags: true),
   ];
 
+  static const List<ArticleDistributionProfileConfig> articleDistributionProfiles = <ArticleDistributionProfileConfig>[
+    ArticleDistributionProfileConfig(id: "circle_dual_column_with_optional_cover", surface: "circle_dual_column", layout: "cover_top_title_summary_or_text_card", coverMode: "optional_cover", summaryLineLimit: 3),
+    ArticleDistributionProfileConfig(id: "follow_list_with_optional_cover", surface: "following_feed", layout: "cover_leading_title_summary", coverMode: "optional_cover", summaryLineLimit: 2),
+  ];
+
+  static const List<ArticleReaderProfileConfig> articleReaderProfiles = <ArticleReaderProfileConfig>[
+    ArticleReaderProfileConfig(id: "full_screen_book_stage", stageLayout: "full_bleed_book", pageIndicatorAnchor: "top_after_back", edgeTreatment: "stitched_spine", supportsPageCurl: true),
+    ArticleReaderProfileConfig(id: "top_nav_with_page_fraction", stageLayout: "top_nav_page_fraction", pageIndicatorAnchor: "top_after_back", edgeTreatment: "clean", supportsPageCurl: false),
+  ];
+
+  static const List<ArticleTemplateConfig> articleTemplateConfigs = <ArticleTemplateConfig>[
+    ArticleTemplateConfig(id: "diffuse", defaultFontPreset: "clean", paperTexture: "mist_canvas", decorationStyle: "translucent_sticker", chromeStyle: "floating_album"),
+    ArticleTemplateConfig(id: "gentle", defaultFontPreset: "clean", paperTexture: "cotton_fiber", decorationStyle: "pressed_flower", chromeStyle: "soft_album"),
+    ArticleTemplateConfig(id: "journal", defaultFontPreset: "handwritten", paperTexture: "scrapbook_paper", decorationStyle: "tape_sticker", chromeStyle: "handmade_notebook"),
+    ArticleTemplateConfig(id: "ritual", defaultFontPreset: "classic", paperTexture: "xuan_paper", decorationStyle: "seal_ribbon", chromeStyle: "stitched_ledger"),
+    ArticleTemplateConfig(id: "tech", defaultFontPreset: "mono", paperTexture: "blueprint_grid", decorationStyle: "data_label", chromeStyle: "precision_manual"),
+  ];
+
+  static const List<ArticleTemplateRecommendationConfig> articleTemplateRecommendations = <ArticleTemplateRecommendationConfig>[
+    ArticleTemplateRecommendationConfig(categoryId: "food", recommendedArticleTemplates: <String>["gentle", "journal"]),
+    ArticleTemplateRecommendationConfig(categoryId: "humanity", recommendedArticleTemplates: <String>["journal", "ritual"]),
+    ArticleTemplateRecommendationConfig(categoryId: "life", recommendedArticleTemplates: <String>["gentle", "diffuse"]),
+    ArticleTemplateRecommendationConfig(categoryId: "tech", recommendedArticleTemplates: <String>["tech", "diffuse"]),
+    ArticleTemplateRecommendationConfig(categoryId: "travel", recommendedArticleTemplates: <String>["journal", "gentle"]),
+  ];
+
   static const Map<String, bool> featureFlags = <String, bool>{
+    'enable_article_book_reader': false,
+    'enable_article_distribution_profiles': false,
+    'enable_article_page_curl': false,
     'enable_assistant_content_identity_index': false,
     'enable_behavior_tracking': true,
     'enable_create_action_entry': false,

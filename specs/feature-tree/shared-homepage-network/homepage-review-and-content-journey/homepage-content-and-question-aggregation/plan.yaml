@@ -1,0 +1,70 @@
+version: 1
+node: shared-homepage-network/homepage-review-and-content-journey/homepage-content-and-question-aggregation
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage aggregation reference contract
+    goal: 冻结主页引用字段、内容/提问聚合读取边界与模块字段
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 主页聚合只消费主页引用字段
+      - 不存在主页自建第二套内容模型
+    status: planned
+
+  - id: P2
+    title: land homepage content and question preview modules
+    goal: 在主页详情中展示内容和提问预览、空态与模块级错误态
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 内容与提问可区分展示
+      - 模块失败不影响整页
+    status: planned
+
+  - id: P3
+    title: wire publish-to-homepage aggregation return flow
+    goal: 打通内容发布后按主页引用回流主页聚合的读链路
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 新发布内容最终出现在主页聚合面
+      - 列表导航可进入对应内容详情
+    status: planned
+
+  - id: P4
+    title: harden homepage aggregation integration tests
+    goal: 为主页内容聚合、提问聚合和回流路径补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 聚合模块和回流路径有稳定测试覆盖
+      - eventual consistency 边界有契约验证
+    status: planned

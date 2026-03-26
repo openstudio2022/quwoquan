@@ -1,0 +1,74 @@
+version: 1
+node: circle-experience-redesign
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze group discovery metadata
+    goal: 冻结群组卡片、模板类型、taxonomy 与搜索结果展示字段
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 群组列表与搜索结果共用 typed view
+      - `Circle.kind` 与 `display_subject_type` 的展示语义明确
+      - taxonomy 继续作为统一发现真相源
+    status: completed
+
+  - id: P2
+    title: establish codegen baseline for discovery views
+    goal: 完成群组卡片、模板视图与搜索展示相关 codegen 基线
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - App 与云侧共用同一套群组 view 产物
+      - 搜索、推荐、发现页不再维护第二套卡片模型
+    status: in_progress
+
+  - id: P3
+    title: deliver group hub discovery and recommendation
+    goal: 落地群组入口页、推荐与统一卡片表达
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 首页一级入口统一叫 `群组`
+      - 推荐与列表页能混合承接兴趣型与组织型主页
+      - 类型徽章和简介表达清晰
+    status: in_progress
+
+  - id: P4
+    title: deliver dual-template routing and context handoff
+    goal: 从列表和搜索稳定进入双模板详情，并保持统一上下文
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A4
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 通用圈子模板与组织主页模板按类型分流
+      - 助理与搜索上下文继续通过 circle 域 typed contract 传递
+    status: pending

@@ -5,20 +5,20 @@ service:
   name: circle-service
   domain: circle
   owner: backend-team
-  description: 圈子管理、成员管理、圈子发现与推荐
+  description: 群组入口、圈子主页、组织主页、成员治理与群组协作
 
 api_routes:
   - method: GET
     path: /v1/circles
     operation: ListCircles
-    description: 圈子列表（分类 + 推荐）
+    description: 群组 / 主页列表（分类 + 推荐）
     query_params: [category, domainId, recommendFor, cursor, limit, sort]
     response_entity: Circle
 
   - method: GET
     path: /v1/circles/search
     operation: SearchCircles
-    description: 全局搜索圈子结果与 facet buckets
+    description: 全局搜索群组结果与 facet buckets
     query_params: [query, categoryId, subCategory, cursor, limit]
     response_entity: CircleSearchResultView
     auth: required
@@ -26,20 +26,21 @@ api_routes:
   - method: POST
     path: /v1/circles
     operation: CreateCircle
-    description: 创建圈子
+    description: 创建圈子 / 组织主页
     request_entity: Circle
-    writable_fields: [name, description, coverUrl, category, tags, visibility, joinPolicy]
+    writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
 
   - method: GET
     path: /v1/circles/{circleId}
     operation: GetCircle
-    description: 圈子详情
+    description: 群组主页详情
     response_entity: Circle
 
   - method: PATCH
     path: /v1/circles/{circleId}
     operation: UpdateCircle
-    description: 更新圈子
+    description: 更新圈子 / 组织主页
+    writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
 
   - method: DELETE
     path: /v1/circles/{circleId}
@@ -73,6 +74,69 @@ api_routes:
     path: /v1/circles/{circleId}/members/{userId}/role
     operation: UpdateMemberRole
     description: 更新成员角色
+
+  # --- 群组 / 组织节点 ---
+  - method: GET
+    path: /v1/circles/{circleId}/groups
+    operation: ListCircleGroups
+    description: 列出圈内群组与组织节点
+    query_params: [groupType, visibility, parentGroupId, nodeType, cursor, limit]
+    response_entity: CircleGroup
+
+  - method: GET
+    path: /v1/circles/{circleId}/groups/search
+    operation: SearchCircleGroups
+    description: 圈内搜索群组与组织节点（私有群仅圈成员可命中）
+    query_params: [query, visibility, groupType, cursor, limit]
+    response_entity: CircleGroup
+    auth: required
+
+  - method: POST
+    path: /v1/circles/{circleId}/groups
+    operation: CreateCircleGroup
+    description: 创建公共群 / 自建群 / 组织节点
+    request_entity: CircleGroup
+    writable_fields: [parentGroupId, groupType, nodeType, name, description, visibility, joinPolicy, managerIds, storageEnabled, noticeEnabled]
+    auth: required
+
+  - method: GET
+    path: /v1/circles/{circleId}/groups/{groupId}
+    operation: GetCircleGroup
+    description: 群组 / 组织节点详情
+    response_entity: CircleGroup
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/groups/{groupId}
+    operation: UpdateCircleGroup
+    description: 更新群组 / 组织节点
+    writable_fields: [parentGroupId, nodeType, name, description, visibility, joinPolicy, managerIds, storageEnabled, noticeEnabled, status]
+    auth: required
+
+  - method: POST
+    path: /v1/circles/{circleId}/groups/{groupId}/join-requests
+    operation: ApplyJoinCircleGroup
+    description: 申请加入公共群 / 公开自建群
+    auth: required
+
+  - method: GET
+    path: /v1/circles/{circleId}/groups/{groupId}/members
+    operation: ListCircleGroupMembers
+    description: 群组成员与申请列表
+    query_params: [status, cursor, limit]
+    response_entity: CircleGroupMember
+    auth: required
+
+  - method: POST
+    path: /v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:approve
+    operation: ApproveCircleGroupMember
+    description: 通过入群申请
+    auth: required
+
+  - method: POST
+    path: /v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:reject
+    operation: RejectCircleGroupMember
+    description: 拒绝入群申请
+    auth: required
 
   - method: GET
     path: /v1/circles/{circleId}/feed
@@ -142,17 +206,17 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, report_behavior, manage_files, manage_sections, pin_post, feature_post]
+    capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, list_groups, search_groups, create_group, manage_group_members, report_behavior, manage_files, manage_sections, pin_post, feature_post]
   - name: platform-ops
-    capabilities: [read_circle, update_circle, manage_members, read_stats]
+    capabilities: [read_circle, update_circle, manage_members, manage_groups, read_stats]
   - name: recommendation-engine
     capabilities: [read_circle, read_members, search]
   - name: assistant-service
-    capabilities: [read_circle, search]
+    capabilities: [read_circle, read_groups, search]
   - name: chat-service
-    capabilities: [read_circle, create_conversation_for_circle]
+    capabilities: [read_circle, read_groups, create_conversation_for_circle, create_conversation_for_circle_group]
   - name: content-service
-    capabilities: [read_circle, read_feed]
+    capabilities: [read_circle, read_groups, read_feed]
 
 contract_test:
   mock_strategy:
@@ -251,7 +315,8 @@ contract_test:
   coverage_requirements:
     - all visibility/joinPolicy combinations covered
     - member role transitions (member → admin → owner) tested
-    - circle-conversation link tested
+    - circle default public group compatibility link tested
+    - circle-group kernel and application flow tested
     - storage CRUD + quota enforcement tested
     - section config CRUD + event tested
     - feed pin/feature operations tested

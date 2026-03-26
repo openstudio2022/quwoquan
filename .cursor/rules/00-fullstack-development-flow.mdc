@@ -5,16 +5,18 @@ alwaysApply: true
 
 # 端云一体开发主线
 
-唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。默认流程：`explore → prd → design → dev → commit → deploy`。
+唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。默认流程：`explore → prd → design → dev → commit → deploy`；需求明确且方案收敛时允许快捷流程：`explore → baseline → dev → commit → deploy`。
 
 ## 总原则
 
 - `spec-first`：先 `spec.md + acceptance.yaml`，再 `design.md`，最后实现。
 - `metadata-first`：契约、字段、错误码、`path / operation / surface / route / decoder context` 先改 metadata，再 codegen，再改业务逻辑。
-- `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，`/prd` 与 `/design` 必须先冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚。
+- `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须先通过 `/prd` + `/design` 或 `/baseline` 冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚。
 - `benchmark-driven`：对标必须写明借鉴、不借鉴、适用边界、当前差距、收敛计划。
 - `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`、`specs/changelog/CR-*.yaml`、metadata 各自是唯一真相源。
 - 缺 benchmark、真实网络条件、容量假设、权限边界、生命周期合同或回滚条件时，直接 `GATE_BLOCK`。
+- `dev-autonomy`：执行 `/dev` 任务时，必须先进入任务级 plan mode，完整审视 `spec.md`、`design.md`、`plan.yaml`、`acceptance.yaml`、CR 与商用条件，再开始实施。
+- `no-partial-stop`：`/dev` 不得因仅完成部分 slice、部分前后端工作或部分测试就停止等待下一条指令；默认目标是自主闭环到可归档、待 `/commit` 状态。
 
 ## `/explore`
 
@@ -71,10 +73,33 @@ make codegen-app
 - 测试证据矩阵
 - 灰度发布设计
 
+## `/baseline`（G0 + G1）
+
+进入前必须确认：
+
+- `/explore` 已完成，且 `L1/L2/L3` 清晰。
+- `/prd` 的准入条件全部满足。
+- 需求边界、验收、商用约束已经稳定，不需要再单独拆出一轮规格冻结。
+- 方案已收敛到现有模式或单一可行路径，不存在需要单独评审的重大架构分叉。
+- 已能直接写出 `design.md` 与 `plan.yaml`，并保持 `metadata -> codegen -> 业务逻辑 -> 测试` 顺序。
+
+产出：
+
+- `spec.md`
+- `acceptance.yaml`
+- `design.md`
+- `plan.yaml`
+- `specs/changelog/CR-*.yaml`
+- metadata / codegen 基线
+
+若执行中发现方案并未收敛：停止 `/baseline`，退回标准链路 `/prd` → `/design`。
+
 ## `/dev` 及以后
 
 - `/dev` 只在设计冻结、codegen 通过、Red 测试就绪后进入。
-- `/dev` 先读 `plan.yaml` 与对应 CR，再派生会话 todo。
+- `/dev` 先进入任务级 plan mode，通读 `spec.md`、`design.md`、`plan.yaml`、`acceptance.yaml` 与对应 CR，审视前后端、metadata/codegen、权限、生命周期、灰度/回滚、观测与 `T1~T4` 缺口。
+- 若规格、设计、切片、验收、四层测试或商用条件存在缺口，`/dev` 必须先自动修复相关问题，再继续开发。
+- `/dev` 必须覆盖目标 scenario 所需的前端、后端、metadata/codegen、配置、文档与测试闭环，不得只完成局部工作。
 - 每完成一组 slice 运行：
 
 ```bash
@@ -83,5 +108,7 @@ make -C quwoquan_service test-contract
 ```
 
 - 全部完成后运行 `make gate-full`。
+- `make gate-full` 或 verify 等价检查失败时，必须继续修复并重跑，直到无 BLOCKING 项。
+- `/dev` 在验证通过后必须自动执行 archive 等价回写，然后停在待 `/commit` 状态。
 - `/commit` 前必须运行端侧测试与 `make gate`。
 - `/deploy` 前必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练。

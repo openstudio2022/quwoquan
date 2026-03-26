@@ -187,15 +187,111 @@ void main() {
         expect(dto.coverUrl, equals('https://example.com/cover3.jpg'));
       });
 
-      test('mock article data: title non-empty', () {
+      test('fromMap parses article presentation fields', () {
+        const raw = <String, dynamic>{
+          'postId': 'art_doc',
+          'contentType': 'article',
+          'authorId': 'writer',
+          'displayName': 'Tech Writer',
+          'authorAvatarUrl': 'https://example.com/avatar3.jpg',
+          'title': '连续文档标题',
+          'body': '文章摘要内容',
+          'articleTemplate': 'journal',
+          'articleFontPreset': 'handwritten',
+          'articlePresentationVersion': 1,
+          'publishedAt': '2026-01-15T08:00:00Z',
+        };
+        final dto = ArticlePostDto.fromMap(raw);
+        expect(dto.articleTemplate, equals('journal'));
+        expect(dto.articleFontPreset, equals('handwritten'));
+        expect(dto.articlePresentationVersion, equals(1));
+      });
+
+      test('mock article data: body non-empty，标题可留空', () {
         for (final raw in ContentMockData.discoveryArticleData) {
           final dto = ArticlePostDto.fromMap(raw);
           expect(
-            dto.title,
+            dto.normalizedBody,
             isNotEmpty,
-            reason: 'postId=${raw['postId']} should have non-empty title',
+            reason: 'postId=${raw['postId']} should have non-empty body',
           );
         }
+      });
+
+      test('canonical article mock 覆盖 5 模板 x 2 封面形态', () {
+        expect(
+          ContentMockData.discoveryArticleData.length,
+          greaterThanOrEqualTo(10),
+        );
+        const templates = <String>[
+          'gentle',
+          'ritual',
+          'diffuse',
+          'journal',
+          'tech',
+        ];
+        for (final template in templates) {
+          final items = ContentMockData.discoveryArticleData
+              .where((raw) => raw['articleTemplate'] == template)
+              .toList(growable: false);
+          expect(
+            items.length,
+            greaterThanOrEqualTo(2),
+            reason: 'template=$template 至少要有有封面/无封面两种存在形态',
+          );
+          expect(
+            items.any(
+              (raw) => (raw['coverUrl'] ?? '').toString().trim().isNotEmpty,
+            ),
+            isTrue,
+            reason: 'template=$template 必须至少有 1 条有封面样本',
+          );
+          expect(
+            items.any(
+              (raw) => (raw['coverUrl'] ?? '').toString().trim().isEmpty,
+            ),
+            isTrue,
+            reason: 'template=$template 必须至少有 1 条无封面样本',
+          );
+          expect(
+            items.every(
+              (raw) => raw['articleDocument'] is Map<String, dynamic>,
+            ),
+            isTrue,
+            reason: 'template=$template 的 canonical 样本必须带 articleDocument',
+          );
+          expect(
+            items.every(
+              (raw) =>
+                  (raw['articlePresentationVersion'] as num?)?.toInt() == 1,
+            ),
+            isTrue,
+            reason:
+                'template=$template 的 canonical 样本必须冻结 presentationVersion=1',
+          );
+        }
+      });
+
+      test('canonical article mock 覆盖封面/标题四种组合', () {
+        final items = ContentMockData.discoveryArticleData;
+        bool hasCase({required bool expectCover, required bool expectTitle}) {
+          return items.any((raw) {
+            final hasCover = (raw['coverUrl'] ?? '')
+                .toString()
+                .trim()
+                .isNotEmpty;
+            final hasTitle = (raw['title'] ?? '').toString().trim().isNotEmpty;
+            final hasBody = (raw['body'] ?? '').toString().trim().isNotEmpty;
+            return hasBody &&
+                hasCover == expectCover &&
+                hasTitle == expectTitle;
+          });
+        }
+
+        expect(hasCase(expectCover: true, expectTitle: true), isTrue);
+        expect(hasCase(expectCover: false, expectTitle: true), isTrue);
+        expect(hasCase(expectCover: true, expectTitle: false), isTrue);
+        expect(hasCase(expectCover: false, expectTitle: false), isTrue);
       });
     });
 

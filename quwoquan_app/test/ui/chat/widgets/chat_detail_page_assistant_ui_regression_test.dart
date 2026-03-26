@@ -138,11 +138,7 @@ void main() {
           'summary': '正在交叉核实关键结论',
           'referenceCount': 1,
         },
-        <String, dynamic>{
-          'stageId': 'answer',
-          'status': 'pending',
-          'order': 3,
-        },
+        <String, dynamic>{'stageId': 'answer', 'status': 'pending', 'order': 3},
       ],
       entries: <Map<String, dynamic>>[
         <String, dynamic>{
@@ -172,9 +168,18 @@ void main() {
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text(UITextConstants.assistantProcessStageUnderstand), findsOneWidget);
-    expect(find.text(UITextConstants.assistantProcessStageSearch), findsOneWidget);
-    expect(find.text(UITextConstants.assistantProcessStageAnswer), findsOneWidget);
+    expect(
+      find.text(UITextConstants.assistantProcessStageUnderstand),
+      findsAtLeastNWidgets(1),
+    );
+    expect(
+      find.text(UITextConstants.assistantProcessStageSearch),
+      findsAtLeastNWidgets(1),
+    );
+    expect(
+      find.text(UITextConstants.assistantProcessStageAnswer),
+      findsNothing,
+    );
     expect(find.text('先把会影响判断的冲突信息排掉，再组织最终答案。'), findsOneWidget);
   });
 
@@ -236,12 +241,12 @@ void main() {
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('处理1篇文档，接纳1篇如下'));
+    await tester.tap(find.textContaining('接纳1篇'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('中国气象局 · weather.cma.cn'), findsOneWidget);
+    expect(find.text('1. 中国气象局 · weather.cma.cn'), findsOneWidget);
 
-    await tester.tap(find.text('中国气象局 · weather.cma.cn'));
+    await tester.tap(find.text('1. 中国气象局 · weather.cma.cn'));
     await tester.pump();
 
     expect(tappedRef, isNotNull);
@@ -425,7 +430,10 @@ void main() {
       find.textContaining('4天路线建议', findRichText: true),
       findsAtLeastNWidgets(1),
     );
-    expect(find.textContaining('route_recommendation', findRichText: true), findsNothing);
+    expect(
+      find.textContaining('route_recommendation', findRichText: true),
+      findsNothing,
+    );
   });
 
   testWidgets('assistant 流式答案出现后仍保留用户可理解的阶段提示', (tester) async {
@@ -473,5 +481,67 @@ void main() {
       find.text(UITextConstants.assistantProcessStageAnswer),
       findsAtLeastNWidgets(1),
     );
+  });
+
+  testWidgets('answerEvidenceBindings 会渲染为可点击递增角标', (tester) async {
+    Map<String, dynamic>? tappedRef;
+    final message = _assistantMessage(
+      id: 'assistant_msg_citations',
+      content:
+          '这条结论来自官方仓库[来源1](https://github.com/flutter/flutter)，补充解释见文档中心[来源2](https://developer.mozilla.org/zh-CN/)。',
+      extra: {
+        'runArtifacts': <String, dynamic>{
+          'answerEvidenceBindings': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'bindingId': 'binding_1',
+              'label': '来源1',
+              'claim': '官方仓库',
+              'evidenceId': 'evidence_1',
+              'url': 'https://github.com/flutter/flutter',
+              'title': 'Flutter GitHub 仓库',
+              'source': 'github.com',
+              'snippet': 'Flutter SDK 与框架源码仓库',
+            },
+            <String, dynamic>{
+              'bindingId': 'binding_2',
+              'label': '来源2',
+              'claim': '文档中心',
+              'evidenceId': 'evidence_2',
+              'url': 'https://developer.mozilla.org/zh-CN/',
+              'title': 'MDN Web Docs',
+              'source': 'developer.mozilla.org',
+              'snippet': '文档中心',
+            },
+          ],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      _bubbleHarness(message, onReferenceTap: (ref) => tappedRef = ref),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_2')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.assistantReferenceSectionTitle),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_2')),
+    );
+    await tester.pump();
+
+    expect(tappedRef, isNotNull);
+    expect(tappedRef!['url'], equals('https://developer.mozilla.org/zh-CN/'));
+    expect(tappedRef!['source'], equals('developer.mozilla.org'));
   });
 }

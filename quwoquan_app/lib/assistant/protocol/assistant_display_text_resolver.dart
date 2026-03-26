@@ -50,6 +50,10 @@ abstract final class AssistantDisplayTextResolver {
     r'(用户(?:想|要|在(?:问|询问)|希望|关注|需要)|我需要(?:搜索|检索|查询|调用)|我(?:准备|打算|将要)(?:搜索|检索|查询|调用)|基于搜索结果整理)',
     caseSensitive: false,
   );
+  static final RegExp _hardInternalProcessFragmentRe = RegExp(
+    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用)',
+    caseSensitive: false,
+  );
   static final RegExp _residualXmlToolFragmentRe = RegExp(
     r'</?<?(?:tool_call|function|parameter)[^>\n\r]*>?',
     caseSensitive: false,
@@ -237,10 +241,196 @@ abstract final class AssistantDisplayTextResolver {
     return _internalPlannerNarrationFragmentRe.hasMatch(text);
   }
 
+  static String normalizeUserFacingProcessNarration(
+    String raw, {
+    String stageHint = '',
+  }) {
+    final stripped = stripRomanizedQueryLeakSentences(raw);
+    if (stripped.isEmpty) return '';
+    var text = normalizeMarkdown(stripped);
+    if (text.isEmpty) {
+      text = normalizePlainText(stripped);
+    }
+    if (text.isEmpty) return '';
+    if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(text)) {
+      return '';
+    }
+    if (_hardInternalProcessFragmentRe.hasMatch(text) ||
+        containsInternalAssistantProtocolFragment(text) ||
+        containsTechnicalFailureFragment(text) ||
+        AssistantContentFilters.isJsonEnvelope(text) ||
+        AssistantContentFilters.isDegradedText(text)) {
+      return '';
+    }
+    if (text.startsWith('{') || text.startsWith('[')) {
+      return '';
+    }
+    return _rewritePlannerNarration(text, stageHint: stageHint);
+  }
+
   static bool containsRomanizedQueryLeakFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return _romanizedQueryLeakFragmentRe.hasMatch(text);
+  }
+
+  static String _rewritePlannerNarration(String text, {String stageHint = ''}) {
+    final normalized = text.trim().replaceAll('\r\n', '\n');
+    if (normalized.isEmpty) {
+      return '';
+    }
+    final compact = normalized.replaceAll(RegExp(r'[ \t]+'), ' ');
+    final stage = _normalizeProcessStageHint(stageHint);
+    final shouldRewrite =
+        _internalPlannerNarrationFragmentRe.hasMatch(compact) ||
+        _looksLikeStageProcessNarration(compact, stage: stage);
+    if (!shouldRewrite) {
+      return normalized;
+    }
+    switch (stage) {
+      case 'analyze':
+        return _rewriteAnalyzePlannerNarration(compact);
+      case 'search':
+        return _rewriteSearchPlannerNarration(compact);
+      case 'answer':
+        return _rewriteAnswerPlannerNarration(compact);
+      default:
+        return _rewriteGenericPlannerNarration(compact);
+    }
+  }
+
+  static String _normalizeProcessStageHint(String raw) {
+    final text = raw.trim().toLowerCase();
+    if (text.contains('understand') || text.contains('analy')) {
+      return 'analyze';
+    }
+    if (text.contains('search') || text.contains('verify')) {
+      return 'search';
+    }
+    if (text.contains('answer')) {
+      return 'answer';
+    }
+    return '';
+  }
+
+  static bool _looksLikeStageProcessNarration(
+    String text, {
+    required String stage,
+  }) {
+    switch (stage) {
+      case 'search':
+        return text.contains('换几个检索词') ||
+            text.contains('换几组检索词') ||
+            text.contains('继续找');
+      case 'answer':
+        return text.contains('开始整理') ||
+            text.contains('整理成答案') ||
+            text.contains('可以直接回答');
+      default:
+        return false;
+    }
+  }
+
+  static String _rewriteAnalyzePlannerNarration(String text) {
+    final goal = _extractNarratedGoal(text);
+    if (goal.isNotEmpty) {
+      return '我先确认你真正想解决的是$goal，再核对最新信息。';
+    }
+    if (text.contains('我需要搜索') ||
+        text.contains('我需要检索') ||
+        text.contains('我需要查询') ||
+        text.contains('我准备搜索') ||
+        text.contains('我打算搜索')) {
+      return '我先把你最关心的问题范围确认清楚，再去核对最新资料。';
+    }
+    if (text.contains('问题焦点') ||
+        text.contains('聚焦') ||
+        text.contains('关注点')) {
+      return '我先把你真正关心的重点对齐清楚。';
+    }
+    return '我先把这次问题的核心目标确认清楚。';
+  }
+
+  static String _rewriteSearchPlannerNarration(String text) {
+    final goal = _extractNarratedGoal(text);
+    final target = _extractSearchTarget(text);
+    if (text.contains('换几个检索词') ||
+        text.contains('换几组检索词') ||
+        text.contains('继续找')) {
+      return '我会换几个检索角度继续交叉核对。';
+    }
+    if (target.isNotEmpty) {
+      return '我先围绕$target补齐几组最新证据，再收束结论。';
+    }
+    if (goal.isNotEmpty) {
+      return '我先把和$goal最相关的几路信息拆开核对。';
+    }
+    if (text.contains('基于搜索结果整理')) {
+      return '我先把已经找到的资料交叉核对，筛出能支撑结论的部分。';
+    }
+    return '我先把最影响结论的几路信息拆开核对。';
+  }
+
+  static String _rewriteAnswerPlannerNarration(String text) {
+    final goal = _extractNarratedGoal(text);
+    if (text.contains('基于搜索结果整理')) {
+      return '我把已经核对过的信息收束成结论。';
+    }
+    if (text.contains('开始整理') ||
+        text.contains('整理成答案') ||
+        text.contains('可以直接回答') ||
+        text.contains('信息已经够用了') ||
+        text.contains('关键信息已经够用了')) {
+      if (goal.isNotEmpty) {
+        return '我已经把$goal需要的关键信息核对好，开始整理结论。';
+      }
+      return '证据已经足够支撑回答，我开始把结论和建议整理清楚。';
+    }
+    return '我开始把已经核对好的信息整理成结论。';
+  }
+
+  static String _rewriteGenericPlannerNarration(String text) {
+    final goal = _extractNarratedGoal(text);
+    if (goal.isNotEmpty) {
+      return '我先围绕$goal把关键信息理清，再继续推进。';
+    }
+    final target = _extractSearchTarget(text);
+    if (target.isNotEmpty) {
+      return '我先围绕$target补齐关键信息。';
+    }
+    return text;
+  }
+
+  static String _extractNarratedGoal(String text) {
+    final match = RegExp(
+      r'^用户(?:想|要|在(?:问|询问)|希望|关注|需要)(?:了解|知道|确认|判断|解决|查(?:询)?|看看|弄清)?(.+?)(?:[，。；;]|$)',
+    ).firstMatch(text);
+    if (match == null) {
+      return '';
+    }
+    return _stripLeadingNarrationParticle(match.group(1) ?? '');
+  }
+
+  static String _extractSearchTarget(String text) {
+    final match = RegExp(
+      r'我(?:需要|准备|打算|将要)?(?:搜索|检索|查询)(.+?)(?:[，。；;]|$)',
+    ).firstMatch(text);
+    if (match == null) {
+      return '';
+    }
+    return _stripLeadingNarrationParticle(match.group(1) ?? '');
+  }
+
+  static String _stripLeadingNarrationParticle(String raw) {
+    var text = raw.trim();
+    if (text.isEmpty) {
+      return '';
+    }
+    text = text
+        .replaceFirst(RegExp(r'^(的是|的是关于|关于|一下|一下子|当前|现在)'), '')
+        .replaceFirst(RegExp(r'^(最新的|相关的|有关的)'), '')
+        .trim();
+    return text;
   }
 
   static String stripRomanizedQueryLeakSentences(String raw) {

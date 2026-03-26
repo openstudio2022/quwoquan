@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
@@ -94,6 +96,8 @@ class RelationshipCapabilityDto {
   bool get isFollowing => relationState == 'following';
   bool get isFollowedBy => relationState == 'followed_by';
   bool get isNotFollowing => relationState == 'not_following';
+  bool get viewerFollowsTarget => isFollowing || isMutual;
+  bool get targetFollowsViewer => isFollowedBy || isMutual;
   bool get isSameInterest =>
       relationTier == 'same_interest' || relationTier == 'close_friend';
   bool get isCloseFriend => relationTier == 'close_friend';
@@ -238,20 +242,14 @@ class MockRelationshipCapabilityRepository
     extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerSubAccountId': 'mock_viewer',
-      'targetSubAccountId': targetUserId,
-      'relationState': 'mutual',
-      'relationTier': 'same_interest',
-      'canGreet': false,
-      'canOpenConversation': true,
-      'canAddSameInterest': true,
-      'canSetCloseFriend': false,
-      'canStartVoiceCall': true,
-      'canStartVideoCall': true,
-      'isBlocked': false,
-      'isBlockedBy': false,
-    });
+    final relationState = UserProfileMockData.relationStateFor(targetUserId);
+    return RelationshipCapabilityDto.fromLegacyRelationship(
+      viewerId: ChatMockData.currentUserProfileId,
+      targetId: targetUserId,
+      isFollowing: UserProfileMockData.viewerFollowsTarget(targetUserId),
+      isFollowedBy: UserProfileMockData.targetFollowsViewer(targetUserId),
+      isSelf: relationState == MockProfileRelationState.self,
+    );
   }
 }
 

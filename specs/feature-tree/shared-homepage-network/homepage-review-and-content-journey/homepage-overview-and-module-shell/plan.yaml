@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage shell summary contract
+    goal: 冻结主页首屏总览字段、主操作入口与模块边界
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - shell 字段清单明确
+      - 模块边界不与聚合场景重叠
+    status: planned
+
+  - id: P2
+    title: land homepage overview hero and action shell
+    goal: 建立名称、类型、摘要和主操作的首页 shell
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 首页无需下滑即可理解主页是什么
+      - 主操作在稳定位置可见
+    status: planned
+
+  - id: P3
+    title: deliver module-level loading and degrade behavior
+    goal: 让评分、内容、群组和治理入口模块都支持独立 loading / error / empty
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 任一模块失败不影响整页
+      - 弱网下骨架优先可见
+    status: planned
+
+  - id: P4
+    title: harden homepage shell regression coverage
+    goal: 为首页壳层、模块降级和主操作可用性补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 主页首页 shell 有稳定 widget 回归
+      - 模块失败不拖挂整页有测试覆盖
+    status: planned

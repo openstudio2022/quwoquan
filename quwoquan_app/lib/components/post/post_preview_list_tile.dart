@@ -24,6 +24,9 @@ class PostPreviewListTile extends StatelessWidget {
     this.eyebrowText = '',
     this.eyebrowColor,
     this.trailing,
+    this.thumbnailKey,
+    this.hideThumbnailWhenNoCover = false,
+    this.supportingTextMaxLines = 2,
   });
 
   final bool isDark;
@@ -37,6 +40,9 @@ class PostPreviewListTile extends StatelessWidget {
   final Color? eyebrowColor;
   final Widget footer;
   final Widget? trailing;
+  final Key? thumbnailKey;
+  final bool hideThumbnailWhenNoCover;
+  final int supportingTextMaxLines;
   final VoidCallback onTap;
 
   bool get _hasCover => coverUrl.trim().isNotEmpty;
@@ -63,6 +69,7 @@ class PostPreviewListTile extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
+    final showThumbnail = _hasCover || !hideThumbnailWhenNoCover;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -86,48 +93,54 @@ class PostPreviewListTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(
-                AppSpacing.contentPreviewCornerRadius,
-              ),
-              child: SizedBox(
-                width: thumbnailWidth,
-                height: thumbnailHeight,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_hasCover)
-                      CachedNetworkImage(
-                        imageUrl: coverUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => ColoredBox(
-                          color: fgSecondary.withValues(alpha: 0.12),
-                        ),
-                        errorWidget: (context, url, error) => ColoredBox(
+            if (showThumbnail) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.contentPreviewCornerRadius,
+                ),
+                child: SizedBox(
+                  key: thumbnailKey,
+                  width: thumbnailWidth,
+                  height: thumbnailHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_hasCover)
+                        CachedNetworkImage(
+                          imageUrl: coverUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => ColoredBox(
+                            color: fgSecondary.withValues(alpha: 0.12),
+                          ),
+                          errorWidget: (context, url, error) => ColoredBox(
+                            color: fgSecondary.withValues(alpha: 0.12),
+                            child: Icon(
+                              CupertinoIcons.photo,
+                              color: fgSecondary,
+                            ),
+                          ),
+                        )
+                      else
+                        ColoredBox(
                           color: fgSecondary.withValues(alpha: 0.12),
                           child: Icon(CupertinoIcons.photo, color: fgSecondary),
                         ),
-                      )
-                    else
-                      ColoredBox(
-                        color: fgSecondary.withValues(alpha: 0.12),
-                        child: Icon(CupertinoIcons.photo, color: fgSecondary),
-                      ),
-                    if (showVideoBadge)
-                      Positioned(
-                        top: AppSpacing.intraGroupSm,
-                        right: AppSpacing.intraGroupSm,
-                        child: Icon(
-                          CupertinoIcons.play_circle_fill,
-                          color: Colors.white,
-                          size: AppSpacing.iconMedium,
+                      if (showVideoBadge)
+                        Positioned(
+                          top: AppSpacing.intraGroupSm,
+                          right: AppSpacing.intraGroupSm,
+                          child: Icon(
+                            CupertinoIcons.play_circle_fill,
+                            color: Colors.white,
+                            size: AppSpacing.iconMedium,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            SizedBox(width: AppSpacing.containerSm),
+              SizedBox(width: AppSpacing.containerSm),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +172,7 @@ class PostPreviewListTile extends StatelessWidget {
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
                       supportingText,
-                      maxLines: 2,
+                      maxLines: supportingTextMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: AppTypography.iosCaption1,

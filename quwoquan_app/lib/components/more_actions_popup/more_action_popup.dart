@@ -56,7 +56,6 @@ class _BottomAction {
   final String label;
   final String? description;
   final VoidCallback? onTap;
-  final bool isDestructive;
 
   const _BottomAction({
     required this.id,
@@ -64,7 +63,6 @@ class _BottomAction {
     required this.label,
     this.description,
     this.onTap,
-    this.isDestructive = false,
   });
 }
 
@@ -180,7 +178,6 @@ class _MediaPostMoreActionSheetState
         label: AppStrings.report,
         description: AppStrings.reportDescription,
         onTap: widget.config.onReport,
-        isDestructive: true,
       ),
     ];
   }
@@ -234,20 +231,9 @@ class _MediaPostMoreActionSheetState
     final isDark = ref.watch(isDarkProvider);
     final scrollActions = _buildScrollActions(isDark);
     final bottomActions = _buildBottomActions();
-    final preferenceActions = bottomActions
-        .where((action) => !action.isDestructive)
-        .toList(growable: false);
-    final destructiveActions = bottomActions
-        .where((action) => action.isDestructive)
-        .toList(growable: false);
-    final panelBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.pageBackground,
-    );
-    final cardBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
+    final panelBackground = SettingsSemanticConstants.pageBackground(isDark);
+    final cardBackground = SettingsSemanticConstants.blockBackground(isDark);
+    final cardBorder = SettingsSemanticConstants.blockBorderColor(isDark);
     final iconSurface = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceMuted,
@@ -256,10 +242,7 @@ class _MediaPostMoreActionSheetState
       isDark,
       ColorType.separatorSubtle,
     ).withValues(alpha: isDark ? 0.72 : 0.9);
-    final divider = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
+    final divider = SettingsSemanticConstants.dividerColor(isDark);
     final primaryText = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -268,7 +251,6 @@ class _MediaPostMoreActionSheetState
       isDark,
       ColorType.foregroundSecondary,
     );
-    final destructiveColor = AppColors.iosDestructive(context);
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.pop(context),
@@ -283,6 +265,7 @@ class _MediaPostMoreActionSheetState
         physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
               height: AppSpacing.modalHeaderHeight,
@@ -301,6 +284,7 @@ class _MediaPostMoreActionSheetState
               _MoreActionQuickSection(
                 actions: scrollActions,
                 cardBackground: cardBackground,
+                cardBorder: cardBorder,
                 iconSurface: iconSurface,
                 iconBorder: iconBorder,
                 primaryText: primaryText,
@@ -309,10 +293,11 @@ class _MediaPostMoreActionSheetState
               ),
               SizedBox(height: AppSpacing.interGroupSm),
             ],
-            if (preferenceActions.isNotEmpty) ...[
+            if (bottomActions.isNotEmpty) ...[
               _MoreActionListSection(
-                actions: preferenceActions,
+                actions: bottomActions,
                 cardBackground: cardBackground,
+                cardBorder: cardBorder,
                 divider: divider,
                 primaryText: primaryText,
                 secondaryText: secondaryText,
@@ -320,19 +305,9 @@ class _MediaPostMoreActionSheetState
               ),
               SizedBox(height: AppSpacing.interGroupSm),
             ],
-            if (destructiveActions.isNotEmpty) ...[
-              _MoreActionListSection(
-                actions: destructiveActions,
-                cardBackground: cardBackground,
-                divider: divider,
-                primaryText: destructiveColor,
-                secondaryText: destructiveColor.withValues(alpha: 0.75),
-                onTap: _handleBottomActionTap,
-              ),
-              SizedBox(height: AppSpacing.interGroupSm),
-            ],
             _MoreActionCancelSection(
               backgroundColor: cardBackground,
+              borderColor: cardBorder,
               foregroundColor: secondaryText,
               onTap: () => Navigator.pop(context),
             ),
@@ -347,6 +322,7 @@ class _MoreActionQuickSection extends StatelessWidget {
   const _MoreActionQuickSection({
     required this.actions,
     required this.cardBackground,
+    required this.cardBorder,
     required this.iconSurface,
     required this.iconBorder,
     required this.primaryText,
@@ -356,6 +332,7 @@ class _MoreActionQuickSection extends StatelessWidget {
 
   final List<_ScrollAction> actions;
   final Color cardBackground;
+  final Color cardBorder;
   final Color iconSurface;
   final Color iconBorder;
   final Color primaryText;
@@ -365,13 +342,17 @@ class _MoreActionQuickSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: cardBackground,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(
+          SettingsSemanticConstants.selectionCardBorderRadius,
+        ),
+        border: Border.all(color: cardBorder),
       ),
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerXs),
       child: SizedBox(
-        height: AppSpacing.oneHundred + AppSpacing.md,
+        height: AppSpacing.avatarRailHeight + AppSpacing.containerSm,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
@@ -382,39 +363,41 @@ class _MoreActionQuickSection extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onTap(action),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: AppSpacing.avatarUserLg,
-                      height: AppSpacing.avatarUserLg,
-                      decoration: BoxDecoration(
-                        color: iconSurface,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: iconBorder,
-                          width: AppSpacing.hairline,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: AppSpacing.avatarUserLg,
+                        height: AppSpacing.avatarUserLg,
+                        decoration: BoxDecoration(
+                          color: iconSurface,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: iconBorder,
+                            width: AppSpacing.hairline,
+                          ),
+                        ),
+                        child: Icon(
+                          action.icon,
+                          size: AppSpacing.iconMedium,
+                          color: secondaryText,
                         ),
                       ),
-                      child: Icon(
-                        action.icon,
-                        size: AppSpacing.iconMedium,
-                        color: secondaryText,
+                      SizedBox(height: AppSpacing.intraGroupSm),
+                      Text(
+                        action.label,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: primaryText,
+                          fontWeight: AppTypography.medium,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupSm),
-                    Text(
-                      action.label,
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: primaryText,
-                        fontWeight: AppTypography.medium,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -432,6 +415,7 @@ class _MoreActionListSection extends StatelessWidget {
   const _MoreActionListSection({
     required this.actions,
     required this.cardBackground,
+    required this.cardBorder,
     required this.divider,
     required this.primaryText,
     required this.secondaryText,
@@ -440,6 +424,7 @@ class _MoreActionListSection extends StatelessWidget {
 
   final List<_BottomAction> actions;
   final Color cardBackground;
+  final Color cardBorder;
   final Color divider;
   final Color primaryText;
   final Color secondaryText;
@@ -448,9 +433,13 @@ class _MoreActionListSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: cardBackground,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(
+          SettingsSemanticConstants.selectionCardBorderRadius,
+        ),
+        border: Border.all(color: cardBorder),
       ),
       child: Column(
         children: actions.asMap().entries.map((entry) {
@@ -466,38 +455,49 @@ class _MoreActionListSection extends StatelessWidget {
                     horizontal: AppSpacing.containerMd,
                     vertical: AppSpacing.containerSm,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        action.icon,
-                        size: AppSpacing.twenty,
-                        color: primaryText,
-                      ),
-                      SizedBox(width: AppSpacing.containerSm),
-                      Expanded(
-                        child: Text(
-                          action.label,
-                          style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: AppTypography.medium,
-                            color: primaryText,
-                          ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minHeight: AppSpacing.minInteractiveSize,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          action.icon,
+                          size: AppSpacing.twenty,
+                          color: primaryText,
                         ),
-                      ),
-                      if (action.description != null)
-                        Flexible(
+                        SizedBox(width: AppSpacing.containerSm),
+                        Expanded(
                           child: Text(
-                            action.description!,
+                            action.label,
                             style: TextStyle(
-                              fontSize: AppTypography.base,
-                              color: secondaryText,
+                              fontSize: AppTypography.lg,
+                              fontWeight: AppTypography.regular,
+                              color: primaryText,
                             ),
-                            textAlign: TextAlign.right,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                    ],
+                        if (action.description != null) ...[
+                          SizedBox(width: AppSpacing.containerSm),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                action.description!,
+                                style: TextStyle(
+                                  fontSize: AppTypography.base,
+                                  fontWeight: AppTypography.medium,
+                                  color: secondaryText,
+                                ),
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -521,30 +521,41 @@ class _MoreActionListSection extends StatelessWidget {
 class _MoreActionCancelSection extends StatelessWidget {
   const _MoreActionCancelSection({
     required this.backgroundColor,
+    required this.borderColor,
     required this.foregroundColor,
     required this.onTap,
   });
 
   final Color backgroundColor;
+  final Color borderColor;
   final Color foregroundColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(
+          SettingsSemanticConstants.selectionCardBorderRadius,
+        ),
+        border: Border.all(color: borderColor),
       ),
       child: CupertinoButton(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+        padding: EdgeInsets.zero,
         onPressed: onTap,
-        child: Text(
-          UITextConstants.cancel,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.medium,
-            color: foregroundColor,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
+          child: Center(
+            child: Text(
+              UITextConstants.cancel,
+              style: TextStyle(
+                fontSize: AppTypography.lg,
+                fontWeight: AppTypography.medium,
+                color: foregroundColor,
+              ),
+            ),
           ),
         ),
       ),

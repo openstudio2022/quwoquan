@@ -479,60 +479,68 @@ void main() {
       );
     });
 
-    test(
-      'retrieval design phase 应产出启发式 typed queryTasks',
-      () async {
-        final phase = RetrievalDesignPhase(
-          runtime: ReactRuntime(
-            llmProvider: const _ToolCallQueryTasksRetrievalDesignLlm(),
-            toolRegistry: AssistantToolRegistry(),
-          ),
-        );
-        const intentGraph = IntentGraph(
-          userGoal: '深圳周末天气适合出门吗',
-          problemShape: ProblemShape.singleSkill,
-          primarySkill: 'weather',
-          problemClass: ProblemClass.realtimeInfo,
-          answerShape: AnswerShape.decisionReady,
-          freshnessNeed: FreshnessNeed.recent,
-          requiresExternalEvidence: true,
-          entityAnchors: <String>['深圳'],
-          authorityDomains: <String>['weather.cma.cn'],
-          freshnessHoursMax: 6,
-        );
-        const request = AssistantRunRequest(
-          messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '深圳周末天气适合出门吗'),
-          ],
-        );
+    test('retrieval design phase 应产出启发式 typed queryTasks', () async {
+      final phase = RetrievalDesignPhase(
+        runtime: ReactRuntime(
+          llmProvider: const _ToolCallQueryTasksRetrievalDesignLlm(),
+          toolRegistry: AssistantToolRegistry(),
+        ),
+      );
+      const intentGraph = IntentGraph(
+        userGoal: '深圳周末天气适合出门吗',
+        problemShape: ProblemShape.singleSkill,
+        primarySkill: 'weather',
+        problemClass: ProblemClass.realtimeInfo,
+        answerShape: AnswerShape.decisionReady,
+        freshnessNeed: FreshnessNeed.recent,
+        requiresExternalEvidence: true,
+        entityAnchors: <String>['深圳'],
+        authorityDomains: <String>['weather.cma.cn'],
+        freshnessHoursMax: 6,
+      );
+      const request = AssistantRunRequest(
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '深圳周末天气适合出门吗'),
+        ],
+      );
 
-        final result = await phase.run(
-          PhaseInput(
-            request: request,
-            state: const AgentExecutionState(intentGraph: intentGraph),
-            runId: 'run_retrieval_tool_call_query_tasks',
-            traceId: 'trace_retrieval_tool_call_query_tasks',
-          ),
-        );
+      final result = await phase.run(
+        PhaseInput(
+          request: request,
+          state: const AgentExecutionState(intentGraph: intentGraph),
+          runId: 'run_retrieval_tool_call_query_tasks',
+          traceId: 'trace_retrieval_tool_call_query_tasks',
+        ),
+      );
 
-        expect(result.state!.queryTasks, hasLength(2));
-        expect(
-          result.state!.queryTasks.map((item) => item.id),
-          containsAll(<String>['key_facts', 'decision_threshold']),
-        );
-        expect(
-          result.state!.queryTasks.every(
-            (item) => item.authorityDomains.contains('weather.cma.cn'),
-          ),
-          isTrue,
-        );
-        expect(
-          result.state!.queryTasks.every((item) => item.freshnessHoursMax == 6),
-          isTrue,
-        );
-        expect(result.state!.intentGraph!.queryTasks, hasLength(2));
-      },
-    );
+      expect(result.state!.queryTasks, hasLength(2));
+      expect(
+        result.state!.queryTasks.map((item) => item.id),
+        containsAll(<String>['key_facts', 'decision_threshold']),
+      );
+      expect(
+        result.state!.queryTasks.map((item) => item.id),
+        isNot(
+          containsAll(<String>[
+            'weather_current_state',
+            'weather_precipitation',
+            'weather_outfit',
+          ]),
+        ),
+        reason: 'weather 场景不应再被 phase 层硬编码扩写为固定天气检索模板',
+      );
+      expect(
+        result.state!.queryTasks.every(
+          (item) => item.authorityDomains.contains('weather.cma.cn'),
+        ),
+        isTrue,
+      );
+      expect(
+        result.state!.queryTasks.every((item) => item.freshnessHoursMax == 6),
+        isTrue,
+      );
+      expect(result.state!.intentGraph!.queryTasks, hasLength(2));
+    });
 
     test('retrieval design phase 应消费 continuity 输入补全 query task 语义', () async {
       final phase = RetrievalDesignPhase(
@@ -1400,163 +1408,156 @@ void main() {
       },
     );
 
-    test(
-      'synthesis phase 在连续追问且已有检索痕迹时仍可走 phase-one answer repair',
-      () async {
-        final tempDir = await Directory.systemTemp.createTemp(
-          'assistant_phase_one_followup_answer_repair_with_execution_',
-        );
-        addTearDown(() async {
-          if (await tempDir.exists()) {
-            await tempDir.delete(recursive: true);
-          }
-        });
-        final llm = _PhaseOneFollowupDirectAnswerRepairLlm();
-        final loop = phase_owner.LocalPhaseExecutionOwner(
-          ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
-          sessionManager: AssistantSessionManager(
-            storagePath: '${tempDir.path}/sessions.json',
-          ),
-          memoryRepository: AssistantMemoryRepository(
-            ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
-          ),
-        );
-        final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
-        final prepared = AssistantExecutionPreparation(
-          domainId: fallbackDomainId,
-          modeDecision: const ModeDecision(
-            mode: AgentMode.singleAgent,
-            reason: 'phase_one_followup_answer_repair_with_execution_test',
-          ),
-          skillName: 'Travel Follow-up Answer',
-          skillInstructionMarkdown: '延续上一轮时，若已能回答就直接给出最终答复。',
-          executionShell: const SkillExecutionShell(
-            problemClass: 'simple_qa',
-            maxIterations: 1,
-            toolBudget: 0,
-            variantBudget: 0,
-            reflectionBudget: 0,
-            freshnessHoursMax: 72,
-          ),
-          plannerTemplateVersion: 'followup_repair_planner_v1',
-          postcheckTemplateVersion: 'followup_repair_postcheck_v1',
-          synthTemplateVersion: 'followup_repair_synth_v1',
-          fusionSynthTemplateVersion: 'followup_repair_fusion_v1',
-        );
-        const previousIntentGraph = IntentGraph(
-          userGoal: '给九寨沟行程做备选路线',
-          problemShape: ProblemShape.singleSkill,
-          primarySkill: 'travel',
-          problemClass: ProblemClass.complexReasoning,
-          answerShape: AnswerShape.options,
-          requiresExternalEvidence: false,
-          entityAnchors: <String>['九寨沟'],
-        );
-        final request = AssistantRunRequest(
-          sessionId: 'phase_one_followup_answer_repair_with_execution_owner',
-          messages: const <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '如果我只有4天，优先哪条路线？'),
-          ],
-          contextScopeHint: <String, dynamic>{
-            'precomputedBootstrap': <String, dynamic>{
-              'sessionId':
-                  'phase_one_followup_answer_repair_with_execution_owner',
-              'latestUserQuery': '如果我只有4天，优先哪条路线？',
-              'historySummary': '上一轮刚讨论过九寨沟多条备选路线。',
-              'previousIntentGraph': previousIntentGraph.toJson(),
-              'previousAnswerSummary': '上轮推荐了九寨沟方向三条路线。',
-              'contextContinuityPolicy': const ContextContinuityPolicy(
-                continuityMode: ContextContinuityMode.explicitFollowUp,
-                explicitContinuation: true,
-                referenceQueries: <String>['给九寨沟行程做备选路线'],
-              ).toJson(),
-              'continuityOverrideSlots': const <String, dynamic>{
-                'durationDays': 4,
-              },
-            },
-            'precomputedIntentGraph': const IntentGraph(
-              userGoal: '4天优先哪条路线',
-              problemShape: ProblemShape.singleSkill,
-              primarySkill: '',
-              problemClass: ProblemClass.simpleQa,
-              answerShape: AnswerShape.directAnswer,
-              requiresExternalEvidence: false,
-              entityAnchors: <String>['九寨沟'],
-              contextSlots: <String, dynamic>{
-                'destination': '九寨沟',
-                'continuity': <String, dynamic>{'mode': 'explicit_follow_up'},
-                'overrideSlots': <String, dynamic>{'durationDays': 4},
-              },
+    test('synthesis phase 在连续追问且已有检索痕迹时仍可走 phase-one answer repair', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'assistant_phase_one_followup_answer_repair_with_execution_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final llm = _PhaseOneFollowupDirectAnswerRepairLlm();
+      final loop = phase_owner.LocalPhaseExecutionOwner(
+        ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+        ),
+      );
+      final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
+      final prepared = AssistantExecutionPreparation(
+        domainId: fallbackDomainId,
+        modeDecision: const ModeDecision(
+          mode: AgentMode.singleAgent,
+          reason: 'phase_one_followup_answer_repair_with_execution_test',
+        ),
+        skillName: 'Travel Follow-up Answer',
+        skillInstructionMarkdown: '延续上一轮时，若已能回答就直接给出最终答复。',
+        executionShell: const SkillExecutionShell(
+          problemClass: 'simple_qa',
+          maxIterations: 1,
+          toolBudget: 0,
+          variantBudget: 0,
+          reflectionBudget: 0,
+          freshnessHoursMax: 72,
+        ),
+        plannerTemplateVersion: 'followup_repair_planner_v1',
+        postcheckTemplateVersion: 'followup_repair_postcheck_v1',
+        synthTemplateVersion: 'followup_repair_synth_v1',
+        fusionSynthTemplateVersion: 'followup_repair_fusion_v1',
+      );
+      const previousIntentGraph = IntentGraph(
+        userGoal: '给九寨沟行程做备选路线',
+        problemShape: ProblemShape.singleSkill,
+        primarySkill: 'travel',
+        problemClass: ProblemClass.complexReasoning,
+        answerShape: AnswerShape.options,
+        requiresExternalEvidence: false,
+        entityAnchors: <String>['九寨沟'],
+      );
+      final request = AssistantRunRequest(
+        sessionId: 'phase_one_followup_answer_repair_with_execution_owner',
+        messages: const <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '如果我只有4天，优先哪条路线？'),
+        ],
+        contextScopeHint: <String, dynamic>{
+          'precomputedBootstrap': <String, dynamic>{
+            'sessionId':
+                'phase_one_followup_answer_repair_with_execution_owner',
+            'latestUserQuery': '如果我只有4天，优先哪条路线？',
+            'historySummary': '上一轮刚讨论过九寨沟多条备选路线。',
+            'previousIntentGraph': previousIntentGraph.toJson(),
+            'previousAnswerSummary': '上轮推荐了九寨沟方向三条路线。',
+            'contextContinuityPolicy': const ContextContinuityPolicy(
+              continuityMode: ContextContinuityMode.explicitFollowUp,
+              explicitContinuation: true,
+              referenceQueries: <String>['给九寨沟行程做备选路线'],
             ).toJson(),
-            'precomputedExecutionPreparation': prepared.toJson(),
+            'continuityOverrideSlots': const <String, dynamic>{
+              'durationDays': 4,
+            },
           },
-        );
+          'precomputedIntentGraph': const IntentGraph(
+            userGoal: '4天优先哪条路线',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: '',
+            problemClass: ProblemClass.simpleQa,
+            answerShape: AnswerShape.directAnswer,
+            requiresExternalEvidence: false,
+            entityAnchors: <String>['九寨沟'],
+            contextSlots: <String, dynamic>{
+              'destination': '九寨沟',
+              'continuity': <String, dynamic>{'mode': 'explicit_follow_up'},
+              'overrideSlots': <String, dynamic>{'durationDays': 4},
+            },
+          ).toJson(),
+          'precomputedExecutionPreparation': prepared.toJson(),
+        },
+      );
 
-        final snapshot = await loop.executeBridge(
-          request,
-          runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
-          traceId: 'trace_phase_one_followup_answer_repair_with_execution_owner',
-        );
-        final phaseOneResult =
-            snapshot['phaseOneResult'] as ReactRuntimeResult;
-        snapshot['phaseOneResult'] = ReactRuntimeResult(
-          finalText: phaseOneResult.finalText,
-          traces: <AssistantTraceEvent>[
-            ...phaseOneResult.traces,
-            AssistantTraceEvent(
-              type: AssistantTraceEventType.searchCompleted,
-              message: 'follow-up evidence checked',
-              timestamp: DateTime.now(),
-              data: const <String, dynamic>{
-                'references': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'title': '九寨沟景区公告',
-                    'url': 'https://example.com/jiuzhaigou',
-                    'source': '官方',
-                  },
-                ],
-              },
-            ),
-          ],
-          degraded: phaseOneResult.degraded,
-          failureCode: phaseOneResult.failureCode,
-        );
-
-        final result = await SynthesisPhase(loop).run(
-          PhaseInput(
-            request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot),
-            runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
-            traceId:
-                'trace_phase_one_followup_answer_repair_with_execution_owner',
+      final snapshot = await loop.executeBridge(
+        request,
+        runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
+        traceId: 'trace_phase_one_followup_answer_repair_with_execution_owner',
+      );
+      final phaseOneResult = snapshot['phaseOneResult'] as ReactRuntimeResult;
+      snapshot['phaseOneResult'] = ReactRuntimeResult(
+        finalText: phaseOneResult.finalText,
+        traces: <AssistantTraceEvent>[
+          ...phaseOneResult.traces,
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.searchCompleted,
+            message: 'follow-up evidence checked',
+            timestamp: DateTime.now(),
+            data: const <String, dynamic>{
+              'references': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'title': '九寨沟景区公告',
+                  'url': 'https://example.com/jiuzhaigou',
+                  'source': '官方',
+                },
+              ],
+            },
           ),
-        );
+        ],
+        degraded: phaseOneResult.degraded,
+        failureCode: phaseOneResult.failureCode,
+      );
 
-        final diagnostics =
-            result
-                    .state!
-                    .pendingResponse!
-                    .structuredResponse['phaseOneRoutingDiagnostics']
-                as Map<String, dynamic>;
-        expect(
-          result.state!.synthesisDraft!.templateVersionUsed,
-          'phase_one_direct_answer',
-        );
-        expect(llm.phaseOneCallCount, 1);
-        expect(llm.repairCallCount, 1);
-        expect(llm.synthesisCallCount, 0);
-        expect(
-          result.state!.pendingResponse!.displayPlainText,
-          contains('九寨沟'),
-        );
-        expect(diagnostics['route'], 'phase_one_direct_answer');
-        expect(diagnostics['phaseOneExecutionSignalsPresent'], isTrue);
-        expect(diagnostics['phaseOneContinuationCarryover'], isTrue);
-        expect(diagnostics['allowPhaseOneContractRepair'], isTrue);
-        expect(diagnostics['phaseOneRecoveryApplied'], isFalse);
-        expect(diagnostics['phaseOneModelRepairApplied'], isTrue);
-      },
-    );
+      final result = await SynthesisPhase(loop).run(
+        PhaseInput(
+          request: request,
+          state: AgentExecutionState(executionBridgeSnapshot: snapshot),
+          runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
+          traceId:
+              'trace_phase_one_followup_answer_repair_with_execution_owner',
+        ),
+      );
+
+      final diagnostics =
+          result
+                  .state!
+                  .pendingResponse!
+                  .structuredResponse['phaseOneRoutingDiagnostics']
+              as Map<String, dynamic>;
+      expect(
+        result.state!.synthesisDraft!.templateVersionUsed,
+        'phase_one_direct_answer',
+      );
+      expect(llm.phaseOneCallCount, 1);
+      expect(llm.repairCallCount, 1);
+      expect(llm.synthesisCallCount, 0);
+      expect(result.state!.pendingResponse!.displayPlainText, contains('九寨沟'));
+      expect(diagnostics['route'], 'phase_one_direct_answer');
+      expect(diagnostics['phaseOneExecutionSignalsPresent'], isTrue);
+      expect(diagnostics['phaseOneContinuationCarryover'], isTrue);
+      expect(diagnostics['allowPhaseOneContractRepair'], isTrue);
+      expect(diagnostics['phaseOneRecoveryApplied'], isFalse);
+      expect(diagnostics['phaseOneModelRepairApplied'], isTrue);
+    });
 
     test(
       'synthesis phase 应允许 direct-answer shortcut 覆盖 derived secondary-skill subagent fallback',

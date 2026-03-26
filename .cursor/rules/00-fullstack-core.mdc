@@ -14,9 +14,12 @@ alwaysApply: true
 - `contracts/metadata/*` 是字段、错误码、`path / operation / surface / route / decoder context` 的唯一真相源。
 - codegen 文件禁止手改；新增字段、接口、路由、错误码必须先 metadata，再 verify/codegen。
 - UI、Repository、Router、埋点与文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
-- 凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须在 `/prd` 与 `/design` 先冻结 benchmark、`SLO/KPI`、权限边界、数据生命周期、迁移/灰度/回滚、观测方案。
+- 凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须先通过 `/prd` + `/design` 或 `/baseline` 冻结 benchmark、`SLO/KPI`、权限边界、数据生命周期、迁移/灰度/回滚、观测方案。
 - 与既有 Story 冲突时，先在 `spec.md` 明确覆盖矩阵与优先级，再进入设计。
 - `/dev` 前必须已有稳定的 `spec.md`、`acceptance.yaml`、`design.md`、`plan.yaml`、对应 `CR`，且 codegen 已通过。
+- AI Agent 执行 `/dev` 时必须先进入任务级 plan mode，系统性审视规格、设计、切片、验收、前后端影响面与商用条件。
+- `/dev` 必须自主完成目标 scenario 所需的前后端实现、metadata/codegen、四层测试证据、验收与商用条件闭环；若发现缺口，必须自动修复，不能停在部分完成状态。
+- `/dev` 验证通过后必须自动完成 archive 等价回写，再等待 `/commit`。
 - 测试层只使用 `T1~T4`。
 - 缺关键前置时直接 `GATE_BLOCK`，不要绕过流程直接实现。
 
@@ -25,6 +28,7 @@ alwaysApply: true
 - `/explore`：定位 `L1/L2/L3`，识别 metadata、NFR、权限、CR 与发布风险。
 - `/prd`：冻结规格、验收、商用基线。
 - `/design`：冻结方案、`plan.yaml`、metadata/codegen、迁移与回滚。
-- `/dev`：按 `plan.yaml` 切片和 `metadata -> codegen -> 业务逻辑 -> 测试` 顺序执行。
+- `/baseline`：在需求明确且方案收敛时一次完成规格、设计与 `plan.yaml` 基线。
+- `/dev`：先用任务级 plan mode 审视并补齐缺口，再按 `metadata -> codegen -> 业务逻辑 -> 测试` 顺序自主闭环到 verify/archive 完成、待 `/commit`。
 - `/commit` / `/deploy`：以门禁、SLO、灰度与回滚演练为准。
 

@@ -34,6 +34,17 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<void> revokeSkillConsent({required String skillId}) async {
     _items.removeWhere((item) => item.skillId == skillId);
   }
+
+  @override
+  Future<AssistantSearchResultView> searchXiaoquResults({
+    required String query,
+    String searchIntensity = 'balanced',
+  }) async {
+    return AssistantSearchResultView(
+      queryEcho: query,
+      searchIntensity: searchIntensity,
+    );
+  }
 }
 
 void main() {

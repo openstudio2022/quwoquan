@@ -57,6 +57,7 @@ dependencies:
   geolocator: ^14.0.2
   google_fonts: ^8.0.2
   flutter_markdown_plus: ^1.0.7
+  markdown: ^7.3.1
   file_picker: ^10.3.10
   permission_handler: ^12.0.1
   speech_to_text: ^7.3.0
@@ -71,10 +72,12 @@ dependencies:
   livekit_client: ^2.6.5
   flutter_callkit_incoming: ^3.0.0
   web_socket_channel: ^3.0.3
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  webview_flutter_platform_interface: ^2.15.1
   flutter_lints: ^6.0.0
   # L4 Patrol E2E（真实设备 / Firebase Test Lab）
   patrol: ^4.3.0

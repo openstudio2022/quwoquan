@@ -53,13 +53,17 @@ class ConversationMembersState {
 /// 提供乐观更新写操作，失败时自动回滚
 class ConversationMembersNotifier
     extends StateNotifier<ConversationMembersState> {
-  ConversationMembersNotifier(this._repo, this._conversationId)
-      : super(const ConversationMembersState(isLoading: true)) {
+  ConversationMembersNotifier(
+    this._repo,
+    this._conversationId,
+    this._currentUserId,
+  ) : super(const ConversationMembersState(isLoading: true)) {
     load();
   }
 
   final ChatRepository _repo;
   final String _conversationId;
+  final String _currentUserId;
 
   /// 加载成员列表和群组设置
   Future<void> load() async {
@@ -69,8 +73,17 @@ class ConversationMembersNotifier
         _repo.listMembers(conversationId: _conversationId, limit: 200),
         _repo.getGroupSettings(_conversationId),
       ]);
+      final members = (results[0] as List<Map<String, dynamic>>)
+          .map((member) {
+            final next = Map<String, dynamic>.from(member);
+            final userId = (next['userId'] ?? next['profileSubjectId'] ?? '')
+                .toString();
+            next['isCurrentUser'] = userId == _currentUserId;
+            return next;
+          })
+          .toList(growable: false);
       state = state.copyWith(
-        members: results[0] as List<Map<String, dynamic>>,
+        members: members,
         settings: results[1] as Map<String, dynamic>,
         isLoading: false,
       );
@@ -82,9 +95,7 @@ class ConversationMembersNotifier
   /// 乐观更新管理员列表；失败时回滚
   Future<void> updateGroupAdmins(List<String> adminIds) async {
     final previous = state;
-    state = state.copyWith(
-      members: _applyAdminChange(state.members, adminIds),
-    );
+    state = state.copyWith(members: _applyAdminChange(state.members, adminIds));
     try {
       await _repo.updateGroupAdmins(_conversationId, adminIds);
     } catch (e) {
@@ -110,9 +121,7 @@ class ConversationMembersNotifier
   /// 乐观更新群组设置；失败时回滚
   Future<void> updateSettings(Map<String, dynamic> settings) async {
     final previous = state;
-    state = state.copyWith(
-      settings: {...state.settings, ...settings},
-    );
+    state = state.copyWith(settings: {...state.settings, ...settings});
     try {
       await _repo.updateGroupSettings(_conversationId, settings);
     } catch (e) {
@@ -147,10 +156,15 @@ class ConversationMembersNotifier
 }
 
 /// 会话成员与设置的全局共享 Provider（family by conversationId）
-final conversationMembersProvider = StateNotifierProvider.family<
-    ConversationMembersNotifier, ConversationMembersState, String>(
-  (ref, conversationId) => ConversationMembersNotifier(
-    ref.watch(chatRepositoryProvider),
-    conversationId,
-  ),
-);
+final conversationMembersProvider =
+    StateNotifierProvider.family<
+      ConversationMembersNotifier,
+      ConversationMembersState,
+      String
+    >(
+      (ref, conversationId) => ConversationMembersNotifier(
+        ref.watch(chatRepositoryProvider),
+        conversationId,
+        ref.watch(currentUserIdProvider),
+      ),
+    );

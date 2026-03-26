@@ -94,7 +94,7 @@ void main() {
       expect(find.byType(HomePage), findsOneWidget);
       expect(find.text('关注'), findsWidgets);
       expect(find.text('精选'), findsWidgets);
-      expect(find.text('圈子'), findsWidgets);
+      expect(find.text(UITextConstants.homeTabCircles), findsWidgets);
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
       expect(find.byIcon(CupertinoIcons.add), findsAtLeastNWidgets(1));
     });
@@ -228,6 +228,120 @@ void main() {
       expect(cardFinder, findsOneWidget);
       expect(tester.getSize(cardFinder).width, lessThan(screenWidth));
       expect(tester.getSize(cardFinder).width, closeTo(720.0, 1.0));
+    });
+
+    testWidgets('关注流文章卡覆盖封面/标题四种组合', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final scrollable = find.byType(Scrollable).first;
+      final coverCard = find.byKey(
+        const ValueKey<String>('following-article-card-web-dev'),
+      );
+      final textOnlyCard = find.byKey(
+        const ValueKey<String>('following-article-card-ritual_plain'),
+      );
+      final bodyOnlyCoverCard = find.byKey(
+        const ValueKey<String>(
+          'following-article-card-diffuse_cover_body_only',
+        ),
+      );
+      final bodyOnlyTextCard = find.byKey(
+        const ValueKey<String>(
+          'following-article-card-journal_plain_body_only',
+        ),
+      );
+
+      await tester.dragUntilVisible(
+        coverCard,
+        scrollable,
+        const Offset(0, -320),
+      );
+      await tester.pumpAndSettle();
+      expect(coverCard, findsOneWidget);
+      expect(
+        find.descendant(
+          of: coverCard,
+          matching: find.byKey(
+            const ValueKey<String>('following-article-thumbnail-web-dev'),
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.dragUntilVisible(
+        textOnlyCard,
+        scrollable,
+        const Offset(0, -320),
+      );
+      await tester.pumpAndSettle();
+      expect(textOnlyCard, findsOneWidget);
+      expect(
+        find.descendant(
+          of: textOnlyCard,
+          matching: find.byKey(
+            const ValueKey<String>('following-article-thumbnail-ritual_plain'),
+          ),
+        ),
+        findsNothing,
+      );
+
+      await tester.dragUntilVisible(
+        bodyOnlyCoverCard,
+        scrollable,
+        const Offset(0, -320),
+      );
+      await tester.pumpAndSettle();
+      expect(bodyOnlyCoverCard, findsOneWidget);
+      expect(
+        find.descendant(
+          of: bodyOnlyCoverCard,
+          matching: find.byKey(
+            const ValueKey<String>(
+              'following-article-thumbnail-diffuse_cover_body_only',
+            ),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: bodyOnlyCoverCard,
+          matching: find.textContaining('把路线、风向和停留时间直接写进正文里'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.dragUntilVisible(
+        bodyOnlyTextCard,
+        scrollable,
+        const Offset(0, -320),
+      );
+      await tester.pumpAndSettle();
+      expect(bodyOnlyTextCard, findsOneWidget);
+      expect(
+        find.descendant(
+          of: bodyOnlyTextCard,
+          matching: find.byKey(
+            const ValueKey<String>(
+              'following-article-thumbnail-journal_plain_body_only',
+            ),
+          ),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: bodyOnlyTextCard,
+          matching: find.textContaining('没有标题也没有封面'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('关注流更多菜单不显示分享和查看原图', (tester) async {

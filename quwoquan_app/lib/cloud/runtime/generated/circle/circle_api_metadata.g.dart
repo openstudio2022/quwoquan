@@ -13,78 +13,120 @@ class CircleApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'ApplyJoinCircleGroup': '/v1/circles/{circleId}/groups/{groupId}/join-requests',
+    'ApproveCircleGroupMember': '/v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:approve',
     'ArchiveCircle': '/v1/circles/{circleId}',
     'CreateCircle': '/v1/circles',
     'CreateCircleFile': '/v1/circles/{circleId}/files',
+    'CreateCircleGroup': '/v1/circles/{circleId}/groups',
     'DeleteCircleFile': '/v1/circles/{circleId}/files/{fileId}',
     'FeatureCirclePost': '/v1/circles/{circleId}/feed/{postId}/feature',
     'GetCircle': '/v1/circles/{circleId}',
     'GetCircleFeed': '/v1/circles/{circleId}/feed',
     'GetCircleFile': '/v1/circles/{circleId}/files/{fileId}',
+    'GetCircleGroup': '/v1/circles/{circleId}/groups/{groupId}',
     'GetCircleStats': '/v1/circles/{circleId}/stats',
     'JoinCircle': '/v1/circles/{circleId}/join',
     'LeaveCircle': '/v1/circles/{circleId}/leave',
     'ListCircleFiles': '/v1/circles/{circleId}/files',
+    'ListCircleGroupMembers': '/v1/circles/{circleId}/groups/{groupId}/members',
+    'ListCircleGroups': '/v1/circles/{circleId}/groups',
     'ListCircleMembers': '/v1/circles/{circleId}/members',
     'ListCircles': '/v1/circles',
     'ListUserCircles': '/v1/users/{userId}/circles',
     'PinCirclePost': '/v1/circles/{circleId}/feed/{postId}/pin',
+    'RejectCircleGroupMember': '/v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:reject',
     'ReportCircleBehavior': '/v1/circles/behaviors',
+    'SearchCircleGroups': '/v1/circles/{circleId}/groups/search',
     'SearchCircles': '/v1/circles/search',
     'UpdateCircle': '/v1/circles/{circleId}',
     'UpdateCircleFile': '/v1/circles/{circleId}/files/{fileId}',
+    'UpdateCircleGroup': '/v1/circles/{circleId}/groups/{groupId}',
     'UpdateCircleSections': '/v1/circles/{circleId}/sections',
     'UpdateMemberRole': '/v1/circles/{circleId}/members/{userId}/role',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'ApplyJoinCircleGroup': 'POST',
+    'ApproveCircleGroupMember': 'POST',
     'ArchiveCircle': 'DELETE',
     'CreateCircle': 'POST',
     'CreateCircleFile': 'POST',
+    'CreateCircleGroup': 'POST',
     'DeleteCircleFile': 'DELETE',
     'FeatureCirclePost': 'PATCH',
     'GetCircle': 'GET',
     'GetCircleFeed': 'GET',
     'GetCircleFile': 'GET',
+    'GetCircleGroup': 'GET',
     'GetCircleStats': 'GET',
     'JoinCircle': 'POST',
     'LeaveCircle': 'POST',
     'ListCircleFiles': 'GET',
+    'ListCircleGroupMembers': 'GET',
+    'ListCircleGroups': 'GET',
     'ListCircleMembers': 'GET',
     'ListCircles': 'GET',
     'ListUserCircles': 'GET',
     'PinCirclePost': 'PATCH',
+    'RejectCircleGroupMember': 'POST',
     'ReportCircleBehavior': 'POST',
+    'SearchCircleGroups': 'GET',
     'SearchCircles': 'GET',
     'UpdateCircle': 'PATCH',
     'UpdateCircleFile': 'PATCH',
+    'UpdateCircleGroup': 'PATCH',
     'UpdateCircleSections': 'PATCH',
     'UpdateMemberRole': 'PATCH',
   };
 
+  static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
+  static const String approveCircleGroupMemberOperation = 'ApproveCircleGroupMember';
   static const String archiveCircleOperation = 'ArchiveCircle';
   static const String createCircleOperation = 'CreateCircle';
   static const String createCircleFileOperation = 'CreateCircleFile';
+  static const String createCircleGroupOperation = 'CreateCircleGroup';
   static const String deleteCircleFileOperation = 'DeleteCircleFile';
   static const String featureCirclePostOperation = 'FeatureCirclePost';
   static const String getCircleOperation = 'GetCircle';
   static const String getCircleFeedOperation = 'GetCircleFeed';
   static const String getCircleFileOperation = 'GetCircleFile';
+  static const String getCircleGroupOperation = 'GetCircleGroup';
   static const String getCircleStatsOperation = 'GetCircleStats';
   static const String joinCircleOperation = 'JoinCircle';
   static const String leaveCircleOperation = 'LeaveCircle';
   static const String listCircleFilesOperation = 'ListCircleFiles';
+  static const String listCircleGroupMembersOperation = 'ListCircleGroupMembers';
+  static const String listCircleGroupsOperation = 'ListCircleGroups';
   static const String listCircleMembersOperation = 'ListCircleMembers';
   static const String listCirclesOperation = 'ListCircles';
   static const String listUserCirclesOperation = 'ListUserCircles';
   static const String pinCirclePostOperation = 'PinCirclePost';
+  static const String rejectCircleGroupMemberOperation = 'RejectCircleGroupMember';
   static const String reportCircleBehaviorOperation = 'ReportCircleBehavior';
+  static const String searchCircleGroupsOperation = 'SearchCircleGroups';
   static const String searchCirclesOperation = 'SearchCircles';
   static const String updateCircleOperation = 'UpdateCircle';
   static const String updateCircleFileOperation = 'UpdateCircleFile';
+  static const String updateCircleGroupOperation = 'UpdateCircleGroup';
   static const String updateCircleSectionsOperation = 'UpdateCircleSections';
   static const String updateMemberRoleOperation = 'UpdateMemberRole';
 
+  static const String applyJoinCircleGroupPathTemplate = '/v1/circles/{circleId}/groups/{groupId}/join-requests';
+  static String applyJoinCircleGroupPath({required String circleId, required String groupId}) {
+    return _fillPath(applyJoinCircleGroupPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
+    });
+  }
+  static const String approveCircleGroupMemberPathTemplate = '/v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:approve';
+  static String approveCircleGroupMemberPath({required String circleId, required String groupId, required String userId}) {
+    return _fillPath(approveCircleGroupMemberPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
+      'userId': userId,
+    });
+  }
   static const String archiveCirclePathTemplate = '/v1/circles/{circleId}';
   static String archiveCirclePath({required String circleId}) {
     return _fillPath(archiveCirclePathTemplate, <String, String>{
@@ -95,6 +137,12 @@ class CircleApiMetadata {
   static const String createCircleFilePathTemplate = '/v1/circles/{circleId}/files';
   static String createCircleFilePath({required String circleId}) {
     return _fillPath(createCircleFilePathTemplate, <String, String>{
+      'circleId': circleId,
+    });
+  }
+  static const String createCircleGroupPathTemplate = '/v1/circles/{circleId}/groups';
+  static String createCircleGroupPath({required String circleId}) {
+    return _fillPath(createCircleGroupPathTemplate, <String, String>{
       'circleId': circleId,
     });
   }
@@ -131,6 +179,13 @@ class CircleApiMetadata {
       'fileId': fileId,
     });
   }
+  static const String getCircleGroupPathTemplate = '/v1/circles/{circleId}/groups/{groupId}';
+  static String getCircleGroupPath({required String circleId, required String groupId}) {
+    return _fillPath(getCircleGroupPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
+    });
+  }
   static const String getCircleStatsPathTemplate = '/v1/circles/{circleId}/stats';
   static String getCircleStatsPath({required String circleId}) {
     return _fillPath(getCircleStatsPathTemplate, <String, String>{
@@ -155,6 +210,19 @@ class CircleApiMetadata {
       'circleId': circleId,
     });
   }
+  static const String listCircleGroupMembersPathTemplate = '/v1/circles/{circleId}/groups/{groupId}/members';
+  static String listCircleGroupMembersPath({required String circleId, required String groupId}) {
+    return _fillPath(listCircleGroupMembersPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
+    });
+  }
+  static const String listCircleGroupsPathTemplate = '/v1/circles/{circleId}/groups';
+  static String listCircleGroupsPath({required String circleId}) {
+    return _fillPath(listCircleGroupsPathTemplate, <String, String>{
+      'circleId': circleId,
+    });
+  }
   static const String listCircleMembersPathTemplate = '/v1/circles/{circleId}/members';
   static String listCircleMembersPath({required String circleId}) {
     return _fillPath(listCircleMembersPathTemplate, <String, String>{
@@ -175,7 +243,21 @@ class CircleApiMetadata {
       'postId': postId,
     });
   }
+  static const String rejectCircleGroupMemberPathTemplate = '/v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:reject';
+  static String rejectCircleGroupMemberPath({required String circleId, required String groupId, required String userId}) {
+    return _fillPath(rejectCircleGroupMemberPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
+      'userId': userId,
+    });
+  }
   static const String reportCircleBehaviorPath = '/v1/circles/behaviors';
+  static const String searchCircleGroupsPathTemplate = '/v1/circles/{circleId}/groups/search';
+  static String searchCircleGroupsPath({required String circleId}) {
+    return _fillPath(searchCircleGroupsPathTemplate, <String, String>{
+      'circleId': circleId,
+    });
+  }
   static const String searchCirclesPath = '/v1/circles/search';
   static const String updateCirclePathTemplate = '/v1/circles/{circleId}';
   static String updateCirclePath({required String circleId}) {
@@ -188,6 +270,13 @@ class CircleApiMetadata {
     return _fillPath(updateCircleFilePathTemplate, <String, String>{
       'circleId': circleId,
       'fileId': fileId,
+    });
+  }
+  static const String updateCircleGroupPathTemplate = '/v1/circles/{circleId}/groups/{groupId}';
+  static String updateCircleGroupPath({required String circleId, required String groupId}) {
+    return _fillPath(updateCircleGroupPathTemplate, <String, String>{
+      'circleId': circleId,
+      'groupId': groupId,
     });
   }
   static const String updateCircleSectionsPathTemplate = '/v1/circles/{circleId}/sections';

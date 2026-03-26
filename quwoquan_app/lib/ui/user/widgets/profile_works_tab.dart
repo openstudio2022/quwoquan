@@ -14,7 +14,7 @@ import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
-/// 创作 Tab：统一承载 `全部 / 微趣 / 图片 / 视频 / 文字` 的内容筛选。
+/// 创作 Tab：统一承载 `全部 / 图片 / 视频 / 文字` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
   const ProfileWorksTab({
     super.key,
@@ -249,11 +249,11 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       case CreationSubTab.work:
         return isMine ? '还没有作品' : 'Ta 还没有作品';
       case CreationSubTab.image:
-        return isMine ? '还没有图片作品' : 'Ta 还没有图片作品';
+        return isMine ? '还没有图片内容' : 'Ta 还没有图片内容';
       case CreationSubTab.video:
-        return isMine ? '还没有视频作品' : 'Ta 还没有视频作品';
+        return isMine ? '还没有视频内容' : 'Ta 还没有视频内容';
       case CreationSubTab.article:
-        return isMine ? '还没有文章作品' : 'Ta 还没有文章作品';
+        return isMine ? '还没有文字内容' : 'Ta 还没有文字内容';
       case CreationSubTab.all:
         return isMine ? '还没有创作内容' : 'Ta 还没有创作内容';
     }

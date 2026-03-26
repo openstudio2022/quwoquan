@@ -22,6 +22,7 @@ class CircleState {
   const CircleState({
     required this.circleId,
     this.circleData,
+    this.rawCircleData,
     this.role = CircleRole.visitor,
     this.joinStatus = 'none',
     this.isFollowed = false,
@@ -37,6 +38,7 @@ class CircleState {
 
   final String circleId;
   final CircleDto? circleData;
+  final Map<String, dynamic>? rawCircleData;
   final CircleRole role;
   final String joinStatus;
   final bool isFollowed;
@@ -51,6 +53,7 @@ class CircleState {
 
   CircleState copyWith({
     CircleDto? circleData,
+    Map<String, dynamic>? rawCircleData,
     CircleRole? role,
     String? joinStatus,
     bool? isFollowed,
@@ -66,6 +69,7 @@ class CircleState {
     return CircleState(
       circleId: circleId,
       circleData: circleData ?? this.circleData,
+      rawCircleData: rawCircleData ?? this.rawCircleData,
       role: role ?? this.role,
       joinStatus: joinStatus ?? this.joinStatus,
       isFollowed: isFollowed ?? this.isFollowed,
@@ -101,6 +105,7 @@ class CircleStateNotifier extends ChangeNotifier {
       final stats = await repo.getCircleStats(_circleId);
       _state = _state.copyWith(
         circleData: CircleDto.fromMap(data),
+        rawCircleData: Map<String, dynamic>.from(data),
         role: _circleRoleFromRaw(data['role']),
         joinStatus: (data['joinStatus'] ?? _state.joinStatus).toString(),
         isFollowed: data['isFollowed'] as bool? ?? _state.isFollowed,
@@ -146,7 +151,9 @@ class CircleStateNotifier extends ChangeNotifier {
   Future<void> joinCircle() async {
     final previousStatus = _state.joinStatus;
     final previousFollowed = _state.isFollowed;
-    _state = _state.copyWith(joinStatus: 'joined', isFollowed: true);
+    final nextJoinStatus =
+        _state.circleData?.joinPolicy == 'approval' ? 'pending' : 'joined';
+    _state = _state.copyWith(joinStatus: nextJoinStatus, isFollowed: true);
     notifyListeners();
     try {
       final repo = _ref.read(circleRepositoryProvider);
@@ -199,11 +206,13 @@ class CircleStateNotifier extends ChangeNotifier {
       final repo = _ref.read(circleRepositoryProvider);
       final updated = await repo.updateCircle(_circleId, data);
       final merged = {
+        ...?_state.rawCircleData,
         ...?_state.circleData?.toMap(),
         ...updated,
       };
       _state = _state.copyWith(
         circleData: CircleDto.fromMap(merged),
+        rawCircleData: Map<String, dynamic>.from(merged),
         role: _circleRoleFromRaw(updated['role'] ?? merged['role']),
         joinStatus: (updated['joinStatus'] ?? merged['joinStatus'] ?? _state.joinStatus)
             .toString(),
@@ -226,3 +235,5 @@ final circleStateProvider =
     ChangeNotifierProvider.family<CircleStateNotifier, String>(
       (ref, circleId) => CircleStateNotifier(ref, circleId),
     );
+
+final circleDirectoryRefreshProvider = StateProvider<int>((ref) => 0);

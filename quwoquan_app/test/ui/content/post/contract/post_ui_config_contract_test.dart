@@ -89,6 +89,23 @@ void main() {
       );
     });
 
+    test('article book feature flags present', () {
+      expect(
+        ContentUIConfig.featureFlags.containsKey('enable_article_book_reader'),
+        isTrue,
+      );
+      expect(
+        ContentUIConfig.featureFlags.containsKey('enable_article_page_curl'),
+        isTrue,
+      );
+      expect(
+        ContentUIConfig.featureFlags.containsKey(
+          'enable_article_distribution_profiles',
+        ),
+        isTrue,
+      );
+    });
+
     test('feature flags all have bool defaults', () {
       for (final entry in ContentUIConfig.featureFlags.entries) {
         expect(
@@ -147,6 +164,64 @@ void main() {
         (filter) => filter.id == 'note',
       );
       expect(note.contentType, 'article');
+    });
+
+    test('article template configs freeze five book presets', () {
+      final ids = ContentUIConfig.articleTemplateConfigs
+          .map((config) => config.id)
+          .toSet();
+      expect(
+        ids,
+        equals(<String>{'gentle', 'ritual', 'diffuse', 'journal', 'tech'}),
+      );
+    });
+
+    test('article distribution profiles cover follow list and circle dual column', () {
+      final ids = ContentUIConfig.articleDistributionProfiles
+          .map((profile) => profile.id)
+          .toList();
+      expect(
+        ids,
+        containsAll(<String>[
+          'follow_list_with_optional_cover',
+          'circle_dual_column_with_optional_cover',
+        ]),
+      );
+    });
+
+    test('article reader profiles freeze full screen stage and top nav page fraction', () {
+      final ids = ContentUIConfig.articleReaderProfiles
+          .map((profile) => profile.id)
+          .toList();
+      expect(
+        ids,
+        containsAll(<String>[
+          'full_screen_book_stage',
+          'top_nav_with_page_fraction',
+        ]),
+      );
+      final fullScreen = ContentUIConfig.articleReaderProfiles.firstWhere(
+        (profile) => profile.id == 'full_screen_book_stage',
+      );
+      expect(fullScreen.pageIndicatorAnchor, equals('top_after_back'));
+      expect(fullScreen.supportsPageCurl, isTrue);
+    });
+
+    test('article template recommendations cover核心圈子频道', () {
+      final tech = ContentUIConfig.articleTemplateRecommendations.firstWhere(
+        (entry) => entry.categoryId == 'tech',
+      );
+      final humanity = ContentUIConfig.articleTemplateRecommendations.firstWhere(
+        (entry) => entry.categoryId == 'humanity',
+      );
+      expect(
+        tech.recommendedArticleTemplates,
+        containsAll(<String>['tech', 'diffuse']),
+      );
+      expect(
+        humanity.recommendedArticleTemplates,
+        containsAll(<String>['journal', 'ritual']),
+      );
     });
   });
 }

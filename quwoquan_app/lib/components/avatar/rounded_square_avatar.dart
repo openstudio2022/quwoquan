@@ -27,6 +27,7 @@ class RoundedSquareAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -36,9 +37,9 @@ class RoundedSquareAvatar extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, _) => _buildFallback(radius),
+              errorBuilder: (_, __, _) => _buildFallback(radius, isDark),
             )
-          : _buildFallback(radius),
+          : _buildFallback(radius, isDark),
     );
 
     if (onTap != null) {
@@ -48,13 +49,15 @@ class RoundedSquareAvatar extends StatelessWidget {
     return avatar;
   }
 
-  Widget _buildFallback(double radius) {
+  Widget _buildFallback(double radius, bool isDark) {
     final initial = _getInitial(name ?? '');
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.light.backgroundTertiary,
+        color:
+            backgroundColor ??
+            AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
         borderRadius: BorderRadius.circular(radius),
       ),
       alignment: Alignment.center,
@@ -63,7 +66,10 @@ class RoundedSquareAvatar extends StatelessWidget {
         style: TextStyle(
           fontSize: size * 0.4,
           fontWeight: FontWeight.w600,
-          color: AppColors.light.foregroundSecondary,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.foregroundSecondary,
+          ),
         ),
       ),
     );

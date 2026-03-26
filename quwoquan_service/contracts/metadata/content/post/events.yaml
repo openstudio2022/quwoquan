@@ -8,7 +8,7 @@ events:
     consumers: [recommendation-engine, notification-service, assistant-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, title, tags, location, circleIds, createdAt]
+    payload_fields: [_id, authorId, contentType, contentIdentity, title, tags, location, primaryHomepageId, circleIds, groupId, nodeId, createdAt]
     recommend_impact: content_index_refresh
 
   - name: PostPublished
@@ -17,7 +17,7 @@ events:
     consumers: [recommendation-engine, notification-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, status, publishedAt]
+    payload_fields: [_id, authorId, contentType, contentIdentity, status, primaryHomepageId, groupId, nodeId, publishedAt, lastActiveAt]
 
   - name: PostUpdated
     description: 内容更新
@@ -25,7 +25,7 @@ events:
     consumers: [recommendation-engine]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, contentIdentity, title, body, tags, updatedAt]
+    payload_fields: [_id, contentIdentity, title, body, tags, primaryHomepageId, groupId, nodeId, updatedAt]
 
   - name: PostSettingsUpdated
     description: 发布后可变设置更新（可见性 / 圈子分发 / 小趣排除）
@@ -33,14 +33,14 @@ events:
     consumers: [recommendation-engine, assistant-service, circle-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentIdentity, visibility, circleIds, assistantUsePolicy, updatedAt]
+    payload_fields: [_id, authorId, contentIdentity, visibility, primaryHomepageId, circleIds, groupId, nodeId, assistantUsePolicy, updatedAt]
 
   - name: PostPromotedToWork
     description: 点滴原地升级为作品
     producer: content-service
     consumers: [recommendation-engine, notification-service, assistant-service, circle-service]
     channel: event_store
-    payload_fields: [postId, authorId, fromIdentity, toIdentity, previousContentType, contentType, title, summary, tags, visibility, circleIds, assistantUsePolicy, promotedAt]
+    payload_fields: [postId, authorId, fromIdentity, toIdentity, previousContentType, contentType, title, summary, tags, visibility, primaryHomepageId, circleIds, groupId, nodeId, assistantUsePolicy, promotedAt]
 
   - name: PostDeleted
     description: 内容删除
@@ -55,7 +55,7 @@ events:
     producer: content-service
     consumers: [recommendation-engine, circle-service]
     channel: event_store
-    payload_fields: [postId, ownerAuthorId, addedCircleIds, removedCircleIds, updatedAt]
+    payload_fields: [postId, ownerAuthorId, groupId, nodeId, addedCircleIds, removedCircleIds, lastActiveAt, updatedAt]
 
   - name: PostReshared
     description: 用户转发到圈子

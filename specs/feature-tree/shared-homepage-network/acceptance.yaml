@@ -1,0 +1,65 @@
+feature: shared-homepage-network
+level: "L1_capability"
+archived: false
+level_acceptance:
+  - id: C1
+    description: >
+      共享主页能力域基线冻结完成：前台统一使用“主页”与具体类目主页表达，
+      PRD 统一使用“共享主页”，云侧继续使用 `entity-service`；
+      baseline 范围仅包含车型、酒店民宿、餐厅、景点四类主页，
+      不把学校、公司等组织型主页纳入本 L1 范围。
+    status: pending
+    tests:
+      - path: specs/00_PRODUCT_CONCEPT_SYSTEM.md
+      - path: specs/00_GLOBAL_TERMINOLOGY.md
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+
+  - id: C2
+    description: >
+      共享主页主档与生命周期设计冻结完成：EntityProfile、EntityTypeTemplate、
+      EntityReviewTemplate、EntityClaimRequest、EntityStatusReport、
+      EntitySourceEvidence 的职责边界明确，主页统一包含总览、口碑、内容、问答、
+      相关群组、官方/服务信息六个模块，并支持候选、待校验、已发布、已下线四个关键状态。
+    status: pending
+    tests:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+      - path: specs/feature-tree/shared-homepage-network/design.md
+      - path: quwoquan_service/contracts/metadata/entity/homepage/aggregate.yaml
+      - path: quwoquan_service/contracts/metadata/entity/homepage/fields.yaml
+
+  - id: C3
+    description: >
+      共享主页与内容/群组集成契约冻结完成：内容统一使用笔记/作品/提问/口碑，
+      口碑必须绑定 1 个主主页，笔记/作品/提问可选择绑定主页；群组最多关联 1 个主主页，
+      只消费主页摘要，不拥有主页主档；主页可以推荐相关群组，但不承接群组治理。
+    status: pending
+    tests:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+      - path: quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+      - path: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+      - path: quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml
+
+  - id: C4
+    description: >
+      口碑、认领与下线合同冻结完成：评分采用 1.0~5.0、步长 0.5；
+      认领采用分层验证；主页下线后保留原 URL、历史内容、历史口碑和相关群组关系，
+      搜索与推荐降级；baseline 不做主页合并与迁移。
+    status: pending
+    tests:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+      - path: specs/feature-tree/shared-homepage-network/design.md
+      - path: quwoquan_service/contracts/metadata/entity/homepage/errors.yaml
+      - path: quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+
+  - id: C5
+    description: >
+      端云一体化与 iOS 体验基线冻结完成：端侧新增 `ui/entity/` 和
+      `cloud/services/entity/` 归属方向，主页路由、surface、request context
+      走 metadata 单一真相源；主页详情、主页选择器、评分交互满足 iOS 原生高品质体验基线；
+      KPI/SLO 可支撑后续 `/prd` 继续展开。
+    status: pending
+    tests:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+      - path: specs/feature-tree/shared-homepage-network/design.md
+      - path: specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md
+      - path: specs/l1_index.yaml

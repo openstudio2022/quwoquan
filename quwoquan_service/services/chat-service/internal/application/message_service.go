@@ -173,6 +173,55 @@ func (s *MessageService) ListMessages(ctx context.Context, req ListMessagesReque
 	return s.repo.ListMessages(ctx, req.ConversationId, req.Limit, req.AfterSeq, req.BeforeSeq)
 }
 
+type SearchMessagesRequest struct {
+	UserId string
+	Query  string
+	Cursor string
+	Limit  int
+}
+
+func (s *MessageService) SearchMessages(
+	ctx context.Context,
+	req SearchMessagesRequest,
+) ([]MessageSearchHit, error) {
+	query := normalizeSearchQuery(req.Query)
+	if query == "" {
+		return []MessageSearchHit{}, nil
+	}
+	limit := clampSearchLimit(req.Limit, 20)
+	conversations, err := listUserConversations(ctx, s.repo, req.UserId)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]MessageSearchHit, 0, limit)
+	for _, conversation := range conversations {
+		messages, err := s.repo.ListMessages(ctx, conversation.ID, limit*4, 0, 0)
+		if err != nil {
+			continue
+		}
+		for _, message := range messages {
+			matched, _ := containsQuery(
+				[]string{
+					message.Content,
+					message.SenderId,
+				},
+				query,
+			)
+			if !matched {
+				continue
+			}
+			results = append(results, MessageSearchHit{
+				Conversation: conversation,
+				Message:      message,
+			})
+			if len(results) >= limit {
+				return results, nil
+			}
+		}
+	}
+	return results, nil
+}
+
 type SyncMessagesRequest struct {
 	ConversationId string
 	LastSeq        int64

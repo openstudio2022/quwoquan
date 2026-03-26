@@ -1,0 +1,103 @@
+id: CR-20260322-002
+title: article book display prd baseline
+slug: article-book-display-prd
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-display-journey-consistency
+  - specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey
+  - specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover
+
+entries:
+  - timestamp: "2026-03-22T21:40:00+08:00"
+    summary: 冻结文章在关注流、圈子双列、沉浸式阅读器与编辑态中的统一产品规格，并引入真实书本模板体系
+    reason: 现有文章规格仍基于“单页详情 / 无沉浸阅读 / 无模板真相源”的旧前提，无法支撑封面分发、真实书页阅读器与编辑态一致性
+    change_type:
+      - refine
+      - split
+      - supersede
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/spec.md
+        sections:
+          - 目标用户
+          - 功能范围
+          - Out of Scope
+          - 既有 Story 覆盖矩阵
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/acceptance.yaml
+        sections:
+          - scope
+          - journey_acceptance.J1
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/spec.md
+        sections:
+          - 全文重写
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+          - A7
+          - A8
+      - path: specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md
+        sections:
+          - 4.1 侵入式图片/视频浏览器与文章阅读器
+          - 4.3 Post 卡片 / 列表 / 圈子封面
+          - 4.4 创作编辑页 / 编辑器
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/design.md
+        sections:
+          - 旧版设计失效说明
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/tasks.md
+        sections:
+          - 旧版任务失效说明
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/spec.md
+        sections:
+          - 旧探索节点失效说明
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/design.md
+        sections:
+          - 旧探索设计失效说明
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - 下一阶段 /design 必须统一文章封面字段、模板字段、编辑态与阅读态分页/翻页策略
+  - timestamp: "2026-03-22T22:10:00+08:00"
+    summary: 完成文章展示与真实书本系统 design baseline，补齐 metadata/codegen、mock 矩阵、测试看护与稳定实施切片
+    reason: 仅有 PRD 仍不足以指导 `/dev`，需要把字段演进、reader hydration、模板 mock 覆盖与 page curl 降级方案冻结为可实施设计
+    change_type:
+      - refine
+      - replan
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/design.md
+        sections:
+          - 全文重写
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+          - P7
+          - P8
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - G1 基线命令已执行通过：make -C quwoquan_service verify-metadata && make codegen && make codegen-app

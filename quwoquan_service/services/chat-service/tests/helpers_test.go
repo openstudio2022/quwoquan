@@ -68,6 +68,18 @@ func doPatch(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	return rec.Code, result
 }
 
+func doPut(t *testing.T, path, payload, userId string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", userId)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	var result map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &result)
+	return rec.Code, result
+}
+
 func doDelete(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodDelete, path, nil)

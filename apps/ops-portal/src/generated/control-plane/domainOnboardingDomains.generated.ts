@@ -311,6 +311,84 @@ export const domainOnboardingDomains = {
     "template_role": "template_seed",
     "version": 1
   },
+  "entity": {
+    "acceptance_status": "integration_pass",
+    "blocking_gaps": [],
+    "control_planes": {
+      "platform": {
+        "config_prefixes": [
+          "sys.entity."
+        ],
+        "enabled": true,
+        "object_types": [
+          "service_catalog_entry",
+          "plane_binding",
+          "gate_rule"
+        ]
+      },
+      "product": {
+        "config_prefixes": [
+          "ops.entity."
+        ],
+        "enabled": true,
+        "object_types": [
+          "moderation_case",
+          "homepage_claim_policy",
+          "homepage_offline_policy"
+        ]
+      }
+    },
+    "deployment": {
+      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "plane_binding_domain": "entity",
+      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+    },
+    "display_name": "Entity",
+    "domain": "entity",
+    "metadata_paths": [
+      "entity/homepage"
+    ],
+    "minimum_package": {
+      "codegen_targets": [
+        "go_runtime",
+        "python_runtime",
+        "ops_portal"
+      ],
+      "metadata_files": [
+        "contracts/metadata/entity/homepage/service.yaml",
+        "contracts/metadata/entity/homepage/tests/contract.yaml",
+        "contracts/metadata/entity/homepage/tests/mock.yaml",
+        "contracts/metadata/entity/homepage/tests/e2e.yaml"
+      ],
+      "test_evidence": {
+        "t1": [
+          "contracts/metadata/entity/homepage/service.yaml",
+          "contracts/metadata/entity/homepage/errors.yaml"
+        ],
+        "t2": [
+          "services/entity-service/tests/homepage_handler_test.go",
+          "../quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart"
+        ],
+        "t3": [
+          "contracts/metadata/entity/homepage/tests/e2e.yaml"
+        ],
+        "t4": []
+      }
+    },
+    "replication": {
+      "copy_notes": [
+        "Reuse circle/content packaging constraints while keeping homepage lifecycle contracts in entity/homepage."
+      ],
+      "next_copy_targets": [],
+      "source_template": "circle"
+    },
+    "rollout_group": "wave_1_copy",
+    "service_names": [
+      "entity-service"
+    ],
+    "template_role": "replica_ready",
+    "version": 1
+  },
   "integration": {
     "acceptance_status": "integration_pass",
     "blocking_gaps": [],

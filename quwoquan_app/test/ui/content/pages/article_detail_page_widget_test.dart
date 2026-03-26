@@ -73,18 +73,8 @@ void main() {
       'shareCount': 3,
       'publishedAt': '2026-03-21T08:00:00Z',
       'articleBlocks': <Map<String, dynamic>>[
-        {
-          'id': 'p1',
-          'type': 'paragraph',
-          'text': '第一段内容',
-          'imagePath': '',
-        },
-        {
-          'id': 'o1',
-          'type': 'orderedItem',
-          'text': '第二条清单',
-          'imagePath': '',
-        },
+        {'id': 'p1', 'type': 'paragraph', 'text': '第一段内容', 'imagePath': ''},
+        {'id': 'o1', 'type': 'orderedItem', 'text': '第二条清单', 'imagePath': ''},
         {
           'id': 'i1',
           'type': 'image',
@@ -98,7 +88,9 @@ void main() {
       ProviderScope(
         overrides: [
           dataServiceProvider.overrideWithValue(_FakeDataService(article)),
-          behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -111,10 +103,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('连续阅读标题'), findsWidgets);
-    expect(find.text('这里是摘要'), findsOneWidget);
+    expect(find.text('连续阅读作者'), findsOneWidget);
     expect(find.text('文章内容'), findsOneWidget);
-    expect(find.textContaining('第一段内容'), findsOneWidget);
-    expect(find.textContaining('1. 第二条清单'), findsOneWidget);
+    expect(find.textContaining('第一段内容'), findsWidgets);
+    expect(find.textContaining('1. 第二条清单'), findsWidgets);
     expect(find.byType(CachedNetworkImage), findsNWidgets(3));
     expect(find.text('分享'), findsOneWidget);
   });

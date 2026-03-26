@@ -2,7 +2,16 @@
 
 ## 设计动因
 
-综合搜索的难点不是“展示几个 section”，而是如何在没有统一后端聚合的前提下，仍保持 typed 结果模型、局部降级和稳定跳转。
+综合搜索的难点不是“展示几个 section”，而是如何在统一 `Search` 接口之下，仍保持 typed 结果模型、局部降级和稳定跳转。
+
+## 最新实现基线（2026-03-22）
+
+本 Scenario 的结果编排基线已经从“单页综合结果”切换为“两段式结果组织”：
+
+- 联想页只允许 `最常使用 / 联系人 / 聊天记录 / 搜索网络结果` 四段。
+- 联系人与聊天记录是会话导向结果，点击后直接进入聊天页。
+- 独立网络结果页负责 `小趣搜` assistant 结果与按群组二级分类过滤的内容结果。
+- 因此，下文若仍出现“按四域综合分组”的旧表述，统一以“联想页四段 + 网络结果页 tab”解释。
 
 ## 上游输入评审
 
@@ -10,7 +19,7 @@
 |---|---|
 | `multi-domain-result-composition/spec.md` | 已冻结四域结果分组、局部降级与不混排问小趣 |
 | `multi-domain-result-composition/acceptance.yaml` | `A1/S1` 足以承接实施切片 |
-| `cross-domain-search-journey/design.md` | Journey 已选定 App `SearchCoordinator` + 域级 `Search*` contract |
+| `cross-domain-search-journey/design.md` | Journey 已选定统一 `Search` 接口 + 内部 `SearchCoordinator` + 域级 `Search*` contract |
 
 ## 对标输入分析
 
@@ -41,11 +50,12 @@
 - 当前服务端改造面过大。
 - 不利于一把上线。
 
-### 方案 C：App `SearchCoordinator` 并行调用四域 Repository，结果 typed 分组
+### 方案 C：统一 `Search` 接口内部由 `SearchCoordinator` 并行调用四域 Repository，结果 typed 分组
 
 优点：
 
 - 实施成本与能力边界最平衡。
+- 页面与业务层不需要面对分域搜索接口。
 - 可沿用现有 Repository 模式和 metadata/codegen 主轴。
 
 缺点：
@@ -58,7 +68,7 @@
 
 ## 关键设计决策
 
-### KD1：`SearchCoordinator` 是唯一搜索编排中心
+### KD1：统一 `Search` 接口是页面唯一入口，`SearchCoordinator` 是其内部编排中心
 
 职责：
 
@@ -82,7 +92,7 @@
 - `content`：内容项
 - `user`：社交关系项
 - `messages`：会话项、消息项
-- `circle`：圈子项、facet buckets
+- `circle`：群组项、facet buckets
 
 ### KD4：局部降级优先
 
@@ -133,7 +143,7 @@
 
 ## TDD / ATDD 策略
 
-- `T1_schema`：四域 search DTO 与 unified result model
+- `T1_schema`：统一 `SearchRequest / SearchResponse`、四域 search DTO 与 unified result model
 - `T2_module_interaction`：分组渲染、空态、降级态
 - `T3_cross_service_integration`：并发 fan-out、部分失败
 - `T4_user_journey`：搜索结果进入详情
@@ -142,10 +152,10 @@
 
 | Slice | 目标 | 主要证据 |
 |---|---|---|
-| `P1` | 冻结四域 search contract 和 unified result model | `T1_schema` |
-| `P2` | 落地 `SearchCoordinator` 与 section composition | `T2_module_interaction`, `T3_cross_service_integration` |
+| `P1` | 冻结统一 `Search` 接口、四域 search contract 和 unified result model | `T1_schema` |
+| `P2` | 落地统一 `Search` 接口、`SearchCoordinator` 与 section composition | `T2_module_interaction`, `T3_cross_service_integration` |
 | `P3` | 验证局部降级与结果跳转 | `T2_module_interaction`, `T4_user_journey` |
 
 ## 未来演进
 
-- 后续如果引入统一聚合搜索，也只替换 `SearchCoordinator` 底层数据源，不改 section/item 模型。
+- 后续如果引入统一聚合搜索，也只替换统一 `Search` 接口的底层数据源，不改 section/item 模型。

@@ -14,6 +14,7 @@ class CreateActionSheet extends StatelessWidget {
     required this.onStartGroupChat,
     required this.onAddContact,
     required this.onCancel,
+    this.onCreateCircle,
     this.priority = CreateActionSheetPriority.createPrimary,
   });
 
@@ -21,6 +22,7 @@ class CreateActionSheet extends StatelessWidget {
   final VoidCallback onStartGroupChat;
   final VoidCallback onAddContact;
   final VoidCallback onCancel;
+  final VoidCallback? onCreateCircle;
   final CreateActionSheetPriority priority;
 
   @override
@@ -77,6 +79,11 @@ class CreateActionSheet extends StatelessWidget {
         label: UITextConstants.addSameInterest,
         onPressed: onAddContact,
       ),
+      if (onCreateCircle != null)
+        _SheetActionSpec(
+          label: UITextConstants.createCircle,
+          onPressed: onCreateCircle!,
+        ),
     ];
 
     final orderedGroups = priority == CreateActionSheetPriority.createPrimary

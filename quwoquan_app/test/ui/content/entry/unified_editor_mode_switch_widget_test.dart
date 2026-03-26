@@ -51,7 +51,7 @@ void main() {
 
     expect(find.byKey(TestKeys.createIdentityWork), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatImage), findsNothing);
-    expect(find.text('输入标题（可选）'), findsOneWidget);
+    expect(find.text('输入 H1 标题（可选）'), findsOneWidget);
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
     expect(find.text('从相册加图'), findsNothing);
     expect(find.text('相机补图'), findsNothing);
@@ -72,7 +72,7 @@ void main() {
     expect(find.byKey(TestKeys.createWorkFormatVideo), findsNothing);
   });
 
-  testWidgets('长正文会按分页软上限拆分到文章页中', (tester) async {
+  testWidgets('长正文会进入连续文档并生成多页快照', (tester) async {
     await tester.pumpWidget(_buildCreatePageApp());
     await tester.pumpAndSettle();
 
@@ -87,7 +87,8 @@ void main() {
     final bodyField = tester.widget<CupertinoTextField>(
       find.byKey(TestKeys.createMomentInput),
     );
-    expect(bodyField.controller?.text.length, kArticlePageSoftCharacterLimit);
+    expect(bodyField.controller?.text.length, lessThan(text.length));
+    expect(state.articleDocument.body, text);
     expect(state.articlePages.length, greaterThan(1));
     expect(
       state.articlePages
@@ -107,7 +108,7 @@ void main() {
     expect(find.text('文章编辑'), findsOneWidget);
     expect(find.text('草稿'), findsOneWidget);
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);
-    expect(find.text('输入标题（可选）'), findsOneWidget);
+    expect(find.text('输入 H1 标题（可选）'), findsOneWidget);
     expect(find.text('继续写内容，支持 emoji、图片、序号和模板'), findsOneWidget);
   });
 

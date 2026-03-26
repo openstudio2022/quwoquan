@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/chat-service/internal/application"
@@ -34,6 +35,11 @@ func NewChatHandler(
 func (h *ChatHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealthz)
+	mux.HandleFunc("GET /v1/chat/conversations/search", h.handleSearchConversations)
+	mux.HandleFunc("GET /v1/chat/messages/search", h.handleSearchMessages)
+	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
+	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
+	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
 	RegisterGeneratedRoutes(mux, h)
 	return mux
 }
@@ -68,10 +74,11 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 
 func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Type         string `json:"type"`
-		Title        string `json:"title"`
-		CircleId     string `json:"circleId"`
-		MaxGroupSize int    `json:"maxGroupSize"`
+		Type             string   `json:"type"`
+		Title            string   `json:"title"`
+		CircleId         string   `json:"circleId"`
+		MaxGroupSize     int      `json:"maxGroupSize"`
+		InitialMemberIds []string `json:"initialMemberIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
@@ -80,7 +87,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 
 	conv, err := h.conversationService.CreateConversation(r.Context(), application.CreateConversationRequest{
 		Type: body.Type, Title: body.Title, CircleId: body.CircleId,
-		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r),
+		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
 	})
 	if err != nil {
 		writeHTTPError(w, err)
@@ -312,6 +319,61 @@ func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r 
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/owner", "conversationId")
+	var body struct {
+		NewOwnerId string `json:"newOwnerId"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	err := h.memberService.TransferOwnership(r.Context(), application.TransferOwnershipRequest{
+		ConversationId: convId,
+		OperatorId:     resolveUserID(r),
+		NewOwnerId:     body.NewOwnerId,
+	})
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/admins", "conversationId")
+	var body struct {
+		AdminIds []string `json:"adminIds"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	err := h.memberService.UpdateGroupAdmins(r.Context(), application.UpdateGroupAdminsRequest{
+		ConversationId: convId,
+		OperatorId:     resolveUserID(r),
+		AdminIds:       body.AdminIds,
+	})
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
+	err := h.conversationService.DissolveConversation(r.Context(), application.DissolveConversationRequest{
+		ConversationId: convId,
+		OperatorId:     resolveUserID(r),
+	})
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
 // ── Inbox ────────────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
@@ -344,13 +406,115 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	contacts, err := h.memberService.SearchContacts(r.Context(), query)
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		query = r.URL.Query().Get("q")
+	}
+	limit := queryInt(r, "limit", 20)
+	contacts, err := h.memberService.SearchContacts(
+		r.Context(),
+		resolveUserID(r),
+		query,
+		limit,
+	)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
+	items := make([]map[string]any, 0, len(contacts))
+	cursor := ""
+	for _, contact := range contacts {
+		cursor = contact.ContactID
+		items = append(items, map[string]any{
+			"contactId":        contact.ContactID,
+			"displayName":      contact.DisplayName,
+			"avatarUrl":        contact.AvatarURL,
+			"conversationId":   contact.ConversationID,
+			"conversationType": contact.ConversationType,
+			"subtitle":         contact.Subtitle,
+			"highlightText":    contact.HighlightText,
+			"matchedField":     contact.MatchedField,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
+}
+
+func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("query")
+	limit := queryInt(r, "limit", 20)
+	conversations, err := h.conversationService.SearchConversations(
+		r.Context(),
+		application.SearchConversationsRequest{
+			UserId: resolveUserID(r),
+			Query:  query,
+			Cursor: r.URL.Query().Get("cursor"),
+			Limit:  limit,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(conversations))
+	cursor := ""
+	for _, conversation := range conversations {
+		cursor = conversation.ID
+		highlight := strings.TrimSpace(conversation.LastMessagePreview)
+		if highlight == "" {
+			highlight = conversation.Title
+		}
+		items = append(items, map[string]any{
+			"conversationId":     conversation.ID,
+			"type":               conversation.Type,
+			"title":              conversation.Title,
+			"avatarUrl":          conversation.AvatarUrl,
+			"lastMessagePreview": conversation.LastMessagePreview,
+			"lastMessageTime":    conversation.LastMessageTime,
+			"memberCount":        conversation.MemberCount,
+			"circleId":           conversation.CircleId,
+			"highlightText":      highlight,
+			"matchedField":       "title",
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
+}
+
+func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("query")
+	limit := queryInt(r, "limit", 20)
+	hits, err := h.messageService.SearchMessages(
+		r.Context(),
+		application.SearchMessagesRequest{
+			UserId: resolveUserID(r),
+			Query:  query,
+			Cursor: r.URL.Query().Get("cursor"),
+			Limit:  limit,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(hits))
+	cursor := ""
+	for _, hit := range hits {
+		cursor = hit.Message.ID
+		items = append(items, map[string]any{
+			"messageId":              hit.Message.ID,
+			"conversationId":         hit.Conversation.ID,
+			"conversationTitle":      hit.Conversation.Title,
+			"conversationAvatarUrl":  hit.Conversation.AvatarUrl,
+			"senderProfileSubjectId": "",
+			"senderDisplayName":      hit.Message.SenderId,
+			"senderAvatarUrl":        "",
+			"messageType":            hit.Message.Type,
+			"contentSnippet":         hit.Message.Content,
+			"highlightText":          hit.Message.Content,
+			"matchedField":           "content",
+			"timestamp":              hit.Message.Timestamp,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

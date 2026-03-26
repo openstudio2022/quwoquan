@@ -21,6 +21,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/article_preview_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
@@ -29,13 +30,21 @@ import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_pa
 import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/ios_article_editor.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
 
 class CreatePage extends ConsumerStatefulWidget {
-  const CreatePage({super.key, this.initialAction, this.initialTabKey});
+  const CreatePage({
+    super.key,
+    this.initialAction,
+    this.initialTabKey,
+    this.initialHomepage,
+  });
 
   final EditorStartAction? initialAction;
   final String? initialTabKey;
+  final HomepageCanonicalReference? initialHomepage;
 
   @override
   ConsumerState<CreatePage> createState() => _CreatePageState();
@@ -92,6 +101,14 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       notifier.reset(editorKind: _resolveInitialEditorKind());
       if (widget.initialAction != null) {
         notifier.setStartAction(widget.initialAction);
+      }
+      if (widget.initialHomepage != null) {
+        notifier.setSettings(
+          ref
+              .read(createEditorProvider)
+              .settings
+              .copyWith(homepage: widget.initialHomepage),
+        );
       }
       _syncControllersFromState(ref.read(createEditorProvider));
       await _applyInitialActionIfNeeded();
@@ -201,6 +218,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   String _coverAssetPathForState(CreateEditorStateV2 state) {
+    if (state.editorKind == CreateEditorKind.text) {
+      return _shouldPublishAsArticle(state)
+          ? state.articleCoverImagePath.trim()
+          : '';
+    }
     if (state.hasVideo) {
       if (state.videoThumbnail.trim().isNotEmpty) {
         return state.videoThumbnail.trim();
@@ -592,11 +614,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       }
       var anchorPageId = activePageId;
       for (final path in paths.skip(1)) {
-        final nextPageId = notifier.insertArticlePageAfter(
-          afterPageId: anchorPageId,
-        );
-        notifier.replaceArticlePageImage(nextPageId, path);
-        anchorPageId = nextPageId;
+        anchorPageId = notifier.insertArticleImageAfterPage(anchorPageId, path);
       }
       await _reportEvent('create_media_images_selected', <String, dynamic>{
         'count': paths.length,
@@ -885,9 +903,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             )
             as int;
     final rawNextEnd = (nextDurationMs * endRatio).round();
-    final nextEnd = rawNextEnd.clamp(nextStart + 100, nextDurationMs) as int;
-    final nextCover =
-        (nextDurationMs * coverRatio).round().clamp(nextStart, nextEnd) as int;
+    final nextEnd = rawNextEnd.clamp(nextStart + 100, nextDurationMs);
+    final nextCover = (nextDurationMs * coverRatio).round().clamp(
+      nextStart,
+      nextEnd,
+    );
     final keepsFullRange = nextStart == 0 && nextEnd == nextDurationMs;
     return _VideoEditContext(
       trimStartMs: nextStart,
@@ -924,7 +944,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .setImages(next, editorKind: state.editorKind, currentIndex: index);
   }
 
-  Future<void> _editArticlePageImage(String pageId) async {
+  Future<void> _editArticlePageImage(ArticlePageData page) async {
     final result = await _openMediaPicker(
       mode: MediaPickerEntryMode.image,
       maxSelection: 1,
@@ -938,7 +958,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     ref
         .read(createEditorProvider.notifier)
-        .replaceArticlePageImage(pageId, path);
+        .replaceArticlePageImageFromBinding(page.binding!, path);
   }
 
   Future<List<CreateCircleOption>> _loadJoinedCircles() {
@@ -1041,8 +1061,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     final asArticle = _shouldPublishAsArticle(state);
     if (asArticle) {
-      final articleBody = buildArticlePlainTextFromPages(
-        state.articlePages,
+      final articleBody = buildArticlePlainTextFromDocument(
+        state.articleDocument,
       ).trim();
       return <String, dynamic>{
         'type': 'article',
@@ -1055,6 +1075,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         'coverUrl': coverAssetPath,
         'articleTemplate': state.articleTemplate.name,
         'articleFontPreset': state.articleFontPreset.name,
+        'articleDocument': state.articleDocument.toMap(),
         'articlePages': state.articlePages
             .map((page) => page.toMap())
             .toList(growable: false),
@@ -1345,20 +1366,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                   child: AnimatedPadding(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.containerMd,
-                      AppSpacing.containerSm,
-                      AppSpacing.containerMd,
-                      MediaQuery.viewInsetsOf(context).bottom +
-                          MediaQuery.viewPaddingOf(context).bottom +
-                          AppSpacing.containerSm,
-                    ),
+                    padding: EdgeInsets.only(top: AppSpacing.containerSm),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         if (!_editorV2Enabled) ...<Widget>[
-                          _buildRollbackBanner(
-                            CupertinoColors.secondaryLabel.resolveFrom(context),
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerMd,
+                            ),
+                            child: _buildRollbackBanner(
+                              CupertinoColors.secondaryLabel.resolveFrom(
+                                context,
+                              ),
+                            ),
                           ),
                           SizedBox(height: AppSpacing.interGroupSm),
                         ],
@@ -1538,29 +1559,60 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildTextEditor(CreateEditorStateV2 state) {
-    return IosArticleEditor(
+    return ArticleEditor(
       state: state,
       titleController: _titleController,
       titleFocusNode: _titleFocusNode,
       onTitleChanged: (value) {
         ref.read(createEditorProvider.notifier).updateTitle(value);
       },
-      onUpdatePageText: (pageId, value) {
+      onUpdatePageText: (page, value) {
         ref
             .read(createEditorProvider.notifier)
-            .updateArticlePageText(pageId, value);
+            .updateArticlePageTextFromBinding(page.binding!, value);
       },
       onEditPageImage: _editArticlePageImage,
-      onUpdatePageImageLayout: (pageId, layout) {
+      onUpdatePageImageLayout: (page, layout) {
         ref
             .read(createEditorProvider.notifier)
-            .updateArticlePageImageLayout(pageId, layout);
+            .updateArticlePageImageLayoutFromBinding(page.binding!, layout);
       },
-      onRemovePage: (pageId) {
-        ref.read(createEditorProvider.notifier).removeArticlePage(pageId);
+      onRemovePage: (page) {
+        if (page.contentBlocks.isNotEmpty) {
+          ref
+              .read(createEditorProvider.notifier)
+              .removeArticleBlocks(page.contentBlocks.map((block) => block.id));
+        }
+        ref
+            .read(createEditorProvider.notifier)
+            .removeArticlePageFromBinding(page.binding!);
       },
       onActivePageChanged: (pageId) {
         ref.read(createEditorProvider.notifier).setActiveArticlePage(pageId);
+      },
+      onActiveBlockChanged: (blockId) {
+        ref.read(createEditorProvider.notifier).setActiveArticleBlock(blockId);
+      },
+      onUpdateTextBlock: (blockId, value) {
+        ref
+            .read(createEditorProvider.notifier)
+            .updateArticleTextBlock(blockId, value);
+      },
+      onInsertTextBlock: (afterBlockId, type) {
+        return ref
+            .read(createEditorProvider.notifier)
+            .insertArticleTextBlock(afterBlockId: afterBlockId, type: type);
+      },
+      onUpdateTextBlockType: (blockId, type) {
+        ref
+            .read(createEditorProvider.notifier)
+            .updateArticleTextBlockType(blockId, type);
+      },
+      onRemoveTextBlock: (blockId) {
+        ref.read(createEditorProvider.notifier).removeArticleBlock(blockId);
+      },
+      onCoverChanged: (imagePath) {
+        ref.read(createEditorProvider.notifier).setArticleCoverImage(imagePath);
       },
       onTemplateChanged: (template) {
         ref.read(createEditorProvider.notifier).setArticleTemplate(template);
@@ -2073,8 +2125,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
                                       colors: <Color>[
-                                        AppColors.createMediaFallbackGradientTop,
-                                        AppColors.createMediaFallbackGradientBottom,
+                                        AppColors
+                                            .createMediaFallbackGradientTop,
+                                        AppColors
+                                            .createMediaFallbackGradientBottom,
                                       ],
                                     ),
                                   ),
@@ -2665,159 +2719,83 @@ class _CreatePublishConfirmSheetState
 
   @override
   Widget build(BuildContext context) {
-    final pageBackground = CupertinoColors.systemGroupedBackground.resolveFrom(
-      context,
-    );
-    return CupertinoPageScaffold(
-      key: TestKeys.createPublishConfirmSheet,
-      backgroundColor: pageBackground,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              CupertinoColors.systemBackground
-                  .resolveFrom(context)
-                  .withValues(alpha: 0.92),
-              pageBackground,
-            ],
-          ),
+    return IosSelectionPageScaffold(
+      pageKey: TestKeys.createPublishConfirmSheet,
+      title: UITextConstants.publishSettingsTitle,
+      onBack: () => Navigator.of(context).pop(),
+      backgroundColor: AppColors.iosPageBackground(context),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          AppSpacing.interGroupLg,
         ),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: <Widget>[
-              _buildPublishSettingsHeader(context),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.containerMd,
-                    AppSpacing.containerSm,
-                    AppSpacing.containerMd,
-                    AppSpacing.lg,
-                  ),
-                  children: <Widget>[
-                    _buildSheetEntrance(
-                      visible: _settingsReady,
-                      beginOffsetY: 0.035,
-                      beginScale: 0.988,
-                      child: _buildSettingsCard(context),
-                    ),
-                    if (_hasContentSummary) ...<Widget>[
-                      SizedBox(height: AppSpacing.interGroupMd),
-                      _buildSheetEntrance(
-                        visible: _previewReady,
-                        beginOffsetY: 0.028,
-                        beginScale: 0.992,
-                        child: _buildPreviewCard(context),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              _buildSheetEntrance(
-                visible: _buttonReady,
-                beginOffsetY: 0.045,
-                beginScale: 0.992,
-                child: _buildPublishBottomBar(context),
-              ),
-            ],
+        children: <Widget>[
+          _buildSheetEntrance(
+            visible: _settingsReady,
+            beginOffsetY: 0.035,
+            beginScale: 0.988,
+            child: _buildSettingsCard(context),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPublishSettingsHeader(BuildContext context) {
-    final chrome = CupertinoColors.systemBackground
-        .resolveFrom(context)
-        .withValues(alpha: 0.82);
-    final divider = CupertinoColors.separator
-        .resolveFrom(context)
-        .withValues(alpha: 0.12);
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
-        child: Container(
-          height: AppSpacing.toolbarHeight + AppSpacing.containerSm,
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerSm,
-            AppSpacing.intraGroupXs,
-            AppSpacing.containerSm,
-            AppSpacing.intraGroupXs,
-          ),
-          decoration: BoxDecoration(
-            color: chrome,
-            border: Border(
-              bottom: BorderSide(color: divider, width: AppSpacing.hairline),
+          if (_hasContentSummary) ...<Widget>[
+            SizedBox(height: AppSpacing.interGroupMd),
+            _buildSheetEntrance(
+              visible: _previewReady,
+              beginOffsetY: 0.028,
+              beginScale: 0.992,
+              child: _buildPreviewCard(context),
             ),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: <Widget>[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: _GlassBackButton(
-                  label: '创作',
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-              Text(
-                '发布设置',
-                style: TextStyle(
-                  color: CupertinoColors.label.resolveFrom(context),
-                  fontSize: AppTypography.xl,
-                  fontWeight: AppTypography.semiBold,
-                  letterSpacing: 0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
+          ],
+        ],
+      ),
+      bottomBar: _buildSheetEntrance(
+        visible: _buttonReady,
+        beginOffsetY: 0.045,
+        beginScale: 0.992,
+        child: _buildPublishBottomBar(context),
       ),
     );
   }
 
   Widget _buildSettingsCard(BuildContext context) {
-    final divider = CupertinoColors.separator
-        .resolveFrom(context)
-        .withValues(alpha: 0.14);
-    return Container(
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-        border: Border.all(color: divider, width: AppSpacing.hairline),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: AppSpacing.twenty,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return IosSelectionSection(
       child: Column(
         children: <Widget>[
           _buildSettingRow(
             context: context,
-            title: '谁可以看',
-            value: _settings.isPublic ? '公开' : '仅自己可见',
+            title: UITextConstants.whoCanSeeLabel,
+            value: _settings.isPublic
+                ? UITextConstants.visibilityPublic
+                : '仅自己可见',
             onTap: _pickVisibility,
             borderRadius: BorderRadius.vertical(
               top: Radius.circular(AppSpacing.radiusTwentyEight),
             ),
           ),
-          Divider(height: AppSpacing.one, color: divider),
+          const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           _buildSettingRow(
             context: context,
-            title: '显示位置',
+            title: UITextConstants.locationLabel,
             value: _settings.locationName.trim().isEmpty
-                ? '不显示位置'
+                ? UITextConstants.locationHidden
                 : _settings.locationName.trim(),
             onTap: _pickLocation,
             borderRadius: BorderRadius.zero,
           ),
-          Divider(height: AppSpacing.one, color: divider),
+          const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+          _buildSettingRow(
+            context: context,
+            title: UITextConstants.attachHomepageTitle,
+            value: !_settings.isPublic
+                ? '仅公开内容可关联'
+                : _settings.homepage == null
+                ? UITextConstants.attachHomepageNone
+                : _settings.homepage!.title,
+            onTap: _settings.isPublic ? _pickHomepage : null,
+            borderRadius: BorderRadius.zero,
+          ),
+          const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           _buildSettingRow(
             context: context,
             title: '同步圈子',
@@ -2837,45 +2815,10 @@ class _CreatePublishConfirmSheetState
   }
 
   Widget _buildPublishBottomBar(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.containerSm,
-        AppSpacing.containerMd,
-        MediaQuery.paddingOf(context).bottom + AppSpacing.containerMd,
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            CupertinoColors.systemBackground
-                .resolveFrom(context)
-                .withValues(alpha: 0),
-            CupertinoColors.systemBackground
-                .resolveFrom(context)
-                .withValues(alpha: 0.92),
-          ],
-        ),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: AppSpacing.buttonHeight + AppSpacing.intraGroupXs,
-        child: CupertinoButton(
-          key: TestKeys.createPublishConfirmButton,
-          color: AppColors.iosAccentLight,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-          onPressed: () => Navigator.of(context).pop(_settings),
-          child: const Text(
-            '确认发布',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: AppTypography.xl,
-              fontWeight: AppTypography.medium,
-            ),
-          ),
-        ),
-      ),
+    return IosSelectionBottomBar(
+      confirmButtonKey: TestKeys.createPublishConfirmButton,
+      confirmLabel: '确认发布',
+      onConfirm: () => Navigator.of(context).pop(_settings),
     );
   }
 
@@ -3012,10 +2955,25 @@ class _CreatePublishConfirmSheetState
     VoidCallback? onTap,
     BorderRadius borderRadius = BorderRadius.zero,
   }) {
-    return _PressableSettingRow(
-      title: title,
-      value: value,
+    return IosSelectionOptionTile(
+      title: Text(
+        title,
+        style: TextStyle(
+          color: AppColors.iosLabel(context),
+          fontSize: AppTypography.iosBody,
+          fontWeight: AppTypography.normal,
+        ),
+      ),
+      additionalInfo: value,
+      additionalInfoTextStyle: TextStyle(
+        color: AppColors.iosAccent(context),
+        fontSize: AppTypography.iosBody,
+        fontWeight: AppTypography.normal,
+      ),
+      showChevron: true,
       onTap: onTap,
+      backgroundColor: Colors.transparent,
+      pressedColor: AppColors.iosSecondaryFill(context),
       borderRadius: borderRadius,
     );
   }
@@ -3052,6 +3010,7 @@ class _CreatePublishConfirmSheetState
         isPublic: nextValue,
         circleIds: nextValue ? _settings.circleIds : const <String>[],
         circleNames: nextValue ? _settings.circleNames : const <String>[],
+        clearHomepage: !nextValue,
       );
     });
   }
@@ -3102,245 +3061,23 @@ class _CreatePublishConfirmSheetState
       );
     });
   }
-}
 
-class _GlassBackButton extends StatefulWidget {
-  const _GlassBackButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  State<_GlassBackButton> createState() => _GlassBackButtonState();
-}
-
-class _GlassBackButtonState extends State<_GlassBackButton> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value || !mounted) {
+  Future<void> _pickHomepage() async {
+    if (!mounted) {
+      return;
+    }
+    final result = await context.push<HomepagePickerSelectionResult>(
+      AppRoutePaths.homepagePicker(query: _settings.homepage?.title),
+      extra: HomepagePickerPageRouteExtra(initialSelection: _settings.homepage),
+    );
+    if (!mounted || result == null) {
       return;
     }
     setState(() {
-      _pressed = value;
+      _settings = result.clearSelection
+          ? _settings.copyWith(clearHomepage: true)
+          : _settings.copyWith(homepage: result.selection);
     });
-  }
-
-  Future<void> _handleTap() async {
-    _setPressed(true);
-    HapticFeedback.selectionClick();
-    await Future<void>.delayed(const Duration(milliseconds: 48));
-    if (mounted) {
-      _setPressed(false);
-    }
-    widget.onPressed();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final borderColor = isDark
-        ? CupertinoColors.white.withValues(alpha: 0.1)
-        : CupertinoColors.white.withValues(alpha: 0.52);
-    final glassTop = isDark
-        ? CupertinoColors.systemGrey.withValues(alpha: _pressed ? 0.24 : 0.16)
-        : CupertinoColors.white.withValues(alpha: _pressed ? 0.58 : 0.46);
-    final glassBottom = isDark
-        ? CupertinoColors.systemGrey2.withValues(alpha: _pressed ? 0.16 : 0.1)
-        : CupertinoColors.systemGrey6.withValues(alpha: _pressed ? 0.42 : 0.3);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _setPressed(true),
-      onTapCancel: () => _setPressed(false),
-      onTap: _handleTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.985 : 1,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: _pressed ? 14 : 12,
-              sigmaY: _pressed ? 14 : 12,
-            ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.containerSm,
-                vertical: AppSpacing.intraGroupXs,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[glassTop, glassBottom],
-                ),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                border: Border.all(
-                  color: borderColor,
-                  width: AppSpacing.hairline,
-                ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: _pressed ? 0.04 : 0.03,
-                    ),
-                    blurRadius: _pressed ? 18 : 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    CupertinoIcons.chevron_back,
-                    color: AppColors.iosAccentLight,
-                    size: AppSpacing.iconMedium,
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupXs / 2),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: AppColors.iosAccentLight,
-                      fontSize: AppTypography.base,
-                      fontWeight: AppTypography.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PressableSettingRow extends StatefulWidget {
-  const _PressableSettingRow({
-    required this.title,
-    required this.value,
-    required this.borderRadius,
-    this.onTap,
-  });
-
-  final String title;
-  final String value;
-  final VoidCallback? onTap;
-  final BorderRadius borderRadius;
-
-  @override
-  State<_PressableSettingRow> createState() => _PressableSettingRowState();
-}
-
-class _PressableSettingRowState extends State<_PressableSettingRow> {
-  bool _pressed = false;
-
-  bool get _isEnabled => widget.onTap != null;
-
-  void _setPressed(bool value) {
-    if (!_isEnabled || _pressed == value || !mounted) {
-      return;
-    }
-    setState(() {
-      _pressed = value;
-    });
-  }
-
-  Future<void> _handleTapUp(TapUpDetails details) async {
-    if (!_isEnabled) {
-      return;
-    }
-    HapticFeedback.selectionClick();
-    await Future<void>.delayed(const Duration(milliseconds: 56));
-    if (mounted) {
-      _setPressed(false);
-    }
-    widget.onTap?.call();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final chevronColor = CupertinoColors.tertiaryLabel.resolveFrom(context);
-    final wash = AppColors.iosAccentLight.withValues(alpha: _pressed ? 0.1 : 0);
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: _isEnabled ? 1 : 0.48,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: _isEnabled ? (_) => _setPressed(true) : null,
-        onTapCancel: _isEnabled ? () => _setPressed(false) : null,
-        onTapUp: _isEnabled ? _handleTapUp : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: wash,
-            borderRadius: widget.borderRadius,
-          ),
-          child: SizedBox(
-            height: AppSpacing.buttonHeight + AppSpacing.containerSm,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    flex: 5,
-                    child: Text(
-                      widget.title,
-                      style: TextStyle(
-                        color: CupertinoColors.label.resolveFrom(context),
-                        fontSize: AppTypography.lg,
-                        fontWeight: AppTypography.normal,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.containerSm),
-                  Expanded(
-                    flex: 7,
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      style: TextStyle(
-                        color: AppColors.iosAccentLight.withValues(
-                          alpha: _pressed ? 1 : 0.92,
-                        ),
-                        fontSize: AppTypography.lg,
-                        fontWeight: AppTypography.normal,
-                      ),
-                      child: Text(
-                        widget.value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  AnimatedScale(
-                    scale: _pressed ? 1.03 : 1,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
-                      CupertinoIcons.chevron_forward,
-                      color: chevronColor.withValues(
-                        alpha: _isEnabled ? 1 : 0.6,
-                      ),
-                      size: AppSpacing.iconSmall,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

@@ -1,0 +1,69 @@
+version: 2
+feature: homepage-entry-and-preview
+level: L3_scenario
+source_path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview
+parent_journey: homepage-discovery-and-attach-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结从结果、卡片、发布器进入主页详情或摘要预览的统一语义。
+  journey_bindings:
+    - J1
+    - J3
+  in_scope:
+    - 主页预览摘要
+    - 主页详情入口
+    - 返回上下文保留
+  out_of_scope:
+    - 主页完整阅读
+    - 发布写入
+
+scenario_acceptance:
+  A1:
+    title: 用户可稳定进入主页并返回原上下文
+    scenario: homepage entry and preview
+    journey_step: preview homepage -> open detail -> return
+    done_when:
+      - 用户可从搜索结果、内容卡片或发布器进入主页详情
+      - 进入前可看到足够的摘要预览
+      - 返回后原搜索或发布上下文仍保留
+    edge_cases:
+      - 详情加载失败可回退
+      - 不同入口的返回路径一致可预期
+    linked_plan_items:
+      - P1
+      - P3
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - homepage entry and preview journey test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 主页详情入口的路由与上下文可治理
+    done_when:
+      - 主页详情 route 和 surface 已明确
+      - 不同入口不再各写一套详情跳转
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - homepage detail route review
+      recorded: []
+    status: pending

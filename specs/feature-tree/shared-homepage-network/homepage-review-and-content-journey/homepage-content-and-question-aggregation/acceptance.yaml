@@ -1,0 +1,70 @@
+version: 2
+feature: homepage-content-and-question-aggregation
+level: L3_scenario
+source_path: shared-homepage-network/homepage-review-and-content-journey/homepage-content-and-question-aggregation
+parent_journey: homepage-review-and-content-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结主页中的内容和提问聚合面，明确主页只消费内容域结果。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - 内容聚合
+    - 提问聚合
+    - 基础筛选
+  out_of_scope:
+    - 内容详情页
+    - 提问写入
+
+scenario_acceptance:
+  A1:
+    title: 主页内容与提问聚合可稳定工作
+    scenario: homepage content and question aggregation
+    journey_step: browse homepage content and questions
+    done_when:
+      - 主页可展示与当前主页绑定的笔记、作品、提问
+      - 内容和提问边界清晰
+      - 回流后的新内容能在主页聚合面出现
+    edge_cases:
+      - 暂无内容或暂无提问时有空态
+      - 聚合失败时为模块级错误
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage content aggregation test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 主页聚合字段与内容域边界清晰
+    done_when:
+      - 主页聚合依赖的主页引用字段已冻结
+      - 不存在主页自建第二套内容模型
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage aggregation contract review
+      recorded: []
+    status: pending

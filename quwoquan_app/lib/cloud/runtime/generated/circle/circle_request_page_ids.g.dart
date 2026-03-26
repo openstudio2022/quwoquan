@@ -5,50 +5,68 @@ class CircleRequestPageIds {
   const CircleRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'ApplyJoinCircleGroup': 'circle.apply.join.circle.group',
+    'ApproveCircleGroupMember': 'circle.approve.circle.group.member',
     'ArchiveCircle': 'circle.archive',
     'CreateCircle': 'circle.create',
     'CreateCircleFile': 'circle.files.create',
+    'CreateCircleGroup': 'circle.create.circle.group',
     'DeleteCircleFile': 'circle.files.delete',
     'FeatureCirclePost': 'circle.post.feature',
     'GetCircle': 'circle.get',
     'GetCircleFeed': 'circle.feed.list',
     'GetCircleFile': 'circle.files.get',
+    'GetCircleGroup': 'circle.get.circle.group',
     'GetCircleStats': 'circle.stats',
     'JoinCircle': 'circle.join',
     'LeaveCircle': 'circle.leave',
     'ListCircleFiles': 'circle.files.list',
+    'ListCircleGroupMembers': 'circle.list.circle.group.members',
+    'ListCircleGroups': 'circle.list.circle.groups',
     'ListCircleMembers': 'circle.members.list',
     'ListCircles': 'circle.list',
     'ListUserCircles': 'circle.user.list',
     'PinCirclePost': 'circle.post.pin',
+    'RejectCircleGroupMember': 'circle.reject.circle.group.member',
     'ReportCircleBehavior': 'circle.behaviors.report',
+    'SearchCircleGroups': 'circle.search.circle.groups',
     'SearchCircles': 'circle.search',
     'UpdateCircle': 'circle.update',
     'UpdateCircleFile': 'circle.files.update',
+    'UpdateCircleGroup': 'circle.update.circle.group',
     'UpdateCircleSections': 'circle.sections.update',
     'UpdateMemberRole': 'circle.members.updateRole',
   };
 
+  static const String applyJoinCircleGroup = 'circle.apply.join.circle.group';
+  static const String approveCircleGroupMember = 'circle.approve.circle.group.member';
   static const String archiveCircle = 'circle.archive';
   static const String createCircle = 'circle.create';
   static const String createCircleFile = 'circle.files.create';
+  static const String createCircleGroup = 'circle.create.circle.group';
   static const String deleteCircleFile = 'circle.files.delete';
   static const String featureCirclePost = 'circle.post.feature';
   static const String getCircle = 'circle.get';
   static const String getCircleFeed = 'circle.feed.list';
   static const String getCircleFile = 'circle.files.get';
+  static const String getCircleGroup = 'circle.get.circle.group';
   static const String getCircleStats = 'circle.stats';
   static const String joinCircle = 'circle.join';
   static const String leaveCircle = 'circle.leave';
   static const String listCircleFiles = 'circle.files.list';
+  static const String listCircleGroupMembers = 'circle.list.circle.group.members';
+  static const String listCircleGroups = 'circle.list.circle.groups';
   static const String listCircleMembers = 'circle.members.list';
   static const String listCircles = 'circle.list';
   static const String listUserCircles = 'circle.user.list';
   static const String pinCirclePost = 'circle.post.pin';
+  static const String rejectCircleGroupMember = 'circle.reject.circle.group.member';
   static const String reportCircleBehavior = 'circle.behaviors.report';
+  static const String searchCircleGroups = 'circle.search.circle.groups';
   static const String searchCircles = 'circle.search';
   static const String updateCircle = 'circle.update';
   static const String updateCircleFile = 'circle.files.update';
+  static const String updateCircleGroup = 'circle.update.circle.group';
   static const String updateCircleSections = 'circle.sections.update';
   static const String updateMemberRole = 'circle.members.updateRole';
 }

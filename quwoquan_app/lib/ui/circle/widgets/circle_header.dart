@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 class CircleHeader extends StatelessWidget {
   const CircleHeader({
@@ -28,7 +29,7 @@ class CircleHeader extends StatelessWidget {
   static double get avatarIntrusion => avatarOuterDiameter * 0.34;
 
   Widget _buildAvatar(Color bg, Color fgSecondary) {
-    final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
+    final avatarProvider = circleImageProvider(avatarUrl);
     return Container(
       key: const ValueKey<String>('circle-header-avatar'),
       decoration: BoxDecoration(
@@ -42,11 +43,11 @@ class CircleHeader extends StatelessWidget {
           ),
         ],
       ),
-      child: hasAvatar
+      child: avatarProvider != null
           ? CircleAvatar(
               radius: avatarRadius,
               backgroundColor: fgSecondary.withValues(alpha: 0.2),
-              backgroundImage: NetworkImage(avatarUrl!),
+              backgroundImage: avatarProvider,
               onBackgroundImageError: (e, s) {},
             )
           : CircleAvatar(

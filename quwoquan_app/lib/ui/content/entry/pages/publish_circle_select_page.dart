@@ -1,10 +1,12 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
 /// 发布圈子选择页（design §3.7）
 ///
@@ -28,6 +30,8 @@ class PublishCircleSelectPage extends StatefulWidget {
 }
 
 class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
+  static const double _kCoverSize = AppSpacing.avatarUserLg;
+
   late Map<String, String> _selected;
 
   @override
@@ -39,325 +43,163 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
-    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
-    final dividerClr = SettingsSemanticConstants.dividerColor(isDark);
-    final blue = AppColors.primaryColor;
-
     final hasJoined = widget.joinedCircles.isNotEmpty;
     final hasRecommended = widget.recommendedCircles.isNotEmpty;
 
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          l10n.selectCircle,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: FontWeight.w600,
-            color: isDark ? CupertinoColors.white : CupertinoColors.black,
+    return IosSelectionPageScaffold(
+      pageKey: TestKeys.publishCircleSelectPage,
+      title: l10n.selectCircle,
+      onBack: () => Navigator.of(context).pop<Map<String, String>?>(null),
+      backgroundColor: AppColors.iosPageBackground(context),
+      body: CustomScrollView(
+        slivers: <Widget>[
+          const SliverToBoxAdapter(
+            child: SizedBox(height: AppSpacing.intraGroupXs),
           ),
-        ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.xmark),
-          onPressed: () =>
-              Navigator.of(context).pop<Map<String, String>?>(null),
-        ),
+          if (hasJoined) ...<Widget>[
+            SliverToBoxAdapter(
+              child: IosSelectionSectionHeader(title: l10n.circleJoinedSection),
+            ),
+            _buildSection(widget.joinedCircles),
+          ],
+          if (hasRecommended) ...<Widget>[
+            SliverToBoxAdapter(
+              child: IosSelectionSectionHeader(
+                title: l10n.circleRecommendedSection,
+              ),
+            ),
+            _buildSection(widget.recommendedCircles),
+          ],
+          if (!hasJoined && !hasRecommended)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildEmptyState(context, l10n),
+            )
+          else
+            const SliverToBoxAdapter(
+              child: SizedBox(height: AppSpacing.interGroupMd),
+            ),
+        ],
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: CustomScrollView(
-                  slivers: [
-                    if (!hasJoined) ...[
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal:
-                                SettingsSemanticConstants.blockHorizontalPadding,
-                            vertical: AppSpacing.interGroupMd,
-                          ),
-                          child: Text(
-                            l10n.noCirclesAvailable,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (hasJoined) ...[
-                      _sectionHeader(l10n.circleJoinedSection, fgSecondary),
-                      SliverToBoxAdapter(
-                        child: Container(
-                          margin: EdgeInsets.symmetric(
-                            horizontal:
-                                SettingsSemanticConstants.blockHorizontalPadding,
-                            vertical: AppSpacing.sm,
-                          ),
-                          decoration: BoxDecoration(
-                            color: blockBg,
-                            borderRadius: BorderRadius.circular(
-                              SettingsSemanticConstants.blockBorderRadius,
-                            ),
-                            border: Border.all(
-                              color: SettingsSemanticConstants.blockBorderColor(
-                                isDark,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              for (
-                                var i = 0;
-                                i < widget.joinedCircles.length;
-                                i++
-                              ) ...[
-                                if (i > 0)
-                                  Divider(
-                                    height: AppSpacing.one,
-                                    color: dividerClr,
-                                    thickness: SettingsSemanticConstants
-                                        .dividerThickness,
-                                  ),
-                                _buildJoinedTile(
-                                  widget.joinedCircles[i],
-                                  l10n,
-                                  fgPrimary,
-                                  fgSecondary,
-                                  blue,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (hasRecommended) ...[
-                      _sectionHeader(
-                        l10n.circleRecommendedSection,
-                        fgSecondary,
-                      ),
-                      SliverToBoxAdapter(
-                        child: Container(
-                          margin: EdgeInsets.symmetric(
-                            horizontal:
-                                SettingsSemanticConstants.blockHorizontalPadding,
-                            vertical: AppSpacing.sm,
-                          ),
-                          decoration: BoxDecoration(
-                            color: blockBg,
-                            borderRadius: BorderRadius.circular(
-                              SettingsSemanticConstants.blockBorderRadius,
-                            ),
-                            border: Border.all(
-                              color: SettingsSemanticConstants.blockBorderColor(
-                                isDark,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              for (
-                                var i = 0;
-                                i < widget.recommendedCircles.length;
-                                i++
-                              ) ...[
-                                if (i > 0)
-                                  Divider(
-                                    height: AppSpacing.one,
-                                    color: dividerClr,
-                                    thickness: SettingsSemanticConstants
-                                        .dividerThickness,
-                                  ),
-                                _buildRecommendedTile(
-                                  widget.recommendedCircles[i],
-                                  l10n,
-                                  fgPrimary,
-                                  fgSecondary,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (!hasJoined && !hasRecommended)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _buildEmptyState(context, l10n, fgSecondary),
-                      ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-                  vertical: AppSpacing.interGroupMd,
-                ),
-                decoration: BoxDecoration(
-                  color: SettingsSemanticConstants.pageBackground(isDark),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: CupertinoButton(
-                        onPressed: () =>
-                            Navigator.of(context).pop<Map<String, String>?>(null),
-                        child: Text(l10n.cancel),
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.interGroupMd),
-                    Expanded(
-                      child: CupertinoButton.filled(
-                        onPressed: () => Navigator.of(context).pop(_selected),
-                        child: Text(l10n.confirm),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomBar: IosSelectionBottomBar(
+        cancelButtonKey: TestKeys.publishCircleCancelButton,
+        confirmButtonKey: TestKeys.publishCircleConfirmButton,
+        onCancel: () => Navigator.of(context).pop<Map<String, String>?>(null),
+        onConfirm: () => Navigator.of(context).pop(_selected),
       ),
     );
   }
 
-  Widget _sectionHeader(String title, Color color) {
+  Widget _buildSection(List<CreateCircleOption> circles) {
     return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          SettingsSemanticConstants.blockHorizontalPadding,
-          AppSpacing.interGroupMd,
-          SettingsSemanticConstants.blockHorizontalPadding,
-          AppSpacing.sm,
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.semiBold,
-            color: color,
-          ),
-        ),
+      child: Column(
+        children: <Widget>[
+          for (var i = 0; i < circles.length; i++) ...<Widget>[
+            _buildCircleTile(circles[i]),
+            if (i != circles.length - 1) _buildSectionDivider(),
+          ],
+          const SizedBox(height: AppSpacing.interGroupSm),
+        ],
       ),
     );
   }
 
-  Widget _buildJoinedTile(
-    CreateCircleOption circle,
-    AppLocalizations l10n,
-    Color fgPrimary,
-    Color fgSecondary,
-    Color blue,
-  ) {
-    final subtitle = circle.memberCount != null
-        ? l10n.circleMemberCountJoined(circle.memberCount!)
-        : l10n.circleJoinedLabel;
-    return _buildSelectableTile(
-      circle: circle,
-      subtitle: subtitle,
-      fgPrimary: fgPrimary,
-      fgSecondary: fgSecondary,
-      blue: blue,
-    );
-  }
-
-  Widget _buildRecommendedTile(
-    CreateCircleOption circle,
-    AppLocalizations l10n,
-    Color fgPrimary,
-    Color fgSecondary,
-  ) {
-    final reason = circle.recommendationReason ?? '';
-    final count = circle.memberCount ?? 0;
-    final subtitle = reason.isNotEmpty && count > 0
-        ? l10n.circleRecommendedSubtitle(reason, count)
-        : count > 0
-        ? '$count ${l10n.circleMembers}'
-        : null;
-    return _buildSelectableTile(
-      circle: circle,
-      subtitle: subtitle,
-      fgPrimary: fgPrimary,
-      fgSecondary: fgSecondary,
-      blue: AppColors.primaryColor,
-    );
-  }
-
-  Widget _buildSelectableTile({
-    required CreateCircleOption circle,
-    required String? subtitle,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blue,
-  }) {
+  Widget _buildCircleTile(CreateCircleOption circle) {
     final checked = _selected.containsKey(circle.id);
-    return CupertinoListTile(
-      leadingSize: AppSpacing.minInteractiveSize,
-      leading: CircleAvatar(
-        radius: AppSpacing.avatarUserMd / 2,
-        backgroundColor: blue.withValues(alpha: 0.16),
-        child: Text(
-          circle.name.isNotEmpty ? circle.name[0] : '?',
-          style: TextStyle(
-            color: blue,
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ),
-      ),
+    final subtitle = _buildSubtitle(circle);
+    return IosSelectionOptionTile(
+      key: ValueKey<String>('publish_circle_tile_${circle.id}'),
+      backgroundColor: AppColors.iosSystemBackground(context),
+      pressedColor: AppColors.iosSecondaryFill(context),
+      leading: _buildCircleCover(circle),
       title: Text(
         circle.name,
-        style: TextStyle(
-          fontSize: AppTypography.lg,
-          fontWeight: AppTypography.medium,
-          color: fgPrimary,
-        ),
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.iosSubheadline,
+          fontWeight: AppTypography.medium,
+          color: AppColors.iosLabel(context),
+        ),
       ),
-      subtitle: subtitle == null
+      subtitle: subtitle.isEmpty
           ? null
           : Text(
               subtitle,
-              style: TextStyle(fontSize: AppTypography.xs, color: fgSecondary),
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
             ),
-      trailing: _buildSelectionIndicator(
-        checked: checked,
-        onTap: () => _toggleSelection(circle),
-      ),
+      trailing: _buildSelectionIndicator(checked: checked),
       onTap: () => _toggleSelection(circle),
     );
   }
 
-  Widget _buildSelectionIndicator({
-    required bool checked,
-    required VoidCallback onTap,
-  }) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
+  String _buildSubtitle(CreateCircleOption circle) {
+    final parts = <String>[
+      if (circle.memberCount != null)
+        '${formatCompactActionCount(circle.memberCount!)} ${UITextConstants.circleMembers}',
+      if (circle.postCount != null)
+        '${formatCompactActionCount(circle.postCount!)} ${UITextConstants.circleWorksCountSuffix}',
+      if ((circle.recommendationReason ?? '').trim().isNotEmpty)
+        circle.recommendationReason!.trim(),
+    ];
+    return parts.join(' · ');
+  }
+
+  Widget _buildCircleCover(CreateCircleOption circle) {
+    final fallback = ColoredBox(
+      color: AppColors.iosSecondaryFill(context),
+      child: Center(
+        child: Icon(
+          CupertinoIcons.person_3_fill,
+          color: AppColors.iosSecondaryLabel(context),
+        ),
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(
+        AppSpacing.contentPreviewCornerRadius,
+      ),
       child: SizedBox(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
-        child: Center(
-          child: Icon(
-            checked
-                ? CupertinoIcons.check_mark_circled_solid
-                : CupertinoIcons.circle,
-            size: AppSpacing.iconMedium,
-            color: checked
-                ? AppColors.primaryColor
-                : CupertinoColors.systemGrey2,
-          ),
+        width: _kCoverSize,
+        height: _kCoverSize,
+        child: (circle.coverUrl ?? '').trim().isEmpty
+            ? fallback
+            : CircleMediaImage(
+                imageSource: circle.coverUrl!,
+                fit: BoxFit.cover,
+                placeholder: fallback,
+                errorWidget: fallback,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSectionDivider() {
+    return IosSelectionInlineDivider(
+      indent: AppSpacing.containerMd + _kCoverSize + AppSpacing.containerSm,
+      endIndent: AppSpacing.containerMd,
+    );
+  }
+
+  Widget _buildSelectionIndicator({required bool checked}) {
+    return SizedBox(
+      width: AppSpacing.minInteractiveSize,
+      height: AppSpacing.minInteractiveSize,
+      child: Center(
+        child: Icon(
+          checked
+              ? CupertinoIcons.check_mark_circled_solid
+              : CupertinoIcons.circle,
+          size: AppSpacing.iconMedium,
+          color: checked
+              ? AppColors.primaryColor
+              : CupertinoColors.systemGrey2.resolveFrom(context),
         ),
       ),
     );
@@ -373,34 +215,78 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
     });
   }
 
-  Widget _buildEmptyState(
-    BuildContext context,
-    AppLocalizations l10n,
-    Color fgSecondary,
-  ) {
+  Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(
-          SettingsSemanticConstants.blockHorizontalPadding,
+        padding: EdgeInsets.all(AppSpacing.containerLg),
+        child: IosSelectionSection(
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.containerLg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  l10n.noCirclesAvailable,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosBody,
+                    color: fgSecondary,
+                    height: AppTypography.bodyLineHeight,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.interGroupMd),
+                SizedBox(
+                  width: double.infinity,
+                  child: _CircleGhostActionButton(
+                    label: l10n.goToDiscovery,
+                    onPressed: () => context.go(AppRoutePaths.home),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              l10n.noCirclesAvailable,
-              style: TextStyle(
-                fontSize: AppTypography.lg,
-                color: fgSecondary,
-                height: AppTypography.bodyLineHeight,
-              ),
-              textAlign: TextAlign.center,
+      ),
+    );
+  }
+}
+
+class _CircleGhostActionButton extends StatelessWidget {
+  const _CircleGhostActionButton({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
+    return SizedBox(
+      height: AppSpacing.buttonHeight + AppSpacing.intraGroupSm,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.iosProfileSurface(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.2),
+            width: AppSpacing.hairline,
+          ),
+        ),
+        child: CupertinoButton(
+          padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+          onPressed: onPressed,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: accent,
+              fontSize: AppTypography.iosButton,
+              fontWeight: AppTypography.semiBold,
             ),
-            SizedBox(height: AppSpacing.interGroupLg),
-            CupertinoButton.filled(
-              onPressed: () => context.go(AppRoutePaths.home),
-              child: Text(l10n.goToDiscovery),
-            ),
-          ],
+          ),
         ),
       ),
     );

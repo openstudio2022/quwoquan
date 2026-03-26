@@ -10,6 +10,7 @@ import (
 
 type UserHandler struct {
 	profile          *application.ProfileService
+	search           *application.SearchService
 	follow           *application.FollowService
 	block            *application.BlockService
 	persona          *application.PersonaService
@@ -24,6 +25,7 @@ type UserHandler struct {
 
 func NewUserHandler(
 	profile *application.ProfileService,
+	search *application.SearchService,
 	follow *application.FollowService,
 	block *application.BlockService,
 	persona *application.PersonaService,
@@ -37,6 +39,7 @@ func NewUserHandler(
 ) *UserHandler {
 	return &UserHandler{
 		profile:          profile,
+		search:           search,
 		follow:           follow,
 		block:            block,
 		persona:          persona,
@@ -61,6 +64,11 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/user/profile", h.handleUpdateProfile)
 	mux.HandleFunc("GET /v1/me", h.handleGetMeProfile)
 	mux.HandleFunc("GET /v1/user/{subAccountId}", h.handleGetSubAccountProfile)
+	mux.HandleFunc("GET /v1/user/search/social-relations", h.handleSearchSocialRelations)
+	mux.HandleFunc("GET /v1/user/search/recent", h.handleListRecentSearches)
+	mux.HandleFunc("PUT /v1/user/search/recent/{entryId}", h.handleUpsertRecentSearch)
+	mux.HandleFunc("DELETE /v1/user/search/recent/{entryId}", h.handleDeleteRecentSearch)
+	mux.HandleFunc("DELETE /v1/user/search/recent", h.handleClearRecentSearches)
 
 	mux.HandleFunc("POST /v1/user/follow/{targetUserId}", h.handleFollow)
 	mux.HandleFunc("DELETE /v1/user/follow/{targetUserId}", h.handleUnfollow)
@@ -183,6 +191,128 @@ func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, view)
 }
 
+func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http.Request) {
+	viewerID := userIDFromHeader(r)
+	if viewerID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []map[string]any{}, "cursor": ""})
+		return
+	}
+	items, err := h.search.SearchSocialRelations(r.Context(), query, parseLimit(r, 20))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	for _, item := range items {
+		targetProfileSubjectID := strings.TrimSpace(anyString(item["profileSubjectId"]))
+		targetOwnerID := strings.TrimSpace(anyString(item["ownerUserId"]))
+		targetSubAccountID := strings.TrimSpace(anyString(item["subAccountId"]))
+		relationTargetID := targetOwnerID
+		if relationTargetID == "" {
+			relationTargetID = targetProfileSubjectID
+		}
+
+		rel, _ := h.follow.GetRelationship(r.Context(), viewerID, relationTargetID)
+		isBlocked, _ := h.block.CheckBlocked(r.Context(), viewerID, relationTargetID)
+		isBlockedBy, _ := h.block.CheckBlocked(r.Context(), relationTargetID, viewerID)
+		capability := buildRelationshipCapabilityView(
+			viewerID,
+			relationTargetID,
+			rel,
+			isBlocked,
+			isBlockedBy,
+		)
+		capability["targetProfileSubjectId"] = targetProfileSubjectID
+		if targetSubAccountID != "" {
+			capability["targetSubAccountId"] = targetSubAccountID
+		}
+		item["relationshipCapability"] = capability
+		item["chatAvailable"] = capability["canOpenConversation"] == true
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": ""})
+}
+
+func (h *UserHandler) handleListRecentSearches(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	items, err := h.search.ListRecentSearches(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *UserHandler) handleUpsertRecentSearch(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	entryID := strings.TrimSpace(r.PathValue("entryId"))
+	if entryID == "" {
+		writeInvalidArg(w, "entryId is required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	if strings.TrimSpace(anyString(body["query"])) == "" {
+		writeInvalidArg(w, "query is required")
+		return
+	}
+	entry, created, err := h.search.UpsertRecentSearch(r.Context(), userID, entryID, body)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, entry)
+}
+
+func (h *UserHandler) handleDeleteRecentSearch(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	entryID := strings.TrimSpace(r.PathValue("entryId"))
+	if entryID == "" {
+		writeInvalidArg(w, "entryId is required")
+		return
+	}
+	if err := h.search.DeleteRecentSearch(r.Context(), userID, entryID); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *UserHandler) handleClearRecentSearches(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	if err := h.search.ClearRecentSearches(r.Context(), userID); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
 func appErrNicknameTaken(msg string) error {
 	return appErr("AppErrorFromNicknameTaken", msg)
 }
@@ -200,6 +330,16 @@ func appErrFromMsg(msg string) error {
 
 func appErrNickname(msg string) error {
 	return (&nickErr{msg: msg})
+}
+
+func anyString(value any) string {
+	if value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
 }
 
 type nickErr struct{ msg string }

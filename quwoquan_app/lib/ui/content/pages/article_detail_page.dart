@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -182,7 +183,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          minSize: 0,
+          minimumSize: Size.zero,
           onPressed: _openAssistantHalfSheet,
           child: Icon(
             Icons.auto_awesome,
@@ -210,30 +211,60 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                   SizedBox(height: AppSpacing.interGroupMd),
                   _ArticleSectionLabel(label: context.l10n.articleContent),
                   SizedBox(height: AppSpacing.intraGroupSm),
-                  if (article.pages.isNotEmpty)
-                    ...article.pages.asMap().entries.map(
-                      (entry) => Padding(
-                        padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
-                        child: ArticlePageShell(
-                          template: article.template,
-                          fontPreset: article.fontPreset,
-                          pageIndex: entry.key,
-                          totalPages: article.pages.length,
-                          child: ArticlePageReadOnlyView(
-                            page: entry.value,
-                            template: article.template,
-                            fontPreset: article.fontPreset,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    ...article.contentBlocks.map(
-                      (block) => Padding(
-                        padding: EdgeInsets.only(bottom: AppSpacing.interGroupSm),
-                        child: ArticleContentBlockRenderer(block: block),
-                      ),
-                    ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final pages = resolvePaginatedArticlePages(
+                        context: context,
+                        constraints: constraints,
+                        document: article.document,
+                        template: article.template,
+                        fontPreset: article.fontPreset,
+                        fallbackPages: article.pages,
+                        variant: ArticleCanvasVariant.detail,
+                      );
+                      final metrics = resolveArticleCanvasMetrics(
+                        context,
+                        constraints,
+                        variant: ArticleCanvasVariant.detail,
+                      );
+                      if (pages.isEmpty) {
+                        return Column(
+                          children: article.contentBlocks.map(
+                            (block) {
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: AppSpacing.interGroupSm,
+                                ),
+                                child: ArticleContentBlockRenderer(block: block),
+                              );
+                            },
+                          ).toList(growable: false),
+                        );
+                      }
+                      return Column(
+                        children: pages.asMap().entries.map((entry) {
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: AppSpacing.interGroupMd,
+                            ),
+                            child: ArticlePageShell(
+                              template: article.template,
+                              fontPreset: article.fontPreset,
+                              pageIndex: entry.key,
+                              totalPages: pages.length,
+                              aspectRatio: metrics.aspectRatio,
+                              contentPadding: metrics.contentPadding,
+                              child: ArticlePageReadOnlyView(
+                                page: entry.value,
+                                template: article.template,
+                                fontPreset: article.fontPreset,
+                              ),
+                            ),
+                          );
+                        }).toList(growable: false),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -539,7 +570,7 @@ class _BottomAction extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: SizedBox(
         width: AppSpacing.largeButtonSize,
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -1,0 +1,70 @@
+version: 1
+node: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-attach-in-publish-flow
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage attach write contract
+    goal: 冻结主页引用字段、四类内容绑定规则与发布 payload 结构
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `primaryHomepageId/type/snapshot` 成为正式字段
+      - 口碑与其它内容的绑定规则明确
+    status: planned
+
+  - id: P2
+    title: land homepage selection in shared composer settings
+    goal: 让全局发布器消费同一份主页设置模型，而不是分叉出第二套写法
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - picker 选择结果可进入 `PublishSettings`
+      - 非口碑场景允许更换或移除主页
+    status: planned
+
+  - id: P3
+    title: wire contextual publish entry and aggregation return flow
+    goal: 打通主页详情进入发布器、默认带入主页和发布后回流主页聚合
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 从主页进入发布器时当前主页默认已选中
+      - 发布成功后内容能出现在主页聚合面
+    status: planned
+
+  - id: P4
+    title: harden homepage attach contract regression tests
+    goal: 为主页写入 payload、回流聚合和上下文带入补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 发布 payload 的 canonical homepage 合约有稳定测试
+      - contextual publish 到主页回流可回归
+    status: planned

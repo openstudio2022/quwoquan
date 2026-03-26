@@ -5,10 +5,75 @@
 // - works：作品集（id / type / title / coverUrl / likeCount / date / desc）
 // - lifeItems：生活记录（id / name / category / categoryKey / coverUrl / desc）
 // 待 contracts/metadata/user/service.yaml 定义后，此文件由 make codegen-app 驱动替换。
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+
+enum MockProfileRelationState {
+  self,
+  notFollowing,
+  following,
+  followedBy,
+  mutual,
+}
 
 class UserProfileMockData {
   UserProfileMockData._();
+
+  /// 统一维护 mock 模式下“我”和作者主页之间的四态关系。
+  ///
+  /// 重点覆盖首页关注流里的 `u1 ~ u4`，方便直接验证：
+  /// - `u1`: 互关
+  /// - `u2`: 对方关注我，我未关注对方
+  /// - `u3`: 双方都未关注
+  /// - `u4`: 我关注对方，对方未关注我
+  static const Map<String, MockProfileRelationState> _relationStateByUserId =
+      <String, MockProfileRelationState>{
+        'u1': MockProfileRelationState.mutual,
+        'u2': MockProfileRelationState.followedBy,
+        'u3': MockProfileRelationState.notFollowing,
+        'u4': MockProfileRelationState.following,
+        'nature_photographer': MockProfileRelationState.mutual,
+        'travel_photographer': MockProfileRelationState.following,
+        'street_photo': MockProfileRelationState.followedBy,
+        'a1': MockProfileRelationState.notFollowing,
+        'a2': MockProfileRelationState.following,
+        'a3': MockProfileRelationState.followedBy,
+        'tech_daily': MockProfileRelationState.notFollowing,
+        'mo_yun': MockProfileRelationState.mutual,
+        'travel_notes': MockProfileRelationState.following,
+        'chef_mario': MockProfileRelationState.notFollowing,
+        'design_guru': MockProfileRelationState.followedBy,
+      };
+
+  static MockProfileRelationState relationStateFor(String userId) {
+    if (userId == ChatMockData.currentUserProfileId) {
+      return MockProfileRelationState.self;
+    }
+    return _relationStateByUserId[userId] ??
+        MockProfileRelationState.notFollowing;
+  }
+
+  static String relationStateValueFor(String userId) {
+    return switch (relationStateFor(userId)) {
+      MockProfileRelationState.self => 'self',
+      MockProfileRelationState.notFollowing => 'not_following',
+      MockProfileRelationState.following => 'following',
+      MockProfileRelationState.followedBy => 'followed_by',
+      MockProfileRelationState.mutual => 'mutual',
+    };
+  }
+
+  static bool viewerFollowsTarget(String userId) {
+    final state = relationStateFor(userId);
+    return state == MockProfileRelationState.following ||
+        state == MockProfileRelationState.mutual;
+  }
+
+  static bool targetFollowsViewer(String userId) {
+    final state = relationStateFor(userId);
+    return state == MockProfileRelationState.followedBy ||
+        state == MockProfileRelationState.mutual;
+  }
 
   // ─── 用户帖子（与 ContentMockData 同源 DTO，模拟用户自己发的内容）────────────
 
@@ -21,8 +86,11 @@ class UserProfileMockData {
         'displayName': _displayNameFor(userId),
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
-        'coverUrl': 'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
-        'imageUrls': ['https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=800'],
+        'coverUrl':
+            'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+        'imageUrls': [
+          'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=800',
+        ],
         'width': 800,
         'height': 600,
         'body': '光影的节奏',
@@ -39,8 +107,10 @@ class UserProfileMockData {
         'displayName': _displayNameFor(userId),
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
-        'videoUrl': 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'thumbnailUrl': 'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+        'videoUrl':
+            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+        'thumbnailUrl':
+            'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
         'width': 720,
         'height': 1280,
         'durationMs': 30000,
@@ -60,7 +130,8 @@ class UserProfileMockData {
         'authorBackgroundUrl': _backgroundFor(userId),
         'title': '极简摄影的真谛',
         'body': '通过剥离不必要的元素，我们才能看见事物的本质。这是一篇关于极简主义摄影的思考与实践。',
-        'coverUrl': 'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+        'coverUrl':
+            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
         'likeCount': 2100,
         'commentCount': 78,
         'favoriteCount': 560,
@@ -75,7 +146,9 @@ class UserProfileMockData {
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
         'body': '咖啡厅一角，除了香味，还有孤独。',
-        'imageUrls': ['https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400'],
+        'imageUrls': [
+          'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
+        ],
         'likeCount': 560,
         'commentCount': 18,
         'favoriteCount': 90,
@@ -93,7 +166,8 @@ class UserProfileMockData {
         id: 'w1',
         type: 'photo',
         title: '光影的节奏',
-        coverUrl: 'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
         likeCount: 1200,
         date: '2025-12-20',
         desc: '在布鲁塞尔的午后，捕捉到的一组极简主义建筑光影。',
@@ -102,7 +176,8 @@ class UserProfileMockData {
         id: 'w2',
         type: 'video',
         title: '森林的呼吸',
-        coverUrl: 'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
         likeCount: 840,
         date: '2025-12-15',
         desc: '4K延时摄影，记录大兴安岭清晨云雾缭绕的过程。',
@@ -111,7 +186,8 @@ class UserProfileMockData {
         id: 'w3',
         type: 'article',
         title: '极简摄影的真谛',
-        coverUrl: 'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
         likeCount: 2100,
         date: '2025-12-10',
         desc: '通过剥离不必要的元素，我们才能看见事物的本质。',
@@ -120,7 +196,8 @@ class UserProfileMockData {
         id: 'w4',
         type: 'photo',
         title: '咖啡厅一角',
-        coverUrl: 'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
         likeCount: 560,
         date: '2025-12-05',
         desc: '深夜的咖啡馆，除了香味，还有孤独。',
@@ -137,7 +214,8 @@ class UserProfileMockData {
         name: '阿那亚礼堂',
         category: '足迹',
         categoryKey: 'footprint',
-        coverUrl: 'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
         desc: '在海边的孤独感中寻找创作灵感。',
       ),
       const UserLifeItem(
@@ -145,7 +223,8 @@ class UserProfileMockData {
         name: '《摄影的哲学》',
         category: '书影音',
         categoryKey: 'soul',
-        coverUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400',
         desc: '比起技巧，我更痴迷于思考快门背后。',
       ),
       const UserLifeItem(
@@ -153,7 +232,8 @@ class UserProfileMockData {
         name: 'Dirty Coffee',
         category: '味蕾',
         categoryKey: 'taste',
-        coverUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400',
         desc: '喜欢那种冷热交替的冲突感。',
       ),
       const UserLifeItem(
@@ -161,7 +241,8 @@ class UserProfileMockData {
         name: 'Leica M11',
         category: '爱物',
         categoryKey: 'private',
-        coverUrl: 'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400',
+        coverUrl:
+            'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400',
         desc: '它是我身体的延伸。',
       ),
     ];
@@ -185,22 +266,32 @@ class UserProfileMockData {
 
   static String _avatarFor(String userId) {
     const map = <String, String>{
-      'nature_photographer': 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
-      'travel_photographer': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'street_photo': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      'a1': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-      'mo_yun': 'https://images.unsplash.com/photo-1545996124-0501eb292251?w=100',
+      'nature_photographer':
+          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+      'travel_photographer':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'street_photo':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+      'a1':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+      'mo_yun':
+          'https://images.unsplash.com/photo-1545996124-0501eb292251?w=100',
     };
-    return map[userId] ?? 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100';
+    return map[userId] ??
+        'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100';
   }
 
   static String _backgroundFor(String userId) {
     const map = <String, String>{
-      'nature_photographer': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
-      'travel_photographer': 'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
-      'a1': 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
+      'nature_photographer':
+          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+      'travel_photographer':
+          'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
+      'a1':
+          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
     };
-    return map[userId] ?? 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200';
+    return map[userId] ??
+        'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200';
   }
 }
 

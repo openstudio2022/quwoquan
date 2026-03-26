@@ -1613,6 +1613,11 @@ class ReactRuntime {
           return '我先确认你想知道的重点是$topic，再核对最新信息。';
         }
         return '我先确认你最关心的重点，再核对最新信息。';
+      case 'search':
+        if (topic.isNotEmpty) {
+          return '我先把和$topic最相关的几路信息拆开核对。';
+        }
+        return '我先把最影响结论的几路信息拆开核对。';
       case 'answering':
         if (topic.isNotEmpty) {
           return '我已经把$topic的关键信息核对好了，开始整理结论。';
@@ -1647,7 +1652,10 @@ class ReactRuntime {
         }
         return '我开始整理已经核对好的关键信息。';
       case 'search':
-        return '检索处理中';
+        if (topic.isNotEmpty) {
+          return '我先把和$topic最相关的几路信息拆开核对。';
+        }
+        return '我先把最影响结论的几路信息拆开核对。';
       default:
         return '理解问题中';
     }

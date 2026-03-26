@@ -1,6 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 
@@ -335,7 +334,10 @@ AssistantJourneyStage _normalizeStageForTimeline({
   required String journeySummary,
 }) {
   final rawStatus = rawStage?.status ?? JourneyStageStatus.pending;
-  final summary = _sanitizeUserFacingTimelineText(rawStage?.summary ?? '');
+  final summary = _sanitizeUserFacingTimelineText(
+    rawStage?.summary ?? '',
+    stageId: stageId,
+  );
   if (rawStage != null) {
     return AssistantJourneyStage(
       stageId: stageId,
@@ -350,7 +352,10 @@ AssistantJourneyStage _normalizeStageForTimeline({
       stageId: stageId,
       status: JourneyStageStatus.completed,
       order: order,
-      summary: _sanitizeUserFacingTimelineText(journeySummary),
+      summary: _sanitizeUserFacingTimelineText(
+        journeySummary,
+        stageId: stageId,
+      ),
       referenceCount: 0,
     );
   }
@@ -370,8 +375,14 @@ AssistantJourneyStage _mergeStageForTimeline({
   required AssistantJourneyStage? secondaryStage,
 }) {
   final mergedSummary = _firstNonEmpty(<String>[
-    _sanitizeUserFacingTimelineText(secondaryStage?.summary ?? ''),
-    _sanitizeUserFacingTimelineText(primaryStage?.summary ?? ''),
+    _sanitizeUserFacingTimelineText(
+      secondaryStage?.summary ?? '',
+      stageId: stageId,
+    ),
+    _sanitizeUserFacingTimelineText(
+      primaryStage?.summary ?? '',
+      stageId: stageId,
+    ),
   ]);
   if (primaryStage == null && secondaryStage == null) {
     return AssistantJourneyStage(
@@ -437,10 +448,13 @@ AssistantJourneyEntry _normalizeEntryForTimeline(AssistantJourneyEntry entry) {
       )
       .toList(growable: false);
   final headline = _normalizeTimelineHeadline(entry);
-  final detail = _sanitizeUserFacingTimelineText(entry.detail);
   final displayStageId = entry.stageId == JourneyStageId.verify
       ? JourneyStageId.search
       : entry.stageId;
+  final detail = _sanitizeUserFacingTimelineText(
+    entry.detail,
+    stageId: displayStageId,
+  );
   return AssistantJourneyEntry(
     entryId: entry.entryId,
     stageId: displayStageId,
@@ -501,7 +515,13 @@ AssistantJourneyReferenceSummary _normalizeReferenceSummary(
 }
 
 String _normalizeTimelineHeadline(AssistantJourneyEntry entry) {
-  final headline = _sanitizeUserFacingTimelineText(entry.headline);
+  final displayStageId = entry.stageId == JourneyStageId.verify
+      ? JourneyStageId.search
+      : entry.stageId;
+  final headline = _sanitizeUserFacingTimelineText(
+    entry.headline,
+    stageId: displayStageId,
+  );
   if (headline.isNotEmpty) {
     return headline;
   }
@@ -517,33 +537,15 @@ String _normalizeTimelineHeadline(AssistantJourneyEntry entry) {
   return '';
 }
 
-String _sanitizeUserFacingTimelineText(String raw) {
-  final text = raw.trim();
-  if (text.isEmpty) {
-    return '';
-  }
-  final romanizedStripped =
-      AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(text);
-  if (romanizedStripped.isEmpty) {
-    return '';
-  }
-  if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(text)) {
-    return '';
-  }
-  final normalized = AssistantDisplayTextResolver.normalizePlainText(
-    romanizedStripped,
+String _sanitizeUserFacingTimelineText(
+  String raw, {
+  JourneyStageId stageId = JourneyStageId.unknown,
+}) {
+  final normalized = AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(
+    raw,
+    stageHint: stageId.name,
   );
   if (normalized.isEmpty) {
-    return '';
-  }
-  if (AssistantDisplayTextResolver.containsInternalProcessFragment(
-        normalized,
-      ) ||
-      AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-        normalized,
-      ) ||
-      AssistantContentFilters.isJsonEnvelope(normalized) ||
-      AssistantContentFilters.isDegradedText(normalized)) {
     return '';
   }
   final lower = normalized.toLowerCase();

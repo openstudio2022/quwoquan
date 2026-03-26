@@ -2,6 +2,11 @@
 
 ## 当前交付任务
 
+> 状态同步（2026-03-26）
+> - 已完成：群组发现相关 metadata 冻结与 codegen 基线。
+> - 进行中：群组入口页、统一卡片表达与发现页接线。
+> - 未完成：按兴趣型/组织型分流的双模板详情路由。
+
 ### L3: domain-taxonomy-alignment
 
 - [ ] T1: [metadata] 创建 `contracts/metadata/_shared/domain_taxonomy.yaml`，定义 16 个核心领域 ID（travel, local_life, health_wellness, tech, education, lifestyle, social_meet, culture_arts, automotive, finance, fortune, weather, calendar, work, shopping, policy）+ 属性（label.zh/en, circleChannelEnabled, assistantDomainId, subCategories）

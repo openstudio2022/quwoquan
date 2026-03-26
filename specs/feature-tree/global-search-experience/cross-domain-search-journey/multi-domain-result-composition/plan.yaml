@@ -7,11 +7,12 @@ derived_from:
   acceptance: acceptance.yaml
   changelog:
     - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
 
 slices:
   - id: P1
     title: freeze domain search contracts and unified result model
-    goal: 收口四域 `Search*` contract、DTO 与统一 `SearchSection / SearchResultItem` 模型
+    goal: 收口统一 `Search` 接口、四域 `Search*` contract、DTO 与统一 `SearchSection / SearchResultItem` 模型
     depends_on: []
     acceptance_refs:
       - A1
@@ -25,7 +26,7 @@ slices:
 
   - id: P2
     title: land search coordinator and section composition
-    goal: 建立 query debounce、parallel fan-out、section composition 与局部降级
+    goal: 建立统一 `Search` 接口、query debounce、parallel fan-out、section composition 与局部降级
     depends_on:
       - P1
     acceptance_refs:
@@ -34,7 +35,8 @@ slices:
       - T2_module_interaction
       - T3_cross_service_integration
     done_when:
-      - `SearchCoordinator` 成为唯一编排中心
+      - 统一 `Search` 接口成为页面唯一入口
+      - `SearchCoordinator` 成为内部唯一编排中心
       - 各域结果可并发汇总并分组展示
       - 单域失败只降级该 section
     status: planned

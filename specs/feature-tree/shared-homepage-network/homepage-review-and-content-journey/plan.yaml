@@ -1,0 +1,116 @@
+version: 1
+node: shared-homepage-network/homepage-review-and-content-journey
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage shell and module metadata
+    goal: >
+      冻结主页详情 route/surface/request context，以及 overview/review/content/question/group
+      各模块的 DTO、module slot 与 ui config 真相源。
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `entity/homepage` 的 homepage shell、score summary、module DTO 已定义
+      - `_shared` 中 homepage detail 与 module page ids 已定义
+      - ui config 中的模块优先级与类目差异已冻结
+    status: planned
+
+  - id: P2
+    title: establish homepage read-model codegen baseline
+    goal: >
+      让 homepage shell、review summary、content/question/group module 相关的生成物
+      都能由 codegen 产出。
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - `make codegen` 与 `make codegen-app` 生成新的 homepage shell / module 产物
+      - App 不再手写模块 slot、page ids 或 route 常量
+    status: planned
+
+  - id: P3
+    title: land overview shell and review summary
+    goal: >
+      落主页首帧总览、评分摘要和主操作，让用户在首屏理解主页并可继续行动。
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 首屏展示名称、类型、摘要、主操作与评分摘要
+      - 主页 overview 与 review summary 可独立降级
+      - 首屏不会退化成纯静态信息卡
+    status: planned
+
+  - id: P4
+    title: land content question and related-group aggregation
+    goal: >
+      打通主页对内容、提问与相关群组摘要的聚合消费，并维持主页与来源域的边界。
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 主页可稳定展示内容聚合、提问聚合和相关群组摘要
+      - 内容域与群组域仍保留各自真相源
+      - 单个聚合模块失败不会拖垮整页
+    status: planned
+
+  - id: P5
+    title: land contextual publish handoff and return flow
+    goal: >
+      落主页上下文发布入口、默认带入当前主页，并完成发布后的主页回流语义。
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 主页可直接发笔记、作品、提问、口碑
+      - 当前主页默认带入统一发布器
+      - 发布后结果能回到主页对应聚合面
+    status: planned
+
+  - id: P6
+    title: harden observability rollback and journey tests
+    goal: >
+      为主页阅读与回流建立模块观测、弱网降级、回滚路径与 Journey 级回归清单。
+    depends_on:
+      - P5
+    acceptance_refs:
+      - R1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - overview/review/content/group/contextual publish 都具备观测指标
+      - 弱网与模块降级路径可验证
+      - Journey 可按 feature flag 或整版策略回滚
+    status: planned

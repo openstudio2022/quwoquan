@@ -21,7 +21,7 @@ func NewInboxService(repo persistence.ChatRepository) *InboxService {
 // InboxItem combines a conversation with the user's state for inbox display.
 type InboxItem struct {
 	Conversation model.Conversation          `json:"conversation"`
-	UserState    model.ConversationUserState  `json:"userState"`
+	UserState    model.ConversationUserState `json:"userState"`
 }
 
 type ListInboxRequest struct {
@@ -47,6 +47,9 @@ func (s *InboxService) ListInbox(ctx context.Context, req ListInboxRequest) ([]I
 	for _, state := range states {
 		conv, err := s.repo.FindConversationByID(ctx, state.ConversationId)
 		if err != nil {
+			continue
+		}
+		if conv.Status != "active" {
 			continue
 		}
 		items = append(items, InboxItem{

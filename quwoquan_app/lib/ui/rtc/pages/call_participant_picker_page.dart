@@ -7,6 +7,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 enum _ParticipantSource { currentConversation, sameInterest, otherGroups }
@@ -60,7 +61,8 @@ class _CallParticipantPickerPageState
           _contacts = contacts;
           _availableGroups = groups;
           if (_selectedGroupId == null && groups.isNotEmpty) {
-            _selectedGroupId = groups.first['id']?.toString() ??
+            _selectedGroupId =
+                groups.first['id']?.toString() ??
                 groups.first['_id']?.toString();
           }
           _isLoading = false;
@@ -82,9 +84,10 @@ class _CallParticipantPickerPageState
     return (conversations as List<Map<String, dynamic>>)
         .where((item) {
           final type = item['type'] as String? ?? '';
-          final id =
-              item['id']?.toString() ?? item['_id']?.toString() ?? '';
-          return type == 'group' && id.isNotEmpty && id != currentConversationId;
+          final id = item['id']?.toString() ?? item['_id']?.toString() ?? '';
+          return type == 'group' &&
+              id.isNotEmpty &&
+              id != currentConversationId;
         })
         .toList(growable: false);
   }
@@ -114,7 +117,9 @@ class _CallParticipantPickerPageState
             .toList(growable: false);
       case _ParticipantSource.otherGroups:
         final groupId = _selectedGroupId;
-        if (groupId == null || groupId.isEmpty) return const <Map<String, dynamic>>[];
+        if (groupId == null || groupId.isEmpty) {
+          return const <Map<String, dynamic>>[];
+        }
         final rawMembers = await chatRepo.listMembers(
           conversationId: groupId,
           limit: 200,
@@ -128,8 +133,8 @@ class _CallParticipantPickerPageState
   void _applyDefaultSelectionIfNeeded(List<Map<String, dynamic>> contacts) {
     final shouldSelectDefault =
         _source == _ParticipantSource.currentConversation &&
-            widget.defaultSelectAll &&
-            _selectedIds.isEmpty;
+        widget.defaultSelectAll &&
+        _selectedIds.isEmpty;
     if (!shouldSelectDefault) return;
     _selectedIds.addAll(
       contacts
@@ -177,8 +182,7 @@ class _CallParticipantPickerPageState
     if (_searchQuery.isEmpty) return _contacts;
     final query = _searchQuery.toLowerCase();
     return _contacts.where((c) {
-      final name =
-          (c['displayName'] as String? ?? '').toLowerCase();
+      final name = (c['displayName'] as String? ?? '').toLowerCase();
       return name.contains(query);
     }).toList();
   }
@@ -235,7 +239,7 @@ class _CallParticipantPickerPageState
                 _buildGroupSelector(),
               Padding(
                 padding: EdgeInsets.all(AppSpacing.md),
-                child: CupertinoSearchTextField(
+                child: AppSearchField(
                   placeholder: '搜索联系人',
                   onChanged: (value) {
                     setState(() => _searchQuery = value);
@@ -299,52 +303,52 @@ class _CallParticipantPickerPageState
                 ),
               ),
               SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CupertinoActivityIndicator())
-                  : filtered.isEmpty
-                      ? Center(
-                          child: Text(
-                            _searchQuery.isEmpty ? '暂无联系人' : '未找到匹配的联系人',
-                            style: TextStyle(
-                              color: AppColors.overlayMedium,
-                              fontSize: AppTypography.md,
-                            ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CupertinoActivityIndicator())
+                    : filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searchQuery.isEmpty ? '暂无联系人' : '未找到匹配的联系人',
+                          style: TextStyle(
+                            color: AppColors.overlayMedium,
+                            fontSize: AppTypography.md,
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final contact = filtered[index];
-                            return _ContactRow(
-                              contact: contact,
-                              isSelected: _selectedIds.contains(
-                                contact['userId'] as String? ?? '',
-                              ),
-                              isDisabled: _selectedIds.length >=
-                                      widget.maxParticipants &&
-                                  !_selectedIds.contains(
-                                    contact['userId'] as String? ?? '',
-                                  ),
-                              onToggle: (userId) {
-                                setState(() {
-                                  if (_selectedIds.contains(userId)) {
-                                    _selectedIds.remove(userId);
-                                  } else if (_selectedIds.length <
-                                      widget.maxParticipants) {
-                                    _selectedIds.add(userId);
-                                  }
-                                });
-                              },
-                            );
-                          },
                         ),
-            ),
-          ],
+                      )
+                    : ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final contact = filtered[index];
+                          return _ContactRow(
+                            contact: contact,
+                            isSelected: _selectedIds.contains(
+                              contact['userId'] as String? ?? '',
+                            ),
+                            isDisabled:
+                                _selectedIds.length >= widget.maxParticipants &&
+                                !_selectedIds.contains(
+                                  contact['userId'] as String? ?? '',
+                                ),
+                            onToggle: (userId) {
+                              setState(() {
+                                if (_selectedIds.contains(userId)) {
+                                  _selectedIds.remove(userId);
+                                } else if (_selectedIds.length <
+                                    widget.maxParticipants) {
+                                  _selectedIds.add(userId);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildSourceTabs() {
@@ -482,15 +486,13 @@ class _ContactRow extends StatelessWidget {
               height: AppSpacing.iconMedium,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected
-                    ? AppColors.primaryColor
-                    : Colors.transparent,
+                color: isSelected ? AppColors.primaryColor : Colors.transparent,
                 border: Border.all(
                   color: isSelected
                       ? AppColors.primaryColor
                       : (isDisabled
-                          ? AppColors.overlayLight
-                          : AppColors.overlayMedium),
+                            ? AppColors.overlayLight
+                            : AppColors.overlayMedium),
                   width: AppSpacing.oneHalf,
                 ),
               ),
@@ -505,10 +507,10 @@ class _ContactRow extends StatelessWidget {
             SizedBox(width: AppSpacing.sm),
             CircleAvatar(
               radius: AppSpacing.twenty,
-              backgroundColor:
-                  AppColors.primaryColor.withValues(alpha: 0.2),
-              backgroundImage:
-                  avatarUrl != null ? NetworkImage(avatarUrl) : null,
+              backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
+              backgroundImage: avatarUrl != null
+                  ? NetworkImage(avatarUrl)
+                  : null,
               child: avatarUrl == null
                   ? Text(
                       displayName.isNotEmpty

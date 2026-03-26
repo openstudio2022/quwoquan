@@ -28,6 +28,15 @@ import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
+import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/sub_account_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
@@ -93,13 +102,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        path: AppRoutePaths.startGroupChat,
+        pageBuilder: (context, state) => MaterialPage<void>(
+          key: state.pageKey,
+          fullscreenDialog: true,
+          child: StartGroupChatPage(
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutePaths.chat);
+              }
+            },
+          ),
+        ),
+      ),
+      GoRoute(
         path: AppRoutePaths.globalSearch,
         pageBuilder: (context, state) {
           final launchContext = state.extra is SearchLaunchContext
               ? state.extra! as SearchLaunchContext
-              : SearchLaunchContext(
-                  entrySurfaceId: AppRoutePaths.globalSearch,
-                );
+              : SearchLaunchContext(entrySurfaceId: AppRoutePaths.globalSearch);
           return CustomTransitionPage<void>(
             key: state.pageKey,
             child: GlobalSearchPage(launchContext: launchContext),
@@ -123,6 +146,158 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   );
                 },
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.globalSearchNetworkResultsPathTemplate,
+        pageBuilder: (context, state) {
+          final extraLaunchContext = state.extra is SearchLaunchContext
+              ? state.extra! as SearchLaunchContext
+              : null;
+          final query =
+              state.uri.queryParameters['query'] ??
+              extraLaunchContext?.prefilledQuery ??
+              '';
+          final initialTabId =
+              state.uri.queryParameters['tab'] ??
+              extraLaunchContext?.initialNetworkTabId;
+          final launchContext =
+              (extraLaunchContext ??
+                      const SearchLaunchContext(
+                        entrySurfaceId: 'globalSearchNetworkResults',
+                      ))
+                  .copyWith(
+                    prefilledQuery: query,
+                    initialNetworkTabId: initialTabId,
+                    restoreState: false,
+                  );
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: SearchNetworkResultsPage(launchContext: launchContext),
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.02),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepagePickerPathTemplate,
+        pageBuilder: (context, state) {
+          final extra = state.extra is HomepagePickerPageRouteExtra
+              ? state.extra! as HomepagePickerPageRouteExtra
+              : null;
+          final query = state.uri.queryParameters['query'] ?? '';
+          return CustomTransitionPage<HomepagePickerSelectionResult>(
+            key: state.pageKey,
+            child: HomepagePickerPage(
+              initialQuery: query,
+              initialSelection: extra?.initialSelection,
+            ),
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.02),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.suggestHomepagePathTemplate,
+        pageBuilder: (context, state) {
+          final query = state.uri.queryParameters['query'] ?? '';
+          return MaterialPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            child: SuggestHomepagePage(initialQuery: query),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final extra = state.extra is HomepageDetailPageRouteExtra
+              ? state.extra! as HomepageDetailPageRouteExtra
+              : null;
+          return HomepageDetailPage(
+            homepageId: id,
+            selectionMode: extra?.selectionMode ?? false,
+            initialSummary: extra?.initialSummary,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepageClaimPathTemplate.replaceAll('{id}', ':id'),
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return MaterialPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            child: HomepageClaimPage(homepageId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepageMaintenancePathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return MaterialPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            child: HomepageMaintenancePage(homepageId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepageStatusReportPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return MaterialPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            child: HomepageStatusReportPage(homepageId: id),
           );
         },
       ),
@@ -159,6 +334,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final typeStr = state.uri.queryParameters['type'];
           final initialTabKey = state.uri.queryParameters['tab'];
+          final initialHomepage = state.extra is HomepageCanonicalReference
+              ? state.extra! as HomepageCanonicalReference
+              : null;
           EditorStartAction? action;
           if (typeStr != null) {
             try {
@@ -172,6 +350,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CreatePage(
             initialAction: action,
             initialTabKey: initialTabKey,
+            initialHomepage: initialHomepage,
           );
         },
         routes: [
@@ -414,6 +593,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
               : null;
+          final searchAnchorContext =
+              state.extra is SearchConversationAnchorContext
+              ? state.extra as SearchConversationAnchorContext
+              : null;
           final isAssistant = id == AppConceptConstants.assistantConversationId;
           void handleBack() {
             if (context.canPop()) {
@@ -438,6 +621,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             conversationId: id,
             onBack: handleBack,
             assistantOpenContext: assistantOpenContext,
+            searchAnchorContext: searchAnchorContext,
           );
         },
         routes: [

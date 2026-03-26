@@ -1,0 +1,118 @@
+version: 1
+node: circle-community
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze group hub metadata model
+    goal: 冻结 `Circle / CircleGroup / CircleGroupMember`、角色边界、内容分发与搜索归属的 metadata 真相源
+    depends_on: []
+    acceptance_refs:
+      - A3
+      - A4
+      - A6
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `social/circle/*` 的群组与群模型字段冻结
+      - `content/post/*` 的 `groupId/nodeId` 归属明确
+      - 搜索统一以 `群组` 为用户词，circle 域结果边界清晰
+    status: completed
+
+  - id: P2
+    title: establish codegen and compatibility baseline
+    goal: 完成 codegen 基线与 `Circle.conversationId -> CircleGroup.conversationId` 兼容策略
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+      - A7
+      - A8
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - metadata 变更可通过 verify/codegen/codegen-app
+      - 端侧 DTO 与 Repository 消费新生成物
+      - 兼容读退出条件被明确记录
+    status: completed
+
+  - id: P3
+    title: deliver hub templates and homepage IA
+    goal: 落地 `通用圈子模板` 与 `组织主页模板` 的首页 IA、页签与主操作
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A4
+      - A5
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 首页与搜索入口统一叫 `群组`
+      - 详情模板按兴趣型与组织型稳定分流
+      - 管理页 disabled 可见性策略落地
+    status: in_progress
+
+  - id: P4
+    title: deliver circle group workflows
+    goal: 落地公共群、自建群、私有群搜索、申请入群、资料与公告能力
+    depends_on:
+      - P2
+      - P3
+    acceptance_refs:
+      - A6
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 公共群只支持申请加入
+      - 私有群只在圈内可通过精确或模糊搜索命中
+      - 群资料与公告绑定 `CircleGroup`
+    status: pending
+
+  - id: P5
+    title: deliver node content aggregation and search integration
+    goal: 落地组织节点内容发布、父节点聚合排序与统一搜索结果接入
+    depends_on:
+      - P2
+      - P3
+      - P4
+    acceptance_refs:
+      - A5
+      - A9
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 节点可独立发布内容
+      - 父节点按最近活跃时间聚合内容
+      - 搜索结果按 `群组` 统一返回并可进入详情
+    status: pending
+
+  - id: P6
+    title: validate release posture and rollback
+    goal: 完成观测、SLO、回滚与发布前验证，确保能力可进入 `/dev`
+    depends_on:
+      - P5
+    acceptance_refs:
+      - A7
+      - A8
+      - A9
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - 关键指标与 SLO 验证路径明确
+      - 整版回滚与兼容回退边界清晰
+      - 可按计划进入 `/dev`
+    status: pending

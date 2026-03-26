@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 
 /// Backward-compatible entrypoint for IM conversation detail.
@@ -12,6 +13,7 @@ class ChatDetailPage extends StatelessWidget {
     required this.conversationId,
     required this.onBack,
     this.assistantOpenContext,
+    this.searchAnchorContext,
     this.embedded = false,
   }) : assert(
          conversationId != AppConceptConstants.assistantConversationId,
@@ -21,6 +23,7 @@ class ChatDetailPage extends StatelessWidget {
   final String conversationId;
   final VoidCallback onBack;
   final AssistantOpenContext? assistantOpenContext;
+  final SearchConversationAnchorContext? searchAnchorContext;
   final bool embedded;
 
   @override
@@ -28,6 +31,7 @@ class ChatDetailPage extends StatelessWidget {
     return ChatConversationPage(
       conversationId: conversationId,
       onBack: onBack,
+      searchAnchorContext: searchAnchorContext,
       embedded: embedded,
     );
   }

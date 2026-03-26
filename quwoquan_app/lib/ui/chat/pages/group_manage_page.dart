@@ -9,6 +9,9 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群管理页 — 群主/管理员专属管理入口
 class GroupManagePage extends ConsumerStatefulWidget {
@@ -24,9 +27,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
   bool _qrCodeJoinEnabled = true;
   bool _joinRequiresApproval = false;
   bool _nameEditableByAdminOnly = false;
-  final String _currentUserRole = 'owner';
-
-  bool get _isOwner => _currentUserRole == 'owner';
+  String _conversationType = 'group';
 
   @override
   void initState() {
@@ -40,12 +41,15 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
       final settings = await repo.getGroupSettings(widget.conversationId);
       if (mounted) {
         setState(() {
-          _qrCodeJoinEnabled =
-              settings['qrCodeJoinEnabled'] as bool? ?? true;
+          _qrCodeJoinEnabled = settings['qrCodeJoinEnabled'] as bool? ?? true;
           _joinRequiresApproval =
               settings['joinRequiresApproval'] as bool? ?? false;
           _nameEditableByAdminOnly =
               settings['nameEditableByAdminOnly'] as bool? ?? false;
+          _conversationType =
+              (settings['type'] as String?) ??
+              (settings['conversationType'] as String?) ??
+              _conversationType;
         });
       }
     } catch (_) {}
@@ -54,16 +58,17 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
   Future<void> _updateSetting(String key, bool value) async {
     try {
       final repo = ref.read(chatRepositoryProvider);
-      await repo.updateGroupSettings(
-        widget.conversationId,
-        {key: value},
-      );
+      await repo.updateGroupSettings(widget.conversationId, {key: value});
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final membersState = ref.watch(
+      conversationMembersProvider(widget.conversationId),
+    );
+    final isOwner = membersState.isOwner;
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final blockSurface = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
@@ -87,7 +92,9 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        border: Border(bottom: BorderSide(color: dividerColor, width: AppSpacing.one)),
+        border: Border(
+          bottom: BorderSide(color: dividerColor, width: AppSpacing.one),
+        ),
       ),
       body: ListView(
         children: [
@@ -132,7 +139,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
               ],
             ),
           ),
-          if (_isOwner) ...[
+          if (isOwner) ...[
             SizedBox(height: SettingsSemanticConstants.blockSpacing),
             _section(
               blockSurface: blockSurface,
@@ -161,51 +168,81 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                 ],
               ),
             ),
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              blockSurface: blockSurface,
-              isDark: isDark,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: () {
-                  showCupertinoDialog<void>(
-                    context: context,
-                    builder: (_) => CupertinoAlertDialog(
-                      title: Text(UITextConstants.dissolveGroupChat),
-                      content: const Text('解散后所有成员将被移出群聊，此操作不可撤销。'),
-                      actions: [
-                        CupertinoDialogAction(
-                          child: Text(UITextConstants.cancel),
-                          onPressed: () => Navigator.pop(context),
+            if (_conversationType != 'circle') ...[
+              SizedBox(height: SettingsSemanticConstants.blockSpacing),
+              _section(
+                blockSurface: blockSurface,
+                isDark: isDark,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () {
+                    showCupertinoDialog<void>(
+                      context: context,
+                      builder: (_) => CupertinoAlertDialog(
+                        title: Text(UITextConstants.dissolveGroupChat),
+                        content: const Text('解散后所有成员将被移出群聊，此操作不可撤销。'),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: Text(UITextConstants.cancel),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          CupertinoDialogAction(
+                            isDestructiveAction: true,
+                            child: Text(UITextConstants.confirm),
+                            onPressed: () async {
+                              Navigator.pop(context);
+                              try {
+                                await ref
+                                    .read(chatRepositoryProvider)
+                                    .dissolveConversation(
+                                      widget.conversationId,
+                                    );
+                                if (ref.read(chatInboxListEnabledProvider)) {
+                                  await ref
+                                      .read(chatInboxListProvider.notifier)
+                                      .refresh();
+                                } else {
+                                  await ref
+                                      .read(conversationSyncProvider)
+                                      .sync(force: true);
+                                }
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                AppToast.show(context, '群聊已解散');
+                                context.go(AppRoutePaths.chat);
+                              } catch (_) {
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                AppToast.show(context, '解散群聊失败，请稍后重试');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: AppSpacing.buttonHeight,
+                    child: Center(
+                      child: Text(
+                        UITextConstants.dissolveGroupChat,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: FontWeight.w500,
+                          color: SettingsSemanticConstants.exitActionColor(
+                            isDark,
+                          ),
                         ),
-                        CupertinoDialogAction(
-                          isDestructiveAction: true,
-                          child: Text(UITextConstants.confirm),
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                child: SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.buttonHeight,
-                  child: Center(
-                    child: Text(
-                      UITextConstants.dissolveGroupChat,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        fontWeight: FontWeight.w500,
-                        color: SettingsSemanticConstants.exitActionColor(isDark),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ],
       ),
@@ -266,8 +303,10 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
             CupertinoSwitch(
               value: value,
               onChanged: onChanged,
-              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+              activeTrackColor:
+                  SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor:
+                  SettingsSemanticConstants.switchInactiveTrackColor(isDark),
             ),
           ],
         ),

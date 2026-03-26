@@ -4,7 +4,7 @@ class UITextConstants {
   static const String discovery = '发现';
   static const String homeTabFollowing = '关注';
   static const String homeTabFeatured = '精选';
-  static const String homeTabCircles = '圈子';
+  static const String homeTabCircles = '群组';
   static const String homeCirclesMy = '我的';
   static const String homeCirclesRecommendTab = '圈子推荐';
   static const String homeCirclesManage = '管理';
@@ -177,6 +177,7 @@ class UITextConstants {
 
   // ==================== 圈子 ====================
   static const String createCircle = '创建圈子';
+  static const String circleCreateSuccess = '圈子已创建';
   static const String editCircle = '编辑圈子';
   static const String manageCenter = '管理中心';
   static const String circleEditSettings = '圈子设置';
@@ -216,7 +217,8 @@ class UITextConstants {
   static const String circleUploadFile = '上传文件';
   static const String circleComments = '评论';
   static const String circleOfficialBadge = '官方认证 | 优质社区';
-  static const String circlesRecommendedTitle = '推荐圈子';
+  static const String circlesRecommendedTitle = '推荐群组';
+  static const String circlesDirectoryTitle = '群组广场';
   static const String circlesFollowingEmpty = '关注暂无内容';
   static const String discoveryEndHint = '已经到底啦';
   static const String circleManageChannels = '频道管理';
@@ -227,6 +229,18 @@ class UITextConstants {
   static const String circleInfoSectionTitle = '基本信息';
   static const String circlePermissionSectionTitle = '访问与加入';
   static const String circleSurfaceSectionTitle = '展示与协作';
+  static const String circleMediaSectionTitle = '头像与封面';
+  static const String circleCategoryLabel = '圈子分类';
+  static const String circleCoverLabel = '圈子封面';
+  static const String circleCoverHint = '建议使用横图，创建后会展示在圈子主页头图和推荐列表中';
+  static const String circleAvatarLabel = '圈子头像';
+  static const String circleAvatarTitle = '主页头像';
+  static const String circleAvatarHint = '圆形头像会展示在圈子主页、成员入口和圈子卡片中';
+  static const String circleAddAvatar = '添加头像';
+  static const String circleChangeAvatar = '更换头像';
+  static const String circleRemoveAvatar = '移除头像';
+  static const String circleRemoveCover = '移除封面';
+  static const String circleSelectFromPhotos = '从照片中选择';
   static const String circleNameLabel = '圈子名称';
   static const String circleNamePlaceholder = '输入圈子名称';
   static const String circleDescriptionLabel = '圈子简介';
@@ -325,6 +339,10 @@ class UITextConstants {
   static const String inputHint = '输入消息...';
   static const String send = '发送';
   static const String emoji = '表情';
+  static const String keyboard = '键盘';
+  static const String more = '更多';
+  static const String voiceInput = '语音输入';
+  static const String expand = '展开';
 
   /// 实时通话
   static const String call = '语音通话';
@@ -514,6 +532,8 @@ class UITextConstants {
   static const String assistantReferenceCopyLink = '复制链接';
   static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
   static const String assistantReferenceHostBlocked = '该链接域名未通过安全白名单，已复制到剪贴板';
+  static const String assistantReferenceSectionTitle = '参考来源';
+  static const String assistantReferenceSectionHint = '点击编号查看原文';
   static const String assistantProcessSearching = '正在搜索';
   static const String assistantProcessOrganizing = '正在整理';
   static const String assistantProcessAnswering = '正在回答';
@@ -527,6 +547,7 @@ class UITextConstants {
   static const String assistantProcessStatusFailed = '待补稳';
   static const String assistantProcessReferenceCountTemplate = '接纳 %s 篇资料';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
+  static const String assistantProcessRunningSummary = '深度思考中';
   static const String assistantProcessCompletedSummary = '已完成深度思考';
   static const String assistantProcessCompletedSummaryReferencesTemplate =
       '已完成深度思考，处理 %s 篇文档';
@@ -537,6 +558,7 @@ class UITextConstants {
   static const String assistantProcessStageUnderstand = '理解问题中';
   static const String assistantProcessStageSearch = '检索处理中';
   static const String assistantProcessStageAnalyze = '检索处理中';
+  static const String assistantProcessStageVerify = '交叉核对中';
   static const String assistantProcessStageAnswer = '整理答案中';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
@@ -590,6 +612,7 @@ class UITextConstants {
   static const String creationSubImage = '图片';
   static const String creationSubVideo = '视频';
   static const String creationSubArticle = '文章';
+  static const String creationSubText = '文字';
   static const String interactionSubLikes = '赞';
   static const String interactionSubComments = '评论';
   static const String interactionSubShares = '转发';
@@ -646,6 +669,8 @@ class UITextConstants {
   static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
+  static const String createPageTitle = '创作';
+  static const String publishSettingsTitle = '发布设置';
   static const String locationLabel = '所在位置';
   static const String locationHidden = '不显示位置';
   static const String remindWhoLabel = '提醒谁看';
@@ -653,6 +678,15 @@ class UITextConstants {
   static const String visibilityPublic = '公开';
   static const String visibilityPrivate = '私密';
   static const String isPublicLabel = '是否公开';
+  static const String attachHomepageTitle = '关联主页';
+  static const String attachHomepageNone = '未关联主页';
+  static const String attachHomepageClear = '暂不关联主页';
+  static const String attachHomepageClearHint = '移除当前关联，按普通公开内容发布';
+  static const String attachHomepageSearchHint = '搜索景点、酒店、餐厅、车型';
+  static const String attachHomepageSuggest = '找不到？补充一个主页';
+  static const String attachHomepageEmpty = '没有找到匹配主页，试试补充一个新主页';
+  static const String attachHomepageUnavailable = '共享主页暂时不可用，请稍后重试';
+  static const String circleWorksCountSuffix = '件作品';
 
   /// 创作页圈子入口/空态；国际化请用 l10n.selectPublishCirclesLabel / l10n.noCirclesAvailable
   static const String selectPublishCirclesLabel = '发布的圈子';
@@ -923,6 +957,8 @@ class UITextConstants {
         return creationSubVideo;
       case 'creation_sub_article':
         return creationSubArticle;
+      case 'creation_sub_text':
+        return creationSubText;
       case 'interaction_sub_likes':
         return interactionSubLikes;
       case 'interaction_sub_comments':

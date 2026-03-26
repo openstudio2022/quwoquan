@@ -88,6 +88,50 @@ const AssistantJourney _referenceJourney = AssistantJourney(
 
 void main() {
   group('AssistantProcessDrawer', () {
+    test('内部规划口吻会转写为用户可读过程文案', () {
+      final built = buildAssistantJourneyViewModel(
+        journey: const AssistantJourney(
+          stages: <AssistantJourneyStage>[
+            AssistantJourneyStage(
+              stageId: JourneyStageId.analyze,
+              status: JourneyStageStatus.active,
+              order: 0,
+              summary: '用户想了解深圳天气，我需要搜索最新的天气信息。',
+            ),
+            AssistantJourneyStage(
+              stageId: JourneyStageId.search,
+              status: JourneyStageStatus.active,
+              order: 1,
+              summary: '我先换几个检索词继续找',
+            ),
+          ],
+          entries: <AssistantJourneyEntry>[
+            AssistantJourneyEntry(
+              entryId: 'journey.analyze.1',
+              stageId: JourneyStageId.analyze,
+              kind: JourneyEntryKind.narrative,
+              status: JourneyStageStatus.active,
+              order: 0,
+              headline: '用户想了解深圳天气，我需要搜索最新的天气信息。',
+            ),
+            AssistantJourneyEntry(
+              entryId: 'journey.search.1',
+              stageId: JourneyStageId.search,
+              kind: JourneyEntryKind.narrative,
+              status: JourneyStageStatus.active,
+              order: 1,
+              headline: '我先换几个检索词继续找',
+            ),
+          ],
+        ),
+        isRunning: true,
+      );
+
+      expect(built.blocks, hasLength(2));
+      expect(built.blocks.first.headline, contains('我先确认你真正想解决的是深圳天气'));
+      expect(built.blocks[1].headline, contains('我会换几个检索角度继续交叉核对'));
+    });
+
     test('运行中且 answer gate 未打开时，会继续停留在搜索阶段', () {
       const journey = AssistantJourney(
         stages: <AssistantJourneyStage>[
@@ -290,7 +334,7 @@ void main() {
       );
 
       expect(find.text('我先把问题立住'), findsOneWidget);
-      expect(find.text('处理1篇文档，接纳1篇如下'), findsOneWidget);
+      expect(find.textContaining('接纳1篇'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
         findsAtLeastNWidgets(1),
@@ -301,17 +345,17 @@ void main() {
       );
       expect(
         find.text(UITextConstants.assistantProcessStageAnswer),
-        findsAtLeastNWidgets(1),
+        findsNothing,
       );
       expect(find.text('查找信息'), findsNothing);
       expect(find.text('核对结论'), findsNothing);
       expect(find.text('整理回答'), findsNothing);
-      expect(find.text('来源：官方'), findsOneWidget);
+      expect(find.text('来源：官方'), findsNothing);
 
-      await tester.tap(find.text('处理1篇文档，接纳1篇如下'));
+      await tester.tap(find.textContaining('接纳1篇'));
       await tester.pump();
 
-      expect(find.text('四川文旅公告 · 官方'), findsOneWidget);
+      expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
     });
 
     testWidgets('search query design 会在无 retrieval snapshot 时回退展示', (
@@ -354,15 +398,12 @@ void main() {
         ),
       );
 
-      expect(
-        find.text('我先按最影响结论的几路信息分开核对。\n检索词：实时天气：深圳天气 实时 降雨 温度'),
-        findsOneWidget,
-      );
+      expect(find.text('我会先核对实时天气。'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('深圳天气 实时 降雨 温度'), findsNothing);
     });
 
     test('search 正式 narrative 存在时不会再回退补一遍 summary', () {
-      const queryDesign =
-          '我会先把最影响结论的几路信息拆开核对：\n- 体感与当前状态：深圳 天气 当前温度 体感 湿度 风力';
+      const queryDesign = '我会先把最影响结论的几路信息拆开核对：\n- 体感与当前状态：深圳 天气 当前温度 体感 湿度 风力';
       final built = buildAssistantJourneyViewModel(
         journey: const AssistantJourney(
           stages: <AssistantJourneyStage>[
@@ -488,17 +529,14 @@ void main() {
         equals(const <JourneyStageId>[
           JourneyStageId.analyze,
           JourneyStageId.search,
-          JourneyStageId.search,
           JourneyStageId.answer,
         ]),
       );
-      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.narrative);
+      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.searchSummary);
       expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
-      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.searchSummary);
-      expect(viewModel.blocks[2].headline, '处理10篇文档，接纳3篇如下');
-      expect(viewModel.blocks[2].detail, isEmpty);
-      expect(viewModel.blocks[3].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
-      expect(viewModel.blocks[3].headline, isNot(contains('Shenzhen tian qi')));
+      expect(viewModel.blocks[1].referenceLabel, '处理10篇文档，接纳3篇如下');
+      expect(viewModel.blocks[2].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
+      expect(viewModel.blocks[2].headline, isNot(contains('Shenzhen tian qi')));
     });
 
     test('检索引用块不会混入低信号系统状态文案', () {

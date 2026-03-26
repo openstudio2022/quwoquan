@@ -14,6 +14,7 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
@@ -717,9 +718,7 @@ final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
 });
 
 class UserRelationshipState {
-  const UserRelationshipState({
-    this.followingProfileIds = const <String>{},
-  });
+  const UserRelationshipState({this.followingProfileIds = const <String>{}});
 
   final Set<String> followingProfileIds;
 
@@ -727,9 +726,7 @@ class UserRelationshipState {
     return followingProfileIds.contains(profileSubjectId);
   }
 
-  UserRelationshipState copyWith({
-    Set<String>? followingProfileIds,
-  }) {
+  UserRelationshipState copyWith({Set<String>? followingProfileIds}) {
     return UserRelationshipState(
       followingProfileIds: followingProfileIds ?? this.followingProfileIds,
     );
@@ -857,7 +854,8 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }
 }
 
-class ClientStateSyncOutboxNotifier extends Notifier<ClientStateSyncOutboxState> {
+class ClientStateSyncOutboxNotifier
+    extends Notifier<ClientStateSyncOutboxState> {
   Timer? _flushTimer;
 
   @override
@@ -880,10 +878,7 @@ class ClientStateSyncOutboxNotifier extends Notifier<ClientStateSyncOutboxState>
     );
   }
 
-  void enqueuePostLike({
-    required String postId,
-    required bool isLiked,
-  }) {
+  void enqueuePostLike({required String postId, required bool isLiked}) {
     _upsertEntry(
       objectType: 'post',
       objectId: postId,
@@ -892,10 +887,7 @@ class ClientStateSyncOutboxNotifier extends Notifier<ClientStateSyncOutboxState>
     );
   }
 
-  void enqueuePostSave({
-    required String postId,
-    required bool isSaved,
-  }) {
+  void enqueuePostSave({required String postId, required bool isSaved}) {
     _upsertEntry(
       objectType: 'post',
       objectId: postId,
@@ -920,17 +912,21 @@ class ClientStateSyncOutboxNotifier extends Notifier<ClientStateSyncOutboxState>
     for (final entry in dueEntries) {
       try {
         await _flushEntry(entry);
-        nextEntries.removeWhere((item) => item.coalesceKey == entry.coalesceKey);
+        nextEntries.removeWhere(
+          (item) => item.coalesceKey == entry.coalesceKey,
+        );
       } catch (_) {
-        nextEntries = nextEntries.map((item) {
-          if (item.coalesceKey != entry.coalesceKey) {
-            return item;
-          }
-          return item.copyWith(
-            retryCount: item.retryCount + 1,
-            nextFlushAt: now.add(config.retryDelay),
-          );
-        }).toList(growable: false);
+        nextEntries = nextEntries
+            .map((item) {
+              if (item.coalesceKey != entry.coalesceKey) {
+                return item;
+              }
+              return item.copyWith(
+                retryCount: item.retryCount + 1,
+                nextFlushAt: now.add(config.retryDelay),
+              );
+            })
+            .toList(growable: false);
       }
     }
     state = state.copyWith(entries: nextEntries);
@@ -1053,6 +1049,14 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   return MockContentRepository();
 });
 
+/// Homepage Repository（共享主页搜索、详情、认领与治理）
+final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteHomepageRepository()
+      : MockHomepageRepository();
+});
+
 /// Chat Repository（按业务对象组织的端侧入口）
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -1096,21 +1100,19 @@ final activePersonaContextProvider =
         return await ref.read(userRepositoryProvider).getActivePersonaContext();
       } catch (_) {
         final currentUser = ref.read(userDataProvider);
-        final fallbackId =
-            currentUser?.id.isNotEmpty == true
+        final fallbackId = currentUser?.id.isNotEmpty == true
             ? currentUser!.id
             : ref.read(currentUserIdProvider);
         return ActivePersonaContextViewData.fallback(
           profileSubjectId: fallbackId,
           ownerUserId:
               currentUser?.metadata?['ownerUserId']?.toString() ?? fallbackId,
-          subAccountId: currentUser?.metadata?['subAccountId']?.toString() ?? '',
+          subAccountId:
+              currentUser?.metadata?['subAccountId']?.toString() ?? '',
           subjectType:
               currentUser?.metadata?['subjectType']?.toString() ?? 'owner',
           displayName:
-              currentUser?.displayName ??
-              currentUser?.username ??
-              fallbackId,
+              currentUser?.displayName ?? currentUser?.username ?? fallbackId,
           avatarUrl: currentUser?.avatarUrlOrAvatar ?? '',
           personaContextVersion:
               currentUser?.metadata?['personaContextVersion']?.toString() ?? '',

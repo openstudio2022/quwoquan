@@ -9,11 +9,9 @@ import 'package:quwoquan_app/ui/user/pages/sub_account_management_page.dart';
 class _StubUserRepository implements UserRepository {
   _StubUserRepository({
     this.accounts = const <PersonaManagementItemViewData>[],
-    this.activeContext,
   });
 
   final List<PersonaManagementItemViewData> accounts;
-  final ActivePersonaContextViewData? activeContext;
 
   @override
   Future<void> activateSubAccount(String subAccountId) async {}
@@ -42,13 +40,12 @@ class _StubUserRepository implements UserRepository {
 
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
-    return activeContext ??
-        ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'user_001',
-          ownerUserId: 'user_001',
-          displayName: '主账号',
-          avatarUrl: '',
-        );
+    return ActivePersonaContextViewData.fallback(
+      profileSubjectId: 'user_001',
+      ownerUserId: 'user_001',
+      displayName: '主账号',
+      avatarUrl: '',
+    );
   }
 
   @override
@@ -59,7 +56,7 @@ class _StubUserRepository implements UserRepository {
         maxSubAccounts: 5,
         usedSubAccounts: accounts.length,
       ),
-      activeContext: activeContext,
+      activeContext: null,
     );
   }
 

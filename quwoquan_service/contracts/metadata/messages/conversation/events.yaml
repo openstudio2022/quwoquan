@@ -8,7 +8,7 @@ events:
     consumers: [notification-service]
     channel: event_store
     payload_entity: Conversation
-    payload_fields: [_id, type, creatorId, circleId, maxGroupSize, receiptEnabled, createdAt]
+    payload_fields: [_id, type, creatorId, circleId, circleGroupId, maxGroupSize, receiptEnabled, createdAt]
 
   - name: MessageSent
     description: 消息发送（v2 新增 seq + clientMsgId）

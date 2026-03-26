@@ -1,0 +1,127 @@
+version: 2
+feature: homepage-review-and-content-journey
+level: L2_journey
+source_path: shared-homepage-network/homepage-review-and-content-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结共享主页的阅读、理解、内容与问答聚合、口碑摘要展示及主页上下文发布入口，
+    让主页成为稳定的阅读与回流容器。
+  composed_scenarios:
+    - homepage-overview-and-module-shell
+    - homepage-review-read-and-score-summary
+    - homepage-content-and-question-aggregation
+    - homepage-contextual-publish-entry
+  out_of_scope:
+    - 主页搜索与补充
+    - 认领审核
+    - 下线治理
+    - 群组模板治理
+
+journey_acceptance:
+  J1:
+    title: 用户可通过主页首屏快速理解具体事物
+    journey: open homepage -> see overview and score summary -> decide to continue browsing or act
+    scenario_refs:
+      - homepage-overview-and-module-shell
+      - homepage-review-read-and-score-summary
+    done_when:
+      - 首屏能展示名称、类型、关键摘要、主操作与评分摘要
+      - 主页模块独立加载与独立降级成立
+      - 用户无需进入二级页面即可理解“这是什么、值不值得继续看”
+    release_guardrails:
+      - 主页首屏不能退化成只有基础信息的静态卡片
+      - 单模块失败不得导致整页不可用
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - homepage overview shell widget test
+        - score summary and first-screen comprehension journey test
+      recorded: []
+    status: pending
+
+  J2:
+    title: 用户可浏览主页中的口碑、内容、问答与相关群组
+    journey: open homepage -> browse reviews/content/questions -> optionally enter related groups
+    scenario_refs:
+      - homepage-review-read-and-score-summary
+      - homepage-content-and-question-aggregation
+    done_when:
+      - 主页可稳定展示口碑摘要、内容聚合与问答聚合
+      - 用户可以在主页内进入相关群组，但主页不吞掉群组治理
+      - 内容和问答的聚合面与主页边界清晰
+    release_guardrails:
+      - 评分摘要和内容聚合必须与主页主档保持一致语义
+      - 主页不能变成群组详情页或内容详情页的替代品
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage content aggregation test
+        - homepage related groups section test
+      recorded: []
+    status: pending
+
+  J3:
+    title: 用户可从主页上下文继续贡献内容并回流主页
+    journey: open homepage -> tap publish/question/review CTA -> publish with homepage context -> return to homepage
+    scenario_refs:
+      - homepage-contextual-publish-entry
+      - homepage-content-and-question-aggregation
+    done_when:
+      - 用户可从主页直接发笔记、作品、提问、口碑
+      - 当前主页默认作为发布上下文写入
+      - 发布成功后，内容能回流到主页对应聚合面
+    release_guardrails:
+      - 主页内入口与全局发布入口仍是同一发布器
+      - 主页上下文丢失时不允许静默降级为无主页发布
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage contextual publish handoff test
+        - homepage content return-flow test
+      recorded: []
+    status: pending
+
+release_acceptance:
+  R1:
+    title: 主页阅读与回流旅程可整体验收并整体回滚
+    done_when:
+      - 总览、评分、内容聚合和主页上下文发布入口的端云契约全部冻结
+      - 首屏、模块降级、弱网与发布回流的异常策略明确
+      - 若出现重大问题，可回退到“主页只读聚合，不承接主页上下文发布”
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_release_rehearsal
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage read-flow rollback rehearsal
+        - weak network homepage module degrade verification
+      recorded: []
+    status: pending

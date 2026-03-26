@@ -25,10 +25,33 @@ collections:
       - { name: idx_cm_circle_role, keys: { circleId: 1, role: 1 } }
       - { name: idx_cm_contribution, keys: { circleId: 1, contribution: -1 } }
 
+  circle_groups:
+    entity: CircleGroup
+    indexes:
+      - { name: idx_cg_circle_type, keys: { circleId: 1, groupType: 1, status: 1, updatedAt: -1 } }
+      - { name: idx_cg_circle_visibility, keys: { circleId: 1, visibility: 1, updatedAt: -1 } }
+      - { name: idx_cg_parent, keys: { circleId: 1, parentGroupId: 1, updatedAt: -1 }, sparse: true }
+      - { name: idx_cg_node_type, keys: { circleId: 1, nodeType: 1, updatedAt: -1 }, sparse: true }
+      - { name: idx_cg_last_active, keys: { circleId: 1, lastActiveAt: -1 }, sparse: true }
+    search_indexes:
+      - name: search_circle_groups_text
+        type: text
+        fields: [name, description]
+        weights: { name: 10, description: 1 }
+
+  circle_group_members:
+    entity: CircleGroupMember
+    indexes:
+      - { name: idx_cgm_group_user, keys: { groupId: 1, userId: 1 }, unique: true }
+      - { name: idx_cgm_circle_user, keys: { circleId: 1, userId: 1 } }
+      - { name: idx_cgm_group_role, keys: { groupId: 1, role: 1 } }
+      - { name: idx_cgm_group_status, keys: { groupId: 1, status: 1, updatedAt: -1 } }
+
   circle_files:
     entity: CircleFile
     indexes:
       - { name: idx_cf_circle_parent, keys: { circleId: 1, parentFolderId: 1, name: 1 } }
+      - { name: idx_cf_group_parent, keys: { groupId: 1, parentFolderId: 1, name: 1 }, sparse: true }
       - { name: idx_cf_circle_status, keys: { circleId: 1, status: 1, createdAt: -1 } }
       - { name: idx_cf_uploader, keys: { uploaderId: 1, createdAt: -1 } }
       - { name: idx_cf_circle_type, keys: { circleId: 1, fileType: 1 } }
@@ -38,6 +61,11 @@ redis_cache:
     ttl_seconds: 600
     entity: Circle
     invalidate_on: [CircleUpdated, CircleMemberJoined, CircleMemberLeft, CircleSectionsUpdated]
+
+  - key: "cache:circle-group:{groupId}"
+    ttl_seconds: 600
+    entity: CircleGroup
+    invalidate_on: [CircleGroupUpdated, CircleGroupMemberJoined, CircleGroupMemberLeft]
 
 object_storage:
   bucket_prefix: "circle-files"

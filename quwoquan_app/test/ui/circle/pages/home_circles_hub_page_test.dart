@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -285,6 +286,29 @@ void main() {
     _consumeImageLoadExceptions(tester);
 
     await tester.tap(find.text('查看更多'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('circles-page'), findsOneWidget);
+  });
+
+  testWidgets('推荐圈子列表的查看全部卡片可跳转到圈子展开页', (tester) async {
+    await tester.pumpWidget(_buildTestApp());
+    await tester.pumpAndSettle();
+    _consumeImageLoadExceptions(tester);
+
+    final horizontalCircleRail = find
+        .byWidgetPredicate(
+          (widget) =>
+              widget is ListView && widget.scrollDirection == Axis.horizontal,
+        )
+        .last;
+    await tester.dragUntilVisible(
+      find.text(UITextConstants.homeCirclesViewAll),
+      horizontalCircleRail,
+      const Offset(-240, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(UITextConstants.homeCirclesViewAll));
     await tester.pumpAndSettle();
 
     expect(find.text('circles-page'), findsOneWidget);

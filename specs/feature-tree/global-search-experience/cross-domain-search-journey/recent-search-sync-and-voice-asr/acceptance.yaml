@@ -11,12 +11,13 @@ execution:
 
 scope:
   summary: >
-    冻结最近搜索的生命周期、本地与云同步语义，以及语音 ASR 到文本查询的输入链路。
+    冻结最近搜索的生命周期、本地与云同步语义、历史管理态，以及语音 ASR 到文本查询的输入链路。
   journey_bindings:
     - J1
     - J3
   in_scope:
     - 最近搜索记录
+    - 双列展示与展开
     - 清空与删除单条
     - 语音 ASR 转文本 query
   out_of_scope:
@@ -35,7 +36,7 @@ scenario_acceptance:
     edge_cases:
       - 云同步失败时本地仍可读
       - 清空操作需要同步影响本地与云端
-      - 问小趣 query 不进入最近搜索
+      - 小趣搜不单独新增 AI query 历史记录
     linked_plan_items:
       - P1
       - P2

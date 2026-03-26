@@ -7,30 +7,37 @@ class AppConceptConstants {
 
   // ==================== 核心理念 ====================
   /// 核心理念：以兴趣为半径，画出我们的交集。
-  static const String coreIdea =
-      '以兴趣为半径，画出我们的交集。';
+  static const String coreIdea = '以兴趣为半径，画出我们的交集。';
 
   // ==================== 私人助理（Personal Assistant） ====================
   /// 助理会话/发送者固定 ID，逻辑判断用，不做展示
   static const String assistantConversationId = 'assistant';
+
   /// 助理发送者 ID，消息气泡/头像判断用
   static const String assistantSenderId = 'assistant';
 
   /// 助理 Slogan（可配置展示名）
   static const String assistantSlogan = '让兴趣闪亮';
+
   /// 助理拟人化名称（可配置）
   static const String assistantName = '智多星';
+
   /// 助理入口标签（用于底部主导航）
   static const String assistantTabLabel = '私助';
+
   /// 助理展示名（用于对话、设置等文案）
   static const String assistantLabel = '私助';
+
   /// 助理页标题
   static const String assistantDisplayTitle = '私助';
+
   /// 助理管理页标题：如「小趣管理」
   static String get assistantManagementTitle => '$assistantLabel管理';
+
   /// 清除记忆确认说明（含助理展示名）
   static String get assistantClearMemoryWarning =>
       '此操作将彻底删除$assistantLabel记录的关于你的所有行为数据、偏好模型及历史总结，操作不可撤销。';
+
   /// 助理参考外链默认白名单；可通过 contextScopeHint.privacyPolicy.allowedReferenceHosts 扩展或覆盖。
   static const List<String> assistantReferenceHostWhitelist = <String>[
     'wikipedia.org',
@@ -77,7 +84,7 @@ class AppConceptConstants {
 
   // ==================== 五大频道 ====================
   static const String discovery = '首页';
-  static const String circles = '圈子';
+  static const String circles = '群组';
   static const String create = '创作';
   static const String chat = '趣信';
   static const String profile = '我的';

@@ -25,11 +25,12 @@ class GroupAvatarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final resolvedSize = _resolveRenderSize(constraints);
         final radius = math.min(
-          borderRadius ?? AppSpacing.borderRadius,
+          borderRadius ?? (AppSpacing.borderRadius - AppSpacing.one),
           resolvedSize / 2,
         );
         final gap = innerGap ?? 2.0;
@@ -37,11 +38,11 @@ class GroupAvatarGrid extends StatelessWidget {
         final count = math.min(validUrls.length, 9);
 
         if (count == 0) {
-          return _buildSingleFallback(resolvedSize, radius);
+          return _buildSingleFallback(resolvedSize, radius, isDark);
         }
 
         if (count == 1) {
-          return _buildSingleAvatar(validUrls[0], resolvedSize, radius);
+          return _buildSingleAvatar(validUrls[0], resolvedSize, radius, isDark);
         }
 
         final rows = _getLayout(count);
@@ -58,7 +59,9 @@ class GroupAvatarGrid extends StatelessWidget {
           height: resolvedSize,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: backgroundColor ?? AppColors.light.backgroundSecondary,
+              color:
+                  backgroundColor ??
+                  AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted),
               borderRadius: BorderRadius.circular(radius),
             ),
             child: ClipRRect(
@@ -75,6 +78,7 @@ class GroupAvatarGrid extends StatelessWidget {
                       cellSize,
                       gap,
                       innerSize,
+                      isDark,
                     ),
                   ),
                 ),
@@ -125,6 +129,7 @@ class GroupAvatarGrid extends StatelessWidget {
     double cellSize,
     double gap,
     double totalWidth,
+    bool isDark,
   ) {
     final widgets = <Widget>[];
     int urlIndex = 0;
@@ -138,7 +143,7 @@ class GroupAvatarGrid extends StatelessWidget {
 
       for (int c = 0; c < colCount && urlIndex < urls.length; c++) {
         if (c > 0) rowChildren.add(SizedBox(width: gap));
-        rowChildren.add(_buildCell(urls[urlIndex], cellSize));
+        rowChildren.add(_buildCell(urls[urlIndex], cellSize, isDark));
         urlIndex++;
       }
 
@@ -160,7 +165,7 @@ class GroupAvatarGrid extends StatelessWidget {
     return widgets;
   }
 
-  Widget _buildCell(String url, double cellSize) {
+  Widget _buildCell(String url, double cellSize, bool isDark) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppSpacing.one),
       child: Image.network(
@@ -171,38 +176,55 @@ class GroupAvatarGrid extends StatelessWidget {
         errorBuilder: (_, __, _) => Container(
           width: cellSize,
           height: cellSize,
-          color: AppColors.light.backgroundTertiary,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundTertiary,
+          ),
           child: Icon(
             Icons.person,
             size: cellSize * 0.5,
-            color: AppColors.light.foregroundSecondary,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSingleFallback(double resolvedSize, double radius) {
+  Widget _buildSingleFallback(double resolvedSize, double radius, bool isDark) {
     return SizedBox(
       width: resolvedSize,
       height: resolvedSize,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.light.backgroundTertiary,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundTertiary,
+          ),
           borderRadius: BorderRadius.circular(radius),
         ),
         child: Center(
           child: Icon(
             Icons.group,
             size: resolvedSize * 0.5,
-            color: AppColors.light.foregroundSecondary,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSingleAvatar(String url, double resolvedSize, double radius) {
+  Widget _buildSingleAvatar(
+    String url,
+    double resolvedSize,
+    double radius,
+    bool isDark,
+  ) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Image.network(
@@ -210,7 +232,8 @@ class GroupAvatarGrid extends StatelessWidget {
         width: resolvedSize,
         height: resolvedSize,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, _) => _buildSingleFallback(resolvedSize, radius),
+        errorBuilder: (_, __, _) =>
+            _buildSingleFallback(resolvedSize, radius, isDark),
       ),
     );
   }

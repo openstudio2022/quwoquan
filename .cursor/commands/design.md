@@ -6,6 +6,7 @@ description: 设计基线（面向 Journey / Scenario，落实商用方案与 pl
 ---
 
 > SDD 主流程：explore → prd → **design** → dev → commit → deploy
+> 若规格与设计可在同一轮冻结，可改用 `/baseline` 直接产出 `spec.md`、`acceptance.yaml`、`design.md` 与 `plan.yaml`。
 
 ## Design Gate
 
@@ -25,6 +26,8 @@ description: 设计基线（面向 Journey / Scenario，落实商用方案与 pl
 ## 执行对象
 
 `/design` 面向 `L2_journey` / `L3_scenario`，并产出其 `plan.yaml`。
+
+适用于需要将规格冻结与设计冻结拆成两轮推进的场景。
 
 ## 产出
 

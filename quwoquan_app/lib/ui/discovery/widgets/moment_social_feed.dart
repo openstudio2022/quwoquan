@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
@@ -27,6 +29,14 @@ const double _momentCellVerticalPadding = AppSpacing.fourteen;
 const double _momentSectionGap = AppSpacing.interGroupSm;
 const double _momentToolbarIconSize = AppSpacing.twenty;
 const double _momentMediaGap = AppSpacing.xs;
+const ArticleDistributionProfileConfig _followingArticleDistributionProfile =
+    ArticleDistributionProfileConfig(
+      id: 'follow_list_with_optional_cover',
+      surface: 'following_feed',
+      layout: 'cover_leading_title_summary',
+      coverMode: 'optional_cover',
+      summaryLineLimit: 2,
+    );
 
 /// 微趣频道：微博风格社交信息流
 ///
@@ -67,10 +77,17 @@ class MomentSocialFeed extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final discoveryState = ref.watch(discoveryStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
-    final fallbackRaw = ref
-        .watch(appContentRepositoryProvider)
-        .discoveryMomentData;
+    final appContentRepository = ref.watch(appContentRepositoryProvider);
+    final fallbackRaw = appContentRepository.discoveryMomentData;
+    final fallbackArticleRaw = appContentRepository.discoveryArticleData;
     final feedMap = ref.watch(discoveryFeedMapProvider);
+    final articleDistributionEnabled = ref.watch(
+      contentFeatureFlagProvider('enable_article_distribution_profiles'),
+    );
+    final shouldShowFollowingArticles =
+        feedTabId == 'following' &&
+        articleDistributionEnabled &&
+        ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
 
     if (!feedMap.containsKey(feedTabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,13 +101,28 @@ class MomentSocialFeed extends ConsumerWidget {
     final moments = dtos
         .where((post) => post.identity == 'moment')
         .toList(growable: false);
+    final articleFallback = shouldShowFollowingArticles
+        ? fallbackArticleRaw
+              .map(postBaseDtoFromMap)
+              .where((post) => post.isArticleLike)
+              .toList(growable: false)
+        : const <PostBaseDto>[];
+    final articlesById = <String, PostBaseDto>{
+      for (final article in articleFallback) article.id: article,
+      for (final article in dtos.where((post) => post.isArticleLike))
+        article.id: article,
+    };
+    final articles = articlesById.values.toList(growable: false);
+    final feedPosts = shouldShowFollowingArticles
+        ? <PostBaseDto>[...moments, ...articles]
+        : moments;
     final hasError = feedAsync.value?.error != null;
 
-    if (feedAsync.isLoading && moments.isEmpty && !hasError) {
+    if (feedAsync.isLoading && feedPosts.isEmpty && !hasError) {
       return const Center(child: CupertinoActivityIndicator());
     }
 
-    if (hasError && moments.isEmpty) {
+    if (hasError && feedPosts.isEmpty) {
       return Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.interGroupLg),
@@ -158,7 +190,7 @@ class MomentSocialFeed extends ConsumerWidget {
               AppSpacing.bottomNavHeight +
               (wideLayout ? AppSpacing.sm : 0),
         ),
-        itemCount: moments.length,
+        itemCount: feedPosts.length,
         separatorBuilder: (context, index) => DecoratedBox(
           decoration: BoxDecoration(
             color: AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted),
@@ -166,10 +198,33 @@ class MomentSocialFeed extends ConsumerWidget {
           child: SizedBox(height: AppSpacing.sm),
         ),
         itemBuilder: (context, index) {
-          final dto = moments[index];
+          final dto = feedPosts[index];
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
           });
+          if (dto.isArticleLike && shouldShowFollowingArticles) {
+            return Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: cardWidth,
+                child: _FollowingArticleCard(
+                  item: dto,
+                  isDark: isDark,
+                  summaryLineLimit:
+                      _followingArticleDistributionProfile.summaryLineLimit,
+                  sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+                  onTap: () => onPostTap?.call(dto, 0, feedPosts: feedPosts),
+                  onMoreTap: () {
+                    if (onMoreTap != null) {
+                      onMoreTap!(dto);
+                    } else {
+                      _showMoreActions(context, ref, dto);
+                    }
+                  },
+                ),
+              ),
+            );
+          }
           return Align(
             alignment: Alignment.topCenter,
             child: SizedBox(
@@ -193,7 +248,7 @@ class MomentSocialFeed extends ConsumerWidget {
                   backgroundUrl: dto.authorBackgroundUrl,
                 ),
                 onImageTap: (imgIndex) =>
-                    onPostTap?.call(dto, imgIndex, feedPosts: moments),
+                    onPostTap?.call(dto, imgIndex, feedPosts: feedPosts),
                 onCommentTap: () {
                   CommentViewer.showModal(context: context, postId: dto.id);
                 },
@@ -216,66 +271,7 @@ class MomentSocialFeed extends ConsumerWidget {
                   if (onMoreTap != null) {
                     onMoreTap!(dto);
                   } else {
-                    MoreActionPopup.show(
-                      context: context,
-                      config: MediaPostMoreActionConfig(
-                        post: dto,
-                        showShareAction: false,
-                        showViewOriginalAction: false,
-                        onCopyLink: () => _copyLink(
-                          context,
-                          ref,
-                          dto,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
-                        ),
-                        onShare: () => _showShare(
-                          context,
-                          ref,
-                          dto,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
-                        ),
-                        onNotInterested: () {
-                          ref
-                              .read(contentBehaviorTrackerProvider)
-                              .trackDislike(dto.id);
-                        },
-                        onBlockUser: () {
-                          ref
-                              .read(blockRepositoryProvider)
-                              .blockUser(dto.authorId);
-                        },
-                        onBlockWords: () async {
-                          final keyword = _extractKeyword(dto.normalizedBody);
-                          if (keyword.isEmpty) return;
-                          await ref
-                              .read(keywordBlockRepositoryProvider)
-                              .addBlockedKeyword(keyword);
-                        },
-                        onReport: () {
-                          ref
-                              .read(behaviorRepositoryProvider)
-                              .reportSingle(
-                                contentId: dto.id,
-                                action: 'report',
-                              );
-                          ref
-                              .read(reportRepositoryProvider)
-                              .createReport(
-                                targetId: dto.id,
-                                targetType: 'post',
-                                reason: 'inappropriate',
-                              );
-                        },
-                      ),
-                    );
+                    _showMoreActions(context, ref, dto);
                   }
                 },
               ),
@@ -303,6 +299,58 @@ class MomentSocialFeed extends ConsumerWidget {
       onActionCompleted: (result) async {
         _recordShare(ref, post.id, result.actionId);
       },
+    );
+  }
+
+  void _showMoreActions(BuildContext context, WidgetRef ref, PostBaseDto post) {
+    MoreActionPopup.show(
+      context: context,
+      config: MediaPostMoreActionConfig(
+        post: post,
+        showShareAction: false,
+        showViewOriginalAction: false,
+        onCopyLink: () => _copyLink(
+          context,
+          ref,
+          post,
+          enableIdentityTemplate: ref.read(
+            contentFeatureFlagProvider('enable_identity_share_template'),
+          ),
+        ),
+        onShare: () => _showShare(
+          context,
+          ref,
+          post,
+          enableIdentityTemplate: ref.read(
+            contentFeatureFlagProvider('enable_identity_share_template'),
+          ),
+        ),
+        onNotInterested: () {
+          ref.read(contentBehaviorTrackerProvider).trackDislike(post.id);
+        },
+        onBlockUser: () {
+          ref.read(blockRepositoryProvider).blockUser(post.authorId);
+        },
+        onBlockWords: () async {
+          final keyword = _extractKeyword(post.normalizedBody);
+          if (keyword.isEmpty) return;
+          await ref
+              .read(keywordBlockRepositoryProvider)
+              .addBlockedKeyword(keyword);
+        },
+        onReport: () {
+          ref
+              .read(behaviorRepositoryProvider)
+              .reportSingle(contentId: post.id, action: 'report');
+          ref
+              .read(reportRepositoryProvider)
+              .createReport(
+                targetId: post.id,
+                targetType: 'post',
+                reason: 'inappropriate',
+              );
+        },
+      ),
     );
   }
 
@@ -334,16 +382,7 @@ class MomentSocialFeed extends ConsumerWidget {
     required PostBaseDto post,
     required bool enableIdentityTemplate,
   }) {
-    final raw = ref
-        .read(appContentRepositoryProvider)
-        .discoveryMomentData
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (item) =>
-              item?['postId']?.toString() == post.id ||
-              item?['id']?.toString() == post.id,
-          orElse: () => null,
-        );
+    final raw = _rawDiscoveryItem(ref, post.id);
     final visibility = raw?['visibility']?.toString() ?? 'public';
     final tags =
         (raw?['tags'] as List?)
@@ -369,17 +408,24 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   String _resolveSourceCircleName(WidgetRef ref, String postId) {
-    final raw = ref
-        .read(appContentRepositoryProvider)
-        .discoveryMomentData
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (item) =>
-              item?['postId']?.toString() == postId ||
-              item?['id']?.toString() == postId,
-          orElse: () => null,
-        );
+    final raw = _rawDiscoveryItem(ref, postId);
     return raw?['circleName']?.toString().trim() ?? '';
+  }
+
+  Map<String, dynamic>? _rawDiscoveryItem(WidgetRef ref, String postId) {
+    final repo = ref.read(appContentRepositoryProvider);
+    final allItems = <Map<String, dynamic>>[
+      ...repo.discoveryMomentData,
+      ...repo.discoveryArticleData,
+      ...repo.discoveryPhotoData,
+      ...repo.discoveryVideoData,
+    ];
+    return allItems.cast<Map<String, dynamic>?>().firstWhere(
+      (item) =>
+          item?['postId']?.toString() == postId ||
+          item?['id']?.toString() == postId,
+      orElse: () => null,
+    );
   }
 
   String _extractKeyword(String text) {
@@ -642,6 +688,116 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
     if (delta < 1) return l10n?.justNow ?? '刚刚';
     if (delta < 24) return l10n?.hoursAgoTemplate(delta) ?? '$delta 小时前';
     return l10n?.monthDayTemplate(t.month, t.day) ?? '${t.month}/${t.day}';
+  }
+}
+
+class _FollowingArticleCard extends StatelessWidget {
+  const _FollowingArticleCard({
+    required this.item,
+    required this.isDark,
+    required this.summaryLineLimit,
+    required this.sourceCircleName,
+    required this.onTap,
+    required this.onMoreTap,
+  });
+
+  final PostBaseDto item;
+  final bool isDark;
+  final int summaryLineLimit;
+  final String sourceCircleName;
+  final VoidCallback onTap;
+  final VoidCallback onMoreTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final eyebrowSegments = <String>[
+      '文章',
+      _articleTemplateLabel,
+      if (sourceCircleName.isNotEmpty) sourceCircleName,
+    ];
+
+    return PostPreviewListTile(
+      key: ValueKey<String>('following-article-card-${item.id}'),
+      isDark: isDark,
+      eyebrowText: eyebrowSegments.join(' · '),
+      eyebrowColor: AppColors.primaryColor,
+      title: _headlineText,
+      supportingText: _supportingText,
+      supportingTextMaxLines: summaryLineLimit,
+      coverUrl: item.mediaCoverUrl,
+      hideThumbnailWhenNoCover: true,
+      thumbnailKey: item.mediaCoverUrl.isNotEmpty
+          ? ValueKey<String>('following-article-thumbnail-${item.id}')
+          : null,
+      onTap: onTap,
+      footer: Row(
+        children: [
+          Expanded(
+            child: Text(
+              item.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          Text(
+            _MomentWeiboCardState._timeAgo(context, item.createdAt),
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+      trailing: _MomentMoreButton(
+        isDark: isDark,
+        color: fgSecondary,
+        onPressed: onMoreTap,
+      ),
+    );
+  }
+
+  String get _articleTemplateLabel {
+    final templateId = item is ArticlePostDto
+        ? (item as ArticlePostDto).articleTemplate
+        : '';
+    switch (templateId) {
+      case 'ritual':
+        return '礼记';
+      case 'diffuse':
+        return '弥散';
+      case 'journal':
+        return '手帐';
+      case 'tech':
+        return '科技';
+      default:
+        return '柔和';
+    }
+  }
+
+  String get _headlineText {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    if (title.isNotEmpty) return title;
+    if (body.isNotEmpty) return body;
+    return '文章';
+  }
+
+  String get _supportingText {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    if (title.isEmpty || body.isEmpty || title == body) {
+      return '';
+    }
+    return body;
   }
 }
 

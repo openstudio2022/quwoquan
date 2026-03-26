@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-discovery-and-attach-journey/missing-homepage-suggestion-and-review
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze candidate suggestion contract
+    goal: 冻结补充主页最小字段、candidate 状态和 suggestion operation
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 补充主页不会绕过审核直接公开
+      - candidate 字段和状态边界明确
+    status: planned
+
+  - id: P2
+    title: land missing-homepage suggestion form
+    goal: 提供搜索空态中的补充主页入口与最小表单提交
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 搜索无结果时可直达补充主页
+      - 表单失败时已填内容保留
+    status: planned
+
+  - id: P3
+    title: wire candidate intake and context restore
+    goal: 将补充主页写入 candidate pipeline，并返回发布或搜索上下文
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 提交后进入 candidate 或 pending_verify
+      - 返回当前上下文时不丢失已写内容
+    status: planned
+
+  - id: P4
+    title: harden duplicate hint and suggestion regression tests
+    goal: 为重复提示、候选边界和返回链路补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T4_user_journey
+    done_when:
+      - candidate 边界与重复提示有测试覆盖
+      - 搜索空态补充主路径可回归
+    status: planned

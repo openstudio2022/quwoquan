@@ -71,10 +71,9 @@ class UserProfileUIConfig {
 
   static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[
     UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null),
-    UserProfileSubTabConfig(id: "micro", labelKey: "creation_sub_micro", contentType: "micro"),
     UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image"),
     UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video"),
-    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_article", contentType: "article"),
+    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article"),
   ];
 
   static const Map<String, List<String>> creationVisibilityFiltersByMode = <String, List<String>>{

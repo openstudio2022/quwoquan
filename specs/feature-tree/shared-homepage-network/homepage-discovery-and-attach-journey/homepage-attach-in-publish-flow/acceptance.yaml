@@ -1,0 +1,73 @@
+version: 2
+feature: homepage-attach-in-publish-flow
+level: L3_scenario
+source_path: shared-homepage-network/homepage-discovery-and-attach-journey/homepage-attach-in-publish-flow
+parent_journey: homepage-discovery-and-attach-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结发布器中的主页挂载规则、主页上下文带入和发布后回流合同。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - 主主页绑定
+    - 主页上下文默认带入
+    - 回流主页聚合
+  out_of_scope:
+    - 编辑器设计
+    - 多主页挂载
+
+scenario_acceptance:
+  A1:
+    title: 发布内容时主页挂载规则一致成立
+    scenario: homepage attach in publish flow
+    journey_step: choose homepage -> publish content -> return to homepage aggregation
+    done_when:
+      - 口碑必须且只能绑定 1 个主主页
+      - 笔记、作品、提问可选绑定 1 个主主页
+      - 从主页进入发布器时当前主页默认已选中
+      - 发布成功后内容进入主页对应聚合面
+    edge_cases:
+      - 写入失败时保留编辑上下文
+      - 主页上下文可手动更换或移除（非口碑）
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage attach publish integration test
+        - homepage return-flow aggregation test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 挂载字段与回流契约可治理
+    done_when:
+      - 发布内容的主页引用字段已冻结
+      - 回流主页聚合的消费方向清晰
+      - 不存在第二套主页挂载写入协议
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage attach contract review
+      recorded: []
+    status: pending

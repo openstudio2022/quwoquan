@@ -1,0 +1,25 @@
+feature: templates
+level: "L1_capability"
+archived: false
+level_acceptance:
+  - id: C1
+    description: >
+      模板目录作为 feature-tree 的作者模板节点成立：目录具备完整的
+      `spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`，
+      不再因为缺少基础文件而阻断 gate。
+    status: pending
+    tests:
+      - path: specs/feature-tree/templates/spec.md
+      - path: specs/feature-tree/templates/design.md
+      - path: specs/feature-tree/templates/acceptance.yaml
+      - path: specs/feature-tree/templates/plan.yaml
+
+  - id: C2
+    description: >
+      L2 Journey 与 L3 Scenario 的 acceptance / plan 模板可被继续复用，
+      且模板字段命名与 gate 校验口径保持一致，不引入第二套规格骨架。
+    status: pending
+    tests:
+      - path: specs/feature-tree/templates/l2_journey_acceptance.yaml
+      - path: specs/feature-tree/templates/l3_scenario_acceptance.yaml
+      - path: specs/feature-tree/templates/plan.yaml

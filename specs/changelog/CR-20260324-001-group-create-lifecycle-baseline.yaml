@@ -1,0 +1,105 @@
+id: CR-20260324-001
+title: group create lifecycle baseline
+slug: group-create-lifecycle-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/chat-conversation/group-creation-member-management
+  - specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow
+  - specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy
+
+entries:
+  - timestamp: "2026-03-24T11:30:00+08:00"
+    summary: >
+      冻结 `group-creation-member-management` Journey baseline，补齐全局添加入口发起群聊、
+      后续加人、私建群解散与圈子群不可解散的规格、设计与实施切片。
+    reason: >
+      现有发起群聊入口仍复用 `chatAddMembers` 旧语义，且 `StartGroupChatPage`、群来源、
+      圈子来源、成员候选和解散能力都存在 mock/占位实现。进入 `/dev` 前必须先把
+      路由 IA、三页结构、互关准入、500 人上限、原子建群与危险操作边界一次冻结。
+    change_type:
+      - refine
+      - design
+      - plan
+    changed_documents:
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/spec.md
+        sections:
+          - 核心旅程
+          - 特性树拆分
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/spec.md
+        sections:
+          - 页面与交互基线
+          - 端云一致性
+          - 对标与吸收结论
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/acceptance.yaml
+        sections:
+          - A1
+          - A7
+          - A8
+          - A10
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/spec.md
+        sections:
+          - 权限模型
+          - 生命周期合同
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/acceptance.yaml
+        sections:
+          - A1
+          - A4
+          - A5
+          - A6
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次为 `/baseline` 冻结，尚未进入 `/dev` 实施。
+      - 本轮只冻结 metadata/codegen 方案，不在 specs 之外直接修改业务 metadata。
+      - 发布口径为一把升级，不保留旧发起群聊页双轨。

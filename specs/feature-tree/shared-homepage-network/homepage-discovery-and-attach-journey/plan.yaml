@@ -1,0 +1,103 @@
+version: 1
+node: shared-homepage-network/homepage-discovery-and-attach-journey
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage discovery metadata topology
+    goal: >
+      冻结主页选择器、主页详情、补充主页的 route/surface/request context，
+      以及 `SearchHomepages` / `GetHomepageDetail` / `SuggestHomepageCandidate`
+      的 metadata 真相源。
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `_shared` 中 homepage picker/detail/suggest 的 route 与 surfaces 已定义
+      - `entity/homepage` 中 search/detail/suggestion DTO 与 operation 已定义
+      - attach 场景不再依赖手写路径或页面字面量
+    status: planned
+
+  - id: P2
+    title: establish homepage attach codegen baseline
+    goal: >
+      让 homepage discovery/attach 所需 DTO、API metadata、request page ids
+      与 route 常量都由 codegen 产出。
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - `make codegen` 与 `make codegen-app` 产出新的 homepage search / attach 生成物
+      - App 与 cloud client 不再手写第二套 homepage attach 常量
+    status: planned
+
+  - id: P3
+    title: land homepage picker detail and suggestion flow
+    goal: >
+      落地主页选择器、主页详情预览与补充主页主线，并确保跨页返回时上下文可恢复。
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 用户可在 picker 中搜索、区分并选择正确主页
+      - 用户可查看主页详情预览后返回 picker 或发布器
+      - 搜索不到主页时可补充主页并回到当前上下文
+    status: planned
+
+  - id: P4
+    title: land canonical homepage attach write path
+    goal: >
+      在统一发布器中落地四类内容的主页挂载规则，并只写 canonical homepage reference。
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J2
+      - J3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 口碑必须且只能绑定 1 个主页
+      - 笔记、作品、提问可选绑定 1 个主页
+      - 发布器只写 `primaryEntityId` 等 canonical fields
+      - 旧自由文本 attach 不再作为新的 write path
+    status: planned
+
+  - id: P5
+    title: connect homepage aggregation return flow and harden rollout
+    goal: >
+      打通 content -> entity 的主页回流链路，并冻结观测、弱网降级与 Journey 级回滚路径。
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J3
+      - R1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_release_rehearsal
+    done_when:
+      - 发布成功后内容能进入主页对应聚合面
+      - attach 写入失败与回流延迟路径有明确观测
+      - Journey 可按 feature flag 或整版策略回滚
+    status: planned

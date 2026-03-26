@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-candidate-intake-and-publish
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze candidate lifecycle metadata
+    goal: 冻结 candidate 状态、来源证据字段与 publish 边界
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - candidate 与 published 边界明确
+      - 来源证据字段可治理
+    status: planned
+
+  - id: P2
+    title: establish candidate intake and publish code path
+    goal: 打通候选主页 intake、审核发布与错误码主线
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - 候选可进入统一状态机
+      - 来源缺失时不能直接发布
+    status: planned
+
+  - id: P3
+    title: expose published homepage to search and attach flows
+    goal: 让已发布主页能被搜索、挂载和浏览，未发布主页仍保持隔离
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+    done_when:
+      - 发布后主页可进入正式网络
+      - 审核前主页不对普通浏览用户公开
+    status: planned
+
+  - id: P4
+    title: harden candidate publish regression tests
+    goal: 为候选生命周期、发布边界和来源校验补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - candidate publish 主线有稳定测试
+      - 来源缺失与驳回场景有回归覆盖
+    status: planned

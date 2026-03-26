@@ -28,22 +28,18 @@ profile_tabs:
         label_key: creation_sub_all
         content_type: null
         order: 0
-      - id: micro
-        label_key: creation_sub_micro
-        content_type: micro
-        order: 1
       - id: image
         label_key: creation_sub_image
         content_type: image
-        order: 2
+        order: 1
       - id: video
         label_key: creation_sub_video
         content_type: video
-        order: 3
+        order: 2
       - id: article
-        label_key: creation_sub_article
+        label_key: creation_sub_text
         content_type: article
-        order: 4
+        order: 3
     visibility_filter:
       mine: [all, public, private]
       other: [all, public]

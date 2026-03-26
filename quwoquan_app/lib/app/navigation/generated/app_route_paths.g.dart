@@ -12,6 +12,9 @@ class AppRoutePaths {
   static const String chat = '/chat';
   static const String chatSegment = 'chat';
 
+  static const String startGroupChat = '/chat/start-group';
+  static const String startGroupChatSegment = 'start-group';
+
   static const String profile = '/profile';
   static const String profileSegment = 'profile';
 
@@ -100,6 +103,70 @@ class AppRoutePaths {
 
   static const String globalSearch = '/search';
   static const String globalSearchSegment = 'search';
+
+  static const String globalSearchNetworkResultsPathTemplate = '/search/network';
+  static String globalSearchNetworkResults({String? query, String? tab}) {
+    return _buildPath(globalSearchNetworkResultsPathTemplate, <String, String>{
+    }, <String, String?>{
+      'query': query,
+      'tab': tab,
+    });
+  }
+  static const String globalSearchNetworkResultsSegment = 'network';
+
+  static const String homepagePickerPathTemplate = '/homepages/picker';
+  static String homepagePicker({String? query}) {
+    return _buildPath(homepagePickerPathTemplate, <String, String>{
+    }, <String, String?>{
+      'query': query,
+    });
+  }
+  static const String homepagePickerSegment = 'picker';
+
+  static const String suggestHomepagePathTemplate = '/homepages/suggest';
+  static String suggestHomepage({String? query}) {
+    return _buildPath(suggestHomepagePathTemplate, <String, String>{
+    }, <String, String?>{
+      'query': query,
+    });
+  }
+  static const String suggestHomepageSegment = 'suggest';
+
+  static const String homepageDetailPathTemplate = '/homepages/{id}';
+  static String homepageDetail({required String id}) {
+    return _buildPath(homepageDetailPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String homepageDetailSegment = '{id}';
+
+  static const String homepageClaimPathTemplate = '/homepages/{id}/claim';
+  static String homepageClaim({required String id}) {
+    return _buildPath(homepageClaimPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String homepageClaimSegment = 'claim';
+
+  static const String homepageMaintenancePathTemplate = '/homepages/{id}/manage';
+  static String homepageMaintenance({required String id}) {
+    return _buildPath(homepageMaintenancePathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String homepageMaintenanceSegment = 'manage';
+
+  static const String homepageStatusReportPathTemplate = '/homepages/{id}/status-report';
+  static String homepageStatusReport({required String id}) {
+    return _buildPath(homepageStatusReportPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String homepageStatusReportSegment = 'status-report';
 
   static const String assistantManagement = '/assistant/management';
   static const String assistantManagementSegment = 'management';

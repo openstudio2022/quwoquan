@@ -1,258 +1,368 @@
-# L1 圈子社区 v2 — 整体架构设计
+# L1 群组入口与圈子内核 — 整体设计方案
 
 ## 设计动因
 
-spec.md v2 将圈子从「浏览型列表页」升级为「同频社区空间」，新增三大能力域（体验重构、协作工具、端侧平台化），涉及 4 个云侧域（circle、chat、content、recommendation）和端侧全链路重构。需要在 L1 层面做出跨切架构决策，确保 6 个 L2 在统一架构下协同演进。
+本轮 PRD 已经把圈子主线重写为：
+
+- 全局入口统一叫 `群组`
+- 详情页分为 `通用圈子模板` 与 `组织主页模板`
+- 群不再等同于聊天群，而是承接 `交流 / 资料 / 公告` 的子单元
+- 内容、成员、群与具体事物的边界必须重新冻结
+
+如果没有一版新的 L1 设计，后续实现会继续回到三类旧问题：
+
+1. 首页与搜索都叫“圈子”，学校、院系、班级、公司、部门会继续显得违和。
+2. 详情页只有一套兴趣圈模板，组织型关系沉淀无法自然承接。
+3. 群仍会被误建模成 Conversation 的别名，无法承接群主、群资料、群公告和加入审批。
 
 ## 上游输入评审
 
-| 上游 | 状态 | 阻断项 |
-|------|------|--------|
-| spec.md v2 | ✅ 已冻结 | 无 |
-| acceptance.yaml（9 条） | ✅ 已定义 | 无 |
-| circle metadata（fields/service/events/errors/storage） | ✅ 已有基线 | 需扩展 CircleFile、CircleSection 实体 |
-| chat metadata（Conversation.circleId, type=circle） | ✅ 已就绪 | 无阻断，event-driven 集成 |
-| content metadata（Post.circleIds, PostCircleDistribution） | ✅ 已就绪 | 无阻断，复用 content 域 |
-| recommendation（circle_discovery scenario） | ✅ 已就绪 | 推理模型可占位，降级到 RuleScorer |
-| domain_taxonomy | ❌ 不存在 | **本次新建**，为 D-1 关键产出 |
+| 输入 | 当前结论 |
+|---|---|
+| `circle-community/spec.md` | 已冻结“群组入口 + 圈子内核 + 组织主页模板” |
+| `circle-community/acceptance.yaml` | `A1~A9` 已能承接本轮设计与后续 plan |
+| `circle-experience-redesign/spec.md` | 已冻结统一发现与双模板详情基线 |
+| `circle-homepage-redesign/spec.md` | 已冻结模板级首页、内容、群/组织、成员结构 |
+| `circle-collaboration-tools/spec.md` | 已冻结群不是纯聊天群，而是子单元协作空间 |
+| `global-search-experience/spec.md` | 已冻结首页与搜索统一入口词为 `群组` |
+| 具体事物会话边界 | 已明确只消费摘要，不在本会话展开主档与抓取 |
+
+结论：
+
+- `/design` 准入满足。
+- 本次设计需要真正覆盖 metadata/codegen、字段演进、迁移、观测与回滚。
+- 由于本轮设计涉及 metadata/codegen 方案，后续将执行真实 G1 校验命令。
 
 ## 对标输入分析
 
-| 对标对象 | 借鉴点 | 不借鉴点 | 适用边界 |
-|----------|--------|----------|----------|
-| Discord Server | 频道 + 角色 + 文件共享 + 机器人集成 | 语音频道、Stage Channel | 圈子定位为兴趣社区而非实时通讯 |
-| 小红书圈子 | 兴趣分类 + 瀑布流 + 发布入口 | 电商导购 | 内容创作为核心，不做交易 |
-| 豆瓣小组 | 话题讨论 + 成员治理 + 文件帖 | 纯文字论坛形态 | 需要多媒体+结构化板块 |
-| Notion Workspace | 可配置板块 + 共享空间 | 在线文档协作 | 仅借鉴板块可配置理念，不做在线编辑 |
+| 对标对象 | 吸收点 | 不吸收点 |
+|---|---|---|
+| 微信群 / 企业微信 | 单入口容纳不同关系对象、正式组织不必强行娱乐化命名 | 不照搬企业通讯录与聊天完全绑定的结构 |
+| Discord Server | 子单元治理、角色分层、子空间可承载多能力 | 不照搬频道级信息架构与实时通讯优先 |
+| 小红书 | 统一发布模型、内容再挂载具体对象 | 不把所有详情页都做成同一种兴趣社区页 |
+| 豆瓣小组 | 内容沉淀、管理员秩序和精华心智 | 不延续纯文字论坛和单列主形态 |
 
 ## 方案对比
 
-### D-1：领域标签统一方案
+### 方案 A：所有关系主页前台统一继续叫“圈子”
 
-#### 方案 A：集中式 domain_taxonomy.yaml（推荐）
+优点：
 
-在 `contracts/metadata/_shared/domain_taxonomy.yaml` 定义全局领域标签体系，所有消费方（圈子频道、助理路由、推荐场景、内容标签）共同引用。codegen 生成 Go/Dart 枚举。
+- 命名最省事。
+- 现有代码、文案和路径改动最小。
 
-**优点**：单一真相、编译期安全、跨域一致
-**缺点**：变更需全量 codegen
-**适用条件**：需要跨域对齐的场景（本次需求）
+缺点：
 
-#### 方案 B：映射层方案
+- 学校、院系、班级、公司、部门会继续显得世俗化。
+- 组织型角色与节点语义会被兴趣圈语言污染。
+- 搜索与首页在用户层无法自然解释。
 
-保持助理 `domain_routing_catalog.json` 和圈子频道配置各自独立，增加映射表对齐。
+### 方案 B：把兴趣圈和组织主页拆成两个完全独立世界
 
-**优点**：最小改动、各自演进
-**缺点**：双源易漂移、运行时映射增加复杂度
-**适用条件**：仅需弱对齐的场景
+优点：
 
-**选型决策**：**方案 A**。metadata-first 原则要求唯一真相；领域标签是跨域基础设施，必须集中管理。
+- 前台语义最纯。
+- 可以分别设计完全不同的信息架构。
 
----
+缺点：
 
-### D-2：圈子主页板块化方案
+- 首页、搜索、推荐、关注、加入、管理都会分裂成两套。
+- 会重复建设内容、成员、群等同构能力。
+- 后续与具体事物和搜索结果面会再次裂开。
 
-#### 方案 A：服务端驱动 UI
+### 方案 C：全局统一 `群组` 入口，详情页使用双模板，共享一个 circle 内核
 
-Circle 实体新增 `sections` 字段（`List<CircleSection>`），API 返回板块配置，客户端根据配置动态渲染。
+优点：
 
-**优点**：完全可配置、无需客户端更新
-**缺点**：API 复杂、冷启动延迟、离线体验差
-**适用条件**：板块类型频繁变化的场景
+- 首页和搜索保持一个入口心智。
+- 兴趣型与组织型只在模板层分叉，底层能力保持复用。
+- 可以在不重命名服务与仓储的前提下完成一把升级。
 
-#### 方案 B：客户端板块注册 + 服务端开关（推荐）
+缺点：
 
-客户端内置所有板块组件（作品区、群聊、存储、互动等），服务端仅返回轻量配置（板块顺序 + 可见性）。每个板块独立加载数据，单板块失败不影响整体。
+- 需要新增群模型，而不是继续把群等同于会话。
+- 需要在 UI 层仔细处理模板差异，避免看起来像“强套皮”。
 
-**优点**：启动快、渐进加载、离线可用、板块隔离
-**缺点**：新板块类型需客户端发版
-**适用条件**：板块类型相对稳定、移动端优先
+## 选型决策
 
-**选型决策**：**方案 B**。移动端性能优先；板块类型（作品/群聊/存储/互动）在 v2 范围内已确定，不需频繁变化。
+**选定方案：方案 C**
 
----
+理由：
 
-### D-3：存储空间架构
+1. 它同时满足“用户心智不分裂”和“前台语言不违和”。
+2. 它允许本轮只升级产品和领域模型，不强制重命名现有 `circle` 域。
+3. 它最适合与全局搜索、推荐、内容和后续具体事物摘要集成保持一致。
 
-#### 方案 A：圈子域内 CircleFile 实体（推荐）
+## 关键设计决策
 
-在 circle 域新增 `CircleFile` 实体，元数据存 MongoDB（文件名、大小、路径、权限），文件本体存 S3 对象存储。circle-service 提供存储 CRUD API。
+### D1：全局入口统一叫 `群组`
 
-**优点**：域内聚合、简单直接、权限复用圈子角色模型
-**缺点**：圈子域职责增大
-**适用条件**：v1 快速交付，存储仅服务圈子场景
+- 首页一级入口和搜索一级筛选统一叫 `群组`。
+- `圈子` 只保留为兴趣型详情页名称。
+- 学校、院系、班级、公司、部门前台直接显示具体名称。
 
-#### 方案 B：独立 file-service
+### D2：底层内核继续复用 `circle` 域
 
-新建 file-service 域，提供通用文件管理能力，circle 通过 fileId 引用。
+- 本轮不重命名 `circle-service`、`CircleRepository`、`ui/circle/`。
+- `Circle` 在领域层继续代表“群组主页”这一聚合根。
+- 用户词与技术词分离：前台叫群组，内部保留 circle。
 
-**优点**：跨域复用（未来用户个人网盘等）
-**缺点**：额外服务开销、权限模型需独立设计
-**适用条件**：多域共享文件管理的场景
+### D3：引入独立的 `CircleGroup` 子单元实体
 
-**选型决策**：**方案 A**。v1 存储仅服务圈子，域内实现最简。未来演进：当其他域需要文件管理时，抽取为 file-service。
+本轮必须停止把“群”直接等同于 `Conversation`。
 
----
+选型对比：
 
-### D-4：群聊集成方式
+- 方案 A：继续用 `Conversation` 直接代表群。
+- 方案 B：引入 `CircleGroup`，并把 `conversationId` 作为群的一个能力绑定。
 
-#### 方案 A：事件驱动松耦合（推荐）
+**选定方案：方案 B。**
 
-`CircleMemberJoined` / `CircleMemberLeft` 事件 → `event_store` → `chat-service` 消费，自动创建/管理群聊成员。已有 events.yaml 中 chat-service 为 consumer。
+原因：
 
-**优点**：松耦合、容错好、已有事件基础设施
-**缺点**：最终一致性（加入后可能延迟几百 ms 才进群）
-**适用条件**：不要求即时一致的场景
+- 群还要承载资料、公告、加入审批、公开/私有、群主/群管。
+- 组织节点（院系、班级、部门）也要复用同一子单元模型。
+- `Conversation` 只能代表交流能力，不能承担群的全量语义。
 
-#### 方案 B：同步 RPC 调用
+### D4：公开内容归群组层，群层不再承接主公开时间线
 
-circle-service 直接调用 chat-service API 管理群聊成员。
+- 群组详情页承接公开内容主 feed。
+- 群层承接 `交流 / 资料 / 公告`。
+- 组织节点可以独立发布内容，但其内容仍归属于群组内容体系，并支持父节点聚合。
 
-**优点**：即时一致
-**缺点**：紧耦合、chat-service 故障会阻塞 circle 操作
-**适用条件**：要求强一致的场景
+### D5：内容模型统一为“发布内容”
 
-**选型决策**：**方案 A**。events.yaml 已定义 chat-service 为消费者，松耦合符合 DDD 原则。延迟在 P99 < 1s 可接受。
+- 一级内容类型冻结为 `笔记 / 作品 / 提问 / 口碑`。
+- 表达形式冻结为 `图文笔记 / 视频 / 文章`。
+- 总添加入口继续保持 `相册 / 视频 / 长文`。
+- 群组内入口与总添加入口共用同一发布器，只改变默认上下文。
 
----
+### D6：加入群组与加入群严格分离
 
-### D-5：发布区内容模型
+- 用户加入群组后，不默认自动加入任何群。
+- `公共群` 一律只能 `申请加入`。
+- 小型群组可只有一个默认公共群，但仍需要用户主动申请。
+- 大型群组不自动分裂，不自动建群，由圈主/管理员或负责人/管理员手动新建。
+- 多个公共群必须先命名后对外展示。
 
-#### 方案 A：复用 content 域 + circleId 过滤（推荐）
+### D7：自建群的公开与私有边界
 
-圈子 feed = `GET /v1/content/posts?circleId={circleId}`，利用已有 `PostCircleDistribution` 表。circle-service 的 `GetCircleFeed` 代理到 content-service 或直接查投影。
+- 自建群分为 `公开` 与 `私有`。
+- 默认公开。
+- 公开自建群：圈内成员可在群列表中看到。
+- 私有自建群：不出现在默认列表中，仅圈内成员可搜索。
+- 私有自建群搜索规则：
+  - 按 `groupId` 精确匹配
+  - 按 `groupName` 支持模糊匹配
 
-**优点**：零新实体、复用内容基础设施、创作流程统一
-**缺点**：跨域查询，circle-service 依赖 content
-**适用条件**：内容模型已完善的场景（当前已有 PostCircleDistribution）
+### D8：角色分层
 
-#### 方案 B：圈子域内物化投影
+- 圈级：`圈主 / 圈管`
+- 组织主页级：`负责人 / 管理员`
+- 群级：`群主 / 群管`
 
-从 content 事件异步投影到 circle 域的 `circle_feed` 读模型。
+治理边界：
 
-**优点**：查询独立、可优化圈子特定排序
-**缺点**：数据冗余、同步复杂度
-**适用条件**：圈子 feed 需要复杂个性化排序
+- 上位治理者只对 `公共群` 拥有 `转让群主 / 解散群` 权限。
+- 不拥有对私有自建群的处置权。
+- 普通成员可见管理页面骨架，但所有不可执行操作为 disabled。
 
-**选型决策**：**方案 A**，因 `PostCircleDistribution` 已存在且有索引。未来演进：当圈子 feed 需圈子特定排序（如圈主置顶）时，启用方案 B（投影 YAML 已在 projections/circle_feed.yaml 预留）。
+### D9：组织节点内容支持向上聚合
 
----
+- 组织节点可以独立发布内容。
+- 父节点可聚合展示子节点内容。
+- 默认排序按 `最近活跃时间`，而不是仅按发布时间。
+- 最近活跃时间由发布时间与评论/回复更新时间共同决定。
 
-## 关键设计决策汇总
+### D10：组织型主页保留关注关系
 
-| 编号 | 决策 | 方案 | 状态 |
-|------|------|------|------|
-| D-1 | 领域标签统一 | 集中式 `_shared/domain_taxonomy.yaml` | 已定 |
-| D-2 | 圈子主页板块化 | 客户端注册 + 服务端开关 | 已定 |
-| D-3 | 存储空间 | 圈子域内 CircleFile | 已定 |
-| D-4 | 群聊集成 | 事件驱动松耦合 | 已定 |
-| D-5 | 发布区内容 | 复用 content 域 + circleId | 已定 |
-| D-6 | 端侧迁移 | features/ → ui/circle/，三层 Repository | 已定 |
+- 组织型主页同时支持 `关注` 与 `加入 / 身份归属`。
+- 关注用于轻量订阅与后续推荐。
+- 加入或身份归属用于节点参与、群申请与治理。
 
-## 整体架构图
+### D11：搜索接口使用统一搜索入口
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         端侧 (Flutter/Dart)                          │
-│                                                                      │
-│  lib/ui/circle/                                                      │
-│  ├── pages/                                                          │
-│  │   ├── circles_page.dart          ← 频道 Tab + 推荐 + 瀑布流       │
-│  │   ├── circle_detail_page.dart    ← 板块式主页                     │
-│  │   └── circle_stats_page.dart     ← 统计页                        │
-│  ├── providers/                                                      │
-│  │   └── circle_providers.dart      ← Riverpod 状态管理              │
-│  ├── widgets/                                                        │
-│  │   ├── circle_card.dart                                            │
-│  │   ├── channel_panel.dart                                          │
-│  │   ├── section_works.dart         ← 作品板块                       │
-│  │   ├── section_chat.dart          ← 群聊板块                       │
-│  │   ├── section_storage.dart       ← 存储板块                       │
-│  │   └── section_interaction.dart   ← 互动板块                       │
-│  └── models/                                                         │
-│      └── circle_view_models.dart    ← 类型化 ViewModel               │
-│                                                                      │
-│  lib/cloud/services/circle/                                          │
-│  ├── circle_repository.dart         ← Abstract + Mock + Remote       │
-│  └── mock/circle_mock_data.dart                                      │
-│                                                                      │
-├──────────────────────────────────────────────────────────────────────┤
-│                         云侧 (Go/MongoDB/Redis)                      │
-│                                                                      │
-│  ┌──────────────┐    event     ┌──────────────┐                      │
-│  │ circle-svc   │────────────▶│ chat-service  │                      │
-│  │              │  Joined/Left │              │                      │
-│  │ Circle       │              │ Conversation  │                      │
-│  │ CircleMember │              │ (type=circle) │                      │
-│  │ CircleFile   │              └──────────────┘                      │
-│  │ CircleSection│                                                    │
-│  └──────┬───────┘                                                    │
-│         │ query                                                      │
-│         ▼                                                            │
-│  ┌──────────────┐                 ┌────────────────┐                 │
-│  │content-svc   │                 │ rec-model-svc  │                 │
-│  │ Post         │ ◀─── feed ────▶│ circle_discovery│                 │
-│  │ Distribution │                 │ scenario       │                 │
-│  └──────────────┘                 └────────────────┘                 │
-│                                                                      │
-│  contracts/metadata/_shared/domain_taxonomy.yaml ← 领域标签唯一真相   │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
-```
+- 产品层不再为群组、内容、人、具体事物分别设计独立搜索体验接口。
+- 对用户暴露的是一个统一的 `Search` 能力，类似 web search。
+- `global-search-experience` 负责统一编排；circle 域只提供群组结果与 facet 真相源。
 
-## 跨域数据流
+## 元数据 / codegen 方案
 
-```
-用户加入圈子 ─▶ circle-service.JoinCircle()
-                 ├── 写入 CircleMember
-                 ├── 更新 Circle.memberCount
-                 └── 发布 CircleMemberJoined 事件
-                      ├── chat-service: 将用户加入 circle 群聊
-                      ├── recommendation-engine: 更新 social_signal
-                      └── notification-service: 通知圈主
+本轮设计冻结以下元数据演进方向：
 
-用户在圈内发帖 ─▶ content-service.CreatePost(circleIds=[circleId])
-                 ├── 写入 Post + PostCircleDistribution
-                 ├── 发布 PostCreated 事件
-                 │    ├── circle-service: 更新 Circle.postCount
-                 │    └── recommendation-engine: 更新 hot_path_signal
-                 └── 端侧 circle feed 自动刷新
+### `contracts/metadata/social/circle/fields.yaml`
 
-圈子 feed 查询 ─▶ circle-service.GetCircleFeed(circleId, cursor)
-                 └── 代理查询 content 域 PostCircleDistribution → Post
+新增或扩展：
 
-存储空间上传 ─▶ circle-service.UploadFile(circleId, file)
-                 ├── 验证权限（CircleMember.role）
-                 ├── 验证容量（Circle.storageUsedBytes vs quota）
-                 ├── 上传到 S3 → 获取 objectKey
-                 ├── 写入 CircleFile 元数据
-                 └── 发布 CircleFileUploaded 事件
-```
+- `Circle.kind`
+  - `interest`
+  - `organization`
+- `Circle.display_subject_type`
+  - `circle`
+  - `school`
+  - `college`
+  - `grade`
+  - `class`
+  - `company`
+  - `department`
+- `Circle.follow_enabled`
+- `CircleGroup`
+- `CircleGroupMember`
 
-## Story 与测试层映射
+`CircleGroup` 关键字段建议：
 
-| L2 | L4 Story | T1 单元 | T2 集成 | T3 契约 | T4 端到端 |
-|----|----------|---------|---------|---------|-----------|
-| circle-client-platform | features-to-ui-migration | import 检查 | Provider 切换 | Repository 契约 | 路由导航 |
-| circle-client-platform | circle-repository-contract | Mock 返回 | Remote HTTP | service.yaml 对齐 | — |
-| circle-client-platform | circle-semantic-cleanup | verify_dart_semantic.py | — | — | — |
-| circle-experience-redesign | domain-taxonomy-contract | 枚举完整性 | 圈子+助理引用 | taxonomy codegen | — |
-| circle-experience-redesign | resonance-matching | 排序算法 | 推荐 API 集成 | — | 推荐相关度 |
-| circle-experience-redesign | homepage-layout | 板块渲染 | 配置加载 | — | 板块独立降级 |
-| circle-collaboration-tools | storage-crud | CRUD 单元 | S3 mock | service.yaml | 上传下载 |
-| circle-collaboration-tools | chat-integration | 事件发布 | chat-svc 消费 | — | 加入→进群 |
-| circle-collaboration-tools | publishing-contract | feed 查询 | content 代理 | — | 发帖→圈子feed |
+- `circleId`
+- `parentGroupId`
+- `groupType`: `public | self_built | org_node`
+- `nodeType`: `generic | college | grade | class | department | team`
+- `displayName`
+- `description`
+- `visibility`: `public | private`
+- `joinPolicy`: `apply_only`
+- `searchMode`
+- `conversationId`
+- `storageEnabled`
+- `noticeEnabled`
+- `isDefaultPublicGroup`
+- `status`
+- `ownerUserId`
+- `managerIds`
+
+`CircleGroupMember` 关键字段建议：
+
+- `groupId`
+- `userId`
+- `role`: `owner | manager | member`
+- `status`: `pending | joined | rejected`
+
+### `contracts/metadata/social/circle/service.yaml`
+
+新增或扩展：
+
+- `ListCircleGroups`
+- `CreateCircleGroup`
+- `UpdateCircleGroup`
+- `ApplyJoinCircleGroup`
+- `ApproveCircleGroupJoin`
+- `RejectCircleGroupJoin`
+- `TransferCircleGroupOwner`
+- `ArchiveCircleGroup`
+
+### `contracts/metadata/content/post/*`
+
+扩展群组内容分发字段：
+
+- 在 `PostCircleDistribution` 或等价分发表中增加 `groupId` / `nodeId`
+- 支持组织节点独立发布
+- 支持父节点聚合查询
+- 支持按最近活跃时间排序
+
+### `contracts/metadata/messages/conversation/*`
+
+保留：
+
+- `circleId`
+
+新增建议：
+
+- `circleGroupId`
+
+使 Conversation 绑定到具体 `CircleGroup`，而非直接把 Conversation 当群本身。
+
+### `_shared/*`
+
+- 首页与搜索入口相关 route / surface / request context 继续对齐 `群组` 用户词
+- 内部仍消费 circle 域的 typed 结果与 facet
+
+## 字段演进、迁移 / 回填、双读双写
+
+### 字段演进
+
+- `Circle` 从单一兴趣圈模型演进为群组主页聚合根。
+- 新增 `CircleGroup / CircleGroupMember`。
+- `Conversation.circleId` 补充 `circleGroupId`，把“交流能力”从“群模型”中拆开。
+- 内容分发表新增 `groupId/nodeId`。
+
+### 迁移 / 回填
+
+- 现有单 `conversationId` 的圈子，迁移为“默认公共群”。
+- 小型群组可由迁移脚本自动生成 1 个默认公共群记录，并把原 `conversationId` 绑定到该群。
+- 组织型主页首期支持手工录入与批量导入组织树。
+- 原有圈子内容默认落在 `circleId` 维度；无明确分组归属的历史内容不强制回填 `groupId`。
+
+### 双读 / 双写
+
+- 迁移阶段允许 `Circle.conversationId` 与 `CircleGroup.conversationId` 短期并行读取。
+- dev 完成后，`Circle.conversationId` 只保留为兼容字段，最终退出条件：
+  - 所有公共群均有 `CircleGroup`
+  - 端侧与 chat 域全部改读 `CircleGroup.conversationId`
+
+## feature flag、观测、SLO 验证与回滚方案
+
+### feature flag
+
+- 本轮不新增用户可见 feature flag。
+- 发布控制采用整版上线与整版回滚。
+
+### 观测
+
+关键指标：
+
+- `group_hub_open_count`
+- `group_hub_join_count`
+- `circle_group_apply_count`
+- `circle_group_apply_approved_count`
+- `circle_group_apply_rejected_count`
+- `circle_group_search_private_hit_count`
+- `circle_group_content_aggregate_latency_ms`
+
+### SLO 验证
+
+- 群组首页首屏即时可见。
+- 群目录打开与申请流程 P95 在可接受范围内。
+- 父节点内容聚合首批结果 P95 不超过群组内容主流约定阈值。
+
+### 回滚
+
+1. 优先整版回退到旧圈子实现。
+2. 若仅群模型迁移失败，允许回退到“单圈默认群”兼容读路径。
+3. 历史圈子内容不做破坏性清理。
+
+## TDD / ATDD 策略
+
+- `T1_schema`
+  - Circle / CircleGroup / CircleGroupMember contract
+  - groupId / nodeId 内容分发表
+  - search route / surface / request context
+- `T2_module_interaction`
+  - 群组首页、群目录、组织树、管理页面 disabled 状态
+- `T3_cross_service_integration`
+  - CircleGroup 与 Conversation 绑定
+  - 内容节点发布与父节点聚合
+  - 群申请与审批
+- `T4_user_journey`
+  - 首页进入群组
+  - 组织型主页加入与节点浏览
+  - 圈子加入后申请公共群
+
+## plan slice 与 T1~T4 证据矩阵映射
+
+| Slice | 目标 | 对应验收 | 主要证据 |
+|---|---|---|---|
+| `P1` | 冻结群组 / 群 / 角色 / 内容 / 搜索元数据模型 | `A3/A4/A6` | `T1_schema` |
+| `P2` | 完成 codegen baseline 与兼容字段策略 | `A1/A2/A7/A8` | `T1_schema`, `T3_cross_service_integration` |
+| `P3` | 落地双模板详情页与首页 IA | `A4/A5` | `T2_module_interaction`, `T4_user_journey` |
+| `P4` | 落地公共群 / 自建群 / 申请入群 / 资料与公告能力 | `A6` | `T2_module_interaction`, `T3_cross_service_integration` |
+| `P5` | 落地组织节点发布、父节点聚合与搜索统一群组结果 | `A5/A9` | `T2_module_interaction`, `T3_cross_service_integration`, `T4_user_journey` |
+| `P6` | 完成观测、SLO、回滚与发布前验证 | `A7/A8/A9` | `T3_cross_service_integration`, `T4_release_rehearsal` |
 
 ## 未来演进
 
-| 演进点 | 触发条件 | 预期方案 |
-|--------|----------|----------|
-| 存储空间 → 独立 file-service | 其他域需要文件管理 | 抽取 CircleFile 为 File，file-service 统一管理 |
-| 发布区 → 物化投影 | 圈子 feed 需圈子特定排序（置顶/加权） | 启用 projections/circle_feed.yaml |
-| 多群聊 | 大型圈子需要子频道 | Circle 支持多 conversationId，UI 增加频道列表 |
-| 实时协作 | 存储空间需在线编辑 | 引入 CRDT/OT 协议，对接在线文档服务 |
-| 付费圈子 | 商业化需求 | 新增 CircleSubscription 实体，对接支付域 |
+- 若未来组织型群组需要更复杂的人员导入与身份认证，再把组织树与身份校验拆到独立 L2。
+- 若群资料能力未来需要跨域复用，再把文件能力从 circle 域中抽离。
+- 若搜索量级上升，再把统一搜索接口下沉到更稳定的聚合实现，但不改变用户词与结果类型。
 
 ## 遗留带规划任务
 
-- 现有 3 个 L2（activity-member-governance、in-circle-recommendation-loop、circle-management-and-stats）的 design.md 仍为占位模板，在各自进入 /dev 阶段时补充具体设计。
-- `projections/circle_feed.yaml` 已预留，暂不启用。
+- 现有 `activity-member-governance`、`circle-management-and-stats` 仍需在进入 `/dev` 前补齐与新群模型一致的设计。
+- 具体事物主档与抓取、口碑模板和展示配置，由独立会话冻结，不在本设计中展开。

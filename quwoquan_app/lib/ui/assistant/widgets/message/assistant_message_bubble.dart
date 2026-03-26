@@ -1,15 +1,13 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_content.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_process_drawer.dart';
@@ -39,11 +37,15 @@ String _resolveAssistantVisibleAnswerText({
   required String content,
   required bool isStreaming,
 }) {
+  final runArtifacts = (message['runArtifacts'] as Map?)
+      ?.cast<String, dynamic>();
   final candidates = isStreaming
       ? <String>[previewAnswer]
       : <String>[
           (message['displayMarkdown'] as String?) ?? '',
           (message['displayPlainText'] as String?) ?? '',
+          (runArtifacts?['displayMarkdown'] as String?) ?? '',
+          (runArtifacts?['displayPlainText'] as String?) ?? '',
           content,
         ];
   for (final candidate in candidates) {
@@ -91,6 +93,7 @@ class AssistantMessageBubble extends StatelessWidget {
     this.journeyViewModel,
     this.answerGateOpen = true,
     this.isAssistantRunning = false,
+    this.expandProcessByDefault = false,
     this.onRegenerateOptionSelected,
   });
 
@@ -110,6 +113,7 @@ class AssistantMessageBubble extends StatelessWidget {
   final AssistantJourneyViewModel? journeyViewModel;
   final bool answerGateOpen;
   final bool isAssistantRunning;
+  final bool expandProcessByDefault;
   final void Function(RegenerateOption option)? onRegenerateOptionSelected;
   final bool showAssistantAvatar;
   final bool showFeedbackActions;
@@ -170,7 +174,8 @@ class AssistantMessageBubble extends StatelessWidget {
                 retrievalProcessing:
                     resolveAssistantRetrievalProcessingFromMessage(message),
                 usageStats:
-                    (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
+                    (message['uiUsageStats'] as Map?)
+                        ?.cast<String, dynamic>() ??
                     const <String, dynamic>{},
                 elapsedMs:
                     ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
@@ -290,10 +295,11 @@ class AssistantMessageBubble extends StatelessWidget {
           horizontal: AppSpacing.containerSm,
           vertical: AppSpacing.intraGroupLg,
         ),
-        child: _buildAssistantMarkdownContent(
-          context: context,
+        child: AssistantAnswerContent(
+          message: message,
           content: answerText,
           textColor: textColor,
+          onReferenceTap: onReferenceTap,
         ),
       );
     } else if (renderPlainSelfText) {
@@ -404,17 +410,16 @@ class AssistantMessageBubble extends StatelessWidget {
         textColor: textColor,
         avatar: avatarWidget,
         content: Column(
-          crossAxisAlignment:
-              isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isRight
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showProcessDrawer)
               AssistantProcessDrawer(
                 viewModel: resolvedJourneyViewModel,
-                initiallyExpanded: isAssistantRunning,
-                onReferenceUrlTap: onReferenceTap != null
-                    ? (url) => onReferenceTap!(<String, dynamic>{'url': url})
-                    : null,
+                initiallyExpanded: isAssistantRunning || expandProcessByDefault,
+                onReferenceTap: onReferenceTap,
               )
             else if (runningStatusLabel != null)
               _RunningStatusRow(
@@ -429,9 +434,7 @@ class AssistantMessageBubble extends StatelessWidget {
                 children: [
                   if (isSelectionMode)
                     Padding(
-                      padding: EdgeInsets.only(
-                        right: AppSpacing.intraGroupSm,
-                      ),
+                      padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
                       child: Icon(
                         isSelected
                             ? Icons.check_circle
@@ -464,162 +467,6 @@ class AssistantMessageBubble extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static final RegExp _referenceBlockPattern = RegExp(
-    r'\n---\n📚\s*\*{0,2}参考资料\*{0,2}[\s\S]*$',
-  );
-
-  Widget _buildAssistantMarkdownContent({
-    required BuildContext context,
-    required String content,
-    required Color textColor,
-  }) {
-    final cleaned = content
-        .replaceFirst(_referenceBlockPattern, '')
-        .trimRight();
-    final segments = _MarkdownSegment.parse(cleaned);
-    final textStyle = TextStyle(
-      fontSize:
-          Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md,
-      color: textColor,
-      height: AppTypography.bodyLineHeight,
-    );
-    final mdStyle = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-      p: textStyle,
-      h1: textStyle.copyWith(fontWeight: FontWeight.w700),
-      h2: textStyle.copyWith(fontWeight: FontWeight.w700),
-      h3: textStyle.copyWith(fontWeight: FontWeight.w600),
-      listBullet: textStyle,
-      blockquote: textStyle,
-      code: textStyle.copyWith(color: textColor, fontFamily: 'monospace'),
-      codeblockPadding: EdgeInsets.all(AppSpacing.containerSm),
-      blockquotePadding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupSm,
-      ),
-      tableColumnWidth: const IntrinsicColumnWidth(),
-      tableCellsPadding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xs / 2,
-      ),
-      tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
-      tableBody: textStyle,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: segments
-          .map((segment) {
-            if (!segment.isCard) {
-              return _safeMarkdownBody(
-                markdownText: segment.content,
-                styleSheet: mdStyle,
-                textStyle: textStyle,
-              );
-            }
-            return Container(
-              margin: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-              padding: EdgeInsets.all(AppSpacing.containerSm),
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                border: Border.all(
-                  color: AppColors.primaryColor.withValues(alpha: 0.24),
-                ),
-              ),
-              child: _safeMarkdownBody(
-                markdownText: segment.toCardMarkdown(),
-                styleSheet: mdStyle,
-                textStyle: textStyle,
-              ),
-            );
-          })
-          .toList(growable: false),
-    );
-  }
-
-  static final _gfmTableBlockRe = RegExp(
-    r'((?:^|\n)\|[^\n]+\|\s*\n\|[\s:|-]+\|\s*\n(?:\|[^\n]+\|\s*\n?)*)',
-    multiLine: true,
-  );
-
-  Widget _safeMarkdownBody({
-    required String markdownText,
-    required MarkdownStyleSheet styleSheet,
-    required TextStyle textStyle,
-  }) {
-    try {
-      final tableMatches = _gfmTableBlockRe.allMatches(markdownText).toList();
-      if (tableMatches.isEmpty) {
-        return MarkdownBody(
-          data: markdownText,
-          selectable: true,
-          styleSheet: styleSheet,
-          onTapLink: _handleMarkdownLinkTap,
-        );
-      }
-
-      final children = <Widget>[];
-      var cursor = 0;
-      for (final match in tableMatches) {
-        if (match.start > cursor) {
-          final before = markdownText.substring(cursor, match.start).trim();
-          if (before.isNotEmpty) {
-            children.add(
-              MarkdownBody(
-                data: before,
-                selectable: true,
-                styleSheet: styleSheet,
-                onTapLink: _handleMarkdownLinkTap,
-              ),
-            );
-          }
-        }
-        final tableText = match.group(0)!.trim();
-        children.add(
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: MarkdownBody(
-              data: tableText,
-              selectable: true,
-              styleSheet: styleSheet,
-              onTapLink: _handleMarkdownLinkTap,
-            ),
-          ),
-        );
-        cursor = match.end;
-      }
-      if (cursor < markdownText.length) {
-        final after = markdownText.substring(cursor).trim();
-        if (after.isNotEmpty) {
-          children.add(
-            MarkdownBody(
-              data: after,
-              selectable: true,
-              styleSheet: styleSheet,
-              onTapLink: _handleMarkdownLinkTap,
-            ),
-          );
-        }
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      );
-    } catch (_) {
-      return SelectableText(markdownText, style: textStyle);
-    }
-  }
-
-  void _handleMarkdownLinkTap(String text, String? href, String title) {
-    final url = (href ?? '').trim();
-    if (url.isEmpty) return;
-    onReferenceTap?.call(<String, dynamic>{
-      'title': text.trim().isNotEmpty ? text.trim() : title,
-      'url': url,
-      'source': title,
-    });
   }
 }
 
@@ -988,139 +835,6 @@ class _BubbleTailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _MarkdownSegment {
-  const _MarkdownSegment._({
-    required this.content,
-    required this.isCard,
-    this.cardType = '',
-    this.cardPayload = const <String, dynamic>{},
-  });
-
-  final String content;
-  final bool isCard;
-  final String cardType;
-  final Map<String, dynamic> cardPayload;
-
-  static const Set<String> _supportedCardTypes = <String>{
-    'compare',
-    'trend',
-    'diagram',
-  };
-
-  factory _MarkdownSegment.text(String content) =>
-      _MarkdownSegment._(content: content, isCard: false);
-
-  factory _MarkdownSegment.hidden() =>
-      const _MarkdownSegment._(content: '', isCard: false);
-
-  factory _MarkdownSegment.card({
-    required String cardType,
-    required String payload,
-  }) {
-    final type = cardType.trim().toLowerCase();
-    if (!_supportedCardTypes.contains(type)) {
-      return _MarkdownSegment.hidden();
-    }
-    final decoded = _tryDecode(payload);
-    if (decoded == null || decoded.isEmpty) {
-      return _MarkdownSegment.hidden();
-    }
-    return _MarkdownSegment._(
-      content: payload,
-      isCard: true,
-      cardType: type,
-      cardPayload: decoded,
-    );
-  }
-
-  static List<_MarkdownSegment> parse(String raw) {
-    if (!raw.contains('```card:')) {
-      return <_MarkdownSegment>[_MarkdownSegment.text(raw)];
-    }
-    final sanitizedRaw = _stripDanglingCardFence(raw);
-    final regex = RegExp(r'```card:([a-zA-Z0-9_-]+)\n([\s\S]*?)```');
-    final segments = <_MarkdownSegment>[];
-    var index = 0;
-    for (final match in regex.allMatches(sanitizedRaw)) {
-      if (match.start > index) {
-        segments.add(
-          _MarkdownSegment.text(sanitizedRaw.substring(index, match.start)),
-        );
-      }
-      final type = (match.group(1) ?? '').trim();
-      final payload = (match.group(2) ?? '').trim();
-      segments.add(_MarkdownSegment.card(cardType: type, payload: payload));
-      index = match.end;
-    }
-    if (index < sanitizedRaw.length) {
-      segments.add(_MarkdownSegment.text(sanitizedRaw.substring(index)));
-    }
-    return segments.where((seg) => seg.content.trim().isNotEmpty).toList();
-  }
-
-  static String _stripDanglingCardFence(String raw) {
-    final start = raw.indexOf('```card:');
-    if (start < 0) return raw;
-    final end = raw.indexOf('```', start + 8);
-    if (end >= 0) return raw;
-    return raw.substring(0, start).trimRight();
-  }
-
-  String toCardMarkdown() {
-    if (!isCard || cardPayload.isEmpty) return content;
-    final title = (cardPayload['title'] as String?)?.trim();
-    final lines = <String>[
-      '### ${title?.isNotEmpty == true ? title! : _fallbackTitle()}',
-    ];
-    if (cardType == 'diagram') {
-      final mermaid = (cardPayload['mermaid'] as String?)?.trim() ?? '';
-      if (mermaid.isNotEmpty) {
-        lines
-          ..add('```mermaid')
-          ..add(mermaid)
-          ..add('```');
-      }
-    }
-    cardPayload.forEach((key, value) {
-      if (key == 'title' || key == 'mermaid') return;
-      lines.add('- **$key**: ${_valueText(value)}');
-    });
-    return lines.join('\n');
-  }
-
-  String _fallbackTitle() {
-    switch (cardType) {
-      case 'compare':
-        return '对比卡片';
-      case 'trend':
-        return '趋势卡片';
-      case 'diagram':
-        return '结构图';
-      default:
-        return cardType;
-    }
-  }
-
-  static Map<String, dynamic>? _tryDecode(String payload) {
-    try {
-      final decoded = jsonDecode(payload);
-      if (decoded is Map<String, dynamic>) return decoded;
-      if (decoded is Map) return decoded.cast<String, dynamic>();
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String _valueText(Object? value) {
-    if (value == null) return '';
-    if (value is num || value is bool || value is String) {
-      return value.toString();
-    }
-    return jsonEncode(value);
-  }
 }
 
 class _AssistantFollowupCard extends StatelessWidget {

@@ -112,6 +112,7 @@ func TestMain(m *testing.M) {
 
 	// 6. Services
 	profileService := application.NewProfileService(profileStore, personaStore, settingStore, profileCache, settingCache)
+	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
 	followService := application.NewFollowService(followStore, profileStore, profileCache)
 	blockService := application.NewBlockService(blockStore, blockCache)
 	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
@@ -125,7 +126,7 @@ func TestMain(m *testing.M) {
 
 	// 7. Handler
 	testHandler = httpadapter.NewUserHandler(
-		profileService, followService, blockService,
+		profileService, searchService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 	).Routes()

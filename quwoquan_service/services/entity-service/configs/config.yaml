@@ -1,0 +1,4 @@
+service:
+  name: entity-service
+  http:
+    addr: ":18084"

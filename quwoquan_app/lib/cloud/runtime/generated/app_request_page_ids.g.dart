@@ -8,17 +8,31 @@ class AppRequestPageIds {
     'createLocationNearby': 'create.location.nearby',
     'createLocationSearch': 'create.location.search',
     'globalSearchLanding': 'global.search.landing',
-    'globalSearchResults': 'global.search.results',
+    'globalSearchNetworkResults': 'global.search.network_results',
+    'globalSearchSuggestions': 'global.search.suggestions',
+    'homepageClaim': 'entity.homepage.claim.page',
+    'homepageDetail': 'entity.homepage.detail.page',
+    'homepageMaintenance': 'entity.homepage.maintenance.page',
+    'homepagePicker': 'entity.homepage.picker',
+    'homepageStatusReport': 'entity.homepage.status_report.page',
     'mediaUploadComplete': 'media.upload.complete',
     'mediaUploadInit': 'media.upload.init',
     'rtcSignal': 'rtc.signal',
+    'suggestHomepage': 'entity.homepage.suggest.page',
   };
 
   static const String createLocationNearby = 'create.location.nearby';
   static const String createLocationSearch = 'create.location.search';
   static const String globalSearchLanding = 'global.search.landing';
-  static const String globalSearchResults = 'global.search.results';
+  static const String globalSearchNetworkResults = 'global.search.network_results';
+  static const String globalSearchSuggestions = 'global.search.suggestions';
+  static const String homepageClaim = 'entity.homepage.claim.page';
+  static const String homepageDetail = 'entity.homepage.detail.page';
+  static const String homepageMaintenance = 'entity.homepage.maintenance.page';
+  static const String homepagePicker = 'entity.homepage.picker';
+  static const String homepageStatusReport = 'entity.homepage.status_report.page';
   static const String mediaUploadComplete = 'media.upload.complete';
   static const String mediaUploadInit = 'media.upload.init';
   static const String rtcSignal = 'rtc.signal';
+  static const String suggestHomepage = 'entity.homepage.suggest.page';
 }

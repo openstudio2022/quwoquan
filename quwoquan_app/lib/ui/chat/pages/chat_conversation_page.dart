@@ -19,12 +19,12 @@ import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
-import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -44,11 +44,13 @@ class ChatConversationPage extends ConsumerStatefulWidget {
     super.key,
     required this.conversationId,
     required this.onBack,
+    this.searchAnchorContext,
     this.embedded = false,
   });
 
   final String conversationId;
   final VoidCallback onBack;
+  final SearchConversationAnchorContext? searchAnchorContext;
   final bool embedded;
 
   @override
@@ -71,7 +73,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   final Set<String> _selectedIds = <String>{};
   Map<String, dynamic>? _actionMenuMessage;
   Offset? _actionMenuPosition;
-  bool _showEmojiPanel = false;
   bool _speechReady = false;
   String _lastAsrText = '';
 
@@ -173,108 +174,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     if (_resolvedTitle != null) return _resolvedTitle!;
     _loadConversationTitle();
     return widget.conversationId;
-  }
-
-  Widget _buildToolbarIconButton({
-    required IconData icon,
-    required VoidCallback onPressed,
-    Color? color,
-  }) {
-    return SizedBox(
-      width: AppSpacing.iconButtonMinSizeSm,
-      height: AppSpacing.iconButtonMinSizeSm,
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, size: AppSpacing.iconMedium),
-        color: color,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-      ),
-    );
-  }
-
-  Widget _buildQuliaoLeftButton(
-    BuildContext context,
-    ChatInputVisualState state,
-    ChatInputDefaultActions actions,
-  ) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    if (state.isVoiceMode) return const SizedBox.shrink();
-    return _buildToolbarIconButton(
-      icon: Icons.mic_none,
-      color: fgPrimary.withValues(alpha: 0.5),
-      onPressed: actions.toggleVoiceMode,
-    );
-  }
-
-  List<Widget> _buildQuliaoRightButtons(
-    BuildContext context,
-    ChatInputVisualState state,
-    ChatInputDefaultActions actions,
-  ) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    if (state.isVoiceMode) return const <Widget>[];
-    if (state.hasText || state.hasAttachments) {
-      return <Widget>[
-        _buildToolbarIconButton(
-          icon: Icons.add,
-          color: fgPrimary.withValues(alpha: 0.6),
-          onPressed: () {
-            setState(() => _showEmojiPanel = false);
-            actions.toggleAddPanel();
-          },
-        ),
-        SizedBox(width: AppSpacing.xs),
-        GestureDetector(
-          onTap: actions.send,
-          child: Container(
-            width: AppSpacing.buttonSize,
-            height: AppSpacing.buttonSize,
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor,
-              borderRadius: BorderRadius.circular(AppSpacing.buttonSize),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.arrow_upward_rounded,
-              size: AppSpacing.iconMedium,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ];
-    }
-    return <Widget>[
-      _buildToolbarIconButton(
-        icon: _showEmojiPanel ? Icons.keyboard_rounded : Icons.mood_outlined,
-        color: fgPrimary.withValues(alpha: 0.5),
-        onPressed: () {
-          setState(() {
-            _showEmojiPanel = !_showEmojiPanel;
-            if (_showEmojiPanel) {
-              _inputFocusNode.unfocus();
-            }
-          });
-        },
-      ),
-      SizedBox(width: AppSpacing.xs),
-      _buildToolbarIconButton(
-        icon: Icons.add,
-        color: fgPrimary.withValues(alpha: 0.6),
-        onPressed: () {
-          setState(() => _showEmojiPanel = false);
-          actions.toggleAddPanel();
-        },
-      ),
-    ];
   }
 
   Future<List<ChatInputAttachment>> _pickChatImages(int remaining) async {
@@ -709,6 +608,11 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       color: Colors.transparent,
       child: Column(
         children: [
+          if (widget.searchAnchorContext case final anchor?)
+            _SearchAnchorBanner(
+              sourceQuery: anchor.sourceQuery,
+              isDark: isDark,
+            ),
           Expanded(
             child: ConversationTimeline(
               controller: _scrollController,
@@ -814,7 +718,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       controller: _inputController,
                       focusNode: _inputFocusNode,
                       maxTextLength: 5000,
-                      maxVisibleLines: 4,
+                      maxVisibleLines: 5,
                       onPickImages: _pickChatImages,
                       onCapturePhoto: _captureChatPhoto,
                       onPickFiles: _pickChatFiles,
@@ -823,17 +727,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       onStopRecord: _stopVoiceRecordForChat,
                       onVoiceAsrTransform: _voiceAsrForChat,
                       onSend: _submitChatInput,
-                      leftBuilder: _buildQuliaoLeftButton,
-                      rightBuilder: _buildQuliaoRightButtons,
+                      showEmojiButton: true,
                       extraPanelItems: _buildCallPanelItems(),
                     ),
-                    if (_showEmojiPanel)
-                      UnifiedEmojiPicker(
-                        showCloseButton: true,
-                        onClose: () => setState(() => _showEmojiPanel = false),
-                        onEmojiSelected: (char) =>
-                            setState(() => _inputController.text += char),
-                      ),
                   ],
                 ),
               ),
@@ -896,6 +792,66 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       overlays: actionMenuOverlay == null
           ? const <Widget>[]
           : <Widget>[actionMenuOverlay],
+    );
+  }
+}
+
+class _SearchAnchorBanner extends StatelessWidget {
+  const _SearchAnchorBanner({
+    required this.sourceQuery,
+    required this.isDark,
+  });
+
+  final String? sourceQuery;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        0,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.primaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          border: Border.all(color: AppColors.primaryColor.withValues(alpha: 0.18)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.scope,
+                size: AppSpacing.iconSmall,
+                color: AppColors.primaryColor,
+              ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Text(
+                  sourceQuery == null || sourceQuery!.isEmpty
+                      ? '已从搜索结果进入该聊天，消息锚点将在后续服务接入后补齐。'
+                      : '已从“$sourceQuery”定位到相关聊天，消息锚点将在后续服务接入后补齐。',
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: fgPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

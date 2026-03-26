@@ -10,11 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/components/conversation/conversation_link_action_sheet.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/conversation/cupertino_conversation_sheet.dart';
@@ -36,6 +34,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_conversation_controller.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
@@ -194,78 +193,6 @@ class _AssistantConversationPageState
     }
   }
 
-  Widget _buildAssistantComposerButton({
-    required IconData icon,
-    required VoidCallback onPressed,
-    required Color fgPrimary,
-    Color? backgroundColor,
-    Key? buttonKey,
-  }) {
-    return GestureDetector(
-      key: buttonKey,
-      onTap: onPressed,
-      child: Container(
-        width: AppSpacing.buttonSize,
-        height: AppSpacing.buttonSize,
-        decoration: BoxDecoration(
-          color: backgroundColor ?? Colors.transparent,
-          borderRadius: BorderRadius.circular(AppSpacing.buttonSize),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, size: AppSpacing.iconMedium, color: fgPrimary),
-      ),
-    );
-  }
-
-  Widget _buildAssistantLeftButton(
-    BuildContext context,
-    ChatInputVisualState state,
-    ChatInputDefaultActions actions,
-  ) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    if (state.isVoiceMode) return const SizedBox.shrink();
-    return _buildAssistantComposerButton(
-      icon: Icons.add,
-      fgPrimary: fgPrimary.withValues(alpha: 0.72),
-      onPressed: actions.toggleAddPanel,
-    );
-  }
-
-  List<Widget> _buildAssistantRightButtons(
-    BuildContext context,
-    ChatInputVisualState state,
-    ChatInputDefaultActions actions,
-  ) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    if (state.isVoiceMode) return const <Widget>[];
-    if (state.hasText || state.hasAttachments) {
-      return <Widget>[
-        _buildAssistantComposerButton(
-          icon: Icons.arrow_upward_rounded,
-          fgPrimary: Colors.white,
-          backgroundColor: AppColors.primaryColor,
-          onPressed: actions.send,
-          buttonKey: TestKeys.assistantSendButton,
-        ),
-      ];
-    }
-    return <Widget>[
-      _buildAssistantComposerButton(
-        icon: Icons.mic_none,
-        fgPrimary: fgPrimary.withValues(alpha: 0.72),
-        onPressed: actions.toggleVoiceMode,
-      ),
-    ];
-  }
-
   Future<List<ChatInputAttachment>> _pickChatImages(int remaining) async {
     final picked = await _imagePicker.pickMultiImage(
       imageQuality: 85,
@@ -356,9 +283,11 @@ class _AssistantConversationPageState
       onResult: (result) {
         _lastAsrText = result.recognizedWords.trim();
       },
+      listenOptions: stt.SpeechListenOptions(
+        cancelOnError: true,
+        listenMode: stt.ListenMode.dictation,
+      ),
       localeId: 'zh_CN',
-      cancelOnError: true,
-      listenMode: stt.ListenMode.dictation,
     );
   }
 
@@ -454,6 +383,11 @@ class _AssistantConversationPageState
     AppToast.show(context, UITextConstants.assistantFeedbackSubmitted);
   }
 
+  void _showAssistantToast(String message) {
+    if (!mounted) return;
+    AppToast.show(context, message);
+  }
+
   Future<void> _showAssistantNegativeFeedbackSheet(
     Map<String, dynamic> message,
   ) async {
@@ -529,7 +463,9 @@ class _AssistantConversationPageState
                                 );
                                 return CupertinoButton(
                                   padding: EdgeInsets.zero,
-                                  minSize: AppSpacing.minInteractiveSize,
+                                  minimumSize: Size.square(
+                                    AppSpacing.minInteractiveSize,
+                                  ),
                                   onPressed: () {
                                     setSheetState(() {
                                       if (isSelected) {
@@ -859,39 +795,42 @@ class _AssistantConversationPageState
     if (url.isEmpty) return;
     final uri = Uri.tryParse(url);
     final allowOpen = uri != null && _controller.isReferenceHostAllowed(uri);
-    final action = await showConversationLinkActionSheet(
-      context,
-      url: url,
-      allowOpenInBrowser: allowOpen,
-    );
-    if (action == null) return;
-    var opened = false;
-    if (action == ConversationLinkAction.openInBrowser &&
-        allowOpen &&
-        uri != null) {
-      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-    if (action == ConversationLinkAction.copyLink || !opened) {
+    if (!allowOpen) {
       await Clipboard.setData(ClipboardData(text: url));
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.assistantReferenceHostBlocked);
+      await _recordAssistantImplicitFeedback(
+        message: message,
+        referenceOpened: true,
+        userTags: const <String>['reference_copy'],
+      );
+      return;
     }
-    if (!mounted) return;
-    AppToast.show(context, switch (action) {
-      ConversationLinkAction.copyLink =>
-        allowOpen
-            ? UITextConstants.assistantReferenceCopied
-            : UITextConstants.assistantReferenceHostBlocked,
-      ConversationLinkAction.openInBrowser =>
-        opened ? url : UITextConstants.assistantReferenceOpenFailed,
-    });
-    await _recordAssistantImplicitFeedback(
-      message: message,
-      referenceOpened: true,
-      userTags: <String>[
-        action == ConversationLinkAction.copyLink
-            ? 'reference_copy'
-            : 'reference_open',
-      ],
-    );
+    try {
+      await Navigator.of(context).push(
+        CupertinoPageRoute<void>(
+          builder: (_) => AssistantReferenceWebViewPage(
+            initialUrl: url,
+            title: (reference['title'] as String?)?.trim() ?? '',
+            source: (reference['source'] as String?)?.trim() ?? '',
+          ),
+        ),
+      );
+      await _recordAssistantImplicitFeedback(
+        message: message,
+        referenceOpened: true,
+        userTags: const <String>['reference_open'],
+      );
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.assistantReferenceOpenFailed);
+      await _recordAssistantImplicitFeedback(
+        message: message,
+        referenceOpened: true,
+        userTags: const <String>['reference_copy'],
+      );
+    }
   }
 
   void _openAssistantDevReplayPage() {
@@ -1201,6 +1140,9 @@ class _AssistantConversationPageState
                           _controller.assistantResponding &&
                           index == displayMessages.length - 1 &&
                           isAssistantMessage,
+                      expandProcessByDefault:
+                          isAssistantMessage &&
+                          index == displayMessages.length - 1,
                       runningStatusLabel:
                           _controller.assistantResponding &&
                               index == displayMessages.length - 1 &&
@@ -1241,9 +1183,7 @@ class _AssistantConversationPageState
                               await Clipboard.setData(
                                 ClipboardData(text: content),
                               );
-                              if (!mounted) return;
-                              AppToast.show(
-                                context,
+                              _showAssistantToast(
                                 UITextConstants.copiedToClipboard,
                               );
                               await _recordAssistantImplicitFeedback(
@@ -1272,9 +1212,7 @@ class _AssistantConversationPageState
                                 message: msg,
                                 favoritedAnswer: true,
                               );
-                              if (!mounted) return;
-                              AppToast.show(
-                                context,
+                              _showAssistantToast(
                                 UITextConstants.assistantBookmarked,
                               );
                             }
@@ -1374,7 +1312,7 @@ class _AssistantConversationPageState
                     textFieldKey: TestKeys.assistantChatInputField,
                     hintText: UITextConstants.assistantAskPlaceholder,
                     maxTextLength: 5000,
-                    maxVisibleLines: 4,
+                    maxVisibleLines: 5,
                     onPickImages: _pickChatImages,
                     onCapturePhoto: _captureChatPhoto,
                     onPickFiles: _pickChatFiles,
@@ -1383,8 +1321,7 @@ class _AssistantConversationPageState
                     onStopRecord: _stopVoiceRecordForChat,
                     onVoiceAsrTransform: _voiceAsrForChat,
                     onSend: _submitChatInput,
-                    leftBuilder: _buildAssistantLeftButton,
-                    rightBuilder: _buildAssistantRightButtons,
+                    sendButtonKey: TestKeys.assistantSendButton,
                     extraPanelItems: const <ChatInputExtraPanelItem>[],
                   ),
                 ],

@@ -20,6 +20,7 @@ class PostPreviewCard extends StatelessWidget {
     this.showVideoBadge = false,
     this.mediaOverlay,
     this.onHorizontalDragEnd,
+    this.supportingTextMaxLines = 2,
   });
 
   final bool isDark;
@@ -32,6 +33,7 @@ class PostPreviewCard extends StatelessWidget {
   final Widget footer;
   final VoidCallback onTap;
   final GestureDragEndCallback? onHorizontalDragEnd;
+  final int supportingTextMaxLines;
 
   bool get _hasCover => coverUrl.trim().isNotEmpty;
 
@@ -142,7 +144,7 @@ class PostPreviewCard extends StatelessWidget {
                       SizedBox(height: AppSpacing.intraGroupXs),
                       Text(
                         supportingText,
-                        maxLines: 2,
+                        maxLines: supportingTextMaxLines,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: AppTypography.iosCaption1,

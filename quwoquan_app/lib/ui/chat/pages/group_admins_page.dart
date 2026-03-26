@@ -1,13 +1,14 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
@@ -84,15 +85,22 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final bgColor = SettingsSemanticConstants.pageBackground(isDark);
+    final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
+      isDark,
+    );
 
-    final membersState =
-        ref.watch(conversationMembersProvider(widget.conversationId));
+    final membersState = ref.watch(
+      conversationMembersProvider(widget.conversationId),
+    );
 
     // 排除群主和当前用户自己
     final allMembers = membersState.members
@@ -118,7 +126,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
     return AppScaffold(
       backgroundColor: bgColor,
       navigationBar: AppNavigationBar(
-        backgroundColor: bgColor,
+        backgroundColor: toolbarBg,
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.back),
@@ -145,13 +153,21 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
             ),
           ),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: SettingsSemanticConstants.dividerColor(isDark),
+            width: AppSpacing.hairline,
+          ),
+        ),
       ),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.sm,
+              AppSpacing.containerMd,
+              AppSpacing.sm,
             ),
             child: Container(
               padding: EdgeInsets.symmetric(
@@ -159,15 +175,19 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
                 vertical: AppSpacing.xs,
               ),
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                color: SettingsSemanticConstants.blockBackground(isDark),
+                borderRadius: BorderRadius.circular(
+                  SettingsSemanticConstants.selectionCardBorderRadius,
+                ),
+                border: Border.all(
+                  color: SettingsSemanticConstants.blockBorderColor(isDark),
+                ),
               ),
               child: Row(
                 children: [
                   ...selectedMembers.map((m) {
-                    final avatar = m['avatarUrl'] as String? ??
+                    final avatar =
+                        m['avatarUrl'] as String? ??
                         m['avatar'] as String? ??
                         '';
                     return Padding(
@@ -180,11 +200,10 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
                     );
                   }),
                   Expanded(
-                    child: CupertinoSearchTextField(
+                    child: AppSearchField(
                       controller: _searchController,
                       placeholder: UITextConstants.search,
                       onChanged: (v) => setState(() => _searchQuery = v),
-                      style: TextStyle(color: fgPrimary),
                     ),
                   ),
                 ],
@@ -194,113 +213,201 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
           Expanded(
             child: membersState.isLoading
                 ? const Center(child: CupertinoActivityIndicator())
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, i) {
-                      final m = filtered[i];
-                      final userId = m['userId'] as String? ?? '';
-                      final name =
-                          m['displayName'] as String? ?? m['name'] as String? ?? '';
-                      final avatar =
-                          m['avatarUrl'] as String? ?? m['avatar'] as String? ?? '';
-                      final nickname = m['nickname'] as String? ?? '';
-                      final isSelected = _selectedIds.contains(userId);
-
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _toggleMember(userId),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
+                : ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      0,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerLg,
+                    ),
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: SettingsSemanticConstants.blockBackground(
+                            isDark,
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: AppSpacing.iconMedium,
-                                height: AppSpacing.iconMedium,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isSelected
-                                      ? AppColors.primaryColor
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppColors.primaryColor
-                                        : fgSecondary,
-                                    width: AppSpacing.oneHalf,
-                                  ),
-                                ),
-                                child: isSelected
-                                    ? Icon(
-                                        Icons.check,
-                                        size: AppSpacing.iconSmall,
-                                        color: Colors.white,
-                                      )
-                                    : null,
-                              ),
-                              SizedBox(width: AppSpacing.interGroupSm),
-                              RoundedSquareAvatar(
-                                size: AppSpacing.largeButtonSize,
-                                imageUrl: avatar,
-                                name: name,
-                              ),
-                              SizedBox(width: AppSpacing.interGroupSm),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          name,
-                                          style: TextStyle(
-                                            fontSize: AppTypography.lg,
-                                            color: fgPrimary,
-                                          ),
-                                        ),
-                                        if (m['role'] == 'admin') ...[
-                                          SizedBox(width: AppSpacing.xs),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: AppSpacing.xs,
-                                              vertical: AppSpacing.one,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primaryColor
-                                                  .withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(
-                                                AppSpacing.borderRadius,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              UITextConstants.admin,
-                                              style: TextStyle(
-                                                fontSize: AppTypography.xs,
-                                                color: AppColors.primaryColor,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    if (nickname.isNotEmpty)
-                                      Text(
-                                        nickname,
-                                        style: TextStyle(
-                                          fontSize: AppTypography.sm,
-                                          color: fgSecondary,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                          borderRadius: BorderRadius.circular(
+                            SettingsSemanticConstants.selectionCardBorderRadius,
+                          ),
+                          border: Border.all(
+                            color: SettingsSemanticConstants.blockBorderColor(
+                              isDark,
+                            ),
                           ),
                         ),
-                      );
-                    },
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < filtered.length; i++) ...[
+                              Builder(
+                                builder: (context) {
+                                  final m = filtered[i];
+                                  final userId = m['userId'] as String? ?? '';
+                                  final name =
+                                      m['displayName'] as String? ??
+                                      m['name'] as String? ??
+                                      '';
+                                  final avatar =
+                                      m['avatarUrl'] as String? ??
+                                      m['avatar'] as String? ??
+                                      '';
+                                  final nickname =
+                                      m['nickname'] as String? ?? '';
+                                  final isSelected = _selectedIds.contains(
+                                    userId,
+                                  );
+                                  return CupertinoButton(
+                                    padding: EdgeInsets.zero,
+                                    onPressed: () => _toggleMember(userId),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 56,
+                                      ),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: SettingsSemanticConstants
+                                              .blockHorizontalPadding,
+                                          vertical: AppSpacing.sm,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              isSelected
+                                                  ? CupertinoIcons
+                                                        .check_mark_circled_solid
+                                                  : CupertinoIcons.circle,
+                                              color: isSelected
+                                                  ? AppColors.primaryColor
+                                                  : SettingsSemanticConstants.checkboxUnselectedBorderColor(
+                                                      isDark,
+                                                    ),
+                                              size: AppSpacing.iconMedium,
+                                            ),
+                                            SizedBox(
+                                              width: AppSpacing.interGroupSm,
+                                            ),
+                                            RoundedSquareAvatar(
+                                              size: AppSpacing.largeButtonSize,
+                                              imageUrl: avatar,
+                                              name: name,
+                                              backgroundColor:
+                                                  SettingsSemanticConstants.blockBackground(
+                                                    isDark,
+                                                  ),
+                                            ),
+                                            SizedBox(
+                                              width: AppSpacing.interGroupSm,
+                                            ),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Flexible(
+                                                        child: Text(
+                                                          name,
+                                                          style: TextStyle(
+                                                            fontSize:
+                                                                AppTypography
+                                                                    .lg,
+                                                            color: fgPrimary,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                      ),
+                                                      if (m['role'] ==
+                                                          'admin') ...[
+                                                        SizedBox(
+                                                          width: AppSpacing.xs,
+                                                        ),
+                                                        Container(
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                horizontal:
+                                                                    AppSpacing
+                                                                        .xs,
+                                                                vertical:
+                                                                    AppSpacing
+                                                                        .one,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color: AppColors
+                                                                .primaryColor
+                                                                .withValues(
+                                                                  alpha: 0.12,
+                                                                ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  AppSpacing
+                                                                      .borderRadius,
+                                                                ),
+                                                          ),
+                                                          child: Text(
+                                                            UITextConstants
+                                                                .admin,
+                                                            style: TextStyle(
+                                                              fontSize:
+                                                                  AppTypography
+                                                                      .xs,
+                                                              color: AppColors
+                                                                  .primaryColor,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                  if (nickname.isNotEmpty)
+                                                    Text(
+                                                      nickname,
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            AppTypography.sm,
+                                                        color: fgSecondary,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              if (i < filtered.length - 1)
+                                Container(
+                                  height: SettingsSemanticConstants
+                                      .dividerThickness,
+                                  margin: EdgeInsets.only(
+                                    left:
+                                        SettingsSemanticConstants
+                                            .blockHorizontalPadding +
+                                        AppSpacing.iconMedium +
+                                        AppSpacing.interGroupSm +
+                                        AppSpacing.largeButtonSize +
+                                        AppSpacing.interGroupSm,
+                                    right: SettingsSemanticConstants
+                                        .blockHorizontalPadding,
+                                  ),
+                                  color: SettingsSemanticConstants.dividerColor(
+                                    isDark,
+                                  ),
+                                ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ],

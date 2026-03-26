@@ -90,6 +90,9 @@ func (s *MongoChatStore) ListConversationsByUser(ctx context.Context, userId str
 	result := make([]model.Conversation, 0, len(convIds))
 	for _, id := range convIds {
 		if c, ok := convMap[id]; ok {
+			if c.Status != "active" {
+				continue
+			}
 			result = append(result, c)
 		}
 	}
@@ -198,6 +201,18 @@ func (s *MongoChatStore) FindMember(ctx context.Context, conversationId, userId 
 		return nil, err
 	}
 	return &member, nil
+}
+
+func (s *MongoChatStore) UpdateMemberRole(ctx context.Context, conversationId, userId, role string) error {
+	_, err := s.members.UpdateOne(ctx, bson.M{
+		"conversationId": conversationId,
+		"userId":         userId,
+	}, bson.M{
+		"$set": bson.M{
+			"role": role,
+		},
+	})
+	return err
 }
 
 func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string, limit int, cursor, role string) ([]model.ConversationMember, error) {

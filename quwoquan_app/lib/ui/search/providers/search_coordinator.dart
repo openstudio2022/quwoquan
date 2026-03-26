@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +20,7 @@ class SearchCoordinator extends ChangeNotifier {
         launchContext: launchContext,
         query: launchContext.prefilledQuery,
         scope: launchContext.initialScope,
-        selectedFacet: launchContext.initialFacet,
+        selection: _resolveInitialSelection(launchContext),
       ) {
     unawaited(hydrateRecentSearches());
     if (_state.hasQuery) {
@@ -27,17 +28,40 @@ class SearchCoordinator extends ChangeNotifier {
     }
   }
 
+  static const Duration _searchDebounce = Duration(milliseconds: 180);
+  static const int _collapsedHistoryCount = 6;
+  static const int _collapsedContactsCount = 3;
+  static const int _collapsedChatRecordsCount = 3;
+  static const int _maxMostUsedCount = 3;
+  static const int _conversationSearchLimit = 12;
+  static const int _messageSearchLimit = 36;
+  static const int _maxNetworkSuggestions = 6;
+
   final Ref _ref;
   final SearchRecentHistoryStore _localStore;
+
   SearchSessionState _state;
   Timer? _debounceTimer;
   int _searchRequestToken = 0;
   bool _disposed = false;
 
-  static const Duration _searchDebounce = Duration(milliseconds: 250);
-  static const int _sectionLimit = 6;
-
   SearchSessionState get state => _state;
+
+  static SearchObjectSelection _resolveInitialSelection(
+    SearchLaunchContext launchContext,
+  ) {
+    final explicitSelection = launchContext.searchObjectSelection.normalized();
+    if (!explicitSelection.isEmpty) {
+      return explicitSelection;
+    }
+    final facetSelection = SearchObjectSelection.fromFacet(
+      launchContext.initialFacet,
+    );
+    if (!facetSelection.isEmpty) {
+      return facetSelection;
+    }
+    return SearchObjectSelection.fromLegacyScope(launchContext.initialScope);
+  }
 
   void _setState(SearchSessionState next) {
     if (_disposed) {
@@ -47,70 +71,110 @@ class SearchCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateQuery(
-    String query, {
-    bool immediate = false,
-    bool persistToHistory = false,
-  }) {
+  void updateQuery(String query, {bool immediate = false}) {
     final trimmedQuery = query.trim();
-    _setState(state.copyWith(
-      query: query,
-      sections: trimmedQuery.isEmpty ? const <SearchSection>[] : null,
-      isLoading: trimmedQuery.isEmpty ? false : state.isLoading,
-    ));
-    if (trimmedQuery.isEmpty) {
-      _debounceTimer?.cancel();
-      return;
-    }
-    scheduleSearch(
-      immediate: immediate,
-      persistToHistory: persistToHistory,
-    );
-  }
-
-  void updateScope(SearchScope scope) {
-    _setState(state.copyWith(
-      scope: scope,
-      selectedFacet: () => scope == SearchScope.circles ? state.selectedFacet : null,
-      sections: state.hasQuery ? state.sections : const <SearchSection>[],
-    ));
-    if (state.hasQuery) {
-      scheduleSearch(immediate: true);
-    }
-  }
-
-  void updateFacet(String? facet) {
-    _setState(state.copyWith(selectedFacet: () => facet));
-    if (state.hasQuery) {
-      scheduleSearch(immediate: true);
-    }
-  }
-
-  void setVoiceRunning(bool running) {
-    _setState(state.copyWith(isVoiceRunning: running));
-  }
-
-  void scheduleSearch({
-    bool immediate = false,
-    bool persistToHistory = false,
-  }) {
     _debounceTimer?.cancel();
-    if (immediate) {
-      unawaited(
-        _performSearch(
-          persistToHistory: persistToHistory,
-        ),
-      );
+    _setState(
+      state.copyWith(
+        query: query,
+        isManagingHistory: false,
+        areContactsExpanded: false,
+        areChatRecordsExpanded: false,
+        suggestionSections: trimmedQuery.isEmpty
+            ? const <SearchSuggestionSection>[]
+            : state.suggestionSections,
+        isLoading: trimmedQuery.isEmpty ? false : state.isLoading,
+      ),
+    );
+    if (trimmedQuery.isEmpty) {
       return;
     }
-    _debounceTimer = Timer(
-      _searchDebounce,
-      () => unawaited(
-        _performSearch(
-          persistToHistory: persistToHistory,
+    scheduleSearch(immediate: immediate);
+  }
+
+  void updateSelection(SearchObjectSelection selection) {
+    final normalizedSelection = selection.normalized();
+    if (setEquals(
+          state.selection.normalizedTargets,
+          normalizedSelection.normalizedTargets,
+        ) &&
+        setEquals(
+          state.selection.contentTypes,
+          normalizedSelection.contentTypes,
+        )) {
+      return;
+    }
+    _setState(
+      state.copyWith(
+        selection: normalizedSelection,
+        launchContext: state.launchContext.copyWith(
+          searchObjectSelection: normalizedSelection,
+          initialFacet: normalizedSelection.toFacet(),
         ),
       ),
     );
+    if (state.hasQuery) {
+      scheduleSearch(immediate: true);
+    }
+  }
+
+  void startManagingHistory() {
+    if (state.hasQuery || state.recentSearches.isEmpty) {
+      return;
+    }
+    _setState(state.copyWith(isManagingHistory: true, isHistoryExpanded: true));
+  }
+
+  void finishManagingHistory() {
+    _setState(
+      state.copyWith(isManagingHistory: false, isHistoryExpanded: false),
+    );
+  }
+
+  void toggleHistoryExpanded() {
+    if (state.recentSearches.length <= _collapsedHistoryCount) {
+      return;
+    }
+    _setState(state.copyWith(isHistoryExpanded: !state.isHistoryExpanded));
+  }
+
+  void expandContacts() {
+    if (state.areContactsExpanded) {
+      return;
+    }
+    _setState(
+      state.copyWith(
+        areContactsExpanded: true,
+        suggestionSections: _applyExpansionFlags(
+          state.suggestionSections,
+          contactsExpanded: true,
+        ),
+      ),
+    );
+  }
+
+  void expandChatRecords() {
+    if (state.areChatRecordsExpanded) {
+      return;
+    }
+    _setState(
+      state.copyWith(
+        areChatRecordsExpanded: true,
+        suggestionSections: _applyExpansionFlags(
+          state.suggestionSections,
+          chatRecordsExpanded: true,
+        ),
+      ),
+    );
+  }
+
+  void scheduleSearch({bool immediate = false}) {
+    _debounceTimer?.cancel();
+    if (immediate) {
+      unawaited(_performSearch());
+      return;
+    }
+    _debounceTimer = Timer(_searchDebounce, () => unawaited(_performSearch()));
   }
 
   Future<void> hydrateRecentSearches() async {
@@ -127,10 +191,9 @@ class SearchCoordinator extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _setState(state.copyWith(
-        recentSearches: merged,
-        isHydratingHistory: false,
-      ));
+      _setState(
+        state.copyWith(recentSearches: merged, isHydratingHistory: false),
+      );
       await _localStore.save(merged);
       final remoteKeys = remoteEntries.map(_historyKeyForEntry).toSet();
       for (final entry in localEntries) {
@@ -138,11 +201,13 @@ class SearchCoordinator extends ChangeNotifier {
           continue;
         }
         unawaited(
-          _ref.read(userProfileRepositoryProvider).upsertRecentSearch(
-            query: entry.query,
-            scope: entry.scope,
-            facet: entry.facet,
-          ),
+          _ref
+              .read(userProfileRepositoryProvider)
+              .upsertRecentSearch(
+                query: entry.query,
+                scope: entry.scope,
+                facet: entry.facet,
+              ),
         );
       }
     } catch (_) {
@@ -154,37 +219,66 @@ class SearchCoordinator extends ChangeNotifier {
   }
 
   Future<void> useRecentSearch(RecentSearchEntryView entry) async {
-    _setState(state.copyWith(
-      query: entry.query,
-      scope: entry.scope,
-      selectedFacet: () => entry.facet,
-    ));
+    final facetSelection = SearchObjectSelection.fromFacet(entry.facet);
+    final selection = facetSelection.isEmpty
+        ? SearchObjectSelection.fromLegacyScope(entry.scope)
+        : facetSelection;
+    _setState(
+      state.copyWith(
+        query: entry.query,
+        scope: entry.scope,
+        selection: selection,
+        launchContext: state.launchContext.copyWith(
+          initialScope: entry.scope,
+          initialFacet: selection.toFacet(),
+          searchObjectSelection: selection,
+        ),
+        isManagingHistory: false,
+        isHistoryExpanded: false,
+        areContactsExpanded: false,
+        areChatRecordsExpanded: false,
+      ),
+    );
     scheduleSearch(immediate: true);
   }
 
-  Future<void> rememberCurrentQuery() {
-    return _rememberQuery(
-      query: state.query,
-      scope: state.scope,
-      facet: state.selectedFacet,
-    );
+  Future<void> rememberCurrentQuery({String? query}) {
+    return _rememberQuery(query: query ?? state.query);
   }
 
   Future<void> removeRecentSearch(String entryId) async {
     final nextEntries = state.recentSearches
         .where((entry) => entry.entryId != entryId)
         .toList(growable: false);
-    _setState(state.copyWith(recentSearches: nextEntries));
+    _setState(
+      state.copyWith(
+        recentSearches: nextEntries,
+        isManagingHistory: nextEntries.isEmpty
+            ? false
+            : state.isManagingHistory,
+        isHistoryExpanded: nextEntries.isEmpty
+            ? false
+            : state.isHistoryExpanded,
+      ),
+    );
     await _localStore.save(nextEntries);
     try {
-      await _ref.read(userProfileRepositoryProvider).deleteRecentSearch(entryId);
+      await _ref
+          .read(userProfileRepositoryProvider)
+          .deleteRecentSearch(entryId);
     } catch (_) {
       // Keep local-first delete even when remote cleanup fails.
     }
   }
 
   Future<void> clearRecentSearches() async {
-    _setState(state.copyWith(recentSearches: const <RecentSearchEntryView>[]));
+    _setState(
+      state.copyWith(
+        recentSearches: const <RecentSearchEntryView>[],
+        isManagingHistory: false,
+        isHistoryExpanded: false,
+      ),
+    );
     await _localStore.clear();
     try {
       await _ref.read(userProfileRepositoryProvider).clearRecentSearches();
@@ -193,193 +287,480 @@ class SearchCoordinator extends ChangeNotifier {
     }
   }
 
-  Future<void> _performSearch({bool persistToHistory = false}) async {
+  Future<void> _performSearch() async {
     final query = state.query.trim();
     if (query.isEmpty) {
-      if (!_disposed) {
-        _setState(state.copyWith(
+      _setState(
+        state.copyWith(
           isLoading: false,
-          sections: const <SearchSection>[],
-        ));
-      }
+          suggestionSections: const <SearchSuggestionSection>[],
+        ),
+      );
       return;
     }
     final token = ++_searchRequestToken;
-    if (!_disposed) {
-      _setState(state.copyWith(isLoading: true));
-    }
-    final scope = state.scope;
-    final selectedFacet = state.selectedFacet;
-    final sections = await _buildSections(
-      query: query,
-      scope: scope,
-      selectedFacet: selectedFacet,
-    );
+    _setState(state.copyWith(isLoading: true));
+    final sections = await _buildSuggestionSections(query);
     if (_disposed || token != _searchRequestToken) {
       return;
     }
-    _setState(state.copyWith(
-      sections: sections,
-      isLoading: false,
-    ));
-    if (persistToHistory) {
-      await _rememberQuery(
-        query: query,
-        scope: scope,
-        facet: selectedFacet,
-      );
+    _setState(state.copyWith(suggestionSections: sections, isLoading: false));
+  }
+
+  Future<List<SearchSuggestionSection>> _buildSuggestionSections(
+    String query,
+  ) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <SearchSuggestionSection>[];
+    }
+
+    final chatRepository = _ref.read(chatRepositoryProvider);
+    final circleRepository = _ref.read(circleRepositoryProvider);
+    final selection = state.selection.normalized();
+    final objectTarget = selection.activeObjectTarget;
+    final includesContacts =
+        objectTarget == null || objectTarget == SearchObjectTarget.contacts;
+    final includesDirectChats =
+        objectTarget == null || objectTarget == SearchObjectTarget.directChats;
+    final includesGroupChats =
+        objectTarget == null || objectTarget == SearchObjectTarget.groupChats;
+    final includesChatRecords = includesDirectChats || includesGroupChats;
+    final includesCircles =
+        objectTarget == null || objectTarget == SearchObjectTarget.circles;
+    final includesNetwork = selection.enabledContentTypes.isNotEmpty;
+
+    final contactsFuture = includesContacts
+        ? chatRepository.searchContacts(
+            query: normalizedQuery,
+            limit: _conversationSearchLimit,
+          )
+        : Future<List<Map<String, dynamic>>>.value(
+            const <Map<String, dynamic>>[],
+          );
+    final allConversationsFuture = includesContacts || includesChatRecords
+        ? chatRepository.listConversations(limit: 100)
+        : Future<List<Map<String, dynamic>>>.value(
+            const <Map<String, dynamic>>[],
+          );
+    final conversationHitsFuture = includesChatRecords
+        ? chatRepository.searchConversations(
+            query: normalizedQuery,
+            limit: _conversationSearchLimit,
+          )
+        : Future<List<ConversationSearchItemView>>.value(
+            const <ConversationSearchItemView>[],
+          );
+    final messageHitsFuture = includesChatRecords
+        ? chatRepository.searchMessages(
+            query: normalizedQuery,
+            limit: _messageSearchLimit,
+          )
+        : Future<List<MessageSearchItemView>>.value(
+            const <MessageSearchItemView>[],
+          );
+    final circleHitsFuture = includesCircles
+        ? circleRepository.searchCircles(query: normalizedQuery, limit: 8)
+        : Future<CircleSearchResultView>.value(const CircleSearchResultView());
+
+    final contacts = await contactsFuture;
+    final allConversationsRaw = await allConversationsFuture;
+    final conversationHits = await conversationHitsFuture;
+    final messageHits = await messageHitsFuture;
+    final circleHits = await circleHitsFuture;
+
+    final allConversations = allConversationsRaw
+        .map(ConversationSearchItemView.fromMap)
+        .toList(growable: false);
+    final contactSuggestions = _buildContactSuggestions(
+      contacts: contacts,
+      allConversations: allConversations,
+    );
+    final chatRecordSuggestions = _buildChatRecordSuggestions(
+      conversationHits: conversationHits,
+      messageHits: messageHits,
+      allConversations: allConversations,
+    );
+    final filteredChatRecordSuggestions = chatRecordSuggestions
+        .where((item) {
+          if (_isGroupConversation(item.conversationType)) {
+            return includesGroupChats;
+          }
+          return includesDirectChats;
+        })
+        .toList(growable: false);
+    final circleSuggestions = includesCircles
+        ? circleHits.items
+        : const <CircleSearchItemView>[];
+    final mostUsedSuggestions =
+        _buildMostUsedSuggestions(
+              contacts: contactSuggestions,
+              chatRecords: filteredChatRecordSuggestions,
+              circles: circleHits.items,
+            )
+            .where((item) => _allowsMostUsedItem(selection, item))
+            .toList(growable: false);
+    final networkSuggestions = includesNetwork
+        ? _buildNetworkSuggestions(normalizedQuery)
+        : const <NetworkSearchSuggestion>[];
+
+    final sections = <SearchSuggestionSection>[
+      if (mostUsedSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.mostUsed,
+          items: mostUsedSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.mostUsed)
+              .toList(growable: false),
+        ),
+      if (includesContacts && contactSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.contacts,
+          items: contactSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.contact)
+              .toList(growable: false),
+          expanded: state.areContactsExpanded,
+          collapsedItemCount: _collapsedContactsCount,
+          moreLabel: '更多联系人',
+        ),
+      if (includesChatRecords && filteredChatRecordSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.chatRecords,
+          items: filteredChatRecordSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.chatRecord)
+              .toList(growable: false),
+          expanded: state.areChatRecordsExpanded,
+          collapsedItemCount: _collapsedChatRecordsCount,
+          moreLabel: switch (objectTarget) {
+            SearchObjectTarget.directChats => '更多单聊',
+            SearchObjectTarget.groupChats => '更多群聊',
+            _ => '更多聊天记录',
+          },
+          titleOverride: switch (objectTarget) {
+            SearchObjectTarget.directChats => '单聊',
+            SearchObjectTarget.groupChats => '群聊',
+            _ => null,
+          },
+        ),
+      if (circleSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.circles,
+          items: circleSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.circle)
+              .toList(growable: false),
+        ),
+      if (includesNetwork)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.network,
+          items: networkSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.network)
+              .toList(growable: false),
+        ),
+    ];
+    return _applyExpansionFlags(sections);
+  }
+
+  bool _allowsMostUsedItem(
+    SearchObjectSelection selection,
+    MostUsedSearchItem item,
+  ) {
+    final normalizedSelection = selection.normalized();
+    final objectTarget = normalizedSelection.activeObjectTarget;
+    if (objectTarget == null) {
+      return true;
+    }
+    switch (item.targetKind) {
+      case MostUsedTargetKind.contact:
+        return objectTarget == SearchObjectTarget.contacts;
+      case MostUsedTargetKind.chatRecord:
+        if (objectTarget == SearchObjectTarget.directChats) {
+          return !_isGroupConversation(item.conversationType);
+        }
+        if (objectTarget == SearchObjectTarget.groupChats) {
+          return _isGroupConversation(item.conversationType);
+        }
+        return false;
+      case MostUsedTargetKind.circle:
+        return objectTarget == SearchObjectTarget.circles;
     }
   }
 
-  Future<List<SearchSection>> _buildSections({
-    required String query,
-    required SearchScope scope,
-    required String? selectedFacet,
-  }) async {
-    final wantsContent = scope == SearchScope.all || scope == SearchScope.content;
-    final wantsPeople =
-        scope == SearchScope.all || scope == SearchScope.socialRelation;
-    final wantsMessages =
-        scope == SearchScope.all || scope == SearchScope.messages;
-    final wantsCircles =
-        scope == SearchScope.all || scope == SearchScope.circles;
-    final circleSearchFuture = wantsCircles
-        ? _ref.read(circleRepositoryProvider).searchCircles(
-            query: query,
-            subCategory: selectedFacet,
-            limit: _sectionLimit,
-          )
-        : null;
+  bool _isGroupConversation(String? conversationType) {
+    return conversationType?.trim().toLowerCase() == 'group';
+  }
 
-    final futures = <Future<SearchSection>>[
-      if (wantsContent)
-        _loadSection(
-          kind: SearchSectionKind.content,
-          loader: () async {
-            final items = await _ref
-                .read(contentRepositoryProvider)
-                .searchPosts(
-              query: query,
-              limit: _sectionLimit,
-            );
-            return items
-                .map<SearchResultItem>(SearchResultItem.post)
-                .toList(growable: false);
-          },
-        ),
-      if (wantsPeople)
-        _loadSection(
-          kind: SearchSectionKind.socialRelation,
-          loader: () async {
-            final items = await _ref
-                .read(userProfileRepositoryProvider)
-                .searchSocialRelations(
-                  query: query,
-                  limit: _sectionLimit,
-                );
-            return items
-                .map<SearchResultItem>(SearchResultItem.socialRelation)
-                .toList(growable: false);
-          },
-        ),
-      if (wantsMessages)
-        _loadSection(
-          kind: SearchSectionKind.messages,
-          loader: () async {
-            final chatRepository = _ref.read(chatRepositoryProvider);
-            final conversationFuture = chatRepository.searchConversations(
-              query: query,
-              limit: _sectionLimit ~/ 2 + 1,
-            );
-            final messageFuture = chatRepository.searchMessages(
-              query: query,
-              limit: _sectionLimit ~/ 2 + 1,
-            );
-            final results = await Future.wait([
-              conversationFuture,
-              messageFuture,
-            ]);
-            final conversations = results[0]
-                .cast<ConversationSearchItemView>()
-                .map<SearchResultItem>(SearchResultItem.conversation);
-            final messages = results[1]
-                .cast<MessageSearchItemView>()
-                .map<SearchResultItem>(SearchResultItem.message);
-            return <SearchResultItem>[
-              ...conversations,
-              ...messages,
-            ].take(_sectionLimit).toList(growable: false);
-          },
-        ),
-      if (wantsCircles)
-        _loadSection(
-          kind: SearchSectionKind.circleFacets,
-          loader: () async {
-            final result = await circleSearchFuture!;
-            return result.facetBuckets
-                .map<SearchResultItem>(SearchResultItem.circleFacet)
-                .toList(growable: false);
-          },
-        ),
-      if (wantsCircles)
-        _loadSection(
-          kind: SearchSectionKind.circles,
-          loader: () async {
-            final result = await circleSearchFuture!;
-            return result.items
-                .map<SearchResultItem>(SearchResultItem.circle)
-                .toList(growable: false);
-          },
-        ),
-    ];
-    final sections = await Future.wait(futures);
+  List<SearchSuggestionSection> _applyExpansionFlags(
+    List<SearchSuggestionSection> sections, {
+    bool? contactsExpanded,
+    bool? chatRecordsExpanded,
+  }) {
+    final nextContactsExpanded = contactsExpanded ?? state.areContactsExpanded;
+    final nextChatRecordsExpanded =
+        chatRecordsExpanded ?? state.areChatRecordsExpanded;
     return sections
-        .where(
-          (section) =>
-              section.items.isNotEmpty || section.degraded || scope == SearchScope.circles,
-        )
+        .map((section) {
+          switch (section.kind) {
+            case SearchSuggestionSectionKind.contacts:
+              return section.copyWith(expanded: nextContactsExpanded);
+            case SearchSuggestionSectionKind.chatRecords:
+              return section.copyWith(expanded: nextChatRecordsExpanded);
+            case SearchSuggestionSectionKind.mostUsed:
+            case SearchSuggestionSectionKind.circles:
+            case SearchSuggestionSectionKind.network:
+              return section;
+          }
+        })
         .toList(growable: false);
   }
 
-  Future<SearchSection> _loadSection({
-    required SearchSectionKind kind,
-    required Future<List<SearchResultItem>> Function() loader,
-  }) async {
-    try {
-      final items = await loader();
-      return SearchSection(kind: kind, items: items);
-    } catch (_) {
-      return SearchSection(
-        kind: kind,
-        items: const <SearchResultItem>[],
-        degraded: true,
-        errorMessage: '当前结果暂不可用',
+  List<ContactSearchSuggestion> _buildContactSuggestions({
+    required List<Map<String, dynamic>> contacts,
+    required List<ConversationSearchItemView> allConversations,
+  }) {
+    final suggestions = <ContactSearchSuggestion>[];
+    for (final contact in contacts) {
+      final userId = (contact['contactId'] ?? contact['userId'] ?? '')
+          .toString()
+          .trim();
+      final displayName = (contact['displayName'] ?? '').toString().trim();
+      if (userId.isEmpty || displayName.isEmpty) {
+        continue;
+      }
+      final directConversationId = (contact['conversationId'] ?? '')
+          .toString()
+          .trim();
+      suggestions.add(
+        ContactSearchSuggestion(
+          contactId: userId,
+          displayName: displayName,
+          conversationId: directConversationId.isNotEmpty
+              ? directConversationId
+              : _resolveContactConversationId(
+                  displayName: displayName,
+                  userId: userId,
+                  allConversations: allConversations,
+                ),
+          avatarUrl: contact['avatarUrl']?.toString(),
+          subtitle: (contact['subtitle'] ?? '联系人').toString(),
+        ),
       );
     }
+    return suggestions;
   }
 
-  Future<void> _rememberQuery({
-    required String query,
-    required SearchScope scope,
-    required String? facet,
-  }) async {
+  String _resolveContactConversationId({
+    required String displayName,
+    required String userId,
+    required List<ConversationSearchItemView> allConversations,
+  }) {
+    final normalizedName = displayName.trim().toLowerCase();
+    for (final conversation in allConversations) {
+      final normalizedTitle = conversation.title.trim().toLowerCase();
+      final isDirectLike =
+          conversation.type == 'direct' || conversation.type == 'encrypted';
+      if (!isDirectLike) {
+        continue;
+      }
+      if (normalizedTitle == normalizedName ||
+          normalizedTitle.contains(normalizedName) ||
+          normalizedName.contains(normalizedTitle)) {
+        return conversation.conversationId;
+      }
+    }
+    for (final conversation in allConversations) {
+      final members = ChatMockData.membersFor(conversation.conversationId);
+      final containsUser = members.any(
+        (member) => member['userId']?.toString() == userId,
+      );
+      if (!containsUser) {
+        continue;
+      }
+      final isDirectLike =
+          conversation.type == 'direct' || conversation.type == 'encrypted';
+      if (isDirectLike) {
+        return conversation.conversationId;
+      }
+    }
+    for (final conversation in allConversations) {
+      final members = ChatMockData.membersFor(conversation.conversationId);
+      if (members.any((member) => member['userId']?.toString() == userId)) {
+        return conversation.conversationId;
+      }
+    }
+    return allConversations.isNotEmpty
+        ? allConversations.first.conversationId
+        : ChatMockData.assistantConversationId;
+  }
+
+  List<ChatRecordSearchSuggestion> _buildChatRecordSuggestions({
+    required List<ConversationSearchItemView> conversationHits,
+    required List<MessageSearchItemView> messageHits,
+    required List<ConversationSearchItemView> allConversations,
+  }) {
+    final conversationIndex = <String, ConversationSearchItemView>{
+      for (final conversation in allConversations)
+        conversation.conversationId: conversation,
+    };
+    final accumulators = <String, _ChatRecordAccumulator>{};
+
+    for (final conversation in conversationHits) {
+      final accumulator = accumulators.putIfAbsent(
+        conversation.conversationId,
+        () => _ChatRecordAccumulator.fromConversation(conversation),
+      );
+      accumulator.includeConversationHit(conversation);
+    }
+
+    for (final message in messageHits) {
+      final seedConversation = conversationIndex[message.conversationId];
+      final accumulator = accumulators.putIfAbsent(
+        message.conversationId,
+        () => _ChatRecordAccumulator.fromMessage(
+          message,
+          seedConversation: seedConversation,
+        ),
+      );
+      accumulator.includeMessageHit(message);
+    }
+
+    final results = accumulators.values
+        .map((accumulator) => accumulator.build())
+        .toList(growable: false);
+    results.sort((left, right) {
+      final countCompare = right.matchCount.compareTo(left.matchCount);
+      if (countCompare != 0) {
+        return countCompare;
+      }
+      final leftTime = left.timestamp;
+      final rightTime = right.timestamp;
+      if (leftTime == null && rightTime == null) {
+        return left.conversationTitle.compareTo(right.conversationTitle);
+      }
+      if (leftTime == null) {
+        return 1;
+      }
+      if (rightTime == null) {
+        return -1;
+      }
+      return rightTime.compareTo(leftTime);
+    });
+    return results;
+  }
+
+  List<MostUsedSearchItem> _buildMostUsedSuggestions({
+    required List<ContactSearchSuggestion> contacts,
+    required List<ChatRecordSearchSuggestion> chatRecords,
+    required List<CircleSearchItemView> circles,
+  }) {
+    final items = <MostUsedSearchItem>[];
+    for (var i = 0; i < contacts.length; i++) {
+      final contact = contacts[i];
+      items.add(
+        MostUsedSearchItem(
+          itemId: 'contact:${contact.contactId}',
+          targetKind: MostUsedTargetKind.contact,
+          title: contact.displayName,
+          subtitle: contact.subtitle ?? '联系人',
+          avatarUrl: contact.avatarUrl,
+          conversationId: contact.conversationId,
+          usageScore: 320 - (i * 10),
+        ),
+      );
+    }
+    for (var i = 0; i < chatRecords.length; i++) {
+      final record = chatRecords[i];
+      items.add(
+        MostUsedSearchItem(
+          itemId: 'chat:${record.conversationId}',
+          targetKind: MostUsedTargetKind.chatRecord,
+          title: record.conversationTitle,
+          subtitle: record.matchedPreview,
+          avatarUrl: record.avatarUrl,
+          avatarCompositeUrls: record.avatarCompositeUrls,
+          conversationId: record.conversationId,
+          conversationType: record.conversationType,
+          messageAnchorId: record.messageAnchorId,
+          timestamp: record.timestamp,
+          matchCount: record.matchCount,
+          usageScore: 240 + record.matchCount - (i * 6),
+        ),
+      );
+    }
+    for (var i = 0; i < circles.length; i++) {
+      final circle = circles[i];
+      items.add(
+        MostUsedSearchItem(
+          itemId: 'circle:${circle.circleId}',
+          targetKind: MostUsedTargetKind.circle,
+          title: circle.name,
+          subtitle: circle.description ?? circle.subCategory ?? '群组',
+          avatarUrl: circle.coverUrl,
+          circleId: circle.circleId,
+          usageScore: 160 + (circle.memberCount ~/ 100) - (i * 4),
+        ),
+      );
+    }
+    items.sort((left, right) => right.usageScore.compareTo(left.usageScore));
+    final deduped = <String, MostUsedSearchItem>{};
+    for (final item in items) {
+      deduped.putIfAbsent(item.itemId, () => item);
+    }
+    return deduped.values.take(_maxMostUsedCount).toList(growable: false);
+  }
+
+  List<NetworkSearchSuggestion> _buildNetworkSuggestions(String query) {
+    final seeds = <NetworkSearchSuggestion>[
+      NetworkSearchSuggestion(
+        query: query,
+        title: '$query 相关主页',
+        subtitle: '搜索 $query 的共享主页',
+        initialTabId: 'homepages',
+      ),
+      NetworkSearchSuggestion(query: query, subtitle: '直接搜索 $query'),
+      NetworkSearchSuggestion(query: '$query群组', subtitle: '搜索 $query群组 的网络结果'),
+      NetworkSearchSuggestion(
+        query: '$query俱乐部',
+        subtitle: '搜索 $query俱乐部 的网络结果',
+      ),
+      NetworkSearchSuggestion(
+        query: '$query热门话题',
+        subtitle: '搜索 $query热门话题 的网络结果',
+      ),
+      NetworkSearchSuggestion(query: '$query攻略', subtitle: '搜索 $query攻略 的网络结果'),
+      NetworkSearchSuggestion(query: '$query推荐', subtitle: '搜索 $query推荐 的网络结果'),
+      NetworkSearchSuggestion(query: '$query精选', subtitle: '搜索 $query精选 的网络结果'),
+    ];
+    final unique = <String>{};
+    return seeds
+        .where(
+          (item) =>
+              unique.add('${item.query.trim()}::${item.initialTabId ?? ''}'),
+        )
+        .take(_maxNetworkSuggestions)
+        .toList(growable: false);
+  }
+
+  Future<void> _rememberQuery({required String query}) async {
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty) {
       return;
     }
+    final selectionFacet = state.selection.toFacet();
+    final historyScope = _scopeForSelection(state.selection);
     final now = DateTime.now();
-    final seed = '${scope.wireValue}|${facet ?? ''}|${trimmedQuery.toLowerCase()}';
     final localEntry = RecentSearchEntryView(
-      entryId: 'recent_${seed.hashCode.abs().toRadixString(16)}',
+      entryId: RecentSearchEntryView.buildEntryId(
+        query: trimmedQuery,
+        scope: historyScope,
+        facet: selectionFacet,
+      ),
       query: trimmedQuery,
-      scope: scope,
-      facet: facet,
+      scope: historyScope,
+      facet: selectionFacet,
       updatedAt: now,
     );
-    final merged = _mergeHistory(
-      <RecentSearchEntryView>[localEntry],
-      state.recentSearches,
-    );
+    final merged = _mergeHistory(<RecentSearchEntryView>[
+      localEntry,
+    ], state.recentSearches);
     _setState(state.copyWith(recentSearches: merged));
     await _localStore.save(merged);
     try {
@@ -387,10 +768,12 @@ class SearchCoordinator extends ChangeNotifier {
           .read(userProfileRepositoryProvider)
           .upsertRecentSearch(
             query: trimmedQuery,
-            scope: scope,
-            facet: facet,
+            scope: historyScope,
+            facet: selectionFacet,
           );
-      final nextEntries = _mergeHistory(<RecentSearchEntryView>[remoteEntry], merged);
+      final nextEntries = _mergeHistory(<RecentSearchEntryView>[
+        remoteEntry,
+      ], merged);
       if (_disposed) {
         return;
       }
@@ -420,6 +803,20 @@ class SearchCoordinator extends ChangeNotifier {
 
   String _historyKeyForEntry(RecentSearchEntryView entry) {
     return '${entry.scope.wireValue}|${entry.facet ?? ''}|${entry.query.toLowerCase()}';
+  }
+
+  SearchScope _scopeForSelection(SearchObjectSelection selection) {
+    switch (selection.normalized().activeObjectTarget) {
+      case SearchObjectTarget.contacts:
+        return SearchScope.socialRelation;
+      case SearchObjectTarget.directChats:
+      case SearchObjectTarget.groupChats:
+        return SearchScope.messages;
+      case SearchObjectTarget.circles:
+        return SearchScope.circles;
+      case null:
+        return SearchScope.all;
+    }
   }
 
   @override
@@ -482,5 +879,116 @@ class SearchRecentHistoryStore {
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+  }
+}
+
+class _ChatRecordAccumulator {
+  _ChatRecordAccumulator({
+    required this.conversationId,
+    required this.conversationTitle,
+    required this.conversationType,
+    required this.avatarUrl,
+    required this.avatarCompositeUrls,
+    required this.matchedPreview,
+    required this.matchCount,
+    this.messageAnchorId,
+    this.timestamp,
+  });
+
+  factory _ChatRecordAccumulator.fromConversation(
+    ConversationSearchItemView conversation,
+  ) {
+    return _ChatRecordAccumulator(
+      conversationId: conversation.conversationId,
+      conversationTitle: conversation.title,
+      conversationType: conversation.type,
+      avatarUrl: conversation.avatarUrl,
+      avatarCompositeUrls: conversation.avatarCompositeUrls,
+      matchedPreview:
+          conversation.highlightText ??
+          conversation.lastMessagePreview ??
+          '打开聊天',
+      matchCount: 1,
+      timestamp: conversation.lastMessageTime,
+    );
+  }
+
+  factory _ChatRecordAccumulator.fromMessage(
+    MessageSearchItemView message, {
+    ConversationSearchItemView? seedConversation,
+  }) {
+    return _ChatRecordAccumulator(
+      conversationId: message.conversationId,
+      conversationTitle:
+          message.conversationTitle ?? seedConversation?.title ?? '聊天记录',
+      conversationType: seedConversation?.type ?? 'group',
+      avatarUrl:
+          message.conversationAvatarUrl ??
+          seedConversation?.avatarUrl ??
+          message.senderAvatarUrl,
+      avatarCompositeUrls:
+          seedConversation?.avatarCompositeUrls ?? const <String>[],
+      matchedPreview: message.highlightText ?? message.contentPreview,
+      matchCount: 1,
+      messageAnchorId: message.messageId,
+      timestamp: message.timestamp,
+    );
+  }
+
+  final String conversationId;
+  String conversationTitle;
+  String conversationType;
+  String? avatarUrl;
+  List<String> avatarCompositeUrls;
+  String matchedPreview;
+  int matchCount;
+  String? messageAnchorId;
+  DateTime? timestamp;
+
+  void includeConversationHit(ConversationSearchItemView conversation) {
+    conversationTitle = conversation.title;
+    conversationType = conversation.type;
+    avatarUrl = avatarUrl ?? conversation.avatarUrl;
+    if (avatarCompositeUrls.isEmpty) {
+      avatarCompositeUrls = conversation.avatarCompositeUrls;
+    }
+    matchedPreview =
+        conversation.highlightText ??
+        conversation.lastMessagePreview ??
+        matchedPreview;
+    timestamp = _maxTimestamp(timestamp, conversation.lastMessageTime);
+  }
+
+  void includeMessageHit(MessageSearchItemView message) {
+    matchCount += 1;
+    matchedPreview = message.highlightText ?? message.contentPreview;
+    messageAnchorId ??= message.messageId;
+    timestamp = _maxTimestamp(timestamp, message.timestamp);
+    avatarUrl =
+        avatarUrl ?? message.conversationAvatarUrl ?? message.senderAvatarUrl;
+  }
+
+  ChatRecordSearchSuggestion build() {
+    return ChatRecordSearchSuggestion(
+      conversationId: conversationId,
+      conversationTitle: conversationTitle,
+      conversationType: conversationType,
+      matchedPreview: matchedPreview,
+      matchCount: matchCount,
+      avatarUrl: avatarUrl,
+      avatarCompositeUrls: avatarCompositeUrls,
+      messageAnchorId: messageAnchorId,
+      timestamp: timestamp,
+    );
+  }
+
+  DateTime? _maxTimestamp(DateTime? left, DateTime? right) {
+    if (left == null) {
+      return right;
+    }
+    if (right == null) {
+      return left;
+    }
+    return left.isAfter(right) ? left : right;
   }
 }

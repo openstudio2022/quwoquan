@@ -15,6 +15,7 @@ export 'constants/ui_text_constants.dart';
 export 'constants/content_type_constants.dart';
 export 'constants/app_strings.dart';
 export 'constants/design_semantic_constants.dart';
+export 'constants/search_semantic_constants.dart';
 export 'constants/settings_semantic_constants.dart';
 export 'constants/app_concept_constants.dart';
 export 'constants/z_index_constants.dart';
@@ -30,6 +31,8 @@ export 'design_system/icons/app_custom_icons.dart';
 // Core widgets
 export 'widgets/app_action_sheet.dart';
 export 'widgets/app_modal_surface.dart';
+export 'widgets/app_search_field.dart';
+export 'widgets/ios_selection_page_components.dart';
 
 // Providers
 export 'design_system/providers/theme_provider.dart';

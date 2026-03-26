@@ -23,7 +23,10 @@ void main() {
     'displayName': '摄影师',
     'authorAvatarUrl': 'https://example.com/avatar.jpg',
     'coverUrl': 'https://example.com/cover.jpg',
-    'mediaUrls': ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+    'mediaUrls': [
+      'https://example.com/img1.jpg',
+      'https://example.com/img2.jpg',
+    ],
     'width': 1200,
     'height': 900,
     'likeCount': 100,
@@ -126,8 +129,7 @@ void main() {
   group('projectPostMap → PostSummaryView 计数字段 & 0→1 回归', () {
     test('likeCount → likesCount 忠实保留原始计数', () {
       final r = projectPostMap(minPhoto);
-      expect(r.likesCount, equals(100),
-          reason: '投射不得把 100 归零：0→1 bug');
+      expect(r.likesCount, equals(100), reason: '投射不得把 100 归零：0→1 bug');
     });
 
     test('commentCount → commentsCount 忠实保留原始计数', () {
@@ -146,8 +148,7 @@ void main() {
     });
 
     test('大数值计数也能忠实保留（不截断）', () {
-      final raw = Map<String, dynamic>.from(minPhoto)
-        ..['likeCount'] = 999999;
+      final raw = Map<String, dynamic>.from(minPhoto)..['likeCount'] = 999999;
       final r = projectPostMap(raw);
       expect(r.likesCount, equals(999999));
     });
@@ -166,8 +167,11 @@ void main() {
         'publishedAt': '2025-01-01T00:00:00Z',
       };
       final r = projectPostMap(raw);
-      expect(r.likesCount, equals(200),
-          reason: 'likesCount alias 必须被 DTO 正确归一');
+      expect(
+        r.likesCount,
+        equals(200),
+        reason: 'likesCount alias 必须被 DTO 正确归一',
+      );
       expect(r.commentsCount, equals(10));
       expect(r.savesCount, equals(40));
     });
@@ -325,38 +329,76 @@ void main() {
     test('所有 Photo mock 投射后均有非空 id / authorId / images / likesCount', () {
       for (final raw in ContentMockData.discoveryPhotoData) {
         final r = projectPostMap(raw);
-        expect(r.id, isNotEmpty,
-            reason: 'photo postId=${raw['postId']} 的 id 不得为空');
-        expect(r.authorId, isNotEmpty,
-            reason: 'photo postId=${raw['postId']} 的 authorId 不得为空');
-        expect(r.images, isNotNull,
-            reason: 'photo postId=${raw['postId']} 应有 images 字段');
+        expect(
+          r.id,
+          isNotEmpty,
+          reason: 'photo postId=${raw['postId']} 的 id 不得为空',
+        );
+        expect(
+          r.authorId,
+          isNotEmpty,
+          reason: 'photo postId=${raw['postId']} 的 authorId 不得为空',
+        );
+        expect(
+          r.images,
+          isNotNull,
+          reason: 'photo postId=${raw['postId']} 应有 images 字段',
+        );
         final rawLikes = (raw['likeCount'] as num?)?.toInt() ?? 0;
-        expect(r.likesCount, equals(rawLikes),
-            reason: 'photo postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）');
+        expect(
+          r.likesCount,
+          equals(rawLikes),
+          reason:
+              'photo postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）',
+        );
       }
     });
 
     test('所有 Video mock 投射后均有 videoUrl / thumbnailUrl', () {
       for (final raw in ContentMockData.discoveryVideoData) {
         final r = projectPostMap(raw);
-        expect(r.videoUrl, isNotNull,
-            reason: 'video postId=${raw['postId']} 应有 videoUrl');
-        expect(r.thumbnailUrl, isNotNull,
-            reason: 'video postId=${raw['postId']} 应有 thumbnailUrl');
+        expect(
+          r.videoUrl,
+          isNotNull,
+          reason: 'video postId=${raw['postId']} 应有 videoUrl',
+        );
+        expect(
+          r.thumbnailUrl,
+          isNotNull,
+          reason: 'video postId=${raw['postId']} 应有 thumbnailUrl',
+        );
         final rawLikes = (raw['likeCount'] as num?)?.toInt() ?? 0;
-        expect(r.likesCount, equals(rawLikes),
-            reason: 'video postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）');
+        expect(
+          r.likesCount,
+          equals(rawLikes),
+          reason:
+              'video postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）',
+        );
       }
     });
 
-    test('所有 Article mock 投射后均有 title / body', () {
+    test('所有 Article mock 投射后均有 body，title 保持 mock 语义', () {
       for (final raw in ContentMockData.discoveryArticleData) {
         final r = projectPostMap(raw);
-        expect(r.title, isNotEmpty,
-            reason: 'article postId=${raw['postId']} 应有非空 title');
-        expect(r.body, isNotEmpty,
-            reason: 'article postId=${raw['postId']} 应有非空 body');
+        expect(
+          r.body,
+          isNotEmpty,
+          reason: 'article postId=${raw['postId']} 应有非空 body',
+        );
+        final rawTitle = (raw['title'] ?? '').toString().trim();
+        if (rawTitle.isNotEmpty) {
+          expect(
+            r.title,
+            isNotEmpty,
+            reason: 'article postId=${raw['postId']} 应保留显式标题',
+          );
+        } else {
+          expect(
+            (r.title ?? '').trim(),
+            isEmpty,
+            reason: 'article postId=${raw['postId']} 的无标题语义不应被强行补标题',
+          );
+        }
       }
     });
   });
@@ -428,8 +470,7 @@ void main() {
     });
 
     test('stats 计数与 DTO 一致（0→1 回归守护）', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['likeCount'] = 8888;
+      final raw = Map<String, dynamic>.from(minArticle)..['likeCount'] = 8888;
       final r = projectArticleDetailView(raw, fallbackArticleId: 'fb4');
       expect(r.stats.likes, equals(8888));
     });
@@ -477,18 +518,8 @@ void main() {
     test('articleBlocks 优先投射为连续内容块', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleBlocks'] = <Map<String, dynamic>>[
-          {
-            'id': 'p1',
-            'type': 'paragraph',
-            'text': '第一段',
-            'imagePath': '',
-          },
-          {
-            'id': 'o1',
-            'type': 'orderedItem',
-            'text': '第二条',
-            'imagePath': '',
-          },
+          {'id': 'p1', 'type': 'paragraph', 'text': '第一段', 'imagePath': ''},
+          {'id': 'o1', 'type': 'orderedItem', 'text': '第二条', 'imagePath': ''},
           {
             'id': 'i1',
             'type': 'image',
@@ -502,7 +533,10 @@ void main() {
       expect(r.contentBlocks[1].type, equals('ordered_item'));
       expect(r.contentBlocks[1].orderedIndex, equals(1));
       expect(r.contentBlocks[2].type, equals('image'));
-      expect(r.contentBlocks[2].imageUrl, equals('https://example.com/block.jpg'));
+      expect(
+        r.contentBlocks[2].imageUrl,
+        equals('https://example.com/block.jpg'),
+      );
     });
 
     test('wrap image + paragraph 会投射为 wrapped_paragraph', () {
@@ -515,18 +549,32 @@ void main() {
             'imagePath': 'https://example.com/wrap.jpg',
             'imageLayout': 'wrapLeft',
           },
-          {
-            'id': 'p1',
-            'type': 'paragraph',
-            'text': '图片旁边的正文',
-            'imagePath': '',
-          },
+          {'id': 'p1', 'type': 'paragraph', 'text': '图片旁边的正文', 'imagePath': ''},
         ];
       final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_wrap');
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('wrapped_paragraph'));
       expect(r.contentBlocks.first.imageLayout, equals('wrapLeft'));
-      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/wrap.jpg'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/wrap.jpg'),
+      );
+    });
+
+    test('正文标题块会投射到连续文档与阅读块语义', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleBlocks'] = <Map<String, dynamic>>[
+          {'id': 'p1', 'type': 'paragraph', 'text': '第一段'},
+          {'id': 'h2_1', 'type': 'heading2', 'text': '章节一'},
+          {'id': 'p2', 'type': 'paragraph', 'text': '第二段'},
+          {'id': 's1', 'type': 'sectionTitle', 'text': '尾声'},
+        ];
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_headings');
+      expect(r.document.blocks, hasLength(2));
+      expect(r.document.blocks.first.text, equals('章节一'));
+      expect(r.document.blocks.last.text, equals('尾声'));
+      expect(r.contentBlocks[1].type, equals('heading_2'));
+      expect(r.contentBlocks.last.type, equals('section_heading'));
     });
 
     test('旧 cards 可回退为连续阅读 section 块', () {
@@ -542,8 +590,94 @@ void main() {
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('section'));
       expect(r.contentBlocks.first.title, equals('小节一'));
-      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/card.jpg'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/card.jpg'),
+      );
     });
+
+    test('articleDocument canonical 优先投射为连续内容块与分页首页', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['title'] = '旧标题'
+        ..['body'] = '分发摘要正文'
+        ..['cards'] = <Map<String, dynamic>>[]
+        ..['articleBlocks'] = <Map<String, dynamic>>[]
+        ..['articleDocument'] = <String, dynamic>{
+          'title': '连续文档标题',
+          'body': '前言段落\n结尾段落',
+          'assets': <Map<String, dynamic>>[
+            {
+              'id': 'asset_1',
+              'offset': 4,
+              'imageUrl': 'https://example.com/doc.jpg',
+              'imageLayout': 'wrapRight',
+              'caption': '文档配图',
+            },
+          ],
+          'blocks': <Map<String, dynamic>>[
+            {'id': 'h2_1', 'type': 'heading2', 'offset': 0, 'text': '章节一'},
+            {
+              'id': 'img_1',
+              'type': 'image',
+              'offset': 5,
+              'imageUrl': 'https://example.com/doc.jpg',
+              'imageLayout': 'wrapRight',
+            },
+            {'id': 'p_1', 'type': 'paragraph', 'offset': 6, 'text': '图旁正文'},
+          ],
+        };
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_document');
+      expect(r.document.title, equals('连续文档标题'));
+      expect(r.documentSource, ArticleDetailDocumentSource.articleDocument);
+      expect(r.contentBlocks, isNotEmpty);
+      expect(r.contentBlocks.first.type, equals('heading_2'));
+      expect(r.title, equals('连续文档标题'));
+      expect(r.description, contains('前言段落'));
+      expect(
+        r.contentBlocks.any(
+          (block) =>
+              block.type == 'wrapped_paragraph' &&
+              block.imageUrl == 'https://example.com/doc.jpg',
+        ),
+        isTrue,
+      );
+      expect(r.pages, isNotEmpty);
+      expect(r.pages.first.title, equals('连续文档标题'));
+    });
+
+    test(
+      'legacy fallback fixtures 覆盖 articleDocument/articleBlocks/cards/body 四条链路',
+      () {
+        final fixtures = ContentMockData.legacyArticleFallbackData;
+        expect(fixtures, hasLength(4));
+        final expectedSources = <String, ArticleDetailDocumentSource>{
+          'legacy_document_only': ArticleDetailDocumentSource.articleDocument,
+          'legacy_blocks_only': ArticleDetailDocumentSource.articleBlocks,
+          'legacy_cards_only': ArticleDetailDocumentSource.cards,
+          'legacy_body_only': ArticleDetailDocumentSource.body,
+        };
+        for (final raw in fixtures) {
+          final postId = raw['postId']?.toString() ?? 'legacy_fallback';
+          final r = projectArticleDetailView(raw, fallbackArticleId: postId);
+          expect(
+            r.document.isEmpty,
+            isFalse,
+            reason: 'postId=$postId 应能产出 document',
+          );
+          expect(
+            r.documentSource,
+            expectedSources[postId],
+            reason: 'postId=$postId 应命中正确的 fallback 来源',
+          );
+          expect(
+            r.contentBlocks,
+            isNotEmpty,
+            reason: 'postId=$postId 应能回退出连续阅读内容块',
+          );
+          expect(r.pages, isNotEmpty, reason: 'postId=$postId 应能回退出阅读页');
+        }
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -557,7 +691,10 @@ void main() {
       'authorNickname': '小趣',
       'authorAvatarUrl': 'https://example.com/avatar.jpg',
       'body': '今天天气真好 ☀️',
-      'mediaUrls': ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+      'mediaUrls': [
+        'https://example.com/img1.jpg',
+        'https://example.com/img2.jpg',
+      ],
       'likeCount': 5,
       'commentCount': 2,
       'favoriteCount': 1,
@@ -584,20 +721,29 @@ void main() {
 
     test('moment type dispatches to MomentPostDto', () {
       final dto = postBaseDtoFromMap(momentWithImages);
-      expect(dto, isA<MomentPostDto>(),
-          reason: 'contentType=moment must dispatch to MomentPostDto');
+      expect(
+        dto,
+        isA<MomentPostDto>(),
+        reason: 'contentType=moment must dispatch to MomentPostDto',
+      );
     });
 
     test('micro type also dispatches to MomentPostDto', () {
       final dto = postBaseDtoFromMap(momentWithVideo);
-      expect(dto, isA<MomentPostDto>(),
-          reason: 'contentType=micro must dispatch to MomentPostDto');
+      expect(
+        dto,
+        isA<MomentPostDto>(),
+        reason: 'contentType=micro must dispatch to MomentPostDto',
+      );
     });
 
     test('moment body is projected to PostSummaryView', () {
       final view = projectPostMap(momentWithImages);
-      expect(view.body, equals('今天天气真好 ☀️'),
-          reason: 'moment body must be projected to PostSummaryView.body');
+      expect(
+        view.body,
+        equals('今天天气真好 ☀️'),
+        reason: 'moment body must be projected to PostSummaryView.body',
+      );
     });
 
     test('moment imageUrls projected correctly', () {
@@ -620,18 +766,27 @@ void main() {
 
     test('moment with no images has empty imageUrls list (not null)', () {
       final dto = postBaseDtoFromMap(momentWithVideo) as MomentPostDto;
-      expect(dto.imageUrls, isEmpty,
-          reason: 'imageUrls must be an empty list when no images provided');
+      expect(
+        dto.imageUrls,
+        isEmpty,
+        reason: 'imageUrls must be an empty list when no images provided',
+      );
     });
 
     test('mock moment data dispatches to MomentPostDto', () {
       final mockMoments = ContentMockData.discoveryMomentData;
-      expect(mockMoments, isNotEmpty,
-          reason: 'mock discovery moment data must not be empty');
+      expect(
+        mockMoments,
+        isNotEmpty,
+        reason: 'mock discovery moment data must not be empty',
+      );
       for (final raw in mockMoments) {
         final dto = postBaseDtoFromMap(raw);
-        expect(dto, isA<MomentPostDto>(),
-            reason: 'All mock micro data must dispatch to MomentPostDto');
+        expect(
+          dto,
+          isA<MomentPostDto>(),
+          reason: 'All mock micro data must dispatch to MomentPostDto',
+        );
       }
     });
   });

@@ -82,7 +82,8 @@ class RetrievalDesignPhase implements Phase {
             latestUserQuery: latestUserQuery,
             intentGraph: intentGraph,
             availableTools: (() {
-              final toolNames = runtime?.listAvailableToolNames() ?? const <String>[];
+              final toolNames =
+                  runtime?.listAvailableToolNames() ?? const <String>[];
               return toolNames.isNotEmpty
                   ? toolNames
                   : const <String>['web_search'];
@@ -125,8 +126,6 @@ class RetrievalDesignPhase implements Phase {
             ),
           )
           .toList(growable: false),
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
     );
     final updatedIntentGraph = IntentGraph.fromJson(<String, dynamic>{
       ...intentGraph.toJson(),
@@ -219,112 +218,8 @@ class RetrievalDesignPhase implements Phase {
 
   List<QueryTask> _normalizeDomainQueryTasks({
     required List<QueryTask> queryTasks,
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
   }) {
-    final normalized = QueryTask.normalizeList(QueryTask.toJsonList(queryTasks));
-    if (intentGraph.primarySkill.trim() != 'weather') {
-      return normalized;
-    }
-    return _normalizeWeatherQueryTasks(
-      queryTasks: normalized,
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
-    );
-  }
-
-  List<QueryTask> _normalizeWeatherQueryTasks({
-    required List<QueryTask> queryTasks,
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-  }) {
-    final seed = _weatherQuerySeed(
-      queryTasks: queryTasks,
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
-    );
-    if (seed.isEmpty) {
-      return queryTasks;
-    }
-    final shared = queryTasks.isNotEmpty ? queryTasks.first : null;
-    final sharedEntityAnchors = queryTasks
-        .expand((task) => task.entityAnchors)
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    final enriched = <QueryTask>[
-      QueryTask(
-        id: 'weather_current_state',
-        query: '$seed 当前温度 体感 湿度 风力',
-        label: '体感与当前状态',
-        dimension: QueryTaskDimension.currentState,
-        entityAnchors: sharedEntityAnchors,
-        negativeKeywords: shared?.negativeKeywords ?? const <String>[],
-        authorityDomains: shared?.authorityDomains ?? const <String>[],
-        freshnessHoursMax: (shared?.freshnessHoursMax ?? 0) > 0
-            ? shared!.freshnessHoursMax
-            : 6,
-        answerShape: shared?.answerShape ?? AnswerShape.unspecified,
-        freshnessNeed: shared?.freshnessNeed ?? FreshnessNeed.unspecified,
-      ),
-      QueryTask(
-        id: 'weather_precipitation',
-        query: '$seed 今天 降雨概率 小时天气',
-        label: '降雨与带伞判断',
-        dimension: QueryTaskDimension.decisionImpact,
-        entityAnchors: sharedEntityAnchors,
-        negativeKeywords: shared?.negativeKeywords ?? const <String>[],
-        authorityDomains: shared?.authorityDomains ?? const <String>[],
-        freshnessHoursMax: (shared?.freshnessHoursMax ?? 0) > 0
-            ? shared!.freshnessHoursMax
-            : 6,
-        answerShape: shared?.answerShape ?? AnswerShape.unspecified,
-        freshnessNeed: shared?.freshnessNeed ?? FreshnessNeed.unspecified,
-      ),
-      QueryTask(
-        id: 'weather_outfit',
-        query: '$seed 今天 最高温 最低温 紫外线 穿衣建议',
-        label: '穿衣与全天温差',
-        dimension: QueryTaskDimension.fitScenarios,
-        entityAnchors: sharedEntityAnchors,
-        negativeKeywords: shared?.negativeKeywords ?? const <String>[],
-        authorityDomains: shared?.authorityDomains ?? const <String>[],
-        freshnessHoursMax: (shared?.freshnessHoursMax ?? 0) > 0
-            ? shared!.freshnessHoursMax
-            : 6,
-        answerShape: shared?.answerShape ?? AnswerShape.unspecified,
-        freshnessNeed: shared?.freshnessNeed ?? FreshnessNeed.unspecified,
-      ),
-      ...queryTasks,
-    ];
-    return QueryTask.normalizeList(QueryTask.toJsonList(enriched));
-  }
-
-  String _weatherQuerySeed({
-    required List<QueryTask> queryTasks,
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-  }) {
-    final candidates = <String>[
-      intentGraph.queryNormalization.normalizedQuery.trim(),
-      if (queryTasks.isNotEmpty) queryTasks.first.query.trim(),
-      latestUserQuery.trim(),
-    ];
-    for (final raw in candidates) {
-      final normalized = raw
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .replaceAll(RegExp(r'(实时)?天气预报'), '天气')
-          .trim();
-      if (normalized.isEmpty) {
-        continue;
-      }
-      if (normalized.contains('天气')) {
-        return normalized;
-      }
-      return '$normalized 天气';
-    }
-    return '';
+    return QueryTask.normalizeList(QueryTask.toJsonList(queryTasks));
   }
 
   SkillExecutionShell inputSkillExecutionShell(IntentGraph intentGraph) {

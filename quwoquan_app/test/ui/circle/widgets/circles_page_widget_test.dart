@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 
@@ -49,6 +50,16 @@ void main() {
       await tester.pump();
 
       expect(find.byType(Scaffold), findsWidgets);
+    });
+
+    testWidgets('展示圈子广场标题与左侧分类菜单', (tester) async {
+      await tester.pumpWidget(_scopedApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.circlesDirectoryTitle), findsOneWidget);
+      expect(find.text(UITextConstants.homeCirclesMy), findsOneWidget);
+      expect(find.text('推荐'), findsOneWidget);
+      expect(find.text('遇见'), findsOneWidget);
     });
   });
 

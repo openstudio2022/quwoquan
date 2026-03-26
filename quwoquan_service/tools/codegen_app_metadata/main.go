@@ -233,6 +233,35 @@ type shareTemplateProfileDef struct {
 	IncludeTags          bool   `yaml:"include_tags"`
 }
 
+type articleDistributionProfileDef struct {
+	ID               string `yaml:"id"`
+	Surface          string `yaml:"surface"`
+	Layout           string `yaml:"layout"`
+	CoverMode        string `yaml:"cover_mode"`
+	SummaryLineLimit int    `yaml:"summary_line_limit"`
+}
+
+type articleReaderProfileDef struct {
+	ID                  string `yaml:"id"`
+	StageLayout         string `yaml:"stage_layout"`
+	PageIndicatorAnchor string `yaml:"page_indicator_anchor"`
+	EdgeTreatment       string `yaml:"edge_treatment"`
+	SupportsPageCurl    bool   `yaml:"supports_page_curl"`
+}
+
+type articleTemplateConfigDef struct {
+	ID                string `yaml:"id"`
+	DefaultFontPreset string `yaml:"default_font_preset"`
+	PaperTexture      string `yaml:"paper_texture"`
+	DecorationStyle   string `yaml:"decoration_style"`
+	ChromeStyle       string `yaml:"chrome_style"`
+}
+
+type articleTemplateRecommendationDef struct {
+	CategoryID                  string   `yaml:"category_id"`
+	RecommendedArticleTemplates []string `yaml:"recommended_article_templates"`
+}
+
 type featureFlagDef struct {
 	Flag        string `yaml:"flag"`
 	Default     bool   `yaml:"default"`
@@ -247,16 +276,20 @@ type emptyStateDef struct {
 }
 
 type uiConfigFile struct {
-	DiscoveryTabs           []discoveryTabDef         `yaml:"discovery_tabs"`
-	DiscoveryRails          []discoveryRailDef        `yaml:"discovery_rails"`
-	CreationIdentityFilters []identityFilterDef       `yaml:"creation_identity_filters"`
-	WorkFormatFilters       []workFormatFilterDef     `yaml:"work_format_filters"`
-	HeaderLayout            profileHeaderLayoutDef    `yaml:"header_layout"`
-	ScrollMotion            profileScrollMotionDef    `yaml:"scroll_motion"`
-	ProfileTabs             []profileTabDef           `yaml:"profile_tabs"`
-	ShareTemplateProfiles   []shareTemplateProfileDef `yaml:"share_template_profiles"`
-	FeatureFlags            []featureFlagDef          `yaml:"feature_flags"`
-	EmptyStates             map[string]emptyStateDef  `yaml:"empty_states"`
+	DiscoveryTabs                  []discoveryTabDef                  `yaml:"discovery_tabs"`
+	DiscoveryRails                 []discoveryRailDef                 `yaml:"discovery_rails"`
+	CreationIdentityFilters        []identityFilterDef                `yaml:"creation_identity_filters"`
+	WorkFormatFilters              []workFormatFilterDef              `yaml:"work_format_filters"`
+	HeaderLayout                   profileHeaderLayoutDef             `yaml:"header_layout"`
+	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
+	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
+	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
+	ArticleDistributionProfiles    []articleDistributionProfileDef    `yaml:"article_distribution_profiles"`
+	ArticleReaderProfiles          []articleReaderProfileDef          `yaml:"article_reader_profiles"`
+	ArticleTemplateConfigs         []articleTemplateConfigDef         `yaml:"article_template_configs"`
+	ArticleTemplateRecommendations []articleTemplateRecommendationDef `yaml:"article_template_recommendations"`
+	FeatureFlags                   []featureFlagDef                   `yaml:"feature_flags"`
+	EmptyStates                    map[string]emptyStateDef           `yaml:"empty_states"`
 }
 
 // ── _shared/request_context.yaml ──────────────────────────────────────────────
@@ -2307,6 +2340,60 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
+	b.WriteString("class ArticleDistributionProfileConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String surface;\n")
+	b.WriteString("  final String layout;\n")
+	b.WriteString("  final String coverMode;\n")
+	b.WriteString("  final int summaryLineLimit;\n\n")
+	b.WriteString("  const ArticleDistributionProfileConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.surface,\n")
+	b.WriteString("    required this.layout,\n")
+	b.WriteString("    required this.coverMode,\n")
+	b.WriteString("    required this.summaryLineLimit,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class ArticleReaderProfileConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String stageLayout;\n")
+	b.WriteString("  final String pageIndicatorAnchor;\n")
+	b.WriteString("  final String edgeTreatment;\n")
+	b.WriteString("  final bool supportsPageCurl;\n\n")
+	b.WriteString("  const ArticleReaderProfileConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.stageLayout,\n")
+	b.WriteString("    required this.pageIndicatorAnchor,\n")
+	b.WriteString("    required this.edgeTreatment,\n")
+	b.WriteString("    required this.supportsPageCurl,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class ArticleTemplateConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String defaultFontPreset;\n")
+	b.WriteString("  final String paperTexture;\n")
+	b.WriteString("  final String decorationStyle;\n")
+	b.WriteString("  final String chromeStyle;\n\n")
+	b.WriteString("  const ArticleTemplateConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.defaultFontPreset,\n")
+	b.WriteString("    required this.paperTexture,\n")
+	b.WriteString("    required this.decorationStyle,\n")
+	b.WriteString("    required this.chromeStyle,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class ArticleTemplateRecommendationConfig {\n")
+	b.WriteString("  final String categoryId;\n")
+	b.WriteString("  final List<String> recommendedArticleTemplates;\n\n")
+	b.WriteString("  const ArticleTemplateRecommendationConfig({\n")
+	b.WriteString("    required this.categoryId,\n")
+	b.WriteString("    required this.recommendedArticleTemplates,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
 	tabs := append([]discoveryTabDef(nil), uc.DiscoveryTabs...)
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].Order < tabs[j].Order })
 	rails := append([]discoveryRailDef(nil), uc.DiscoveryRails...)
@@ -2317,6 +2404,16 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	sort.Slice(workFormatFilters, func(i, j int) bool { return workFormatFilters[i].Order < workFormatFilters[j].Order })
 	shareProfiles := append([]shareTemplateProfileDef(nil), uc.ShareTemplateProfiles...)
 	sort.Slice(shareProfiles, func(i, j int) bool { return shareProfiles[i].ID < shareProfiles[j].ID })
+	articleDistributionProfiles := append([]articleDistributionProfileDef(nil), uc.ArticleDistributionProfiles...)
+	sort.Slice(articleDistributionProfiles, func(i, j int) bool { return articleDistributionProfiles[i].ID < articleDistributionProfiles[j].ID })
+	articleReaderProfiles := append([]articleReaderProfileDef(nil), uc.ArticleReaderProfiles...)
+	sort.Slice(articleReaderProfiles, func(i, j int) bool { return articleReaderProfiles[i].ID < articleReaderProfiles[j].ID })
+	articleTemplateConfigs := append([]articleTemplateConfigDef(nil), uc.ArticleTemplateConfigs...)
+	sort.Slice(articleTemplateConfigs, func(i, j int) bool { return articleTemplateConfigs[i].ID < articleTemplateConfigs[j].ID })
+	articleTemplateRecommendations := append([]articleTemplateRecommendationDef(nil), uc.ArticleTemplateRecommendations...)
+	sort.Slice(articleTemplateRecommendations, func(i, j int) bool {
+		return articleTemplateRecommendations[i].CategoryID < articleTemplateRecommendations[j].CategoryID
+	})
 
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
 	b.WriteString("class ContentUIConfig {\n")
@@ -2373,6 +2470,53 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 			profile.IncludeTimeContext,
 			profile.IncludeCircleContext,
 			profile.IncludeTags))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const List<ArticleDistributionProfileConfig> articleDistributionProfiles = <ArticleDistributionProfileConfig>[\n")
+	for _, profile := range articleDistributionProfiles {
+		b.WriteString(fmt.Sprintf("    ArticleDistributionProfileConfig(id: %s, surface: %s, layout: %s, coverMode: %s, summaryLineLimit: %d),\n",
+			dartStringLiteral(profile.ID),
+			dartStringLiteral(profile.Surface),
+			dartStringLiteral(profile.Layout),
+			dartStringLiteral(profile.CoverMode),
+			profile.SummaryLineLimit))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const List<ArticleReaderProfileConfig> articleReaderProfiles = <ArticleReaderProfileConfig>[\n")
+	for _, profile := range articleReaderProfiles {
+		b.WriteString(fmt.Sprintf("    ArticleReaderProfileConfig(id: %s, stageLayout: %s, pageIndicatorAnchor: %s, edgeTreatment: %s, supportsPageCurl: %v),\n",
+			dartStringLiteral(profile.ID),
+			dartStringLiteral(profile.StageLayout),
+			dartStringLiteral(profile.PageIndicatorAnchor),
+			dartStringLiteral(profile.EdgeTreatment),
+			profile.SupportsPageCurl))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const List<ArticleTemplateConfig> articleTemplateConfigs = <ArticleTemplateConfig>[\n")
+	for _, config := range articleTemplateConfigs {
+		b.WriteString(fmt.Sprintf("    ArticleTemplateConfig(id: %s, defaultFontPreset: %s, paperTexture: %s, decorationStyle: %s, chromeStyle: %s),\n",
+			dartStringLiteral(config.ID),
+			dartStringLiteral(config.DefaultFontPreset),
+			dartStringLiteral(config.PaperTexture),
+			dartStringLiteral(config.DecorationStyle),
+			dartStringLiteral(config.ChromeStyle)))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const List<ArticleTemplateRecommendationConfig> articleTemplateRecommendations = <ArticleTemplateRecommendationConfig>[\n")
+	for _, recommendation := range articleTemplateRecommendations {
+		b.WriteString(fmt.Sprintf("    ArticleTemplateRecommendationConfig(categoryId: %s, recommendedArticleTemplates: <String>[",
+			dartStringLiteral(recommendation.CategoryID)))
+		for i, templateID := range recommendation.RecommendedArticleTemplates {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(dartStringLiteral(templateID))
+		}
+		b.WriteString("]),\n")
 	}
 	b.WriteString("  ];\n\n")
 

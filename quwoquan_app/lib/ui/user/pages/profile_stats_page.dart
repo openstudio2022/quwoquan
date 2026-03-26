@@ -143,11 +143,6 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final inputBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundTertiary,
-    );
-
     String searchHint;
     switch (_type) {
       case 'circles':
@@ -188,21 +183,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               horizontal: AppSpacing.md,
               vertical: AppSpacing.intraGroupLg,
             ),
-            child: CupertinoSearchTextField(
+            child: AppSearchField(
               onChanged: (v) => setState(() => _searchQuery = v),
               placeholder: searchHint,
-              placeholderStyle: TextStyle(
-                color: fgSecondary,
-                fontSize: AppTypography.base,
-              ),
-              style: TextStyle(color: fg, fontSize: AppTypography.base),
-              backgroundColor: inputBg,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-              prefixIcon: Icon(
-                CupertinoIcons.search,
-                size: 20,
-                color: fgSecondary,
-              ),
+              elevated: false,
             ),
           ),
           Expanded(
@@ -337,10 +321,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ),
       itemBuilder: (context, i) {
         final u = list[i];
-        final userId =
-            (u['profileSubjectId'] ?? u['userId']) as String? ?? '';
-        final nickname =
-            (u['displayName'] ?? u['nickname']) as String? ?? '';
+        final userId = (u['profileSubjectId'] ?? u['userId']) as String? ?? '';
+        final nickname = (u['displayName'] ?? u['nickname']) as String? ?? '';
         final avatarUrl = u['avatarUrl'] as String? ?? '';
         final isFollowing = u['isFollowing'] as bool? ?? false;
         return CupertinoButton(

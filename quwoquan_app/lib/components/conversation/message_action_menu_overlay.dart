@@ -106,7 +106,7 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
           child: Material(
             elevation: AppSpacing.sm,
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            child: Container(
+            child: SizedBox(
               width: menuWidth,
               child: CupertinoPopupSurface(
                 isSurfacePainted: true,
@@ -136,11 +136,15 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
                         child: CupertinoButton(
                           padding: EdgeInsets.symmetric(
                             horizontal:
-                                AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ??
+                                AppSpacing.semantic[DesignSemanticConstants
+                                    .container]?[DesignSemanticConstants.md] ??
                                 AppSpacing.containerMd,
                             vertical: AppSpacing.containerSm,
                           ),
-                          minSize: AppSpacing.minInteractiveSize,
+                          minimumSize: const Size(
+                            0,
+                            AppSpacing.minInteractiveSize,
+                          ),
                           borderRadius: BorderRadius.zero,
                           alignment: Alignment.centerLeft,
                           onPressed: () {
@@ -159,7 +163,9 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
                                 entry.value,
                                 style: TextStyle(
                                   fontSize:
-                                      Theme.of(context).textTheme.bodyMedium?.fontSize ??
+                                      Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.fontSize ??
                                       AppSpacing.containerMd,
                                   fontWeight: FontWeight.w500,
                                   color: foreground,

@@ -12,7 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
@@ -33,6 +33,7 @@ class HomeCirclesHubPage extends CirclesHubPage {
 }
 
 const double _homeCircleCoverAspectRatio = 4 / 3;
+const int _maxHomeCircleRailItems = 10;
 
 TextStyle _homeCircleRailTitleTextStyle() {
   return const TextStyle(
@@ -303,15 +304,23 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     String categoryId,
   ) {
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
-    final modeFiltered = CircleMockData.circles
-        .where((circle) {
-          final isMineCircle = _isMyCircleId(circle['id']?.toString() ?? '');
-          return isMineMode ? isMineCircle : !isMineCircle;
-        })
-        .toList(growable: false);
+    final source =
+        CircleMockData.circles
+            .where((circle) {
+              if (!isMineMode) {
+                return true;
+              }
+              return _isMyCircleId(circle['id']?.toString() ?? '');
+            })
+            .toList(growable: true)
+          ..sort((left, right) {
+            final rightCount = (right['memberCount'] as num?)?.toInt() ?? 0;
+            final leftCount = (left['memberCount'] as num?)?.toInt() ?? 0;
+            return rightCount.compareTo(leftCount);
+          });
     if (categoryId == 'all') {
-      return modeFiltered
-          .take(6)
+      return source
+          .take(_maxHomeCircleRailItems - 1)
           .map(
             (circle) => CircleDto.fromMap({
               ...circle,
@@ -320,14 +329,14 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           )
           .toList(growable: false);
     }
-    final categoryFiltered = modeFiltered
+    final categoryFiltered = source
         .where((circle) => circle['categoryId'] == categoryId)
         .toList(growable: false);
     final fallbackPool = categoryFiltered.isNotEmpty
         ? categoryFiltered
-        : modeFiltered;
+        : source;
     return fallbackPool
-        .take(6)
+        .take(_maxHomeCircleRailItems - 1)
         .map(
           (circle) => CircleDto.fromMap({
             ...circle,
@@ -780,7 +789,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '热门',
+                UITextConstants.circlesRecommendedTitle,
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
                   fontWeight: AppTypography.medium,
@@ -807,10 +816,17 @@ class _CirclesGlobalHeader extends StatelessWidget {
             height: _circleRailHeight(context),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: circles.length,
+              itemCount: circles.isEmpty ? 0 : circles.length + 1,
               separatorBuilder: (context, index) =>
                   SizedBox(width: AppSpacing.intraGroupMd),
               itemBuilder: (context, index) {
+                if (index == circles.length) {
+                  return _HomeCircleViewAllCard(
+                    width: circleCardWidth,
+                    isDark: isDark,
+                    onTap: onSeeMoreTap,
+                  );
+                }
                 final circle = circles[index];
                 return _HomeCircleRailCard(
                   circle: circle,
@@ -918,76 +934,6 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
   }
 }
 
-class _HomeCirclesModuleTabs extends StatelessWidget {
-  const _HomeCirclesModuleTabs({
-    required this.isDark,
-    required this.activeTab,
-    required this.onTabChanged,
-  });
-
-  final bool isDark;
-  final _HomeCirclesModuleTab activeTab;
-  final ValueChanged<_HomeCirclesModuleTab> onTabChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildPlainTab(
-          label: UITextConstants.homeCirclesRecommendTab,
-          fontSize: AppTypography.sm,
-          selected: activeTab == _HomeCirclesModuleTab.recommended,
-          onTap: () => onTabChanged(_HomeCirclesModuleTab.recommended),
-          isDark: isDark,
-          fgSecondary: fgSecondary,
-        ),
-        SizedBox(width: AppSpacing.intraGroupMd),
-        _buildPlainTab(
-          label: UITextConstants.homeCirclesMy,
-          fontSize: AppTypography.sm,
-          selected: activeTab == _HomeCirclesModuleTab.mine,
-          onTap: () => onTabChanged(_HomeCirclesModuleTab.mine),
-          isDark: isDark,
-          fgSecondary: fgSecondary,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlainTab({
-    required String label,
-    required double fontSize,
-    required bool selected,
-    required VoidCallback onTap,
-    required bool isDark,
-    required Color fgSecondary,
-  }) {
-    return CupertinoButton(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.intraGroupXs,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: selected ? AppTypography.semiBold : AppTypography.medium,
-          color: selected
-              ? (isDark ? Colors.white : AppColors.primaryColor)
-              : fgSecondary,
-        ),
-      ),
-    );
-  }
-}
-
 class _HomeCircleRailCard extends StatelessWidget {
   const _HomeCircleRailCard({
     required this.circle,
@@ -1055,8 +1001,8 @@ class _HomeCircleRailCard extends StatelessWidget {
                 ),
                 child: AspectRatio(
                   aspectRatio: _homeCircleCoverAspectRatio,
-                  child: AppCachedNetworkImage(
-                    imageUrl: circle.coverUrl ?? '',
+                  child: CircleMediaImage(
+                    imageSource: circle.coverUrl ?? '',
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -1094,133 +1040,86 @@ class _HomeCircleRailCard extends StatelessWidget {
   }
 }
 
-class _HomeCircleStoryCard extends StatelessWidget {
-  const _HomeCircleStoryCard({
-    required this.item,
+class _HomeCircleViewAllCard extends StatelessWidget {
+  const _HomeCircleViewAllCard({
+    required this.width,
     required this.isDark,
     required this.onTap,
   });
 
-  final _HomeCircleStoryItem item;
+  final double width;
   final bool isDark;
   final VoidCallback onTap;
 
-  double _thumbnailWidth(BuildContext context) {
-    return AppSpacing.responsiveValue(
-      context,
-      compact: AppSpacing.bottomNavHeight * 1.45,
-      regular: AppSpacing.bottomNavHeight * 1.6,
-      expanded: AppSpacing.bottomNavHeight * 1.75,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final bgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final bgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
     );
     final borderColor = AppColorsFunctional.getColor(
       isDark,
       ColorType.borderPrimary,
     );
-    final thumbnailWidth = _thumbnailWidth(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: bgSecondary,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        border: Border.all(color: borderColor.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
-            blurRadius: AppSpacing.md,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    return SizedBox(
+      width: width,
       child: CupertinoButton(
-        padding: EdgeInsets.all(AppSpacing.sm),
+        padding: EdgeInsets.zero,
         minimumSize: Size.zero,
         onPressed: onTap,
-        child: Row(
-          children: [
-            SizedBox(
-              width: thumbnailWidth,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.contentPreviewCornerRadius,
-                ),
-                child: AspectRatio(
-                  aspectRatio: _homeCircleCoverAspectRatio,
-                  child: AppCachedNetworkImage(
-                    imageUrl: item.imageUrl,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: bgPrimary,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
+                blurRadius: AppSpacing.md,
+                offset: const Offset(0, 8),
               ),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      fontWeight: AppTypography.semiBold,
-                      color: fgPrimary,
+            ],
+          ),
+          padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.contentPreviewCornerRadius,
                     ),
                   ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    '${item.typeLabel} · ${item.subtitle}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: fgSecondary,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.intraGroupXs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.circularBorderRadius,
-                      ),
-                    ),
-                    child: Text(
-                      item.isMine
-                          ? UITextConstants.homeCirclesMy
-                          : UITextConstants.homeCirclesRecommendTab,
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.square_grid_2x2,
+                        size: AppSpacing.iconMedium,
                         color: AppColors.primaryColor,
-                        fontWeight: AppTypography.semiBold,
                       ),
-                    ),
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                      Text(
+                        UITextConstants.homeCirclesViewAll,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

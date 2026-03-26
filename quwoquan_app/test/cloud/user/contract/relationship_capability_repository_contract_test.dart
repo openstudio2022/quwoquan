@@ -188,8 +188,8 @@ void main() {
       expect(dto.relationTier, isNotEmpty);
     });
 
-    test('getCapability 默认 mock 返回 same_interest', () async {
-      final dto = await repo.getCapability('any_user');
+    test('getCapability 对互关 mock 用户返回 same_interest', () async {
+      final dto = await repo.getCapability('u1');
       expect(dto.relationTier, 'same_interest');
       expect(dto.canStartVoiceCall, true);
       expect(dto.canStartVideoCall, true);

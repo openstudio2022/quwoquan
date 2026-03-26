@@ -1,9 +1,18 @@
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
 /// 文章详情投射视图 — 由 projectArticleDetailView 生成，供 ArticleDetailPage 消费。
 ///
 /// 取代原来从 `Map<String, dynamic>` 中 article['stats']['likes']、
 /// article['author']['name'] 等写死字符串访问。
+enum ArticleDetailDocumentSource {
+  articleDocument,
+  articleBlocks,
+  cards,
+  body,
+  empty,
+}
+
 class ArticleDetailView {
   const ArticleDetailView({
     required this.id,
@@ -18,9 +27,11 @@ class ArticleDetailView {
     required this.stats,
     required this.contentBlocks,
     required this.cards,
+    required this.document,
     required this.pages,
     required this.template,
     required this.fontPreset,
+    required this.documentSource,
   });
 
   final String id;
@@ -37,9 +48,11 @@ class ArticleDetailView {
   final ArticleStatsView stats;
   final List<ArticleContentBlockView> contentBlocks;
   final List<ArticleCardView> cards;
+  final ArticleDocumentData document;
   final List<ArticlePageData> pages;
   final ArticleTemplatePreset template;
   final ArticleFontPreset fontPreset;
+  final ArticleDetailDocumentSource documentSource;
 }
 
 class ArticleAuthorView {

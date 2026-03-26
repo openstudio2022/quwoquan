@@ -1,0 +1,95 @@
+version: 1
+aggregate: Homepage
+domain: ENTITY
+
+description: |
+  entity 域共享主页错误码。格式：MODULE.KIND.REASON。
+
+errors:
+  - code: ENTITY.USER.homepage_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: homepageNotFound
+    go_const: ErrHomepageNotFound
+    user_message:
+      zh: "主页不存在或已下线"
+      en: "Homepage not found or offline"
+
+  - code: ENTITY.USER.homepage_attach_required
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: homepageAttachRequired
+    go_const: ErrHomepageAttachRequired
+    user_message:
+      zh: "口碑必须绑定一个主页"
+      en: "A review must be attached to one homepage"
+
+  - code: ENTITY.USER.claim_material_missing
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: claimMaterialMissing
+    go_const: ErrClaimMaterialMissing
+    user_message:
+      zh: "认领材料不完整，请补充后重试"
+      en: "Claim materials are incomplete"
+
+  - code: ENTITY.USER.already_claimed
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: alreadyClaimed
+    go_const: ErrAlreadyClaimed
+    user_message:
+      zh: "该主页已被认领"
+      en: "Homepage has already been claimed"
+
+  - code: ENTITY.USER.homepage_offline
+    kind: USER
+    reason: gone
+    http_status: 410
+    retryable: false
+    dart_const: homepageOffline
+    go_const: ErrHomepageOffline
+    user_message:
+      zh: "主页已下线，仅保留历史信息"
+      en: "Homepage is offline and kept for history only"
+
+  - code: ENTITY.USER.invalid_homepage_type
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidHomepageType
+    go_const: ErrInvalidHomepageType
+    user_message:
+      zh: "不支持的主页类型"
+      en: "Unsupported homepage type"
+
+  - code: ENTITY.USER.permission_denied
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: permissionDenied
+    go_const: ErrPermissionDenied
+    user_message:
+      zh: "当前无权限执行此操作"
+      en: "You are not allowed to do this"
+
+  - code: ENTITY.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "共享主页暂时不可用，请稍后再试"
+      en: "Homepage service is temporarily unavailable"

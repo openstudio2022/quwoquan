@@ -1,0 +1,128 @@
+version: 2
+feature: homepage-discovery-and-attach-journey
+level: L2_journey
+source_path: shared-homepage-network/homepage-discovery-and-attach-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结共享主页的发现、搜索、选择、补充与发布挂载的端到端旅程，
+    确保用户可以在搜索和发布场景中找到正确主页、补充缺失主页，并把内容稳定挂载到主页。
+  composed_scenarios:
+    - homepage-search-and-picker
+    - missing-homepage-suggestion-and-review
+    - homepage-entry-and-preview
+    - homepage-attach-in-publish-flow
+  out_of_scope:
+    - 主页认领
+    - 主页下线治理
+    - 主页合并
+    - 群组模板治理
+
+journey_acceptance:
+  J1:
+    title: 用户可在搜索与发布器中找到正确主页
+    journey: open homepage search or picker -> input query -> inspect result summary -> choose target homepage
+    scenario_refs:
+      - homepage-search-and-picker
+      - homepage-entry-and-preview
+    done_when:
+      - 用户可从全局搜索、发布页和主页入口进入同一套主页搜索/选择体验
+      - 搜索结果提供名称、类目、位置或品牌系列、评分摘要等区分信息
+      - 选择主页后，可进入主页详情或直接回填到发布器
+    release_guardrails:
+      - 前台统一使用“主页”与具体类目名，不暴露“实体”
+      - 搜索结果信息足以避免高频同名误挂载
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - homepage picker widget journey test
+        - homepage search result disambiguation test
+      recorded: []
+    status: pending
+
+  J2:
+    title: 用户在搜不到主页时可补充主页并继续当前发布
+    journey: search homepage -> no suitable result -> submit missing homepage suggestion -> return to current compose flow
+    scenario_refs:
+      - missing-homepage-suggestion-and-review
+      - homepage-attach-in-publish-flow
+    done_when:
+      - 搜索无结果或结果不匹配时，用户可发起补充主页
+      - 补充主页至少提交最小必要信息并进入候选/待校验状态
+      - 提交后用户能返回当前编辑上下文，不丢失已写内容
+    release_guardrails:
+      - 不允许用自由文本替代主页绑定
+      - 补充失败或超时不能导致发布器上下文丢失
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - missing homepage suggestion flow test
+        - compose context restore after suggestion test
+      recorded: []
+    status: pending
+
+  J3:
+    title: 用户发布的内容可稳定挂载并回流到主页
+    journey: choose homepage -> publish note/work/question/review -> content returns to homepage aggregation
+    scenario_refs:
+      - homepage-attach-in-publish-flow
+      - homepage-entry-and-preview
+    done_when:
+      - 口碑必须绑定 1 个主主页
+      - 笔记、作品、提问可选绑定主页
+      - 发布成功后，内容能进入主页对应聚合面
+      - 从主页进入发布器时，当前主页默认已选中
+    release_guardrails:
+      - 全局发布入口与主页内入口共用同一发布页
+      - 主页挂载写入失败时不得出现“内容已发出但主页无关联”的静默不一致
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage attach in publish flow integration test
+        - homepage content aggregation return-flow test
+      recorded: []
+    status: pending
+
+release_acceptance:
+  R1:
+    title: 主页发现与挂载旅程可整体验收并整体回滚
+    done_when:
+      - 搜索、补充、挂载、回流四个环节的端云契约均已冻结
+      - KPI/SLO、弱网恢复和上下文保留路径可验证
+      - 出现严重问题时可整体回退到“无主页挂载”的旧发布路径
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_release_rehearsal
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage attach rollback rehearsal
+        - weak network homepage picker degrade verification
+      recorded: []
+    status: pending

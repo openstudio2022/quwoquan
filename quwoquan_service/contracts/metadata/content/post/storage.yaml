@@ -10,6 +10,9 @@ collections:
       - { name: idx_posts_content_type, keys: { contentType: 1, publishedAt: -1 } }
       - { name: idx_posts_visibility, keys: { visibility: 1, publishedAt: -1 } }
       - { name: idx_posts_status_published, keys: { status: 1, publishedAt: -1 } }
+      - { name: idx_posts_group_published, keys: { groupId: 1, publishedAt: -1 }, sparse: true }
+      - { name: idx_posts_node_published, keys: { nodeId: 1, publishedAt: -1 }, sparse: true }
+      - { name: idx_posts_last_active, keys: { lastActiveAt: -1 }, sparse: true }
       - { name: idx_posts_tags, keys: { tags: 1 } }
       - { name: idx_posts_location, keys: { location: "2dsphere" }, sparse: true }
       - { name: idx_posts_moderation, keys: { moderationStatus: 1, createdAt: -1 } }
@@ -62,6 +65,9 @@ collections:
     indexes:
       - { name: idx_dist_post_circle, keys: { postId: 1, circleId: 1 }, unique: true }
       - { name: idx_dist_circle_active, keys: { circleId: 1, state: 1, updatedAt: -1 } }
+      - { name: idx_dist_circle_last_active, keys: { circleId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
+      - { name: idx_dist_group_last_active, keys: { groupId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
+      - { name: idx_dist_node_last_active, keys: { nodeId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
       - { name: idx_dist_owner, keys: { ownerAuthorId: 1, updatedAt: -1 } }
 
   post_circle_reshare:

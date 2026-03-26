@@ -1,0 +1,68 @@
+version: 2
+feature: homepage-candidate-intake-and-publish
+level: L3_scenario
+source_path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-candidate-intake-and-publish
+parent_journey: homepage-claim-maintain-and-offline-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结候选主页 intake、候选状态与发布审核主线。
+  journey_bindings:
+    - J1
+  in_scope:
+    - 候选 intake
+    - 候选状态
+    - 发布审核
+  out_of_scope:
+    - 认领
+    - 下线
+
+scenario_acceptance:
+  A1:
+    title: 候选主页可进入正式发布
+    scenario: homepage candidate intake and publish
+    journey_step: create candidate -> review -> publish homepage
+    done_when:
+      - 候选主页进入统一候选状态
+      - 审核通过前不对普通浏览用户公开
+      - 发布后可被搜索、被挂载、被浏览
+    edge_cases:
+      - 来源缺失时不能直接发布
+      - 审核驳回可保留原因
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - homepage candidate publish test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 候选状态与发布边界可治理
+    done_when:
+      - 候选与正式主页状态字段已冻结
+      - 来源证据字段已明确
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - candidate lifecycle schema review
+      recorded: []
+    status: pending

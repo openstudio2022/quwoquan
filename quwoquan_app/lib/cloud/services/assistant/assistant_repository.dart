@@ -55,6 +55,94 @@ class AssistantSkillConsent {
   };
 }
 
+class AssistantSearchCitationView {
+  const AssistantSearchCitationView({
+    required this.citationId,
+    required this.objectType,
+    required this.objectId,
+    required this.title,
+    this.contentType,
+    this.snippet,
+    this.coverUrl,
+    this.badgeLabel,
+    this.sourceDomain,
+  });
+
+  final String citationId;
+  final String objectType;
+  final String objectId;
+  final String title;
+  final String? contentType;
+  final String? snippet;
+  final String? coverUrl;
+  final String? badgeLabel;
+  final String? sourceDomain;
+
+  factory AssistantSearchCitationView.fromJson(Map<String, dynamic> json) {
+    return AssistantSearchCitationView(
+      citationId: (json['citationId'] ?? '').toString().trim(),
+      objectType: (json['objectType'] ?? '').toString().trim(),
+      objectId: (json['objectId'] ?? '').toString().trim(),
+      title: (json['title'] ?? '').toString().trim(),
+      contentType: json['contentType']?.toString(),
+      snippet: json['snippet']?.toString(),
+      coverUrl: json['coverUrl']?.toString(),
+      badgeLabel: json['badgeLabel']?.toString(),
+      sourceDomain: json['sourceDomain']?.toString(),
+    );
+  }
+}
+
+class AssistantSearchResultView {
+  const AssistantSearchResultView({
+    required this.queryEcho,
+    this.summary,
+    this.searchIntensity,
+    this.citations = const <AssistantSearchCitationView>[],
+  });
+
+  final String queryEcho;
+  final String? summary;
+  final String? searchIntensity;
+  final List<AssistantSearchCitationView> citations;
+
+  factory AssistantSearchResultView.fromJson(Map<String, dynamic> json) {
+    final rawCitations =
+        (json['citations'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return AssistantSearchResultView(
+      queryEcho: (json['queryEcho'] ?? json['userQuery'] ?? '')
+          .toString()
+          .trim(),
+      summary: json['summary']?.toString(),
+      searchIntensity: json['searchIntensity']?.toString(),
+      citations: rawCitations
+          .map(AssistantSearchCitationView.fromJson)
+          .where((item) => item.citationId.isNotEmpty || item.title.isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+}
+
+AssistantSearchResultView _buildFallbackSearchResult({
+  required String query,
+  required String searchIntensity,
+}) {
+  final trimmedQuery = query.trim();
+  final summary = trimmedQuery.isEmpty
+      ? '小趣搜会结合圈子频道结果和已有公开内容，为你梳理当前最相关的线索。'
+      : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子频道与内容方向。';
+  return AssistantSearchResultView(
+    queryEcho: trimmedQuery,
+    summary: summary,
+    searchIntensity: searchIntensity,
+    citations: const <AssistantSearchCitationView>[],
+  );
+}
+
 abstract class AssistantRepository {
   Future<List<AssistantSkillConsent>> listConsents();
 
@@ -64,6 +152,11 @@ abstract class AssistantRepository {
   });
 
   Future<void> revokeSkillConsent({required String skillId});
+
+  Future<AssistantSearchResultView> searchXiaoquResults({
+    required String query,
+    String searchIntensity = 'balanced',
+  });
 }
 
 class MockAssistantRepository implements AssistantRepository {
@@ -96,14 +189,23 @@ class MockAssistantRepository implements AssistantRepository {
   Future<void> revokeSkillConsent({required String skillId}) {
     return _store.revoke(skillId);
   }
+
+  @override
+  Future<AssistantSearchResultView> searchXiaoquResults({
+    required String query,
+    String searchIntensity = 'balanced',
+  }) async {
+    return _buildFallbackSearchResult(
+      query: query,
+      searchIntensity: searchIntensity,
+    );
+  }
 }
 
 class RemoteAssistantRepository implements AssistantRepository {
-  RemoteAssistantRepository({
-    http.Client? client,
-    AssistantConsentStore? store,
-  }) : _client = client ?? http.Client(),
-       _store = store ?? const AssistantConsentStore();
+  RemoteAssistantRepository({http.Client? client, AssistantConsentStore? store})
+    : _client = client ?? http.Client(),
+      _store = store ?? const AssistantConsentStore();
 
   final http.Client _client;
   final AssistantConsentStore _store;
@@ -123,6 +225,22 @@ class RemoteAssistantRepository implements AssistantRepository {
   String _settingsContext({required String operationId}) {
     return CloudRequestHeaders.contextForSurfaceOperation(
       surfaceId: AppUiSurfaces.assistantSettings.id,
+      operationId: operationId,
+    );
+  }
+
+  Map<String, String> _headersForNetworkResults({required String operationId}) {
+    return CloudRequestHeaders.forSurfaceOperation(
+      surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+      routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
+      operationId: operationId,
+      legacyPageId: AssistantRequestPageIds.searchXiaoquResults,
+    );
+  }
+
+  String _networkResultsContext({required String operationId}) {
+    return CloudRequestHeaders.contextForSurfaceOperation(
+      surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
       operationId: operationId,
     );
   }
@@ -229,6 +347,60 @@ class RemoteAssistantRepository implements AssistantRepository {
       // Local revoke still applies when assistant-service is unavailable.
     }
     await _store.revoke(skillId);
+  }
+
+  @override
+  Future<AssistantSearchResultView> searchXiaoquResults({
+    required String query,
+    String searchIntensity = 'balanced',
+  }) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      return _buildFallbackSearchResult(
+        query: query,
+        searchIntensity: searchIntensity,
+      );
+    }
+    try {
+      final uri = _assistantUri(AssistantApiMetadata.searchXiaoquResultsPath);
+      final response = await _client.post(
+        uri,
+        headers: <String, String>{
+          ..._headersForNetworkResults(
+            operationId: AssistantApiMetadata.searchXiaoquResultsOperation,
+          ),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'userQuery': trimmedQuery,
+          'searchIntensity': searchIntensity,
+          'sourceSurfaceId': AppUiSurfaces.globalSearchNetworkResults.id,
+          'fromGlobalSearch': true,
+        }),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = response.body.trim().isEmpty
+            ? <String, dynamic>{}
+            : CloudResponseDecoder.asObject(
+                jsonDecode(response.body),
+                context: _networkResultsContext(
+                  operationId:
+                      AssistantApiMetadata.searchXiaoquResultsOperation,
+                ),
+              );
+        final result = AssistantSearchResultView.fromJson(decoded);
+        if (result.queryEcho.isNotEmpty ||
+            result.summary?.trim().isNotEmpty == true) {
+          return result;
+        }
+      }
+    } catch (_) {
+      // Fall back to local synthesis when assistant-service is unavailable.
+    }
+    return _buildFallbackSearchResult(
+      query: trimmedQuery,
+      searchIntensity: searchIntensity,
+    );
   }
 
   Uri _assistantUri(String path) {

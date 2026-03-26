@@ -1,0 +1,70 @@
+version: 1
+node: shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-offline-report-and-history-retention
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze offline report and retention schema
+    goal: 冻结 status report、offline 原因标签与历史保留边界
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - offline 状态和原因字段明确
+      - 历史保留范围冻结
+    status: planned
+
+  - id: P2
+    title: land offline report submission and review flow
+    goal: 提供下线上报、审核与主页状态更新主线
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 用户或认领方可提交 status report
+      - 审核通过后主页进入 offline
+    status: planned
+
+  - id: P3
+    title: preserve offline homepage history access
+    goal: 确保主页下线后仍能访问原 URL、历史内容、历史口碑和相关群组摘要
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 搜索与推荐降级但历史页可访问
+      - 详情页展示原因标签和 offline 提示
+    status: planned
+
+  - id: P4
+    title: harden offline retention regression tests
+    goal: 为下线上报、状态切换和历史保留补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - offline workflow 和历史保留有稳定测试
+      - 不存在硬删除回退口径
+    status: planned

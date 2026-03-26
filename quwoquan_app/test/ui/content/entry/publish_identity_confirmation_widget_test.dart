@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -11,6 +16,8 @@ import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _TrackingContentRepository extends MockContentRepository {
@@ -77,9 +84,62 @@ Widget _buildApp(_TrackingContentRepository repository) {
   );
 }
 
+Widget _buildRouterApp(_TrackingContentRepository repository) {
+  final router = GoRouter(
+    routes: <RouteBase>[
+      GoRoute(path: '/', builder: (context, state) => const _CreateHostApp()),
+      GoRoute(
+        path: AppRoutePaths.homepagePickerPathTemplate,
+        builder: (context, state) {
+          final extra = state.extra is HomepagePickerPageRouteExtra
+              ? state.extra! as HomepagePickerPageRouteExtra
+              : null;
+          return HomepagePickerPage(
+            initialQuery: state.uri.queryParameters['query'] ?? '',
+            initialSelection: extra?.initialSelection,
+          );
+        },
+      ),
+    ],
+  );
+
+  return ProviderScope(
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(repository),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+    ],
+    child: ScreenUtilInit(
+      designSize: const Size(390, 844),
+      builder: (context, _) => MaterialApp.router(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+}
+
 void main() {
+  late FlutterExceptionHandler? originalOnError;
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    HttpOverrides.global = _NoNetworkHttpOverrides();
+    originalOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final message = details.exceptionAsString();
+      if (message.contains('HTTP request failed') ||
+          message.contains('NetworkImageLoadException')) {
+        return;
+      }
+      originalOnError?.call(details);
+    };
+  });
+
+  tearDown(() {
+    HttpOverrides.global = null;
+    FlutterError.onError = originalOnError;
   });
 
   testWidgets('短文本直接按 micro 契约发布，且不暴露旧 taxonomy', (tester) async {
@@ -189,4 +249,41 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });
+
+  testWidgets('发布设置页可进入统一返回页风格的主页与圈子选择', (tester) async {
+    final repository = _TrackingContentRepository();
+
+    await tester.pumpWidget(_buildRouterApp(repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开创作'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(TestKeys.createMomentInput), '测试发布设置');
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.createPublishButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    expect(find.text('发布设置'), findsOneWidget);
+
+    await tester.tap(find.text('关联主页'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.homepagePickerPage), findsOneWidget);
+    expect(find.byKey(TestKeys.homepagePickerConfirmButton), findsOneWidget);
+
+    await tester.tap(find.byKey(TestKeys.homepagePickerCancelButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+
+    await tester.tap(find.text('同步圈子'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.publishCircleSelectPage), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
+
+    await tester.tap(find.byKey(TestKeys.publishCircleCancelButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+  });
 }
+
+class _NoNetworkHttpOverrides extends HttpOverrides {}

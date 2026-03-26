@@ -18,16 +18,21 @@ class _RuntimeConfigRepository extends MockContentRepository {
 }
 
 void main() {
-  test('mock mode 默认启用 story runtime flags', () {
+  test('mock mode 会刷新出文章阅读相关 runtime flags', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
+    container.read(contentRuntimeConfigProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
     final state = container.read(contentRuntimeConfigProvider);
 
     expect(state.isEnabled('enable_create_action_entry'), isTrue);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);
     expect(state.isEnabled('enable_identity_based_surfaces'), isTrue);
     expect(state.isEnabled('enable_identity_share_template'), isTrue);
+    expect(state.isEnabled('enable_article_book_reader'), isTrue);
+    expect(state.isEnabled('enable_article_page_curl'), isTrue);
     expect(state.isEnabled('enable_assistant_content_identity_index'), isTrue);
   });
 
@@ -42,6 +47,8 @@ void main() {
                 'enable_unified_create_editor': true,
                 'enable_identity_based_surfaces': false,
                 'enable_identity_share_template': true,
+                'enable_article_book_reader': false,
+                'enable_article_page_curl': true,
                 'enable_assistant_content_identity_index': true,
               },
               'gray_release': {
@@ -73,6 +80,8 @@ void main() {
     expect(state.isEnabled('enable_create_action_entry'), isFalse);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);
     expect(state.isEnabled('enable_identity_based_surfaces'), isFalse);
+    expect(state.isEnabled('enable_article_book_reader'), isFalse);
+    expect(state.isEnabled('enable_article_page_curl'), isTrue);
     expect(state.experimentBucket, 'rollout_20');
     expect(state.currentCanaryStage, '20%');
     expect(state.canaryStages.map((stage) => stage.stage).toList(), <String>[

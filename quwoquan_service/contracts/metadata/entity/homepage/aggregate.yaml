@@ -1,0 +1,26 @@
+version: 1
+domain: entity
+aggregate_root: Homepage
+
+description: |
+  共享主页聚合。承载 candidate -> published -> offline 生命周期、
+  主页阅读壳层、认领申请与下线治理的唯一真相源。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 120
+
+capabilities:
+  - queryable
+  - searchable
+  - aggregatable
+
+taggable: true
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: services/entity-service/internal/domain/homepage/model
+  repository: services/entity-service/internal/domain/homepage/repository
+  application: services/entity-service/internal/application/homepage
+  adapter_rest: services/entity-service/internal/adapters/http/homepage
+  adapter_event: services/entity-service/internal/adapters/mq/homepage

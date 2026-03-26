@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -186,6 +188,107 @@ func (s *CircleService) ListCircles(ctx context.Context, req ListCirclesRequest)
 		circles = []model.Circle{}
 	}
 	return ListCirclesResponse{Items: circles, Cursor: cursor}
+}
+
+type SearchCirclesRequest struct {
+	Query       string
+	CategoryID  string
+	SubCategory string
+	Cursor      string
+	Limit       int
+}
+
+type SearchCirclesResponse struct {
+	Items        []map[string]any `json:"items"`
+	FacetBuckets []map[string]any `json:"facetBuckets"`
+	Cursor       string           `json:"cursor,omitempty"`
+}
+
+func (s *CircleService) SearchCircles(
+	ctx context.Context,
+	req SearchCirclesRequest,
+) SearchCirclesResponse {
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	listResp := s.ListCircles(ctx, ListCirclesRequest{
+		Category: req.CategoryID,
+		Cursor:   req.Cursor,
+		Limit:    limit * 8,
+	})
+	query := strings.TrimSpace(strings.ToLower(req.Query))
+	items := make([]map[string]any, 0, limit)
+	facetCounts := map[string]int{}
+	for _, circle := range listResp.Items {
+		categoryID := strings.TrimSpace(circle.Category)
+		if categoryID == "" {
+			categoryID = strings.TrimSpace(circle.DomainID)
+		}
+		if categoryID == "" {
+			categoryID = "all"
+		}
+		if query != "" {
+			matched := false
+			for _, value := range []string{
+				circle.Name,
+				circle.Description,
+				strings.Join(asStringSlice(circle.Tags), " "),
+				categoryID,
+			} {
+				if strings.Contains(strings.ToLower(strings.TrimSpace(value)), query) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		facetCounts[categoryID]++
+		items = append(items, map[string]any{
+			"circleId":      circle.ID,
+			"name":          circle.Name,
+			"description":   circle.Description,
+			"coverUrl":      circle.CoverUrl,
+			"categoryId":    categoryID,
+			"subCategory":   "",
+			"domainId":      circle.DomainID,
+			"memberCount":   circle.MemberCount,
+			"postCount":     circle.PostCount,
+			"highlightText": circle.Name,
+			"matchedField":  "name",
+		})
+		if len(items) >= limit {
+			break
+		}
+	}
+	facetKeys := make([]string, 0, len(facetCounts))
+	for key := range facetCounts {
+		facetKeys = append(facetKeys, key)
+	}
+	sort.Strings(facetKeys)
+	facetBuckets := make([]map[string]any, 0, len(facetKeys))
+	for _, key := range facetKeys {
+		facetBuckets = append(facetBuckets, map[string]any{
+			"facetKey":    key,
+			"label":       key,
+			"categoryId":  key,
+			"subCategory": "",
+			"facetCount":  facetCounts[key],
+		})
+	}
+	cursor := ""
+	if len(items) == limit {
+		if circleID, ok := items[len(items)-1]["circleId"].(string); ok {
+			cursor = circleID
+		}
+	}
+	return SearchCirclesResponse{
+		Items:        items,
+		FacetBuckets: facetBuckets,
+		Cursor:       cursor,
+	}
 }
 
 func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data map[string]any) (*model.Circle, error) {
@@ -401,4 +504,25 @@ func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sec
 func (s *CircleService) ReportBehavior(ctx context.Context, report map[string]any) error {
 	s.publishEvent(ctx, "CircleBehaviorReported", "", report)
 	return nil
+}
+
+func asStringSlice(value any) []string {
+	if value == nil {
+		return nil
+	}
+	switch typed := value.(type) {
+	case []string:
+		return typed
+	case []any:
+		items := make([]string, 0, len(typed))
+		for _, item := range typed {
+			text := strings.TrimSpace(fmt.Sprint(item))
+			if text != "" {
+				items = append(items, text)
+			}
+		}
+		return items
+	default:
+		return nil
+	}
 }

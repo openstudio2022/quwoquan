@@ -58,6 +58,16 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
+      - name: subCategory
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 二级分类 / 组织细分标签
+
       - name: tags
         type: "[]string"
         constraints: [NULLABLE]
@@ -125,6 +135,44 @@ entities:
         ops_exposure: read
         description: 超前
 
+      - name: kind
+        type: enum
+        enum_ref: CircleKind
+        constraints: [NOT_NULL, DEFAULT_INTEREST]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 关系主页类型（兴趣型 / 组织型）
+
+      - name: displaySubjectType
+        type: enum
+        enum_ref: CircleDisplaySubjectType
+        constraints: [NOT_NULL, DEFAULT_CIRCLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 前台详情模板命名（圈子 / 学校主页 / 公司主页等）
+
+      - name: followEnabled
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 是否允许通过主页沉淀成员关系
+
+      - name: defaultPublicGroupId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 默认公共群 / 组织默认交流节点
+
       - name: conversationId
         type: ObjectId
         constraints: [NULLABLE]
@@ -132,7 +180,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关联群聊
+        description: 兼容字段：默认公共群绑定的 Conversation
 
       - name: autoSyncChat
         type: boolean
@@ -180,6 +228,34 @@ entities:
         recommend_feature: true
         description: 领域标签 ID（引用 domain_taxonomy.yaml）
         domain_taxonomy_ref: true
+
+      - name: linkedHomepageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 群组关联的共享主页 ID（只读摘要消费锚点）
+
+      - name: linkedHomepageType
+        type: enum
+        enum_ref: HomepageType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 关联共享主页的类型快照
+
+      - name: linkedHomepageTitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 关联共享主页的标题快照
 
       - name: createdAt
         type: timestamp
@@ -264,6 +340,279 @@ entities:
       - columns: [circleId, userId]
         description: 成员唯一
 
+  CircleGroup:
+    description: 圈内群组 / 组织节点（非 Conversation）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: parentGroupId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 上级群组 / 组织节点
+
+      - name: groupType
+        type: enum
+        enum_ref: CircleGroupType
+        constraints: [NOT_NULL, DEFAULT_PUBLIC_GROUP]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 公共群 / 自建群 / 组织节点
+
+      - name: nodeType
+        type: enum
+        enum_ref: OrganizationNodeType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 组织节点类型（院系 / 班级 / 部门等）
+
+      - name: name
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        search_field: true
+
+      - name: description
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        search_field: true
+
+      - name: visibility
+        type: enum
+        enum_ref: CircleGroupVisibility
+        constraints: [NOT_NULL, DEFAULT_PUBLIC]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: joinPolicy
+        type: enum
+        enum_ref: CircleGroupJoinPolicy
+        constraints: [NOT_NULL, DEFAULT_APPLY_ONLY]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: ownerUserId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: managerIds
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: memberCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 绑定的聊天会话
+
+      - name: storageEnabled
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: noticeEnabled
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: isDefaultPublicGroup
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否为圈子默认公共群
+
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 最近活跃时间（含聊天 / 公告 / 内容互动）
+
+      - name: status
+        type: enum
+        enum_ref: CircleGroupStatus
+        constraints: [NOT_NULL, DEFAULT_ACTIVE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  CircleGroupMember:
+    description: 群组成员 / 入群申请
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: role
+        type: enum
+        enum_ref: CircleGroupMemberRole
+        constraints: [NOT_NULL, DEFAULT_MEMBER]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: status
+        type: enum
+        enum_ref: CircleGroupMemberStatus
+        constraints: [NOT_NULL, DEFAULT_PENDING]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: joinedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: invitedByUserId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: decidedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [groupId, userId]
+        description: 同一群组同一用户唯一
+
   CircleSectionConfig:
     description: 圈子主页板块配置项（嵌入文档，非独立集合）
     embedded: true
@@ -321,6 +670,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: groupId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关联群组 / 组织节点（为空表示圈级资料）
 
       - name: parentFolderId
         type: ObjectId
@@ -411,7 +769,7 @@ entities:
         ops_exposure: read
 
   CircleSearchItemView:
-    description: 圈子搜索结果项视图，用于全局搜索结果分组
+    description: 群组搜索结果项视图，用于全局搜索结果分组
     fields:
       - name: circleId
         type: string
@@ -469,6 +827,24 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: kind
+        type: enum
+        enum_ref: CircleKind
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displaySubjectType
+        type: enum
+        enum_ref: CircleDisplaySubjectType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
       - name: memberCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
@@ -501,8 +877,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: linkedHomepageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: linkedHomepageType
+        type: enum
+        enum_ref: HomepageType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: linkedHomepageTitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
   CircleFacetBucketView:
-    description: 圈子搜索 facet bucket，用于频道/分类投影视图
+    description: 群组搜索 facet bucket，用于频道/分类投影视图
     fields:
       - name: facetKey
         type: string
@@ -545,7 +946,7 @@ entities:
         ops_exposure: read
 
   CircleSearchResultView:
-    description: 圈子搜索结果视图，包含圈子项与 facet buckets
+    description: 群组搜索结果视图，包含群组项与 facet buckets
     fields:
       - name: items
         type: "[]CircleSearchItemView"

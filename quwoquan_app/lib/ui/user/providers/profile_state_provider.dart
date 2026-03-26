@@ -107,9 +107,29 @@ class ProfileNotifier extends ChangeNotifier {
       final profileSubjectId = profile.profileSubjectId.isNotEmpty
           ? profile.profileSubjectId
           : _userId;
-      final seededFollowing = _ref
+      final isRemote =
+          _ref.read(appDataSourceModeProvider) == AppDataSourceMode.remote;
+      RelationshipCapabilityDto? seededCapability;
+      final sharedFollowing = _ref
           .read(userRelationshipStateProvider)
           .isFollowing(profileSubjectId);
+      if (!isRemote) {
+        try {
+          seededCapability = await _ref
+              .read(relationshipCapabilityRepositoryProvider)
+              .getCapability(profileSubjectId);
+          if (sharedFollowing && !seededCapability.viewerFollowsTarget) {
+            seededCapability = _copyCapabilityWithFollowState(
+              seededCapability,
+              true,
+            );
+          }
+        } catch (_) {
+          seededCapability = null;
+        }
+      }
+      final seededFollowing =
+          seededCapability?.viewerFollowsTarget ?? sharedFollowing;
       _state = _state.copyWith(
         profile: profile,
         creations: posts,
@@ -118,13 +138,19 @@ class ProfileNotifier extends ChangeNotifier {
         circles: circles,
         isLoading: false,
         isFollowing: seededFollowing,
+        capability: seededCapability,
       );
+      _ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(profileSubjectId, seededFollowing);
     } catch (_) {
       _state = _state.copyWith(isLoading: false);
     }
     notifyListeners();
     // 异步加载关系能力位（不阻塞主内容展示）
-    _loadRelationshipCapability();
+    if (_state.capability == null) {
+      _loadRelationshipCapability();
+    }
   }
 
   Future<void> _loadRelationshipCapability() async {
@@ -139,7 +165,7 @@ class ProfileNotifier extends ChangeNotifier {
       var cap = await capRepo.getCapability(targetUserId);
       if (_ref.read(appDataSourceModeProvider) != AppDataSourceMode.remote &&
           seededFollowing &&
-          !(cap.isFollowing || cap.isMutual)) {
+          !cap.viewerFollowsTarget) {
         cap = _copyCapabilityWithFollowState(cap, true);
       }
       final latestTargetId = _state.profile?.profileSubjectId.isNotEmpty == true
@@ -150,10 +176,10 @@ class ProfileNotifier extends ChangeNotifier {
       }
       _ref
           .read(userRelationshipStateProvider.notifier)
-          .setFollowing(targetUserId, cap.isFollowing || cap.isMutual);
+          .setFollowing(targetUserId, cap.viewerFollowsTarget);
       _state = _state.copyWith(
         capability: cap,
-        isFollowing: cap.isFollowing || cap.isMutual,
+        isFollowing: cap.viewerFollowsTarget,
       );
       notifyListeners();
     } catch (_) {
@@ -223,21 +249,28 @@ RelationshipCapabilityDto _copyCapabilityWithFollowState(
   RelationshipCapabilityDto capability,
   bool isFollowing,
 ) {
-  final relationState = isFollowing ? 'following' : 'not_following';
+  final next = RelationshipCapabilityDto.fromLegacyRelationship(
+    viewerId: capability.viewerSubAccountId,
+    targetId: capability.targetSubAccountId,
+    isFollowing: isFollowing,
+    isFollowedBy: capability.targetFollowsViewer,
+    closeFriend: capability.isCloseFriend,
+  );
   return RelationshipCapabilityDto(
     viewerSubAccountId: capability.viewerSubAccountId,
     targetSubAccountId: capability.targetSubAccountId,
-    relationState: relationState,
-    canFollow: !isFollowing,
-    canUnfollow: isFollowing,
-    canMessage: capability.canMessage,
-    canFollowBack: capability.canFollowBack && !isFollowing,
-    canGreet: capability.canGreet,
-    canOpenConversation: capability.canOpenConversation,
-    canAddSameInterest: capability.canAddSameInterest,
-    canSetCloseFriend: capability.canSetCloseFriend,
-    canStartVoiceCall: capability.canStartVoiceCall,
-    canStartVideoCall: capability.canStartVideoCall,
+    relationState: next.relationState,
+    relationTier: next.relationTier,
+    canFollow: next.canFollow,
+    canUnfollow: next.canUnfollow,
+    canMessage: next.canMessage,
+    canFollowBack: next.canFollowBack,
+    canGreet: next.canGreet,
+    canOpenConversation: next.canOpenConversation,
+    canAddSameInterest: next.canAddSameInterest,
+    canSetCloseFriend: next.canSetCloseFriend,
+    canStartVoiceCall: next.canStartVoiceCall,
+    canStartVideoCall: next.canStartVideoCall,
     isBlocked: capability.isBlocked,
     isBlockedBy: capability.isBlockedBy,
   );

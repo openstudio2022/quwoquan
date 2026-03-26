@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -22,11 +23,13 @@ class SectionCreations extends ConsumerStatefulWidget {
     required this.circleId,
     required this.isDark,
     required this.role,
+    this.inlineScroll = false,
   });
 
   final String circleId;
   final bool isDark;
   final CircleRole role;
+  final bool inlineScroll;
 
   @override
   ConsumerState<SectionCreations> createState() => _SectionCreationsState();
@@ -36,6 +39,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _feedItems = const [];
+  String? _circleCategoryId;
 
   List<IdentityFilterConfig> get _identityFilters =>
       ContentUIConfig.creationIdentityFilters;
@@ -44,6 +48,14 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       ContentUIConfig.workFormatFilters;
 
   static const double _creationGridCoverAspectRatio = 0.92;
+  static const ArticleDistributionProfileConfig
+  _circleArticleDistributionProfile = ArticleDistributionProfileConfig(
+    id: 'circle_dual_column_with_optional_cover',
+    surface: 'circle_dual_column',
+    layout: 'cover_top_title_summary_or_text_card',
+    coverMode: 'optional_cover',
+    summaryLineLimit: 3,
+  );
 
   static const _sortLabels = {
     CreationSortMode.latest: UITextConstants.circleSortLatest,
@@ -66,6 +78,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       final notifier = ref.read(circleStateProvider(widget.circleId));
       final repo = ref.read(circleRepositoryProvider);
       final query = _feedQueryForState(notifier.state);
+      final circle = await repo.getCircle(widget.circleId);
       final items = await repo.getCircleFeed(
         widget.circleId,
         identity: query.identity,
@@ -75,6 +88,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       if (mounted) {
         setState(() {
           _feedItems = items;
+          _circleCategoryId = circle['categoryId']?.toString();
           _isLoading = false;
         });
       }
@@ -109,10 +123,25 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           ),
         ) *
         2;
+    final summaryHeight =
+        _measureSingleLineTextHeight(
+          context,
+          const TextStyle(fontSize: AppTypography.iosCaption1),
+        ) *
+        3;
     final metaTextHeight = _measureSingleLineTextHeight(
       context,
       const TextStyle(fontSize: AppTypography.iosCaption1),
     );
+    final recommendationHeight =
+        _measureSingleLineTextHeight(
+          context,
+          const TextStyle(
+            fontSize: AppTypography.xs,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ) *
+        2;
     final metaRowHeight = metaTextHeight > AppSpacing.iconSmall
         ? metaTextHeight
         : AppSpacing.iconSmall;
@@ -121,7 +150,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         AppSpacing.intraGroupSm +
         titleHeight +
         AppSpacing.xs +
-        metaRowHeight;
+        summaryHeight +
+        AppSpacing.intraGroupXs +
+        recommendationHeight +
+        metaRowHeight +
+        AppSpacing.sm;
   }
 
   @override
@@ -146,6 +179,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     final borderColor = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.borderPrimary,
+    );
+
+    final contentSurface = _buildSurface(
+      backgroundColor: bgSecondary,
+      borderColor: borderColor,
+      padding: EdgeInsets.zero,
+      child: _buildContent(notifier, fgSecondary),
     );
 
     return Padding(
@@ -182,14 +222,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             ),
           ),
           SizedBox(height: AppSpacing.sm),
-          Expanded(
-            child: _buildSurface(
-              backgroundColor: bgSecondary,
-              borderColor: borderColor,
-              padding: EdgeInsets.zero,
-              child: _buildContent(notifier, fgSecondary),
-            ),
-          ),
+          if (widget.inlineScroll)
+            contentSurface
+          else
+            Expanded(child: contentSurface),
         ],
       ),
     );
@@ -517,10 +553,35 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
     final activeSubTab = notifier.state.activeSubTab;
     final activeWorkFormat = notifier.state.activeWorkFormat;
-    final filtered = _feedItems.where((item) {
-      return _matchesIdentityFilter(item, activeSubTab) &&
-          _matchesWorkFormat(item, activeSubTab, activeWorkFormat);
-    }).toList();
+    final filtered = _feedItems
+        .where((item) {
+          return _matchesIdentityFilter(item, activeSubTab) &&
+              _matchesWorkFormat(item, activeSubTab, activeWorkFormat);
+        })
+        .toList(growable: true);
+
+    if (activeSubTab == CreationSubTab.article ||
+        activeWorkFormat == CreationWorkFormat.note) {
+      filtered.sort((left, right) {
+        final leftHasTemplate = (left['articleTemplate'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty;
+        final rightHasTemplate = (right['articleTemplate'] ?? '')
+            .toString()
+            .trim()
+            .isNotEmpty;
+        if (leftHasTemplate != rightHasTemplate) {
+          return leftHasTemplate ? -1 : 1;
+        }
+        final leftHasCover = _itemCoverUrl(left).isNotEmpty;
+        final rightHasCover = _itemCoverUrl(right).isNotEmpty;
+        if (leftHasCover != rightHasCover) {
+          return leftHasCover ? -1 : 1;
+        }
+        return 0;
+      });
+    }
 
     if (filtered.isEmpty) {
       return _buildEmpty(fgSecondary);
@@ -528,6 +589,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
     if (notifier.state.viewMode == CreationViewMode.list) {
       return ListView.separated(
+        physics: widget.inlineScroll
+            ? const NeverScrollableScrollPhysics()
+            : const BouncingScrollPhysics(),
+        shrinkWrap: widget.inlineScroll,
         padding: EdgeInsets.fromLTRB(
           AppSpacing.postPreviewGridSpacing,
           AppSpacing.postPreviewGridSpacing,
@@ -556,6 +621,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                 AppSpacing.postPreviewGridSpacing) /
             2;
         return GridView.builder(
+          physics: widget.inlineScroll
+              ? const NeverScrollableScrollPhysics()
+              : const BouncingScrollPhysics(),
+          shrinkWrap: widget.inlineScroll,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.postPreviewGridSpacing,
             AppSpacing.postPreviewGridSpacing,
@@ -694,6 +763,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
+    if (_isArticleItem(item)) {
+      return _buildArticleGridItem(item, fgSecondary, onTap: onTap);
+    }
     final typeLabel = _itemTypeLabel(item);
     return PostPreviewCard(
       isDark: widget.isDark,
@@ -743,6 +815,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
+    if (_isArticleItem(item)) {
+      return _buildArticleListItem(item, fgSecondary, onTap: onTap);
+    }
     final typeLabel = _itemTypeLabel(item);
     return PostPreviewListTile(
       isDark: widget.isDark,
@@ -774,6 +849,131 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
+  Widget _buildArticleGridItem(
+    Map<String, dynamic> item,
+    Color fgSecondary, {
+    required VoidCallback onTap,
+  }) {
+    final recommendationLabel = _articleRecommendationLabel(item);
+    final authorName = (item['authorNickname'] ?? item['displayName'] ?? '')
+        .toString()
+        .trim();
+    return PostPreviewCard(
+      key: ValueKey<String>('circle-article-grid-${_itemId(item)}'),
+      isDark: widget.isDark,
+      title: _itemHeadlineText(item),
+      supportingText: _itemSupportingText(item),
+      supportingTextMaxLines:
+          _circleArticleDistributionProfile.summaryLineLimit,
+      coverUrl: _itemCoverUrl(item),
+      mediaAspectRatio: _creationGridCoverAspectRatio,
+      mediaOverlay: _articleTemplateBadge(item),
+      onTap: onTap,
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (recommendationLabel.isNotEmpty) ...[
+            Text(
+              recommendationLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.xs,
+                color: AppColors.primaryColor,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs / 2),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  authorName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              PostCardMetric(
+                icon: CupertinoIcons.heart_fill,
+                label: '${_itemLikeCount(item)}',
+                color: fgSecondary,
+                iconColor: AppColors.error.withValues(alpha: 0.9),
+                textStyle: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: fgSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArticleListItem(
+    Map<String, dynamic> item,
+    Color fgSecondary, {
+    required VoidCallback onTap,
+  }) {
+    final recommendationLabel = _articleRecommendationLabel(item);
+    final authorName = (item['authorNickname'] ?? item['displayName'] ?? '')
+        .toString()
+        .trim();
+    return PostPreviewListTile(
+      key: ValueKey<String>('circle-article-list-${_itemId(item)}'),
+      isDark: widget.isDark,
+      eyebrowText: recommendationLabel.isNotEmpty
+          ? recommendationLabel
+          : '笔记 · ${_articleTemplateLabel(item)}',
+      eyebrowColor: AppColors.primaryColor,
+      title: _itemHeadlineText(item),
+      supportingText: _itemSupportingText(item),
+      supportingTextMaxLines:
+          _circleArticleDistributionProfile.summaryLineLimit,
+      coverUrl: _itemCoverUrl(item),
+      hideThumbnailWhenNoCover: true,
+      onTap: onTap,
+      footer: Row(
+        children: [
+          Expanded(
+            child: Text(
+              authorName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          PostCardMetric(
+            icon: CupertinoIcons.heart_fill,
+            label: '赞 ${_itemLikeCount(item)}',
+            color: fgSecondary,
+            iconColor: AppColors.error.withValues(alpha: 0.9),
+            textStyle: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+      trailing: Icon(
+        CupertinoIcons.chevron_forward,
+        size: AppSpacing.iconSmall,
+        color: fgSecondary,
+      ),
+    );
+  }
+
   String _itemCoverUrl(Map<String, dynamic> item) {
     final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
     if (cover.isNotEmpty) return cover;
@@ -782,6 +982,14 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       return imageUrls.first.toString();
     }
     return '';
+  }
+
+  String _itemId(Map<String, dynamic> item) {
+    return (item['postId'] ?? item['id'] ?? '').toString();
+  }
+
+  bool _isArticleItem(Map<String, dynamic> item) {
+    return (item['contentType'] ?? item['type'] ?? '').toString() == 'article';
   }
 
   String _itemTitle(Map<String, dynamic> item) {
@@ -809,7 +1017,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   String _itemSupportingText(Map<String, dynamic> item) {
-    final title = _itemTitle(item);
+    final headline = _itemHeadlineText(item);
+    final summary = (item['summary'] ?? '').toString().trim();
+    if (_isArticleItem(item) && summary.isNotEmpty && summary != headline) {
+      return summary;
+    }
     final body =
         (item['body'] ??
                 item['description'] ??
@@ -818,10 +1030,70 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                 '')
             .toString()
             .trim();
-    if (body.isEmpty || body == title) {
+    if (body.isEmpty || body == headline) {
       return '';
     }
     return body;
+  }
+
+  Widget _articleTemplateBadge(Map<String, dynamic> item) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      ),
+      child: Text(
+        _articleTemplateLabel(item),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: AppTypography.xs,
+          fontWeight: AppTypography.semiBold,
+        ),
+      ),
+    );
+  }
+
+  String _articleTemplateLabel(Map<String, dynamic> item) {
+    return articleTemplatePresetFromString(
+      item['articleTemplate']?.toString(),
+    ).label;
+  }
+
+  List<String> _recommendedArticleTemplatesForCircle() {
+    final categoryId = (_circleCategoryId ?? '').trim();
+    if (categoryId.isEmpty) {
+      return const <String>[];
+    }
+    for (final recommendation
+        in ContentUIConfig.articleTemplateRecommendations) {
+      if (recommendation.categoryId == categoryId) {
+        return recommendation.recommendedArticleTemplates;
+      }
+    }
+    return const <String>[];
+  }
+
+  String _articleRecommendationLabel(Map<String, dynamic> item) {
+    final recommended = _recommendedArticleTemplatesForCircle();
+    if (recommended.isEmpty) {
+      return '';
+    }
+    final templateId = (item['articleTemplate'] ?? '').toString().trim();
+    if (templateId.isNotEmpty && recommended.contains(templateId)) {
+      return '频道推荐 · ${articleTemplatePresetFromString(templateId).label}';
+    }
+    final labels = recommended
+        .take(2)
+        .map((value) => articleTemplatePresetFromString(value).label)
+        .join(' / ');
+    if (labels.isEmpty) {
+      return '';
+    }
+    return '频道推荐 · $labels';
   }
 
   int _itemLikeCount(Map<String, dynamic> item) {

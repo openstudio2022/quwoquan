@@ -6,6 +6,7 @@ description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 ---
 
 > SDD 主流程：... → dev → **verify** / commit → deploy
+> AI Agent 在执行 `/dev` 时必须完成 verify 等价检查；`/verify` 用于独立复核、返工后重跑或人工显式发起质量审查。
 
 `/verify` 只验证：
 
@@ -15,6 +16,8 @@ description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 - `acceptance.yaml` 是否闭环
 - `CR` 是否记录了本次 delta 与影响
 - `T1~T4` 证据是否存在
+
+它不负责继续拆分需求或补做功能；若发现 BLOCKING，必须回到 `/dev` 的自主闭环继续修复，直到再次通过验证。
 
 ## 核查项
 

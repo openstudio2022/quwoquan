@@ -3,6 +3,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -25,6 +26,14 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  assert(() {
+    debugPaintSizeEnabled = false;
+    debugPaintBaselinesEnabled = false;
+    debugPaintPointersEnabled = false;
+    debugPaintLayerBordersEnabled = false;
+    debugRepaintRainbowEnabled = false;
+    return true;
+  }());
   final previousFlutterErrorHandler = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
     if (previousFlutterErrorHandler != null) {
@@ -38,8 +47,7 @@ void main() async {
       stackText: details.stack?.toString() ?? '',
     );
   };
-  final previousPlatformDispatcherHandler =
-      PlatformDispatcher.instance.onError;
+  final previousPlatformDispatcherHandler = PlatformDispatcher.instance.onError;
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     _logAppException(
       source: 'platform_dispatcher',
@@ -279,9 +287,9 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
     super.didChangeAccessibilityFeatures();
     final mediaQuery = MediaQuery.maybeOf(context);
     if (mediaQuery != null) {
-      ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
-            mediaQuery,
-          );
+      ref
+          .read(accessibilityProvider.notifier)
+          .updateFromMediaQueryData(mediaQuery);
     }
   }
 
@@ -290,16 +298,18 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
     super.didChangeTextScaleFactor();
     final mediaQuery = MediaQuery.maybeOf(context);
     if (mediaQuery != null) {
-      ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
-            mediaQuery,
-          );
+      ref
+          .read(accessibilityProvider.notifier)
+          .updateFromMediaQueryData(mediaQuery);
     }
   }
 
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    ref.read(themeProvider.notifier).updateSystemBrightness(
+    ref
+        .read(themeProvider.notifier)
+        .updateSystemBrightness(
           WidgetsBinding.instance.platformDispatcher.platformBrightness,
         );
   }
@@ -316,8 +326,12 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
         await ref.read(assistantApiGatewayProvider).start();
         _assistantApiStarted = true;
       }
-      await ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded();
-      ref.read(themeProvider.notifier).updateSystemBrightness(
+      await ref
+          .read(appearanceSettingsControllerProvider.notifier)
+          .ensureLoaded();
+      ref
+          .read(themeProvider.notifier)
+          .updateSystemBrightness(
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
           );
     } catch (e) {
@@ -351,14 +365,19 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
           builder: (context, child) {
             final mediaQuery = MediaQuery.of(context);
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              ref.read(responsiveProvider.notifier).updateFromMediaQueryData(
-                    mediaQuery,
-                  );
-              ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
-                    mediaQuery,
-                  );
-              ref.read(themeProvider.notifier).updateSystemBrightness(
-                    WidgetsBinding.instance.platformDispatcher.platformBrightness,
+              ref
+                  .read(responsiveProvider.notifier)
+                  .updateFromMediaQueryData(mediaQuery);
+              ref
+                  .read(accessibilityProvider.notifier)
+                  .updateFromMediaQueryData(mediaQuery);
+              ref
+                  .read(themeProvider.notifier)
+                  .updateSystemBrightness(
+                    WidgetsBinding
+                        .instance
+                        .platformDispatcher
+                        .platformBrightness,
                   );
             });
             return _wrapWithAppAppearance(

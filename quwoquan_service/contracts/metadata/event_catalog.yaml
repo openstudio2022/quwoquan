@@ -40,3 +40,23 @@ events:
     domain: integration
     entity: LocationPoi
     canonical: contracts/metadata/integration/location/events.yaml
+
+  - name: HomepageCandidateIntaken
+    domain: entity
+    entity: Homepage
+    canonical: contracts/metadata/entity/homepage/events.yaml
+
+  - name: HomepagePublished
+    domain: entity
+    entity: Homepage
+    canonical: contracts/metadata/entity/homepage/events.yaml
+
+  - name: HomepageClaimRequested
+    domain: entity
+    entity: HomepageClaimRequest
+    canonical: contracts/metadata/entity/homepage/events.yaml
+
+  - name: HomepageStatusReported
+    domain: entity
+    entity: HomepageStatusReport
+    canonical: contracts/metadata/entity/homepage/events.yaml

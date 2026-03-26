@@ -721,6 +721,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
             );
             if (reasoningDelta.isNotEmpty) {
               reasoningBuffer.write(reasoningDelta);
+              onDelta(reasoningDelta);
             }
           }
 

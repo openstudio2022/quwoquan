@@ -2,12 +2,19 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 enum CircleEditSettingsTab { info, settings }
+
+enum _CircleMediaSlot { cover, avatar }
+
+enum _CircleMediaAction { camera, photoLibrary, remove }
 
 class CircleEditSettingsPage extends ConsumerStatefulWidget {
   const CircleEditSettingsPage({
@@ -15,11 +22,22 @@ class CircleEditSettingsPage extends ConsumerStatefulWidget {
     required this.circleId,
     required this.initialCircle,
     this.initialTab = CircleEditSettingsTab.info,
-  });
+    this.initialAvatarUrl,
+  }) : isCreateMode = false;
 
-  final String circleId;
-  final CircleDto initialCircle;
+  const CircleEditSettingsPage.create({
+    super.key,
+    this.initialTab = CircleEditSettingsTab.info,
+  }) : circleId = null,
+       initialCircle = null,
+       initialAvatarUrl = null,
+       isCreateMode = true;
+
+  final String? circleId;
+  final CircleDto? initialCircle;
   final CircleEditSettingsTab initialTab;
+  final String? initialAvatarUrl;
+  final bool isCreateMode;
 
   @override
   ConsumerState<CircleEditSettingsPage> createState() =>
@@ -28,20 +46,39 @@ class CircleEditSettingsPage extends ConsumerStatefulWidget {
 
 class _CircleEditSettingsPageState
     extends ConsumerState<CircleEditSettingsPage> {
+  static const List<String> _categoryIds = <String>[
+    'meet',
+    'campus',
+    'car',
+    'humanity',
+    'life',
+    'sports',
+    'tech',
+    'travel',
+    'food',
+  ];
+
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _tagsController;
+  late final CircleDto _seedCircle;
   late CircleEditSettingsTab _activeTab;
   late String _visibility;
   late String _joinPolicy;
+  String? _categoryId;
+  String? _coverSourceOverride;
+  String? _avatarSourceOverride;
   late bool _autoSyncChat;
   late List<CircleSectionConfigDto> _sections;
   bool _isSaving = false;
 
+  bool get _isCreateMode => widget.isCreateMode;
+
   @override
   void initState() {
     super.initState();
-    final circle = widget.initialCircle;
+    final circle = widget.initialCircle ?? _buildDraftCircle();
+    _seedCircle = circle;
     _nameController = TextEditingController(text: circle.name);
     _descriptionController = TextEditingController(
       text: circle.description ?? '',
@@ -50,20 +87,30 @@ class _CircleEditSettingsPageState
     _activeTab = widget.initialTab;
     _visibility = circle.visibility;
     _joinPolicy = circle.joinPolicy;
+    _categoryId =
+        circle.category ?? (_isCreateMode ? _categoryIds.first : null);
     _autoSyncChat = circle.autoSyncChat;
     _sections = circle.sectionConfig.isNotEmpty
         ? (circle.sectionConfig
               .map((section) => section.copyWith())
               .toList(growable: true)
-          ..sort((a, b) => a.order.compareTo(b.order)))
+            ..sort((a, b) => a.order.compareTo(b.order)))
         : const [
-            CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
+            CircleSectionConfigDto(
+              sectionType: 'works',
+              visible: true,
+              order: 0,
+            ),
             CircleSectionConfigDto(
               sectionType: 'interaction',
               visible: true,
               order: 1,
             ),
-            CircleSectionConfigDto(sectionType: 'chat', visible: true, order: 2),
+            CircleSectionConfigDto(
+              sectionType: 'chat',
+              visible: true,
+              order: 2,
+            ),
             CircleSectionConfigDto(
               sectionType: 'storage',
               visible: true,
@@ -78,6 +125,86 @@ class _CircleEditSettingsPageState
     _descriptionController.dispose();
     _tagsController.dispose();
     super.dispose();
+  }
+
+  CircleDto _buildDraftCircle() {
+    final now = DateTime.now();
+    return CircleDto(
+      id: '',
+      name: '',
+      description: '',
+      ownerId: '',
+      category: _categoryIds.first,
+      visibility: 'public',
+      joinPolicy: 'open',
+      autoSyncChat: true,
+      sectionConfig: const [
+        CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
+        CircleSectionConfigDto(
+          sectionType: 'interaction',
+          visible: true,
+          order: 1,
+        ),
+        CircleSectionConfigDto(sectionType: 'chat', visible: true, order: 2),
+        CircleSectionConfigDto(sectionType: 'storage', visible: true, order: 3),
+      ],
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  String get _initialCoverSource => (_seedCircle.coverUrl ?? '').trim();
+
+  String get _initialAvatarSource {
+    final raw = (widget.initialAvatarUrl ?? _seedCircle.coverUrl ?? '').trim();
+    return raw;
+  }
+
+  String get _resolvedCoverSource =>
+      (_coverSourceOverride ?? _initialCoverSource).trim();
+
+  String get _resolvedAvatarSource {
+    final resolved = (_avatarSourceOverride ?? _initialAvatarSource).trim();
+    if (resolved.isNotEmpty) {
+      return resolved;
+    }
+    return _avatarSourceOverride == null ? _resolvedCoverSource : '';
+  }
+
+  bool get _hasCoverSource => _resolvedCoverSource.isNotEmpty;
+
+  bool get _hasAvatarSource => _resolvedAvatarSource.isNotEmpty;
+
+  void _setMediaSource(_CircleMediaSlot slot, String value) {
+    if (slot == _CircleMediaSlot.cover) {
+      _coverSourceOverride = value;
+    } else {
+      _avatarSourceOverride = value;
+    }
+  }
+
+  Map<String, dynamic> _submitPayload(String name) {
+    return <String, dynamic>{
+      'name': name,
+      'description': _descriptionController.text.trim(),
+      'tags': _normalizedTags(),
+      'visibility': _visibility,
+      'joinPolicy': _joinPolicy,
+      'autoSyncChat': _autoSyncChat,
+      'coverUrl': _resolvedCoverSource,
+      'cover': _resolvedCoverSource,
+      'avatarUrl': _resolvedAvatarSource,
+      'avatar': _resolvedAvatarSource,
+      if (_categoryId != null && _categoryId!.isNotEmpty)
+        'categoryId': _categoryId,
+      if (_categoryId != null && _categoryId!.isNotEmpty)
+        'category': _categoryId,
+      'sectionConfig': _sections
+          .asMap()
+          .entries
+          .map((entry) => entry.value.copyWith(order: entry.key).toMap())
+          .toList(growable: false),
+    };
   }
 
   List<String> _normalizedTags() {
@@ -111,6 +238,77 @@ class _CircleEditSettingsPageState
         : UITextConstants.circleJoinOpenDescription;
   }
 
+  String _mediaLabel(_CircleMediaSlot slot) {
+    return slot == _CircleMediaSlot.cover
+        ? UITextConstants.circleCoverLabel
+        : UITextConstants.circleAvatarLabel;
+  }
+
+  Future<void> _showMediaActionSheet(_CircleMediaSlot slot) async {
+    final currentHasValue = slot == _CircleMediaSlot.cover
+        ? _hasCoverSource
+        : _hasAvatarSource;
+    final action = await showAppActionSheet<_CircleMediaAction>(
+      context,
+      title: _mediaLabel(slot),
+      message: slot == _CircleMediaSlot.cover
+          ? UITextConstants.circleCoverHint
+          : UITextConstants.circleAvatarHint,
+      sections: [
+        const AppActionSheetSection<_CircleMediaAction>(
+          items: [
+            AppActionSheetItem<_CircleMediaAction>(
+              value: _CircleMediaAction.camera,
+              label: UITextConstants.cameraPhotoMode,
+              icon: CupertinoIcons.camera,
+            ),
+            AppActionSheetItem<_CircleMediaAction>(
+              value: _CircleMediaAction.photoLibrary,
+              label: UITextConstants.circleSelectFromPhotos,
+              icon: CupertinoIcons.photo_on_rectangle,
+            ),
+          ],
+        ),
+        if (currentHasValue)
+          AppActionSheetSection<_CircleMediaAction>(
+            items: [
+              AppActionSheetItem<_CircleMediaAction>(
+                value: _CircleMediaAction.remove,
+                label: slot == _CircleMediaSlot.cover
+                    ? UITextConstants.circleRemoveCover
+                    : UITextConstants.circleRemoveAvatar,
+                icon: CupertinoIcons.delete,
+                isDestructive: true,
+              ),
+            ],
+          ),
+      ],
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _CircleMediaAction.camera:
+        await _pickMedia(slot, CircleMediaPickSource.camera);
+      case _CircleMediaAction.photoLibrary:
+        await _pickMedia(slot, CircleMediaPickSource.photoLibrary);
+      case _CircleMediaAction.remove:
+        setState(() => _setMediaSource(slot, ''));
+    }
+  }
+
+  Future<void> _pickMedia(
+    _CircleMediaSlot slot,
+    CircleMediaPickSource source,
+  ) async {
+    final picker = ref.read(circleMediaPickerProvider);
+    final path = await picker.pickImage(context, source: source);
+    if (!mounted || path == null || path.trim().isEmpty) {
+      return;
+    }
+    setState(() => _setMediaSource(slot, path.trim()));
+  }
+
   Future<void> _save() async {
     if (_isSaving) return;
     final name = _nameController.text.trim();
@@ -120,29 +318,56 @@ class _CircleEditSettingsPageState
     }
 
     setState(() => _isSaving = true);
-    final notifier = ref.read(circleStateProvider(widget.circleId));
-    final success = await notifier.updateCircleDetails({
-      'name': name,
-      'description': _descriptionController.text.trim(),
-      'tags': _normalizedTags(),
-      'visibility': _visibility,
-      'joinPolicy': _joinPolicy,
-      'autoSyncChat': _autoSyncChat,
-      'sectionConfig': _sections
-          .asMap()
-          .entries
-          .map(
-            (entry) => entry.value.copyWith(order: entry.key).toMap(),
-          )
-          .toList(growable: false),
-    });
+    final payload = _submitPayload(name);
+    bool success = false;
+    String? createdCircleId;
+    if (_isCreateMode) {
+      try {
+        final repo = ref.read(circleRepositoryProvider);
+        final created = await repo.createCircle(payload);
+        final merged = <String, dynamic>{
+          ...payload,
+          ...created,
+          'role': created['role'] ?? 'owner',
+          'joinStatus': created['joinStatus'] ?? 'joined',
+          'isFollowed': created['isFollowed'] ?? true,
+          'memberCount': created['memberCount'] ?? 1,
+          'postCount': created['postCount'] ?? 0,
+          'weeklyActiveCount': created['weeklyActiveCount'] ?? 0,
+          'createdAt': created['createdAt'] ?? DateTime.now().toIso8601String(),
+          'updatedAt': created['updatedAt'] ?? DateTime.now().toIso8601String(),
+        };
+        createdCircleId = CircleDto.fromMap(merged).id;
+        success = createdCircleId.isNotEmpty;
+        if (success) {
+          final refreshNotifier = ref.read(
+            circleDirectoryRefreshProvider.notifier,
+          );
+          refreshNotifier.state = refreshNotifier.state + 1;
+        }
+      } catch (_) {
+        success = false;
+      }
+    } else {
+      final notifier = ref.read(circleStateProvider(widget.circleId!));
+      success = await notifier.updateCircleDetails(payload);
+    }
     if (!mounted) {
       return;
     }
     setState(() => _isSaving = false);
     if (success) {
-      AppToast.show(context, UITextConstants.circleSaveSuccess);
-      Navigator.of(context).pop();
+      AppToast.show(
+        context,
+        _isCreateMode
+            ? UITextConstants.circleCreateSuccess
+            : UITextConstants.circleSaveSuccess,
+      );
+      if (_isCreateMode) {
+        Navigator.of(context).pop(createdCircleId);
+      } else {
+        Navigator.of(context).pop();
+      }
     } else {
       AppToast.show(context, UITextConstants.loadFailed);
     }
@@ -151,7 +376,10 @@ class _CircleEditSettingsPageState
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
     final cardBg = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
@@ -160,12 +388,18 @@ class _CircleEditSettingsPageState
       isDark,
       ColorType.backgroundTertiary,
     );
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
     );
-    final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
 
     return AppScaffold(
       backgroundColor: bg,
@@ -183,7 +417,9 @@ class _CircleEditSettingsPageState
           child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
-          UITextConstants.circleEditSettings,
+          _isCreateMode
+              ? UITextConstants.createCircle
+              : UITextConstants.circleEditSettings,
           style: TextStyle(
             color: fg,
             fontSize: AppTypography.lg,
@@ -196,7 +432,9 @@ class _CircleEditSettingsPageState
           child: _isSaving
               ? const CupertinoActivityIndicator()
               : Text(
-                  UITextConstants.circleSaveChanges,
+                  _isCreateMode
+                      ? UITextConstants.create
+                      : UITextConstants.circleSaveChanges,
                   style: TextStyle(
                     color: AppColors.primaryColor,
                     fontSize: AppTypography.sm,
@@ -220,11 +458,26 @@ class _CircleEditSettingsPageState
               _buildTabSwitcher(cardBg, fg, fgSecondary, border),
               SizedBox(height: AppSpacing.md),
               if (_activeTab == CircleEditSettingsTab.info) ...[
+                _buildMediaSelectorCard(
+                  cardBg: cardBg,
+                  fill: fill,
+                  fg: fg,
+                  fgSecondary: fgSecondary,
+                  border: border,
+                ),
+                SizedBox(height: AppSpacing.md),
                 _buildFormCard(
                   title: UITextConstants.circleInfoSectionTitle,
                   cardBg: cardBg,
                   child: Column(
                     children: [
+                      _buildCategorySelector(
+                        fill: fill,
+                        fg: fg,
+                        fgSecondary: fgSecondary,
+                        border: border,
+                      ),
+                      SizedBox(height: AppSpacing.md),
                       _buildField(
                         label: UITextConstants.circleNameLabel,
                         controller: _nameController,
@@ -425,7 +678,9 @@ class _CircleEditSettingsPageState
                   child: _isSaving
                       ? const CupertinoActivityIndicator(color: Colors.white)
                       : Text(
-                          UITextConstants.circleSaveChanges,
+                          _isCreateMode
+                              ? UITextConstants.createCircle
+                              : UITextConstants.circleSaveChanges,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: AppTypography.base,
@@ -442,7 +697,8 @@ class _CircleEditSettingsPageState
   }
 
   Widget _buildHeroCard(Color cardBg, Color fg, Color fgSecondary) {
-    final coverUrl = widget.initialCircle.coverUrl;
+    final coverUrl = _resolvedCoverSource;
+    final avatarUrl = _resolvedAvatarSource;
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
@@ -460,16 +716,21 @@ class _CircleEditSettingsPageState
         child: Stack(
           children: [
             SizedBox(
-              height: 188,
+              height:
+                  AppSpacing.oneHundred +
+                  AppSpacing.avatarCircleXl +
+                  AppSpacing.md,
               width: double.infinity,
-              child: coverUrl != null && coverUrl.isNotEmpty
-                  ? Image.network(
-                      coverUrl,
+              child: coverUrl.isNotEmpty
+                  ? CircleMediaImage(
+                      imageSource: coverUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          ColoredBox(color: cardBg),
+                      placeholder: ColoredBox(color: cardBg),
+                      errorWidget: ColoredBox(color: cardBg),
                     )
-                  : ColoredBox(color: AppColors.primaryColor.withValues(alpha: 0.1)),
+                  : ColoredBox(
+                      color: AppColors.primaryColor.withValues(alpha: 0.1),
+                    ),
             ),
             Positioned.fill(
               child: DecoratedBox(
@@ -493,23 +754,30 @@ class _CircleEditSettingsPageState
               child: Row(
                 children: [
                   Container(
-                      width: AppSpacing.avatarCircleLg,
-                      height: AppSpacing.avatarCircleLg,
+                    width: AppSpacing.avatarCircleLg,
+                    height: AppSpacing.avatarCircleLg,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: Colors.white.withValues(alpha: 0.22),
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: AppSpacing.two,
+                      ),
                     ),
-                    child: coverUrl != null && coverUrl.isNotEmpty
+                    child: avatarUrl.isNotEmpty
                         ? ClipOval(
-                            child: Image.network(
-                              coverUrl,
+                            child: CircleMediaImage(
+                              imageSource: avatarUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(
+                              errorWidget: const ColoredBox(
+                                color: Colors.transparent,
+                                child: Center(
+                                  child: Icon(
                                     CupertinoIcons.person_3_fill,
                                     color: Colors.white,
                                   ),
+                                ),
+                              ),
                             ),
                           )
                         : const Icon(
@@ -524,7 +792,9 @@ class _CircleEditSettingsPageState
                       children: [
                         Text(
                           _nameController.text.trim().isEmpty
-                              ? widget.initialCircle.name
+                              ? (_isCreateMode
+                                    ? UITextConstants.createCircle
+                                    : _seedCircle.name)
                               : _nameController.text.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -536,9 +806,13 @@ class _CircleEditSettingsPageState
                         ),
                         SizedBox(height: AppSpacing.intraGroupXs),
                         Text(
-                          _activeTab == CircleEditSettingsTab.info
-                              ? UITextConstants.editCircle
-                              : UITextConstants.manageCenter,
+                          _isCreateMode
+                              ? (_activeTab == CircleEditSettingsTab.info
+                                    ? UITextConstants.createCircle
+                                    : UITextConstants.circleEditSettings)
+                              : (_activeTab == CircleEditSettingsTab.info
+                                    ? UITextConstants.editCircle
+                                    : UITextConstants.manageCenter),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.86),
                             fontSize: AppTypography.sm,
@@ -580,7 +854,9 @@ class _CircleEditSettingsPageState
               vertical: AppSpacing.xs,
             ),
             child: Text(
-              UITextConstants.editCircle,
+              _isCreateMode
+                  ? UITextConstants.circleInfoSectionTitle
+                  : UITextConstants.editCircle,
               style: TextStyle(
                 color: _activeTab == CircleEditSettingsTab.info
                     ? fg
@@ -596,7 +872,9 @@ class _CircleEditSettingsPageState
               vertical: AppSpacing.xs,
             ),
             child: Text(
-              UITextConstants.manageCenter,
+              _isCreateMode
+                  ? UITextConstants.circleEditSettings
+                  : UITextConstants.manageCenter,
               style: TextStyle(
                 color: _activeTab == CircleEditSettingsTab.settings
                     ? fg
@@ -613,6 +891,317 @@ class _CircleEditSettingsPageState
           }
         },
       ),
+    );
+  }
+
+  Widget _buildMediaSelectorCard({
+    required Color cardBg,
+    required Color fill,
+    required Color fg,
+    required Color fgSecondary,
+    required Color border,
+  }) {
+    return _buildFormCard(
+      title: UITextConstants.circleMediaSectionTitle,
+      cardBg: cardBg,
+      child: Column(
+        children: [
+          _buildCoverPickerTile(
+            fill: fill,
+            fg: fg,
+            fgSecondary: fgSecondary,
+            border: border,
+          ),
+          SizedBox(height: AppSpacing.md),
+          _buildAvatarPickerTile(
+            fill: fill,
+            fg: fg,
+            fgSecondary: fgSecondary,
+            border: border,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverPickerTile({
+    required Color fill,
+    required Color fg,
+    required Color fgSecondary,
+    required Color border,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSegmentTitle(UITextConstants.circleCoverLabel, fgSecondary),
+        SizedBox(height: AppSpacing.sm),
+        Container(
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: border.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppSpacing.largeBorderRadius),
+                ),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _hasCoverSource
+                      ? CircleMediaImage(
+                          imageSource: _resolvedCoverSource,
+                          fit: BoxFit.cover,
+                          placeholder: ColoredBox(color: fill),
+                          errorWidget: ColoredBox(color: fill),
+                        )
+                      : DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primaryColor.withValues(alpha: 0.18),
+                                fill,
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              CupertinoIcons.photo_on_rectangle,
+                              color: fgSecondary,
+                              size: AppSpacing.iconLarge,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(AppSpacing.containerSm),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        UITextConstants.circleCoverHint,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.containerSm),
+                    CupertinoButton(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.containerSm,
+                        vertical: AppSpacing.intraGroupSm,
+                      ),
+                      minimumSize: Size.zero,
+                      color: AppColors.primaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.circularBorderRadius,
+                      ),
+                      onPressed: () =>
+                          _showMediaActionSheet(_CircleMediaSlot.cover),
+                      child: Text(
+                        _hasCoverSource
+                            ? UITextConstants.videoChangeCover
+                            : UITextConstants.addCover,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.semiBold,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarPickerTile({
+    required Color fill,
+    required Color fg,
+    required Color fgSecondary,
+    required Color border,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSegmentTitle(UITextConstants.circleAvatarLabel, fgSecondary),
+        SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: EdgeInsets.all(AppSpacing.containerSm),
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: border.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: AppSpacing.avatarCircleLg,
+                height: AppSpacing.avatarCircleLg,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: fgSecondary.withValues(alpha: 0.14),
+                  border: Border.all(
+                    color: Colors.white,
+                    width: AppSpacing.two,
+                  ),
+                ),
+                child: ClipOval(
+                  child: _hasAvatarSource
+                      ? CircleMediaImage(
+                          imageSource: _resolvedAvatarSource,
+                          fit: BoxFit.cover,
+                          placeholder: ColoredBox(
+                            color: fgSecondary.withValues(alpha: 0.12),
+                          ),
+                          errorWidget: ColoredBox(
+                            color: fgSecondary.withValues(alpha: 0.12),
+                            child: Icon(
+                              CupertinoIcons.person_3_fill,
+                              color: fgSecondary,
+                            ),
+                          ),
+                        )
+                      : Icon(CupertinoIcons.person_3_fill, color: fgSecondary),
+                ),
+              ),
+              SizedBox(width: AppSpacing.containerSm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      UITextConstants.circleAvatarTitle,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: AppTypography.semiBold,
+                        color: fg,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      UITextConstants.circleAvatarHint,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: AppSpacing.containerSm),
+              CupertinoButton(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                  vertical: AppSpacing.intraGroupSm,
+                ),
+                minimumSize: Size.zero,
+                color: AppColors.primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.circularBorderRadius,
+                ),
+                onPressed: () => _showMediaActionSheet(_CircleMediaSlot.avatar),
+                child: Text(
+                  _hasAvatarSource
+                      ? UITextConstants.circleChangeAvatar
+                      : UITextConstants.circleAddAvatar,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.semiBold,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategorySelector({
+    required Color fill,
+    required Color fg,
+    required Color fgSecondary,
+    required Color border,
+  }) {
+    final categories = _categoryIds
+        .where(CircleMockData.categoryConfig.containsKey)
+        .map(
+          (id) => MapEntry(
+            id,
+            CircleMockData.categoryConfig[id]?['label']?.toString() ?? id,
+          ),
+        )
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          UITextConstants.circleCategoryLabel,
+          style: TextStyle(
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.semiBold,
+            color: fgSecondary,
+          ),
+        ),
+        SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.intraGroupSm,
+          runSpacing: AppSpacing.intraGroupSm,
+          children: categories
+              .map((entry) {
+                final selected = entry.key == _categoryId;
+                return CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => setState(() => _categoryId = entry.key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerSm,
+                      vertical: AppSpacing.intraGroupSm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppColors.primaryColor.withValues(alpha: 0.12)
+                          : fill,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.circularBorderRadius,
+                      ),
+                      border: Border.all(
+                        color: selected
+                            ? AppColors.primaryColor.withValues(alpha: 0.28)
+                            : border.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Text(
+                      entry.value,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        fontWeight: selected
+                            ? AppTypography.semiBold
+                            : AppTypography.medium,
+                        color: selected ? AppColors.primaryColor : fg,
+                      ),
+                    ),
+                  ),
+                );
+              })
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 

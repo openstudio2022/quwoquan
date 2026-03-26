@@ -10,12 +10,12 @@ class AssistantProcessDrawer extends StatefulWidget {
     super.key,
     required this.viewModel,
     this.initiallyExpanded = false,
-    this.onReferenceUrlTap,
+    this.onReferenceTap,
   });
 
   final AssistantJourneyViewModel viewModel;
   final bool initiallyExpanded;
-  final void Function(String url)? onReferenceUrlTap;
+  final void Function(Map<String, dynamic> reference)? onReferenceTap;
 
   @override
   State<AssistantProcessDrawer> createState() => _AssistantProcessDrawerState();
@@ -109,19 +109,23 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   }
 
   String _headerLabel() {
-    if (_viewModel.isRunning && _viewModel.activeStageLabel.isNotEmpty) {
-      return _viewModel.activeStageLabel;
+    if (_viewModel.isRunning) {
+      return UITextConstants.assistantProcessRunningSummary;
     }
     if (!_viewModel.isRunning && _viewModel.finalAnswerReady) {
-      return _summaryHeaderLabel();
-    }
-    if (!_viewModel.isRunning && !_expanded) {
       return _summaryHeaderLabel();
     }
     if (_viewModel.summary.isNotEmpty) {
       return _viewModel.summary;
     }
     return _summaryHeaderLabel();
+  }
+
+  String _headerSubtitle() {
+    if (_isLongWaitWithoutProgress) {
+      return _waitReassuranceText();
+    }
+    return '';
   }
 
   @override
@@ -144,11 +148,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final accentColor = AppColorsFunctional.getColor(isDark, ColorType.primary);
+    final surfaceTint = secondaryTextColor.withValues(
+      alpha: isDark ? 0.12 : 0.04,
+    );
     return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.xs),
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: Color.alphaBlend(surfaceTint, bgColor),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         border: Border.all(color: borderColor, width: AppSpacing.one / 2),
       ),
@@ -159,13 +165,11 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
           _buildHeader(
             textColor: textColor,
             secondaryTextColor: secondaryTextColor,
-            accentColor: accentColor,
           ),
           if (_expanded)
             _buildBody(
               textColor: textColor,
               secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
             ),
         ],
       ),
@@ -175,63 +179,59 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   Widget _buildHeader({
     required Color textColor,
     required Color secondaryTextColor,
-    required Color accentColor,
   }) {
-    final monochrome = Color.lerp(secondaryTextColor, accentColor, 0.22)!;
+    final monochrome = secondaryTextColor.withValues(alpha: 0.8);
+    final subtitle = _headerSubtitle();
     return GestureDetector(
       key: TestKeys.assistantProcessHeader,
       onTap: () => setState(() => _expanded = !_expanded),
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.intraGroupSm,
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.sm,
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (!_viewModel.isRunning)
-              Padding(
-                padding: EdgeInsets.only(right: AppSpacing.xs),
-                child: Icon(
-                  CupertinoIcons.checkmark_circle_fill,
-                  size: AppTypography.base,
-                  color: accentColor,
+            Padding(
+              padding: EdgeInsets.only(right: AppSpacing.sm),
+              child: SizedBox(
+                width: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
+                height: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
+                child: Center(
+                  child: _viewModel.isRunning
+                      ? _BreathingCapsule(color: monochrome)
+                      : Icon(
+                          CupertinoIcons.checkmark_circle_fill,
+                          size: AppTypography.base + 1,
+                          color: monochrome,
+                        ),
                 ),
               ),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          _headerLabel(),
-                          style: TextStyle(
-                            fontSize: AppTypography.base,
-                            fontWeight: FontWeight.w500,
-                            color: textColor,
-                            height: AppTypography.bodyLineHeight,
-                          ),
-                        ),
-                      ),
-                      if (_viewModel.isRunning)
-                        Padding(
-                          padding: EdgeInsets.only(left: AppSpacing.xs),
-                          child: _BreathingCapsule(color: monochrome),
-                        ),
-                    ],
+                  Text(
+                    _headerLabel(),
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      height: AppTypography.bodyLineHeight,
+                    ),
                   ),
-                  if (_isLongWaitWithoutProgress)
+                  if (subtitle.isNotEmpty)
                     Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.xs / 2),
+                      padding: EdgeInsets.only(top: AppSpacing.one),
                       child: Text(
-                        _waitReassuranceText(),
+                        subtitle,
                         style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: secondaryTextColor.withValues(alpha: 0.85),
+                          fontSize: AppTypography.sm,
+                          color: secondaryTextColor.withValues(alpha: 0.9),
                           height: AppTypography.bodyLineHeight,
                         ),
                       ),
@@ -255,106 +255,27 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   Widget _buildBody({
     required Color textColor,
     required Color secondaryTextColor,
-    required Color accentColor,
   }) {
     return Padding(
       padding: EdgeInsets.only(
-        left: AppSpacing.sm,
-        right: AppSpacing.sm,
-        bottom: AppSpacing.intraGroupSm,
+        left: AppSpacing.containerSm,
+        right: AppSpacing.containerSm,
+        bottom: AppSpacing.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: double.infinity,
-            height: AppSpacing.one / 2,
-            color: secondaryTextColor.withValues(alpha: 0.15),
-          ),
-          SizedBox(height: AppSpacing.xs),
-          if (_viewModel.stages.isNotEmpty)
-            _buildStageStrip(
-              secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
-            ),
-          if (_viewModel.stages.isNotEmpty && _viewModel.blocks.isNotEmpty)
-            SizedBox(height: AppSpacing.xs),
           for (var i = 0; i < _viewModel.blocks.length; i++)
             _buildBlock(
               index: i,
               block: _viewModel.blocks[i],
               textColor: textColor,
               secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
             ),
         ],
       ),
     );
-  }
-
-  Widget _buildStageStrip({
-    required Color secondaryTextColor,
-    required Color accentColor,
-  }) {
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: _viewModel.stages
-          .map(
-            (stage) => Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: AppSpacing.xs / 2,
-              ),
-              decoration: BoxDecoration(
-                color:
-                    _stageColor(
-                      stage.status,
-                      accentColor: accentColor,
-                      secondaryTextColor: secondaryTextColor,
-                    ).withValues(
-                      alpha: stage.isActive
-                          ? 0.18
-                          : (stage.isResolved ? 0.12 : 0.08),
-                    ),
-                borderRadius: BorderRadius.circular(AppSpacing.sm),
-              ),
-              child: Text(
-                stage.label,
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  fontWeight: FontWeight.w500,
-                  color: _stageColor(
-                    stage.status,
-                    accentColor: accentColor,
-                    secondaryTextColor: secondaryTextColor,
-                  ),
-                  height: AppTypography.bodyLineHeight,
-                ),
-              ),
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  Color _stageColor(
-    JourneyStageStatus status, {
-    required Color accentColor,
-    required Color secondaryTextColor,
-  }) {
-    switch (status) {
-      case JourneyStageStatus.active:
-      case JourneyStageStatus.completed:
-        return accentColor;
-      case JourneyStageStatus.blocked:
-        return AppColors.warning;
-      case JourneyStageStatus.skipped:
-      case JourneyStageStatus.pending:
-      case JourneyStageStatus.unknown:
-        return secondaryTextColor.withValues(alpha: 0.85);
-    }
   }
 
   Widget _buildBlock({
@@ -362,105 +283,89 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required AssistantJourneyBlockViewModel block,
     required Color textColor,
     required Color secondaryTextColor,
-    required Color accentColor,
   }) {
-    if (!block.hasReferences) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.three),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (block.headline.isNotEmpty)
-              Text(
-                block.headline,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: secondaryTextColor,
-                  height: AppTypography.lineHeightRelaxed,
-                ),
-              ),
-            if (block.detail.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(
-                  top: block.headline.isNotEmpty ? 4 : 0,
-                ),
-                child: Text(
-                  block.detail,
-                  style: TextStyle(
-                    fontSize: AppTypography.xsPlus,
-                    color: secondaryTextColor.withValues(alpha: 0.9),
-                    height: AppTypography.lineHeightRelaxed,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-    return _buildCollapsibleReferenceBlock(
-      index: index,
-      icon: block.kind == AssistantJourneyBlockKind.searchSummary
-          ? CupertinoIcons.search
-          : CupertinoIcons.doc_text,
-      label: block.headline,
-      detail: block.detail,
-      references: block.references,
-      textColor: textColor,
-      secondaryTextColor: secondaryTextColor,
-      accentColor: accentColor,
-    );
-  }
-
-  Widget _buildCollapsibleReferenceBlock({
-    required int index,
-    required IconData icon,
-    required String label,
-    required String detail,
-    required List<AssistantJourneyReferenceViewModel> references,
-    required Color textColor,
-    required Color secondaryTextColor,
-    required Color accentColor,
-  }) {
+    final bulletLines = _bulletLines(block.detail);
+    final paragraphLines = _paragraphLines(block.detail);
     final isExpanded = _expandedBlockIndices.contains(index);
-    final sourceSummary = references
-        .map((reference) => reference.source.trim())
-        .where((source) => source.isNotEmpty)
-        .toSet()
-        .take(2)
-        .join('、');
     return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                if (isExpanded) {
-                  _expandedBlockIndices.remove(index);
-                } else {
-                  _expandedBlockIndices.add(index);
-                }
-              });
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
+          _buildStageHeading(
+            label: _stageLabelFor(block.stageId),
+            secondaryTextColor: secondaryTextColor,
+          ),
+          if (block.headline.isNotEmpty) ...[
+            SizedBox(height: AppSpacing.one),
+            Text(
+              block.headline,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                fontWeight: FontWeight.w400,
+                color: textColor,
+                height: AppTypography.lineHeightRelaxed,
+              ),
+            ),
+          ],
+          if (paragraphLines.isNotEmpty) ...[
+            SizedBox(height: block.headline.isNotEmpty ? AppSpacing.one : 0),
+            ...paragraphLines.map(
+              (line) => Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.one),
+                child: Text(
+                  line,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: FontWeight.w400,
+                    color: textColor.withValues(alpha: 0.88),
+                    height: AppTypography.lineHeightRelaxed,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (bulletLines.isNotEmpty) ...[
+            SizedBox(height: AppSpacing.one),
+            ...bulletLines.map(
+              (line) => Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.one),
+                child: Text(
+                  '• $line',
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: FontWeight.w400,
+                    color: textColor.withValues(alpha: 0.88),
+                    height: AppTypography.lineHeightRelaxed,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (block.hasReferences) ...[
+            SizedBox(height: AppSpacing.one),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isExpanded) {
+                    _expandedBlockIndices.remove(index);
+                  } else {
+                    _expandedBlockIndices.add(index);
+                  }
+                });
+              },
+              behavior: HitTestBehavior.opaque,
               child: Row(
                 children: [
-                  Icon(icon, size: AppTypography.smPlus, color: accentColor),
-                  SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
-                      label.isNotEmpty
-                          ? label
-                          : _referenceCountLabel(references.length),
+                      _referenceSummaryLabel(block),
                       style: TextStyle(
                         fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w500,
-                        color: textColor,
+                        fontWeight: FontWeight.w400,
+                        color: textColor.withValues(alpha: 0.88),
+                        height: AppTypography.lineHeightRelaxed,
                       ),
                     ),
                   ),
@@ -469,99 +374,101 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                         ? CupertinoIcons.chevron_up
                         : CupertinoIcons.chevron_down,
                     size: AppTypography.xsPlus,
-                    color: secondaryTextColor,
+                    color: secondaryTextColor.withValues(alpha: 0.72),
                   ),
                 ],
               ),
             ),
-          ),
-          if (detail.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppTypography.smPlus + AppSpacing.xs,
-                bottom: AppSpacing.xs / 2,
-              ),
-              child: Text(
-                detail,
-                style: TextStyle(
-                  fontSize: AppTypography.xsPlus,
-                  color: secondaryTextColor,
-                  height: AppTypography.bodyLineHeight,
-                ),
-              ),
-            ),
-          if (sourceSummary.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppTypography.smPlus + AppSpacing.xs,
-                bottom: AppSpacing.xs / 2,
-              ),
-              child: Text(
-                '来源：$sourceSummary',
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  color: secondaryTextColor.withValues(alpha: 0.8),
-                  height: AppTypography.bodyLineHeight,
-                ),
-              ),
-            ),
-          if (isExpanded)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppTypography.smPlus + AppSpacing.xs,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: references
-                    .map(
-                      (reference) => GestureDetector(
-                        onTap: reference.url.isNotEmpty
-                            ? () =>
-                                  widget.onReferenceUrlTap?.call(reference.url)
-                            : null,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  reference.source.trim().isNotEmpty
-                                      ? '${reference.title} · ${reference.source}'
-                                      : reference.title,
-                                  style: TextStyle(
-                                    fontSize: AppTypography.base,
-                                    color: accentColor,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: accentColor.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (reference.url.isNotEmpty)
-                                Padding(
-                                  padding: EdgeInsets.only(left: AppSpacing.xs),
-                                  child: Icon(
-                                    CupertinoIcons.arrow_up_right,
-                                    size: AppTypography.xs,
-                                    color: accentColor.withValues(alpha: 0.6),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+            if (isExpanded) ...[
+              SizedBox(height: AppSpacing.one),
+              ...List<Widget>.generate(block.references.length, (refIndex) {
+                final reference = block.references[refIndex];
+                final sourceSuffix = reference.source.trim().isNotEmpty
+                    ? ' · ${reference.source.trim()}'
+                    : '';
+                return GestureDetector(
+                  onTap: reference.url.isNotEmpty
+                      ? () => widget.onReferenceTap?.call(<String, dynamic>{
+                          'title': reference.title,
+                          'url': reference.url,
+                          'source': reference.source,
+                        })
+                      : null,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.one),
+                    child: Text(
+                      '${refIndex + 1}. ${reference.title}$sourceSuffix',
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: FontWeight.w400,
+                        color: textColor.withValues(alpha: 0.88),
+                        height: AppTypography.lineHeightRelaxed,
                       ),
-                    )
-                    .toList(growable: false),
-              ),
-            ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildStageHeading({
+    required String label,
+    required Color secondaryTextColor,
+  }) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: AppTypography.base,
+        fontWeight: FontWeight.w400,
+        color: secondaryTextColor.withValues(alpha: 0.82),
+        height: AppTypography.bodyLineHeight,
+      ),
+    );
+  }
+
+  String _referenceSummaryLabel(AssistantJourneyBlockViewModel block) {
+    if (block.referenceLabel.trim().isNotEmpty) {
+      return block.referenceLabel.trim();
+    }
+    return _referenceCountLabel(block.references.length);
+  }
+
+  String _stageLabelFor(JourneyStageId stageId) {
+    switch (stageId) {
+      case JourneyStageId.analyze:
+        return UITextConstants.assistantProcessStageUnderstand;
+      case JourneyStageId.search:
+        return UITextConstants.assistantProcessStageSearch;
+      case JourneyStageId.verify:
+        return UITextConstants.assistantProcessStageVerify;
+      case JourneyStageId.answer:
+        return UITextConstants.assistantProcessStageAnswer;
+      case JourneyStageId.unknown:
+        return UITextConstants.assistantProcessStageUnderstand;
+    }
+  }
+
+  List<String> _paragraphLines(String detail) {
+    return detail
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty && !line.startsWith('- '))
+        .toList(growable: false);
+  }
+
+  List<String> _bulletLines(String detail) {
+    return detail
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.startsWith('- '))
+        .map((line) => line.substring(2).trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
   }
 }
 

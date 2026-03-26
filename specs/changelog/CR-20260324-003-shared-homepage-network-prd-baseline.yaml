@@ -1,0 +1,363 @@
+id: CR-20260324-003
+title: shared homepage network prd baseline
+slug: shared-homepage-network-prd-baseline
+revision: 4
+status: active
+
+affected_nodes:
+  - specs/feature-tree/shared-homepage-network
+  - specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey
+  - specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey
+  - specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey
+  - specs/feature-tree/tree_index.yaml
+  - specs/l1_index.yaml
+  - specs/feature-tree/README.md
+  - specs/00_PRODUCT_CONCEPT_SYSTEM.md
+  - specs/00_GLOBAL_TERMINOLOGY.md
+
+entries:
+  - timestamp: "2026-03-24T18:30:00+08:00"
+    summary: >
+      新建独立 L1 `shared-homepage-network`，冻结共享主页的 baseline：
+      包含主页定义、四类主页范围、口碑模板、认领与下线合同、内容挂载契约、
+      对群组的集成边界，以及前台/PRD/服务三层命名分层。
+    reason: >
+      当前产品缺少围绕具体事物的长期主页能力，导致内容挂载、口碑沉淀、
+      搜索发现、认领维护和下线治理都没有统一落点；同时“实体/对象/directory”
+      等内部词不适合作为用户语言。进入后续 `/prd` 与 `/design` 前，
+      必须先冻结共享主页能力域、服务边界、baseline 类目范围和端云一体化契约。
+    change_type:
+      - add
+      - refine
+      - baseline
+      - align
+    changed_documents:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+        sections:
+          - 能力边界
+          - 功能范围
+          - 领域服务与业务对象
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/shared-homepage-network/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - iOS 体验基线
+      - path: specs/feature-tree/shared-homepage-network/acceptance.yaml
+        sections:
+          - C1
+          - C2
+          - C3
+          - C4
+          - C5
+      - path: specs/feature-tree/shared-homepage-network/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/l1_index.yaml
+        sections:
+          - shared-homepage-network
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - shared-homepage-network
+      - path: specs/feature-tree/README.md
+        sections:
+          - L1 落地范围
+      - path: specs/00_PRODUCT_CONCEPT_SYSTEM.md
+        sections:
+          - 共享主页
+          - 后续 `/prd` 约束
+      - path: specs/00_GLOBAL_TERMINOLOGY.md
+        sections:
+          - 共享主页体系
+          - 服务与 API 命名建议
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次为共享主页主线 baseline 冻结，不进入群组/关系主页详细设计。
+      - baseline 明确不包含主页合并、组织型主页模板和交易闭环。
+  - timestamp: "2026-03-24T19:20:00+08:00"
+    summary: >
+      将 `shared-homepage-network/spec.md` 进一步细化为正式 PRD 正文结构，
+      并正式拆出首个 L2 Journey `homepage-discovery-and-attach-journey`，
+      冻结主页搜索、主页补充与发布挂载的端到端旅程。
+    reason: >
+      L1 baseline 已完成能力边界冻结，但若不继续把“发现主页并挂载主页”拆成正式 Journey，
+      后续 `/prd` 与 `/design` 仍会停留在 L1 抽象层，无法直接继续细化发布、搜索和主页选择器的端到端链路。
+      该 Journey 是共享主页主线里最先落地、最直接连接内容系统的主路径，必须优先下钻。
+    change_type:
+      - refine
+      - split
+      - expand
+    changed_documents:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+        sections:
+          - 产品定位
+          - 关键 Journey
+          - baseline 范围冻结
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/spec.md
+        sections:
+          - 核心旅程
+          - 特性树拆分
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - shared-homepage-network/homepage-discovery-and-attach-journey
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次只拆分第一个 Journey，不继续展开认领/下线与口碑消费 Journey。
+      - 后续若进入 `/design`，优先补 `homepage-discovery-and-attach-journey/design.md` 与相关 L3 scenario 节点。
+  - timestamp: "2026-03-24T20:15:00+08:00"
+    summary: >
+      完成 `shared-homepage-network` 的全量 PRD 拆分：补齐剩余两个 L2 Journey，
+      并为三个 Journey 下的全部 L3 Scenario 建立 `spec.md + acceptance.yaml` 骨架，
+      使共享主页主线具备直接进入 design 的树结构与验收骨架。
+    reason: >
+      仅有 L1 和部分 L2 还不足以支撑 design 阶段的方案对比与 metadata/codegen 拆分。
+      为避免 design 阶段再次回头补特性树，本次需要先把“发现与挂载、阅读与回流、认领与下线”
+      三条主旅程和对应的 L3 scenario 全部正式落盘。
+    change_type:
+      - split
+      - expand
+      - align
+      - baseline
+    changed_documents:
+      - path: specs/feature-tree/shared-homepage-network/spec.md
+        sections:
+          - 关键 Journey
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/spec.md
+        sections:
+          - 核心旅程
+          - 特性树拆分
+          - 非功能目标
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/spec.md
+        sections:
+          - 核心旅程
+          - 特性树拆分
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-search-and-picker/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-search-and-picker/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/missing-homepage-suggestion-and-review/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/missing-homepage-suggestion-and-review/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-attach-in-publish-flow/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/homepage-attach-in-publish-flow/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-review-read-and-score-summary/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-review-read-and-score-summary/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-content-and-question-aggregation/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-content-and-question-aggregation/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-candidate-intake-and-publish/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-candidate-intake-and-publish/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-claim-request-and-review/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-claim-request-and-review/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/claimed-homepage-basic-maintenance/spec.md
+        sections:
+          - 功能范围
+          - 验收重点
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/claimed-homepage-basic-maintenance/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-offline-report-and-history-retention/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/homepage-offline-report-and-history-retention/acceptance.yaml
+        sections:
+          - A1
+          - S1
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - shared-homepage-network
+          - shared-homepage-network/homepage-discovery-and-attach-journey
+          - shared-homepage-network/homepage-review-and-content-journey
+          - shared-homepage-network/homepage-claim-maintain-and-offline-journey
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次完成的是全量 PRD 拆分，不包含 design.md 与 plan.yaml 的 Journey/Scenario 深化。
+      - 共享主页主线现已具备直接进入 design 阶段的特性树骨架。
+  - timestamp: "2026-03-24T21:10:00+08:00"
+    summary: >
+      完成 `shared-homepage-network` 三个 L2 Journey 的正式 `/design` 设计基线：
+      为 `homepage-discovery-and-attach-journey`、`homepage-review-and-content-journey`、
+      `homepage-claim-maintain-and-offline-journey` 分别补齐 `design.md + plan.yaml`，
+      并执行 G1 metadata/codegen 基线校验。
+    reason: >
+      全量 PRD 已完成 L1/L2/L3 拆分，但若没有 Journey 级设计与实施切片，后续 `/dev`
+      仍会在 metadata 归属、codegen 生成物、跨域聚合、feature flag 与回滚上反复返工。
+      因此本次需要把三条主旅程全部推进到 design 冻结状态。
+    change_type:
+      - design
+      - plan
+      - align
+      - baseline
+    changed_documents:
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+          - P7
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次 `/design` 只冻结设计与实施切片，尚未进入 `/dev` 实际 metadata 改动。
+      - G1 已执行并通过：`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app`。

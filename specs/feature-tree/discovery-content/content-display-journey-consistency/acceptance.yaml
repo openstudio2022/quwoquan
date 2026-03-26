@@ -10,16 +10,15 @@ execution:
 
 scope:
   summary: >
-    冻结 discovery 与 circle 两类来源在 feed -> immersive viewer -> author profile ->
-    返回 feed 的统一旅程基线，统一对象真相源、canonical key、Provider 自动同步与延迟批同步策略。
+    冻结 discovery 与 circle 两类来源在 feed -> immersive viewer/article reader ->
+    author profile -> 返回 feed 的统一旅程基线，统一对象真相源、canonical key、Provider 自动同步与延迟批同步策略。
   in_scope:
-    - discovery / circle 两类来源进入图片、视频、微趣媒体浏览器的 handoff 契约
+    - discovery / circle 两类来源进入图片、视频、微趣媒体浏览器与文章阅读器的 handoff 契约
     - ProfileSubjectId / authorProfileSubjectId / PostId 的 canonical key 语义
     - user / post 对象级唯一状态源与 Provider 自动同步
     - sync outbox 的默认 10s 聚合 flush 与 5min 失败重试
     - sys.client_state_sync.* 作为系统级运行时配置真相源
   out_of_scope:
-    - article 沉浸式浏览重做
     - RTC 能力重做
     - 圈子 feed 排序、推荐与召回
     - profile 壳层视觉重构
@@ -29,8 +28,8 @@ journey_acceptance:
     title: discovery 与 circle 多来源内容展示旅程一致
     journey: discovery/circle feed -> viewer -> author profile -> return
     done_when:
-      - discovery 与 circle 两类来源进入 viewer 时都能带入 post 文案、作者信息、互动状态与返回上下文
-      - 图片、视频、微趣媒体在 viewer 中的标题与正文展示与对应 post 一致
+      - discovery 与 circle 两类来源进入 viewer / article reader 时都能带入 post 文案、作者信息、互动状态与返回上下文
+      - 图片、视频、微趣媒体与文章在 viewer / article reader 中的标题与正文展示与对应 post 一致
       - 退出 viewer 返回原来源后，feed 状态与 viewer 最终状态一致
     blockers:
       - 任一来源无法进入 viewer 或进入后缺失 post 文案
@@ -43,8 +42,8 @@ journey_acceptance:
         - T4_user_journey
     tests:
       planned:
-        - discovery photo/video/moment journey integration test
-        - circle photo/video/moment handoff integration test
+        - discovery photo/video/moment/article journey integration test
+        - circle photo/video/moment/article handoff integration test
       recorded: []
     status: pending
   J2:

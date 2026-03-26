@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
@@ -26,7 +28,15 @@ enum CreateMediaKind { none, images, video }
 
 enum TitlePresentation { collapsed, expanded }
 
-enum CreateTextBlockType { paragraph, orderedItem, image }
+enum CreateTextBlockType {
+  paragraph,
+  heading2,
+  heading3,
+  sectionTitle,
+  orderedItem,
+  bulletItem,
+  image,
+}
 
 enum CreateTextImageLayout { fullWidth, wrapLeft, wrapRight }
 
@@ -40,10 +50,7 @@ class CreateTextBlock {
     this.imageLayout = CreateTextImageLayout.fullWidth,
   });
 
-  factory CreateTextBlock.paragraph({
-    required String id,
-    String text = '',
-  }) {
+  factory CreateTextBlock.paragraph({required String id, String text = ''}) {
     return CreateTextBlock(
       id: id,
       type: CreateTextBlockType.paragraph,
@@ -51,13 +58,42 @@ class CreateTextBlock {
     );
   }
 
-  factory CreateTextBlock.orderedItem({
-    required String id,
-    String text = '',
-  }) {
+  factory CreateTextBlock.orderedItem({required String id, String text = ''}) {
     return CreateTextBlock(
       id: id,
       type: CreateTextBlockType.orderedItem,
+      text: text,
+    );
+  }
+
+  factory CreateTextBlock.bulletItem({required String id, String text = ''}) {
+    return CreateTextBlock(
+      id: id,
+      type: CreateTextBlockType.bulletItem,
+      text: text,
+    );
+  }
+
+  factory CreateTextBlock.heading2({required String id, String text = ''}) {
+    return CreateTextBlock(
+      id: id,
+      type: CreateTextBlockType.heading2,
+      text: text,
+    );
+  }
+
+  factory CreateTextBlock.heading3({required String id, String text = ''}) {
+    return CreateTextBlock(
+      id: id,
+      type: CreateTextBlockType.heading3,
+      text: text,
+    );
+  }
+
+  factory CreateTextBlock.sectionTitle({required String id, String text = ''}) {
+    return CreateTextBlock(
+      id: id,
+      type: CreateTextBlockType.sectionTitle,
       text: text,
     );
   }
@@ -78,7 +114,11 @@ class CreateTextBlock {
   factory CreateTextBlock.fromMap(Map<String, dynamic> map) {
     final typeName = (map['type'] ?? 'paragraph').toString().trim();
     final type = switch (typeName) {
+      'heading2' => CreateTextBlockType.heading2,
+      'heading3' => CreateTextBlockType.heading3,
+      'sectionTitle' => CreateTextBlockType.sectionTitle,
       'orderedItem' => CreateTextBlockType.orderedItem,
+      'bulletItem' => CreateTextBlockType.bulletItem,
       'image' => CreateTextBlockType.image,
       _ => CreateTextBlockType.paragraph,
     };
@@ -141,38 +181,54 @@ List<CreateTextBlock> createDefaultArticleBlocks({
   String body = '',
   List<String> imagePaths = const <String>[],
 }) {
-  final blocks = <CreateTextBlock>[
-    CreateTextBlock.paragraph(id: 'paragraph_0', text: body),
-    ...imagePaths.asMap().entries.map(
-      (entry) => CreateTextBlock.image(
-        id: 'image_${entry.key}',
-        imagePath: entry.value,
-      ),
-    ),
-  ]
-      .where(
-        (block) =>
-            block.hasImage ||
-            block.text.isNotEmpty ||
-            block.type == CreateTextBlockType.paragraph,
-      )
-      .toList(growable: false);
+  final blocks =
+      <CreateTextBlock>[
+            CreateTextBlock.paragraph(id: 'paragraph_0', text: body),
+            ...imagePaths.asMap().entries.map(
+              (entry) => CreateTextBlock.image(
+                id: 'image_${entry.key}',
+                imagePath: entry.value,
+              ),
+            ),
+          ]
+          .where(
+            (block) =>
+                block.hasImage ||
+                block.text.isNotEmpty ||
+                block.type == CreateTextBlockType.paragraph,
+          )
+          .toList(growable: false);
   if (blocks.isEmpty) {
     return const <CreateTextBlock>[
-      CreateTextBlock(
-        id: 'paragraph_0',
-        type: CreateTextBlockType.paragraph,
-      ),
+      CreateTextBlock(id: 'paragraph_0', type: CreateTextBlockType.paragraph),
     ];
   }
   return blocks;
 }
 
 String buildArticlePlainText(List<CreateTextBlock> blocks) {
-  final lines = blocks
-      .where((block) => block.isTextLike && block.hasText)
-      .map((block) => block.text.trim())
-      .toList(growable: false);
+  final lines = <String>[];
+  var orderedIndex = 0;
+  for (final block in blocks.where(
+    (block) => block.isTextLike && block.hasText,
+  )) {
+    final text = block.text.trim();
+    final line = switch (block.type) {
+      CreateTextBlockType.orderedItem =>
+        text.isEmpty ? '' : '${++orderedIndex}. $text',
+      CreateTextBlockType.bulletItem => text.isEmpty ? '' : '• $text',
+      _ => (() {
+        orderedIndex = 0;
+        return text;
+      })(),
+    };
+    if (line.isNotEmpty) {
+      lines.add(line);
+    }
+    if (block.type != CreateTextBlockType.orderedItem) {
+      orderedIndex = 0;
+    }
+  }
   return lines.join('\n');
 }
 
@@ -184,104 +240,429 @@ List<String> extractArticleImagePaths(List<CreateTextBlock> blocks) {
       .toList(growable: false);
 }
 
+ArticleDocumentBlock _documentBlockFromEditorBlock(
+  CreateTextBlock block, {
+  int offset = 0,
+  int? orderedIndex,
+}) {
+  return ArticleDocumentBlock(
+    id: block.id,
+    type: switch (block.type) {
+      CreateTextBlockType.heading2 => ArticleDocumentBlockType.heading2,
+      CreateTextBlockType.heading3 => ArticleDocumentBlockType.heading3,
+      CreateTextBlockType.sectionTitle => ArticleDocumentBlockType.sectionTitle,
+      CreateTextBlockType.orderedItem => ArticleDocumentBlockType.orderedItem,
+      CreateTextBlockType.bulletItem => ArticleDocumentBlockType.bulletItem,
+      CreateTextBlockType.image => ArticleDocumentBlockType.image,
+      CreateTextBlockType.paragraph => ArticleDocumentBlockType.paragraph,
+    },
+    offset: offset,
+    text: block.text,
+    imageUrl: block.imagePath,
+    imageLayout: block.imageLayout.name,
+    orderedIndex: orderedIndex,
+  );
+}
+
+CreateTextBlock _editorBlockFromDocumentBlock(ArticleDocumentBlock block) {
+  return switch (block.type) {
+    ArticleDocumentBlockType.heading2 => CreateTextBlock.heading2(
+      id: block.id,
+      text: block.text,
+    ),
+    ArticleDocumentBlockType.heading3 => CreateTextBlock.heading3(
+      id: block.id,
+      text: block.text,
+    ),
+    ArticleDocumentBlockType.sectionTitle => CreateTextBlock.sectionTitle(
+      id: block.id,
+      text: block.text,
+    ),
+    ArticleDocumentBlockType.orderedItem => CreateTextBlock.orderedItem(
+      id: block.id,
+      text: block.text,
+    ),
+    ArticleDocumentBlockType.bulletItem => CreateTextBlock.bulletItem(
+      id: block.id,
+      text: block.text,
+    ),
+    ArticleDocumentBlockType.image => CreateTextBlock.image(
+      id: block.id,
+      imagePath: block.imageUrl,
+      imageLayout: _imageLayoutFromPage(block.imageLayout),
+    ),
+    ArticleDocumentBlockType.paragraph => CreateTextBlock.paragraph(
+      id: block.id,
+      text: block.text,
+    ),
+  };
+}
+
+String _normalizeArticleBody(String value) {
+  return value.replaceAll('\r\n', '\n');
+}
+
+ArticleDocumentData createDefaultArticleDocument({
+  String title = '',
+  String body = '',
+  List<String> imagePaths = const <String>[],
+}) {
+  final normalizedBody = _normalizeArticleBody(body);
+  final sanitizedImages = imagePaths
+      .map((path) => path.trim())
+      .where((path) => path.isNotEmpty)
+      .toList(growable: false);
+  return ArticleDocumentData(
+    title: title,
+    body: normalizedBody,
+    assets: [
+      for (final entry in sanitizedImages.asMap().entries)
+        ArticleDocumentAsset(
+          id: 'asset_${entry.key}',
+          offset: entry.key == 0 ? 0 : normalizedBody.length,
+          imageUrl: entry.value,
+        ),
+    ],
+  );
+}
+
+ArticleDocumentData buildArticleDocumentFromPages(
+  List<ArticlePageData> pages, {
+  String title = '',
+}) {
+  if (pages.isEmpty) {
+    return createDefaultArticleDocument(title: title);
+  }
+
+  final structuredBlocks = pages
+      .expand((page) => page.contentBlocks)
+      .where((block) => block.id.trim().isNotEmpty)
+      .toList(growable: false);
+  if (structuredBlocks.isNotEmpty) {
+    final buffer = StringBuffer();
+    final assets = <ArticleDocumentAsset>[];
+    final blocks = <ArticleDocumentBlock>[];
+    var assetSeed = 0;
+    for (final page in pages) {
+      final imageUrl = page.imageUrl.trim();
+      if (imageUrl.isNotEmpty) {
+        assets.add(
+          ArticleDocumentAsset(
+            id: 'asset_${assetSeed++}',
+            offset: buffer.length,
+            imageUrl: imageUrl,
+            imageLayout: page.imageLayout,
+            caption: page.caption,
+          ),
+        );
+      }
+      for (final block in page.contentBlocks) {
+        blocks.add(block.copyWith(offset: buffer.length));
+      }
+      final normalized = _normalizeArticleBody(page.body).trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      if (buffer.isNotEmpty) {
+        buffer.write('\n');
+      }
+      buffer.write(normalized);
+    }
+    return ArticleDocumentData(
+      title: pages.first.title.trim().isNotEmpty ? pages.first.title : title,
+      body: buffer.toString(),
+      assets: assets,
+      blocks: blocks,
+    );
+  }
+
+  final buffer = StringBuffer();
+  final assets = <ArticleDocumentAsset>[];
+  final resolvedTitle = pages.first.title.trim().isNotEmpty
+      ? pages.first.title
+      : title;
+  var assetSeed = 0;
+
+  void appendBody(String value) {
+    final normalized = _normalizeArticleBody(value).trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    if (buffer.isNotEmpty) {
+      buffer.write('\n');
+    }
+    buffer.write(normalized);
+  }
+
+  for (final page in pages) {
+    final imageUrl = page.imageUrl.trim();
+    if (imageUrl.isNotEmpty) {
+      assets.add(
+        ArticleDocumentAsset(
+          id: 'asset_${assetSeed++}',
+          offset: buffer.length,
+          imageUrl: imageUrl,
+          imageLayout: page.imageLayout,
+          caption: page.caption,
+        ),
+      );
+    }
+    appendBody(page.body);
+  }
+
+  return ArticleDocumentData(
+    title: resolvedTitle,
+    body: buffer.toString(),
+    assets: assets,
+  );
+}
+
+ArticleDocumentData buildArticleDocumentFromBlocks(
+  List<CreateTextBlock> blocks, {
+  String title = '',
+}) {
+  if (blocks.isEmpty) {
+    return createDefaultArticleDocument(title: title);
+  }
+
+  final buffer = StringBuffer();
+  final assets = <ArticleDocumentAsset>[];
+  final documentBlocks = <ArticleDocumentBlock>[];
+  var assetSeed = 0;
+  var orderedIndex = 0;
+
+  void appendLine(String line) {
+    final normalized = line.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    if (buffer.isNotEmpty) {
+      buffer.write('\n');
+    }
+    buffer.write(normalized);
+  }
+
+  for (final block in blocks) {
+    switch (block.type) {
+      case CreateTextBlockType.image:
+        final imagePath = block.imagePath.trim();
+        if (imagePath.isEmpty) {
+          continue;
+        }
+        assets.add(
+          ArticleDocumentAsset(
+            id: block.id.isNotEmpty ? block.id : 'asset_${assetSeed++}',
+            offset: buffer.length,
+            imageUrl: imagePath,
+            imageLayout: block.imageLayout.name,
+          ),
+        );
+        orderedIndex = 0;
+        break;
+      case CreateTextBlockType.heading2:
+        orderedIndex = 0;
+        documentBlocks.add(
+          _documentBlockFromEditorBlock(block, offset: buffer.length),
+        );
+        break;
+      case CreateTextBlockType.heading3:
+        orderedIndex = 0;
+        documentBlocks.add(
+          _documentBlockFromEditorBlock(block, offset: buffer.length),
+        );
+        break;
+      case CreateTextBlockType.sectionTitle:
+        orderedIndex = 0;
+        documentBlocks.add(
+          _documentBlockFromEditorBlock(block, offset: buffer.length),
+        );
+        break;
+      case CreateTextBlockType.orderedItem:
+        orderedIndex += 1;
+        appendLine('$orderedIndex. ${block.text.trim()}');
+        break;
+      case CreateTextBlockType.bulletItem:
+        orderedIndex = 0;
+        appendLine(block.text.trim().isEmpty ? '' : '• ${block.text.trim()}');
+        break;
+      case CreateTextBlockType.paragraph:
+        orderedIndex = 0;
+        appendLine(block.text);
+        break;
+    }
+  }
+
+  return ArticleDocumentData(
+    title: title,
+    body: buffer.toString(),
+    assets: assets,
+    blocks: documentBlocks,
+  );
+}
+
+List<CreateTextBlock> buildArticleBlocksFromDocument(
+  ArticleDocumentData document,
+) {
+  final body = _normalizeArticleBody(document.body);
+  final semanticBlocks =
+      document.blocks
+          .where(
+            (block) =>
+                block.type == ArticleDocumentBlockType.heading2 ||
+                block.type == ArticleDocumentBlockType.heading3 ||
+                block.type == ArticleDocumentBlockType.sectionTitle,
+          )
+          .toList(growable: false)
+        ..sort((left, right) {
+          final offsetCompare = left.offset.compareTo(right.offset);
+          if (offsetCompare != 0) {
+            return offsetCompare;
+          }
+          return left.id.compareTo(right.id);
+        });
+  final assets =
+      document.assets.where((asset) => asset.hasImage).toList(growable: false)
+        ..sort((left, right) => left.offset.compareTo(right.offset));
+  final blocks = <CreateTextBlock>[];
+  var cursor = 0;
+  var textSeed = 0;
+  var semanticIndex = 0;
+  var assetIndex = 0;
+
+  void appendTextSegment(String value) {
+    final lines = _normalizeArticleBody(value)
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    for (final line in lines) {
+      final orderedMatch = _orderedArticleLinePattern.firstMatch(line);
+      if (orderedMatch != null) {
+        final content = line.substring(orderedMatch.end).trim();
+        blocks.add(
+          CreateTextBlock.orderedItem(
+            id: 'ordered_${textSeed++}',
+            text: content,
+          ),
+        );
+      } else {
+        final bulletMatch = _bulletArticleLinePattern.firstMatch(line);
+        if (bulletMatch != null) {
+          final content = line.substring(bulletMatch.end).trim();
+          blocks.add(
+            CreateTextBlock.bulletItem(
+              id: 'bullet_${textSeed++}',
+              text: content,
+            ),
+          );
+        } else {
+          blocks.add(
+            CreateTextBlock.paragraph(
+              id: 'paragraph_${textSeed++}',
+              text: line,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  while (semanticIndex < semanticBlocks.length || assetIndex < assets.length) {
+    final nextSemanticOffset = semanticIndex < semanticBlocks.length
+        ? semanticBlocks[semanticIndex].offset.clamp(cursor, body.length)
+        : body.length;
+    final nextAssetOffset = assetIndex < assets.length
+        ? assets[assetIndex].offset.clamp(cursor, body.length)
+        : body.length;
+    final nextOffset = nextSemanticOffset < nextAssetOffset
+        ? nextSemanticOffset
+        : nextAssetOffset;
+    appendTextSegment(body.substring(cursor, nextOffset));
+    cursor = nextOffset;
+
+    while (semanticIndex < semanticBlocks.length &&
+        semanticBlocks[semanticIndex].offset.clamp(0, body.length) <= cursor) {
+      blocks.add(_editorBlockFromDocumentBlock(semanticBlocks[semanticIndex]));
+      semanticIndex += 1;
+    }
+    while (assetIndex < assets.length &&
+        assets[assetIndex].offset.clamp(0, body.length) <= cursor) {
+      final asset = assets[assetIndex];
+      blocks.add(
+        CreateTextBlock.image(
+          id: asset.id,
+          imagePath: asset.imageUrl.trim(),
+          imageLayout: _imageLayoutFromPage(asset.imageLayout),
+        ),
+      );
+      assetIndex += 1;
+    }
+  }
+  appendTextSegment(body.substring(cursor));
+
+  if (blocks.isEmpty) {
+    return createDefaultArticleBlocks();
+  }
+  return blocks;
+}
+
+String buildArticlePlainTextFromDocument(ArticleDocumentData document) {
+  if (document.blocks.isNotEmpty) {
+    return buildArticlePlainText(buildArticleBlocksFromDocument(document));
+  }
+  return _normalizeArticleBody(document.body).trim();
+}
+
+List<String> extractArticleImagePathsFromDocument(
+  ArticleDocumentData document,
+) {
+  if (document.assets.isEmpty && document.blocks.isNotEmpty) {
+    return document.blocks
+        .where((block) => block.hasImage)
+        .map((block) => block.imageUrl.trim())
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
+  }
+  return document.assets
+      .map((asset) => asset.imageUrl.trim())
+      .where((path) => path.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<ArticlePageData> buildArticlePagesSnapshotFromDocument(
+  ArticleDocumentData document, {
+  ArticleFontPreset fontPreset = ArticleFontPreset.clean,
+}) {
+  return ArticlePaginationEngine.paginateSnapshot(
+    document: document,
+    fontPreset: fontPreset,
+  );
+}
+
 const int kArticlePageSoftCharacterLimit = 150;
 
 final RegExp _orderedArticleLinePattern = RegExp(r'^\s*(\d+)[\.\u3001]\s+');
+final RegExp _bulletArticleLinePattern = RegExp(r'^\s*[•\-]\s+');
 
 List<ArticlePageData> createDefaultArticlePages({
   String title = '',
   String body = '',
   List<String> imagePaths = const <String>[],
 }) {
-  final sanitizedImages = imagePaths
-      .map((path) => path.trim())
-      .where((path) => path.isNotEmpty)
-      .toList(growable: false);
-  final pages = <ArticlePageData>[
-    ArticlePageData(
-      id: 'page_0',
-      title: title,
-      body: body,
-      imageUrl: sanitizedImages.isEmpty ? '' : sanitizedImages.first,
-    ),
-    for (final entry in sanitizedImages.skip(1).toList(growable: false).asMap().entries)
-      ArticlePageData(
-        id: 'page_${entry.key + 1}',
-        imageUrl: entry.value,
-      ),
-  ].where((page) => !page.isEmpty || page.id == 'page_0').toList(growable: false);
-
-  if (pages.isEmpty) {
-    return <ArticlePageData>[ArticlePageData(id: 'page_0', title: title)];
-  }
-  return pages;
+  final document = createDefaultArticleDocument(
+    title: title,
+    body: body,
+    imagePaths: imagePaths,
+  );
+  return buildArticlePagesSnapshotFromDocument(document);
 }
 
 List<ArticlePageData> buildArticlePagesFromBlocks(
   List<CreateTextBlock> blocks, {
   String title = '',
 }) {
-  if (blocks.isEmpty) {
-    return createDefaultArticlePages(title: title);
-  }
-
-  final pages = <ArticlePageData>[];
-  var current = ArticlePageData(id: 'page_0', title: title);
-  var pageIndex = 1;
-  var orderedIndex = 0;
-
-  void flushCurrent() {
-    if (current.isEmpty && current.title.trim().isEmpty) {
-      return;
-    }
-    pages.add(current);
-    current = ArticlePageData(id: 'page_$pageIndex');
-    pageIndex += 1;
-  }
-
-  String appendText(String existing, String addition) {
-    final trimmed = addition.trim();
-    if (trimmed.isEmpty) {
-      return existing;
-    }
-    if (existing.trim().isEmpty) {
-      return trimmed;
-    }
-    return '$existing\n$trimmed';
-  }
-
-  for (final block in blocks) {
-    switch (block.type) {
-      case CreateTextBlockType.image:
-        if (current.hasText || current.hasImage) {
-          flushCurrent();
-        }
-        current = current.copyWith(
-          imageUrl: block.imagePath.trim(),
-          imageLayout: block.imageLayout.name,
-        );
-        orderedIndex = 0;
-        break;
-      case CreateTextBlockType.orderedItem:
-        orderedIndex += 1;
-        current = current.copyWith(
-          body: appendText(current.body, '$orderedIndex. ${block.text.trim()}'),
-        );
-        break;
-      case CreateTextBlockType.paragraph:
-        orderedIndex = 0;
-        current = current.copyWith(
-          body: appendText(current.body, block.text.trim()),
-        );
-        break;
-    }
-  }
-
-  flushCurrent();
-  if (pages.isEmpty) {
-    return createDefaultArticlePages(title: title);
-  }
-  return pages;
+  final document = buildArticleDocumentFromBlocks(blocks, title: title);
+  return buildArticlePagesSnapshotFromDocument(document);
 }
 
 CreateTextImageLayout _imageLayoutFromPage(String layout) {
@@ -293,66 +674,29 @@ CreateTextImageLayout _imageLayoutFromPage(String layout) {
 }
 
 List<CreateTextBlock> buildArticleBlocksFromPages(List<ArticlePageData> pages) {
-  final blocks = <CreateTextBlock>[];
-
-  Iterable<CreateTextBlock> buildTextBlocks(String pageId, String body) sync* {
-    final lines = body
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
+  final structuredBlocks = pages
+      .expand((page) => page.contentBlocks)
+      .where((block) => block.id.trim().isNotEmpty)
+      .toList(growable: false);
+  if (structuredBlocks.isNotEmpty) {
+    return structuredBlocks
+        .map(_editorBlockFromDocumentBlock)
         .toList(growable: false);
-    if (lines.isEmpty) {
-      return;
-    }
-    for (var index = 0; index < lines.length; index += 1) {
-      final line = lines[index];
-      final orderedMatch = _orderedArticleLinePattern.firstMatch(line);
-      if (orderedMatch != null) {
-        final content = line.substring(orderedMatch.end).trim();
-        if (content.isNotEmpty) {
-          yield CreateTextBlock.orderedItem(
-            id: '${pageId}_ordered_$index',
-            text: content,
-          );
-        }
-      } else {
-        yield CreateTextBlock.paragraph(id: '${pageId}_paragraph_$index', text: line);
-      }
-    }
   }
-
-  for (final page in pages) {
-    final imagePath = page.imageUrl.trim();
-    if (imagePath.isNotEmpty) {
-      blocks.add(
-        CreateTextBlock.image(
-          id: '${page.id}_image',
-          imagePath: imagePath,
-          imageLayout: _imageLayoutFromPage(page.imageLayout),
-        ),
-      );
-    }
-    blocks.addAll(buildTextBlocks(page.id, page.body));
-  }
-
-  if (blocks.isEmpty) {
-    return createDefaultArticleBlocks();
-  }
-  return blocks;
+  final document = buildArticleDocumentFromPages(pages);
+  return buildArticleBlocksFromDocument(document);
 }
 
 String buildArticlePlainTextFromPages(List<ArticlePageData> pages) {
-  return pages
-      .map((page) => page.body.trim())
-      .where((body) => body.isNotEmpty)
-      .join('\n');
+  return buildArticlePlainTextFromDocument(
+    buildArticleDocumentFromPages(pages),
+  );
 }
 
 List<String> extractArticleImagePathsFromPages(List<ArticlePageData> pages) {
-  return pages
-      .map((page) => page.imageUrl.trim())
-      .where((path) => path.isNotEmpty)
-      .toList(growable: false);
+  return extractArticleImagePathsFromDocument(
+    buildArticleDocumentFromPages(pages),
+  );
 }
 
 List<Map<String, dynamic>> buildArticleCardsFromPages(
@@ -375,7 +719,10 @@ List<Map<String, dynamic>> buildArticleCardsFromPages(
       .toList(growable: false);
 }
 
-int resolveArticlePageSplitIndex(String text, {int softLimit = kArticlePageSoftCharacterLimit}) {
+int resolveArticlePageSplitIndex(
+  String text, {
+  int softLimit = kArticlePageSoftCharacterLimit,
+}) {
   final normalized = text.trimRight();
   if (normalized.length <= softLimit) {
     return normalized.length;
@@ -408,12 +755,14 @@ class CreateEditorStateV2 {
     required this.currentMediaIndex,
     required this.title,
     required this.body,
+    required this.articleDocument,
     required this.articlePages,
     required this.articleBlocks,
     required this.activeArticlePageId,
     required this.activeArticleBlockId,
     required this.articleTemplate,
     required this.articleFontPreset,
+    required this.articleCoverImagePath,
     required this.titlePresentation,
     required this.titleHintDismissed,
     required this.settings,
@@ -423,7 +772,9 @@ class CreateEditorStateV2 {
   factory CreateEditorStateV2.initial({
     CreateEditorKind editorKind = CreateEditorKind.text,
   }) {
-    final initialBlocks = createDefaultArticleBlocks();
+    final initialDocument = createDefaultArticleDocument();
+    final initialBlocks = buildArticleBlocksFromDocument(initialDocument);
+    final initialPages = buildArticlePagesSnapshotFromDocument(initialDocument);
     return CreateEditorStateV2(
       editorKind: editorKind,
       mediaKind: CreateMediaKind.none,
@@ -438,13 +789,15 @@ class CreateEditorStateV2 {
       videoMuted: false,
       currentMediaIndex: 0,
       title: '',
-      body: '',
-      articlePages: createDefaultArticlePages(),
+      body: initialDocument.body,
+      articleDocument: initialDocument,
+      articlePages: initialPages,
       articleBlocks: initialBlocks,
-      activeArticlePageId: 'page_0',
+      activeArticlePageId: initialPages.first.id,
       activeArticleBlockId: initialBlocks.first.id,
       articleTemplate: ArticleTemplatePreset.gentle,
       articleFontPreset: ArticleFontPreset.clean,
+      articleCoverImagePath: '',
       titlePresentation: TitlePresentation.collapsed,
       titleHintDismissed: false,
       settings: const PublishSettings(),
@@ -465,12 +818,14 @@ class CreateEditorStateV2 {
   final int currentMediaIndex;
   final String title;
   final String body;
+  final ArticleDocumentData articleDocument;
   final List<ArticlePageData> articlePages;
   final List<CreateTextBlock> articleBlocks;
   final String? activeArticlePageId;
   final String? activeArticleBlockId;
   final ArticleTemplatePreset articleTemplate;
   final ArticleFontPreset articleFontPreset;
+  final String articleCoverImagePath;
   final TitlePresentation titlePresentation;
   final bool titleHintDismissed;
   final PublishSettings settings;
@@ -481,7 +836,8 @@ class CreateEditorStateV2 {
   bool get hasTitle => title.trim().isNotEmpty;
   bool get hasBody => body.trim().isNotEmpty;
   bool get hasContent => hasTitle || hasBody || hasImages || hasVideo;
-  bool get hasArticleImages => extractArticleImagePaths(articleBlocks).isNotEmpty;
+  bool get hasArticleImages =>
+      extractArticleImagePaths(articleBlocks).isNotEmpty;
   bool get shouldSuggestTitle {
     if (hasTitle) {
       return false;
@@ -516,12 +872,14 @@ class CreateEditorStateV2 {
     int? currentMediaIndex,
     String? title,
     String? body,
+    ArticleDocumentData? articleDocument,
     List<ArticlePageData>? articlePages,
     List<CreateTextBlock>? articleBlocks,
     String? activeArticlePageId,
     String? activeArticleBlockId,
     ArticleTemplatePreset? articleTemplate,
     ArticleFontPreset? articleFontPreset,
+    String? articleCoverImagePath,
     TitlePresentation? titlePresentation,
     bool? titleHintDismissed,
     PublishSettings? settings,
@@ -545,6 +903,7 @@ class CreateEditorStateV2 {
       currentMediaIndex: currentMediaIndex ?? this.currentMediaIndex,
       title: title ?? this.title,
       body: body ?? this.body,
+      articleDocument: articleDocument ?? this.articleDocument,
       articlePages: articlePages ?? this.articlePages,
       articleBlocks: articleBlocks ?? this.articleBlocks,
       activeArticlePageId: clearActiveArticlePageId
@@ -555,6 +914,8 @@ class CreateEditorStateV2 {
           : (activeArticleBlockId ?? this.activeArticleBlockId),
       articleTemplate: articleTemplate ?? this.articleTemplate,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
+      articleCoverImagePath:
+          articleCoverImagePath ?? this.articleCoverImagePath,
       titlePresentation: titlePresentation ?? this.titlePresentation,
       titleHintDismissed: titleHintDismissed ?? this.titleHintDismissed,
       settings: settings ?? this.settings,
@@ -602,9 +963,14 @@ class CreateDraft {
     final storedImagePaths = List<String>.from(
       map['imagePaths'] as List? ?? const <String>[],
     );
+    final storedDocumentMap = Map<String, dynamic>.from(
+      map['articleDocument'] as Map? ?? const <String, dynamic>{},
+    );
     final articlePages = ((map['articlePages'] as List?) ?? const <dynamic>[])
         .whereType<Map>()
-        .map((entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)))
+        .map(
+          (entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)),
+        )
         .where((page) => page.id.trim().isNotEmpty)
         .toList(growable: false);
     final articleBlocks = ((map['articleBlocks'] as List?) ?? const <dynamic>[])
@@ -614,18 +980,32 @@ class CreateDraft {
         )
         .where((block) => block.id.trim().isNotEmpty)
         .toList(growable: false);
-    final normalizedBlocks = articleBlocks.isNotEmpty
-        ? articleBlocks
-        : createDefaultArticleBlocks(
-            body: storedBody,
-            imagePaths: storedImagePaths,
-          );
-    final normalizedPages = articlePages.isNotEmpty
-        ? articlePages
-        : buildArticlePagesFromBlocks(
-            normalizedBlocks,
+    final articleDocument = storedDocumentMap.isNotEmpty
+        ? ArticleDocumentData.fromMap(storedDocumentMap)
+        : articlePages.isNotEmpty
+        ? buildArticleDocumentFromPages(
+            articlePages,
+            title: (map['title'] ?? '').toString(),
+          )
+        : buildArticleDocumentFromBlocks(
+            articleBlocks.isNotEmpty
+                ? articleBlocks
+                : createDefaultArticleBlocks(
+                    body: storedBody,
+                    imagePaths: storedImagePaths,
+                  ),
             title: (map['title'] ?? '').toString(),
           );
+    final normalizedBlocks = buildArticleBlocksFromDocument(articleDocument);
+    final normalizedPages = buildArticlePagesSnapshotFromDocument(
+      articleDocument,
+      fontPreset: articleFontPresetFromString(
+        map['articleFontPreset']?.toString(),
+      ),
+    );
+    final storedCover = (map['articleCoverImagePath'] ?? map['coverUrl'] ?? '')
+        .toString()
+        .trim();
     final draftType = (map['type'] ?? editorKind.name).toString().trim();
     return CreateDraft(
       id: (map['id'] ?? '').toString(),
@@ -637,8 +1017,8 @@ class CreateDraft {
             ? extractArticleImagePaths(normalizedBlocks)
             : storedImagePaths,
         videoPath: (map['videoPath'] ?? '').toString(),
-        originalVideoPath: ((map['originalVideoPath'] ?? map['videoPath']) ?? '')
-            .toString(),
+        originalVideoPath:
+            ((map['originalVideoPath'] ?? map['videoPath']) ?? '').toString(),
         videoThumbnail: (map['videoThumbnail'] ?? '').toString(),
         videoDurationMs: (map['videoDurationMs'] as num?)?.toInt() ?? 0,
         videoTrimStartMs: (map['videoTrimStartMs'] as num?)?.toInt() ?? 0,
@@ -649,8 +1029,9 @@ class CreateDraft {
             (map['currentMediaIndex'] as num?)?.toInt().clamp(0, 9999) ?? 0,
         title: (map['title'] ?? '').toString(),
         body: editorKind == CreateEditorKind.text
-            ? buildArticlePlainTextFromPages(normalizedPages)
+            ? buildArticlePlainTextFromDocument(articleDocument)
             : storedBody,
+        articleDocument: articleDocument,
         articlePages: normalizedPages,
         articleBlocks: normalizedBlocks,
         activeArticlePageId:
@@ -667,6 +1048,7 @@ class CreateDraft {
         articleFontPreset: articleFontPresetFromString(
           map['articleFontPreset']?.toString(),
         ),
+        articleCoverImagePath: storedCover,
         titlePresentation:
             (map['titlePresentation']?.toString() ?? 'collapsed') == 'expanded'
             ? TitlePresentation.expanded
@@ -695,6 +1077,10 @@ class CreateDraft {
             data['images'] as List? ?? const <String>[],
           ),
         );
+        final photoDocument = buildArticleDocumentFromBlocks(
+          photoBlocks,
+          title: (data['title'] ?? '').toString(),
+        );
         final photoPages = buildArticlePagesFromBlocks(
           photoBlocks,
           title: (data['title'] ?? '').toString(),
@@ -707,6 +1093,7 @@ class CreateDraft {
               ),
               title: (data['title'] ?? '').toString(),
               body: (data['description'] ?? '').toString(),
+              articleDocument: photoDocument,
               articlePages: photoPages,
               articleBlocks: photoBlocks,
               activeArticlePageId: photoPages.first.id,
@@ -723,6 +1110,10 @@ class CreateDraft {
         final videoBlocks = createDefaultArticleBlocks(
           body: (data['description'] ?? '').toString(),
         );
+        final videoDocument = buildArticleDocumentFromBlocks(
+          videoBlocks,
+          title: (data['title'] ?? '').toString(),
+        );
         final videoPages = buildArticlePagesFromBlocks(
           videoBlocks,
           title: (data['title'] ?? '').toString(),
@@ -735,14 +1126,18 @@ class CreateDraft {
                   ((data['originalVideoPath'] ?? data['videoPath']) ?? '')
                       .toString(),
               videoThumbnail:
-                  (data['thumbnail'] ?? data['videoThumbnail'] ?? '').toString(),
+                  (data['thumbnail'] ?? data['videoThumbnail'] ?? '')
+                      .toString(),
               videoDurationMs: (data['videoDurationMs'] as num?)?.toInt() ?? 0,
-              videoTrimStartMs: (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
+              videoTrimStartMs:
+                  (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
               videoTrimEndMs: (data['videoTrimEndMs'] as num?)?.toInt() ?? 0,
-              videoCoverTimeMs: (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
+              videoCoverTimeMs:
+                  (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
               videoMuted: data['videoMuted'] == true,
               title: (data['title'] ?? '').toString(),
               body: (data['description'] ?? '').toString(),
+              articleDocument: videoDocument,
               articlePages: videoPages,
               articleBlocks: videoBlocks,
               activeArticlePageId: videoPages.first.id,
@@ -756,11 +1151,23 @@ class CreateDraft {
             );
         break;
       case 'article':
+        final legacyArticleImages = List<String>.from(
+          data['covers'] as List? ?? const <String>[],
+        );
+        final legacyArticleCover =
+            (data['coverUrl'] ??
+                    (legacyArticleImages.isNotEmpty
+                        ? legacyArticleImages.first
+                        : ''))
+                .toString()
+                .trim();
         final articleBlocks = createDefaultArticleBlocks(
           body: (data['content'] ?? '').toString(),
-          imagePaths: List<String>.from(
-            data['covers'] as List? ?? const <String>[],
-          ),
+          imagePaths: legacyArticleImages,
+        );
+        final articleDocument = buildArticleDocumentFromBlocks(
+          articleBlocks,
+          title: (data['title'] ?? '').toString(),
         );
         final articlePages = buildArticlePagesFromBlocks(
           articleBlocks,
@@ -770,11 +1177,13 @@ class CreateDraft {
             .copyWith(
               imagePaths: extractArticleImagePaths(articleBlocks),
               title: (data['title'] ?? '').toString(),
-              body: buildArticlePlainTextFromPages(articlePages),
+              body: buildArticlePlainTextFromDocument(articleDocument),
+              articleDocument: articleDocument,
               articlePages: articlePages,
               articleBlocks: articleBlocks,
               activeArticlePageId: articlePages.first.id,
               activeArticleBlockId: articleBlocks.first.id,
+              articleCoverImagePath: legacyArticleCover,
               titlePresentation:
                   ((data['title'] ?? '').toString().trim().isNotEmpty)
                   ? TitlePresentation.expanded
@@ -795,34 +1204,41 @@ class CreateDraft {
           body: (data['content'] ?? '').toString(),
           imagePaths: images,
         );
+        final momentDocument = buildArticleDocumentFromBlocks(momentBlocks);
         final momentPages = buildArticlePagesFromBlocks(momentBlocks);
-        state = CreateEditorStateV2.initial(
-          editorKind: videoPath.isNotEmpty || images.isNotEmpty
-              ? CreateEditorKind.media
-              : CreateEditorKind.text,
-        ).copyWith(
-          mediaKind: videoPath.isNotEmpty
-              ? CreateMediaKind.video
-              : (images.isNotEmpty ? CreateMediaKind.images : CreateMediaKind.none),
-          imagePaths: images,
-          videoPath: videoPath,
-          originalVideoPath: originalVideoPath,
-          videoThumbnail: (data['videoThumbnail'] ?? '').toString(),
-          videoDurationMs: (data['videoDurationMs'] as num?)?.toInt() ?? 0,
-          videoTrimStartMs: (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
-          videoTrimEndMs: (data['videoTrimEndMs'] as num?)?.toInt() ?? 0,
-          videoCoverTimeMs: (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
-          videoMuted: data['videoMuted'] == true,
-          body: videoPath.isNotEmpty || images.isNotEmpty
-              ? (data['content'] ?? '').toString()
-              : buildArticlePlainTextFromPages(momentPages),
-          articlePages: momentPages,
-          articleBlocks: momentBlocks,
-          activeArticlePageId: momentPages.first.id,
-          activeArticleBlockId: momentBlocks.first.id,
-          settings: settings,
-          draftId: (map['id'] ?? '').toString(),
-        );
+        state =
+            CreateEditorStateV2.initial(
+              editorKind: videoPath.isNotEmpty || images.isNotEmpty
+                  ? CreateEditorKind.media
+                  : CreateEditorKind.text,
+            ).copyWith(
+              mediaKind: videoPath.isNotEmpty
+                  ? CreateMediaKind.video
+                  : (images.isNotEmpty
+                        ? CreateMediaKind.images
+                        : CreateMediaKind.none),
+              imagePaths: images,
+              videoPath: videoPath,
+              originalVideoPath: originalVideoPath,
+              videoThumbnail: (data['videoThumbnail'] ?? '').toString(),
+              videoDurationMs: (data['videoDurationMs'] as num?)?.toInt() ?? 0,
+              videoTrimStartMs:
+                  (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
+              videoTrimEndMs: (data['videoTrimEndMs'] as num?)?.toInt() ?? 0,
+              videoCoverTimeMs:
+                  (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
+              videoMuted: data['videoMuted'] == true,
+              body: videoPath.isNotEmpty || images.isNotEmpty
+                  ? (data['content'] ?? '').toString()
+                  : buildArticlePlainTextFromDocument(momentDocument),
+              articleDocument: momentDocument,
+              articlePages: momentPages,
+              articleBlocks: momentBlocks,
+              activeArticlePageId: momentPages.first.id,
+              activeArticleBlockId: momentBlocks.first.id,
+              settings: settings,
+              draftId: (map['id'] ?? '').toString(),
+            );
         break;
     }
 
@@ -855,6 +1271,7 @@ class CreateDraft {
       'currentMediaIndex': state.currentMediaIndex,
       'title': state.title,
       'body': state.body,
+      'articleDocument': state.articleDocument.toMap(),
       'articlePages': state.articlePages
           .map((page) => page.toMap())
           .toList(growable: false),
@@ -865,6 +1282,8 @@ class CreateDraft {
       'activeArticleBlockId': state.activeArticleBlockId,
       'articleTemplate': state.articleTemplate.name,
       'articleFontPreset': state.articleFontPreset.name,
+      'articleCoverImagePath': state.articleCoverImagePath,
+      'coverUrl': state.articleCoverImagePath,
       'titlePresentation': state.titlePresentation.name,
       'titleHintDismissed': state.titleHintDismissed,
       'settings': state.settings.toMap(),
@@ -903,8 +1322,11 @@ class CreateDraft {
       ...state.settings.toMap(),
       'title': state.title,
       'body': state.body,
+      'articleDocument': state.articleDocument.toMap(),
       'articleTemplate': state.articleTemplate.name,
       'articleFontPreset': state.articleFontPreset.name,
+      'articleCoverImagePath': state.articleCoverImagePath,
+      'coverUrl': state.articleCoverImagePath,
       'articlePages': state.articlePages
           .map((page) => page.toMap())
           .toList(growable: false),
@@ -953,6 +1375,8 @@ class CreateDraft {
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty)
         .length;
-    return body.length >= 140 || paragraphCount >= 2 || state.imagePaths.isNotEmpty;
+    return body.length >= 140 ||
+        paragraphCount >= 2 ||
+        state.imagePaths.isNotEmpty;
   }
 }

@@ -109,7 +109,8 @@ abstract class UserProfileRepository {
     return items.map(ProfileCircleViewData.fromMap).toList(growable: false);
   }
 
-  Future<List<ProfileInteractionActivityViewData>> listProfileInteractionReceivedView(
+  Future<List<ProfileInteractionActivityViewData>>
+  listProfileInteractionReceivedView(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -124,7 +125,8 @@ abstract class UserProfileRepository {
         .toList(growable: false);
   }
 
-  Future<List<ProfileInteractionActivityViewData>> listProfileInteractionSentView(
+  Future<List<ProfileInteractionActivityViewData>>
+  listProfileInteractionSentView(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -229,27 +231,36 @@ class MockUserProfileRepository extends UserProfileRepository {
     }
     return _mockRelationUsers
         .where((user) {
-          final displayName =
-              (user['displayName'] ?? user['nickname'] ?? '').toString();
+          final displayName = (user['displayName'] ?? user['nickname'] ?? '')
+              .toString();
           final headline = (user['headline'] ?? user['bio'] ?? '').toString();
           return displayName.toLowerCase().contains(normalizedQuery) ||
               headline.toLowerCase().contains(normalizedQuery);
         })
         .take(limit)
         .map((user) {
-          final isFollowing = user['isFollowing'] == true;
+          final profileSubjectId =
+              user['profileSubjectId']?.toString() ??
+              user['userId']?.toString() ??
+              '';
+          final relationState = UserProfileMockData.relationStateValueFor(
+            profileSubjectId,
+          );
+          final isFollowing = UserProfileMockData.viewerFollowsTarget(
+            profileSubjectId,
+          );
           return SocialRelationSearchItemView.fromMap(<String, dynamic>{
             ...user,
-            'profileSubjectId': user['profileSubjectId'] ?? user['userId'],
+            'profileSubjectId': profileSubjectId,
             'username': user['username'] ?? user['nickname'],
             'displayName': user['displayName'] ?? user['nickname'],
             'headline': user['headline'] ?? user['bio'],
             'chatAvailable': true,
             'relationshipCapability': <String, dynamic>{
-              'relationState': isFollowing ? 'following' : 'not_following',
+              'relationState': relationState,
               'canFollow': !isFollowing,
               'canUnfollow': isFollowing,
-              'canOpenConversation': true,
+              'canOpenConversation': relationState == 'mutual',
             },
           });
         })
@@ -306,7 +317,15 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockRelationUsers.take(limit).toList();
+    return _mockRelationUsers
+        .where(
+          (user) => UserProfileMockData.viewerFollowsTarget(
+            _profileSubjectIdOf(user),
+          ),
+        )
+        .map(_withMockRelationship)
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override
@@ -315,12 +334,28 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockRelationUsers.take(limit).toList();
+    return _mockRelationUsers
+        .where(
+          (user) => UserProfileMockData.targetFollowsViewer(
+            _profileSubjectIdOf(user),
+          ),
+        )
+        .map(_withMockRelationship)
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override
   Future<Map<String, dynamic>> getRelationship(String userId) async {
-    return {'isFollowing': false, 'isFollowedBy': false, 'isMutual': false};
+    final relationState = UserProfileMockData.relationStateValueFor(userId);
+    final isFollowing = UserProfileMockData.viewerFollowsTarget(userId);
+    final isFollowedBy = UserProfileMockData.targetFollowsViewer(userId);
+    return <String, dynamic>{
+      'relationState': relationState,
+      'isFollowing': isFollowing,
+      'isFollowedBy': isFollowedBy,
+      'isMutual': relationState == 'mutual',
+    };
   }
 
   @override
@@ -609,6 +644,27 @@ class MockUserProfileRepository extends UserProfileRepository {
       'isActive': false,
     },
   ];
+
+  static String _profileSubjectIdOf(Map<String, dynamic> user) {
+    return user['profileSubjectId']?.toString() ??
+        user['userId']?.toString() ??
+        '';
+  }
+
+  static Map<String, dynamic> _withMockRelationship(Map<String, dynamic> user) {
+    final profileSubjectId = _profileSubjectIdOf(user);
+    final relationState = UserProfileMockData.relationStateValueFor(
+      profileSubjectId,
+    );
+    return <String, dynamic>{
+      ...user,
+      'profileSubjectId': profileSubjectId,
+      'relationState': relationState,
+      'isFollowing': UserProfileMockData.viewerFollowsTarget(profileSubjectId),
+      'isFollowedBy': UserProfileMockData.targetFollowsViewer(profileSubjectId),
+      'isMutual': relationState == 'mutual',
+    };
+  }
 }
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
@@ -667,7 +723,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     return 'not_following';
   }
 
-  static Map<String, dynamic> _normalizeRelationshipItem(Map<String, dynamic> raw) {
+  static Map<String, dynamic> _normalizeRelationshipItem(
+    Map<String, dynamic> raw,
+  ) {
     final profileSubjectId =
         raw['profileSubjectId']?.toString() ??
         raw['targetProfileSubjectId']?.toString() ??
@@ -871,9 +929,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('searchSocialRelations failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp)
-        .map(SocialRelationSearchItemView.fromMap)
-        .toList(growable: false);
+    return _decodeItems(
+      resp,
+    ).map(SocialRelationSearchItemView.fromMap).toList(growable: false);
   }
 
   @override
@@ -881,14 +939,16 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(UserApiMetadata.listRecentSearchesPath);
     final resp = await _client.get(
       url,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listRecentSearches),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.listRecentSearches,
+      ),
     );
     if (resp.statusCode != 200) {
       throw Exception('listRecentSearches failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp)
-        .map(RecentSearchEntryView.fromMap)
-        .toList(growable: false);
+    return _decodeItems(
+      resp,
+    ).map(RecentSearchEntryView.fromMap).toList(growable: false);
   }
 
   @override
@@ -925,7 +985,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(UserApiMetadata.deleteRecentSearchPath(entryId: entryId));
     final resp = await _client.delete(
       url,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteRecentSearch),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.deleteRecentSearch,
+      ),
     );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
       throw Exception('deleteRecentSearch failed: ${resp.statusCode}');
@@ -951,9 +1013,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> followUser(String targetUserId) async {
     final url = _uri(
-      UserApiMetadata.followUserPath(
-        targetProfileSubjectId: targetUserId,
-      ),
+      UserApiMetadata.followUserPath(targetProfileSubjectId: targetUserId),
     );
     final resp = await _client.post(
       url,
@@ -967,9 +1027,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> unfollowUser(String targetUserId) async {
     final url = _uri(
-      UserApiMetadata.unfollowUserPath(
-        targetProfileSubjectId: targetUserId,
-      ),
+      UserApiMetadata.unfollowUserPath(targetProfileSubjectId: targetUserId),
     );
     final resp = await _client.delete(
       url,
@@ -999,9 +1057,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowing failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp)
-        .map(_normalizeRelationshipItem)
-        .toList(growable: false);
+    return _decodeItems(
+      resp,
+    ).map(_normalizeRelationshipItem).toList(growable: false);
   }
 
   @override
@@ -1023,9 +1081,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowers failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp)
-        .map(_normalizeRelationshipItem)
-        .toList(growable: false);
+    return _decodeItems(
+      resp,
+    ).map(_normalizeRelationshipItem).toList(growable: false);
   }
 
   @override
@@ -1090,7 +1148,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode == 200) {
       return _decodeItems(resp);
     }
-    if (resp.statusCode == 204 || resp.statusCode == 404 || resp.statusCode == 501) {
+    if (resp.statusCode == 204 ||
+        resp.statusCode == 404 ||
+        resp.statusCode == 501) {
       return <Map<String, dynamic>>[];
     }
     throw Exception('listUserInteractionReceived failed: ${resp.statusCode}');
@@ -1119,7 +1179,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode == 200) {
       return _decodeItems(resp);
     }
-    if (resp.statusCode == 204 || resp.statusCode == 404 || resp.statusCode == 501) {
+    if (resp.statusCode == 204 ||
+        resp.statusCode == 404 ||
+        resp.statusCode == 501) {
       return <Map<String, dynamic>>[];
     }
     throw Exception('listUserInteractionSent failed: ${resp.statusCode}');

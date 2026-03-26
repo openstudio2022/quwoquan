@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// Shared conversation page shell used by chat- and assistant-owned pages.
@@ -32,11 +31,6 @@ class ConversationPageScaffold extends StatelessWidget {
     if (overlays.isEmpty) {
       return pageContent;
     }
-    return Stack(
-      children: <Widget>[
-        pageContent,
-        ...overlays,
-      ],
-    );
+    return Stack(children: <Widget>[pageContent, ...overlays]);
   }
 }

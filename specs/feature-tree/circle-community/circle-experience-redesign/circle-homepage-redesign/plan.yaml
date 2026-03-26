@@ -1,0 +1,74 @@
+version: 1
+node: circle-homepage-redesign
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage template metadata
+    goal: 冻结共享壳层、双模板、节点摘要与页面模块的 typed view
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 群组首页、群主页、组织节点主页的摘要模型清晰
+      - 模板分流字段与页签结构冻结
+    status: completed
+
+  - id: P2
+    title: establish homepage codegen and repository baseline
+    goal: 完成首页模板与节点摘要视图的 codegen 基线和 Repository 消费方式
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - App DTO 与 cloud view 对齐
+      - 模板信息不再依赖页面内硬编码判断
+    status: in_progress
+
+  - id: P3
+    title: deliver shared shell and dual templates
+    goal: 落地共享壳层、双模板首页模块和统一发布入口文案
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - A4
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 通用圈子模板与组织主页模板均可稳定展示
+      - 发布入口与页签结构符合设计基线
+    status: in_progress
+
+  - id: P4
+    title: deliver group and organization node pages
+    goal: 落地通用群主页、组织节点主页与父节点聚合逻辑
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A5
+      - A6
+      - A7
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 群主页以交流/资料/成员为核心
+      - 组织节点主页支持内容和交流并存
+      - 父节点聚合按最近活跃时间工作
+    status: pending

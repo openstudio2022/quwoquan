@@ -51,7 +51,7 @@ specs/feature-tree/<l1-capability>/
 
 ## L1 落地范围
 
-功能 L1（6）：
+当前 L1（以 `tree_index.yaml` 为准）：
 
 - `discovery-content`
 - `circle-community`
@@ -59,13 +59,12 @@ specs/feature-tree/<l1-capability>/
 - `user-identity-profile-relationship`
 - `assistant-run-learning`
 - `global-search-experience`
-
-非功能 L1（4）：
-
+- `shared-homepage-network`
 - `runtime`
 - `platform-ops-governance`
 - `product-ops-growth`
 - `gateway-orchestrator-foundation`
+- `recommendation-platform`
 
 ---
 

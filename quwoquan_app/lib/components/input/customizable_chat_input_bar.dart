@@ -1,10 +1,12 @@
 import 'dart:async';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 enum ChatInputAttachmentType { image, file }
 
@@ -53,32 +55,38 @@ class ChatInputSubmitPayload {
   final Duration voiceDuration;
 }
 
+enum ChatInputPanelMode { none, emoji, more }
+
 class ChatInputVisualState {
   const ChatInputVisualState({
-    required this.isVoiceMode,
-    required this.isRecording,
     required this.hasText,
     required this.hasAttachments,
-    required this.showAddPanel,
+    required this.isVoiceMode,
+    required this.isRecording,
+    required this.panelMode,
   });
 
-  final bool isVoiceMode;
-  final bool isRecording;
   final bool hasText;
   final bool hasAttachments;
-  final bool showAddPanel;
+  final bool isVoiceMode;
+  final bool isRecording;
+  final ChatInputPanelMode panelMode;
 }
 
 class ChatInputDefaultActions {
   const ChatInputDefaultActions({
-    required this.toggleVoiceMode,
     required this.toggleAddPanel,
+    required this.toggleVoiceMode,
+    required this.toggleEmojiPanel,
     required this.send,
+    required this.openExpandedEditor,
   });
 
-  final VoidCallback toggleVoiceMode;
   final VoidCallback toggleAddPanel;
+  final VoidCallback toggleVoiceMode;
+  final VoidCallback toggleEmojiPanel;
   final VoidCallback send;
+  final VoidCallback openExpandedEditor;
 }
 
 typedef ChatInputLeftBuilder =
@@ -104,7 +112,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.textFieldKey,
     this.hintText,
     this.maxTextLength = 5000,
-    this.maxVisibleLines = 4,
+    this.maxVisibleLines = 5,
     this.maxAttachmentCount = 3,
     this.initialAttachments = const <ChatInputAttachment>[],
     this.onPickImages,
@@ -114,11 +122,14 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.onStartRecord,
     this.onStopRecord,
     this.onVoiceAsrTransform,
-    this.leftBuilder,
-    this.rightBuilder,
     this.onAttachmentChanged,
     this.onToast,
     this.showAddPanel = true,
+    this.showEmojiButton = false,
+    this.enableExpandedEditor = true,
+    this.sendButtonKey,
+    this.leftBuilder,
+    this.rightBuilder,
     this.extraPanelItems = const <ChatInputExtraPanelItem>[],
   });
 
@@ -138,13 +149,16 @@ class CustomizableChatInputBar extends StatefulWidget {
   final Future<void> Function(Duration duration)? onStopRecord;
   final Future<String?> Function(Duration duration)? onVoiceAsrTransform;
   final Future<void> Function(ChatInputSubmitPayload payload) onSend;
-  final ChatInputLeftBuilder? leftBuilder;
-  final ChatInputRightBuilder? rightBuilder;
   final ValueChanged<List<ChatInputAttachment>>? onAttachmentChanged;
   final ValueChanged<String>? onToast;
   final bool showAddPanel;
+  final bool showEmojiButton;
+  final bool enableExpandedEditor;
+  final Key? sendButtonKey;
+  final ChatInputLeftBuilder? leftBuilder;
+  final ChatInputRightBuilder? rightBuilder;
 
-  /// 注入到 `+` 面板第二行的自定义功能项（如语音通话、视频通话）
+  /// 注入到 `+` 面板中的自定义功能项（如语音通话、视频通话）
   final List<ChatInputExtraPanelItem> extraPanelItems;
 
   @override
@@ -158,9 +172,10 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   late final FocusNode _focusNode;
   late final bool _isExternalController;
   late final bool _isExternalFocusNode;
+  final ScrollController _textScrollController = ScrollController();
   final List<ChatInputAttachment> _attachments = <ChatInputAttachment>[];
 
-  bool _showAddPanel = false;
+  ChatInputPanelMode _panelMode = ChatInputPanelMode.none;
   bool _isVoiceMode = false;
   bool _isRecording = false;
   DateTime? _recordStartAt;
@@ -172,25 +187,10 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   bool get _hasText => _controller.text.trim().isNotEmpty;
   bool get _hasAttachments => _attachments.isNotEmpty;
   bool get _canSend => _hasText || _hasAttachments;
+  bool get _showAddPanel => _panelMode == ChatInputPanelMode.more;
+  bool get _showEmojiPanel => _panelMode == ChatInputPanelMode.emoji;
 
-  ChatInputVisualState get _visualState => ChatInputVisualState(
-    isVoiceMode: _isVoiceMode,
-    isRecording: _isRecording,
-    hasText: _hasText,
-    hasAttachments: _hasAttachments,
-    showAddPanel: _showAddPanel,
-  );
-
-  ChatInputDefaultActions get _defaultActions => ChatInputDefaultActions(
-    toggleVoiceMode: _toggleVoiceMode,
-    toggleAddPanel: _toggleAddPanel,
-    send: _send,
-  );
-
-  Color _cupertinoColor(
-    BuildContext context,
-    CupertinoDynamicColor color,
-  ) {
+  Color _cupertinoColor(BuildContext context, CupertinoDynamicColor color) {
     return CupertinoDynamicColor.resolve(color, context);
   }
 
@@ -200,8 +200,10 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   Color _foregroundSecondary(BuildContext context) =>
       _cupertinoColor(context, CupertinoColors.secondaryLabel);
 
-  Color _sheetBackground(BuildContext context) =>
-      _cupertinoColor(context, CupertinoColors.secondarySystemGroupedBackground);
+  Color _sheetBackground(BuildContext context) => _cupertinoColor(
+    context,
+    CupertinoColors.secondarySystemGroupedBackground,
+  );
 
   Color _fieldBackground(BuildContext context) =>
       _cupertinoColor(context, CupertinoColors.systemBackground);
@@ -218,10 +220,11 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     _focusNode = widget.focusNode ?? FocusNode();
     _attachments.addAll(widget.initialAttachments);
     _controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
-    )..repeat(reverse: true);
+    );
   }
 
   @override
@@ -229,6 +232,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     _waveTicker?.cancel();
     _waveController.dispose();
     _controller.removeListener(_onTextChanged);
+    _focusNode.removeListener(_onFocusChanged);
+    _textScrollController.dispose();
     if (!_isExternalController) {
       _controller.dispose();
     }
@@ -241,6 +246,15 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   void _onTextChanged() {
     if (!mounted) return;
     setState(() {});
+  }
+
+  void _onFocusChanged() {
+    if (!mounted || !_focusNode.hasFocus) {
+      return;
+    }
+    if (_panelMode != ChatInputPanelMode.none) {
+      setState(() => _panelMode = ChatInputPanelMode.none);
+    }
   }
 
   void _emitToast(String text) {
@@ -328,11 +342,27 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _toggleAddPanel() {
-    if (!widget.showAddPanel || _isVoiceMode) return;
+    if (!widget.showAddPanel) return;
     setState(() {
-      _showAddPanel = !_showAddPanel;
-      if (_showAddPanel) {
+      _panelMode = _showAddPanel
+          ? ChatInputPanelMode.none
+          : ChatInputPanelMode.more;
+      if (_panelMode == ChatInputPanelMode.more) {
         _focusNode.unfocus();
+      }
+    });
+  }
+
+  void _toggleEmojiPanel() {
+    if (!widget.showEmojiButton) return;
+    setState(() {
+      _panelMode = _showEmojiPanel
+          ? ChatInputPanelMode.none
+          : ChatInputPanelMode.emoji;
+      if (_panelMode == ChatInputPanelMode.emoji) {
+        _focusNode.unfocus();
+      } else if (!_isVoiceMode) {
+        _focusNode.requestFocus();
       }
     });
   }
@@ -340,8 +370,12 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   void _toggleVoiceMode() {
     setState(() {
       _isVoiceMode = !_isVoiceMode;
-      _showAddPanel = false;
-      _focusNode.unfocus();
+      _panelMode = ChatInputPanelMode.none;
+      if (_isVoiceMode) {
+        _focusNode.unfocus();
+      } else {
+        _focusNode.requestFocus();
+      }
     });
   }
 
@@ -357,7 +391,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     setState(() {
       _controller.clear();
       _attachments.clear();
-      _showAddPanel = false;
+      _panelMode = ChatInputPanelMode.none;
     });
     if (hadAttachments) {
       widget.onAttachmentChanged?.call(const <ChatInputAttachment>[]);
@@ -401,6 +435,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _startWave() {
+    if (!_waveController.isAnimating) {
+      _waveController.repeat(reverse: true);
+    }
     _waveTicker?.cancel();
     _waveTicker = Timer.periodic(const Duration(milliseconds: 56), (_) {
       if (!mounted || !_isRecording) return;
@@ -418,6 +455,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   void _stopWave() {
     _waveTicker?.cancel();
     _waveTicker = null;
+    _waveController.stop();
+    _waveController.reset();
     setState(() {
       for (var i = 0; i < _waveBars.length; i++) {
         _waveBars[i] = 0.2;
@@ -425,51 +464,107 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     });
   }
 
-  Widget _defaultLeftButton(BuildContext context) {
-    if (_isVoiceMode || _hasText || _hasAttachments) {
-      return const SizedBox.shrink();
-    }
-    return _buildIconButton(
-      context: context,
-      icon: Icons.camera_alt_outlined,
-      onTap: _capturePhoto,
-      semanticLabel: UITextConstants.chatMoreShoot,
+  ChatInputVisualState _visualState() {
+    return ChatInputVisualState(
+      hasText: _hasText,
+      hasAttachments: _hasAttachments,
+      isVoiceMode: _isVoiceMode,
+      isRecording: _isRecording,
+      panelMode: _panelMode,
     );
   }
 
-  List<Widget> _defaultRightButtons(BuildContext context) {
-    if (_isVoiceMode) return const <Widget>[];
-    if (_canSend) {
-      return <Widget>[
+  ChatInputDefaultActions _defaultActions() {
+    return ChatInputDefaultActions(
+      toggleAddPanel: _toggleAddPanel,
+      toggleVoiceMode: _toggleVoiceMode,
+      toggleEmojiPanel: _toggleEmojiPanel,
+      send: () {
+        unawaited(_send());
+      },
+      openExpandedEditor: () {
+        unawaited(_openExpandedEditor());
+      },
+    );
+  }
+
+  Future<void> _openExpandedEditor() async {
+    if (!widget.enableExpandedEditor || _isVoiceMode) {
+      return;
+    }
+    final shouldRefocus = _focusNode.hasFocus;
+    final draft = await Navigator.of(context).push<_ExpandedInputDraft>(
+      CupertinoPageRoute<_ExpandedInputDraft>(
+        fullscreenDialog: true,
+        builder: (context) => _ExpandedChatInputPage(
+          initialText: _controller.text,
+          hintText: widget.hintText ?? UITextConstants.inputHint,
+          showEmojiButton: widget.showEmojiButton,
+        ),
+      ),
+    );
+    if (!mounted || draft == null) {
+      return;
+    }
+    _controller.value = TextEditingValue(
+      text: draft.text,
+      selection: TextSelection.collapsed(offset: draft.text.length),
+    );
+    setState(() {
+      _panelMode = draft.openEmojiPanel && widget.showEmojiButton
+          ? ChatInputPanelMode.emoji
+          : ChatInputPanelMode.none;
+    });
+    if (shouldRefocus && !_showEmojiPanel) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  List<Widget> _buildTrailingButtons(BuildContext context) {
+    final buttons = <Widget>[];
+    if (widget.showEmojiButton) {
+      buttons.add(
         _buildIconButton(
           context: context,
-          icon: Icons.add,
-          onTap: _toggleAddPanel,
-          semanticLabel: '更多操作',
+          key: TestKeys.chatInputEmojiToggleButton,
+          icon: _showEmojiPanel
+              ? CupertinoIcons.keyboard
+              : CupertinoIcons.smiley,
+          onTap: _toggleEmojiPanel,
+          semanticLabel: _showEmojiPanel
+              ? UITextConstants.keyboard
+              : UITextConstants.emoji,
         ),
-        SizedBox(width: AppSpacing.xs),
-        _buildSendButton(context),
-      ];
+      );
     }
-    return <Widget>[
-      _buildIconButton(
-        context: context,
-        icon: Icons.mic_none,
-        onTap: _toggleVoiceMode,
-        semanticLabel: '语音输入',
-      ),
-      SizedBox(width: AppSpacing.xs),
-      _buildIconButton(
-        context: context,
-        icon: Icons.add,
-        onTap: _toggleAddPanel,
-        semanticLabel: '更多操作',
-      ),
-    ];
+    if (widget.showEmojiButton && (_canSend || widget.showAddPanel)) {
+      buttons.add(SizedBox(width: AppSpacing.xs));
+    }
+    if (_canSend) {
+      buttons.add(_buildSendButton(context));
+      return buttons;
+    }
+    if (widget.showAddPanel) {
+      buttons.add(
+        _buildIconButton(
+          context: context,
+          key: TestKeys.chatInputMoreButton,
+          icon: CupertinoIcons.add,
+          onTap: _toggleAddPanel,
+          semanticLabel: UITextConstants.more,
+        ),
+      );
+    }
+    return buttons;
   }
 
   Widget _buildIconButton({
     required BuildContext context,
+    Key? key,
     required IconData icon,
     required VoidCallback onTap,
     required String semanticLabel,
@@ -481,6 +576,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         button: true,
         label: semanticLabel,
         child: IconButton(
+          key: key,
           onPressed: onTap,
           icon: Icon(icon, size: AppSpacing.iconMedium),
           color: _foregroundPrimary(context).withValues(alpha: 0.88),
@@ -497,6 +593,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       label: UITextConstants.send,
       onTap: _send,
       child: GestureDetector(
+        key: widget.sendButtonKey,
         onTap: _send,
         child: Container(
           width: AppSpacing.buttonSize,
@@ -555,8 +652,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: AppTypography.base,
-                                color: _foregroundPrimary(context)
-                                    .withValues(alpha: 0.88),
+                                color: _foregroundPrimary(
+                                  context,
+                                ).withValues(alpha: 0.88),
                               ),
                             ),
                             if ((item.subtitle ?? '').trim().isNotEmpty)
@@ -629,58 +727,54 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   Widget _buildVoicePanel() {
     final isPressed = _isRecording;
-    final topHint = isPressed
-        ? UITextConstants.chatVoiceReleaseToSend
-        : UITextConstants.chatVoiceHoldTip;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: AppSpacing.md + AppSpacing.xs,
-          child: Center(
-            child: Text(
-              topHint,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor.withValues(alpha: 0.9),
-              ),
-            ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _startVoiceRecord(),
+      onTapUp: (_) => _stopVoiceRecordAndSend(),
+      onTapCancel: () => _stopVoiceRecordAndSend(),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        width: double.infinity,
+        constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isPressed
+              ? AppColors.primaryColor.withValues(alpha: 0.14)
+              : _fieldBackground(context),
+          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+          border: Border.all(
+            color: isPressed
+                ? AppColors.primaryColor
+                : _separatorColor(context).withValues(alpha: 0.24),
           ),
         ),
-        SizedBox(
-          height: AppSpacing.buttonSize - AppSpacing.xs,
-          child: _buildWaveBars(),
-        ),
-        SizedBox(height: AppSpacing.xs),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _toggleVoiceMode,
-          onTapDown: (_) => _startVoiceRecord(),
-          onTapUp: (_) => _stopVoiceRecordAndSend(),
-          onTapCancel: () => _stopVoiceRecordAndSend(),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            width: double.infinity,
-            height: AppSpacing.buttonHeight,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isPressed
-                  ? AppColors.primaryColor
-                  : AppColors.primaryColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius * 2),
-            ),
-            child: Text(
-              UITextConstants.chatVoiceHoldToTalk,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isPressed) ...[
+              SizedBox(height: AppSpacing.md, child: _buildWaveBars()),
+              SizedBox(height: AppSpacing.xs),
+            ],
+            Text(
+              isPressed
+                  ? UITextConstants.chatVoiceReleaseToSend
+                  : UITextConstants.chatVoiceHoldToTalk,
               style: TextStyle(
-                color: isPressed ? Colors.white : AppColors.primaryColor,
+                color: isPressed
+                    ? AppColors.primaryColor
+                    : _foregroundPrimary(context),
                 fontSize: AppTypography.base,
                 fontWeight: FontWeight.w600,
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -692,7 +786,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           mainAxisAlignment: MainAxisAlignment.center,
           children: _waveBars
               .map((value) {
-                final h = 4 + (AppSpacing.buttonSize * 0.7 * value);
+                final h = 4 + (AppSpacing.buttonSize * 0.36 * value);
                 return Container(
                   width: AppSpacing.three,
                   height: h,
@@ -711,147 +805,235 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     );
   }
 
-  Widget _buildInputRow() {
-    final left =
-        widget.leftBuilder?.call(context, _visualState, _defaultActions) ??
-        _defaultLeftButton(context);
-    final right =
-        widget.rightBuilder?.call(context, _visualState, _defaultActions) ??
-        _defaultRightButtons(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: _sheetBackground(context),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius * 2),
-        border: Border.all(
-          color: _separatorColor(context).withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          left,
-          if (left is! SizedBox) SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Semantics(
-              textField: true,
-              label: widget.hintText ?? UITextConstants.inputHint,
-              child: TextField(
+  int _estimateLineCount({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    if (text.trim().isEmpty || maxWidth <= 0) {
+      return 1;
+    }
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+    return math.max(1, painter.computeLineMetrics().length);
+  }
+
+  Widget _buildTextComposerCenter() {
+    final textStyle = TextStyle(
+      fontSize: AppTypography.base,
+      height: AppSpacing.textLineHeightBody,
+      color: _foregroundPrimary(context),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentHorizontalPadding = AppSpacing.md;
+        final estimatedWidth =
+            constraints.maxWidth - contentHorizontalPadding * 2;
+        final lineCount = _estimateLineCount(
+          text: _controller.text,
+          style: textStyle,
+          maxWidth: estimatedWidth,
+        );
+        final canExpandInline =
+            widget.enableExpandedEditor && lineCount > widget.maxVisibleLines;
+        final topPadding = canExpandInline
+            ? AppSpacing.lg + AppSpacing.xs
+            : AppSpacing.sm;
+        return Container(
+          decoration: BoxDecoration(
+            color: _fieldBackground(context),
+            borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+          ),
+          child: Stack(
+            children: [
+              TextField(
                 key: widget.textFieldKey,
                 controller: _controller,
                 focusNode: _focusNode,
+                scrollController: _textScrollController,
                 enabled: !_isVoiceMode,
                 maxLength: widget.maxTextLength,
                 maxLines: widget.maxVisibleLines,
                 minLines: 1,
-                textAlignVertical: TextAlignVertical.center,
+                textAlignVertical: TextAlignVertical.top,
                 cursorColor: AppColors.primaryColor,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: _foregroundPrimary(context),
-                ),
+                style: textStyle,
+                onTap: () {
+                  if (_panelMode != ChatInputPanelMode.none) {
+                    setState(() => _panelMode = ChatInputPanelMode.none);
+                  }
+                },
                 decoration: InputDecoration(
                   hintText: widget.hintText ?? UITextConstants.inputHint,
-                  hintStyle: TextStyle(
-                    color: _foregroundSecondary(context),
-                  ),
-                  filled: true,
-                  fillColor: _fieldBackground(context),
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide.none,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.fullBorderRadius,
-                    ),
-                  ),
+                  hintStyle: TextStyle(color: _foregroundSecondary(context)),
+                  border: InputBorder.none,
                   isDense: true,
                   counterText: '',
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
+                  contentPadding: EdgeInsets.fromLTRB(
+                    contentHorizontalPadding,
+                    topPadding,
+                    contentHorizontalPadding,
+                    AppSpacing.sm,
                   ),
                 ),
               ),
-            ),
+              if (canExpandInline)
+                Positioned(
+                  left: AppSpacing.sm,
+                  top: AppSpacing.xs,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: IconButton(
+                      key: TestKeys.chatInputExpandButton,
+                      onPressed: _openExpandedEditor,
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(
+                        minWidth: AppSpacing.iconButtonMinSizeSm,
+                        minHeight: AppSpacing.iconButtonMinSizeSm,
+                      ),
+                      alignment: Alignment.centerLeft,
+                      icon: Icon(
+                        Icons.open_in_full,
+                        size: AppSpacing.iconSmall,
+                        color: _foregroundSecondary(context),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          if (right.isNotEmpty) SizedBox(width: AppSpacing.xs),
-          ...right,
-        ],
-      ),
+        );
+      },
+    );
+  }
+
+  Widget _buildComposerRow() {
+    final state = _visualState();
+    final actions = _defaultActions();
+    final right =
+        widget.rightBuilder?.call(context, state, actions) ??
+        _buildTrailingButtons(context);
+    final left =
+        widget.leftBuilder?.call(context, state, actions) ??
+        Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
+          child: _buildIconButton(
+            context: context,
+            key: TestKeys.chatInputVoiceToggleButton,
+            icon: _isVoiceMode
+                ? CupertinoIcons.keyboard
+                : CupertinoIcons.waveform,
+            onTap: _toggleVoiceMode,
+            semanticLabel: _isVoiceMode
+                ? UITextConstants.keyboard
+                : UITextConstants.voiceInput,
+          ),
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        left,
+        if (left is! SizedBox) SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: _sheetBackground(context),
+              borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+              border: Border.all(
+                color: _separatorColor(context).withValues(alpha: 0.28),
+              ),
+            ),
+            child: _isVoiceMode
+                ? _buildVoicePanel()
+                : _buildTextComposerCenter(),
+          ),
+        ),
+        if (right.isNotEmpty) SizedBox(width: AppSpacing.xs),
+        Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
+          child: Row(mainAxisSize: MainAxisSize.min, children: right),
+        ),
+      ],
     );
   }
 
   Widget _buildAddPanel() {
-    if (!_showAddPanel || _isVoiceMode) return const SizedBox.shrink();
+    if (!_showAddPanel) return const SizedBox.shrink();
     final disableImage =
         _attachments.isNotEmpty &&
         _attachments.first.type == ChatInputAttachmentType.file;
     final disableFile =
         _attachments.isNotEmpty &&
         _attachments.first.type == ChatInputAttachmentType.image;
-    final hasExtras = widget.extraPanelItems.isNotEmpty;
+    final panelItems = <_PanelActionItem>[
+      _PanelActionItem(
+        icon: Icons.photo_library_outlined,
+        text: UITextConstants.chatMorePhoto,
+        disabled: disableImage,
+        onTap: _pickImages,
+      ),
+      _PanelActionItem(
+        icon: Icons.camera_alt_outlined,
+        text: UITextConstants.chatMoreShoot,
+        disabled: disableImage,
+        onTap: _capturePhoto,
+      ),
+      _PanelActionItem(
+        icon: Icons.insert_drive_file_outlined,
+        text: UITextConstants.chatMoreFile,
+        disabled: disableFile,
+        onTap: _pickFiles,
+      ),
+      ...widget.extraPanelItems.map(
+        (item) => _PanelActionItem(
+          icon: item.icon,
+          text: item.text,
+          disabled: item.disabled,
+          onTap: item.onTap,
+        ),
+      ),
+    ];
     return Container(
       margin: EdgeInsets.only(top: AppSpacing.sm),
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.sm,
+        vertical: AppSpacing.md,
       ),
       decoration: BoxDecoration(
         color: _sheetBackground(context),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
           color: _separatorColor(context).withValues(alpha: 0.35),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildPanelItem(
-                icon: Icons.photo_library_outlined,
-                text: UITextConstants.chatMorePhoto,
-                disabled: disableImage,
-                onTap: _pickImages,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              _buildPanelItem(
-                icon: Icons.camera_alt_outlined,
-                text: UITextConstants.chatMoreShoot,
-                disabled: disableImage,
-                onTap: _capturePhoto,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              _buildPanelItem(
-                icon: Icons.insert_drive_file_outlined,
-                text: UITextConstants.chatMoreFile,
-                disabled: disableFile,
-                onTap: _pickFiles,
-              ),
-            ],
-          ),
-          if (hasExtras) ...[
-            SizedBox(height: AppSpacing.sm),
-            Row(
-              children: widget.extraPanelItems
-                  .expand(
-                    (item) => [
-                      if (widget.extraPanelItems.indexOf(item) > 0)
-                        SizedBox(width: AppSpacing.sm),
-                      _buildPanelItem(
-                        icon: item.icon,
-                        text: item.text,
-                        disabled: item.disabled,
-                        onTap: item.onTap,
-                      ),
-                    ],
-                  )
-                  .toList(),
-            ),
-          ],
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = panelItems.length < 4 ? panelItems.length : 4;
+          final itemWidth =
+              (constraints.maxWidth - AppSpacing.sm * (columns - 1)) / columns;
+          return Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.md,
+            children: panelItems
+                .map(
+                  (item) => SizedBox(
+                    width: itemWidth,
+                    child: _buildPanelItem(
+                      icon: item.icon,
+                      text: item.text,
+                      disabled: item.disabled,
+                      onTap: item.onTap,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
       ),
     );
   }
@@ -865,34 +1047,65 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     final fg = disabled
         ? _foregroundPrimary(context).withValues(alpha: 0.25)
         : _foregroundPrimary(context).withValues(alpha: 0.78);
-    return Expanded(
-      child: Semantics(
-        button: true,
-        enabled: !disabled,
-        label: text,
-        child: GestureDetector(
-          onTap: disabled ? null : onTap,
-          child: Container(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: _fieldBackground(context).withValues(
-                alpha: disabled ? 0.55 : 1,
-              ),
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: AppSpacing.iconLarge, color: fg),
-                SizedBox(height: AppSpacing.xs),
-                Text(
-                  text,
-                  style: TextStyle(fontSize: AppTypography.sm, color: fg),
+    return Semantics(
+      button: true,
+      enabled: !disabled,
+      label: text,
+      child: GestureDetector(
+        onTap: disabled ? null : onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: AppSpacing.md,
+            horizontal: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: _fieldBackground(
+              context,
+            ).withValues(alpha: disabled ? 0.55 : 1),
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: AppSpacing.buttonSize + AppSpacing.md,
+                height: AppSpacing.buttonSize + AppSpacing.md,
+                decoration: BoxDecoration(
+                  color: _sheetBackground(context),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
                 ),
-              ],
-            ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: AppSpacing.iconLarge, color: fg),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: AppTypography.sm, color: fg),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmojiPanel() {
+    if (!_showEmojiPanel) return const SizedBox.shrink();
+    return Container(
+      margin: EdgeInsets.only(top: AppSpacing.sm),
+      child: UnifiedEmojiPicker(
+        showCloseButton: true,
+        onClose: () => setState(() => _panelMode = ChatInputPanelMode.none),
+        onEmojiSelected: (char) {
+          final next = '${_controller.text}$char';
+          _controller.value = TextEditingValue(
+            text: next,
+            selection: TextSelection.collapsed(offset: next.length),
+          );
+        },
       ),
     );
   }
@@ -906,9 +1119,210 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         children: [
           _buildAttachmentPreview(),
           if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
-          if (_isVoiceMode) _buildVoicePanel() else _buildInputRow(),
+          _buildComposerRow(),
+          _buildEmojiPanel(),
           _buildAddPanel(),
         ],
+      ),
+    );
+  }
+}
+
+class _PanelActionItem {
+  const _PanelActionItem({
+    required this.icon,
+    required this.text,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool disabled;
+  final Future<void> Function() onTap;
+}
+
+class _ExpandedInputDraft {
+  const _ExpandedInputDraft({required this.text, required this.openEmojiPanel});
+
+  final String text;
+  final bool openEmojiPanel;
+}
+
+class _ExpandedChatInputPage extends StatefulWidget {
+  const _ExpandedChatInputPage({
+    required this.initialText,
+    required this.hintText,
+    required this.showEmojiButton,
+  });
+
+  final String initialText;
+  final String hintText;
+  final bool showEmojiButton;
+
+  @override
+  State<_ExpandedChatInputPage> createState() => _ExpandedChatInputPageState();
+}
+
+class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+  bool _showEmojiPanel = false;
+
+  Color _cupertinoColor(BuildContext context, CupertinoDynamicColor color) {
+    return CupertinoDynamicColor.resolve(color, context);
+  }
+
+  Color _foregroundPrimary(BuildContext context) =>
+      _cupertinoColor(context, CupertinoColors.label);
+
+  Color _foregroundSecondary(BuildContext context) =>
+      _cupertinoColor(context, CupertinoColors.secondaryLabel);
+
+  Color _surfaceBackground(BuildContext context) => _cupertinoColor(
+    context,
+    CupertinoColors.secondarySystemGroupedBackground,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _closeEditor() {
+    Navigator.of(context).pop(
+      _ExpandedInputDraft(
+        text: _controller.text,
+        openEmojiPanel: _showEmojiPanel,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: _surfaceBackground(context),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  CupertinoButton(
+                    key: TestKeys.chatInputCollapseButton,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                    onPressed: _closeEditor,
+                    child: Icon(
+                      CupertinoIcons.chevron_down,
+                      color: _foregroundPrimary(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                key: TestKeys.fullscreenModalSurface,
+                width: double.infinity,
+                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                padding: EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground.resolveFrom(context),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    cursorColor: AppColors.primaryColor,
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      height: AppSpacing.textLineHeightHeadline,
+                      color: _foregroundPrimary(context),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: widget.hintText,
+                      hintStyle: TextStyle(
+                        color: _foregroundSecondary(context),
+                      ),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (widget.showEmojiButton)
+                    CupertinoButton(
+                      key: TestKeys.chatInputExpandedEmojiToggleButton,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                      onPressed: () {
+                        setState(() => _showEmojiPanel = !_showEmojiPanel);
+                        if (_showEmojiPanel) {
+                          _focusNode.unfocus();
+                        } else {
+                          _focusNode.requestFocus();
+                        }
+                      },
+                      child: Icon(
+                        _showEmojiPanel
+                            ? CupertinoIcons.keyboard
+                            : CupertinoIcons.smiley,
+                        color: _foregroundPrimary(context),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (_showEmojiPanel)
+              UnifiedEmojiPicker(
+                showCloseButton: false,
+                onEmojiSelected: (char) {
+                  final next = '${_controller.text}$char';
+                  _controller.value = TextEditingValue(
+                    text: next,
+                    selection: TextSelection.collapsed(offset: next.length),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

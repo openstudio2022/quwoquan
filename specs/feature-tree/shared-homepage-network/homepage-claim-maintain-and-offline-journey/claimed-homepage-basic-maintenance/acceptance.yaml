@@ -1,0 +1,68 @@
+version: 2
+feature: claimed-homepage-basic-maintenance
+level: L3_scenario
+source_path: shared-homepage-network/homepage-claim-maintain-and-offline-journey/claimed-homepage-basic-maintenance
+parent_journey: homepage-claim-maintain-and-offline-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结已认领主页可维护字段和维护边界。
+  journey_bindings:
+    - J2
+  in_scope:
+    - 基础信息维护
+    - 封面图库维护
+    - 状态与官方说明维护
+  out_of_scope:
+    - 用户口碑管理
+    - 历史内容删改
+
+scenario_acceptance:
+  A1:
+    title: 已认领主页可维护基础信息且不越权
+    scenario: claimed homepage basic maintenance
+    journey_step: claim approved -> maintain homepage basics
+    done_when:
+      - 认领方可更新基础信息、封面、状态和官方说明
+      - 用户口碑和历史内容不可被直接修改
+      - 更新结果可在主页展示
+    edge_cases:
+      - 非认领方不可进入维护
+      - 维护失败保留已填信息
+    linked_plan_items:
+      - P2
+      - P4
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - claimed homepage maintenance permission test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: 已认领主页可维护字段清单已冻结
+    done_when:
+      - 可维护字段和不可维护字段边界明确
+      - 维护操作的审计需求已明确
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - claimed homepage field boundary review
+      recorded: []
+    status: pending

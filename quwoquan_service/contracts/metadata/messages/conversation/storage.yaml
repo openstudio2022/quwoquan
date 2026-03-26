@@ -8,6 +8,7 @@ collections:
     indexes:
       - { name: idx_conv_type_updated, keys: { type: 1, updatedAt: -1 } }
       - { name: idx_conv_circle, keys: { circleId: 1 }, sparse: true }
+      - { name: idx_conv_circle_group, keys: { circleGroupId: 1 }, sparse: true }
       - { name: idx_conv_status, keys: { status: 1 } }
       - { name: idx_conv_last_msg_time, keys: { lastMessageTime: -1 } }
     search_indexes:

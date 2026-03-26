@@ -52,6 +52,14 @@ l1:
     services: [gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service]
     app_modules: [home.discovery, chat.chat_page, circles.circles_page, assistant.assistant_home]
 
+  - category: functional
+    title: "共享主页网络"
+    key: "shared-homepage-network"
+    directory: "specs/feature-tree/shared-homepage-network"
+    feature_path_prefix: "capability.shared-homepage-network"
+    services: [entity-service, content-service, circle-service, gateway-service, orchestrator-service, product-ops]
+    app_modules: [entity.entity_detail, create.create, search.global_search, circles.circle_detail]
+
   - category: nonfunctional
     title: "产品运营增长"
     key: "product-ops-growth"

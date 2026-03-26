@@ -9,6 +9,13 @@ service:
 
 api_routes:
   - method: POST
+    path: /v1/assistant/search/xiaoqu
+    operation: SearchXiaoquResults
+    description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
+    request_fields: [userQuery, searchIntensity, profileSubjectId, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch]
+    response_entity: AssistantSearchResultView
+
+  - method: POST
     path: /v1/assistant/runs
     operation: CreateRun
     description: 同步执行
@@ -66,7 +73,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [create_run, stream_run, report_page_context, get_suggested_actions, report_events, list_skills, manage_consent]
+    capabilities: [search_xiaoqu_results, create_run, stream_run, report_page_context, get_suggested_actions, report_events, list_skills, manage_consent]
   - name: platform-ops
     capabilities: [read_runs, read_events, read_scorecards, manage_policy, manage_skills]
   - name: recommendation-engine

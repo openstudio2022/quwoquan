@@ -11,31 +11,31 @@ execution:
 
 scope:
   summary: >
-    冻结搜索首页中的问小趣快捷入口及其到 assistant 会话的 typed handoff。
+    冻结独立网络结果页中的小趣搜 assistant 结果 tab 及其 continuation 语义。
   journey_bindings:
     - J1
     - J3
   in_scope:
-    - 问小趣入口
-    - query handoff
-    - assistant 会话承接
+    - 小趣搜 tab
+    - assistant 搜索结果
+    - assistant continuation
   out_of_scope:
     - AI 搜索结果混排
     - assistant runtime 改造
 
 scenario_acceptance:
   A1:
-    title: 问小趣作为搜索页快捷入口而非结果域
+    title: 小趣搜作为独立网络结果页中的 assistant 结果 tab
     scenario: xiaoqu handoff
-    journey_step: tap ask xiaoqu and continue in assistant conversation
+    journey_step: open network results and continue in xiaoqu tab
     done_when:
-      - 搜索首页存在明确的问小趣入口
-      - 用户点击后可把当前 query 与上下文交给 assistant 会话承接
-      - 问小趣 query 不进入最近搜索
+      - 网络结果页存在明确的小趣搜 tab
+      - 用户切换后可看到 assistant 摘要与引用结果
+      - 小趣搜不单独新增 AI query 历史记录
     edge_cases:
-      - 搜索框为空时直接进入问小趣
-      - 当前 query 已输入但未发普通搜索
+      - 当前 query 已输入但无 assistant 结果
       - assistant 会话页已有上下文
+      - 某类引用对象不存在可跳转目标
     linked_plan_items:
       - P1
       - P2
@@ -47,8 +47,8 @@ scenario_acceptance:
         - T3_cross_service_integration
     tests:
       planned:
-        - xiaoqu handoff widget test
-        - assistant conversation handoff regression test
+        - xiaoqu results widget test
+        - assistant continuation regression test
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - flutter test test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
@@ -56,9 +56,9 @@ scenario_acceptance:
 
 story_readiness:
   S1:
-    title: handoff 走 typed contract 而非 runtime 字符串路由
+    title: 小趣搜走 typed result contract 而非 runtime 字符串路由
     done_when:
-      - handoff 使用 assistant metadata 和既有 contract 语义承接
+      - 小趣搜使用 assistant metadata 和既有 contract 语义承接
       - 不新增 runtime 层字符串 contains 路由
     evidence:
       primary:

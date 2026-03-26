@@ -20,11 +20,72 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
 void main() {
+  setUpAll(() {
+    WebViewPlatform.instance = _FakeWebViewPlatform();
+  });
+
+  testWidgets('assistant 对话页使用外置语音按钮与发送按钮', (tester) async {
+    final localEntry = _ControlledLocalAssistantEntry();
+    addTearDown(localEntry.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(
+            _EmptyAssistantChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _AssistantCapabilityRepository(),
+          ),
+          assistantGatewayProvider.overrideWithValue(
+            _ImmediateAssistantGateway(
+              const AssistantRunResponse(
+                finalText: '',
+                traces: <AssistantTraceEvent>[],
+              ),
+            ),
+          ),
+          localAssistantEntryProvider.overrideWithValue(localEntry),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
+        ),
+      ),
+    );
+
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byKey(TestKeys.assistantChatInputField).evaluate().isNotEmpty,
+    );
+
+    expect(find.byKey(TestKeys.chatInputVoiceToggleButton), findsOneWidget);
+    expect(find.byKey(TestKeys.chatInputMoreButton), findsOneWidget);
+    expect(find.byKey(TestKeys.assistantSendButton), findsNothing);
+
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      '帮我整理一下这个问题',
+    );
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byKey(TestKeys.assistantSendButton).evaluate().isNotEmpty,
+    );
+
+    expect(find.byKey(TestKeys.assistantSendButton), findsOneWidget);
+    expect(find.byKey(TestKeys.chatInputMoreButton), findsNothing);
+  });
+
   testWidgets('远端未配置时 assistant 对话页会自动回落本地 backend', (tester) async {
     final localEntry = _ControlledLocalAssistantEntry();
     addTearDown(localEntry.dispose);
@@ -48,9 +109,7 @@ void main() {
           localAssistantEntryProvider.overrideWithValue(localEntry),
         ],
         child: MaterialApp(
-          home: Scaffold(
-            body: AssistantConversationPage(onBack: _noop),
-          ),
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
         ),
       ),
     );
@@ -132,9 +191,7 @@ void main() {
           remoteAssistantEntryProvider.overrideWithValue(gateway),
         ],
         child: MaterialApp(
-          home: Scaffold(
-            body: AssistantConversationPage(onBack: _noop),
-          ),
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
         ),
       ),
     );
@@ -196,8 +253,8 @@ void main() {
     );
     expect(
       find.text('九寨沟方向'),
-      findsNothing,
-      reason: '进入 answering 阶段前，不应先把最终答案正文暴露到界面',
+      findsAtLeastNWidgets(1),
+      reason: '收到可见 answer chunk 后，正文应立即开始流式显示给用户',
     );
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('九寨沟方向'));
@@ -461,9 +518,7 @@ void main() {
           remoteAssistantEntryProvider.overrideWithValue(gateway),
         ],
         child: MaterialApp(
-          home: Scaffold(
-            body: AssistantConversationPage(onBack: _noop),
-          ),
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
         ),
       ),
     );
@@ -517,9 +572,7 @@ void main() {
           remoteAssistantEntryProvider.overrideWithValue(gateway),
         ],
         child: MaterialApp(
-          home: Scaffold(
-            body: AssistantConversationPage(onBack: _noop),
-          ),
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
         ),
       ),
     );
@@ -614,6 +667,110 @@ void main() {
     expect(finalAnswer, contains('深圳今天天气晴，适合出行。'));
     expect(find.textContaining('contractId'), findsNothing);
     expect(find.textContaining('machineEnvelope'), findsNothing);
+  });
+
+  testWidgets('assistant 引用角标点击后打开应用内网页页', (tester) async {
+    final message = <String, dynamic>{
+      'id': 'assistant_reference_seed',
+      'conversationId': AppConceptConstants.assistantConversationId,
+      'type': 'text',
+      'content': 'Flutter 官方仓库可作为参考来源。',
+      'senderId': AppConceptConstants.assistantSenderId,
+      'senderName': AppConceptConstants.assistantLabel,
+      'senderAvatar': '',
+      'timestamp': '10:10',
+      'isRead': true,
+      'isSelf': false,
+      'displayMarkdown':
+          'Flutter 官方仓库可作为参考来源。[来源1](https://github.com/flutter/flutter)',
+      'displayPlainText': 'Flutter 官方仓库可作为参考来源。',
+      'runArtifacts': <String, dynamic>{
+        'displayMarkdown':
+            'Flutter 官方仓库可作为参考来源。[来源1](https://github.com/flutter/flutter)',
+        'displayPlainText': 'Flutter 官方仓库可作为参考来源。',
+        'answerEvidenceBindings': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'bindingId': 'binding_1',
+            'label': '来源1',
+            'claim': 'Flutter 官方仓库可作为参考来源。',
+            'evidenceId': 'evidence_1',
+            'url': 'https://github.com/flutter/flutter',
+            'title': 'Flutter GitHub 仓库',
+            'source': 'github.com',
+            'snippet': 'Flutter SDK 与框架源码仓库',
+          },
+        ],
+      },
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              return AssistantMessageBubble(
+                message: message,
+                isRight: false,
+                bubbleColor: Colors.grey.shade200,
+                textColor: Colors.black,
+                isSelectionMode: false,
+                isSelected: false,
+                onLongPressStart: (_) {},
+                hideAvatarAndName: true,
+                useFullWidth: true,
+                renderSelfTextWithoutBubble: true,
+                answerGateOpen: true,
+                onReferenceTap: (reference) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AssistantReferenceWebViewPage(
+                        initialUrl: (reference['url'] as String?) ?? '',
+                        title: (reference['title'] as String?) ?? '',
+                        source: (reference['source'] as String?) ?? '',
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find
+          .byKey(const ValueKey<String>('assistant_reference_chip_1'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    final runArtifacts =
+        (message['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    expect(
+      (runArtifacts['displayMarkdown'] as String?) ?? '',
+      contains('[来源1](https://github.com/flutter/flutter)'),
+    );
+    final bindings =
+        (runArtifacts['answerEvidenceBindings'] as List?)
+            ?.whereType<Map>()
+            .toList(growable: false) ??
+        const <Map>[];
+    expect(bindings, hasLength(1));
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('https://github.com/flutter/flutter'), findsOneWidget);
+    expect(find.text('Flutter GitHub 仓库'), findsOneWidget);
   });
 }
 
@@ -739,14 +896,21 @@ AssistantJourney _journeySnapshot({
 
 class _ControlledRemoteAssistantEntry extends RemoteAssistantEntry {
   _ControlledRemoteAssistantEntry()
-    : _controller = StreamController<AssistantRunStreamEvent>(),
-      _subscribed = Completer<void>(),
+    : _subscribed = Completer<void>(),
       super(
         openClawBridge: OpenClawBridge(baseUrl: ''),
         requestPolicy: const AssistantRequestPolicy(),
-      );
+      ) {
+    _controller = StreamController<AssistantRunStreamEvent>(
+      onListen: () {
+        if (!_subscribed.isCompleted) {
+          _subscribed.complete();
+        }
+      },
+    );
+  }
 
-  final StreamController<AssistantRunStreamEvent> _controller;
+  late final StreamController<AssistantRunStreamEvent> _controller;
   final Completer<void> _subscribed;
 
   void emit(AssistantRunStreamEvent event) => _controller.add(event);
@@ -758,12 +922,7 @@ class _ControlledRemoteAssistantEntry extends RemoteAssistantEntry {
   @override
   Stream<AssistantRunStreamEvent> runStream({
     required AssistantRunRequest request,
-  }) {
-    if (!_subscribed.isCompleted) {
-      _subscribed.complete();
-    }
-    return _controller.stream;
-  }
+  }) => _controller.stream;
 
   Future<void> dispose() async {
     if (_controller.isClosed) {
@@ -775,8 +934,7 @@ class _ControlledRemoteAssistantEntry extends RemoteAssistantEntry {
 
 class _ControlledLocalAssistantEntry extends LocalAssistantEntry {
   _ControlledLocalAssistantEntry()
-    : _controller = StreamController<AssistantRunStreamEvent>(),
-      _subscribed = Completer<void>(),
+    : _subscribed = Completer<void>(),
       super(
         assistantGateway: _ImmediateAssistantGateway(
           const AssistantRunResponse(
@@ -785,9 +943,17 @@ class _ControlledLocalAssistantEntry extends LocalAssistantEntry {
           ),
         ),
         requestPolicy: const AssistantRequestPolicy(),
-      );
+      ) {
+    _controller = StreamController<AssistantRunStreamEvent>(
+      onListen: () {
+        if (!_subscribed.isCompleted) {
+          _subscribed.complete();
+        }
+      },
+    );
+  }
 
-  final StreamController<AssistantRunStreamEvent> _controller;
+  late final StreamController<AssistantRunStreamEvent> _controller;
   final Completer<void> _subscribed;
 
   void emit(AssistantRunStreamEvent event) => _controller.add(event);
@@ -799,12 +965,7 @@ class _ControlledLocalAssistantEntry extends LocalAssistantEntry {
   @override
   Stream<AssistantRunStreamEvent> runStream({
     required AssistantRunRequest request,
-  }) {
-    if (!_subscribed.isCompleted) {
-      _subscribed.complete();
-    }
-    return _controller.stream;
-  }
+  }) => _controller.stream;
 
   Future<void> dispose() async {
     if (_controller.isClosed) {
@@ -892,4 +1053,124 @@ Future<void> _pumpUntil(
     if (condition()) return;
   }
   throw TestFailure('等待条件超时: $timeout');
+}
+
+class _FakeWebViewPlatform extends WebViewPlatform {
+  @override
+  PlatformNavigationDelegate createPlatformNavigationDelegate(
+    PlatformNavigationDelegateCreationParams params,
+  ) {
+    return _FakePlatformNavigationDelegate(params);
+  }
+
+  @override
+  PlatformWebViewController createPlatformWebViewController(
+    PlatformWebViewControllerCreationParams params,
+  ) {
+    return _FakePlatformWebViewController(params);
+  }
+
+  @override
+  PlatformWebViewWidget createPlatformWebViewWidget(
+    PlatformWebViewWidgetCreationParams params,
+  ) {
+    return _FakePlatformWebViewWidget(params);
+  }
+}
+
+class _FakePlatformNavigationDelegate extends PlatformNavigationDelegate {
+  _FakePlatformNavigationDelegate(super.params) : super.implementation();
+
+  PageEventCallback? onPageStarted;
+  PageEventCallback? onPageFinished;
+  WebResourceErrorCallback? onWebResourceError;
+  NavigationRequestCallback? onNavigationRequest;
+
+  @override
+  Future<void> setOnPageStarted(PageEventCallback callback) async {
+    onPageStarted = callback;
+  }
+
+  @override
+  Future<void> setOnPageFinished(PageEventCallback callback) async {
+    onPageFinished = callback;
+  }
+
+  @override
+  Future<void> setOnWebResourceError(WebResourceErrorCallback callback) async {
+    onWebResourceError = callback;
+  }
+
+  @override
+  Future<void> setOnNavigationRequest(
+    NavigationRequestCallback callback,
+  ) async {
+    onNavigationRequest = callback;
+  }
+
+  @override
+  Future<void> setOnHttpError(HttpResponseErrorCallback onHttpError) async {}
+
+  @override
+  Future<void> setOnProgress(ProgressCallback onProgress) async {}
+
+  @override
+  Future<void> setOnUrlChange(UrlChangeCallback onUrlChange) async {}
+
+  @override
+  Future<void> setOnHttpAuthRequest(
+    HttpAuthRequestCallback onHttpAuthRequest,
+  ) async {}
+
+  @override
+  Future<void> setOnSSlAuthError(SslAuthErrorCallback onSslAuthError) async {}
+}
+
+class _FakePlatformWebViewController extends PlatformWebViewController {
+  _FakePlatformWebViewController(super.params) : super.implementation();
+
+  _FakePlatformNavigationDelegate? _delegate;
+  Uri? _currentUri;
+
+  @override
+  Future<void> setJavaScriptMode(JavaScriptMode javaScriptMode) async {}
+
+  @override
+  Future<void> setBackgroundColor(Color color) async {}
+
+  @override
+  Future<void> setPlatformNavigationDelegate(
+    PlatformNavigationDelegate handler,
+  ) async {
+    _delegate = handler is _FakePlatformNavigationDelegate ? handler : null;
+  }
+
+  @override
+  Future<void> loadRequest(LoadRequestParams params) async {
+    _currentUri = params.uri;
+    final url = params.uri.toString();
+    _delegate?.onPageStarted?.call(url);
+    _delegate?.onPageFinished?.call(url);
+  }
+
+  @override
+  Future<void> reload() async {
+    final uri = _currentUri;
+    if (uri == null) return;
+    final url = uri.toString();
+    _delegate?.onPageStarted?.call(url);
+    _delegate?.onPageFinished?.call(url);
+  }
+
+  @override
+  Future<String?> currentUrl() async => _currentUri?.toString();
+}
+
+class _FakePlatformWebViewWidget extends PlatformWebViewWidget {
+  _FakePlatformWebViewWidget(super.params) : super.implementation();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(color: Colors.white);
+  }
 }

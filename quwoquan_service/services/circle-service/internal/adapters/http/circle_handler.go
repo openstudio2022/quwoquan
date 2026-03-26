@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
-	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/application"
+	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
@@ -29,6 +29,7 @@ func (h *CircleHandler) Routes() http.Handler {
 
 	// Circles CRUD
 	mux.HandleFunc("/v1/circles", h.handleCircles)
+	mux.HandleFunc("GET /v1/circles/search", h.handleSearchCircles)
 	mux.HandleFunc("/v1/circles/behaviors", h.handleBehaviors)
 	mux.HandleFunc("/v1/circles/", h.handleCircleSubRoutes)
 
@@ -70,6 +71,26 @@ func (h *CircleHandler) handleListCircles(w http.ResponseWriter, r *http.Request
 		Limit:        limit,
 	})
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *CircleHandler) handleSearchCircles(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+	resp := h.circleService.SearchCircles(r.Context(), application.SearchCirclesRequest{
+		Query:       q.Get("query"),
+		CategoryID:  q.Get("categoryId"),
+		SubCategory: q.Get("subCategory"),
+		Cursor:      q.Get("cursor"),
+		Limit:       limit,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":        resp.Items,
+		"facetBuckets": resp.FacetBuckets,
+		"cursor":       resp.Cursor,
+	})
 }
 
 func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {

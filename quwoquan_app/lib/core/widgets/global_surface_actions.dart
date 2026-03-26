@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 
@@ -81,11 +82,7 @@ class GlobalSearchLauncher {
 }
 
 class _TopActionIcon extends StatelessWidget {
-  const _TopActionIcon({
-    super.key,
-    required this.icon,
-    required this.onTap,
-  });
+  const _TopActionIcon({super.key, required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -146,6 +143,7 @@ class _QuickActionSheet extends StatelessWidget {
       onCreateAction: (action) => _openCreateAction(context, action),
       onStartGroupChat: () => _openStartGroupChat(context),
       onAddContact: () => _openAddContact(context),
+      onCreateCircle: () => _openCreateCircle(context),
       onCancel: () => Navigator.of(context).pop(),
       priority: priority,
     );
@@ -158,11 +156,7 @@ class _QuickActionSheet extends StatelessWidget {
 
   void _openStartGroupChat(BuildContext sheetContext) {
     Navigator.of(sheetContext).pop();
-    rootContext.push(
-      AppRoutePaths.chatAddMembers(
-        id: AppConceptConstants.assistantConversationId,
-      ),
-    );
+    rootContext.push(AppRoutePaths.startGroupChat);
   }
 
   void _openAddContact(BuildContext sheetContext) {
@@ -174,6 +168,25 @@ class _QuickActionSheet extends StatelessWidget {
         barrierColor: Colors.transparent,
         builder: (_) => const _AddContactSheet(),
       );
+    });
+  }
+
+  void _openCreateCircle(BuildContext sheetContext) {
+    Navigator.of(sheetContext).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!rootContext.mounted) return;
+      Navigator.of(rootContext)
+          .push<String>(
+            CupertinoPageRoute<String>(
+              builder: (_) => const CircleEditSettingsPage.create(),
+            ),
+          )
+          .then((circleId) {
+            if (!rootContext.mounted || circleId == null || circleId.isEmpty) {
+              return;
+            }
+            rootContext.push(AppRoutePaths.circleDetail(id: circleId));
+          });
     });
   }
 }
@@ -391,7 +404,7 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
           Row(
             children: [
               Expanded(
-                child: CupertinoSearchTextField(
+                child: AppSearchField(
                   controller: _controller,
                   autofocus: true,
                   placeholder: UITextConstants.globalSearchTitle,
@@ -443,7 +456,7 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
                   if (_scope == GlobalSearchScope.all ||
                       _scope == GlobalSearchScope.circles)
                     _ResultSection(
-                      title: '圈子',
+                      title: '群组',
                       items: circleResults,
                       titleKey: 'name',
                       subtitleKey: 'subCategory',
@@ -496,7 +509,7 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
       case GlobalSearchScope.content:
         return '内容';
       case GlobalSearchScope.circles:
-        return '圈子';
+        return '群组';
       case GlobalSearchScope.contacts:
         return '联系人';
       case GlobalSearchScope.messages:

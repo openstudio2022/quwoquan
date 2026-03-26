@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
 Widget _scopedApp({
@@ -63,8 +64,9 @@ void main() {
       expect(find.text('成为同好后可直接发起语音和视频通话'), findsOneWidget);
       expect(find.text('加同好'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.add).first);
+      await tester.tap(find.byKey(TestKeys.chatInputMoreButton));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('语音通话'), findsNothing);
       expect(find.text('视频通话'), findsNothing);
@@ -118,8 +120,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byIcon(Icons.add).first);
+      await tester.tap(find.byKey(TestKeys.chatInputMoreButton));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('语音通话'), findsOneWidget);
       expect(find.text('视频通话'), findsOneWidget);

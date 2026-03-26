@@ -80,7 +80,13 @@ void main() {
     await tester.tap(find.text('笔记').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('笔记'), findsAtLeastNWidgets(2));
+    expect(find.text('笔记'), findsAtLeastNWidgets(1));
+    expect(
+      find.byKey(
+        const ValueKey<String>('circle-article-list-circle_journal_cover'),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('赞 '), findsWidgets);
   });
 }

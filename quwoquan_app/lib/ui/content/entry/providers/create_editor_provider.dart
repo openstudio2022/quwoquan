@@ -1,11 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
 class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
   int _articleBlockSeed = 0;
-  int _articlePageSeed = 0;
+  int _articleAssetSeed = 0;
 
   @override
   CreateEditorStateV2 build() {
@@ -34,15 +35,12 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
   }
 
   void updateTitle(String value) {
-    final nextPages = state.articlePages.isEmpty
-        ? createDefaultArticlePages(title: value)
-        : <ArticlePageData>[
-            state.articlePages.first.copyWith(title: value),
-            ...state.articlePages.skip(1),
-          ];
+    _applyArticleDocument(
+      state.articleDocument.copyWith(title: value),
+      activePageId: state.activeArticlePageId,
+      activeBlockId: state.activeArticleBlockId,
+    );
     state = state.copyWith(
-      title: value,
-      articlePages: nextPages,
       titlePresentation: value.trim().isEmpty
           ? state.titlePresentation
           : TitlePresentation.expanded,
@@ -58,19 +56,143 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     return '${type.name}_$_articleBlockSeed';
   }
 
-  String _nextArticlePageId() {
-    _articlePageSeed += 1;
-    return 'page_${_articlePageSeed + state.articlePages.length}';
+  String _nextArticleAssetId() {
+    _articleAssetSeed += 1;
+    return 'asset_$_articleAssetSeed';
   }
 
-  List<ArticlePageData> _syncTitleIntoPages(List<ArticlePageData> pages) {
-    final normalized = pages.isEmpty
-        ? createDefaultArticlePages(title: state.title)
-        : pages.toList(growable: false);
-    return <ArticlePageData>[
-      normalized.first.copyWith(title: state.title),
-      ...normalized.skip(1),
-    ];
+  String _normalizeArticleBody(String value) {
+    return value.replaceAll('\r\n', '\n');
+  }
+
+  List<ArticleDocumentAsset> _normalizeAssets(
+    List<ArticleDocumentAsset> assets,
+    int bodyLength,
+  ) {
+    final normalized =
+        assets
+            .where((asset) => asset.hasImage)
+            .map((asset) {
+              final offset = asset.offset < 0
+                  ? 0
+                  : (asset.offset > bodyLength ? bodyLength : asset.offset);
+              return asset.copyWith(offset: offset);
+            })
+            .toList(growable: false)
+          ..sort((left, right) {
+            final offsetCompare = left.offset.compareTo(right.offset);
+            if (offsetCompare != 0) {
+              return offsetCompare;
+            }
+            return left.id.compareTo(right.id);
+          });
+    return normalized;
+  }
+
+  String _normalizeArticleCoverImagePath(
+    String candidate,
+    List<String> imagePaths,
+  ) {
+    final sanitized = candidate.trim();
+    if (sanitized.isEmpty) {
+      return '';
+    }
+    return imagePaths.contains(sanitized) ? sanitized : '';
+  }
+
+  ArticleDocumentData _replaceBodyRange(
+    ArticleDocumentData document, {
+    required int start,
+    required int end,
+    required String replacement,
+  }) {
+    final int safeStart = start < 0
+        ? 0
+        : (start > document.body.length ? document.body.length : start);
+    final int safeEnd = end < safeStart
+        ? safeStart
+        : (end > document.body.length ? document.body.length : end);
+    final normalizedReplacement = _normalizeArticleBody(replacement);
+    final nextBody = document.body.replaceRange(
+      safeStart,
+      safeEnd,
+      normalizedReplacement,
+    );
+    final int delta = normalizedReplacement.length - (safeEnd - safeStart);
+    final nextAssets = document.assets
+        .map((asset) {
+          final shouldShift =
+              asset.offset > safeEnd ||
+              (safeEnd > safeStart && asset.offset == safeEnd);
+          return shouldShift
+              ? asset.copyWith(offset: asset.offset + delta)
+              : asset;
+        })
+        .toList(growable: false);
+    return document.copyWith(
+      body: nextBody,
+      assets: _normalizeAssets(nextAssets, nextBody.length),
+    );
+  }
+
+  ArticlePageBinding? _bindingForPageId(String? pageId) {
+    if (pageId == null) {
+      return null;
+    }
+    for (final page in state.articlePages) {
+      if (page.id == pageId) {
+        return page.binding;
+      }
+    }
+    return null;
+  }
+
+  void _applyArticleDocument(
+    ArticleDocumentData document, {
+    String? activePageId,
+    String? activeBlockId,
+    bool clearActivePageId = false,
+    bool clearActiveBlockId = false,
+  }) {
+    final normalizedBody = _normalizeArticleBody(document.body);
+    final normalizedDocument = ArticleDocumentData(
+      title: document.title,
+      body: normalizedBody,
+      assets: _normalizeAssets(document.assets, normalizedBody.length),
+      blocks: document.blocks,
+    );
+    final imagePaths = extractArticleImagePathsFromDocument(normalizedDocument);
+    final blocks = buildArticleBlocksFromDocument(normalizedDocument);
+    final pages = buildArticlePagesSnapshotFromDocument(
+      normalizedDocument,
+      fontPreset: state.articleFontPreset,
+    );
+    final fallbackTextBlock = blocks.firstWhere(
+      (block) => block.isTextLike,
+      orElse: () => blocks.first,
+    );
+    state = state.copyWith(
+      title: normalizedDocument.title,
+      body: buildArticlePlainTextFromDocument(normalizedDocument),
+      imagePaths: imagePaths,
+      articleDocument: normalizedDocument,
+      articlePages: pages,
+      articleBlocks: blocks,
+      articleCoverImagePath: _normalizeArticleCoverImagePath(
+        state.articleCoverImagePath,
+        imagePaths,
+      ),
+      activeArticlePageId: clearActivePageId
+          ? null
+          : (activePageId ?? state.activeArticlePageId ?? pages.first.id),
+      activeArticleBlockId: clearActiveBlockId
+          ? null
+          : (activeBlockId ??
+                state.activeArticleBlockId ??
+                fallbackTextBlock.id),
+      clearActiveArticlePageId: clearActivePageId,
+      clearActiveArticleBlockId: clearActiveBlockId,
+    );
   }
 
   void _applyArticleBlocks(
@@ -82,53 +204,46 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     final normalized = blocks.isEmpty
         ? createDefaultArticleBlocks()
         : blocks.toList(growable: false);
-    final pages = _syncTitleIntoPages(
-      buildArticlePagesFromBlocks(normalized, title: state.title),
+    final document = buildArticleDocumentFromBlocks(
+      normalized,
+      title: state.title,
+    );
+    final normalizedBody = _normalizeArticleBody(document.body);
+    final normalizedDocument = ArticleDocumentData(
+      title: document.title,
+      body: normalizedBody,
+      assets: _normalizeAssets(document.assets, normalizedBody.length),
+      blocks: document.blocks,
+    );
+    final imagePaths = extractArticleImagePathsFromDocument(normalizedDocument);
+    final pages = buildArticlePagesSnapshotFromDocument(
+      normalizedDocument,
+      fontPreset: state.articleFontPreset,
     );
     final fallbackTextBlock = normalized.firstWhere(
       (block) => block.isTextLike,
       orElse: () => normalized.first,
     );
     state = state.copyWith(
+      title: normalizedDocument.title,
+      body: buildArticlePlainTextFromDocument(normalizedDocument),
+      imagePaths: imagePaths,
+      articleDocument: normalizedDocument,
       articlePages: pages,
       articleBlocks: normalized,
-      body: buildArticlePlainText(normalized),
-      imagePaths: extractArticleImagePaths(normalized),
-      activeArticlePageId: activePageId ?? state.activeArticlePageId ?? pages.first.id,
+      articleCoverImagePath: _normalizeArticleCoverImagePath(
+        state.articleCoverImagePath,
+        imagePaths,
+      ),
+      activeArticlePageId:
+          activePageId ?? state.activeArticlePageId ?? pages.first.id,
       activeArticleBlockId: clearActiveBlockId
           ? null
-          : (activeBlockId ?? state.activeArticleBlockId ?? fallbackTextBlock.id),
+          : (activeBlockId ??
+                state.activeArticleBlockId ??
+                fallbackTextBlock.id),
       clearActiveArticlePageId: false,
       clearActiveArticleBlockId: clearActiveBlockId,
-    );
-  }
-
-  void _applyArticlePages(
-    List<ArticlePageData> pages, {
-    String? activePageId,
-    bool clearActivePageId = false,
-  }) {
-    final normalized = _syncTitleIntoPages(pages.toList(growable: false));
-    final safePages = normalized.isEmpty
-        ? createDefaultArticlePages(title: state.title)
-        : normalized;
-    final blocks = buildArticleBlocksFromPages(safePages);
-    final resolvedActivePageId = clearActivePageId
-        ? null
-        : (activePageId ?? state.activeArticlePageId ?? safePages.first.id);
-    final fallbackBlock = blocks.firstWhere(
-      (block) => block.id.startsWith('${resolvedActivePageId ?? safePages.first.id}_'),
-      orElse: () => blocks.first,
-    );
-    state = state.copyWith(
-      articlePages: safePages,
-      articleBlocks: blocks,
-      body: buildArticlePlainTextFromPages(safePages),
-      imagePaths: extractArticleImagePathsFromPages(safePages),
-      activeArticlePageId: resolvedActivePageId,
-      activeArticleBlockId: fallbackBlock.id,
-      clearActiveArticlePageId: clearActivePageId,
-      clearActiveArticleBlockId: false,
     );
   }
 
@@ -164,6 +279,45 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     return block.id;
   }
 
+  String insertArticleTextBlock({
+    String? afterBlockId,
+    required CreateTextBlockType type,
+    String text = '',
+  }) {
+    final block = switch (type) {
+      CreateTextBlockType.heading2 => CreateTextBlock.heading2(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.heading3 => CreateTextBlock.heading3(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.sectionTitle => CreateTextBlock.sectionTitle(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.orderedItem => CreateTextBlock.orderedItem(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.bulletItem => CreateTextBlock.bulletItem(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.paragraph => CreateTextBlock.paragraph(
+        id: _nextArticleBlockId(type),
+        text: text,
+      ),
+      CreateTextBlockType.image => CreateTextBlock.image(
+        id: _nextArticleBlockId(type),
+        imagePath: text,
+      ),
+    };
+    _insertArticleBlock(block, afterBlockId: afterBlockId);
+    return block.id;
+  }
+
   void _insertArticleBlock(CreateTextBlock block, {String? afterBlockId}) {
     final blocks = List<CreateTextBlock>.from(state.articleBlocks);
     final insertIndex = afterBlockId == null
@@ -183,59 +337,115 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     _applyArticleBlocks(blocks, activeBlockId: blockId);
   }
 
-  String insertArticlePageAfter({
-    String? afterPageId,
-    String body = '',
-  }) {
-    final nextId = _nextArticlePageId();
-    final pages = List<ArticlePageData>.from(state.articlePages);
-    final insertIndex = afterPageId == null
-        ? pages.length
-        : pages.indexWhere((page) => page.id == afterPageId) + 1;
-    final safeIndex = insertIndex.clamp(0, pages.length);
-    pages.insert(safeIndex, ArticlePageData(id: nextId, body: body));
-    _applyArticlePages(pages, activePageId: nextId);
-    return nextId;
+  void updateArticleTextBlockType(String blockId, CreateTextBlockType type) {
+    final blocks = state.articleBlocks
+        .map(
+          (block) => block.id == blockId ? block.copyWith(type: type) : block,
+        )
+        .toList(growable: false);
+    _applyArticleBlocks(blocks, activeBlockId: blockId);
+  }
+
+  String insertArticlePageAfter({String? afterPageId, String body = ''}) {
+    final binding = _bindingForPageId(afterPageId);
+    final insertionOffset =
+        binding?.bodyRange?.end ??
+        binding?.insertOffset ??
+        state.articleDocument.body.length;
+    final nextDocument = _replaceBodyRange(
+      state.articleDocument,
+      start: insertionOffset,
+      end: insertionOffset,
+      replacement: body.isEmpty ? '\n' : '\n${_normalizeArticleBody(body)}',
+    );
+    _applyArticleDocument(nextDocument);
+    return state.articlePages.last.id;
   }
 
   void updateArticlePageText(String pageId, String value) {
-    final pages = List<ArticlePageData>.from(state.articlePages);
-    final index = pages.indexWhere((page) => page.id == pageId);
-    if (index < 0) {
+    final binding = _bindingForPageId(pageId);
+    if (binding == null) {
       return;
     }
-    final current = pages[index];
-    final trimmed = value;
-    if (trimmed.length > kArticlePageSoftCharacterLimit) {
-      final splitIndex = resolveArticlePageSplitIndex(trimmed);
-      final head = trimmed.substring(0, splitIndex).trimRight();
-      final tail = trimmed.substring(splitIndex).trimLeft();
-      pages[index] = current.copyWith(body: head);
-      if (tail.isNotEmpty) {
-        final nextIndex = index + 1;
-        if (nextIndex < pages.length && pages[nextIndex].isEmpty) {
-          pages[nextIndex] = pages[nextIndex].copyWith(body: tail);
-        } else {
-          pages.insert(nextIndex, ArticlePageData(id: _nextArticlePageId(), body: tail));
-        }
-      }
-      _applyArticlePages(pages, activePageId: pageId);
+    if (binding.hasBodySlice) {
+      final nextDocument = _replaceBodyRange(
+        state.articleDocument,
+        start: binding.bodyRange!.start,
+        end: binding.bodyRange!.end,
+        replacement: value,
+      );
+      _applyArticleDocument(nextDocument, activePageId: pageId);
       return;
     }
-    pages[index] = current.copyWith(body: trimmed);
-    _applyArticlePages(pages, activePageId: pageId);
+    if (value.trim().isEmpty) {
+      return;
+    }
+    final nextDocument = _replaceBodyRange(
+      state.articleDocument,
+      start: binding.insertOffset,
+      end: binding.insertOffset,
+      replacement: value,
+    );
+    _applyArticleDocument(nextDocument, activePageId: pageId);
+  }
+
+  void updateArticlePageTextFromBinding(
+    ArticlePageBinding binding,
+    String value,
+  ) {
+    if (binding.hasBodySlice) {
+      final nextDocument = _replaceBodyRange(
+        state.articleDocument,
+        start: binding.bodyRange!.start,
+        end: binding.bodyRange!.end,
+        replacement: value,
+      );
+      _applyArticleDocument(nextDocument);
+      return;
+    }
+    if (value.trim().isEmpty) {
+      return;
+    }
+    final nextDocument = _replaceBodyRange(
+      state.articleDocument,
+      start: binding.insertOffset,
+      end: binding.insertOffset,
+      replacement: value,
+    );
+    _applyArticleDocument(nextDocument);
   }
 
   void removeArticlePage(String pageId) {
-    final next = state.articlePages
-        .where((page) => page.id != pageId)
-        .toList(growable: false);
-    if (next.isEmpty) {
-      _applyArticlePages(createDefaultArticlePages(title: state.title));
+    final binding = _bindingForPageId(pageId);
+    if (binding == null) {
       return;
     }
-    final fallback = next.first;
-    _applyArticlePages(next, activePageId: fallback.id);
+    var nextDocument = state.articleDocument;
+    if (binding.hasTitleSlice) {
+      nextDocument = nextDocument.copyWith(
+        title: nextDocument.title.replaceRange(
+          binding.titleRange!.start,
+          binding.titleRange!.end,
+          '',
+        ),
+      );
+    }
+    if (binding.hasBodySlice) {
+      nextDocument = _replaceBodyRange(
+        nextDocument,
+        start: binding.bodyRange!.start,
+        end: binding.bodyRange!.end,
+        replacement: '',
+      );
+    }
+    if (binding.hasAsset) {
+      nextDocument = nextDocument.copyWith(
+        assets: nextDocument.assets
+            .where((asset) => asset.id != binding.assetId)
+            .toList(growable: false),
+      );
+    }
+    _applyArticleDocument(nextDocument, activePageId: pageId);
   }
 
   void replaceArticlePageImage(String pageId, String imagePath) {
@@ -243,23 +453,187 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     if (sanitized.isEmpty) {
       return;
     }
-    final pages = state.articlePages
-        .map(
-          (page) => page.id == pageId ? page.copyWith(imageUrl: sanitized) : page,
-        )
-        .toList(growable: false);
-    _applyArticlePages(pages, activePageId: pageId);
+    final binding = _bindingForPageId(pageId);
+    if (binding == null) {
+      return;
+    }
+    if (binding.hasAsset) {
+      final nextAssets = state.articleDocument.assets
+          .map(
+            (asset) => asset.id == binding.assetId
+                ? asset.copyWith(imageUrl: sanitized)
+                : asset,
+          )
+          .toList(growable: false);
+      _applyArticleDocument(
+        state.articleDocument.copyWith(
+          assets: _normalizeAssets(
+            nextAssets,
+            state.articleDocument.body.length,
+          ),
+        ),
+        activePageId: pageId,
+      );
+      return;
+    }
+    final assetId = _nextArticleAssetId();
+    final nextAssets = <ArticleDocumentAsset>[
+      ...state.articleDocument.assets,
+      ArticleDocumentAsset(
+        id: assetId,
+        offset: binding.insertOffset,
+        imageUrl: sanitized,
+      ),
+    ];
+    _applyArticleDocument(
+      state.articleDocument.copyWith(
+        assets: _normalizeAssets(nextAssets, state.articleDocument.body.length),
+      ),
+      activePageId: pageId,
+    );
+  }
+
+  void replaceArticlePageImageFromBinding(
+    ArticlePageBinding binding,
+    String imagePath,
+  ) {
+    final sanitized = imagePath.trim();
+    if (sanitized.isEmpty) {
+      return;
+    }
+    if (binding.hasAsset) {
+      final nextAssets = state.articleDocument.assets
+          .map(
+            (asset) => asset.id == binding.assetId
+                ? asset.copyWith(imageUrl: sanitized)
+                : asset,
+          )
+          .toList(growable: false);
+      _applyArticleDocument(
+        state.articleDocument.copyWith(
+          assets: _normalizeAssets(
+            nextAssets,
+            state.articleDocument.body.length,
+          ),
+        ),
+      );
+      return;
+    }
+    final nextAssets = <ArticleDocumentAsset>[
+      ...state.articleDocument.assets,
+      ArticleDocumentAsset(
+        id: _nextArticleAssetId(),
+        offset: binding.insertOffset,
+        imageUrl: sanitized,
+      ),
+    ];
+    _applyArticleDocument(
+      state.articleDocument.copyWith(
+        assets: _normalizeAssets(nextAssets, state.articleDocument.body.length),
+      ),
+    );
   }
 
   void updateArticlePageImageLayout(String pageId, String imageLayout) {
-    final pages = state.articlePages
+    final binding = _bindingForPageId(pageId);
+    if (binding == null || !binding.hasAsset) {
+      return;
+    }
+    final nextAssets = state.articleDocument.assets
         .map(
-          (page) => page.id == pageId
-              ? page.copyWith(imageLayout: imageLayout)
-              : page,
+          (asset) => asset.id == binding.assetId
+              ? asset.copyWith(imageLayout: imageLayout)
+              : asset,
         )
         .toList(growable: false);
-    _applyArticlePages(pages, activePageId: pageId);
+    _applyArticleDocument(
+      state.articleDocument.copyWith(
+        assets: _normalizeAssets(nextAssets, state.articleDocument.body.length),
+      ),
+      activePageId: pageId,
+    );
+  }
+
+  void updateArticlePageImageLayoutFromBinding(
+    ArticlePageBinding binding,
+    String imageLayout,
+  ) {
+    if (!binding.hasAsset) {
+      return;
+    }
+    final nextAssets = state.articleDocument.assets
+        .map(
+          (asset) => asset.id == binding.assetId
+              ? asset.copyWith(imageLayout: imageLayout)
+              : asset,
+        )
+        .toList(growable: false);
+    _applyArticleDocument(
+      state.articleDocument.copyWith(
+        assets: _normalizeAssets(nextAssets, state.articleDocument.body.length),
+      ),
+    );
+  }
+
+  void removeArticlePageFromBinding(ArticlePageBinding binding) {
+    var nextDocument = state.articleDocument;
+    if (binding.hasTitleSlice) {
+      nextDocument = nextDocument.copyWith(
+        title: nextDocument.title.replaceRange(
+          binding.titleRange!.start,
+          binding.titleRange!.end,
+          '',
+        ),
+      );
+    }
+    if (binding.hasBodySlice) {
+      nextDocument = _replaceBodyRange(
+        nextDocument,
+        start: binding.bodyRange!.start,
+        end: binding.bodyRange!.end,
+        replacement: '',
+      );
+    }
+    if (binding.hasAsset) {
+      nextDocument = nextDocument.copyWith(
+        assets: nextDocument.assets
+            .where((asset) => asset.id != binding.assetId)
+            .toList(growable: false),
+      );
+    }
+    _applyArticleDocument(nextDocument);
+  }
+
+  String insertArticleImageAfterPage(String? afterPageId, String imagePath) {
+    final sanitized = imagePath.trim();
+    if (sanitized.isEmpty) {
+      return state.activeArticlePageId ?? state.articlePages.first.id;
+    }
+    final binding = _bindingForPageId(afterPageId);
+    final insertionOffset =
+        binding?.bodyRange?.end ??
+        binding?.insertOffset ??
+        state.articleDocument.body.length;
+    final assetId = _nextArticleAssetId();
+    final nextAssets = <ArticleDocumentAsset>[
+      ...state.articleDocument.assets,
+      ArticleDocumentAsset(
+        id: assetId,
+        offset: insertionOffset,
+        imageUrl: sanitized,
+      ),
+    ];
+    _applyArticleDocument(
+      state.articleDocument.copyWith(
+        assets: _normalizeAssets(nextAssets, state.articleDocument.body.length),
+      ),
+    );
+    for (final page in state.articlePages) {
+      if (page.binding?.assetId == assetId) {
+        return page.id;
+      }
+    }
+    return state.activeArticlePageId ?? state.articlePages.first.id;
   }
 
   void setArticleTemplate(ArticleTemplatePreset preset) {
@@ -268,6 +642,20 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
 
   void setArticleFontPreset(ArticleFontPreset preset) {
     state = state.copyWith(articleFontPreset: preset);
+    _applyArticleDocument(
+      state.articleDocument,
+      activePageId: state.activeArticlePageId,
+      activeBlockId: state.activeArticleBlockId,
+    );
+  }
+
+  void setArticleCoverImage(String? imagePath) {
+    state = state.copyWith(
+      articleCoverImagePath: _normalizeArticleCoverImagePath(
+        imagePath ?? '',
+        state.imagePaths,
+      ),
+    );
   }
 
   void replaceArticleImageBlock(String blockId, String imagePath) {
@@ -299,10 +687,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     _applyArticleBlocks(blocks, activeBlockId: blockId);
   }
 
-  void insertArticleImages(
-    List<String> paths, {
-    String? afterBlockId,
-  }) {
+  void insertArticleImages(List<String> paths, {String? afterBlockId}) {
     final sanitized = paths
         .map((path) => path.trim())
         .where((path) => path.isNotEmpty)
@@ -333,6 +718,26 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
   void removeArticleBlock(String blockId) {
     final next = state.articleBlocks
         .where((block) => block.id != blockId)
+        .toList(growable: false);
+    if (next.isEmpty) {
+      final fallbackId = insertArticleParagraph();
+      setActiveArticleBlock(fallbackId);
+      return;
+    }
+    final fallback = next.firstWhere(
+      (block) => block.isTextLike,
+      orElse: () => next.first,
+    );
+    _applyArticleBlocks(next, activeBlockId: fallback.id);
+  }
+
+  void removeArticleBlocks(Iterable<String> blockIds) {
+    final idSet = blockIds.where((id) => id.trim().isNotEmpty).toSet();
+    if (idSet.isEmpty) {
+      return;
+    }
+    final next = state.articleBlocks
+        .where((block) => !idSet.contains(block.id))
         .toList(growable: false);
     if (next.isEmpty) {
       final fallbackId = insertArticleParagraph();
@@ -391,7 +796,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
         .toList(growable: false);
     state = state.copyWith(
       editorKind: editorKind,
-      mediaKind: sanitized.isEmpty ? CreateMediaKind.none : CreateMediaKind.images,
+      mediaKind: sanitized.isEmpty
+          ? CreateMediaKind.none
+          : CreateMediaKind.images,
       imagePaths: sanitized,
       videoPath: '',
       originalVideoPath: '',
@@ -445,8 +852,11 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
         oldIndex == newIndex) {
       return;
     }
-    final currentCoverPath = state.imagePaths[
-        state.currentMediaIndex.clamp(0, state.imagePaths.length - 1)];
+    final currentCoverPath =
+        state.imagePaths[state.currentMediaIndex.clamp(
+          0,
+          state.imagePaths.length - 1,
+        )];
     final next = List<String>.from(state.imagePaths);
     final moved = next.removeAt(oldIndex);
     final targetIndex = oldIndex < newIndex ? newIndex - 1 : newIndex;
@@ -477,7 +887,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
     final sanitizedPath = path.trim();
     state = state.copyWith(
       editorKind: editorKind,
-      mediaKind: sanitizedPath.isEmpty ? CreateMediaKind.none : CreateMediaKind.video,
+      mediaKind: sanitizedPath.isEmpty
+          ? CreateMediaKind.none
+          : CreateMediaKind.video,
       imagePaths: const <String>[],
       videoPath: sanitizedPath,
       originalVideoPath: (originalPath ?? sanitizedPath).trim(),
@@ -523,7 +935,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
 
   void clearVideo() {
     state = state.copyWith(
-      mediaKind: state.imagePaths.isNotEmpty ? CreateMediaKind.images : CreateMediaKind.none,
+      mediaKind: state.imagePaths.isNotEmpty
+          ? CreateMediaKind.images
+          : CreateMediaKind.none,
       videoPath: '',
       originalVideoPath: '',
       videoThumbnail: '',
@@ -548,5 +962,5 @@ class CreateEditorNotifier extends Notifier<CreateEditorStateV2> {
 
 final createEditorProvider =
     NotifierProvider.autoDispose<CreateEditorNotifier, CreateEditorStateV2>(
-  CreateEditorNotifier.new,
-);
+      CreateEditorNotifier.new,
+    );

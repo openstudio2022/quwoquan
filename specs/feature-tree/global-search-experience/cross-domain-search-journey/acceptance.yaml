@@ -10,8 +10,8 @@ execution:
 
 scope:
   summary: >
-    冻结全屏搜索首页、跨域综合结果、社交关系搜索、圈子 facet、最近搜索、
-    语音转词与问小趣 handoff 的端到端旅程。
+    冻结全屏搜索首页初始态、实时联想、独立网络结果页、联系人/聊天记录直达、
+    群组结果与群组分类 facet、最近搜索、语音转词与小趣搜 assistant 结果的端到端旅程。
   composed_scenarios:
     - full-screen-search-shell-and-entry
     - multi-domain-result-composition
@@ -27,14 +27,14 @@ scope:
 journey_acceptance:
   J1:
     title: 用户可从任一一级页面进入统一全屏搜索首页
-    journey: home/chat/circle/assistant -> open full-screen search -> pick scope or input query
+    journey: home/chat/group-hub/assistant -> open full-screen search -> see history state -> input query
     scenario_refs:
       - full-screen-search-shell-and-entry
       - recent-search-sync-and-voice-asr
       - xiaoqu-entry-handoff
     done_when:
-      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
-      - 搜索首页包含搜索框、问小趣入口、语音按钮、指定搜索内容和最近搜索
+      - 首页、聊天页、群组页、助手页进入同一全屏搜索首页
+      - 搜索首页包含搜索框、最近在搜双列卡片、展开与历史管理态
       - 用户取消、返回与重新进入时，上下文行为稳定可预期
     release_guardrails:
       - 全局搜索保持唯一全屏浮层语义
@@ -53,21 +53,21 @@ journey_acceptance:
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: implemented
+    status: pending
   J2:
-    title: 用户可得到按类型组织的综合搜索结果
-    journey: input query -> receive grouped results -> switch section -> enter target page
+    title: 用户可得到实时联想并进入独立网络结果页
+    journey: input query -> receive suggestions -> expand sections or open network results -> enter target page
     scenario_refs:
       - multi-domain-result-composition
       - social-relationship-search-contract
       - circle-facet-search-and-filter
     done_when:
-      - 综合搜索结果按内容、社交关系、消息、圈子与频道 facet 分组组织
-      - 单域失败时只降级该分组，不阻塞其它分组显示
-      - 结果点击可稳定进入对应详情或列表页
+      - 联想页按“最常使用 / 联系人 / 聊天记录 / 搜索网络结果”四段组织
+      - 联系人、聊天记录可页内展开更多，并稳定直达对应会话
+      - 网络结果页可在小趣搜与群组分类 facet 间切换，并进入对应群组或内容目标页
     release_guardrails:
-      - 不把问小趣结果混入综合搜索结果
-      - 频道仅以 circle facet 形式出现
+      - 不把小趣搜结果混入联想页实时分段
+      - 群组分类仅以 circle facet 形式出现
     evidence:
       primary:
         - T3_cross_service_integration
@@ -82,17 +82,17 @@ journey_acceptance:
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - make gate
-    status: implemented
+    status: pending
   J3:
-    title: 用户可在搜索页完成历史复用、语音转词与问小趣切换
-    journey: open search -> use recent history or voice -> continue search or handoff to xiaoqu
+    title: 用户可在搜索页完成历史复用、语音转词与小趣搜 continuation
+    journey: open search -> use recent history or voice -> continue search -> optionally switch to xiaoqu tab
     scenario_refs:
       - recent-search-sync-and-voice-asr
       - xiaoqu-entry-handoff
     done_when:
       - 普通搜索 query 会记录到最近搜索并支持本地与云同步
       - 语音入口将 ASR 文本写回搜索框并参与普通搜索
-      - 问小趣 handoff 不写入最近搜索，且保存在 assistant 对话中
+      - 小趣搜不单独新增 AI query 历史，后续 assistant continuation 保存在 assistant 对话中
     release_guardrails:
       - 语音失败可退回手动输入
       - 历史清除动作可本地与云端一致生效
@@ -107,11 +107,11 @@ journey_acceptance:
       planned:
         - recent search sync test
         - voice to query journey test
-        - xiaoqu handoff regression test
+        - xiaoqu tab regression test
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - flutter test test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: implemented
+    status: pending
 
 release_acceptance:
   R1:
@@ -134,4 +134,4 @@ release_acceptance:
       recorded:
         - make gate
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: implemented
+    status: pending

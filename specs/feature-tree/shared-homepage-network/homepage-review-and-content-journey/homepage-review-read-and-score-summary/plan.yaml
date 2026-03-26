@@ -1,0 +1,69 @@
+version: 1
+node: shared-homepage-network/homepage-review-and-content-journey/homepage-review-read-and-score-summary
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage review summary schema
+    goal: 冻结总评分、维度摘要、精选口碑预览与类目模板绑定
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 评分摘要字段清晰
+      - 维度模板与主页类目关系明确
+    status: planned
+
+  - id: P2
+    title: land review summary module on homepage shell
+    goal: 在主页详情中展示总评分、维度摘要和精选口碑入口
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 总评分和维度摘要可见
+      - 暂无口碑时有明确空态
+    status: planned
+
+  - id: P3
+    title: wire category-specific review template consumption
+    goal: 让不同主页类型消费各自的口碑摘要模板，而不是前台硬编码一套规则
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+      - T4_user_journey
+    done_when:
+      - 酒店、餐饮、景点等类型能读取对应维度
+      - 写口碑和更多口碑入口语义清晰
+    status: planned
+
+  - id: P4
+    title: harden homepage review summary tests
+    goal: 为评分摘要、空态和精选口碑预览补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 评分摘要模块有稳定回归测试
+      - 类目模板和空态有契约覆盖
+    status: planned

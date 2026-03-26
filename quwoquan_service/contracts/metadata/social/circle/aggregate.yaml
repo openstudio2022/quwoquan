@@ -3,9 +3,10 @@ domain: circle
 aggregate_root: Circle
 
 description: |
-  圈子聚合。兴趣/本地/行业/活动/校友等分类圈子。
-  MongoDB 存储，支撑圈子发现和成员管理的高并发读取。
-  圈子可绑定群聊（Conversation type=circle）。
+  群组入口对应的 circle 聚合。兴趣圈子与组织主页共用同一聚合根，
+  下挂 CircleGroup / CircleGroupMember 承载公共群、自建群和组织节点。
+  MongoDB 存储，支撑详情模板分流、成员治理与群组协作的高并发读取。
+  默认公共群与组织默认交流节点可绑定 Conversation。
 
 storage_backend: mongodb
 cache_layer: redis
@@ -24,6 +25,16 @@ members:
     relation: 1:N
     cascade_delete: true
     description: 圈子成员
+
+  - entity: CircleGroup
+    relation: 1:N
+    cascade_delete: true
+    description: 群组 / 组织节点
+
+  - entity: CircleGroupMember
+    relation: 1:N
+    cascade_delete: true
+    description: 群组成员与入群申请
 
 ddd_layer_mapping:
   domain_model: internal/domain/circle/model

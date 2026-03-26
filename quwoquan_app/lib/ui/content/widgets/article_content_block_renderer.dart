@@ -1,8 +1,8 @@
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 
@@ -60,6 +60,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const sectionHeadingLineHeight = 1.3;
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
 
@@ -71,6 +72,34 @@ class ArticleContentBlockRenderer extends StatelessWidget {
         backgroundColor: backgroundColor,
         padding: padding,
         child: switch (block.type) {
+          'heading_2' => Text(
+            block.body,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: AppTypography.xl,
+              fontWeight: AppTypography.semiBold,
+              height: AppSpacing.textLineHeightBody,
+            ),
+          ),
+          'heading_3' => Text(
+            block.body,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: AppTypography.lg,
+              fontWeight: AppTypography.semiBold,
+              height: AppSpacing.textLineHeightHeadline,
+            ),
+          ),
+          'section_heading' => Text(
+            block.body,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: AppTypography.xl + 2,
+              fontWeight: AppTypography.bold,
+              height: sectionHeadingLineHeight,
+              letterSpacing: 0.18,
+            ),
+          ),
           'image' => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -97,8 +126,8 @@ class ArticleContentBlockRenderer extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: AppSpacing.twentyEight,
+                height: AppSpacing.twentyEight,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: CupertinoColors.activeBlue
@@ -114,6 +143,33 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                     color: CupertinoColors.activeBlue.resolveFrom(context),
                     fontSize: AppTypography.sm,
                     fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+              ),
+              SizedBox(width: AppSpacing.containerSm),
+              Expanded(
+                child: Text(
+                  block.body,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: AppTypography.base,
+                    height: 1.8, // ignore: verify_dart_semantic
+                  ),
+                ),
+              ),
+            ],
+          ),
+          'bullet_item' => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
+                child: Container(
+                  width: AppSpacing.sm,
+                  height: AppSpacing.sm,
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.activeBlue.resolveFrom(context),
+                    borderRadius: BorderRadius.circular(AppSpacing.xs),
                   ),
                 ),
               ),
@@ -207,7 +263,11 @@ class ArticleAdaptiveImage extends StatelessWidget {
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       return CachedNetworkImage(
         imageUrl: imageUrl,
-        fit: BoxFit.cover,
+        imageBuilder: (context, imageProvider) => Image(
+          image: imageProvider,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
         placeholder: (context, url) =>
             Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
         errorWidget: (context, url, error) =>
@@ -217,6 +277,7 @@ class ArticleAdaptiveImage extends StatelessWidget {
     return Image.file(
       File(imageUrl),
       fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
       errorBuilder: (context, error, stackTrace) =>
           Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
     );
@@ -242,11 +303,11 @@ class ArticleWrappedParagraph extends StatelessWidget {
       fontSize: AppTypography.base,
       height: 1.85, // ignore: verify_dart_semantic
     );
-    const imageWidth = 120.0;
-    const imageHeight = 120.0;
     final horizontalGap = AppSpacing.containerSm;
     return LayoutBuilder(
       builder: (context, constraints) {
+        final imageWidth = math.min(132.0, constraints.maxWidth * 0.42);
+        final imageHeight = imageWidth;
         final sideWidth = (constraints.maxWidth - imageWidth - horizontalGap)
             .clamp(120.0, constraints.maxWidth)
             .toDouble();

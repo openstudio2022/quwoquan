@@ -1,0 +1,22 @@
+version: 1
+aggregate: Homepage
+layer: contract
+
+scenarios:
+  - name: search_homepages
+    operation: SearchHomepages
+    assertions:
+      - items_match_schema
+      - result_contains_homepage_id
+
+  - name: suggest_homepage_candidate
+    operation: SuggestHomepageCandidate
+    assertions:
+      - status_201
+      - candidate_status_created
+
+  - name: create_claim_request
+    operation: CreateHomepageClaimRequest
+    assertions:
+      - status_201
+      - claim_request_status_pending_review

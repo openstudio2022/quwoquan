@@ -125,6 +125,80 @@ share_template_profiles:
     include_circle_context: false
     include_tags: true
 
+# ── 1.46、article 分发 / 阅读 / 模板配置 ────────────────────────────────────
+article_distribution_profiles:
+  - id: follow_list_with_optional_cover
+    surface: following_feed
+    layout: cover_leading_title_summary
+    cover_mode: optional_cover
+    summary_line_limit: 2
+
+  - id: circle_dual_column_with_optional_cover
+    surface: circle_dual_column
+    layout: cover_top_title_summary_or_text_card
+    cover_mode: optional_cover
+    summary_line_limit: 3
+
+article_reader_profiles:
+  - id: full_screen_book_stage
+    stage_layout: full_bleed_book
+    page_indicator_anchor: top_after_back
+    edge_treatment: stitched_spine
+    supports_page_curl: true
+
+  - id: top_nav_with_page_fraction
+    stage_layout: top_nav_page_fraction
+    page_indicator_anchor: top_after_back
+    edge_treatment: clean
+    supports_page_curl: false
+
+article_template_configs:
+  - id: gentle
+    default_font_preset: clean
+    paper_texture: cotton_fiber
+    decoration_style: pressed_flower
+    chrome_style: soft_album
+
+  - id: ritual
+    default_font_preset: classic
+    paper_texture: xuan_paper
+    decoration_style: seal_ribbon
+    chrome_style: stitched_ledger
+
+  - id: diffuse
+    default_font_preset: clean
+    paper_texture: mist_canvas
+    decoration_style: translucent_sticker
+    chrome_style: floating_album
+
+  - id: journal
+    default_font_preset: handwritten
+    paper_texture: scrapbook_paper
+    decoration_style: tape_sticker
+    chrome_style: handmade_notebook
+
+  - id: tech
+    default_font_preset: mono
+    paper_texture: blueprint_grid
+    decoration_style: data_label
+    chrome_style: precision_manual
+
+article_template_recommendations:
+  - category_id: humanity
+    recommended_article_templates: [journal, ritual]
+
+  - category_id: tech
+    recommended_article_templates: [tech, diffuse]
+
+  - category_id: travel
+    recommended_article_templates: [journal, gentle]
+
+  - category_id: food
+    recommended_article_templates: [gentle, journal]
+
+  - category_id: life
+    recommended_article_templates: [gentle, diffuse]
+
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:
   photo:
@@ -213,6 +287,21 @@ feature_flags:
     default: false
     runtime_overridable: true
     description: "按点滴 / 作品生成差异化分享模板"
+
+  - flag: enable_article_distribution_profiles
+    default: false
+    runtime_overridable: true
+    description: "启用文章关注流 / 圈子分发 profile 真相源"
+
+  - flag: enable_article_book_reader
+    default: false
+    runtime_overridable: true
+    description: "启用文章全屏书本阅读器舞台"
+
+  - flag: enable_article_page_curl
+    default: false
+    runtime_overridable: true
+    description: "启用文章翻页卷角动效"
 
   - flag: enable_assistant_content_identity_index
     default: false

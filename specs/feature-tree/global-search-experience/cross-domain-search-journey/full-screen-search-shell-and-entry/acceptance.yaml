@@ -11,12 +11,14 @@ execution:
 
 scope:
   summary: >
-    冻结全局搜索首页的全屏壳层、统一入口、默认上下文与 route/surface/page context。
+    冻结全局搜索首页初始态与输入后联想态的全屏壳层、统一入口、
+    默认上下文与 route/surface/page context。
   journey_bindings:
     - J1
   in_scope:
-    - 首页、聊天页、圈子页、助手页统一进入全屏搜索首页
-    - 搜索框、问小趣、语音、指定搜索内容、最近搜索区块布局
+    - 首页、聊天页、群组页、助手页统一进入全屏搜索首页
+    - 搜索框、`最近在搜` 双列卡片、展开与历史管理态布局
+    - 输入后联想页的四段结构布局
   out_of_scope:
     - 搜索结果分组逻辑
     - 最近搜索同步实现
@@ -27,8 +29,9 @@ scenario_acceptance:
     scenario: global search shell and entry
     journey_step: open search landing from root surfaces
     done_when:
-      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
-      - 搜索首页包含搜索框、问小趣入口、语音按钮、指定搜索内容、最近搜索区块
+      - 首页、聊天页、群组页、助手页进入同一全屏搜索首页
+      - 搜索首页包含搜索框、`最近在搜` 双列卡片、展开与历史管理态
+      - 输入后页面切换为 `最常使用 / 联系人 / 聊天记录 / 搜索网络结果` 四段联想布局
       - 返回与取消操作不会破坏原页面上下文
     edge_cases:
       - 深色模式下层级不混乱
@@ -50,7 +53,7 @@ scenario_acceptance:
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: implemented
+    status: pending
 
 story_readiness:
   S1:
@@ -70,4 +73,4 @@ story_readiness:
       recorded:
         - make verify-metadata
         - make gate
-    status: implemented
+    status: pending

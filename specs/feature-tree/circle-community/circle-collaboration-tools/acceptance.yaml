@@ -3,39 +3,38 @@ level: "L2_feature"
 archived: false
 level_acceptance:
 - id: A1
-  description: '存储空间 CRUD 可用：成员可创建文件夹、上传文件（≤50MB）、下载文件、删除文件、 重命名文件/文件夹。文件列表支持按时间/大小排序。
+  description: '资料能力 CRUD 可用：公共群、组织节点和开启资料能力的自建群可创建文件夹、上传文件（≤50MB）、下载文件、删除文件、重命名文件/文件夹； 文件列表支持按时间/大小排序。
 
     '
   status: pending
   tests: []
 - id: A2
-  description: '存储空间权限控制生效：圈主可增删所有文件、管理员可管理本层级文件、 成员可上传和下载、访客仅可浏览和下载公开文件。 非授权操作返回
+  description: '资料权限模型生效：圈级或组织级治理者可配置公共群资料权限， 群主可管理自建群资料； 成员可按群规则上传和下载， 非授权操作返回
     403 + 对应错误码。
 
     '
   status: pending
   tests: []
 - id: A3
-  description: '存储空间容量限制生效：超过配置上限时上传返回错误提示， 圈子设置页显示已用/总容量。
+  description: '群目录可用：群组详情可区分展示公共群与自建群； 组织型详情可展示组织节点、公共交流群与兴趣小组； 用户能明确看到自己已加入的群或节点。
 
     '
   status: pending
   tests: []
 - id: A4
-  description: '群聊入口可用：圈子详情页显示群聊卡片（最近 1 条消息预览 + 未读计数）， 点击跳转到 IM 会话页。
+  description: '公共群交流入口可用：群组详情页可进入默认公共群或组织节点的交流页， 并展示最近消息预览、未读状态和群资料入口。
 
     '
   status: pending
   tests: []
 - id: A5
-  description: '群聊成员自动同步：加入圈子后 3 秒内自动进入群聊（CircleMemberJoined → chat-service）， 退出圈子后自动退出群聊（CircleMemberLeft
-    → chat-service）。 圈主可在圈子设置中关闭自动同步。
+  description: '群成员自动同步规则可用：加入群组后 3 秒内自动进入默认公共群， 退出群组后自动退出对应公共群； 组织型群组可按节点分流； 圈级或组织级治理者可关闭自动同步。
 
     '
   status: pending
   tests: []
 - id: A6
-  description: '作品发布区可用：圈子详情页展示圈内内容 feed， 支持瀑布流/列表视图切换，圈内 FAB 可跳转创作页并自动填充 circleId。
+  description: '群组层公开内容发布区可用：详情页展示群组内容 feed， 支持笔记/作品/提问/口碑的统一发布入口； 群层不承接第二条公开时间线， 只负责交流、资料和公告。
 
     '
   status: pending

@@ -19,10 +19,9 @@ class SettingsSemanticConstants {
       AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
 
   /// 创作页（微趣/美图/视频/文章）整体背景：浅色纯白、深色与设置页一致；分割线保持 [createInlineDividerColor]；支持深色模式
-  static Color createPageBackground(bool isDark) =>
-      isDark
-          ? AppColorsFunctional.getColor(true, ColorType.backgroundSecondary)
-          : AppColorsFunctional.getColor(false, ColorType.backgroundPrimary);
+  static Color createPageBackground(bool isDark) => isDark
+      ? AppColorsFunctional.getColor(true, ColorType.backgroundSecondary)
+      : AppColorsFunctional.getColor(false, ColorType.backgroundPrimary);
 
   /// 创作页功能块/AppBar 背景：浅色纯白、深色深黑 [backgroundPrimary]；支持深色模式
   static Color createPageBlockBackground(bool isDark) =>
@@ -76,7 +75,8 @@ class SettingsSemanticConstants {
   static double get createInputArticleBodyFontSize => 18.0;
 
   /// 创作页：设置项名字号（与顶部标题同号，非黑体）
-  static double get createSettingItemLabelFontSize => createToolbarTitleFontSize;
+  static double get createSettingItemLabelFontSize =>
+      createToolbarTitleFontSize;
 
   /// 创作页：设置项值字号（比设置项名小一号）
   static double get createSettingItemValueFontSize => AppTypography.lg;
@@ -130,7 +130,9 @@ class SettingsSemanticConstants {
 
   /// 块内水平内边距
   static double get blockHorizontalPadding =>
-      AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd;
+      AppSpacing.semantic[DesignSemanticConstants
+          .container]?[DesignSemanticConstants.md] ??
+      AppSpacing.containerMd;
 
   // ==================== 开关 Switch ====================
   /// 选中：轨道色（主色/蓝）
@@ -155,7 +157,10 @@ class SettingsSemanticConstants {
   /// 危险操作文字色（红，稍浅）
   static Color exitActionColor(bool isDark) {
     final base = AppColors.error;
-    final mix = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final mix = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     return Color.lerp(base, mix, 0.12) ?? base;
   }
 
@@ -240,6 +245,36 @@ class SettingsSemanticConstants {
   /// AppBar 内发表按钮：文字字号
   static double get actionButtonTextSizeInToolbar => AppTypography.sm;
 
+  // ==================== 选择页 / 浮层统一语义 ====================
+  /// 选择页工具栏背景，和设置/发布场景保持同一层级。
+  static Color selectionToolbarBackground(bool isDark) =>
+      createPageBlockBackground(isDark);
+
+  /// 选择页搜索框底色，浅色偏中性灰，深色抬高一层表面。
+  static Color selectionSearchBackground(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted);
+
+  /// 选择页右侧箭头/辅助图标颜色。
+  static Color selectionChevronColor(bool isDark) => secondaryColor(isDark);
+
+  /// 选择页卡片圆角，相比设置页略大，接近全局弹层视觉。
+  static double get selectionCardBorderRadius => AppSpacing.largeBorderRadius;
+
+  /// 选择页卡片内行最小高度，保证触控与视觉留白一致。
+  static double get selectionRowMinHeight => 56.0;
+
+  /// 已选头像上的移除按钮背景。
+  static Color selectionAvatarAccessoryBackground(bool isDark) =>
+      blockBackground(isDark);
+
+  /// 已选头像上的移除按钮描边。
+  static Color selectionAvatarAccessoryBorder(bool isDark) =>
+      dividerColor(isDark);
+
+  /// 已选头像上的移除按钮图标色，保持低强调。
+  static Color selectionAvatarAccessoryForeground(bool isDark) =>
+      secondaryColor(isDark);
+
   // ==================== 工具栏高度（业界设计） ====================
   /// 顶部 AppBar 高度（含分割线）
   static double get appBarHeight => 56.0;
@@ -258,14 +293,18 @@ class SettingsSemanticConstants {
 
   /// emoji Tab 左右内边距（与 blockHorizontalPadding 或更紧凑）
   static double get emojiTabPaddingHorizontal =>
-      AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm;
+      AppSpacing.semantic[DesignSemanticConstants
+          .container]?[DesignSemanticConstants.sm] ??
+      AppSpacing.containerSm;
 
   /// emoji Tab 上下内边距
   static double get emojiTabPaddingVertical => AppSpacing.xs;
 
   /// emoji Tab 之间水平间距（胶囊之间更疏朗）
   static double get emojiTabSpacing =>
-      AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.md] ?? AppSpacing.intraGroupMd;
+      AppSpacing.semantic[DesignSemanticConstants
+          .intraGroup]?[DesignSemanticConstants.md] ??
+      AppSpacing.intraGroupMd;
 
   /// emoji Tab 胶囊圆角
   static double get emojiTabCapsuleRadius => 16.0;
@@ -278,11 +317,15 @@ class SettingsSemanticConstants {
 
   /// emoji 网格：横向/纵向间距一致（组内间距 sm）
   static double get emojiGridSpacing =>
-      AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.sm] ?? AppSpacing.intraGroupSm;
+      AppSpacing.semantic[DesignSemanticConstants
+          .intraGroup]?[DesignSemanticConstants.sm] ??
+      AppSpacing.intraGroupSm;
 
   /// emoji 分类区块标题行高（紧凑，与网格无空行）
   static double get emojiSectionTitleHeight =>
-      AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.lg] ?? AppSpacing.intraGroupLg;
+      AppSpacing.semantic[DesignSemanticConstants
+          .intraGroup]?[DesignSemanticConstants.lg] ??
+      AppSpacing.intraGroupLg;
 
   /// emoji 分类之间垂直间距（0，分类间无空行）
   static double get emojiSectionGap => 0.0;

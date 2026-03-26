@@ -4810,7 +4810,7 @@ class LocalPhaseExecutionOwner {
     }
     if (candidateIndices.isEmpty) return trimmed;
     final usedIndices = <int>{};
-    for (final link in evidenceLinks.take(2)) {
+    for (final link in evidenceLinks) {
       final targetIndex = _pickEvidenceTargetLine(
         lines: lines,
         candidates: candidateIndices,
@@ -4821,7 +4821,7 @@ class LocalPhaseExecutionOwner {
       final url = (link['url'] as String?)?.trim() ?? '';
       final label = (link['label'] as String?)?.trim() ?? '来源';
       if (url.isEmpty || lines[targetIndex].contains('($url)')) continue;
-      lines[targetIndex] = '${lines[targetIndex].trimRight()} 🔗[$label]($url)';
+      lines[targetIndex] = '${lines[targetIndex].trimRight()} [$label]($url)';
       usedIndices.add(targetIndex);
     }
     return lines.join('\n');
@@ -5117,9 +5117,7 @@ class LocalPhaseExecutionOwner {
   }
 
   String _queryTaskLeadLine(int taskCount) {
-    return taskCount >= 2
-        ? '我会先把最影响结论的几路信息拆开核对：'
-        : '我先核对最影响结论的这一项：';
+    return taskCount >= 2 ? '我会先把会影响判断的几个方面拆开确认：' : '我先确认最影响判断的这一项：';
   }
 
   String _queryTaskDisplayLine(QueryTask task) {
@@ -5133,19 +5131,14 @@ class LocalPhaseExecutionOwner {
       if (objectLabel.isNotEmpty) objectLabel,
       if (displayLabel.isNotEmpty) displayLabel,
     ];
-    final prefix = prefixParts.join('｜');
-    if (prefix.isEmpty ||
-        _normalizedCompactQueryToken(prefix) ==
-            _normalizedCompactQueryToken(query)) {
-      return '- $query';
+    final prefix = prefixParts.join(' · ');
+    if (prefix.isNotEmpty) {
+      return '- $prefix';
     }
-    return '- $prefix：$query';
+    return '- $query';
   }
 
-  String _queryTaskObjectLabel(
-    QueryTask task, {
-    required String query,
-  }) {
+  String _queryTaskObjectLabel(QueryTask task, {required String query}) {
     final anchors = task.entityAnchors
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
@@ -5161,10 +5154,7 @@ class LocalPhaseExecutionOwner {
         : joined;
   }
 
-  String _queryTaskDisplayLabel(
-    QueryTask task, {
-    required String query,
-  }) {
+  String _queryTaskDisplayLabel(QueryTask task, {required String query}) {
     final label = task.label.trim();
     if (label.isNotEmpty &&
         _normalizedCompactQueryToken(label) !=
@@ -5181,10 +5171,10 @@ class LocalPhaseExecutionOwner {
   }
 
   String _normalizedCompactQueryToken(String raw) {
-    return raw
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\s:：|｜/、,，。！？!?._-]+'), '');
+    return raw.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s:：|｜/、,，。！？!?._-]+'),
+      '',
+    );
   }
 
   RunArtifactsAnswerProcessing _buildAnswerProcessingSnapshot({
@@ -5538,6 +5528,18 @@ class LocalPhaseExecutionOwner {
     if (emotion.isNotEmpty) {
       lines.add('我也留意到你现在$emotion。');
     }
+    final focusGroups = snapshot.queryGroups
+        .map(
+          (group) => group.why.trim().isNotEmpty
+              ? group.why.trim()
+              : group.dimension.trim(),
+        )
+        .where((item) => item.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    if (focusGroups.isNotEmpty) {
+      lines.add('我会先拆开确认${focusGroups.join('、')}，再判断能不能直接给你结论。');
+    }
     return lines.join('\n').trim();
   }
 
@@ -5548,7 +5550,8 @@ class LocalPhaseExecutionOwner {
     final candidates = <String>[entry.headline, entry.detail];
     for (final candidate in candidates) {
       final sanitized = _sanitizeJourneyCandidate(candidate);
-      if (sanitized.isEmpty || _isLowSignalJourneyNarrative(stageId, sanitized)) {
+      if (sanitized.isEmpty ||
+          _isLowSignalJourneyNarrative(stageId, sanitized)) {
         continue;
       }
       return true;
@@ -5584,10 +5587,7 @@ class LocalPhaseExecutionOwner {
     return normalized;
   }
 
-  bool _isLowSignalJourneyNarrative(
-    JourneyStageId stageId,
-    String text,
-  ) {
+  bool _isLowSignalJourneyNarrative(JourneyStageId stageId, String text) {
     final normalized = text.trim();
     switch (stageId) {
       case JourneyStageId.analyze:

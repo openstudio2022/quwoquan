@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
 class PublishSettings {
@@ -8,6 +9,7 @@ class PublishSettings {
     this.location = const <String, dynamic>{},
     this.circleIds = const <String>[],
     this.circleNames = const <String>[],
+    this.homepage,
   });
 
   final bool isPublic;
@@ -15,6 +17,7 @@ class PublishSettings {
   final Map<String, dynamic> location;
   final List<String> circleIds;
   final List<String> circleNames;
+  final HomepageCanonicalReference? homepage;
 
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
@@ -31,6 +34,11 @@ class PublishSettings {
       circleNames: vis == 'public'
           ? List<String>.from(map['circleNames'] as List? ?? const <String>[])
           : const <String>[],
+      homepage: map['homepage'] is Map
+          ? HomepageCanonicalReference.fromMap(
+              Map<String, dynamic>.from(map['homepage'] as Map),
+            )
+          : null,
     );
   }
 
@@ -40,6 +48,7 @@ class PublishSettings {
     'location': location,
     'circleIds': circleIds,
     'circleNames': circleNames,
+    'homepage': homepage?.toMap(),
   };
 
   /// 生成发布 payload 字段
@@ -52,6 +61,9 @@ class PublishSettings {
     if (location.containsKey('latitude') && location.containsKey('longitude')) {
       payload['location'] = location;
     }
+    if (homepage != null) {
+      payload.addAll(homepage!.toPayloadFields());
+    }
     return payload;
   }
 
@@ -61,12 +73,15 @@ class PublishSettings {
     Map<String, dynamic>? location,
     List<String>? circleIds,
     List<String>? circleNames,
+    HomepageCanonicalReference? homepage,
+    bool clearHomepage = false,
   }) => PublishSettings(
     isPublic: isPublic ?? this.isPublic,
     locationName: locationName ?? this.locationName,
     location: location ?? this.location,
     circleIds: circleIds ?? this.circleIds,
     circleNames: circleNames ?? this.circleNames,
+    homepage: clearHomepage ? null : (homepage ?? this.homepage),
   );
 }
 
@@ -113,6 +128,8 @@ class CreateCircleOption {
     required this.id,
     required this.name,
     this.memberCount,
+    this.postCount,
+    this.coverUrl,
     this.recommendationReason,
     this.isJoined = true,
   });
@@ -122,6 +139,12 @@ class CreateCircleOption {
 
   /// 成员数，用于小字标注。null 时显示「已加入」无数字。
   final int? memberCount;
+
+  /// 创作数，用于与圈子列表保持统一的次级信息。
+  final int? postCount;
+
+  /// 圈子封面或头像，优先展示为方形封面缩略图。
+  final String? coverUrl;
 
   /// 推荐理由，仅推荐区使用。如「与你兴趣相似」。
   final String? recommendationReason;
@@ -133,12 +156,16 @@ class CreateCircleOption {
     String? id,
     String? name,
     int? memberCount,
+    int? postCount,
+    String? coverUrl,
     String? recommendationReason,
     bool? isJoined,
   }) => CreateCircleOption(
     id: id ?? this.id,
     name: name ?? this.name,
     memberCount: memberCount ?? this.memberCount,
+    postCount: postCount ?? this.postCount,
+    coverUrl: coverUrl ?? this.coverUrl,
     recommendationReason: recommendationReason ?? this.recommendationReason,
     isJoined: isJoined ?? this.isJoined,
   );

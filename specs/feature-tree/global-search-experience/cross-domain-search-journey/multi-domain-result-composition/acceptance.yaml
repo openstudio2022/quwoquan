@@ -11,11 +11,12 @@ execution:
 
 scope:
   summary: >
-    冻结综合搜索结果的跨域分组、局部降级与统一跳转语义。
+    冻结实时联想四段、独立网络结果页 tab 编排、局部降级与统一跳转语义。
   journey_bindings:
     - J2
   in_scope:
-    - content、social relation、messages、circle 结果分组
+    - 最常使用 / 联系人 / 聊天记录 / 搜索网络结果 联想分段
+    - 小趣搜 + 群组分类 facet 网络结果页 tab
     - 单域失败降级
     - 统一结果点击跳转
   out_of_scope:
@@ -24,13 +25,14 @@ scope:
 
 scenario_acceptance:
   A1:
-    title: 综合结果按域分组并可稳定导航
+    title: 联想页与网络结果页可稳定编排并导航
     scenario: grouped result composition
-    journey_step: input query and browse grouped results
+    journey_step: input query and browse suggestions / network results
     done_when:
-      - 综合结果按内容、社交关系、消息、圈子与频道 facet 分组展示
-      - 点击任一结果可进入对应详情页或列表页
-      - 问小趣不出现在综合结果分组中
+      - 联想页按“最常使用 / 联系人 / 聊天记录 / 搜索网络结果”四段展示
+      - 点击联系人/聊天记录可进入对应会话，点击“搜索网络结果”可进入独立网络结果页
+      - 小趣搜不出现在联想页分段中，而作为网络结果页左侧 tab 出现
+      - 用户面向的结果类型统一显示为群组，分类仍由 circle facet 提供
     edge_cases:
       - 某一域结果为空
       - 某一域查询失败
@@ -51,7 +53,7 @@ scenario_acceptance:
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
         - make gate
-    status: implemented
+    status: pending
 
 story_readiness:
   S1:
@@ -71,4 +73,4 @@ story_readiness:
       recorded:
         - make verify-metadata
         - make gate
-    status: implemented
+    status: pending

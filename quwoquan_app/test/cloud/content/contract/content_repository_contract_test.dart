@@ -78,6 +78,8 @@ void main() {
           'enable_unified_create_editor',
           'enable_identity_based_surfaces',
           'enable_identity_share_template',
+          'enable_article_book_reader',
+          'enable_article_page_curl',
           'enable_assistant_content_identity_index',
         ]),
       );

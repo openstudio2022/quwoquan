@@ -3,8 +3,10 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
@@ -55,6 +57,80 @@ func (s *PgProfileStore) FindByNickname(ctx context.Context, nickname string) (*
 	row := s.pool.QueryRow(ctx,
 		`SELECT `+userProfileCols+` FROM user_profiles WHERE nickname = $1`, nickname)
 	return scanUserProfile(row)
+}
+
+func (s *PgProfileStore) SearchProfiles(ctx context.Context, query string, limit int) ([]model.UserProfile, error) {
+	normalized := strings.TrimSpace(query)
+	if normalized == "" {
+		return []model.UserProfile{}, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	pattern := "%" + normalized + "%"
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT `+userProfileCols+`
+		FROM user_profiles
+		WHERE user_id ILIKE $1
+		   OR nickname ILIKE $1
+		   OR owner_display_name ILIKE $1
+		   OR bio ILIKE $1
+		   OR region ILIKE $1
+		ORDER BY follower_count DESC, updated_at DESC
+		LIMIT $2`,
+		pattern,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]model.UserProfile, 0, limit)
+	for rows.Next() {
+		profile, err := scanUserProfileRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *profile)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
+	e := &model.UserProfile{}
+	err := rows.Scan(
+		&e.UserID,
+		&e.Phone,
+		&e.Nickname,
+		&e.AvatarURL,
+		&e.Bio,
+		&e.Gender,
+		&e.BirthDate,
+		&e.Region,
+		&e.Status,
+		&e.ProfileVersion,
+		&e.FollowerCount,
+		&e.FollowingCount,
+		&e.PostCount,
+		&e.CircleCount,
+		&e.LikeCount,
+		&e.OwnerDisplayName,
+		&e.SubAccountCount,
+		&e.CreatedAt,
+		&e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
 }
 
 func (s *PgProfileStore) IncrementCounter(ctx context.Context, userID, field string, delta int64) error {

@@ -1,7 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -53,6 +52,7 @@ class AssistantJourneyBlockViewModel {
     required this.stageId,
     this.headline = '',
     this.detail = '',
+    this.referenceLabel = '',
     this.references = const <AssistantJourneyReferenceViewModel>[],
   });
 
@@ -60,6 +60,7 @@ class AssistantJourneyBlockViewModel {
   final JourneyStageId stageId;
   final String headline;
   final String detail;
+  final String referenceLabel;
   final List<AssistantJourneyReferenceViewModel> references;
 
   bool get hasReferences => references.isNotEmpty;
@@ -267,7 +268,10 @@ AssistantJourneyStageViewModel _stageViewModel({
   required String label,
   required AssistantJourneyStage? stage,
 }) {
-  final summary = _sanitizeJourneyText(stage?.summary ?? '');
+  final summary = _sanitizeStageNarrative(
+    stage?.summary ?? '',
+    stageId: stageId,
+  );
   return AssistantJourneyStageViewModel(
     stageId: stageId,
     order: order,
@@ -292,8 +296,8 @@ AssistantJourneyStageViewModel _mergedStageViewModel({
     label: label,
     status: _mergeStageStatus(primaryStage?.status, secondaryStage?.status),
     summary: _firstNonEmpty(<String>[
-      _sanitizeJourneyText(secondaryStage?.summary ?? ''),
-      _sanitizeJourneyText(primaryStage?.summary ?? ''),
+      _sanitizeStageNarrative(secondaryStage?.summary ?? '', stageId: stageId),
+      _sanitizeStageNarrative(primaryStage?.summary ?? '', stageId: stageId),
     ]),
     referenceCount: _maxInt(<int>[
       referenceCount,
@@ -353,102 +357,47 @@ List<AssistantJourneyBlockViewModel> _buildBlocks(
   required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
   final blocks = <AssistantJourneyBlockViewModel>[];
-  final analyzeLines = <String>[];
-  final searchLines = <String>[];
-  final answerLines = <String>[];
-  final fallbackSearchReferences = <AssistantJourneyReferenceViewModel>[];
-  final fallbackSearchReferenceKeys = <String>{};
   final orderedEntries = List<AssistantJourneyEntry>.of(journey.entries)
     ..sort((a, b) => a.order.compareTo(b.order));
   for (final entry in orderedEntries) {
-    final displayStageId = _displayStageId(entry.stageId);
-    final lines = _narrativeLinesForEntry(entry, stageId: displayStageId);
-    final references = _referenceViewModels(entry.references);
-    switch (displayStageId) {
-      case JourneyStageId.analyze:
-        _appendDistinctLines(analyzeLines, lines);
-        break;
-      case JourneyStageId.search:
-        _appendDistinctLines(searchLines, lines);
-        _appendDistinctReferences(
-          fallbackSearchReferences,
-          fallbackSearchReferenceKeys,
-          references,
-        );
-        break;
-      case JourneyStageId.answer:
-        _appendDistinctLines(answerLines, lines);
-        break;
-      default:
-        break;
+    final block = _buildBlockFromEntry(entry);
+    if (block == null) {
+      continue;
     }
+    _appendOrMergeSequentialBlock(blocks, block);
   }
   final stageById = <JourneyStageId, AssistantJourneyStageViewModel>{
     for (final stage in stages) stage.stageId: stage,
   };
-  if (analyzeLines.isEmpty) {
-    _appendFallbackStageSummary(
-      analyzeLines,
-      stageById[JourneyStageId.analyze]?.summary ?? '',
-      stageId: JourneyStageId.analyze,
-    );
-  }
-  if (searchLines.isEmpty) {
-    _appendFallbackStageSummary(
-      searchLines,
-      stageById[JourneyStageId.search]?.summary ?? '',
-      stageId: JourneyStageId.search,
-      skipLowSignal: true,
-    );
-    _appendFallbackStageSummary(
-      searchLines,
-      retrievalProcessing.processingSummary,
-      stageId: JourneyStageId.search,
-      skipLowSignal: true,
-    );
-  }
-  if (answerLines.isEmpty) {
-    _appendFallbackStageSummary(
-      answerLines,
-      stageById[JourneyStageId.answer]?.summary ?? '',
-      stageId: JourneyStageId.answer,
-    );
-  }
-  _appendFallbackStageSummary(
-    searchLines,
-    retrievalProcessing.expansionReason,
+  _appendFallbackStageBlock(
+    blocks,
+    stageId: JourneyStageId.analyze,
+    candidate: stageById[JourneyStageId.analyze]?.summary ?? '',
+  );
+  _appendFallbackStageBlock(
+    blocks,
     stageId: JourneyStageId.search,
+    candidate: stageById[JourneyStageId.search]?.summary ?? '',
     skipLowSignal: true,
   );
-
-  final analyzeBlock = _buildNarrativeStageBlock(
-    stageId: JourneyStageId.analyze,
-    lines: analyzeLines,
-  );
-  if (analyzeBlock != null) {
-    blocks.add(analyzeBlock);
-  }
-  final searchNarrativeBlock = _buildNarrativeStageBlock(
+  _appendFallbackStageBlock(
+    blocks,
     stageId: JourneyStageId.search,
-    lines: searchLines,
+    candidate: retrievalProcessing.processingSummary,
+    skipLowSignal: true,
   );
-  if (searchNarrativeBlock != null) {
-    blocks.add(searchNarrativeBlock);
-  }
-  final retrievalReferenceBlock = _buildRetrievalReferenceBlock(
-    retrievalProcessing,
-    fallbackReferences: fallbackSearchReferences,
+  _appendFallbackStageBlock(
+    blocks,
+    stageId: JourneyStageId.search,
+    candidate: retrievalProcessing.expansionReason,
+    skipLowSignal: true,
   );
-  if (retrievalReferenceBlock != null) {
-    blocks.add(retrievalReferenceBlock);
-  }
-  final answerBlock = _buildNarrativeStageBlock(
+  _appendFallbackStageBlock(
+    blocks,
     stageId: JourneyStageId.answer,
-    lines: answerLines,
+    candidate: stageById[JourneyStageId.answer]?.summary ?? '',
   );
-  if (answerBlock != null) {
-    blocks.add(answerBlock);
-  }
+  _mergeRetrievalProcessingIntoBlocks(blocks, retrievalProcessing);
   if (blocks.isEmpty) {
     final summary = _resolveSummary(journey, stages: stages, blocks: blocks);
     if (summary.isNotEmpty) {
@@ -462,21 +411,6 @@ List<AssistantJourneyBlockViewModel> _buildBlocks(
     }
   }
   return blocks;
-}
-
-List<String> _narrativeLinesForEntry(
-  AssistantJourneyEntry entry, {
-  required JourneyStageId stageId,
-}) {
-  final headline = _sanitizeStageNarrative(entry.headline, stageId: stageId);
-  final detail = _sanitizeStageNarrative(entry.detail, stageId: stageId);
-  if (headline.isEmpty && detail.isEmpty) {
-    return const <String>[];
-  }
-  return _distinctNonEmpty(<String>[
-    headline,
-    if (detail.isNotEmpty && detail != headline) detail,
-  ]);
 }
 
 List<AssistantJourneyReferenceViewModel> _referenceViewModels(
@@ -496,36 +430,140 @@ List<AssistantJourneyReferenceViewModel> _referenceViewModels(
       .toList(growable: false);
 }
 
-void _appendDistinctLines(List<String> target, Iterable<String> candidates) {
-  for (final candidate in candidates) {
-    final trimmed = candidate.trim();
-    if (trimmed.isEmpty || target.contains(trimmed)) {
-      continue;
-    }
-    target.add(trimmed);
+AssistantJourneyBlockViewModel? _buildBlockFromEntry(AssistantJourneyEntry entry) {
+  final stageId = _displayStageId(entry.stageId);
+  final visibleLines = _filterStageNarrativeLines(
+    stageId,
+    _narrativeLinesForEntry(entry, stageId: stageId),
+  );
+  final references = _referenceViewModels(entry.references);
+  if (visibleLines.isEmpty && references.isEmpty) {
+    return null;
   }
+  return AssistantJourneyBlockViewModel(
+    kind: references.isNotEmpty
+        ? AssistantJourneyBlockKind.searchSummary
+        : AssistantJourneyBlockKind.narrative,
+    stageId: stageId,
+    headline: visibleLines.isNotEmpty ? visibleLines.first : '',
+    detail: visibleLines.skip(1).join('\n'),
+    referenceLabel: references.isNotEmpty
+        ? _retrievalBlockHeadline(
+            processedCount: 0,
+            acceptedCount: references.length,
+          )
+        : '',
+    references: references,
+  );
 }
 
-void _appendDistinctReferences(
-  List<AssistantJourneyReferenceViewModel> target,
-  Set<String> seenKeys,
-  Iterable<AssistantJourneyReferenceViewModel> candidates,
-) {
-  for (final candidate in candidates) {
-    final key = '${candidate.url}::${candidate.title}';
-    if (!seenKeys.add(key)) {
-      continue;
-    }
-    target.add(candidate);
-  }
-}
-
-void _appendFallbackStageSummary(
-  List<String> target,
-  String candidate, {
+List<String> _narrativeLinesForEntry(
+  AssistantJourneyEntry entry, {
   required JourneyStageId stageId,
+}) {
+  final headline = _sanitizeStageNarrative(entry.headline, stageId: stageId);
+  final detail = _sanitizeStageNarrative(entry.detail, stageId: stageId);
+  if (headline.isEmpty && detail.isEmpty) {
+    return const <String>[];
+  }
+  return _distinctNonEmpty(<String>[
+    if (headline.isNotEmpty) headline,
+    if (detail.isNotEmpty && detail != headline)
+      ...detail
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty),
+  ]);
+}
+
+void _appendOrMergeSequentialBlock(
+  List<AssistantJourneyBlockViewModel> blocks,
+  AssistantJourneyBlockViewModel incoming,
+) {
+  if (blocks.isEmpty) {
+    blocks.add(incoming);
+    return;
+  }
+  final last = blocks.last;
+  if (last.stageId != incoming.stageId) {
+    blocks.add(incoming);
+    return;
+  }
+  blocks[blocks.length - 1] = _mergeJourneyBlocks(last, incoming);
+}
+
+AssistantJourneyBlockViewModel _mergeJourneyBlocks(
+  AssistantJourneyBlockViewModel current,
+  AssistantJourneyBlockViewModel incoming,
+) {
+  final mergedLines = _distinctNonEmpty(<String>[
+    ..._blockLines(current),
+    ..._blockLines(incoming),
+  ]);
+  final mergedReferences = _mergeBlockReferences(
+    current.references,
+    incoming.references,
+  );
+  final mergedReferenceLabel = incoming.referenceLabel.trim().isNotEmpty
+      ? incoming.referenceLabel.trim()
+      : (current.referenceLabel.trim().isNotEmpty
+            ? current.referenceLabel.trim()
+            : (mergedReferences.isNotEmpty
+                  ? _retrievalBlockHeadline(
+                      processedCount: 0,
+                      acceptedCount: mergedReferences.length,
+                    )
+                  : ''));
+  return AssistantJourneyBlockViewModel(
+    kind: mergedReferences.isNotEmpty
+        ? AssistantJourneyBlockKind.searchSummary
+        : current.kind,
+    stageId: current.stageId,
+    headline: mergedLines.isNotEmpty ? mergedLines.first : '',
+    detail: mergedLines.skip(1).join('\n'),
+    referenceLabel: mergedReferenceLabel,
+    references: mergedReferences,
+  );
+}
+
+List<String> _blockLines(AssistantJourneyBlockViewModel block) {
+  return _distinctNonEmpty(<String>[
+    if (block.headline.trim().isNotEmpty) block.headline.trim(),
+    ...block.detail
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty),
+  ]);
+}
+
+List<AssistantJourneyReferenceViewModel> _mergeBlockReferences(
+  List<AssistantJourneyReferenceViewModel> first,
+  List<AssistantJourneyReferenceViewModel> second,
+) {
+  final seen = <String>{};
+  final merged = <AssistantJourneyReferenceViewModel>[];
+  for (final candidate in <AssistantJourneyReferenceViewModel>[
+    ...first,
+    ...second,
+  ]) {
+    final key = '${candidate.url}::${candidate.title}';
+    if (!seen.add(key)) {
+      continue;
+    }
+    merged.add(candidate);
+  }
+  return merged;
+}
+
+void _appendFallbackStageBlock(
+  List<AssistantJourneyBlockViewModel> blocks, {
+  required JourneyStageId stageId,
+  required String candidate,
   bool skipLowSignal = false,
 }) {
+  if (blocks.any((block) => block.stageId == stageId)) {
+    return;
+  }
   final sanitized = _sanitizeStageNarrative(candidate, stageId: stageId);
   if (sanitized.isEmpty) {
     return;
@@ -533,65 +571,90 @@ void _appendFallbackStageSummary(
   if (skipLowSignal && _isLowSignalStageNarrative(stageId, sanitized)) {
     return;
   }
-  if (target.contains(sanitized)) {
-    return;
-  }
-  target.add(sanitized);
-}
-
-AssistantJourneyBlockViewModel? _buildNarrativeStageBlock({
-  required JourneyStageId stageId,
-  required List<String> lines,
-}) {
-  final visibleLines = _filterStageNarrativeLines(stageId, lines);
-  if (visibleLines.isEmpty) {
-    return null;
-  }
-  return AssistantJourneyBlockViewModel(
-    kind: AssistantJourneyBlockKind.narrative,
-    stageId: stageId,
-    headline: visibleLines.first,
-    detail: visibleLines.skip(1).join('\n'),
+  _insertBlockByStageOrder(
+    blocks,
+    AssistantJourneyBlockViewModel(
+      kind: AssistantJourneyBlockKind.narrative,
+      stageId: stageId,
+      headline: sanitized,
+    ),
   );
 }
 
-AssistantJourneyBlockViewModel? _buildRetrievalReferenceBlock(
-  RetrievalProcessingSnapshot retrievalProcessing, {
-  required List<AssistantJourneyReferenceViewModel> fallbackReferences,
-}) {
-  final references = retrievalProcessing.acceptedReferences.isNotEmpty
-      ? retrievalProcessing.acceptedReferences
-            .map(
-              (reference) => AssistantJourneyReferenceViewModel(
-                title: reference.title.trim(),
-                url: reference.url.trim(),
-                source: reference.source.trim(),
-              ),
-            )
-            .where(
-              (reference) =>
-                  reference.title.isNotEmpty && reference.url.isNotEmpty,
-            )
-            .toList(growable: false)
-      : fallbackReferences;
+void _mergeRetrievalProcessingIntoBlocks(
+  List<AssistantJourneyBlockViewModel> blocks,
+  RetrievalProcessingSnapshot retrievalProcessing,
+) {
+  final references = retrievalProcessing.acceptedReferences
+      .map(
+        (reference) => AssistantJourneyReferenceViewModel(
+          title: reference.title.trim(),
+          url: reference.url.trim(),
+          source: reference.source.trim(),
+        ),
+      )
+      .where(
+        (reference) => reference.title.isNotEmpty && reference.url.isNotEmpty,
+      )
+      .toList(growable: false);
   final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
       ? retrievalProcessing.acceptedDocumentCount
       : references.length;
   final processedCount = retrievalProcessing.processedDocumentCount > 0
       ? retrievalProcessing.processedDocumentCount
       : acceptedCount;
-  if (processedCount <= 0 && acceptedCount <= 0 && references.isEmpty) {
-    return null;
+  final referenceLabel =
+      (processedCount > 0 || acceptedCount > 0 || references.isNotEmpty)
+      ? _retrievalBlockHeadline(
+          processedCount: processedCount,
+          acceptedCount: acceptedCount,
+        )
+      : '';
+  if (referenceLabel.isEmpty && references.isEmpty) {
+    return;
   }
-  return AssistantJourneyBlockViewModel(
+  final searchIndex = blocks.lastIndexWhere(
+    (block) => block.stageId == JourneyStageId.search,
+  );
+  final retrievalBlock = AssistantJourneyBlockViewModel(
     kind: AssistantJourneyBlockKind.searchSummary,
     stageId: JourneyStageId.search,
-    headline: _retrievalBlockHeadline(
-      processedCount: processedCount,
-      acceptedCount: acceptedCount,
-    ),
+    referenceLabel: referenceLabel,
     references: references,
   );
+  if (searchIndex < 0) {
+    _insertBlockByStageOrder(blocks, retrievalBlock);
+    return;
+  }
+  blocks[searchIndex] = _mergeJourneyBlocks(blocks[searchIndex], retrievalBlock);
+}
+
+void _insertBlockByStageOrder(
+  List<AssistantJourneyBlockViewModel> blocks,
+  AssistantJourneyBlockViewModel block,
+) {
+  final insertAt = blocks.indexWhere(
+    (existing) => _stageDisplayOrder(existing.stageId) > _stageDisplayOrder(block.stageId),
+  );
+  if (insertAt < 0) {
+    blocks.add(block);
+    return;
+  }
+  blocks.insert(insertAt, block);
+}
+
+int _stageDisplayOrder(JourneyStageId stageId) {
+  switch (stageId) {
+    case JourneyStageId.analyze:
+      return 0;
+    case JourneyStageId.search:
+    case JourneyStageId.verify:
+      return 1;
+    case JourneyStageId.answer:
+      return 2;
+    case JourneyStageId.unknown:
+      return 3;
+  }
 }
 
 bool _isLowSignalRetrievalNarrative(String text) {
@@ -599,18 +662,72 @@ bool _isLowSignalRetrievalNarrative(String text) {
   return normalized == '已完成资料筛选并进入成答' || normalized == '已完成当前轮资料筛选';
 }
 
-String _sanitizeStageNarrative(
-  String raw, {
-  required JourneyStageId stageId,
-}) {
+String _sanitizeStageNarrative(String raw, {required JourneyStageId stageId}) {
+  final normalized = stageId == JourneyStageId.analyze
+      ? _sanitizeAnalyzeJourneyText(raw)
+      : _sanitizeJourneyText(raw, stageHint: stageId.name);
   final sanitized = _stripLowSignalStagePrefix(
-    _sanitizeJourneyText(raw),
+    stageId == JourneyStageId.search
+        ? _normalizeSearchNarrative(normalized)
+        : normalized,
     stageId: stageId,
   );
   if (sanitized.isEmpty || _isLowSignalStageNarrative(stageId, sanitized)) {
     return '';
   }
   return sanitized;
+}
+
+String _sanitizeAnalyzeJourneyText(String raw) {
+  final normalized = AssistantDisplayTextResolver
+      .normalizeUserFacingProcessNarration(raw, stageHint: 'analyze');
+  if (normalized.isEmpty) return '';
+  if (_looksLikeRomanizedQueryFragment(normalized)) return '';
+  return normalized.trim();
+}
+
+String _normalizeSearchNarrative(String raw) {
+  if (raw.trim().isEmpty) {
+    return '';
+  }
+  final lines = raw
+      .replaceAll('\r\n', '\n')
+      .split('\n')
+      .map(_normalizeSearchNarrativeLine)
+      .where((line) => line.isNotEmpty)
+      .toList(growable: false);
+  return lines.join('\n').trim();
+}
+
+String _normalizeSearchNarrativeLine(String rawLine) {
+  final line = rawLine.trim();
+  if (line.isEmpty) {
+    return '';
+  }
+  if (line.startsWith('检索词：')) {
+    final focus = _compactSearchFocusLabel(line.substring(4).trim());
+    return focus.isEmpty ? '' : '我会先核对$focus。';
+  }
+  if (line.startsWith('- ')) {
+    final focus = _compactSearchFocusLabel(line.substring(2).trim());
+    return focus.isEmpty ? '' : '- $focus';
+  }
+  return line;
+}
+
+String _compactSearchFocusLabel(String raw) {
+  final normalized = raw.trim();
+  if (normalized.isEmpty) {
+    return '';
+  }
+  final prefix = normalized.split('：').first.trim().replaceAll('｜', ' · ');
+  if (prefix.isEmpty) {
+    return '';
+  }
+  if (prefix == normalized && normalized.length > 24) {
+    return '';
+  }
+  return prefix;
 }
 
 String _stripLowSignalStagePrefix(
@@ -635,10 +752,7 @@ String _stripLowSignalStagePrefix(
             '',
           )
           .replaceFirst(RegExp(r'^已找到\s*\d+\s*篇相关资料[。！？!?]?\s*'), '')
-          .replaceFirst(
-            RegExp(r'^已经有一批能支撑判断的信息了[^\n。！？!?]*[。！？!?]?\s*'),
-            '',
-          );
+          .replaceFirst(RegExp(r'^已经有一批能支撑判断的信息了[^\n。！？!?]*[。！？!?]?\s*'), '');
       break;
     case JourneyStageId.answer:
       normalized = normalized.replaceFirst(
@@ -657,9 +771,7 @@ List<String> _filterStageNarrativeLines(
   Iterable<String> lines,
 ) {
   return _distinctNonEmpty(
-    lines.where(
-      (line) => !_isLowSignalStageNarrative(stageId, line.trim()),
-    ),
+    lines.where((line) => !_isLowSignalStageNarrative(stageId, line.trim())),
   );
 }
 
@@ -812,33 +924,14 @@ String _resolveSummary(
   return '';
 }
 
-String _sanitizeJourneyText(String raw) {
-  final normalized =
-      AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-        AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(raw),
-      );
+String _sanitizeJourneyText(String raw, {String stageHint = ''}) {
+  final normalized = AssistantDisplayTextResolver
+      .normalizeUserFacingProcessNarration(raw, stageHint: stageHint);
   if (normalized.isEmpty) return '';
   if (_looksLikeRomanizedQueryFragment(normalized)) return '';
-  if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(normalized)) return '';
-  if (AssistantContentFilters.isJsonEnvelope(normalized) ||
-      AssistantContentFilters.isDegradedText(normalized) ||
-      AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
-        normalized,
-      ) ||
-      AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-        normalized,
-      ) ||
-      AssistantDisplayTextResolver.containsTechnicalFailureFragment(
-        normalized,
-      ) ||
-      AssistantDisplayTextResolver.containsInternalProcessFragment(
-        normalized,
-      ) ||
-      normalized.contains('模型调用') ||
-      normalized.toLowerCase().contains('token')) {
+  if (normalized.contains('模型调用') || normalized.toLowerCase().contains('token')) {
     return '';
   }
-  if (normalized.startsWith('{') || normalized.startsWith('[')) return '';
   return normalized.trim();
 }
 

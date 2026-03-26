@@ -1,0 +1,70 @@
+version: 1
+node: shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260324-003-shared-homepage-network-prd-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze homepage contextual publish contract
+    goal: 冻结主页内发布入口、主页上下文 extra 与返回语义
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 主页内入口与全局入口共享同一发布器
+      - 上下文带入字段已明确
+    status: planned
+
+  - id: P2
+    title: land homepage shell publish actions
+    goal: 在主页首屏提供稳定的发布、写口碑和提问入口
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 用户可从主页直接打开发布器
+      - 当前主页默认带入成功
+    status: planned
+
+  - id: P3
+    title: wire contextual publish return and homepage refresh
+    goal: 打通发布成功后返回主页和主页聚合刷新主路径
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 发布失败保留内容和主页上下文
+      - 发布成功后主页可看到对应回流结果
+    status: planned
+
+  - id: P4
+    title: harden contextual publish regression tests
+    goal: 为主页上下文发布入口、返回和回流补齐测试
+    depends_on:
+      - P3
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 主页内发布入口有稳定测试覆盖
+      - 回主页语义和主页刷新有回归保障
+    status: planned

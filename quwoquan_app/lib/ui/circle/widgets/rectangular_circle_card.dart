@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 class RectangularCircleCard extends StatelessWidget {
   final CircleDto circle;
@@ -41,8 +41,8 @@ class RectangularCircleCard extends StatelessWidget {
           children: [
             // Cover Image
             Positioned.fill(
-              child: AppCachedNetworkImage(
-                imageUrl: circle.coverUrl ?? circle.coverUrl ?? '',
+              child: CircleMediaImage(
+                imageSource: circle.coverUrl ?? '',
                 fit: BoxFit.cover,
               ),
             ),

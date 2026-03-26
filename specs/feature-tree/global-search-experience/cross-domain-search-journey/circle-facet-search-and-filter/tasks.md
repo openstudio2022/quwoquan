@@ -2,9 +2,13 @@
 
 ## 当前交付任务
 
+> 状态同步（2026-03-26）
+> - T1 已完成。
+> - T2/T3 回退为未完成：当前网络结果页的 facet 切换尚未与 `content-service` 的 `SearchPosts` 结果集过滤保持一致，不能继续标记为已交付。
+
 - [x] T1: 冻结 `SearchCircles`、`CircleSearchItemView` 与 `CircleFacetBucketView`，明确频道仅为 facet → A1 S1
-- [x] T2: 落地圈子结果与 facet bucket 展示、筛选和清除行为 → A1
-- [x] T3: 完成 facet 空态、无结果态与圈子详情跳转验证 → A1 S1
+- [ ] T2: 落地圈子结果与 facet bucket 展示、筛选和清除行为 → A1
+- [ ] T3: 完成 facet 空态、无结果态与圈子详情跳转验证 → A1 S1
 
 ## 搁置任务（带规划）
 

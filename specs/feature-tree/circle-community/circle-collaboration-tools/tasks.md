@@ -2,6 +2,11 @@
 
 ## 当前交付任务
 
+> 状态同步（2026-03-26）
+> - 已完成：群组内核 metadata、`circleGroupId/groupId/nodeId` codegen 基线，以及 `SectionChat/SectionStorage` 的基础端侧壳层。
+> - 进行中：`CircleGroup` 与 `Conversation` 的解耦收口。
+> - 未完成：`CircleGroup` HTTP 全链路、申请入群、私有群搜索、群资料/公告绑定。
+
 ### L3: circle-storage
 
 - [ ] T1: [metadata] 在 `contracts/metadata/social/circle/fields.yaml` 新增 CircleFile 实体（_id, circleId, parentFolderId, name, type, mimeType, sizeBytes, objectKey, uploaderId, status, createdAt, updatedAt）
