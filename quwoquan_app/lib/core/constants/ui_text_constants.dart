@@ -129,6 +129,8 @@ class UITextConstants {
   static const String loading = '加载中...';
   static const String retry = '重试';
   static const String cancel = '取消';
+  /// 表单/弹层主提交（与「确认」区分，偏对话框「确定」）
+  static const String ok = '确定';
   static const String confirm = '确认';
   static const String user = '用户';
   static const String following = '已关注';

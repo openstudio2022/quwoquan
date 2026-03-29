@@ -33,6 +33,11 @@ level_acceptance:
     status: implemented
     linked_tasks: []
     tests: []
+  A8:
+    criteria: 贴底对话态 Sheet 符合 page-layout-semantics §4.4；showCupertinoModalPopup 经 conversation_sheet_manifest 登记并通过 verify_conversation_sheet_canonical
+    status: implemented
+    linked_tasks: []
+    tests: []
   A5:
     criteria: 圈子页右上角使用三横频道管理入口，点击后在一级 tab 下方滑出微博式频道面板，支持我的频道/全部频道切换、增删与顺序调整，并落盘本地偏好
     status: pending

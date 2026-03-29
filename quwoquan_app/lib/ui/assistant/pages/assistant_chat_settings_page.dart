@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -50,8 +51,6 @@ class _AssistantChatSettingsPageState
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     final gateway = ref.read(assistantGatewayProvider);
@@ -60,96 +59,78 @@ class _AssistantChatSettingsPageState
         ? UITextConstants.assistantModelSelectorEmpty
         : _shortModelName(currentModel);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
-      child: AppScaffold(
-        backgroundColor: pageBg,
-        navigationBar: AppNavigationBar(
-          middle: Text(
-            UITextConstants.settings,
-            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.settings,
+      onBack: () => Navigator.of(context).pop(),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.only(
+            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            top: AppSpacing.intraGroupSm,
+            bottom: AppSpacing.xl,
           ),
-          leading: AppNavigationBarIconButton(
-            icon: CupertinoIcons.back,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.all(AppSpacing.containerMd),
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: blockBg,
-                  borderRadius: BorderRadius.circular(
-                    SettingsSemanticConstants.blockBorderRadius,
+          children: [
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              child: Column(
+                children: [
+                  _SettingsEntryRow(
+                    title: UITextConstants.assistantSettingsBackend,
+                    value: _backendLabel(_backend),
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    onTap: _openBackendSelector,
                   ),
-                  border: Border.all(
-                    color: SettingsSemanticConstants.blockBorderColor(isDark),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  _SettingsEntryRow(
+                    title: UITextConstants.assistantSettingsModel,
+                    value: _backend == AssistantBackend.local
+                        ? modelText
+                        : UITextConstants.assistantBackendRemote,
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    onTap: _backend == AssistantBackend.local
+                        ? _openModelSelector
+                        : null,
                   ),
-                ),
-                child: Column(
-                  children: [
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  if (kDebugMode) ...[
                     _SettingsEntryRow(
-                      title: UITextConstants.assistantSettingsBackend,
-                      value: _backendLabel(_backend),
+                      title: UITextConstants.assistantSettingsTraceSession,
+                      value: '',
                       fgPrimary: fgPrimary,
                       fgSecondary: fgSecondary,
-                      onTap: _openBackendSelector,
+                      onTap: widget.onOpenTrace,
                     ),
-                    _divider(isDark),
-                    _SettingsEntryRow(
-                      title: UITextConstants.assistantSettingsModel,
-                      value: _backend == AssistantBackend.local
-                          ? modelText
-                          : UITextConstants.assistantBackendRemote,
-                      fgPrimary: fgPrimary,
-                      fgSecondary: fgSecondary,
-                      onTap: _backend == AssistantBackend.local
-                          ? _openModelSelector
-                          : null,
-                    ),
-                    _divider(isDark),
-                    if (kDebugMode) ...[
-                      _SettingsEntryRow(
-                        title: UITextConstants.assistantSettingsTraceSession,
-                        value: '',
-                        fgPrimary: fgPrimary,
-                        fgSecondary: fgSecondary,
-                        onTap: widget.onOpenTrace,
-                      ),
-                      _divider(isDark),
-                    ],
-                    _SettingsEntryRow(
-                      title:
-                          UITextConstants.assistantSettingsConversationHistory,
-                      value: _backend == AssistantBackend.local
-                          ? _topicTitle
-                          : UITextConstants
-                                .assistantSettingsRemoteHistoryDisabled,
-                      fgPrimary: fgPrimary,
-                      fgSecondary: fgSecondary,
-                      onTap: _backend == AssistantBackend.local
-                          ? _openHistoryPage
-                          : null,
-                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
                   ],
-                ),
+                  _SettingsEntryRow(
+                    title:
+                        UITextConstants.assistantSettingsConversationHistory,
+                    value: _backend == AssistantBackend.local
+                        ? _topicTitle
+                        : UITextConstants
+                              .assistantSettingsRemoteHistoryDisabled,
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    onTap: _backend == AssistantBackend.local
+                        ? _openHistoryPage
+                        : null,
+                  ),
+                ],
               ),
-              SizedBox(height: AppSpacing.containerMd),
-              if (_backend == AssistantBackend.local)
-                _PreferenceFactsSection(currentSessionId: _sessionId),
+            ),
+            if (_backend == AssistantBackend.local) ...[
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              _PreferenceFactsSection(currentSessionId: _sessionId),
             ],
-          ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _divider(bool isDark) {
-    return Container(
-      height: SettingsSemanticConstants.dividerThickness,
-      color: SettingsSemanticConstants.dividerColor(isDark),
     );
   }
 
@@ -279,7 +260,6 @@ class _PreferenceFactsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
-    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     return FutureBuilder<Map<String, dynamic>?>(
@@ -300,29 +280,12 @@ class _PreferenceFactsSection extends ConsumerWidget {
                 .map((item) => item.cast<String, dynamic>())
                 .toList(growable: false) ??
             const <Map<String, dynamic>>[];
-        return Container(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          decoration: BoxDecoration(
-            color: blockBg,
-            borderRadius: BorderRadius.circular(
-              SettingsSemanticConstants.blockBorderRadius,
-            ),
-            border: Border.all(
-              color: SettingsSemanticConstants.blockBorderColor(isDark),
-            ),
-          ),
+        return SettingsInsetGroupedSection(
+          isDark: isDark,
+          header: '偏好事实',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '偏好事实',
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.semiBold,
-                  color: fgPrimary,
-                ),
-              ),
-              SizedBox(height: AppSpacing.xs),
               Text(
                 '当前会话即时生效，长期事实会随历史积累展示在这里。',
                 style: TextStyle(

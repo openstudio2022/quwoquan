@@ -89,20 +89,51 @@
 | **Picker** | 列表 + 单选/多选（`ListTile` 或 `CheckboxListTile`） | 地点、圈子 |
 | **Editor** | `TabBarView` / 画布 / 工具区 | 创作、图片编辑 |
 
-### 4.2 设置类页面统一结构
+### 4.2 设置类页面统一结构（历史：块+描边）
 
-设置类页面（SettingsPage、DeveloperSettingsPage、ChatSettingsPage、AssistantManagementPage）须使用统一语义：
+> **已演进**：全屏「系统设置式」页面必须以 **§4.3 Inset 同源** 为准；本节保留 `blockBackground` / `blockBorder` 仅用于 **非全屏 Inset** 的遗留或局部块（如半屏、WebView 宿主例外页）。
 
-| 元素 | API / 约定 |
-|------|------------|
-| **页面背景** | `SettingsSemanticConstants.pageBackground(isDark)` |
-| **功能块背景** | `SettingsSemanticConstants.blockBackground(isDark)` |
-| **块容器** | 左右 padding `blockHorizontalPadding`，上下 `sectionVerticalPadding`，圆角 `blockBorderRadius`，边框 `blockBorderColor` |
-| **块内分割线** | `SettingsSemanticConstants.dividerColor(isDark)`，`dividerThickness` |
-| **块间距** | `SettingsSemanticConstants.blockSpacing` |
-| **设置行** | 最小高度 `AppSpacing.buttonHeight`，leading 图标 + label + trailing（Switch/chevron/文案） |
+设置类页面须使用 `SettingsSemanticConstants` 与 `AppSpacing` / `AppTypography`；全屏列表/表单见下节。
 
-**建议**：抽取 `SettingsSection`、`SettingsRow` 等可复用组件，确保各设置页视觉与交互一致。
+---
+
+### 4.3 设置类 Inset 同源（强制）
+
+**唯一允许的两种全屏壳**（实现：`lib/components/settings_form/settings_inset_form_page.dart`）：
+
+| 类型 | 壳组件 | 顶栏与底色 | 内容区 |
+|------|--------|------------|--------|
+| **A 类** | `SettingsInsetFormPageScaffold` | 与 `insetFormPageBackground` / `insetFormNavigationBarBackground` 一致；返回为 `AppNavigationBarIconButton` + `CupertinoIcons.back` | 灰底上 `SettingsInsetGroupedSection` + `SettingsInsetFormRow` / 行内分割线 `SettingsInsetFormSectionDivider` |
+| **B 类** | `SettingsInsetMemberPickerPageScaffold` | **与 A 同源顶栏**（禁止再组合 `pageBackground` + `selectionToolbarBackground` 作为第三套）；可选别名 token `memberPickerNavigationBarBackground` | 内嵌搜索 + 列表（如群成员选择） |
+
+**禁止**：
+
+- 内页返回使用 `GlobalTopBarIconButton`（**例外**：主壳/发现等全局顶栏上的搜索等入口，见 `GlobalTopBarIconButton` 文档）。
+- 新建全屏设置页手写「灰内容区 + 白/块顶栏 + 未文档化 token 组合」而不登记 `scripts/settings_canonical_manifest.yaml`。
+
+**门禁**：`scripts/verify_settings_canonical.py`（随 `gate_repo.sh` app 阶段执行）。
+
+**群聊设置域交叉引用**：`specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md`（§9 全屏表单态）。
+
+---
+
+### 4.4 贴底对话态 Sheet（强制）
+
+与 **§4.3 全屏 Inset** 区分：贴底半屏、保留上层 scrim/上下文的 **选项表 / 说明列表 / 更多功能** 等，必须走统一底壳与语义 Token。
+
+| 项 | 要求 |
+|----|------|
+| **底壳** | `AppBottomModalSurface`（`lib/core/widgets/app_modal_surface.dart`）；`barrierColor` 与现有实现一致（通常透明，由底壳绘制 scrim） |
+| **面板灰底** | `SettingsSemanticConstants.conversationSheetPanelBackground(isDark)`（与 `ColorType.pageBackground` 同源） |
+| **内容区左右缩进** | `conversationSheetOuterHorizontalPadding` |
+| **标准列表 + 取消** | 优先 `showAppActionSheet`；或组合 `ConversationSheetHeader` / `ConversationSheetListCard` / `ConversationSheetDivider` / `ConversationSheetSingleSelectRow` / `ConversationSheetCancelBar`（`lib/core/widgets/conversation_sheet.dart`，设置域可 `import .../settings_conversation/sheet/conversation_sheet.dart`） |
+| **深浅色** | 禁止 Sheet 内未文档化的 `Color(0x…)`；颜色经 `AppColorsFunctional` / `SettingsSemanticConstants.conversationSheet*` |
+
+**禁止**：业务页新建 `showCupertinoModalPopup` + 自绘 `Container(color: Colors.white…` 等第二套「白卡 + 灰底」且无登记。
+
+**门禁**：`scripts/verify_conversation_sheet_canonical.py` + `scripts/conversation_sheet_manifest.yaml`（随 `gate_repo.sh` app 阶段执行）。
+
+**与 §4.3 选用关系**：全屏设置/表单 → `SettingsInsetFormPageScaffold`；贴底选项/说明 → 本节 + `AppBottomModalSurface`。
 
 ---
 
@@ -191,4 +222,4 @@
 | 聊天选择器 | StartGroupChatPage | 多选选择态改为 iOS 语义图标（替换 Material Checkbox） |
 | 圈子频道管理 | CirclesPage | 一级 tab 下方滑出频道管理面板；我的频道支持拖拽排序；+/- 互转；动作色为蓝色主色 |
 
-> 门禁：`scripts/verify_dart_semantic.py` 已新增 iOS 语义风格检查，并由 `scripts/gate_repo.sh` 在 app gate 阶段执行。
+> 门禁：`scripts/verify_dart_semantic.py`、`scripts/verify_settings_canonical.py`、`scripts/verify_conversation_sheet_canonical.py` 由 `scripts/gate_repo.sh` 在 app gate 阶段执行。

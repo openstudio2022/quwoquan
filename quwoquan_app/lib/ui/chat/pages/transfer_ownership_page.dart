@@ -2,15 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
@@ -75,15 +72,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final bgColor = SettingsSemanticConstants.pageBackground(isDark);
-    final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
-      isDark,
-    );
 
     final membersState = ref.watch(
       conversationMembersProvider(widget.conversationId),
@@ -96,25 +85,10 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
 
     final filtered = filterMemberMapsByQuery(candidates, _searchQuery);
 
-    return AppScaffold(
-      backgroundColor: bgColor,
-      navigationBar: AppNavigationBar(
-        backgroundColor: toolbarBg,
-        leading: GlobalTopBarIconButton(
-          icon: CupertinoIcons.back,
-          onTap: () => context.pop(),
-        ),
-        middle: Text(
-          UITextConstants.selectNewOwner,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: SettingsSemanticConstants.dividerColor(isDark),
-            width: AppSpacing.hairline,
-          ),
-        ),
-      ),
+    return SettingsInsetMemberPickerPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.selectNewOwner,
+      onBack: () => context.pop(),
       body: Column(
         children: [
           EmbeddedMemberSearchBarPlain(

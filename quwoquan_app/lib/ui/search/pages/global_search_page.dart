@@ -1099,10 +1099,10 @@ class _SearchContentTypeSheetState extends State<_SearchContentTypeSheet> {
       onDismiss: () => Navigator.of(context).pop(),
       backgroundColor: pageBackground,
       contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,
-        AppSpacing.containerMd,
-        AppSpacing.containerMd,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

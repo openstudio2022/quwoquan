@@ -2,6 +2,8 @@
 
 > **层级**：L3_feature（隶属 L2 `group-creation-member-management`）
 > **状态**：baseline（2026-03-29：§9–§10 全屏表单态与搜索入口冻结）
+>
+> **全局布局同源**：`specs/ux/page-layout-semantics.md` §4.3（Inset A/B 类壳与门禁清单）。
 
 ## 0. 一句话定义
 

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 
 /// 私人助理管理页
 ///
@@ -35,56 +34,47 @@ class _AssistantManagementPageState
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     final contentAccessState = ref.watch(personalContentAccessProvider);
-    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final dividerClr = SettingsSemanticConstants.dividerColor(isDark);
-    final blockBorder = SettingsSemanticConstants.blockBorderColor(isDark);
 
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: blockBg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: widget.onBack,
-        ),
-        middle: Text(
-          AppConceptConstants.assistantManagementTitle,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-      ),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-          vertical: SettingsSemanticConstants.blockSpacing,
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: AppConceptConstants.assistantManagementTitle,
+      onBack: widget.onBack,
+      body: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+          right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+          top: AppSpacing.intraGroupSm,
+          bottom: AppSpacing.xl,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildSectionTitle(Icons.person_outline, '性格选择', fgSecondary),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Row(
-              children: [
-                _buildPersonalityChip('gentle', '温柔', '情感关怀', Icons.face),
-                SizedBox(width: AppSpacing.interGroupSm),
-                _buildPersonalityChip('strict', '严厉', '强力催促', Icons.face_3),
-                SizedBox(width: AppSpacing.interGroupSm),
-                _buildPersonalityChip('minimal', '极简', '言简意赅', Icons.flash_on),
-              ],
-            ),
-            SizedBox(height: AppSpacing.interGroupXl),
-            _buildSectionTitle(Icons.shield_outlined, '隐私权限', fgSecondary),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Container(
-              decoration: BoxDecoration(
-                color: blockBg,
-                borderRadius: BorderRadius.circular(
-                  SettingsSemanticConstants.blockBorderRadius,
-                ),
-                border: Border.all(color: blockBorder),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '性格选择',
+              child: Row(
+                children: [
+                  _buildPersonalityChip('gentle', '温柔', '情感关怀', Icons.face),
+                  SizedBox(width: AppSpacing.interGroupSm),
+                  _buildPersonalityChip('strict', '严厉', '强力催促', Icons.face_3),
+                  SizedBox(width: AppSpacing.interGroupSm),
+                  _buildPersonalityChip(
+                    'minimal',
+                    '极简',
+                    '言简意赅',
+                    Icons.flash_on,
+                  ),
+                ],
               ),
+            ),
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '隐私权限',
               child: Column(
                 children: [
                   _buildPermissionRow(
@@ -93,11 +83,7 @@ class _AssistantManagementPageState
                     (v) => setState(() => _permChat = v),
                     Icons.lock_outline,
                   ),
-                  Divider(
-                    height: AppSpacing.one,
-                    color: dividerClr,
-                    thickness: SettingsSemanticConstants.dividerThickness,
-                  ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _buildPermissionRow(
                     '允许${AppConceptConstants.assistantLabel}使用我的创作内容',
                     contentAccessState.granted,
@@ -120,22 +106,14 @@ class _AssistantManagementPageState
                               ? '加载中'
                               : contentAccessState.summaryLabel),
                   ),
-                  Divider(
-                    height: AppSpacing.one,
-                    color: dividerClr,
-                    thickness: SettingsSemanticConstants.dividerThickness,
-                  ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _buildPermissionRow(
                     '允许访问位置',
                     _permLocation,
                     (v) => setState(() => _permLocation = v),
                     Icons.location_on_outlined,
                   ),
-                  Divider(
-                    height: AppSpacing.one,
-                    color: dividerClr,
-                    thickness: SettingsSemanticConstants.dividerThickness,
-                  ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _buildPermissionRow(
                     '系统通知',
                     _permNotifications,
@@ -186,7 +164,7 @@ class _AssistantManagementPageState
                           color: AppColors.error,
                         ),
                       ),
-                      Spacer(),
+                      const Spacer(),
                       Icon(
                         CupertinoIcons.chevron_forward,
                         color: AppColors.error.withValues(alpha: 0.7),
@@ -206,19 +184,9 @@ class _AssistantManagementPageState
               ),
             ),
             SizedBox(height: AppSpacing.interGroupXl),
-            _buildSectionTitle(Icons.schedule, '技能生效时间', fgSecondary),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Container(
-              padding: EdgeInsets.all(
-                SettingsSemanticConstants.blockHorizontalPadding,
-              ),
-              decoration: BoxDecoration(
-                color: blockBg,
-                borderRadius: BorderRadius.circular(
-                  SettingsSemanticConstants.blockBorderRadius,
-                ),
-                border: Border.all(color: blockBorder),
-              ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '技能生效时间',
               child: Column(
                 children: [
                   Row(
@@ -253,7 +221,7 @@ class _AssistantManagementPageState
                       valueColor: AlwaysStoppedAnimation<Color>(
                         AppColors.primaryColor,
                       ),
-                      minHeight: 6,
+                      minHeight: AppSpacing.six,
                     ),
                   ),
                 ],

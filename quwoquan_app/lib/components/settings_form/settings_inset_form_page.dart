@@ -7,6 +7,59 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
+/// A/B 类设置全屏页共用：灰底、[insetFormNavigationBarBackground] 顶栏、
+/// [AppNavigationBarIconButton] 返回与 hairline 底边。
+Widget _settingsInsetPageChrome({
+  required bool isDark,
+  required String title,
+  required VoidCallback onBack,
+  required Widget body,
+  Widget? trailing,
+  bool resizeToAvoidBottomInset = true,
+}) {
+  final barBg =
+      SettingsSemanticConstants.insetFormNavigationBarBackground(isDark);
+  final borderColor =
+      SettingsSemanticConstants.insetFormNavigationBarBorderColor(isDark);
+  final trail = trailing;
+
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
+    child: AppScaffold(
+      backgroundColor:
+          SettingsSemanticConstants.insetFormPageBackground(isDark),
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      navigationBar: AppNavigationBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: barBg,
+        border: Border(
+          bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
+        ),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
+          onPressed: onBack,
+        ),
+        middle: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        ),
+        trailing: trail == null
+            ? null
+            : IconTheme.merge(
+                data: IconThemeData(
+                  color: AppNavigationSemanticConstants.barIconColor(isDark),
+                  size: AppNavigationSemanticConstants.barIconSize,
+                ),
+                child: trail,
+              ),
+      ),
+      body: body,
+    ),
+  );
+}
+
 /// 全屏 **Inset Grouped** 表单骨架：灰底 + 白（深模式深灰）分组卡片，对齐 iOS 设置页。
 ///
 /// 顶栏背景与页面底同色；返回与操作图标使用 [SettingsSemanticConstants.insetFormNavigationBarActionIconColor]，避免默认 Cupertino 蓝。
@@ -30,45 +83,47 @@ class SettingsInsetFormPageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final barBg =
-        SettingsSemanticConstants.insetFormNavigationBarBackground(isDark);
-    final borderColor =
-        SettingsSemanticConstants.insetFormNavigationBarBorderColor(isDark);
+    return _settingsInsetPageChrome(
+      isDark: isDark,
+      title: title,
+      onBack: onBack,
+      body: body,
+      trailing: trailing,
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+    );
+  }
+}
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
-      child: AppScaffold(
-        backgroundColor:
-            SettingsSemanticConstants.insetFormPageBackground(isDark),
-        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-        navigationBar: AppNavigationBar(
-          automaticallyImplyLeading: false,
-          backgroundColor: barBg,
-          border: Border(
-            bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
-          ),
-          leading: AppNavigationBarIconButton(
-            icon: CupertinoIcons.back,
-            onPressed: onBack,
-          ),
-          middle: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-          ),
-          trailing: trailing == null
-              ? null
-              : IconTheme.merge(
-                  data: IconThemeData(
-                    color: AppNavigationSemanticConstants.barIconColor(isDark),
-                    size: AppNavigationSemanticConstants.barIconSize,
-                  ),
-                  child: trailing!,
-                ),
-        ),
-        body: body,
-      ),
+/// B 类：**成员选择 + 内嵌搜索** 全屏页，与 [SettingsInsetFormPageScaffold] **同源顶栏/灰底**。
+///
+/// 业务将搜索条与列表置于 [body]（通常为 `Column` + `Expanded(ListView)`）。
+class SettingsInsetMemberPickerPageScaffold extends StatelessWidget {
+  const SettingsInsetMemberPickerPageScaffold({
+    super.key,
+    required this.isDark,
+    required this.title,
+    required this.onBack,
+    required this.body,
+    this.trailing,
+    this.resizeToAvoidBottomInset = true,
+  });
+
+  final bool isDark;
+  final String title;
+  final VoidCallback onBack;
+  final Widget body;
+  final Widget? trailing;
+  final bool resizeToAvoidBottomInset;
+
+  @override
+  Widget build(BuildContext context) {
+    return _settingsInsetPageChrome(
+      isDark: isDark,
+      title: title,
+      onBack: onBack,
+      body: body,
+      trailing: trailing,
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
     );
   }
 }

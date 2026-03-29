@@ -99,10 +99,8 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
 
     return AppBottomModalSurface(
       onDismiss: _dismissSheet,
-      backgroundColor: AppColorsFunctional.getColor(
-        isDark,
-        ColorType.backgroundPrimary,
-      ),
+      backgroundColor:
+          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
       maxHeightRatio: AppSpacing.modalSheetMaxHeightRatio,
       panelKey: TestKeys.modalBottomSheetPanel,
       child: Column(

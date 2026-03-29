@@ -4054,10 +4054,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _showHistorySheet() {
     const isDark = true;
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
+    final bg =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
     final fg = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -4075,9 +4073,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           backgroundColor: bg,
           maxHeightRatio: 0.65,
           contentPadding: EdgeInsets.all(
-            AppSpacing.semantic[DesignSemanticConstants
-                    .container]?[DesignSemanticConstants.md] ??
-                AppSpacing.containerMd,
+            SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

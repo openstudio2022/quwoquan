@@ -277,6 +277,7 @@
 - 非全屏底部面板高度 `MUST` 由内容决定，并受统一最大高度比例约束；超过上限后仅内部内容滚动，外层面板不再继续长高。
 - 破坏性操作 `MUST` 和普通操作视觉分组。
 - 弹窗蒙层 `MUST` 轻，不允许过黑或过厚毛玻璃遮蔽主内容。
+- **贴底对话态 Sheet**（更多功能、Action Sheet、标准选项表）：布局、面板底色、内容水平缩进、`ConversationSheet*` 积木与 `showAppActionSheet` 封装 `MUST` 与 [`specs/ux/page-layout-semantics.md`](specs/ux/page-layout-semantics.md) **§4.4** 一致；`showCupertinoModalPopup` 新增调用点 `MUST` 登记 `scripts/conversation_sheet_manifest.yaml`（由 `verify_conversation_sheet_canonical.py` 校验）。
 
 ### 4.7 组件级响应式清单
 

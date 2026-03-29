@@ -1,0 +1,45 @@
+id: CR-20260329-003
+title: settings canonical Inset shell + manifest gate
+slug: settings-canonical-shell-gate
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/ux/page-layout-semantics.md
+  - scripts/settings_canonical_manifest.yaml
+  - scripts/verify_settings_canonical.py
+  - scripts/gate_repo.sh
+  - quwoquan_app/lib/components/settings_form
+  - quwoquan_app/lib/ui/settings/pages
+  - quwoquan_app/lib/ui/chat/pages
+  - quwoquan_app/lib/ui/assistant/pages
+
+entries:
+  - timestamp: "2026-03-29T20:00:00+08:00"
+    summary: >
+      冻结 A/B 类设置全屏壳（SettingsInsetFormPageScaffold / SettingsInsetMemberPickerPageScaffold）、
+      memberPickerNavigationBarBackground 语义别名；应用设置/开发者/助理管理页迁 Inset；
+      新增 manifest + verify_settings_canonical 门禁与 Cursor 规则，禁止第三套顶栏组合。
+    reason: >
+      设置类页面长期分叉（pageBackground + selectionToolbarBackground + GlobalTopBar 等），
+      需单一真相源与自动化清单防止回归。
+    change_type:
+      - baseline
+      - design
+      - tooling
+    changed_documents:
+      - path: specs/ux/page-layout-semantics.md
+        sections:
+          - "§4.3 设置类 Inset 同源"
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md
+        sections:
+          - "全局布局同源"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+      cloud_contract_change: false
+    rollback: >
+      Revert verify_settings_canonical 与 gate 调用；恢复 manifest 与页面壳改动；
+      保留 CR 记录以便审计。

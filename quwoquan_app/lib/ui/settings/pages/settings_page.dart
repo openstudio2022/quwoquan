@@ -1,14 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -19,42 +17,31 @@ class SettingsPage extends ConsumerWidget {
     final contentAccessState = ref.watch(personalContentAccessProvider);
     final snapshot = appearanceState.snapshot;
     final isDark = ref.watch(isDarkProvider);
-    final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
-      child: AppScaffold(
-        backgroundColor: backgroundColor,
-        navigationBar: AppNavigationBar(
-          backgroundColor: backgroundColor,
-          automaticallyImplyLeading: false,
-          middle: Text(
-            UITextConstants.settings,
-            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.settings,
+      onBack: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutePaths.profile);
+        }
+      },
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: EdgeInsets.only(
+            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            top: AppSpacing.intraGroupSm,
+            bottom: AppSpacing.xl,
           ),
-          leading: AppNavigationBarIconButton(
-            icon: CupertinoIcons.back,
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.profile);
-              }
-            },
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.intraGroupLg,
-              AppSpacing.containerMd,
-              AppSpacing.xl,
-            ),
-            children: <Widget>[
-              _SettingsGroup(
-                title: '偏好',
+          children: <Widget>[
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '偏好',
+              child: Column(
                 children: <Widget>[
                   _SettingsRow(
                     icon: CupertinoIcons.paintbrush,
@@ -66,11 +53,13 @@ class SettingsPage extends ConsumerWidget {
                       builder: (_) => const _AppearanceSettingsSheet(),
                     ),
                   ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _SettingsRow(
                     icon: CupertinoIcons.bell,
                     label: '通知',
                     onTap: () => _showPendingNotice(context, '通知'),
                   ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _SettingsRow(
                     icon: CupertinoIcons.lock_shield,
                     label: '${AppConceptConstants.assistantLabel}读取创作内容',
@@ -85,9 +74,14 @@ class SettingsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-              SizedBox(height: AppSpacing.md),
-              _SettingsGroup(
-                title: '其他',
+            ),
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '其他',
+              child: Column(
                 children: <Widget>[
                   _SettingsRow(
                     icon: CupertinoIcons.sparkles,
@@ -95,11 +89,13 @@ class SettingsPage extends ConsumerWidget {
                     onTap: () =>
                         context.push(AppRoutePaths.assistantManagement),
                   ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _SettingsRow(
                     icon: CupertinoIcons.lab_flask,
                     label: '开发者',
                     onTap: () => context.push(AppRoutePaths.settingsDeveloper),
                   ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   _SettingsRow(
                     icon: CupertinoIcons.info,
                     label: '关于',
@@ -107,8 +103,8 @@ class SettingsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -205,20 +201,19 @@ class _AppearanceSettingsSheetState
     final state = ref.watch(appearanceSettingsControllerProvider);
     final snapshot = state.snapshot;
     final accessibility = ref.watch(accessibilityProvider);
-    final backgroundColor = CupertinoDynamicColor.resolve(
-      CupertinoColors.secondarySystemGroupedBackground,
-      context,
-    );
+    final sheetIsDark = ref.watch(isDarkProvider);
+    final backgroundColor =
+        SettingsSemanticConstants.conversationSheetPanelBackground(sheetIsDark);
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
       backgroundColor: backgroundColor,
       maxHeightRatio: 0.78,
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
+      contentPadding: EdgeInsets.fromLTRB(
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,
-        AppSpacing.containerMd,
-        AppSpacing.containerSm,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -367,6 +362,7 @@ class _AppearanceSettingsSheetState
   }
 }
 
+/// Sheet 内分组（非全屏 Inset 页，保留圆角白底块）。
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({required this.title, required this.children});
 

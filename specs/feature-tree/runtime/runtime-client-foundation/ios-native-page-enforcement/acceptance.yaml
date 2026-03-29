@@ -1,0 +1,94 @@
+version: 1
+feature: ios-native-page-enforcement
+level: "L3_story"
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.ios-native-page-enforcement
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: iOS 原生根壳与静态门禁；详见 spec.md
+  A1:
+    criteria: 门禁脚本在仓库根可执行，对 quwoquan_app 约定路径生效
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: scripts/verify_ios_native_surface_gate.py
+  A2:
+    criteria: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py，失败时非零退出
+    status: implemented
+    linked_tasks:
+      - M2
+    tests:
+      - file: scripts/gate_repo.sh
+  A3:
+    criteria: lib/ui/**/pages/*.dart 与 design 约定 glob 内禁止未豁免的 return Scaffold(
+    status: implemented
+    linked_tasks:
+      - M3
+    tests:
+      - file: scripts/verify_ios_native_surface_gate.py
+  A4:
+    criteria: allowlist 仅登记已知存量；新增业务页不得依赖扩大豁免
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/gates/ios_native_surface_allowlist.yaml
+  A7:
+    criteria: spec/design/plan 与 02_IOS_NATIVE_FRONTEND_UX_SPEC、page-layout-semantics 一致
+    status: implemented
+    linked_tasks:
+      - M3
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/spec.md
+execution:
+  local_gate: python3 scripts/verify_ios_native_surface_gate.py
+  full_gate: make gate
+
+# 以下为 T1~T4 叙事映射（供 CR / 评审引用，门禁以 level_acceptance 为准）
+journey_acceptance:
+  - id: A1
+    statement: 门禁脚本在仓库根执行且对 quwoquan_app 页面路径生效
+    t_layers: [T1]
+  - id: A2
+    statement: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py 失败时退出非零
+    t_layers: [T1]
+  - id: A3
+    statement: lib/ui/**/pages/*.dart 中禁止出现未豁免的 return Scaffold(
+    t_layers: [T1, T2]
+  - id: A4
+    statement: 约定的 components 全屏页路径与同规则一致（见 design 中 glob）
+    t_layers: [T1, T2]
+  - id: A5
+    statement: allowlist 仅包含当前已知的 Material 根壳文件；新增业务页不得依赖 allowlist
+    t_layers: [T3]
+
+scenario_acceptance:
+  - id: S1
+    statement: 开发者在全新页面使用 return Scaffold( 时本地 make gate 失败并给出文件与规则链接
+    t_layers: [T2]
+  - id: S2
+    statement: 将 allowlist 中某文件改为 AppScaffold 根壳后，从 allowlist 移除仍能通过 gate
+    t_layers: [T2, T3]
+
+evidence_matrix:
+  T1:
+    - type: script
+      artifact: scripts/verify_ios_native_surface_gate.py
+    - type: config
+      artifact: specs/gates/ios_native_surface_allowlist.yaml
+    - type: ci
+      artifact: scripts/gate_repo.sh run_app 调用链
+  T2:
+    - type: manual
+      note: 故意引入违规一行后 gate 失败再还原
+  T3:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/plan.yaml
+  T4:
+    - type: deferred
+      note: 全量 UI 黄金用例可选；本 L3 以静态门禁为主

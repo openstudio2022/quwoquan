@@ -1,0 +1,16 @@
+id: CR-20260329-002-ios-native-page-enforcement
+title: iOS 原生页面根壳门禁与 allowlist 基线
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/ios-native-page-enforcement
+summary: |
+  引入静态门禁 scripts/verify_ios_native_surface_gate.py，禁止 lib/ui/**/pages 与约定 components 全屏页
+  使用 return Scaffold( 作为根壳（Material）；存量 3 文件登记于 specs/gates/ios_native_surface_allowlist.yaml，
+  后续切片迁移至 AppScaffold/CupertinoPageScaffold 并清空 allowlist。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/plan.yaml
+  - specs/gates/ios_native_surface_allowlist.yaml
+  - scripts/verify_ios_native_surface_gate.py
+  - scripts/gate_repo.sh

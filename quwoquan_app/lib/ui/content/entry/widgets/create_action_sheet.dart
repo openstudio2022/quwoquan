@@ -31,10 +31,8 @@ class CreateActionSheet extends StatelessWidget {
         CupertinoTheme.of(context).brightness ??
         MediaQuery.platformBrightnessOf(context);
     final isDark = brightness == Brightness.dark;
-    final pageBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.pageBackground,
-    );
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
     final blockBackground = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceElevated,
@@ -94,10 +92,10 @@ class CreateActionSheet extends StatelessWidget {
       onDismiss: onCancel,
       backgroundColor: pageBackground,
       contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerXs,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,
-        AppSpacing.containerXs,
-        AppSpacing.containerXs,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       panelKey: TestKeys.modalBottomSheetPanel,
       child: Column(

@@ -2,14 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群管理员设置页 — 多选最多 3 人
@@ -85,14 +82,6 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final bgColor = SettingsSemanticConstants.pageBackground(isDark);
-    final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
-      isDark,
-    );
 
     final membersState = ref.watch(
       conversationMembersProvider(widget.conversationId),
@@ -114,35 +103,20 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
         .where((m) => _selectedIds.contains(m['userId'] as String? ?? ''))
         .toList();
 
-    return AppScaffold(
-      backgroundColor: bgColor,
-      navigationBar: AppNavigationBar(
-        backgroundColor: toolbarBg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(
-          UITextConstants.selectGroupMembers,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _selectedIds.isEmpty ? null : _onDone,
-          child: Text(
-            '${UITextConstants.done}(${_selectedIds.length})',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: _selectedIds.isEmpty
-                  ? CupertinoColors.systemGrey
-                  : AppColors.primaryColor,
-            ),
-          ),
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: SettingsSemanticConstants.dividerColor(isDark),
-            width: AppSpacing.hairline,
+    return SettingsInsetMemberPickerPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.selectGroupMembers,
+      onBack: () => context.pop(),
+      trailing: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: _selectedIds.isEmpty ? null : _onDone,
+        child: Text(
+          '${UITextConstants.done}(${_selectedIds.length})',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: _selectedIds.isEmpty
+                ? CupertinoColors.systemGrey
+                : AppColors.primaryColor,
           ),
         ),
       ),

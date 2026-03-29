@@ -72,6 +72,13 @@ class SettingsSemanticConstants {
   static Color insetFormNavigationBarBackground(bool isDark) =>
       insetFormPageBackground(isDark);
 
+  /// B 类（群成员选择、搜索 + 列表）顶栏背景：与 [insetFormNavigationBarBackground] 同源。
+  ///
+  /// **禁止**在业务页再手写 `pageBackground` + `selectionToolbarBackground` 作为第三套顶栏组合；
+  /// 应使用 `SettingsInsetMemberPickerPageScaffold`（`lib/components/settings_form/`）。
+  static Color memberPickerNavigationBarBackground(bool isDark) =>
+      insetFormNavigationBarBackground(isDark);
+
   /// 顶栏底部分割线（hairline）。
   static Color insetFormNavigationBarBorderColor(bool isDark) {
     final c = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
@@ -107,6 +114,50 @@ class SettingsSemanticConstants {
     final c = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
     return c.withValues(alpha: 0.12);
   }
+
+  // ==================== 贴底对话态 Sheet（AppBottomModalSurface 内）====================
+  /// 与 [AppBottomModalSurface] 面板灰底一致；深浅色用 [ColorType.pageBackground]。
+  static Color conversationSheetPanelBackground(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+
+  /// 列表/取消条白卡片表面（与现有 `AppActionSheet` 一致）。
+  static Color conversationSheetCardSurface(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.surfaceElevated);
+
+  /// 卡片描边（与帖子更多功能列表卡同源）。
+  static Color conversationSheetCardBorderColor(bool isDark) =>
+      blockBorderColor(isDark);
+
+  /// 卡片圆角（与 [selectionCardBorderRadius] 同源）。
+  static double get conversationSheetCardCornerRadius =>
+      selectionCardBorderRadius;
+
+  /// 主标题 / 行主文案色。
+  static Color conversationSheetPrimaryLabelColor(bool isDark) =>
+      labelColor(isDark);
+
+  /// 脚注、取消文案、行次要色。
+  static Color conversationSheetSecondaryLabelColor(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+
+  /// 行分割线（hairline 上再乘透明度由组件侧处理时可调用）。
+  static Color conversationSheetDividerColor(bool isDark) =>
+      insetFormSectionDividerColor(isDark);
+
+  /// 单选选中对勾（系统强调蓝）。
+  static Color conversationSheetSelectionAccentColor(bool isDark) =>
+      AppColors.primaryColor;
+
+  /// 面板内容区相对屏幕左右缩进（与帖子更多功能一致）。
+  static double get conversationSheetOuterHorizontalPadding =>
+      AppSpacing.containerXs;
+
+  /// 卡片之间、脚注与卡片之间竖向间距。
+  static double get conversationSheetSectionGap => AppSpacing.interGroupSm;
+
+  /// 标题与下方脚注的间距。
+  static double get conversationSheetTitleToFootnoteSpacing =>
+      AppSpacing.intraGroupSm;
 
   // ==================== 内容与分割线 ====================
   /// 设置项主文字颜色

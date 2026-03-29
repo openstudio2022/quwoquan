@@ -15,19 +15,22 @@ class CupertinoConversationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.viewInsetsOf(context);
     final clampedMaxHeight = maxHeightFactor.clamp(0.3, 0.92);
+    final brightness =
+        CupertinoTheme.of(context).brightness ??
+        MediaQuery.platformBrightnessOf(context);
+    final isDark = brightness == Brightness.dark;
+    final outer = SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: CupertinoDynamicColor.resolve(
-        CupertinoColors.systemBackground,
-        context,
-      ),
+      backgroundColor:
+          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
       maxHeightRatio: clampedMaxHeight,
       contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerSm,
+        outer,
         0,
-        AppSpacing.containerSm,
-        viewInsets.bottom + AppSpacing.containerSm,
+        outer,
+        viewInsets.bottom + outer,
       ),
       child: child,
     );

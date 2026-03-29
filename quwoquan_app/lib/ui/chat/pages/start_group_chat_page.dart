@@ -19,6 +19,8 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
+// settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
+
 /// 发起群聊页（图一：创建新群聊 + 相关同好）
 class StartGroupChatPage extends ConsumerStatefulWidget {
   const StartGroupChatPage({

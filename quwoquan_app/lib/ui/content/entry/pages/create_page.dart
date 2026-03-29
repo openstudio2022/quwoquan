@@ -2993,10 +2993,9 @@ class _CreatePublishConfirmSheetState
   }
 
   Future<void> _pickVisibility() async {
-    final nextValue = await showAppActionSheet<bool>(
+    final nextValue = await showAppActionSheetForConfirm<bool>(
       context,
-      title: '谁可以看',
-      message: '公开内容可以同步到圈子，私密内容仅自己可见。',
+      title: context.l10n.whoCanSeeLabel,
       sections: [
         AppActionSheetSection<bool>(
           items: [
@@ -3015,6 +3014,7 @@ class _CreatePublishConfirmSheetState
           ],
         ),
       ],
+      initialValue: _settings.isPublic,
     );
     if (nextValue == null) {
       return;

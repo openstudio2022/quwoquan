@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -23,15 +24,18 @@ class ParticipantListSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final participantsState = ref.watch(callParticipantsProvider);
     final participants = participantsState.participants;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final outer = SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor:
+          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
       maxHeightRatio: 0.6,
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
+      contentPadding: EdgeInsets.fromLTRB(
+        outer,
         0,
-        AppSpacing.md,
-        AppSpacing.sm,
+        outer,
+        outer,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

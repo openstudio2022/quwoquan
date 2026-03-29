@@ -1,10 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
+import 'package:quwoquan_app/core/widgets/conversation_sheet.dart';
 
 class AppActionSheetItem<T> {
   const AppActionSheetItem({
@@ -53,6 +52,32 @@ Future<T?> showAppActionSheet<T>(
   );
 }
 
+/// 选项仅高亮草稿选中态；点「确定」才返回选中值，点「取消」或关闭返回 `null`。
+Future<T?> showAppActionSheetForConfirm<T>(
+  BuildContext context, {
+  String? title,
+  String? message,
+  required List<AppActionSheetSection<T>> sections,
+  required T initialValue,
+  String cancelLabel = UITextConstants.cancel,
+  String confirmLabel = UITextConstants.ok,
+  double? maxHeightRatio,
+}) {
+  return showCupertinoModalPopup<T>(
+    context: context,
+    barrierColor: Colors.transparent,
+    builder: (sheetContext) => _AppActionSheetForConfirm<T>(
+      title: title,
+      message: message,
+      sections: sections,
+      initialValue: initialValue,
+      cancelLabel: cancelLabel,
+      confirmLabel: confirmLabel,
+      maxHeightRatio: maxHeightRatio,
+    ),
+  );
+}
+
 class _AppActionSheet<T> extends StatelessWidget {
   const _AppActionSheet({
     required this.sections,
@@ -74,116 +99,43 @@ class _AppActionSheet<T> extends StatelessWidget {
         (CupertinoTheme.of(context).brightness ??
             MediaQuery.platformBrightnessOf(context)) ==
         Brightness.dark;
-    final pageBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.pageBackground,
-    );
-    final cardBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-    final primaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final secondaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final divider = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
       backgroundColor: pageBackground,
       maxHeightRatio: maxHeightRatio,
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.containerXs,
+      contentPadding: EdgeInsets.fromLTRB(
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,
-        AppSpacing.containerXs,
-        AppSpacing.containerXs,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if ((title ?? '').trim().isNotEmpty ||
-                (message ?? '').trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  0,
-                  AppSpacing.containerMd,
-                  AppSpacing.interGroupSm,
-                ),
-                child: Column(
-                  children: [
-                    if ((title ?? '').trim().isNotEmpty)
-                      SizedBox(
-                        height: AppSpacing.modalHeaderHeight,
-                        child: Center(
-                          child: Text(
-                            title!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: AppTypography.lg,
-                              fontWeight: AppTypography.semiBold,
-                              color: primaryText,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if ((message ?? '').trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppSpacing.interGroupSm,
-                        ),
-                        child: Text(
-                          message!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: secondaryText,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+            ConversationSheetHeader(
+              isDark: isDark,
+              title: title,
+              footnote: message,
+            ),
             for (final section in sections) ...[
               _ActionSheetSectionCard<T>(
+                isDark: isDark,
                 section: section,
-                backgroundColor: cardBackground,
-                dividerColor: divider,
-                primaryText: primaryText,
-                secondaryText: secondaryText,
               ),
-              const SizedBox(height: AppSpacing.interGroupSm),
+              SizedBox(
+                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              ),
             ],
-            Container(
-              decoration: BoxDecoration(
-                color: cardBackground,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
-                ),
-              ),
-              child: CupertinoButton(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.containerSm,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(
-                  cancelLabel,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.medium,
-                    color: secondaryText,
-                  ),
-                ),
-              ),
+            ConversationSheetCancelBar(
+              isDark: isDark,
+              label: cancelLabel,
+              onTap: () => Navigator.of(context).pop(),
             ),
           ],
         ),
@@ -194,109 +146,187 @@ class _AppActionSheet<T> extends StatelessWidget {
 
 class _ActionSheetSectionCard<T> extends StatelessWidget {
   const _ActionSheetSectionCard({
+    required this.isDark,
     required this.section,
-    required this.backgroundColor,
-    required this.dividerColor,
-    required this.primaryText,
-    required this.secondaryText,
   });
 
+  final bool isDark;
   final AppActionSheetSection<T> section;
-  final Color backgroundColor;
-  final Color dividerColor;
-  final Color primaryText;
-  final Color secondaryText;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
+    return ConversationSheetListCard(
+      isDark: isDark,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: section.items.asMap().entries.map((entry) {
           final index = entry.key;
           final item = entry.value;
-          final actionColor = item.isDestructive
-              ? AppColors.iosDestructive(context)
-              : primaryText;
-
+          final inset = ConversationSheetSingleSelectRow.dividerInsetForIcon(
+            item.icon != null,
+          );
           return Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: !item.enabled
-                    ? null
-                    : () => Navigator.of(context).pop(item.value),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerMd,
-                    vertical: AppSpacing.containerSm,
-                  ),
-                  child: Row(
-                    children: [
-                      if (item.icon != null) ...[
-                        Icon(
-                          item.icon,
-                          size: AppSpacing.twenty,
-                          color: actionColor,
-                        ),
-                        const SizedBox(width: AppSpacing.containerSm),
-                      ],
-                      Expanded(
-                        child: Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: item.isSelected
-                                ? AppTypography.semiBold
-                                : AppTypography.medium,
-                            color: item.enabled
-                                ? actionColor
-                                : secondaryText.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ),
-                      if ((item.description ?? '').trim().isNotEmpty)
-                        Flexible(
-                          child: Text(
-                            item.description!,
-                            textAlign: TextAlign.right,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTypography.base,
-                              color: item.isDestructive
-                                  ? actionColor.withValues(alpha: 0.75)
-                                  : secondaryText,
-                            ),
-                          ),
-                        ),
-                      if (item.isSelected) ...[
-                        const SizedBox(width: AppSpacing.intraGroupSm),
-                        Icon(
-                          CupertinoIcons.check_mark,
-                          size: AppSpacing.iconSmall,
-                          color: AppColors.primaryColor,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+              ConversationSheetSingleSelectRow(
+                isDark: isDark,
+                label: item.label,
+                icon: item.icon,
+                description: item.description,
+                isSelected: item.isSelected,
+                isDestructive: item.isDestructive,
+                enabled: item.enabled,
+                onTap: () => Navigator.of(context).pop(item.value),
               ),
               if (index < section.items.length - 1)
-                Container(
-                  height: AppSpacing.hairline,
-                  margin: EdgeInsets.only(
-                    left: item.icon == null
-                        ? AppSpacing.containerMd
-                        : AppSpacing.containerMd +
-                              AppSpacing.twenty +
-                              AppSpacing.containerSm,
-                    right: AppSpacing.containerMd,
-                  ),
-                  color: dividerColor.withValues(alpha: 0.9),
+                ConversationSheetDivider(
+                  isDark: isDark,
+                  dividerLeftInset: inset,
+                ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _AppActionSheetForConfirm<T> extends StatefulWidget {
+  const _AppActionSheetForConfirm({
+    required this.sections,
+    required this.initialValue,
+    required this.cancelLabel,
+    required this.confirmLabel,
+    this.title,
+    this.message,
+    this.maxHeightRatio,
+  });
+
+  final String? title;
+  final String? message;
+  final List<AppActionSheetSection<T>> sections;
+  final T initialValue;
+  final String cancelLabel;
+  final String confirmLabel;
+  final double? maxHeightRatio;
+
+  @override
+  State<_AppActionSheetForConfirm<T>> createState() =>
+      _AppActionSheetForConfirmState<T>();
+}
+
+class _AppActionSheetForConfirmState<T>
+    extends State<_AppActionSheetForConfirm<T>> {
+  late T _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.initialValue;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark =
+        (CupertinoTheme.of(context).brightness ??
+            MediaQuery.platformBrightnessOf(context)) ==
+        Brightness.dark;
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.of(context).pop(),
+      backgroundColor: pageBackground,
+      maxHeightRatio: widget.maxHeightRatio,
+      contentPadding: EdgeInsets.fromLTRB(
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        0,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+      ),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConversationSheetHeader(
+              isDark: isDark,
+              title: widget.title,
+              footnote: widget.message,
+            ),
+            for (final section in widget.sections) ...[
+              _ActionSheetSectionCardForConfirm<T>(
+                isDark: isDark,
+                section: section,
+                selectedValue: _draft,
+                onSelect: (value) {
+                  if (value != null) {
+                    setState(() => _draft = value);
+                  }
+                },
+              ),
+              SizedBox(
+                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              ),
+            ],
+            ConversationSheetCancelConfirmBar(
+              isDark: isDark,
+              cancelLabel: widget.cancelLabel,
+              confirmLabel: widget.confirmLabel,
+              onCancel: () => Navigator.of(context).pop(),
+              onConfirm: () => Navigator.of(context).pop(_draft),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionSheetSectionCardForConfirm<T> extends StatelessWidget {
+  const _ActionSheetSectionCardForConfirm({
+    required this.isDark,
+    required this.section,
+    required this.selectedValue,
+    required this.onSelect,
+  });
+
+  final bool isDark;
+  final AppActionSheetSection<T> section;
+  final T selectedValue;
+  final void Function(T? value) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConversationSheetListCard(
+      isDark: isDark,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: section.items.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          final inset = ConversationSheetSingleSelectRow.dividerInsetForIcon(
+            item.icon != null,
+          );
+          final isSelected = item.value != null && item.value == selectedValue;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConversationSheetSingleSelectRow(
+                isDark: isDark,
+                label: item.label,
+                icon: item.icon,
+                description: item.description,
+                isSelected: isSelected,
+                isDestructive: item.isDestructive,
+                enabled: item.enabled,
+                onTap: () => onSelect(item.value),
+              ),
+              if (index < section.items.length - 1)
+                ConversationSheetDivider(
+                  isDark: isDark,
+                  dividerLeftInset: inset,
                 ),
             ],
           );

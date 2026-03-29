@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -31,21 +32,25 @@ class ContentShareSheet extends StatefulWidget {
     return showCupertinoModalPopup<void>(
       context: context,
       barrierColor: Colors.transparent,
-      builder: (sheetContext) => AppBottomModalSurface(
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return AppBottomModalSurface(
         onDismiss: () => Navigator.of(sheetContext).pop(),
-        backgroundColor: AppColors.iosPageBackground(context),
-        contentPadding: const EdgeInsets.fromLTRB(
-          AppSpacing.containerMd,
+        backgroundColor:
+            SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
+        contentPadding: EdgeInsets.fromLTRB(
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
           0,
-          AppSpacing.containerMd,
-          AppSpacing.containerMd,
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         ),
         child: ContentShareSheet(
           template: template,
           actionHandler: actionHandler,
           onActionCompleted: onActionCompleted,
         ),
-      ),
+        );
+      },
     );
   }
 

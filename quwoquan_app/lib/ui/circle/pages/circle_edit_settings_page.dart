@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -377,10 +376,6 @@ class _CircleEditSettingsPageState
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
     final cardBg = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
@@ -402,42 +397,27 @@ class _CircleEditSettingsPageState
       ColorType.borderPrimary,
     );
 
-    return AppScaffold(
-      backgroundColor: bg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: cardBg.withValues(alpha: 0.94),
-        border: Border(
-          bottom: BorderSide(
-            color: border.withValues(alpha: 0.3),
-            width: AppSpacing.hairline,
-          ),
-        ),
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        middle: Text(
-          _isCreateMode
-              ? UITextConstants.createCircle
-              : UITextConstants.circleEditSettings,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _isSaving ? null : _save,
-          child: _isSaving
-              ? const CupertinoActivityIndicator()
-              : Text(
-                  _isCreateMode
-                      ? UITextConstants.create
-                      : UITextConstants.circleSaveChanges,
-                  style: TextStyle(
-                    color: AppColors.primaryColor,
-                    fontSize: AppTypography.sm,
-                    fontWeight: AppTypography.semiBold,
-                  ),
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: _isCreateMode
+          ? UITextConstants.createCircle
+          : UITextConstants.circleEditSettings,
+      onBack: () => Navigator.of(context).maybePop(),
+      trailing: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: _isSaving ? null : _save,
+        child: _isSaving
+            ? const CupertinoActivityIndicator()
+            : Text(
+                _isCreateMode
+                    ? UITextConstants.create
+                    : UITextConstants.circleSaveChanges,
+                style: TextStyle(
+                  color: AppColors.primaryColor,
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.semiBold,
                 ),
-        ),
+              ),
       ),
       body: Stack(
         children: [

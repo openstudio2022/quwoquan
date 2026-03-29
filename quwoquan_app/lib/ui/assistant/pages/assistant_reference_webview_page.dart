@@ -5,6 +5,8 @@ import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
+// settings-canonical-exception: WebView 全屏内容宿主 CR-20260329-003
+
 class AssistantReferenceWebViewPage extends StatefulWidget {
   const AssistantReferenceWebViewPage({
     super.key,

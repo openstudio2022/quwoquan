@@ -232,9 +232,8 @@ class _MediaPostMoreActionSheetState
     final isDark = ref.watch(isDarkProvider);
     final scrollActions = _buildScrollActions(isDark);
     final bottomActions = _buildBottomActions();
-    final panelBackground = SettingsSemanticConstants.pageBackground(isDark);
-    final cardBackground = SettingsSemanticConstants.blockBackground(isDark);
-    final cardBorder = SettingsSemanticConstants.blockBorderColor(isDark);
+    final panelBackground =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
     final iconSurface = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceMuted,
@@ -243,7 +242,6 @@ class _MediaPostMoreActionSheetState
       isDark,
       ColorType.separatorSubtle,
     ).withValues(alpha: isDark ? 0.72 : 0.9);
-    final divider = SettingsSemanticConstants.dividerColor(isDark);
     final primaryText = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -257,10 +255,11 @@ class _MediaPostMoreActionSheetState
       onDismiss: () => Navigator.pop(context),
       backgroundColor: panelBackground,
       panelKey: TestKeys.modalBottomSheetPanel,
-      contentPadding: EdgeInsets.only(
-        left: AppSpacing.containerXs,
-        right: AppSpacing.containerXs,
-        bottom: AppSpacing.containerXs,
+      contentPadding: EdgeInsets.fromLTRB(
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        0,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -268,48 +267,37 @@ class _MediaPostMoreActionSheetState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              height: AppSpacing.modalHeaderHeight,
-              child: Center(
-                child: Text(
-                  AppStrings.moreActionsTitle,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.semiBold,
-                    color: primaryText,
-                  ),
-                ),
-              ),
+            ConversationSheetHeader(
+              isDark: isDark,
+              title: AppStrings.moreActionsTitle,
             ),
             if (scrollActions.isNotEmpty) ...[
               _MoreActionQuickSection(
+                isDark: isDark,
                 actions: scrollActions,
-                cardBackground: cardBackground,
-                cardBorder: cardBorder,
                 iconSurface: iconSurface,
                 iconBorder: iconBorder,
                 primaryText: primaryText,
                 secondaryText: secondaryText,
                 onTap: _handleScrollActionTap,
               ),
-              SizedBox(height: AppSpacing.interGroupSm),
+              SizedBox(
+                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              ),
             ],
             if (bottomActions.isNotEmpty) ...[
               _MoreActionListSection(
+                isDark: isDark,
                 actions: bottomActions,
-                cardBackground: cardBackground,
-                cardBorder: cardBorder,
-                divider: divider,
-                primaryText: primaryText,
-                secondaryText: secondaryText,
                 onTap: _handleBottomActionTap,
               ),
-              SizedBox(height: AppSpacing.interGroupSm),
+              SizedBox(
+                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              ),
             ],
-            _MoreActionCancelSection(
-              backgroundColor: cardBackground,
-              borderColor: cardBorder,
-              foregroundColor: secondaryText,
+            ConversationSheetCancelBar(
+              isDark: isDark,
+              label: UITextConstants.cancel,
               onTap: () => Navigator.pop(context),
             ),
           ],
@@ -321,9 +309,8 @@ class _MediaPostMoreActionSheetState
 
 class _MoreActionQuickSection extends StatelessWidget {
   const _MoreActionQuickSection({
+    required this.isDark,
     required this.actions,
-    required this.cardBackground,
-    required this.cardBorder,
     required this.iconSurface,
     required this.iconBorder,
     required this.primaryText,
@@ -331,9 +318,8 @@ class _MoreActionQuickSection extends StatelessWidget {
     required this.onTap,
   });
 
+  final bool isDark;
   final List<_ScrollAction> actions;
-  final Color cardBackground;
-  final Color cardBorder;
   final Color iconSurface;
   final Color iconBorder;
   final Color primaryText;
@@ -342,70 +328,65 @@ class _MoreActionQuickSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: cardBackground,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.selectionCardBorderRadius,
-        ),
-        border: Border.all(color: cardBorder),
-      ),
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerXs),
-      child: SizedBox(
-        height: AppSpacing.avatarRailHeight + AppSpacing.containerSm,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return SizedBox(
-              width: AppSpacing.avatarUserLg + AppSpacing.twenty,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onTap(action),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: AppSpacing.avatarUserLg,
-                        height: AppSpacing.avatarUserLg,
-                        decoration: BoxDecoration(
-                          color: iconSurface,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: iconBorder,
-                            width: AppSpacing.hairline,
+    return ConversationSheetListCard(
+      isDark: isDark,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerXs),
+        child: SizedBox(
+          height: AppSpacing.avatarRailHeight + AppSpacing.containerSm,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+            itemBuilder: (context, index) {
+              final action = actions[index];
+              return SizedBox(
+                width: AppSpacing.avatarUserLg + AppSpacing.twenty,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTap(action),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: AppSpacing.avatarUserLg,
+                          height: AppSpacing.avatarUserLg,
+                          decoration: BoxDecoration(
+                            color: iconSurface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: iconBorder,
+                              width: AppSpacing.hairline,
+                            ),
+                          ),
+                          child: Icon(
+                            action.icon,
+                            size: AppSpacing.iconMedium,
+                            color: secondaryText,
                           ),
                         ),
-                        child: Icon(
-                          action.icon,
-                          size: AppSpacing.iconMedium,
-                          color: secondaryText,
+                        SizedBox(height: AppSpacing.intraGroupSm),
+                        Text(
+                          action.label,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: primaryText,
+                            fontWeight: AppTypography.medium,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      SizedBox(height: AppSpacing.intraGroupSm),
-                      Text(
-                        action.label,
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: primaryText,
-                          fontWeight: AppTypography.medium,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-          separatorBuilder: (context, index) =>
-              SizedBox(width: AppSpacing.intraGroupXs),
-          itemCount: actions.length,
+              );
+            },
+            separatorBuilder: (context, index) =>
+                SizedBox(width: AppSpacing.intraGroupXs),
+            itemCount: actions.length,
+          ),
         ),
       ),
     );
@@ -414,151 +395,41 @@ class _MoreActionQuickSection extends StatelessWidget {
 
 class _MoreActionListSection extends StatelessWidget {
   const _MoreActionListSection({
+    required this.isDark,
     required this.actions,
-    required this.cardBackground,
-    required this.cardBorder,
-    required this.divider,
-    required this.primaryText,
-    required this.secondaryText,
     required this.onTap,
   });
 
+  final bool isDark;
   final List<_BottomAction> actions;
-  final Color cardBackground;
-  final Color cardBorder;
-  final Color divider;
-  final Color primaryText;
-  final Color secondaryText;
   final ValueChanged<_BottomAction> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: cardBackground,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.selectionCardBorderRadius,
-        ),
-        border: Border.all(color: cardBorder),
-      ),
+    return ConversationSheetListCard(
+      isDark: isDark,
       child: Column(
         children: actions.asMap().entries.map((entry) {
           final index = entry.key;
           final action = entry.value;
           return Column(
             children: [
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () => onTap(action),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerMd,
-                    vertical: AppSpacing.containerSm,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: AppSpacing.minInteractiveSize,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          action.icon,
-                          size: AppSpacing.twenty,
-                          color: primaryText,
-                        ),
-                        SizedBox(width: AppSpacing.containerSm),
-                        Expanded(
-                          child: Text(
-                            action.label,
-                            style: TextStyle(
-                              fontSize: AppTypography.lg,
-                              fontWeight: AppTypography.regular,
-                              color: primaryText,
-                            ),
-                          ),
-                        ),
-                        if (action.description != null) ...[
-                          SizedBox(width: AppSpacing.containerSm),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                action.description!,
-                                style: TextStyle(
-                                  fontSize: AppTypography.base,
-                                  fontWeight: AppTypography.medium,
-                                  color: secondaryText,
-                                ),
-                                textAlign: TextAlign.right,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+              ConversationSheetActionRow(
+                isDark: isDark,
+                icon: action.icon,
+                label: action.label,
+                description: action.description,
+                onTap: () => onTap(action),
               ),
               if (index < actions.length - 1)
-                Container(
-                  height: AppSpacing.hairline,
-                  margin: EdgeInsets.only(
-                    left: AppSpacing.containerMd + AppSpacing.twenty,
-                    right: AppSpacing.containerMd,
-                  ),
-                  color: divider.withValues(alpha: 0.9),
+                ConversationSheetDivider(
+                  isDark: isDark,
+                  dividerLeftInset:
+                      ConversationSheetActionRow.dividerLeftInsetDefault,
                 ),
             ],
           );
         }).toList(),
-      ),
-    );
-  }
-}
-
-class _MoreActionCancelSection extends StatelessWidget {
-  const _MoreActionCancelSection({
-    required this.backgroundColor,
-    required this.borderColor,
-    required this.foregroundColor,
-    required this.onTap,
-  });
-
-  final Color backgroundColor;
-  final Color borderColor;
-  final Color foregroundColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.selectionCardBorderRadius,
-        ),
-        border: Border.all(color: borderColor),
-      ),
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
-          child: Center(
-            child: Text(
-              UITextConstants.cancel,
-              style: TextStyle(
-                fontSize: AppTypography.lg,
-                fontWeight: AppTypography.medium,
-                color: foregroundColor,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -119,6 +119,14 @@ expect(actual.code, IntegrationLocationErrorCode.upstreamTimeout.code)
 - 深色背景文本/图标使用高对比（`AppColorsFunctional.getColor`）
 - 文字对比度：正常文字 4.5:1（AA），大号文字 3:1
 
+### 2.5 设置类全屏页（Inset 同源）
+
+- **A 类**（分组列表/表单）：`SettingsInsetFormPageScaffold` + `SettingsInsetGroupedSection` / `SettingsInsetFormRow` / `SettingsInsetFormSectionDivider`（`lib/components/settings_form/`）。
+- **B 类**（成员选择 + 内嵌搜索）：`SettingsInsetMemberPickerPageScaffold`（与 A **同源顶栏/灰底**）。
+- **禁止**内页返回使用 `GlobalTopBarIconButton`；禁止新建 `pageBackground` + `selectionToolbarBackground` + 白顶栏作为未登记的第三套组合。
+- 新增或移动受控页必须在同 PR 更新 [`scripts/settings_canonical_manifest.yaml`](scripts/settings_canonical_manifest.yaml)；例外页须在文件前部注释 `settings-canonical-exception: <理由> <CR-id>`（见 `specs/ux/page-layout-semantics.md` §4.3）。
+- **门禁**：`python3 scripts/verify_settings_canonical.py`（`gate_repo.sh` app 阶段已接入）。
+
 ---
 
 ## 3. 状态管理（Riverpod）
@@ -271,6 +279,7 @@ final wrapped = parsed['assistant_turn_v2'];
 ```bash
 flutter analyze
 python3 scripts/verify_dart_semantic.py
+python3 scripts/verify_settings_canonical.py
 ```
 
-检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符；同时检查 iOS 语义（行尾箭头、Cupertino 页面组件边界、selector leading）。
+检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符；同时检查 iOS 语义（行尾箭头、Cupertino 页面组件边界、selector leading）；设置类全屏页与 `settings_canonical_manifest.yaml` 一致（§2.5）。

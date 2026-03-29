@@ -8,6 +8,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
+// settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
+
 /// Skill Center（V2 原型版）
 ///
 /// 目标：接入真实技能清单与开关，遵循 i18n 与语义 token。

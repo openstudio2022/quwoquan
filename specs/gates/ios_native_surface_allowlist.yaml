@@ -1,0 +1,9 @@
+# iOS 原生页面壳门禁 — Material Scaffold 根 return 豁免清单
+# 政策：仅登记当前存量；新增页面不得加入。迁移完成后应清空 allow_scaffold_return。
+#
+# 规则说明：见 specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/design.md
+
+allow_scaffold_return:
+  - quwoquan_app/lib/ui/rtc/pages/incoming_call_page.dart
+  - quwoquan_app/lib/ui/rtc/pages/outgoing_call_page.dart
+  - quwoquan_app/lib/components/media/camera/camera_capture_page.dart

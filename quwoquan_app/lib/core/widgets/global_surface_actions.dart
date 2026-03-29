@@ -202,16 +202,17 @@ class _AddContactSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final contacts = ref.read(appContentRepositoryProvider).chatMockContacts;
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
+    final backgroundColor =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
       backgroundColor: backgroundColor,
       contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,
-        AppSpacing.containerMd,
-        AppSpacing.containerLg,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

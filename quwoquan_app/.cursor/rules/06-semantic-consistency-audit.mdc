@@ -22,6 +22,9 @@ alwaysApply: true
 # 仓库根目录
 flutter analyze quwoquan_app/lib/
 python3 scripts/verify_dart_semantic.py
+python3 scripts/verify_settings_canonical.py
 ```
 
 已知违规可先用 `python3 scripts/verify_dart_semantic.py --update-baseline` 写入基线，后续新增违规将失败。
+
+设置类全屏页壳与清单见 `scripts/settings_canonical_manifest.yaml`；`verify_settings_canonical.py` 失败表示未登记页面或壳类型与清单不一致。

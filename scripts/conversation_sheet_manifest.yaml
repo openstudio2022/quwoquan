@@ -1,0 +1,36 @@
+# 贴底对话态 Sheet：`showCupertinoModalPopup` 允许清单（见 specs/ux/page-layout-semantics.md §4.4）。
+# 新增调用方须登记，否则 verify_conversation_sheet_canonical.py 失败。
+allowed_modal_popup:
+  - path: quwoquan_app/lib/core/widgets/app_action_sheet.dart
+    kind: canonical_impl
+  - path: quwoquan_app/lib/components/settings_conversation/more_actions_popup/more_action_popup.dart
+    kind: canonical_impl
+  - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/core/widgets/global_surface_actions.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/ui/content/share/content_share_sheet.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/components/comment_system/comment_viewer_modal.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/components/media/image/editor/image_editor_page.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+    kind: uses_bottom_modal_custom
+  - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
+    kind: sheet_exception
+    reason: 建群向导多步贴底面板，业务编排复杂；底壳仍须 AppBottomModalSurface
+  - path: quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
+    kind: sheet_exception
+    reason: 助理会话内嵌表单弹层，与标准选项表形态不同
+  - path: quwoquan_app/lib/components/media/video/viewer/immersive_video_viewer.dart
+    kind: sheet_exception
+    reason: 沉浸式视频控件栈上的控制浮层
+  - path: quwoquan_app/lib/ui/rtc/pages/video_call_page.dart
+    kind: sheet_exception
+    reason: 通话中 RTC 控制条/列表面板
+  - path: quwoquan_app/lib/ui/rtc/pages/voice_call_page.dart
+    kind: sheet_exception
+    reason: 语音通话内控制面板
