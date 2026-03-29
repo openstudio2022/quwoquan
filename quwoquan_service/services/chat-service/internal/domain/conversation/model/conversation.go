@@ -13,8 +13,9 @@ type Conversation struct {
 	AvatarUrl          string    `json:"avatarUrl" bson:"avatarUrl"`
 	CreatorId          string    `json:"creatorId" bson:"creatorId"`
 	CircleId           string    `json:"circleId" bson:"circleId"`
-	MaxSeq             int64     `json:"maxSeq" bson:"maxSeq"`
-	MemberCount        int       `json:"memberCount" bson:"memberCount"`
+	MaxSeq                 int64 `json:"maxSeq" bson:"maxSeq"`
+	MemberCount            int   `json:"memberCount" bson:"memberCount"`
+	MembersRosterRevision  int64 `json:"membersRosterRevision" bson:"membersRosterRevision"`
 	MaxGroupSize       int       `json:"maxGroupSize" bson:"maxGroupSize"`
 	ReceiptEnabled     bool      `json:"receiptEnabled" bson:"receiptEnabled"`
 	LastMessageId      string    `json:"lastMessageId" bson:"lastMessageId"`

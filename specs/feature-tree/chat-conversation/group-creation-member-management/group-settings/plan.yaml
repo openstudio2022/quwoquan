@@ -1,0 +1,41 @@
+# plan: group-settings — 全屏表单态 UI 基线（2026-03-29）
+# 顺序：无 metadata/codegen；直接业务（Flutter）→ 测试
+
+version: 1
+feature: group-settings
+level: L3_story
+status: baseline
+parent_journey: group-creation-member-management
+
+slices:
+  - id: P-UI-1
+    title: 冻结规格与设计（spec/design/acceptance/CR）
+    order: 1
+    outputs:
+      - specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md
+      - specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/design.md
+      - specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/acceptance.yaml
+      - specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/plan.yaml
+      - specs/changelog/CR-20260329-002-inset-form-settings-ui-baseline.yaml
+
+  - id: P-UI-2
+    title: GroupManagePage 迁移至 SettingsInsetForm*（与 ChatSettingsPage 一致）
+    order: 2
+    code_paths:
+      - quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
+    notes: 移除手写描边 Container；顶栏并入骨架；文案常量化
+
+  - id: P-UI-3
+    title: 回归与门禁
+    order: 3
+    commands:
+      - cd quwoquan_app && flutter analyze
+      - python3 scripts/verify_dart_semantic.py
+    test_layers:
+      T1: required
+      T2: required
+      T3: recommended
+
+metadata_codegen:
+  required: false
+  rationale: 无 API/字段/路由变更；端云契约与既有 getGroupSettings 等保持一致

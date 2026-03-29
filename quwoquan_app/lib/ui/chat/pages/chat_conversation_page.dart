@@ -20,6 +20,7 @@ import 'package:quwoquan_app/components/conversation/conversation_timeline.dart'
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -691,22 +692,19 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
               },
             ),
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal:
+          ColoredBox(
+            color: isDark ? bgColor : AppColors.chatToolbarBackground,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
                   AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
-                  AppSpacing.containerSm,
-            ),
-            child: Container(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: isDark ? bgColor : AppColors.chatToolbarBackground,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
+                      AppSpacing.containerSm,
+                  AppSpacing.sm,
+                  AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
+                      AppSpacing.containerSm,
+                  AppSpacing.sm,
                 ),
-              ),
-              child: SafeArea(
-                top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -746,23 +744,18 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           ? null
           : AppNavigationBar(
               backgroundColor: bgColor,
-              leading: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
-                child: Icon(
-                  _isSelectionMode ? CupertinoIcons.xmark : CupertinoIcons.back,
-                  color: fgPrimary,
-                ),
+              leading: AppNavigationBarIconButton(
+                icon: _isSelectionMode
+                    ? CupertinoIcons.xmark
+                    : CupertinoIcons.back,
+                onPressed:
+                    _isSelectionMode ? _cancelSelection : widget.onBack,
               ),
               middle: Text(
                 _isSelectionMode
                     ? '已选 ${_selectedIds.length} 条'
                     : _conversationTitle,
-                style: TextStyle(
-                  color: fgPrimary,
-                  fontSize: AppTypography.xl,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
               ),
               trailing: _isSelectionMode
                   ? CupertinoButton(
@@ -778,14 +771,22 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                         await _shareMessages(selectedMessages);
                         _cancelSelection();
                       },
-                      child: Text(UITextConstants.messageActionForward),
+                      child: Text(
+                        UITextConstants.messageActionForward,
+                        style: TextStyle(
+                          color: AppNavigationSemanticConstants.barTitleColor(
+                            isDark,
+                          ),
+                          fontSize: AppTypography.iosNavTitle,
+                          fontWeight: AppTypography.semiBold,
+                        ),
+                      ),
                     )
-                  : CupertinoButton(
-                      padding: EdgeInsets.zero,
+                  : AppNavigationBarIconButton(
+                      icon: CupertinoIcons.ellipsis,
                       onPressed: () => context.push(
                         AppRoutePaths.chatSettings(id: widget.conversationId),
                       ),
-                      child: const Icon(CupertinoIcons.ellipsis),
                     ),
             ),
       body: bodyContent,

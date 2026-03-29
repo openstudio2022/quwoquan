@@ -30,11 +30,27 @@ events:
     realtime_channel: "rt:conversation:{conversationId}"
 
   - name: MemberJoined
-    description: 成员加入（v2 触发 ConversationMember 创建 + memberCount 更新）
+    description: |
+      成员加入（内部域事件；持久化/审计用）。
+      面向客户端的实时下发应优先使用合并后的 ConversationRosterUpdated，避免多人同时加入时推送风暴。
     producer: chat-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store
     payload_fields: [conversationId, userId, role, invitedBy, memberCount]
+    realtime_channel: "rt:conversation:{conversationId}"
+
+  - name: ConversationRosterUpdated
+    description: |
+      群 roster/设置聚合变更（成员、名称、规则等）后的对外通知事件，单次事务或合并窗口只发一条。
+      负载须含 membersRosterRevision 与 updatedAt（与 Conversation 文档一致），供端上增量拉取与去重。
+    producer: chat-service
+    consumers: [realtime-gateway, notification-service]
+    channel: event_store
+    payload_fields:
+      - conversationId
+      - membersRosterRevision
+      - updatedAt
+      - aspects
     realtime_channel: "rt:conversation:{conversationId}"
 
   - name: MemberLeft

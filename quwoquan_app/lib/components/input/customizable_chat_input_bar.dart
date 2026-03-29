@@ -8,6 +8,12 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
+/// 与 `CustomizableChatInputBar` 工具栏共享的图标规格（同文件内复用）。
+const double _kChatInputToolbarGlyphSize = AppSpacing.iconMedium + 2;
+const double _kChatInputSendGlyphSize = AppSpacing.iconMedium + 1;
+const IconData _kChatInputKeyboardCompactIcon = Icons.keyboard_outlined;
+const IconData _kChatInputEmojiPanelIcon = Icons.sentiment_satisfied_alt;
+
 enum ChatInputAttachmentType { image, file }
 
 /// 输入区 `+` 面板中的自定义功能项（扩展点，宿主按需注入）
@@ -168,6 +174,10 @@ class CustomizableChatInputBar extends StatefulWidget {
 
 class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     with SingleTickerProviderStateMixin {
+  /// 与微信一致：输入/语音槽单行同高；多行时仅外轮廓四角为小圆角（非胶囊）。
+  static const double _fieldCornerRadius = AppSpacing.smallBorderRadius;
+  static const double _composerCenterMinHeight = AppSpacing.buttonHeight;
+
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   late final bool _isExternalController;
@@ -210,6 +220,24 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   Color _separatorColor(BuildContext context) =>
       _cupertinoColor(context, CupertinoColors.separator);
+
+  /// 输入/语音槽填充：介于工具栏灰底与纯白之间，降低与条背景的对比度。
+  Color _composerInputFill(BuildContext context) {
+    final sheet = _sheetBackground(context);
+    final field = _fieldBackground(context);
+    return Color.lerp(sheet, field, 0.28) ?? field;
+  }
+
+  /// 与聊天气泡正文一致：Theme `bodyLarge` + 统一行高。
+  TextStyle _composerTextStyle(BuildContext context) {
+    final fontSize =
+        Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md;
+    return TextStyle(
+      fontSize: fontSize,
+      height: AppTypography.bodyLineHeight,
+      color: _foregroundPrimary(context),
+    );
+  }
 
   @override
   void initState() {
@@ -528,12 +556,12 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     final buttons = <Widget>[];
     if (widget.showEmojiButton) {
       buttons.add(
-        _buildIconButton(
+        _buildToolbarPlainIconButton(
           context: context,
           key: TestKeys.chatInputEmojiToggleButton,
           icon: _showEmojiPanel
-              ? CupertinoIcons.keyboard
-              : CupertinoIcons.smiley,
+              ? _kChatInputKeyboardCompactIcon
+              : _kChatInputEmojiPanelIcon,
           onTap: _toggleEmojiPanel,
           semanticLabel: _showEmojiPanel
               ? UITextConstants.keyboard
@@ -550,7 +578,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     }
     if (widget.showAddPanel) {
       buttons.add(
-        _buildIconButton(
+        _buildToolbarPlainIconButton(
           context: context,
           key: TestKeys.chatInputMoreButton,
           icon: CupertinoIcons.add,
@@ -562,27 +590,26 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     return buttons;
   }
 
-  Widget _buildIconButton({
+  /// 与工具栏底同色语义：无圆框、透明热区，图标即按钮。
+  Widget _buildToolbarPlainIconButton({
     required BuildContext context,
     Key? key,
     required IconData icon,
     required VoidCallback onTap,
     required String semanticLabel,
+    double iconSize = _kChatInputToolbarGlyphSize,
   }) {
-    return SizedBox(
-      width: AppSpacing.iconButtonMinSizeSm,
-      height: AppSpacing.iconButtonMinSizeSm,
-      child: Semantics(
-        button: true,
-        label: semanticLabel,
-        child: IconButton(
-          key: key,
-          onPressed: onTap,
-          icon: Icon(icon, size: AppSpacing.iconMedium),
-          color: _foregroundPrimary(context).withValues(alpha: 0.88),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
+    final diameter = AppSpacing.iconButtonMinSizeSm;
+    final fg = _foregroundPrimary(context).withValues(alpha: 0.82);
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: CupertinoButton(
+        key: key,
+        padding: EdgeInsets.zero,
+        minimumSize: Size(diameter, diameter),
+        onPressed: onTap,
+        child: Icon(icon, size: iconSize, color: fg),
       ),
     );
   }
@@ -605,7 +632,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           alignment: Alignment.center,
           child: Icon(
             Icons.arrow_upward_rounded,
-            size: AppSpacing.iconMedium,
+            size: _kChatInputSendGlyphSize,
             color: _fieldBackground(context),
           ),
         ),
@@ -727,52 +754,56 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   Widget _buildVoicePanel() {
     final isPressed = _isRecording;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _startVoiceRecord(),
-      onTapUp: (_) => _stopVoiceRecordAndSend(),
-      onTapCancel: () => _stopVoiceRecordAndSend(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-        width: double.infinity,
-        constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isPressed
-              ? AppColors.primaryColor.withValues(alpha: 0.14)
-              : _fieldBackground(context),
-          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-          border: Border.all(
-            color: isPressed
-                ? AppColors.primaryColor
-                : _separatorColor(context).withValues(alpha: 0.24),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isPressed) ...[
-              SizedBox(height: AppSpacing.md, child: _buildWaveBars()),
-              SizedBox(height: AppSpacing.xs),
-            ],
-            Text(
-              isPressed
-                  ? UITextConstants.chatVoiceReleaseToSend
-                  : UITextConstants.chatVoiceHoldToTalk,
-              style: TextStyle(
+    final fill = _composerInputFill(context);
+    final sepIdle = _separatorColor(context).withValues(alpha: 0.12);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_fieldCornerRadius),
+      child: ColoredBox(
+        color: fill,
+        child: SizedBox(
+          height: _composerCenterMinHeight,
+          width: double.infinity,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (_) => _startVoiceRecord(),
+            onTapUp: (_) => _stopVoiceRecordAndSend(),
+            onTapCancel: () => _stopVoiceRecordAndSend(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              alignment: Alignment.center,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              decoration: BoxDecoration(
                 color: isPressed
-                    ? AppColors.primaryColor
-                    : _foregroundPrimary(context),
-                fontSize: AppTypography.base,
-                fontWeight: FontWeight.w600,
+                    ? AppColors.primaryColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: isPressed ? AppColors.primaryColor : sepIdle,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isPressed) ...[
+                    SizedBox(height: AppSpacing.lg, child: _buildWaveBars()),
+                    SizedBox(width: AppSpacing.sm),
+                  ],
+                  Text(
+                    isPressed
+                        ? UITextConstants.chatVoiceReleaseToSend
+                        : UITextConstants.chatVoiceHoldToTalk,
+                    style: _composerTextStyle(context).copyWith(
+                      color: isPressed
+                          ? AppColors.primaryColor
+                          : _foregroundPrimary(context),
+                      fontWeight: AppTypography.regular,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -786,7 +817,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           mainAxisAlignment: MainAxisAlignment.center,
           children: _waveBars
               .map((value) {
-                final h = 4 + (AppSpacing.buttonSize * 0.36 * value);
+                final h = 3 + (AppSpacing.md * 0.85 * value);
                 return Container(
                   width: AppSpacing.three,
                   height: h,
@@ -821,16 +852,12 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   Widget _buildTextComposerCenter() {
-    final textStyle = TextStyle(
-      fontSize: AppTypography.base,
-      height: AppSpacing.textLineHeightBody,
-      color: _foregroundPrimary(context),
-    );
+    final textStyle = _composerTextStyle(context);
+    final secondary = _foregroundSecondary(context);
+    final hPad = AppSpacing.md;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentHorizontalPadding = AppSpacing.md;
-        final estimatedWidth =
-            constraints.maxWidth - contentHorizontalPadding * 2;
+        final estimatedWidth = constraints.maxWidth - hPad * 2;
         final lineCount = _estimateLineCount(
           text: _controller.text,
           style: textStyle,
@@ -838,71 +865,95 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         );
         final canExpandInline =
             widget.enableExpandedEditor && lineCount > widget.maxVisibleLines;
-        final topPadding = canExpandInline
-            ? AppSpacing.lg + AppSpacing.xs
+        final alignVertical = lineCount <= 1
+            ? TextAlignVertical.center
+            : TextAlignVertical.top;
+        final fontSize = textStyle.fontSize ?? AppSpacing.md;
+        final lineHeight = textStyle.height ?? AppTypography.bodyLineHeight;
+        final lineBoxHeight = fontSize * lineHeight;
+        final vPad = lineCount <= 1
+            ? ((_composerCenterMinHeight - lineBoxHeight) / 2).clamp(
+                AppSpacing.xs,
+                AppSpacing.lg,
+              )
             : AppSpacing.sm;
-        return Container(
-          decoration: BoxDecoration(
-            color: _fieldBackground(context),
-            borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-          ),
-          child: Stack(
-            children: [
-              TextField(
-                key: widget.textFieldKey,
-                controller: _controller,
-                focusNode: _focusNode,
-                scrollController: _textScrollController,
-                enabled: !_isVoiceMode,
-                maxLength: widget.maxTextLength,
-                maxLines: widget.maxVisibleLines,
-                minLines: 1,
-                textAlignVertical: TextAlignVertical.top,
-                cursorColor: AppColors.primaryColor,
-                style: textStyle,
-                onTap: () {
-                  if (_panelMode != ChatInputPanelMode.none) {
-                    setState(() => _panelMode = ChatInputPanelMode.none);
-                  }
-                },
-                decoration: InputDecoration(
-                  hintText: widget.hintText ?? UITextConstants.inputHint,
-                  hintStyle: TextStyle(color: _foregroundSecondary(context)),
-                  border: InputBorder.none,
-                  isDense: true,
-                  counterText: '',
-                  contentPadding: EdgeInsets.fromLTRB(
-                    contentHorizontalPadding,
-                    topPadding,
-                    contentHorizontalPadding,
-                    AppSpacing.sm,
-                  ),
-                ),
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(_fieldCornerRadius),
+          child: ColoredBox(
+            color: _composerInputFill(context),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: _composerCenterMinHeight,
               ),
-              if (canExpandInline)
-                Positioned(
-                  left: AppSpacing.sm,
-                  top: AppSpacing.xs,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: IconButton(
-                      key: TestKeys.chatInputExpandButton,
-                      onPressed: _openExpandedEditor,
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints(
-                        minWidth: AppSpacing.iconButtonMinSizeSm,
-                        minHeight: AppSpacing.iconButtonMinSizeSm,
+              child: Stack(
+                children: [
+                  TextField(
+                    key: widget.textFieldKey,
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    scrollController: _textScrollController,
+                    enabled: !_isVoiceMode,
+                    maxLength: widget.maxTextLength,
+                    maxLines: widget.maxVisibleLines,
+                    minLines: 1,
+                    textAlignVertical: alignVertical,
+                    cursorColor: AppColors.primaryColor,
+                    style: textStyle,
+                    strutStyle: StrutStyle(
+                      fontSize: fontSize,
+                      height: lineHeight,
+                      leadingDistribution: TextLeadingDistribution.even,
+                      forceStrutHeight: true,
+                    ),
+                    onTap: () {
+                      if (_panelMode != ChatInputPanelMode.none) {
+                        setState(() => _panelMode = ChatInputPanelMode.none);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: widget.hintText ?? UITextConstants.inputHint,
+                      hintStyle: TextStyle(
+                        color: secondary,
+                        fontSize: fontSize,
+                        height: lineHeight,
                       ),
-                      alignment: Alignment.centerLeft,
-                      icon: Icon(
-                        Icons.open_in_full,
-                        size: AppSpacing.iconSmall,
-                        color: _foregroundSecondary(context),
+                      border: InputBorder.none,
+                      isDense: true,
+                      counterText: '',
+                      contentPadding: EdgeInsets.fromLTRB(
+                        hPad,
+                        vPad,
+                        hPad,
+                        vPad,
                       ),
                     ),
                   ),
-                ),
-            ],
+                  if (canExpandInline)
+                    Positioned(
+                      left: AppSpacing.sm,
+                      top: AppSpacing.xs,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: IconButton(
+                          key: TestKeys.chatInputExpandButton,
+                          onPressed: _openExpandedEditor,
+                          padding: EdgeInsets.zero,
+                          constraints: BoxConstraints(
+                            minWidth: AppSpacing.iconButtonMinSizeSm,
+                            minHeight: AppSpacing.iconButtonMinSizeSm,
+                          ),
+                          alignment: Alignment.centerLeft,
+                          icon: Icon(
+                            Icons.open_in_full,
+                            size: AppSpacing.iconSmall,
+                            color: secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -917,47 +968,27 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         _buildTrailingButtons(context);
     final left =
         widget.leftBuilder?.call(context, state, actions) ??
-        Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
-          child: _buildIconButton(
-            context: context,
-            key: TestKeys.chatInputVoiceToggleButton,
-            icon: _isVoiceMode
-                ? CupertinoIcons.keyboard
-                : CupertinoIcons.waveform,
-            onTap: _toggleVoiceMode,
-            semanticLabel: _isVoiceMode
-                ? UITextConstants.keyboard
-                : UITextConstants.voiceInput,
-          ),
+        _buildToolbarPlainIconButton(
+          context: context,
+          key: TestKeys.chatInputVoiceToggleButton,
+          icon: _isVoiceMode ? _kChatInputKeyboardCompactIcon : CupertinoIcons.mic,
+          onTap: _toggleVoiceMode,
+          semanticLabel: _isVoiceMode
+              ? UITextConstants.keyboard
+              : UITextConstants.voiceInput,
         );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         left,
-        if (left is! SizedBox) SizedBox(width: AppSpacing.xs),
+        if (left is! SizedBox) SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            padding: EdgeInsets.all(AppSpacing.xs),
-            decoration: BoxDecoration(
-              color: _sheetBackground(context),
-              borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-              border: Border.all(
-                color: _separatorColor(context).withValues(alpha: 0.28),
-              ),
-            ),
-            child: _isVoiceMode
-                ? _buildVoicePanel()
-                : _buildTextComposerCenter(),
-          ),
+          child: _isVoiceMode
+              ? _buildVoicePanel()
+              : _buildTextComposerCenter(),
         ),
-        if (right.isNotEmpty) SizedBox(width: AppSpacing.xs),
-        Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
-          child: Row(mainAxisSize: MainAxisSize.min, children: right),
-        ),
+        if (right.isNotEmpty) SizedBox(width: AppSpacing.sm),
+        Row(mainAxisSize: MainAxisSize.min, children: right),
       ],
     );
   }
@@ -1213,6 +1244,13 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
 
   @override
   Widget build(BuildContext context) {
+    final composerFontSize =
+        Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md;
+    final composerStyle = TextStyle(
+      fontSize: composerFontSize,
+      height: AppTypography.bodyLineHeight,
+      color: _foregroundPrimary(context),
+    );
     return CupertinoPageScaffold(
       backgroundColor: _surfaceBackground(context),
       child: SafeArea(
@@ -1261,14 +1299,10 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
                     expands: true,
                     textAlignVertical: TextAlignVertical.top,
                     cursorColor: AppColors.primaryColor,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      height: AppSpacing.textLineHeightHeadline,
-                      color: _foregroundPrimary(context),
-                    ),
+                    style: composerStyle,
                     decoration: InputDecoration(
                       hintText: widget.hintText,
-                      hintStyle: TextStyle(
+                      hintStyle: composerStyle.copyWith(
                         color: _foregroundSecondary(context),
                       ),
                       border: InputBorder.none,
@@ -1302,9 +1336,11 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
                       },
                       child: Icon(
                         _showEmojiPanel
-                            ? CupertinoIcons.keyboard
-                            : CupertinoIcons.smiley,
-                        color: _foregroundPrimary(context),
+                            ? _kChatInputKeyboardCompactIcon
+                            : _kChatInputEmojiPanelIcon,
+                        size: _kChatInputToolbarGlyphSize,
+                        color: _foregroundPrimary(context)
+                            .withValues(alpha: 0.82),
                       ),
                     ),
                 ],

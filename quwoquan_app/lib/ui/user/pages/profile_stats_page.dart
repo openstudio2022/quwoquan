@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -162,18 +163,13 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
         middle: Text(
           ProfileStatsPage._title(_type),
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       child: Column(

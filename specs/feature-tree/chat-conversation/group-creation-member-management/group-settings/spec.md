@@ -1,7 +1,7 @@
 # L3 规格：group-settings — 群聊设置与治理边界
 
 > **层级**：L3_feature（隶属 L2 `group-creation-member-management`）
-> **状态**：specified
+> **状态**：baseline（2026-03-29：§9–§10 全屏表单态与搜索入口冻结）
 
 ## 0. 一句话定义
 
@@ -121,3 +121,38 @@
 
 ### T4
 - 用户真实旅程下，能顺利完成“查看群信息”“退出群聊”“举报消息”“拉黑成员”而不混淆操作对象
+
+## 9. 全屏设置页视觉与交互基线（2026-03-29 baseline）
+
+> 本节为 **表现层与 IA 基线**，**不新增** 云侧字段、HTTP 路由或 `service.yaml` 契约；与 `SettingsInsetForm*`、`insetForm*` 语义 token 对齐。
+
+### 9.1 表单态（全屏 Inset Grouped）
+
+- **适用页面**：`ChatSettingsPage`（群聊信息）、`GroupManagePage`（群管理，群主/管理员）及后续同类全屏设置页。
+- **骨架**：`SettingsInsetFormPageScaffold`（`lib/components/settings_form/`）；页面底与顶栏背景使用 `SettingsSemanticConstants.insetFormPageBackground` / `insetFormNavigationBarBackground`，与 iOS 系统「设置」分组列表一致。
+- **分组**：`SettingsInsetGroupedSection` + `SettingsInsetFormRow` + `SettingsInsetFormSectionDivider`；列表水平边距 `insetFormListHorizontalPadding`，组间 `insetFormSectionVerticalGap`。
+- **禁止**：在全屏表单页使用帖子「更多功能」式 **描边大圆角卡片**（`selectionCardBorderRadius` + `blockBorderColor`）作为默认分组容器。
+
+### 9.2 对话态（半屏更多操作）
+
+- **适用**：Feed/媒体上下文贴底 `MoreActionPopup` 等，归属 `lib/components/settings_conversation/`，与全屏表单态区分，不得混用默认容器语义。
+
+### 9.3 成员网格折叠
+
+- **规则**：成员头像区默认最多展示 **4 行 × 5 列** 容量内成员（末格为「添加」）；超过则折叠，展示「更多成员」；展开后展示 **全部成员** + 添加。
+- **不改变**：成员数据来源、权限与路由；仅展示行数策略。
+
+### 9.4 全局搜索入口（群聊信息顶栏）
+
+- **条件**：成员数大于约定阈值时展示搜索（与产品一致，当前实现为 `> 5`）。
+- **样式**：与首页顶栏一致，使用 `GlobalTopBarIconButton`（`lib/core/widgets/global_surface_actions.dart`），**非**默认 Cupertino 蓝。
+- **行为**：`GlobalSearchLauncher.open`，默认 scope 为消息域（`GlobalSearchScope.messages`），不新增全局搜索路由契约。
+
+### 9.5 文案与门禁
+
+- 用户可见静态文案须 `UITextConstants` / l10n；群管理解散确认等 **禁止** 在业务 Dart 中硬编码中文（满足 `verify_dart_semantic`）。
+
+## 10. 与群管理页（GroupManagePage）的关系
+
+- 群管理页为 **管理员专项** 全屏页，**不**纳入本节 GS1–GS5 的「普通成员设置」清单，但 **必须** 与 §9.1 使用同一套表单态组件与 token，保证与群聊信息页视觉一致。
+- 解散群聊等危险操作保留在群管理页；普通群设置页仍以「退出群聊」为唯一危险操作（与 §2、§6 一致）。

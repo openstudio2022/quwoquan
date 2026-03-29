@@ -4,7 +4,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/entry/services/ios_video_editing_service.dart';
 import 'package:video_player/video_player.dart';
 
@@ -504,11 +506,14 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                 Image.file(
                   File(_selectedCoverPath),
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const ColoredBox(color: Color(0xFF151515)),
+                  errorBuilder: (context, error, stackTrace) => const ColoredBox(
+                    color: AppColors.createMediaFallbackGradientBottom,
+                  ),
                 )
               else
-                const ColoredBox(color: Color(0xFF151515)),
+                const ColoredBox(
+                  color: AppColors.createMediaFallbackGradientBottom,
+                ),
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -666,7 +671,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   Widget _buildPreviewTimelineStrip() {
     if (_frames.isEmpty) {
       return Container(
-        height: 76,
+        height: AppSpacing.buttonHeight + AppSpacing.lg + AppSpacing.xs,
         decoration: BoxDecoration(
           color: CupertinoColors.systemBackground.resolveFrom(context),
           borderRadius: BorderRadius.circular(AppSpacing.containerSm),
@@ -705,7 +710,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           onHorizontalDragUpdate: (details) => previewAtOffset(details.localPosition.dx),
           onHorizontalDragEnd: (_) => _endPreviewDrag(),
           child: SizedBox(
-            height: 76,
+            height: AppSpacing.buttonHeight + AppSpacing.lg + AppSpacing.xs,
             child: Stack(
               children: <Widget>[
                 ClipRRect(
@@ -718,7 +723,9 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                               File(frame.path),
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
-                                  const ColoredBox(color: Color(0xFF151515)),
+                                  const ColoredBox(
+                                color: AppColors.createMediaFallbackGradientBottom,
+                              ),
                             ),
                           ),
                         )
@@ -739,14 +746,19 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   ),
                 ),
                 Positioned(
-                  left: (playheadLeft - 1.5).clamp(0.0, math.max(width - 3, 0.0)),
+                  left: (playheadLeft - AppSpacing.oneHalf).clamp(
+                    0.0,
+                    math.max(width - AppSpacing.three, 0.0),
+                  ),
                   top: 0,
                   bottom: 0,
                   child: Container(
-                    width: 3,
+                    width: AppSpacing.three,
                     decoration: BoxDecoration(
                       color: AppColors.iosAccentLight,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusNinetyNine,
+                      ),
                       boxShadow: <BoxShadow>[
                         BoxShadow(
                           color: AppColors.iosAccentLight.withValues(alpha: 0.32),
@@ -757,15 +769,21 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   ),
                 ),
                 Positioned(
-                  left: (playheadLeft - 9).clamp(0.0, math.max(width - 18, 0.0)),
-                  top: 6,
+                  left: (playheadLeft - AppSpacing.eighteen / 2).clamp(
+                    0.0,
+                    math.max(width - AppSpacing.eighteen, 0.0),
+                  ),
+                  top: AppSpacing.six,
                   child: Container(
-                    width: 18,
-                    height: 18,
+                    width: AppSpacing.eighteen,
+                    height: AppSpacing.eighteen,
                     decoration: BoxDecoration(
                       color: AppColors.iosAccentLight,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(
+                        color: AppColors.white,
+                        width: AppSpacing.two,
+                      ),
                     ),
                   ),
                 ),
@@ -837,7 +855,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
           SizedBox(
-            height: 92,
+            height:
+                AppSpacing.largeAvatarSize + AppSpacing.lg + AppSpacing.xs,
             child: _frames.isEmpty
                 ? Center(
                     child: Text(
@@ -866,8 +885,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                         onTap: () => _selectFrame(frame),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
-                          width: 74,
-                          padding: EdgeInsets.all(selected ? 2 : 0),
+                          width: AppSpacing.largeAvatarSize + AppSpacing.ten,
+                          padding: EdgeInsets.all(
+                            selected ? AppSpacing.two : 0,
+                          ),
                           decoration: BoxDecoration(
                             color: CupertinoColors
                                 .secondarySystemGroupedBackground
@@ -897,7 +918,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                   File(frame.path),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) =>
-                                      const ColoredBox(color: Color(0xFF151515)),
+                                      const ColoredBox(
+                                    color:
+                                        AppColors.createMediaFallbackGradientBottom,
+                                  ),
                                 ),
                                 Positioned(
                                   left: AppSpacing.intraGroupXs,
@@ -945,14 +969,18 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     final background = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    return CupertinoPageScaffold(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AppScaffold(
       backgroundColor: background,
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('视频编辑'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+      navigationBar: AppNavigationBar(
+        backgroundColor: background,
+        middle: Text(
+          '视频编辑',
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        ),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,

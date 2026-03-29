@@ -1,12 +1,13 @@
+// 对话态设置 UI：贴底半屏、保留上层上下文（与全屏 `settings_form/` 区分）。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
+import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 
-/// 更多操作弹窗组件
+/// 更多操作弹窗组件（对话态）
 class MoreActionPopup extends StatelessWidget {
   final dynamic config;
 

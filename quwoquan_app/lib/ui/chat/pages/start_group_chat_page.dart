@@ -6,6 +6,7 @@ import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -662,20 +663,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         backgroundColor: SettingsSemanticConstants.selectionToolbarBackground(
           isDark,
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onBack,
-          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           widget.isCreateMode
               ? UITextConstants.startGroupChat
               : UITextConstants.addMember,
-          style: TextStyle(
-            color: fgPrimary,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         border: Border(
           bottom: BorderSide(color: dividerColor, width: AppSpacing.hairline),
@@ -1335,18 +1331,13 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
       backgroundColor: pageBg,
       navigationBar: AppNavigationBar(
         backgroundColor: toolbarBg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onClose,
-          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           UITextConstants.selectGroupChat,
-          style: TextStyle(
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-            color: fgPrimary,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         border: Border(
           bottom: BorderSide(
@@ -1557,18 +1548,13 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
       backgroundColor: pageBg,
       navigationBar: AppNavigationBar(
         backgroundColor: toolbarBg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onClose,
-          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           UITextConstants.selectCircle,
-          style: TextStyle(
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-            color: fgPrimary,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         border: Border(
           bottom: BorderSide(
@@ -1743,18 +1729,13 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
       backgroundColor: pageBg,
       navigationBar: AppNavigationBar(
         backgroundColor: toolbarBg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onBack,
-          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           widget.title,
-          style: TextStyle(
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-            color: fgPrimary,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         border: Border(
           bottom: BorderSide(

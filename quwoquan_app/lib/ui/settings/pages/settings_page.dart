@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -15,27 +18,31 @@ class SettingsPage extends ConsumerWidget {
     final appearanceState = ref.watch(appearanceSettingsControllerProvider);
     final contentAccessState = ref.watch(personalContentAccessProvider);
     final snapshot = appearanceState.snapshot;
-    final backgroundColor = CupertinoDynamicColor.resolve(
-      CupertinoColors.systemGroupedBackground,
-      context,
-    );
+    final isDark = ref.watch(isDarkProvider);
+    final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
 
-    return CupertinoPageScaffold(
-      backgroundColor: backgroundColor,
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(UITextConstants.settings),
-        leading: CupertinoNavigationBarBackButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutePaths.profile);
-            }
-          },
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
+      child: AppScaffold(
+        backgroundColor: backgroundColor,
+        navigationBar: AppNavigationBar(
+          backgroundColor: backgroundColor,
+          automaticallyImplyLeading: false,
+          middle: Text(
+            UITextConstants.settings,
+            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+          ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.back,
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutePaths.profile);
+              }
+            },
+          ),
         ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
         child: SafeArea(
           bottom: false,
           child: ListView(

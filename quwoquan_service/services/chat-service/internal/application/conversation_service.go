@@ -17,13 +17,17 @@ type ConversationService struct {
 	repo      persistence.ChatRepository
 	cache     *cache.ConversationCache
 	publisher EventPublisher
+	profiles  ProfileSnapshotResolver
 }
 
-func NewConversationService(repo persistence.ChatRepository, cache *cache.ConversationCache, publisher EventPublisher) *ConversationService {
+func NewConversationService(repo persistence.ChatRepository, cache *cache.ConversationCache, publisher EventPublisher, profiles ProfileSnapshotResolver) *ConversationService {
 	if publisher == nil {
 		publisher = NoopEventPublisher()
 	}
-	return &ConversationService{repo: repo, cache: cache, publisher: publisher}
+	if profiles == nil {
+		profiles = noopProfileResolver{}
+	}
+	return &ConversationService{repo: repo, cache: cache, publisher: publisher, profiles: profiles}
 }
 
 type CreateConversationRequest struct {
@@ -77,10 +81,22 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		return nil, err
 	}
 
+	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
+	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
+	lookup := func(uid string) (string, string) {
+		if p, ok := profMap[uid]; ok {
+			return p.DisplayName, p.AvatarURL
+		}
+		return "", ""
+	}
+
+	creatorDN, creatorAV := lookup(req.CreatorId)
 	creator := &model.ConversationMember{
 		ID:             generateID(),
 		ConversationId: conv.ID,
 		UserId:         req.CreatorId,
+		DisplayName:    creatorDN,
+		AvatarUrl:      creatorAV,
 		MemberType:     "user",
 		Role:           "owner",
 		JoinedAt:       now,
@@ -89,15 +105,18 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		return nil, err
 	}
 
-	for _, userID := range initialMemberIds {
+	for i, userID := range initialMemberIds {
+		dn, av := lookup(userID)
 		member := &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: conv.ID,
 			UserId:         userID,
+			DisplayName:    dn,
+			AvatarUrl:      av,
 			MemberType:     "user",
 			Role:           "member",
 			InvitedBy:      req.CreatorId,
-			JoinedAt:       now,
+			JoinedAt:       now.Add(time.Duration(i+1) * time.Millisecond),
 		}
 		if err := s.repo.CreateMember(ctx, member); err != nil {
 			return nil, err
@@ -111,6 +130,8 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	}
 
 	conv.MemberCount = len(initialMemberIds) + 1
+	conv.MembersRosterRevision = 1
+	conv.UpdatedAt = time.Now()
 	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
 		return nil, err
 	}
@@ -133,6 +154,21 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 			"createdAt":      conv.CreatedAt,
 		}); err != nil {
 			slog.Error("publish ConversationCreated failed", "err", err, "conversationId", conv.ID)
+		}
+	}()
+
+	go func() {
+		convFresh, err := s.repo.FindConversationByID(context.Background(), conv.ID)
+		if err != nil {
+			slog.Error("publish ConversationRosterUpdated after create", "err", err, "conversationId", conv.ID)
+			return
+		}
+		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationRosterUpdated, conv.ID, req.CreatorId, map[string]any{
+			"membersRosterRevision": convFresh.MembersRosterRevision,
+			"updatedAt":             convFresh.UpdatedAt,
+			"aspects":               []string{"members", "created"},
+		}); err != nil {
+			slog.Error("publish ConversationRosterUpdated failed", "err", err, "conversationId", conv.ID)
 		}
 	}()
 

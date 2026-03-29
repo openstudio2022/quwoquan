@@ -7,6 +7,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -102,7 +103,8 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     _handleTabChange(_tabOrder[nextIndex]);
   }
 
-  Widget _buildBackAction(Color color) {
+  Widget _buildBackAction(bool isDark) {
+    final iconColor = AppNavigationSemanticConstants.barIconColor(isDark);
     return SizedBox(
       width: AppSpacing.iconButtonMinSizeSm,
       child: CupertinoButton(
@@ -111,14 +113,17 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         onPressed: _activeTab == 'dialog' ? _handleExit : null,
         child: Icon(
           CupertinoIcons.back,
-          color: _activeTab == 'dialog' ? color : color.withValues(alpha: 0),
-          size: AppSpacing.iconMedium,
+          color: _activeTab == 'dialog'
+              ? iconColor
+              : iconColor.withValues(alpha: 0),
+          size: AppNavigationSemanticConstants.barIconSize,
         ),
       ),
     );
   }
 
-  Widget _buildSettingsAction(Color color) {
+  Widget _buildSettingsAction(bool isDark) {
+    final iconColor = AppNavigationSemanticConstants.barIconColor(isDark);
     return SizedBox(
       width: AppSpacing.iconButtonMinSizeSm,
       child: CupertinoButton(
@@ -127,14 +132,15 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         onPressed: () => context.push(AppRoutePaths.assistantManagement),
         child: Icon(
           CupertinoIcons.settings,
-          size: AppSpacing.iconMedium,
-          color: color,
+          size: AppNavigationSemanticConstants.barIconSize,
+          color: iconColor,
         ),
       ),
     );
   }
 
-  Widget _buildSearchAction(Color color) {
+  Widget _buildSearchAction(bool isDark) {
+    final iconColor = AppNavigationSemanticConstants.barIconColor(isDark);
     return SizedBox(
       width: AppSpacing.iconButtonMinSizeSm,
       child: CupertinoButton(
@@ -149,8 +155,8 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         ),
         child: Icon(
           CupertinoIcons.search,
-          size: AppSpacing.iconMedium,
-          color: color,
+          size: AppNavigationSemanticConstants.barIconSize,
+          color: iconColor,
         ),
       ),
     );
@@ -232,10 +238,10 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
           activeTab: _activeTab,
           onTabChange: _handleTabChange,
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
-          leadingActions: [_buildBackAction(fgSecondary)],
+          leadingActions: [_buildBackAction(isDark)],
           trailingActions: [
-            _buildSearchAction(fgSecondary),
-            _buildSettingsAction(fgSecondary),
+            _buildSearchAction(isDark),
+            _buildSettingsAction(isDark),
           ],
           transparentBackground: true,
         ),

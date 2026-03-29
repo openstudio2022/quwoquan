@@ -26,6 +26,7 @@ import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/group_member_search_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
@@ -630,6 +631,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               return ChatSettingsPage(conversationId: id);
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.chatMemberSearchSegment,
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return GroupMemberSearchPage(conversationId: id);
             },
           ),
           GoRoute(

@@ -1,0 +1,71 @@
+version: 1
+node: chat-conversation/group-creation-member-management/group-member-roster-version-sync
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260329-001-group-member-roster-version-sync-baseline.yaml
+
+slices:
+  - id: R0
+    title: metadata + verify + codegen-app 基线
+    goal: membersRosterRevision、MemberListSort、ListMembers.sort、ConversationRosterUpdated 已落盘并通过 verify-metadata / codegen-app
+    depends_on: []
+    acceptance_refs: [A1, A3, A4]
+    planned_evidence: [T1]
+    done_when:
+      - make -C quwoquan_service verify-metadata 通过
+      - make -C quwoquan_service codegen-app 通过
+    status: completed
+
+  - id: R1
+    title: Go 模型与事件常量对齐 + Publisher 白名单
+    goal: model.Conversation、event 常量、SupportedEventTypes 与 metadata 一致；chat-service 可编译
+    depends_on: [R0]
+    acceptance_refs: [A3, A4]
+    planned_evidence: [T1, T3]
+    done_when:
+      - go build ./services/chat-service/... 通过
+    status: completed
+
+  - id: R2
+    title: 持久化与 ListMembers 排序实现
+    goal: Mongo ListMembers 支持 sort；创建时 joinedAt 单调；变更时 $inc revision
+    depends_on: [R1]
+    acceptance_refs: [A1, A5]
+    planned_evidence: [T3]
+    done_when:
+      - 契约测试覆盖 sort 与 revision
+    status: planned
+
+  - id: R3
+    title: 展示名 enrichment
+    goal: CreateMember/AddMembers 写入 displayName/avatarUrl（user-service 或批量 profile）
+    depends_on: [R2]
+    acceptance_refs: [A2]
+    planned_evidence: [T3]
+    done_when:
+      - 集成测试 listMembers 展示名非 userId
+    status: planned
+
+  - id: R4
+    title: 合并推送与防抖窗口
+    goal: ConversationRosterUpdated 防抖合并；AddMembers 不再对未新增 userId 发事件
+    depends_on: [R2]
+    acceptance_refs: [A4]
+    planned_evidence: [T3]
+    done_when:
+      - EventSpy 验证合并语义
+    status: planned
+
+  - id: R5
+    title: 端侧 Mock 对齐 + Remote listMembers(sort) + 实时 handler
+    goal: MockChatRepository 与云一致；RealtimeMessageHandler 处理 ConversationRosterUpdated；conversationMembersProvider 定点刷新
+    depends_on: [R0]
+    acceptance_refs: [A2, A4]
+    planned_evidence: [T2, T3]
+    done_when:
+      - widget/journey 测试覆盖信息页成员网格刷新
+    status: planned

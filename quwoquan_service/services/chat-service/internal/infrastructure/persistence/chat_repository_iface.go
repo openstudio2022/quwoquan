@@ -28,7 +28,8 @@ type ChatRepository interface {
 	DeleteMember(ctx context.Context, conversationId, userId string) error
 	FindMember(ctx context.Context, conversationId, userId string) (*model.ConversationMember, error)
 	UpdateMemberRole(ctx context.Context, conversationId, userId, role string) error
-	ListMembers(ctx context.Context, conversationId string, limit int, cursor, role string) ([]model.ConversationMember, error)
+	ListMembers(ctx context.Context, conversationId string, limit int, cursor, role, sort string) ([]model.ConversationMember, error)
+	BumpMembersRosterRevision(ctx context.Context, conversationId string, memberCount *int) error
 	CountMembers(ctx context.Context, conversationId string) (int, error)
 	FindAssistantMember(ctx context.Context, conversationId string) (*model.ConversationMember, error)
 

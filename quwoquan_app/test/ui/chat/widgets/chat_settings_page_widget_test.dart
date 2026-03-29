@@ -163,6 +163,7 @@ class _ErrorChatRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     throw Exception('Network error');
   }
@@ -176,6 +177,7 @@ class _MemberRoleChatRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     return [
       {

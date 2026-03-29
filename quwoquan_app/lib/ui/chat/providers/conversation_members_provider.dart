@@ -70,7 +70,11 @@ class ConversationMembersNotifier
     state = state.copyWith(isLoading: true, error: null);
     try {
       final results = await Future.wait([
-        _repo.listMembers(conversationId: _conversationId, limit: 200),
+        _repo.listMembers(
+          conversationId: _conversationId,
+          limit: 200,
+          sort: 'joined_asc',
+        ),
         _repo.getGroupSettings(_conversationId),
       ]);
       final members = (results[0] as List<Map<String, dynamic>>)

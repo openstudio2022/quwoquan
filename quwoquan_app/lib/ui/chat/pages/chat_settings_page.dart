@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -16,7 +17,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
-/// 聊天设置/聊天信息页（1:1 图二）
+/// 聊天设置/聊天信息页；全屏表单布局复用 [SettingsInsetFormPageScaffold]。
 class ChatSettingsPage extends ConsumerStatefulWidget {
   const ChatSettingsPage({super.key, required this.conversationId});
 
@@ -34,12 +35,10 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
 
   static const int _memberColumns = 5;
 
-  /// 收起时最多 4 行，添加按钮与成员同一行（不单独成行、无空行）
-  static const int _memberSlotsCollapsed =
-      (_memberColumns * 4) - 1; // 19 成员 + 1 添加 = 20 格 = 4 行
-  /// 展开时最多 5 行
-  static const int _memberSlotsExpanded =
-      (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
+  /// 收起时最多 4 行（5×4 格末格为「添加」）：超过则折叠，仅展示本容量内成员。
+  static const int _memberRowsCollapsed = 4;
+  static int get _collapsedMemberCapacity =>
+      _memberColumns * _memberRowsCollapsed - 1;
 
   @override
   void initState() {
@@ -141,72 +140,54 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final privacyShield =
         membersState.settings['privacyShieldAdminOnly'] as bool? ?? false;
 
-    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final blockSurface = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
-    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
     final borderColor = AppColorsFunctional.getColor(
       isDark,
       ColorType.borderPrimary,
     );
     final memberCount = members.length;
+    final memberGridOverflow = memberCount > _collapsedMemberCapacity;
+    final visibleMemberCount = !memberGridOverflow || _membersExpanded
+        ? memberCount
+        : _collapsedMemberCapacity;
 
-    final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: blockSurface,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(
-          '${UITextConstants.chatInfoTitle}($memberCount)',
-          style: TextStyle(
-            color: fgPrimary,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        trailing: memberCount > 5
-            ? CupertinoButton(
-                padding: EdgeInsets.zero,
-                child: const Icon(CupertinoIcons.search),
-                onPressed: () {
-                  AppToast.show(context, '${UITextConstants.search}（开发中）');
-                },
-              )
-            : null,
-        border: Border(
-          bottom: BorderSide(color: dividerColor, width: AppSpacing.one),
-        ),
-      ),
+    final secondaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final chevronColor =
+        SettingsSemanticConstants.selectionChevronColor(isDark);
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: '${UITextConstants.chatInfoTitle}($memberCount)',
+      onBack: () => context.pop(),
+      trailing: memberCount > 5
+          ? GlobalTopBarIconButton(
+              icon: CupertinoIcons.search,
+              onTap: () => context.push(
+                AppRoutePaths.chatMemberSearch(id: widget.conversationId),
+              ),
+            )
+          : null,
       body: SizedBox.expand(
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(
-            left: 0,
-            right: 0,
-            top: 0,
+            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            top: AppSpacing.intraGroupSm,
             bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            _section(
-              context,
-              blockSurface: blockSurface,
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.standard,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final maxMembers = _membersExpanded
-                          ? _memberSlotsExpanded
-                          : _memberSlotsCollapsed;
-                      final visibleCount = members.length > maxMembers
-                          ? maxMembers
-                          : members.length;
-                      final totalCells = visibleCount + 1;
+                      final totalCells = visibleMemberCount + 1;
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -218,12 +199,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         ),
                         itemCount: totalCells,
                         itemBuilder: (context, index) {
-                          if (index == visibleCount) {
+                          if (index == visibleMemberCount) {
                             return Align(
                               alignment: Alignment.topCenter,
                               child: _AddMemberPlaceholder(
                                 borderColor: borderColor,
-                                avatarHeight: AppSpacing.largeButtonSize,
+                                size: AppSpacing.avatarUserLg,
                                 onTap: () => context.push(
                                   AppRoutePaths.chatAddMembers(
                                     id: widget.conversationId,
@@ -264,7 +245,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       );
                     },
                   ),
-                  if (members.length > _memberSlotsCollapsed) ...[
+                  if (memberGridOverflow) ...[
                     SizedBox(height: AppSpacing.xs),
                     Center(
                       child: GestureDetector(
@@ -299,15 +280,17 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 ],
               ),
             ),
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              context,
-              blockSurface: blockSurface,
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
               child: Column(
                 children: [
-                  _SettingsRow(
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.groupName,
-                    fgPrimary: fgPrimary,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -320,28 +303,29 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 ? UITextConstants.groupNameHint
                                 : _groupName,
                             style: TextStyle(
-                              fontSize: AppTypography.md,
-                              color: _groupName.isEmpty
-                                  ? secondaryColor
-                                  : fgPrimary,
+                              fontSize: AppTypography.base,
+                              fontWeight: AppTypography.medium,
+                              color: secondaryText,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
                           ),
                         ),
+                        SizedBox(width: AppSpacing.containerSm),
                         Icon(
                           CupertinoIcons.chevron_forward,
                           size: AppSpacing.iconMedium,
-                          color: secondaryColor,
+                          color: chevronColor,
                         ),
                       ],
                     ),
                     onTap: _showEditGroupNameDialog,
                   ),
-                  _divider(isDark),
-                  _SettingsRow(
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.qrCode,
-                    fgPrimary: fgPrimary,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -350,51 +334,55 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           size: AppSpacing.iconMedium,
                           color: fgPrimary,
                         ),
+                        SizedBox(width: AppSpacing.containerSm),
                         Icon(
                           CupertinoIcons.chevron_forward,
                           size: AppSpacing.iconMedium,
-                          color: secondaryColor,
+                          color: chevronColor,
                         ),
                       ],
                     ),
                     onTap: () {},
                   ),
-                  _divider(isDark),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
                   if (isAdminOrOwner) ...[
-                    _SettingsRow(
+                    SettingsInsetFormRow(
+                      isDark: isDark,
                       label: UITextConstants.groupManagement,
-                      fgPrimary: fgPrimary,
                       trailing: Icon(
                         CupertinoIcons.chevron_forward,
                         size: AppSpacing.iconMedium,
-                        color: secondaryColor,
+                        color: chevronColor,
                       ),
                       onTap: () => context.push(
                         AppRoutePaths.chatManage(id: widget.conversationId),
                       ),
                     ),
-                    _divider(isDark),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
                   ],
-                  _SettingsRow(
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.groupAnnouncement,
-                    fgPrimary: fgPrimary,
                     trailing: Icon(
                       CupertinoIcons.chevron_forward,
                       size: AppSpacing.iconMedium,
-                      color: secondaryColor,
+                      color: chevronColor,
                     ),
                     onTap: () {},
                   ),
                 ],
               ),
             ),
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              context,
-              blockSurface: blockSurface,
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
               child: Column(
                 children: [
-                  _SettingsRow(
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.muteNotifications,
                     trailing: _buildSettingSwitch(
                       isDark: isDark,
@@ -402,8 +390,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       onChanged: (v) => setState(() => _mute = v),
                     ),
                   ),
-                  _divider(isDark),
-                  _SettingsRow(
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.pinChat,
                     trailing: _buildSettingSwitch(
                       isDark: isDark,
@@ -411,8 +400,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       onChanged: (v) => setState(() => _pin = v),
                     ),
                   ),
-                  _divider(isDark),
-                  _SettingsRow(
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.privacyShield,
                     trailing: _buildSettingSwitch(
                       isDark: isDark,
@@ -435,40 +425,44 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 ],
               ),
             ),
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              context,
-              blockSurface: blockSurface,
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
               child: Column(
                 children: [
-                  _SettingsRow(
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.setChatBackground,
-                    fgPrimary: fgPrimary,
                     trailing: Icon(
                       CupertinoIcons.chevron_forward,
                       size: AppSpacing.iconMedium,
-                      color: secondaryColor,
+                      color: chevronColor,
                     ),
                     onTap: () {},
                   ),
-                  _divider(isDark),
-                  _SettingsRow(
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
                     label: UITextConstants.clearChatHistory,
-                    fgPrimary: fgPrimary,
                     trailing: Icon(
                       CupertinoIcons.chevron_forward,
                       size: AppSpacing.iconMedium,
-                      color: secondaryColor,
+                      color: chevronColor,
                     ),
                     onTap: () {},
                   ),
                 ],
               ),
             ),
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              context,
-              blockSurface: blockSurface,
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
@@ -485,7 +479,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       UITextConstants.exitGroupChat,
                       style: TextStyle(
                         fontSize: AppTypography.lg,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: AppTypography.medium,
                         color: SettingsSemanticConstants.exitActionColor(
                           isDark,
                         ),
@@ -497,46 +491,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _section(
-    BuildContext context, {
-    required Color blockSurface,
-    required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.only(
-        left: SettingsSemanticConstants.blockHorizontalPadding,
-        right: SettingsSemanticConstants.blockHorizontalPadding,
-        top: SettingsSemanticConstants.sectionVerticalPadding,
-        bottom: SettingsSemanticConstants.sectionVerticalPadding,
-      ),
-      decoration: BoxDecoration(
-        color: blockSurface,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.blockBorderRadius,
-        ),
-        border: Border.all(
-          color: SettingsSemanticConstants.blockBorderColor(
-            ref.watch(isDarkProvider),
-          ),
-        ),
-      ),
-      child: child,
-    );
-  }
-
-  /// 功能块内分割线：语义 token，非常细、浅
-  Widget _divider(bool isDark) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
-      child: Divider(
-        height: AppSpacing.one,
-        thickness: SettingsSemanticConstants.dividerThickness,
-        color: SettingsSemanticConstants.dividerColor(isDark),
       ),
     );
   }
@@ -647,67 +601,35 @@ class _MemberAvatar extends StatelessWidget {
 class _AddMemberPlaceholder extends StatelessWidget {
   const _AddMemberPlaceholder({
     required this.borderColor,
-    required this.avatarHeight,
+    required this.size,
     required this.onTap,
   });
 
   final Color borderColor;
-  final double avatarHeight;
+  /// 与 [_MemberAvatar] 中 [RoundedSquareAvatar] 边长一致。
+  final double size;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: avatarHeight * 1.2,
-        height: avatarHeight,
-        decoration: BoxDecoration(
-          border: Border.all(color: borderColor, style: BorderStyle.solid),
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        ),
-        child: Icon(Icons.add, size: AppSpacing.iconMedium, color: borderColor),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
-    required this.trailing,
-    this.fgPrimary,
-    this.onTap,
-  });
-
-  final String label;
-  final Widget trailing;
-  final Color? fgPrimary;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = fgPrimary ?? Theme.of(context).colorScheme.onSurface;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(fontSize: AppTypography.lg, color: color),
-                ),
-              ),
-              trailing,
-            ],
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: borderColor, style: BorderStyle.solid),
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          ),
+          child: Icon(
+            Icons.add,
+            size: AppSpacing.iconMedium,
+            color: borderColor,
           ),
         ),
       ),
     );
   }
 }
+

@@ -212,7 +212,7 @@ class RealtimeConnectionManager extends StateNotifier<TransportState> {
 final realtimeConnectionManagerProvider =
     StateNotifierProvider<RealtimeConnectionManager, TransportState>((ref) {
   final config = RealtimeConfig.fromGateway();
-  final handler = RealtimeMessageHandler(ref);
+  final handler = RealtimeMessageHandler(ref.read);
   return RealtimeConnectionManager(
     config: config,
     userId: 'current_user',

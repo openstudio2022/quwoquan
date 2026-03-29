@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -82,18 +83,13 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
             width: AppSpacing.hairline,
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: Icon(CupertinoIcons.back, color: fg),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
         middle: Text(
           UITextConstants.personaManage,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.iosNavTitle,
-            fontWeight: AppTypography.semiBold,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       body: ListView(

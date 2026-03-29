@@ -193,6 +193,10 @@ class UITextConstants {
   static const String circlePosts = '创作';
   static const String circleWeeklyActive = '活跃';
   static const String searchMembersHint = '搜索成员...';
+  /// 群成员搜索页搜索框占位（端侧过滤）。
+  static const String searchGroupMembers = '搜索群成员';
+  /// 成员列表本地过滤无结果。
+  static const String noMatchingMembers = '暂无匹配成员';
   static const String searchGroupsHint = '搜索群聊...';
   static const String searchFansHint = '搜索粉丝...';
   static const String searchLikesHint = '搜索获赞记录...';
@@ -410,6 +414,10 @@ class UITextConstants {
   static const String clearChatHistory = '清空聊天记录';
   static const String exitGroupChat = '退出群聊';
   static const String dissolveGroupChat = '解散该群聊';
+  static const String dissolveGroupChatConfirmMessage =
+      '解散后所有成员将被移出群聊，此操作不可撤销。';
+  static const String groupChatDissolvedToast = '群聊已解散';
+  static const String dissolveGroupChatFailedToast = '解散群聊失败，请稍后重试';
   static const String addMember = '添加成员';
   static const String groupManagement = '群管理';
   static const String groupNameAdminOnly = '群组已设定为只有群主或管理员才能修改群名';

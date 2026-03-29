@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -187,16 +188,11 @@ class _AssistantSkillCenterPageState
       navigationBar: AppNavigationBar(
         middle: Text(
           l10n.assistantSkillCenterTitle,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: fgPrimary,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onBack,
-          child: Icon(CupertinoIcons.back, color: fgPrimary),
         ),
       ),
       child: content,

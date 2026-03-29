@@ -136,6 +136,18 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface chatMemberSearch = AppUiSurface(
+    id: 'chatMemberSearch',
+    owner: 'chat',
+    routeId: 'chatMemberSearch',
+    pathTemplate: '/chat/{id}/member-search',
+    description: '群成员搜索页（端侧过滤）',
+    operationIds: <String>[
+      'GetConversation',
+      'ListMembers',
+    ],
+  );
+
   static const AppUiSurface assistantDialog = AppUiSurface(
     id: 'assistantDialog',
     owner: 'assistant',
@@ -334,6 +346,7 @@ class AppUiSurfaces {
     chatAddMembers,
     chatTransferOwnership,
     chatAdmins,
+    chatMemberSearch,
     assistantDialog,
     assistantHalfSheet,
     assistantSettings,
@@ -359,6 +372,7 @@ class AppUiSurfaces {
     'chatAddMembers': chatAddMembers,
     'chatTransferOwnership': chatTransferOwnership,
     'chatAdmins': chatAdmins,
+    'chatMemberSearch': chatMemberSearch,
     'assistantDialog': assistantDialog,
     'assistantHalfSheet': assistantHalfSheet,
     'assistantSettings': assistantSettings,

@@ -107,9 +107,9 @@ func main() {
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
 
-	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher)
+	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher, nil)
 	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
-	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher)
+	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher, nil)
 	inboxSvc := application.NewInboxService(chatStore)
 
 	handler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()

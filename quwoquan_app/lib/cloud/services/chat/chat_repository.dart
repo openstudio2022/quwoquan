@@ -11,6 +11,41 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
+/// 与云侧 ListMembers `sort` 枚举对齐；非法值回退 `joined_asc`。
+List<Map<String, dynamic>> sortChatMemberRows(
+  List<Map<String, dynamic>> members,
+  String? sort,
+) {
+  final normalized = switch (sort?.trim()) {
+    'display_name_asc' => 'display_name_asc',
+    _ => 'joined_asc',
+  };
+  final copy = members.map((m) => Map<String, dynamic>.from(m)).toList();
+  if (normalized == 'display_name_asc') {
+    copy.sort((a, b) {
+      final da = (a['displayName'] ?? a['userId'] ?? '').toString();
+      final db = (b['displayName'] ?? b['userId'] ?? '').toString();
+      final c = da.compareTo(db);
+      if (c != 0) return c;
+      return (a['userId'] ?? '').toString().compareTo(
+            (b['userId'] ?? '').toString(),
+          );
+    });
+  } else {
+    copy.sort((a, b) {
+      final ja = DateTime.tryParse((a['joinedAt'] ?? '').toString());
+      final jb = DateTime.tryParse((b['joinedAt'] ?? '').toString());
+      final ta = ja?.millisecondsSinceEpoch ?? 0;
+      final tb = jb?.millisecondsSinceEpoch ?? 0;
+      if (ta != tb) return ta.compareTo(tb);
+      return (a['userId'] ?? '').toString().compareTo(
+            (b['userId'] ?? '').toString(),
+          );
+    });
+  }
+  return copy;
+}
+
 /// Chat 域 Repository：会话、消息、成员、联系人等业务对象入口。
 /// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
 abstract class ChatRepository {
@@ -96,6 +131,8 @@ abstract class ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String? role,
+    /// 与 metadata 一致：`joined_asc`（默认）、`display_name_asc`；`null` 时 Remote 传 `joined_asc`。
+    String? sort,
   });
 
   Future<void> addMembers({
@@ -197,16 +234,22 @@ class MockChatRepository implements ChatRepository {
     return _membersCache[conversationId]!;
   }
 
-  void _updateConversationMemberCount(String conversationId, int memberCount) {
+  void _bumpMembersRosterAfterMemberChange(
+    String conversationId,
+    int memberCount,
+  ) {
     final index = _conversationCache.indexWhere(
       (conversation) => _conversationIdOf(conversation) == conversationId,
     );
     if (index < 0) {
       return;
     }
+    final cur = Map<String, dynamic>.from(_conversationCache[index]);
+    final prevRev = (cur['membersRosterRevision'] as num?)?.toInt() ?? 0;
     _conversationCache[index] = <String, dynamic>{
-      ..._conversationCache[index],
+      ...cur,
       'memberCount': memberCount,
+      'membersRosterRevision': prevRev + 1,
       'updatedAt': DateTime.now().toIso8601String(),
     };
   }
@@ -293,7 +336,8 @@ class MockChatRepository implements ChatRepository {
     List<String>? initialMemberIds,
   }) async {
     final conversationId = 'conv_new_${DateTime.now().millisecondsSinceEpoch}';
-    final now = DateTime.now().toIso8601String();
+    final nowUtc = DateTime.now().toUtc();
+    final now = nowUtc.toIso8601String();
     final conversation = <String, dynamic>{
       '_id': conversationId,
       'id': conversationId,
@@ -304,6 +348,7 @@ class MockChatRepository implements ChatRepository {
       'maxGroupSize': maxGroupSize ?? 500,
       'status': 'active',
       'memberCount': (initialMemberIds?.length ?? 0) + 1,
+      'membersRosterRevision': 1,
       'maxSeq': 0,
       'createdAt': now,
       'updatedAt': now,
@@ -319,14 +364,18 @@ class MockChatRepository implements ChatRepository {
         'avatarUrl': ChatMockData.avatarFor(ChatMockData.currentUserProfileId),
         'role': 'owner',
         'isCurrentUser': true,
+        'joinedAt': nowUtc.toIso8601String(),
       },
-      for (final userId in initialMemberIds ?? const <String>[])
+      for (var i = 0; i < (initialMemberIds?.length ?? 0); i++)
         <String, dynamic>{
-          'userId': userId,
-          'displayName': userId,
-          'avatarUrl': ChatMockData.avatarFor(userId),
+          'userId': initialMemberIds![i],
+          'displayName': ChatMockData.nameFor(initialMemberIds[i]),
+          'avatarUrl': ChatMockData.avatarFor(initialMemberIds[i]),
           'role': 'member',
           'isCurrentUser': false,
+          'joinedAt': nowUtc
+              .add(Duration(milliseconds: i + 1))
+              .toIso8601String(),
         },
     ];
     return Map<String, dynamic>.from(conversation);
@@ -462,10 +511,19 @@ class MockChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String? role,
+    String? sort,
   }) async {
-    return _ensureMembersCache(
-      conversationId,
-    ).map((m) => Map<String, dynamic>.from(m)).toList();
+    var rows = _ensureMembersCache(conversationId)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    rows = sortChatMemberRows(rows, sort);
+    if (role != null && role.isNotEmpty) {
+      rows = rows.where((m) => m['role'] == role).toList();
+    }
+    if (limit > 0 && rows.length > limit) {
+      rows = rows.take(limit).toList();
+    }
+    return rows;
   }
 
   @override
@@ -477,19 +535,35 @@ class MockChatRepository implements ChatRepository {
     final existingIds = members
         .map((member) => (member['userId'] ?? '').toString())
         .toSet();
+    var maxJoinedMs = 0;
+    for (final m in members) {
+      final d = DateTime.tryParse((m['joinedAt'] ?? '').toString());
+      if (d != null && d.millisecondsSinceEpoch > maxJoinedMs) {
+        maxJoinedMs = d.millisecondsSinceEpoch;
+      }
+    }
+    var step = 0;
     for (final userId in userIds) {
       if (existingIds.contains(userId)) {
         continue;
       }
+      step++;
+      final joinedAt = DateTime.fromMillisecondsSinceEpoch(
+        maxJoinedMs + step,
+        isUtc: true,
+      ).toIso8601String();
       members.add(<String, dynamic>{
         'userId': userId,
-        'displayName': userId,
+        'displayName': ChatMockData.nameFor(userId),
         'avatarUrl': ChatMockData.avatarFor(userId),
         'role': 'member',
         'isCurrentUser': false,
+        'joinedAt': joinedAt,
       });
     }
-    _updateConversationMemberCount(conversationId, members.length);
+    if (step > 0) {
+      _bumpMembersRosterAfterMemberChange(conversationId, members.length);
+    }
   }
 
   @override
@@ -499,7 +573,7 @@ class MockChatRepository implements ChatRepository {
   }) async {
     final members = _ensureMembersCache(conversationId)
       ..removeWhere((member) => member['userId'] == userId);
-    _updateConversationMemberCount(conversationId, members.length);
+    _bumpMembersRosterAfterMemberChange(conversationId, members.length);
   }
 
   @override
@@ -1030,6 +1104,7 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String? role,
+    String? sort,
   }) async {
     final uri = _uri(
       ChatApiMetadata.listMembersPath(conversationId: conversationId),
@@ -1037,6 +1112,7 @@ class RemoteChatRepository implements ChatRepository {
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         'limit': '$limit',
         if (role != null && role.isNotEmpty) 'role': role,
+        'sort': sort ?? 'joined_asc',
       },
     );
     final decoded = await _httpClient.getJson(

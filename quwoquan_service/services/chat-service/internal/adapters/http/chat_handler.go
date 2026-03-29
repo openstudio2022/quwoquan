@@ -228,8 +228,9 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 	limit := queryInt(r, "limit", 20)
 	role := r.URL.Query().Get("role")
 
+	sort := r.URL.Query().Get("sort")
 	members, err := h.memberService.ListMembers(r.Context(), application.ListMembersRequest{
-		ConversationId: convId, Cursor: cursor, Limit: limit, Role: role,
+		ConversationId: convId, Cursor: cursor, Limit: limit, Role: role, Sort: sort,
 	})
 	if err != nil {
 		writeHTTPError(w, err)

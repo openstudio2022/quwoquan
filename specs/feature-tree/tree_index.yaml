@@ -296,6 +296,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: group-member-roster-version-sync
+              name: group-member-roster-version-sync
+              level: L3_story
+              path: chat-conversation/group-creation-member-management/group-member-roster-version-sync
+              domain: ""
+              status: specified
+              tags: []
         - id: list-detail-message-delivery
           name: list-detail-message-delivery
           level: L2_feature

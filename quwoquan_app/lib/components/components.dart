@@ -9,7 +9,8 @@
 /// - 输入组件（Emoji 选择器）
 /// - 媒体查看器组件（图片、视频、沉浸式）
 /// - 评论系统组件
-/// - 更多操作弹窗组件
+/// - 设置对话态组件（半屏更多操作等，`settings_conversation/`）
+/// - 设置表单态组件（全屏 Inset Grouped，`settings_form/`）
 ///
 /// 注意：底部导航（BottomNavigationWidget）已迁移至 lib/app/shell/，
 /// 由 MainAppShell 直接引用，不再通过此门面导出。
@@ -72,8 +73,11 @@ export 'comment_system/comment_viewer.dart';
 export 'comment_system/comment_models.dart';
 export 'comment_system/comment_viewer_modal.dart';
 
-// ==================== 更多操作弹窗组件 ====================
-export 'more_actions_popup/more_action_popup.dart';
-export 'more_actions_popup/more_action_types.dart';
-export 'more_actions_popup/configs/image_viewer_config.dart';
-export 'more_actions_popup/configs/media_post_config.dart';
+// ==================== 嵌入式成员搜索 ====================
+export 'search/search_embedded.dart';
+
+// ==================== 设置：对话态（半屏更多操作等）====================
+export 'settings_conversation/settings_conversation.dart';
+
+// ==================== 设置：全屏表单态（Inset Grouped）====================
+export 'settings_form/settings_form.dart';

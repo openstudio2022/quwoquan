@@ -25,3 +25,10 @@
 - [ ] D2: T2 — 对象级治理入口位置回归
 - [ ] D3: T3 — 群聊通话入口路径回归
 - [ ] D4: `make gate`
+
+## Phase E — 全屏表单态基线（CR-20260329-002）
+
+- [x] E1: `GroupManagePage` 对齐 `SettingsInsetFormPageScaffold` 与 `SettingsInsetGroupedSection`
+- [x] E2: 解散/Toast 等文案迁入 `UITextConstants` 或 l10n（满足门禁）
+- [x] E3: 验收 A9–A13（acceptance.yaml）
+- [x] E4: `flutter analyze` + `verify_dart_semantic.py`

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -181,18 +182,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             width: AppSpacing.hairline,
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
         middle: Text(
           CircleStatsPage._title(_type),
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.xl,
-            fontWeight: AppTypography.bold,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       child: Column(

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
@@ -31,14 +32,17 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return AppScaffold(
       navigationBar: AppNavigationBar(
+        automaticallyImplyLeading: false,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         middle: Text(
           UITextConstants.assistantDevReplayTitle,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       child: SafeArea(

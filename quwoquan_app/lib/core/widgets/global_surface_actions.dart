@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -29,7 +30,7 @@ class GlobalTopActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (showSearch)
-          _TopActionIcon(
+          GlobalTopBarIconButton(
             key: TestKeys.globalSearchLauncherButton,
             icon: CupertinoIcons.search,
             onTap: () => GlobalSearchLauncher.open(
@@ -38,7 +39,7 @@ class GlobalTopActions extends StatelessWidget {
             ),
           ),
         if (showSearch) SizedBox(width: AppSpacing.intraGroupXs),
-        _TopActionIcon(
+        GlobalTopBarIconButton(
           icon: CupertinoIcons.add,
           onTap: () => GlobalQuickActionSheet.show(
             context,
@@ -81,14 +82,20 @@ class GlobalSearchLauncher {
   }
 }
 
-class _TopActionIcon extends StatelessWidget {
-  const _TopActionIcon({super.key, required this.icon, required this.onTap});
+/// 首页顶栏等与 [GlobalTopActions] 一致的圆形热区 + 主标签色图标（非强调蓝）。
+class GlobalTopBarIconButton extends StatelessWidget {
+  const GlobalTopBarIconButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return CupertinoButton(
       padding: EdgeInsets.zero,
       onPressed: onTap,
@@ -102,11 +109,8 @@ class _TopActionIcon extends StatelessWidget {
         child: Center(
           child: Icon(
             icon,
-            size: AppSpacing.iconMedium,
-            color: AppColorsFunctional.getColor(
-              Theme.of(context).brightness == Brightness.dark,
-              ColorType.foregroundPrimary,
-            ),
+            size: AppNavigationSemanticConstants.barIconSize,
+            color: AppNavigationSemanticConstants.barIconColor(isDark),
           ),
         ),
       ),

@@ -38,7 +38,7 @@ api_routes:
   - method: GET
     path: /v1/chat/conversations/{conversationId}
     operation: GetConversation
-    description: 会话详情（含 maxSeq、memberCount）
+    description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt）
     response_entity: Conversation
 
   # ── 消息 ──────────────────────────────────────
@@ -85,8 +85,10 @@ api_routes:
   - method: GET
     path: /v1/chat/conversations/{conversationId}/members
     operation: ListMembers
-    description: 成员列表（分页，返回角色、加入时间）
-    query_params: [cursor, limit, role]
+    description: |
+      成员列表（分页，返回角色、加入时间、展示名与头像）。
+      排序由 query `sort` 控制，默认 joined_asc（加入顺序，先加入在前）；可选 display_name_asc（展示名字典序，同名按 userId 打破并列）。
+    query_params: [cursor, limit, role, sort]
     response_entity: ConversationMember
 
   - method: POST

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
 
@@ -46,16 +48,19 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text(UITextConstants.comment),
-        leading: CupertinoNavigationBarBackButton(
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
+        automaticallyImplyLeading: false,
+        middle: Text(
+          UITextConstants.comment,
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        ),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
+      child: SafeArea(
           child: Column(
             children: [
               _buildTabBar(isDark),
@@ -76,7 +81,6 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
               ),
             ],
           ),
-        ),
       ),
     );
   }

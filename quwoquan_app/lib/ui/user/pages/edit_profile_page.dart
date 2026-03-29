@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -109,8 +110,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   @override
   Widget build(BuildContext context) {
     final userData = ref.watch(userDataProvider);
+    final isDark = ref.watch(isDarkProvider);
     final bg = AppColors.iosPageBackground(context);
-    final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final accent = AppColors.iosAccent(context);
 
@@ -126,19 +127,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             width: AppSpacing.hairline,
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
           onPressed: () => context.pop(),
-          child: Icon(CupertinoIcons.xmark, color: fg),
         ),
         middle: Text(
           UITextConstants.editProfile,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.iosNavTitle,
-            fontWeight: AppTypography.semiBold,
-            letterSpacing: -0.24,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,

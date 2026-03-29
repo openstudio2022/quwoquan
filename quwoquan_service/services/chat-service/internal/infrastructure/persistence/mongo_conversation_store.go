@@ -215,21 +215,52 @@ func (s *MongoChatStore) UpdateMemberRole(ctx context.Context, conversationId, u
 	return err
 }
 
-func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string, limit int, cursor, role string) ([]model.ConversationMember, error) {
+func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string, limit int, cursor, role, sort string) ([]model.ConversationMember, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
-	filter := bson.M{"conversationId": conversationId}
+	sortMode := NormalizeMemberListSort(sort)
+	base := bson.M{"conversationId": conversationId}
 	if role != "" {
-		filter["role"] = role
+		base["role"] = role
 	}
-	if cursor != "" {
-		filter["_id"] = bson.M{"$gt": cursor}
+
+	var cursorFilter bson.M
+	var err error
+	switch sortMode {
+	case SortMembersDisplayNameAsc:
+		cursorFilter, err = memberListCursorFilterDisplayName(cursor)
+	default:
+		cursorFilter, err = memberListCursorFilterJoined(cursor)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var filter bson.M
+	if cursorFilter != nil {
+		filter = bson.M{"$and": []bson.M{base, cursorFilter}}
+	} else {
+		filter = base
+	}
+
+	var sortDoc bson.D
+	switch sortMode {
+	case SortMembersDisplayNameAsc:
+		sortDoc = bson.D{
+			{Key: "displayName", Value: 1},
+			{Key: "userId", Value: 1},
+		}
+	default:
+		sortDoc = bson.D{
+			{Key: "joinedAt", Value: 1},
+			{Key: "_id", Value: 1},
+		}
 	}
 
 	opts := options.Find().
-		SetSort(bson.D{{Key: "joinedAt", Value: -1}}).
+		SetSort(sortDoc).
 		SetLimit(int64(limit))
 
 	cur, err := s.members.Find(ctx, filter, opts)
@@ -243,6 +274,21 @@ func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string,
 		return nil, err
 	}
 	return members, nil
+}
+
+// BumpMembersRosterRevision increments membersRosterRevision and sets updatedAt.
+// When memberCount is non-nil, memberCount is set on the conversation document.
+func (s *MongoChatStore) BumpMembersRosterRevision(ctx context.Context, conversationId string, memberCount *int) error {
+	now := time.Now()
+	setDoc := bson.M{"updatedAt": now}
+	if memberCount != nil {
+		setDoc["memberCount"] = *memberCount
+	}
+	_, err := s.conversations.UpdateOne(ctx, bson.M{"_id": conversationId}, bson.M{
+		"$inc": bson.M{"membersRosterRevision": 1},
+		"$set": setDoc,
+	})
+	return err
 }
 
 func (s *MongoChatStore) CountMembers(ctx context.Context, conversationId string) (int, error) {

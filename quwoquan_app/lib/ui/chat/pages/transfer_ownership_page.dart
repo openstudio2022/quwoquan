@@ -1,16 +1,16 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/components/search/search_embedded.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
@@ -94,29 +94,19 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
         .where((m) => m['role'] != 'owner' && m['isCurrentUser'] != true)
         .toList();
 
-    final filtered = _searchQuery.isEmpty
-        ? candidates
-        : candidates.where((m) {
-            final name = (m['displayName'] ?? m['name'] ?? '') as String;
-            return name.toLowerCase().contains(_searchQuery.toLowerCase());
-          }).toList();
+    final filtered = filterMemberMapsByQuery(candidates, _searchQuery);
 
     return AppScaffold(
       backgroundColor: bgColor,
       navigationBar: AppNavigationBar(
         backgroundColor: toolbarBg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
-          onPressed: () => context.pop(),
+        leading: GlobalTopBarIconButton(
+          icon: CupertinoIcons.back,
+          onTap: () => context.pop(),
         ),
         middle: Text(
           UITextConstants.selectNewOwner,
-          style: TextStyle(
-            color: fgPrimary,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         border: Border(
           bottom: BorderSide(
@@ -127,18 +117,11 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.sm,
-              AppSpacing.containerMd,
-              AppSpacing.sm,
-            ),
-            child: AppSearchField(
-              controller: _searchController,
-              placeholder: UITextConstants.search,
-              onChanged: (v) => setState(() => _searchQuery = v),
-            ),
+          EmbeddedMemberSearchBarPlain(
+            isDark: isDark,
+            controller: _searchController,
+            placeholder: UITextConstants.searchGroupMembers,
+            onChanged: (v) => setState(() => _searchQuery = v),
           ),
           Expanded(
             child: membersState.isLoading
@@ -151,98 +134,26 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                       AppSpacing.containerLg,
                     ),
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: SettingsSemanticConstants.blockBackground(
-                            isDark,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            SettingsSemanticConstants.selectionCardBorderRadius,
-                          ),
-                          border: Border.all(
-                            color: SettingsSemanticConstants.blockBorderColor(
-                              isDark,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            for (var i = 0; i < filtered.length; i++) ...[
-                              Builder(
-                                builder: (context) {
-                                  final m = filtered[i];
-                                  final name =
-                                      m['displayName'] as String? ??
-                                      m['name'] as String? ??
-                                      '';
-                                  final avatar =
-                                      m['avatarUrl'] as String? ??
-                                      m['avatar'] as String? ??
-                                      '';
-                                  return CupertinoListTile(
-                                    backgroundColor: Colors.transparent,
-                                    onTap: () => _onMemberSelected(m),
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: SettingsSemanticConstants
-                                          .blockHorizontalPadding,
-                                      vertical: AppSpacing.sm,
-                                    ),
-                                    leading: RoundedSquareAvatar(
-                                      size: AppSpacing.largeButtonSize,
-                                      imageUrl: avatar,
-                                      name: name,
-                                      backgroundColor:
-                                          SettingsSemanticConstants.blockBackground(
-                                            isDark,
-                                          ),
-                                    ),
-                                    title: Text(
-                                      name,
-                                      style: TextStyle(
-                                        fontSize: AppTypography.lg,
-                                        color: fgPrimary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: Icon(
-                                      CupertinoIcons.chevron_forward,
-                                      size: AppSpacing.iconMedium,
-                                      color:
-                                          SettingsSemanticConstants.selectionChevronColor(
-                                            isDark,
-                                          ),
-                                    ),
-                                  );
-                                },
+                      if (filtered.isNotEmpty)
+                        InsetGroupedMemberListCard(
+                          isDark: isDark,
+                          dividerKind: MemberListDividerInsetKind.navigate,
+                          tileWidgets: [
+                            for (final m in filtered)
+                              MemberListNavigateTile(
+                                isDark: isDark,
+                                member: m,
+                                subtitleText: (m['nickname'] as String?)?.trim(),
+                                onTap: () => _onMemberSelected(m),
                               ),
-                              if (i < filtered.length - 1)
-                                Container(
-                                  height: SettingsSemanticConstants
-                                      .dividerThickness,
-                                  margin: EdgeInsets.only(
-                                    left:
-                                        SettingsSemanticConstants
-                                            .blockHorizontalPadding +
-                                        AppSpacing.largeButtonSize +
-                                        AppSpacing.interGroupSm,
-                                    right: SettingsSemanticConstants
-                                        .blockHorizontalPadding,
-                                  ),
-                                  color: SettingsSemanticConstants.dividerColor(
-                                    isDark,
-                                  ),
-                                ),
-                            ],
                           ],
                         ),
-                      ),
                       if (filtered.isEmpty)
                         Padding(
                           padding: EdgeInsets.only(top: AppSpacing.xl),
                           child: Center(
                             child: Text(
-                              '暂无匹配成员',
+                              UITextConstants.noMatchingMembers,
                               style: TextStyle(
                                 fontSize: AppTypography.base,
                                 color: fgSecondary,

@@ -1,0 +1,116 @@
+version: 2
+feature: group-member-roster-version-sync
+level: L3_scenario
+source_path: chat-conversation/group-creation-member-management/group-member-roster-version-sync
+parent_journey: group-creation-member-management
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    成员展示名端云/Mock 一致；ListMembers 默认加入顺序排序与可选按展示名排序；
+    ConversationRosterUpdated 合并推送 + membersRosterRevision/updatedAt 拉取对齐；
+    建群单事务与建群后并发更新分离。
+  out_of_scope:
+    - 群内独立昵称产品与 UI 副标题强制规范
+    - 网关节点水平扩展细节
+
+scenario_acceptance:
+  A1:
+    title: ListMembers 默认 joined_asc、可选 display_name_asc
+    done_when:
+      - metadata 中 ListMembers 声明 sort 与 MemberListSort 枚举
+      - 默认未传 sort 时等价 joined_asc
+      - display_name_asc 下同名按 userId 升序打破并列
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2]
+    tests:
+      planned:
+        - chat-service contract test ListMembers sort
+        - MockChatRepository listMembers sort parity test
+      recorded: []
+    status: specified
+
+  A2:
+    title: 成员展示名为用户展示名且身份以 userId 为准
+    done_when:
+      - Remote 与 Mock 返回的 displayName 均为用户展示名（非裸 userId）
+      - UI 与路由逻辑使用 userId 作为唯一键
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    evidence:
+      primary: [T2, T3]
+      supporting: [T1]
+    tests:
+      planned:
+        - create group + listMembers display name journey
+      recorded: []
+    status: specified
+
+  A3:
+    title: membersRosterRevision 与 updatedAt 仅云端事务内单调更新
+    done_when:
+      - 任意成员/群资料影响 roster 的变更后 revision 严格递增且与 updatedAt 同事务写入
+      - GetConversation / timestamps 投影可观测到变化
+    test_layers:
+      T1: required
+      T3: required
+      T4: optional
+    evidence:
+      primary: [T3]
+      supporting: [T1]
+    tests:
+      planned:
+        - contract test revision monotonicity
+      recorded: []
+    status: specified
+
+  A4:
+    title: 合并推送 ConversationRosterUpdated
+    done_when:
+      - 同一合并窗口内多次成员变更仅对外发布一条 ConversationRosterUpdated（或契约声明的等价语义）
+      - payload 含 membersRosterRevision、updatedAt、aspects
+      - MemberJoined 不再作为客户端唯一依赖（迁移期可双发）
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    evidence:
+      primary: [T3]
+      supporting: [T1, T2]
+    tests:
+      planned:
+        - event_spy ConversationRosterUpdated batch add
+        - RealtimeMessageHandler roster refresh unit test
+      recorded: []
+    status: specified
+
+  A5:
+    title: 创建群单事务与并发更新分离
+    done_when:
+      - CreateConversation 在单事务内完成会话+初始成员+状态+首版 revision
+      - AddMembers/设置类接口各自独立事务，与创建路径代码分离清晰
+    test_layers:
+      T1: optional
+      T3: required
+    evidence:
+      primary: [T3]
+      supporting: [T1]
+    tests:
+      planned:
+        - group lifecycle contract create vs add split
+      recorded: []
+    status: specified

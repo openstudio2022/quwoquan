@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 统一的 iOS 风格页面骨架
@@ -85,5 +86,41 @@ class AppNavigationBar extends StatelessWidget implements ObstructingPreferredSi
     final backgroundColor =
         this.backgroundColor ?? CupertinoTheme.of(context).barBackgroundColor;
     return (backgroundColor.a * 255.0).round().clamp(0, 255) == 0xFF;
+  }
+}
+
+/// 与聊天信息页一致的顶栏图标按钮：44 最小触控区 + [AppNavigationSemanticConstants.barIconSize] + 主标签色。
+class AppNavigationBarIconButton extends StatelessWidget {
+  const AppNavigationBarIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onPressed,
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      child: SizedBox(
+        width: AppSpacing.minInteractiveSize,
+        height: AppSpacing.minInteractiveSize,
+        child: Center(
+          child: Icon(
+            icon,
+            size: AppNavigationSemanticConstants.barIconSize,
+            color: AppNavigationSemanticConstants.barIconColor(isDark),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -151,3 +151,52 @@
 
 1. 管理员专属设置区（禁言、踢人、审批）
 2. 群资料治理对象（如未来引入举报群）
+
+---
+
+## 全屏表单态 UI 工程方案（baseline 2026-03-29）
+
+### 上游补充
+
+- `group-settings/spec.md` §9 冻结 Inset Grouped、成员折叠、顶栏全局搜索入口与文案门禁。
+- **无 metadata / codegen 变更**；不改变 `getGroupSettings` / `updateGroupSettings` 等键语义。
+
+### 选型结论
+
+| 方案 | 结论 |
+|------|------|
+| 每页手写 `Container` + 描边 | 否；与 iOS 设置分组不一致，维护分叉 |
+| 统一 `SettingsInsetForm*` + `insetForm*` token | **是**；与 `chat-conversation` 内多页复用 |
+
+### 组件与路径
+
+| 用途 | 位置 |
+|------|------|
+| 全屏骨架、分组、行、分割线 | `lib/components/settings_form/settings_inset_form_page.dart` |
+| 半屏更多操作 | `lib/components/settings_conversation/` |
+| 顶栏搜索图标（与首页一致） | `GlobalTopBarIconButton` + `GlobalSearchLauncher` |
+
+### 关键决策
+
+- **KD-4**：全屏群相关设置页与全局「应用设置」类页面共享同一 Inset Grouped 语义，大屏留白由 `insetFormListHorizontalPadding` 统一。
+- **KD-5**：全局搜索与页内列表过滤分离；本 baseline 仅冻结 **全局搜索启动器** 在群信息顶栏的样式与跳转，内嵌搜索另开 L3 时再定契约。
+
+### 迁移顺序（实施切片）
+
+1. `ChatSettingsPage`（已按 §9 对齐的可作为参考实现）
+2. `GroupManagePage`
+3. 其他 `lib/ui/settings/`、`lib/ui/circle/` 等全屏列表设置页（按需）
+
+### 观测与回滚
+
+- 无 feature flag；回归依赖 T2 截图/交互与 `flutter analyze`。
+- 回滚：还原对应页面 Widget 树，不涉及数据迁移。
+
+### T1–T4 证据（本增量）
+
+| 层 | 证据 |
+|----|------|
+| T1 | `flutter analyze`、`verify_dart_semantic`（若改文案） |
+| T2 | 群信息/群管理页 Widget 或手工清单：顶栏灰底、分组圆角无描边、开关与导航行 |
+| T3 | 浅/深模式、成员折叠/展开、搜索跳转全局搜 |
+| T4 | 可选：关键用户旅程不混淆退出/解散入口（群设置 vs 群管理） |

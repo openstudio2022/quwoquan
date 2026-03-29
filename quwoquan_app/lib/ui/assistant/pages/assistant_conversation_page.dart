@@ -21,6 +21,7 @@ import 'package:quwoquan_app/components/conversation/message_action_menu_overlay
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -1298,38 +1299,45 @@ class _AssistantConversationPageState
               },
             ),
           ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal:
-                    AppSpacing.semantic[DesignSemanticConstants
-                        .container]?[DesignSemanticConstants.sm] ??
-                    AppSpacing.containerSm,
-                vertical: AppSpacing.sm,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CustomizableChatInputBar(
-                    controller: _inputController,
-                    focusNode: _inputFocusNode,
-                    textFieldKey: TestKeys.assistantChatInputField,
-                    hintText: UITextConstants.assistantAskPlaceholder,
-                    maxTextLength: 5000,
-                    maxVisibleLines: 5,
-                    onPickImages: _pickChatImages,
-                    onCapturePhoto: _captureChatPhoto,
-                    onPickFiles: _pickChatFiles,
-                    onRequestMicPermission: _requestMicPermissionForChat,
-                    onStartRecord: _startVoiceRecordForChat,
-                    onStopRecord: _stopVoiceRecordForChat,
-                    onVoiceAsrTransform: _voiceAsrForChat,
-                    onSend: _submitChatInput,
-                    sendButtonKey: TestKeys.assistantSendButton,
-                    extraPanelItems: const <ChatInputExtraPanelItem>[],
-                  ),
-                ],
+          ColoredBox(
+            color: isDark ? bgColor : AppColors.chatToolbarBackground,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.semantic[DesignSemanticConstants
+                          .container]?[DesignSemanticConstants.sm] ??
+                      AppSpacing.containerSm,
+                  AppSpacing.sm,
+                  AppSpacing.semantic[DesignSemanticConstants
+                          .container]?[DesignSemanticConstants.sm] ??
+                      AppSpacing.containerSm,
+                  AppSpacing.sm,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomizableChatInputBar(
+                      controller: _inputController,
+                      focusNode: _inputFocusNode,
+                      textFieldKey: TestKeys.assistantChatInputField,
+                      hintText: UITextConstants.assistantAskPlaceholder,
+                      maxTextLength: 5000,
+                      maxVisibleLines: 5,
+                      onPickImages: _pickChatImages,
+                      onCapturePhoto: _captureChatPhoto,
+                      onPickFiles: _pickChatFiles,
+                      onRequestMicPermission: _requestMicPermissionForChat,
+                      onStartRecord: _startVoiceRecordForChat,
+                      onStopRecord: _stopVoiceRecordForChat,
+                      onVoiceAsrTransform: _voiceAsrForChat,
+                      onSend: _submitChatInput,
+                      sendButtonKey: TestKeys.assistantSendButton,
+                      showEmojiButton: true,
+                      extraPanelItems: const <ChatInputExtraPanelItem>[],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1344,23 +1352,18 @@ class _AssistantConversationPageState
           ? null
           : AppNavigationBar(
               backgroundColor: bgColor,
-              leading: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
-                child: Icon(
-                  _isSelectionMode ? CupertinoIcons.xmark : CupertinoIcons.back,
-                  color: fgPrimary,
-                ),
+              leading: AppNavigationBarIconButton(
+                icon: _isSelectionMode
+                    ? CupertinoIcons.xmark
+                    : CupertinoIcons.back,
+                onPressed:
+                    _isSelectionMode ? _cancelSelection : widget.onBack,
               ),
               middle: Text(
                 _isSelectionMode
                     ? '已选 ${_selectedIds.length} 条'
                     : AppConceptConstants.assistantDisplayTitle,
-                style: TextStyle(
-                  color: fgPrimary,
-                  fontSize: AppTypography.xl,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
               ),
               trailing: _isSelectionMode
                   ? CupertinoButton(
@@ -1376,12 +1379,20 @@ class _AssistantConversationPageState
                         await _shareMessages(selectedMessages);
                         _cancelSelection();
                       },
-                      child: Text(UITextConstants.messageActionForward),
+                      child: Text(
+                        UITextConstants.messageActionForward,
+                        style: TextStyle(
+                          color: AppNavigationSemanticConstants.barTitleColor(
+                            isDark,
+                          ),
+                          fontSize: AppTypography.iosNavTitle,
+                          fontWeight: AppTypography.semiBold,
+                        ),
+                      ),
                     )
-                  : CupertinoButton(
-                      padding: EdgeInsets.zero,
+                  : AppNavigationBarIconButton(
+                      icon: CupertinoIcons.gear,
                       onPressed: _openAssistantSettingsPage,
-                      child: const Icon(CupertinoIcons.gear),
                     ),
             ),
       body: bodyContent,

@@ -37,6 +37,20 @@ var collections = []string{
 	"message_receipts",
 }
 
+// testProfileResolver returns deterministic display names for contract tests.
+type testProfileResolver struct{}
+
+func (testProfileResolver) ResolveMany(ctx context.Context, userIDs []string) (map[string]application.ProfileSnapshot, error) {
+	out := make(map[string]application.ProfileSnapshot, len(userIDs))
+	for _, id := range userIDs {
+		out[id] = application.ProfileSnapshot{
+			DisplayName: "Display_" + id,
+			AvatarURL:   "https://test.avatar/" + id,
+		}
+	}
+	return out, nil
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -90,9 +104,10 @@ func TestMain(m *testing.M) {
 
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
 
-	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher)
+	profiles := testProfileResolver{}
+	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher, profiles)
 	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
-	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher)
+	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher, profiles)
 	inboxSvc := application.NewInboxService(chatStore)
 
 	testHandler = chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()

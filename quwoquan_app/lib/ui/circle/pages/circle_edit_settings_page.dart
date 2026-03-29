@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -411,20 +412,15 @@ class _CircleEditSettingsPageState
             width: AppSpacing.hairline,
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => Navigator.of(context).maybePop(),
-          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           _isCreateMode
               ? UITextConstants.createCircle
               : UITextConstants.circleEditSettings,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.bold,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,

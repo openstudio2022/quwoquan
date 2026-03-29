@@ -125,6 +125,30 @@ void main() {
       expect(members, isNotEmpty);
     });
 
+    test('listMembers display_name_asc 按展示名排序', () async {
+      final members = await repo.listMembers(
+        conversationId: 'conv_002',
+        sort: 'display_name_asc',
+      );
+      final names = members
+          .map((m) => (m['displayName'] ?? m['userId']).toString())
+          .toList();
+      final sorted = [...names]..sort();
+      expect(names, orderedEquals(sorted));
+    });
+
+    test('createConversation 与 addMembers 维护 membersRosterRevision', () async {
+      final created = await repo.createConversation(
+        type: 'group',
+        title: 'rev test',
+      );
+      final id = (created['_id'] ?? created['id']).toString();
+      expect(created['membersRosterRevision'], 1);
+      await repo.addMembers(conversationId: id, userIds: ['user_099']);
+      final after = await repo.getConversation(id);
+      expect(after['membersRosterRevision'], 2);
+    });
+
     test('addMembers 不抛出异常', () async {
       await expectLater(
         repo.addMembers(conversationId: 'conv_002', userIds: ['user_new_001']),

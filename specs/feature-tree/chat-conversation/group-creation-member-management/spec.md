@@ -39,13 +39,14 @@
 
 ## 特性树拆分
 
-本 Journey 以 3 个 `L3_scenario` 收口：
+本 Journey 以 4 个 `L3_scenario` 收口：
 
 | L3 Scenario | 负责的问题 | 说明 |
 |---|---|---|
 | `group-create-flow` | 发起入口、三类选人来源、已选区、原子建群 | 本次 baseline 主场景 |
 | `member-add-remove-policy` | 建群后继续加人、互关筛选、私建群/圈子群危险操作边界 | 生命周期收口 |
 | `group-settings` | 聊天信息页成员区、资料区与退出群聊基础边界 | 复用既有冻结规格 |
+| `group-member-roster-version-sync` | 成员展示名端云一致、`ListMembers` 排序、revision/时间戳、合并推送与拉取、建群事务与并发更新分离 | `/baseline` 2026-03-29 冻结 |
 
 额外依赖但不在本 Journey 内重写：
 
@@ -67,6 +68,7 @@
 - 聊天信息页继续加人时复用同一互关准入规则
 - 私建群可解散；圈子群不可解散，生命周期绑定圈子
 - 浅色/深色双模式、蓝色主题、iOS 原画质体验
+- **成员 roster 同步**：`ListMembers` 默认按加入顺序、可选按展示名排序；成员展示名为用户展示名（`userId` 为唯一键）；`membersRosterRevision` 与 `updatedAt` **仅云端**在事务内更新；实时 **`ConversationRosterUpdated` 合并推送**，客户端按 revision/时间戳定点拉取；**创建群单事务**与**建群后多端并发更新**在云侧代码路径上分离（详见 `group-member-roster-version-sync`）
 
 ### Out of Scope
 

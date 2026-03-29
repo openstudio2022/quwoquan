@@ -255,6 +255,15 @@ class AppRoutePaths {
   }
   static const String chatAdminsSegment = 'admins';
 
+  static const String chatMemberSearchPathTemplate = '/chat/{id}/member-search';
+  static String chatMemberSearch({required String id}) {
+    return _buildPath(chatMemberSearchPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String chatMemberSearchSegment = 'member-search';
+
   static const String rtcOutgoingPathTemplate = '/rtc/outgoing/{callId}';
   static String rtcOutgoing({required String callId}) {
     return _buildPath(rtcOutgoingPathTemplate, <String, String>{

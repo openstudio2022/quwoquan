@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
@@ -58,88 +60,87 @@ class _AssistantChatSettingsPageState
         ? UITextConstants.assistantModelSelectorEmpty
         : _shortModelName(currentModel);
 
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        middle: Text(
-          UITextConstants.settings,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: fgPrimary,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
+      child: AppScaffold(
+        backgroundColor: pageBg,
+        navigationBar: AppNavigationBar(
+          middle: Text(
+            UITextConstants.settings,
+            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+          ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.back,
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => Navigator.of(context).pop(),
-          child: Icon(CupertinoIcons.back, color: fgPrimary),
-        ),
-      ),
-      child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: blockBg,
-                borderRadius: BorderRadius.circular(
-                  SettingsSemanticConstants.blockBorderRadius,
-                ),
-                border: Border.all(
-                  color: SettingsSemanticConstants.blockBorderColor(isDark),
-                ),
-              ),
-              child: Column(
-                children: [
-                  _SettingsEntryRow(
-                    title: UITextConstants.assistantSettingsBackend,
-                    value: _backendLabel(_backend),
-                    fgPrimary: fgPrimary,
-                    fgSecondary: fgSecondary,
-                    onTap: _openBackendSelector,
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.all(AppSpacing.containerMd),
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: blockBg,
+                  borderRadius: BorderRadius.circular(
+                    SettingsSemanticConstants.blockBorderRadius,
                   ),
-                  _divider(isDark),
-                  _SettingsEntryRow(
-                    title: UITextConstants.assistantSettingsModel,
-                    value: _backend == AssistantBackend.local
-                        ? modelText
-                        : UITextConstants.assistantBackendRemote,
-                    fgPrimary: fgPrimary,
-                    fgSecondary: fgSecondary,
-                    onTap: _backend == AssistantBackend.local
-                        ? _openModelSelector
-                        : null,
+                  border: Border.all(
+                    color: SettingsSemanticConstants.blockBorderColor(isDark),
                   ),
-                  _divider(isDark),
-                  if (kDebugMode) ...[
+                ),
+                child: Column(
+                  children: [
                     _SettingsEntryRow(
-                      title: UITextConstants.assistantSettingsTraceSession,
-                      value: '',
+                      title: UITextConstants.assistantSettingsBackend,
+                      value: _backendLabel(_backend),
                       fgPrimary: fgPrimary,
                       fgSecondary: fgSecondary,
-                      onTap: widget.onOpenTrace,
+                      onTap: _openBackendSelector,
                     ),
                     _divider(isDark),
+                    _SettingsEntryRow(
+                      title: UITextConstants.assistantSettingsModel,
+                      value: _backend == AssistantBackend.local
+                          ? modelText
+                          : UITextConstants.assistantBackendRemote,
+                      fgPrimary: fgPrimary,
+                      fgSecondary: fgSecondary,
+                      onTap: _backend == AssistantBackend.local
+                          ? _openModelSelector
+                          : null,
+                    ),
+                    _divider(isDark),
+                    if (kDebugMode) ...[
+                      _SettingsEntryRow(
+                        title: UITextConstants.assistantSettingsTraceSession,
+                        value: '',
+                        fgPrimary: fgPrimary,
+                        fgSecondary: fgSecondary,
+                        onTap: widget.onOpenTrace,
+                      ),
+                      _divider(isDark),
+                    ],
+                    _SettingsEntryRow(
+                      title:
+                          UITextConstants.assistantSettingsConversationHistory,
+                      value: _backend == AssistantBackend.local
+                          ? _topicTitle
+                          : UITextConstants
+                                .assistantSettingsRemoteHistoryDisabled,
+                      fgPrimary: fgPrimary,
+                      fgSecondary: fgSecondary,
+                      onTap: _backend == AssistantBackend.local
+                          ? _openHistoryPage
+                          : null,
+                    ),
                   ],
-                  _SettingsEntryRow(
-                    title: UITextConstants.assistantSettingsConversationHistory,
-                    value: _backend == AssistantBackend.local
-                        ? _topicTitle
-                        : UITextConstants
-                              .assistantSettingsRemoteHistoryDisabled,
-                    fgPrimary: fgPrimary,
-                    fgSecondary: fgSecondary,
-                    onTap: _backend == AssistantBackend.local
-                        ? _openHistoryPage
-                        : null,
-                  ),
-                ],
+                ),
               ),
-            ),
-            SizedBox(height: AppSpacing.containerMd),
-            if (_backend == AssistantBackend.local)
-              _PreferenceFactsSection(currentSessionId: _sessionId),
-          ],
+              SizedBox(height: AppSpacing.containerMd),
+              if (_backend == AssistantBackend.local)
+                _PreferenceFactsSection(currentSessionId: _sessionId),
+            ],
+          ),
         ),
       ),
     );
@@ -405,90 +406,89 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
 
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        middle: Text(
-          UITextConstants.assistantSettingsConversationHistory,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: fgPrimary,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
+      child: AppScaffold(
+        backgroundColor: pageBg,
+        navigationBar: AppNavigationBar(
+          middle: Text(
+            UITextConstants.assistantSettingsConversationHistory,
+            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+          ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.back,
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => Navigator.of(context).pop(),
-          child: Icon(CupertinoIcons.back, color: fgPrimary),
-        ),
-      ),
-      child: SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: ref.read(assistantGatewayProvider).listSessions(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CupertinoActivityIndicator());
-            }
-            final sessions = (snapshot.data ?? const <Map<String, dynamic>>[])
-                .where((item) {
-                  final sessionId = (item['sessionId'] ?? '').toString();
-                  return isAssistantSessionForBackend(
-                    sessionId,
-                    AssistantBackend.local,
-                  );
-                })
-                .toList(growable: false);
-            if (sessions.isEmpty) {
-              return Center(
-                child: Text(
-                  UITextConstants.assistantHistoryEmpty,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: fgSecondary,
+        child: SafeArea(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: ref.read(assistantGatewayProvider).listSessions(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CupertinoActivityIndicator());
+              }
+              final sessions =
+                  (snapshot.data ?? const <Map<String, dynamic>>[])
+                      .where((item) {
+                        final sessionId =
+                            (item['sessionId'] ?? '').toString();
+                        return isAssistantSessionForBackend(
+                          sessionId,
+                          AssistantBackend.local,
+                        );
+                      })
+                      .toList(growable: false);
+              if (sessions.isEmpty) {
+                return Center(
+                  child: Text(
+                    UITextConstants.assistantHistoryEmpty,
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: fgSecondary,
+                    ),
                   ),
-                ),
-              );
-            }
-            return ListView.separated(
-              padding: EdgeInsets.all(AppSpacing.containerMd),
-              itemCount: sessions.length + 1,
-              separatorBuilder: (context, index) =>
-                  SizedBox(height: AppSpacing.xs),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _SessionTile(
-                    title: UITextConstants.assistantHistoryAll,
-                    subtitle: UITextConstants.assistantHistoryAllSubtitle
-                        .replaceFirst('%s', sessions.length.toString()),
-                    selected: false,
-                    onTap: () => Navigator.of(context).pop(currentSessionId),
-                  );
-                }
-                final item = sessions[index - 1];
-                final sessionId = (item['sessionId'] ?? '').toString();
-                final title = (item['topicTitle'] ?? '').toString().trim();
-                final summary = (item['topicSummary'] ?? '').toString().trim();
-                final count = (item['messageCount'] as int?) ?? 0;
-                final subtitle = summary.isNotEmpty
-                    ? summary
-                    : UITextConstants.assistantHistoryMessageCount.replaceFirst(
-                        '%s',
-                        count.toString(),
-                      );
-                return _SessionTile(
-                  title: title.isEmpty
-                      ? UITextConstants.assistantHistoryUntitled
-                      : title,
-                  subtitle: subtitle,
-                  selected: sessionId == currentSessionId,
-                  onTap: () => Navigator.of(context).pop(sessionId),
                 );
-              },
-            );
-          },
+              }
+              return ListView.separated(
+                padding: EdgeInsets.all(AppSpacing.containerMd),
+                itemCount: sessions.length + 1,
+                separatorBuilder: (context, index) =>
+                    SizedBox(height: AppSpacing.xs),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _SessionTile(
+                      title: UITextConstants.assistantHistoryAll,
+                      subtitle: UITextConstants.assistantHistoryAllSubtitle
+                          .replaceFirst('%s', sessions.length.toString()),
+                      selected: false,
+                      onTap: () =>
+                          Navigator.of(context).pop(currentSessionId),
+                    );
+                  }
+                  final item = sessions[index - 1];
+                  final sessionId = (item['sessionId'] ?? '').toString();
+                  final title = (item['topicTitle'] ?? '').toString().trim();
+                  final summary =
+                      (item['topicSummary'] ?? '').toString().trim();
+                  final count = (item['messageCount'] as int?) ?? 0;
+                  final subtitle = summary.isNotEmpty
+                      ? summary
+                      : UITextConstants.assistantHistoryMessageCount
+                            .replaceFirst('%s', count.toString());
+                  return _SessionTile(
+                    title: title.isEmpty
+                        ? UITextConstants.assistantHistoryUntitled
+                        : title,
+                    subtitle: subtitle,
+                    selected: sessionId == currentSessionId,
+                    onTap: () => Navigator.of(context).pop(sessionId),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );

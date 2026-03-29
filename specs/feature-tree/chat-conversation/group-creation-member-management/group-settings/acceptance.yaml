@@ -1,7 +1,7 @@
 version: 1
 feature: group-settings
 level: "L3_story"
-status: specified
+status: baseline
 archived: false
 template: '2026-03-10'
 focus_groups: []
@@ -53,3 +53,30 @@ level_acceptance:
     status: pending
     test_layers:
       T4: required
+  A9:
+    criteria: 群聊信息页（ChatSettingsPage）使用全屏表单态骨架与分组组件（SettingsInsetFormPageScaffold、SettingsInsetGroupedSection、SettingsInsetFormRow、SettingsInsetFormSectionDivider）及 insetForm* 列表边距与组间距
+    status: satisfied
+    test_layers:
+      T2: required
+      T3: required
+  A10:
+    criteria: 群管理页（GroupManagePage）与群聊信息页共享同一套全屏表单态视觉（灰底顶栏、Inset Grouped 白块、hairline 分割、无默认描边大卡片）
+    status: satisfied
+    test_layers:
+      T2: required
+  A11:
+    criteria: 成员头像网格在超过 4 行容量时折叠展示，支持展开显示全部成员；添加成员入口行为不变
+    status: satisfied
+    test_layers:
+      T2: required
+  A12:
+    criteria: 群聊信息顶栏搜索（若展示）使用 GlobalTopBarIconButton 与 GlobalSearchLauncher，图标色非默认 Cupertino 蓝
+    status: satisfied
+    test_layers:
+      T2: required
+  A13:
+    criteria: 群管理页解散确认与相关 Toast 等用户可见文案不硬编码中文（UITextConstants 或 l10n）
+    status: satisfied
+    test_layers:
+      T1: required
+      T2: required

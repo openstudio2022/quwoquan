@@ -124,6 +124,35 @@
 - 主题以蓝色强调，但分割线、圆角、背景层次比微信更轻、更干净
 - 若缺少用于“已选头像折叠区”或“蓝色主按钮 disable/enable 态”的 token，先补 token 再写业务 UI
 
+### KD-8：成员展示名端云 / Mock 一致
+
+- `ConversationMember.displayName`（及 `avatarUrl`）由 **chat-service 写入时 enrichment**（用户展示名真相源在 user 域），端侧 **禁止** 长期依赖裸 `userId` 当展示名。
+- **重名允许**；列表与 UI 去重、跳转、权限一律以 **`userId` 唯一键**。
+- `MockChatRepository` 必须使用与云侧相同的字段语义（如 `nameFor(userId)`），不得再写入 `displayName: userId` 作为常态。
+
+### KD-9：ListMembers 排序
+
+- Query `sort` 枚举 `MemberListSort`：`joined_asc`（**默认**）、`display_name_asc`。
+- `display_name_asc` 第二排序键为 `userId` 升序。
+- 建群批量初始成员在同一事务内须写入 **严格单调** 的 `joinedAt`（或后续 CR 引入 `joinSequence`），保证 `joined_asc` 稳定。
+
+### KD-10：版本与时间戳仅云端
+
+- `Conversation.membersRosterRevision` 与 `Conversation.updatedAt` **只在服务端事务内**更新；影响面包括成员集合变化与聊天信息页可见群设置项变更（`aspects` 在设计中枚举）。
+- 客户端仅用其做 **缓存失效与拉取决策**，禁止本地伪造 revision。
+
+### KD-11：推送合并与拉取
+
+- 对外实时主事件：**`ConversationRosterUpdated`**，合并窗口 **50–100ms**（可配置），窗口内多条变更合并为 **一条** 推送，payload 携带最新 `membersRosterRevision`、`updatedAt`、`aspects`。
+- `MemberJoined`/`MemberLeft` 保留域内/审计；客户端主路径迁移至 `ConversationRosterUpdated`。
+- 拉取：`ListConversationTimestamps` / `GetConversation` 与 `updatedAt` 对齐；revision 变化则定点 `ListMembers` + 必要设置接口。
+
+### KD-12：建群事务 vs 并发更新
+
+- **CreateConversation**：单事务创建会话 + 群主 + 初始成员 + `ConversationUserState` + **首版 revision / updatedAt**。
+- **建群后更新**（`AddMembers`、`RemoveMember`、群名/管理员/规则等）：**独立事务**，允许多端并发；每事务内递增 revision 并刷新 `updatedAt`。
+- **其他成员**不参与创建事务；仅通过推送 + 拉取达到一致。
+
 ## metadata / codegen 方案
 
 本次 `/dev` 前的 metadata 真相源建议如下：
@@ -144,6 +173,13 @@
   - 扩展原子建群 contract
   - 新增候选源/候选成员查询 operation
   - 冻结 `DissolveConversation` 仅对私建群生效
+  - `ListMembers` 增加 `sort` query（`MemberListSort`）
+- `contracts/metadata/messages/conversation/fields.yaml`
+  - `Conversation.membersRosterRevision`
+- `contracts/metadata/messages/conversation/events.yaml`
+  - `ConversationRosterUpdated`（合并推送）；`MemberJoined` 标注为域内/审计向
+- `contracts/metadata/_shared/types.yaml`
+  - `MemberListSort` 枚举
 
 ### circle contract
 
@@ -201,6 +237,7 @@
 | 群来源 / 成员来源 sheet | schema contract | widget | integration | 真机交互 |
 | 原子建群 | contract | journey | API + storage + inbox | 主路径旅程 |
 | 后续加人 / 解散边界 | contract | widget | API + inbox cleanup | 主路径旅程 |
+| 成员 roster / revision / 合并推送 | metadata + contract | provider + handler | API + Redis + 双账号 | 主路径旅程 |
 
 ## 未来演进
 

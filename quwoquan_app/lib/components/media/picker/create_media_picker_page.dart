@@ -283,10 +283,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
         backgroundColor: bg,
         navigationBar: AppNavigationBar(
           backgroundColor: bg,
-          leading: CupertinoButton(
-            padding: EdgeInsets.zero,
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.xmark,
             onPressed: () => Navigator.of(context).pop(),
-            child: Icon(CupertinoIcons.xmark, color: fg),
           ),
         ),
         child: Center(
@@ -325,14 +324,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       height: AppSpacing.toolbarHeight,
       child: Row(
         children: [
-          CupertinoButton(
-            padding: EdgeInsets.zero,
+          AppNavigationBarIconButton(
+            icon: CupertinoIcons.xmark,
             onPressed: () => Navigator.of(context).pop(),
-            minimumSize: Size(
-              AppSpacing.minInteractiveSize,
-              AppSpacing.minInteractiveSize,
-            ),
-            child: Icon(CupertinoIcons.xmark, color: fg),
           ),
           Expanded(
             child: Center(

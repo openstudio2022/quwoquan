@@ -93,6 +93,18 @@ entities:
         ops_exposure: read
         description: 当前成员数（冗余，避免 count 查询）
 
+      - name: membersRosterRevision
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          群 roster/设置影响面修订号，仅由 chat-service 在事务内单调递增。
+          任意影响「成员列表、群名称、群管理规则（可见设置项）」的变更均须与 Conversation.updatedAt 一并更新。
+          客户端用其与本地缓存比对，决定重拉 GetConversation / ListMembers / 群设置。
+
       - name: maxGroupSize
         type: int
         constraints: [NOT_NULL]

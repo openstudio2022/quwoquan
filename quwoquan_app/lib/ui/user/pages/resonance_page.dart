@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
@@ -207,18 +208,13 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
         middle: Text(
           UITextConstants.myResonance,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       child: Column(

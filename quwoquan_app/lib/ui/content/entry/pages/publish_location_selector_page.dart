@@ -4,7 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -94,24 +96,18 @@ class _PublishLocationSelectorPageState
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
         middle: Text(
           l10n.locationNearbyTitle,
-          style: TextStyle(
-            fontWeight: AppTypography.semiBold,
-            fontSize: AppTypography.sectionTitle,
-            color: isDark ? CupertinoColors.white : CupertinoColors.black,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.xmark),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.search),
+        trailing: AppNavigationBarIconButton(
+          icon: CupertinoIcons.search,
           onPressed: () async {
             final navigator = Navigator.of(context);
             final result = await Navigator.of(context)
@@ -129,9 +125,7 @@ class _PublishLocationSelectorPageState
           },
         ),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
+      child: SafeArea(
           child: _loading
               ? Center(
                   child: Column(
@@ -164,7 +158,6 @@ class _PublishLocationSelectorPageState
                     for (final item in _items) _buildLocationTile(item),
                   ],
                 ),
-        ),
       ),
     );
   }
@@ -320,26 +313,19 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
         middle: Text(
           l10n.locationSearchTitle,
-          style: TextStyle(
-            fontWeight: AppTypography.semiBold,
-            fontSize: AppTypography.sectionTitle,
-            color: isDark ? CupertinoColors.white : CupertinoColors.black,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.xmark),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          child: Column(
+      child: SafeArea(
+        child: Column(
             children: [
               Padding(
                 padding: EdgeInsets.all(AppSpacing.interGroupMd),
@@ -381,7 +367,6 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
               ),
             ],
           ),
-        ),
       ),
     );
   }

@@ -1,14 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
@@ -62,6 +61,56 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
     } catch (_) {}
   }
 
+  Future<void> _onConfirmDissolve() async {
+    try {
+      await ref.read(chatRepositoryProvider).dissolveConversation(
+            widget.conversationId,
+          );
+      if (ref.read(chatInboxListEnabledProvider)) {
+        await ref.read(chatInboxListProvider.notifier).refresh();
+      } else {
+        await ref.read(conversationSyncProvider).sync(force: true);
+      }
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.groupChatDissolvedToast);
+      context.go(AppRoutePaths.chat);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.dissolveGroupChatFailedToast);
+    }
+  }
+
+  void _showDissolveDialog() {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(UITextConstants.dissolveGroupChat),
+        content: Padding(
+          padding: EdgeInsets.only(top: AppSpacing.sm),
+          child: Text(UITextConstants.dissolveGroupChatConfirmMessage),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(UITextConstants.cancel),
+            onPressed: () => Navigator.pop(dialogContext),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(UITextConstants.confirm),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _onConfirmDissolve();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
@@ -69,283 +118,155 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
       conversationMembersProvider(widget.conversationId),
     );
     final isOwner = membersState.isOwner;
-    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final blockSurface = SettingsSemanticConstants.blockBackground(isDark);
-    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
-    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
-    final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
+    final chevronColor =
+        SettingsSemanticConstants.selectionChevronColor(isDark);
 
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: blockSurface,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(
-          UITextConstants.groupManagement,
-          style: TextStyle(
-            color: fgPrimary,
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w600,
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.groupManagement,
+      onBack: () => context.pop(),
+      body: SizedBox.expand(
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+            top: AppSpacing.intraGroupSm,
+            bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
           ),
-        ),
-        border: Border(
-          bottom: BorderSide(color: dividerColor, width: AppSpacing.one),
-        ),
-      ),
-      body: ListView(
-        children: [
-          _section(
-            blockSurface: blockSurface,
-            isDark: isDark,
-            child: _buildSwitchRow(
-              label: UITextConstants.qrCodeJoin,
-              value: _qrCodeJoinEnabled,
+          children: [
+            SettingsInsetGroupedSection(
               isDark: isDark,
-              onChanged: (v) {
-                setState(() => _qrCodeJoinEnabled = v);
-                _updateSetting('qrCodeJoinEnabled', v);
-              },
-            ),
-          ),
-          SizedBox(height: SettingsSemanticConstants.blockSpacing),
-          _section(
-            blockSurface: blockSurface,
-            isDark: isDark,
-            child: Column(
-              children: [
-                _buildSwitchRow(
-                  label: UITextConstants.joinRequiresApproval,
-                  value: _joinRequiresApproval,
-                  isDark: isDark,
-                  onChanged: (v) {
-                    setState(() => _joinRequiresApproval = v);
-                    _updateSetting('joinRequiresApproval', v);
-                  },
-                ),
-                _divider(isDark),
-                _buildSwitchRow(
-                  label: UITextConstants.nameEditableByAdminOnly,
-                  value: _nameEditableByAdminOnly,
-                  isDark: isDark,
-                  onChanged: (v) {
-                    setState(() => _nameEditableByAdminOnly = v);
-                    _updateSetting('nameEditableByAdminOnly', v);
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (isOwner) ...[
-            SizedBox(height: SettingsSemanticConstants.blockSpacing),
-            _section(
-              blockSurface: blockSurface,
-              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
               child: Column(
                 children: [
-                  _buildNavRow(
-                    label: UITextConstants.transferOwnership,
-                    fgPrimary: fgPrimary,
-                    secondaryColor: secondaryColor,
-                    onTap: () => context.push(
-                      AppRoutePaths.chatTransferOwnership(
-                        id: widget.conversationId,
-                      ),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
+                    label: UITextConstants.qrCodeJoin,
+                    trailing: CupertinoSwitch(
+                      value: _qrCodeJoinEnabled,
+                      onChanged: (v) {
+                        setState(() => _qrCodeJoinEnabled = v);
+                        _updateSetting('qrCodeJoinEnabled', v);
+                      },
+                      activeTrackColor:
+                          SettingsSemanticConstants.switchActiveTrackColor,
+                      inactiveTrackColor:
+                          SettingsSemanticConstants.switchInactiveTrackColor(
+                            isDark,
+                          ),
                     ),
                   ),
-                  _divider(isDark),
-                  _buildNavRow(
-                    label: UITextConstants.groupAdmins,
-                    fgPrimary: fgPrimary,
-                    secondaryColor: secondaryColor,
-                    onTap: () => context.push(
-                      AppRoutePaths.chatAdmins(id: widget.conversationId),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
+                    label: UITextConstants.joinRequiresApproval,
+                    trailing: CupertinoSwitch(
+                      value: _joinRequiresApproval,
+                      onChanged: (v) {
+                        setState(() => _joinRequiresApproval = v);
+                        _updateSetting('joinRequiresApproval', v);
+                      },
+                      activeTrackColor:
+                          SettingsSemanticConstants.switchActiveTrackColor,
+                      inactiveTrackColor:
+                          SettingsSemanticConstants.switchInactiveTrackColor(
+                            isDark,
+                          ),
+                    ),
+                  ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
+                    label: UITextConstants.nameEditableByAdminOnly,
+                    trailing: CupertinoSwitch(
+                      value: _nameEditableByAdminOnly,
+                      onChanged: (v) {
+                        setState(() => _nameEditableByAdminOnly = v);
+                        _updateSetting('nameEditableByAdminOnly', v);
+                      },
+                      activeTrackColor:
+                          SettingsSemanticConstants.switchActiveTrackColor,
+                      inactiveTrackColor:
+                          SettingsSemanticConstants.switchInactiveTrackColor(
+                            isDark,
+                          ),
                     ),
                   ),
                 ],
               ),
             ),
-            if (_conversationType != 'circle') ...[
-              SizedBox(height: SettingsSemanticConstants.blockSpacing),
-              _section(
-                blockSurface: blockSurface,
+            if (isOwner) ...[
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
                 isDark: isDark,
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: () {
-                    showCupertinoDialog<void>(
-                      context: context,
-                      builder: (_) => CupertinoAlertDialog(
-                        title: Text(UITextConstants.dissolveGroupChat),
-                        content: const Text('解散后所有成员将被移出群聊，此操作不可撤销。'),
-                        actions: [
-                          CupertinoDialogAction(
-                            child: Text(UITextConstants.cancel),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            child: Text(UITextConstants.confirm),
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              try {
-                                await ref
-                                    .read(chatRepositoryProvider)
-                                    .dissolveConversation(
-                                      widget.conversationId,
-                                    );
-                                if (ref.read(chatInboxListEnabledProvider)) {
-                                  await ref
-                                      .read(chatInboxListProvider.notifier)
-                                      .refresh();
-                                } else {
-                                  await ref
-                                      .read(conversationSyncProvider)
-                                      .sync(force: true);
-                                }
-                                if (!context.mounted) {
-                                  return;
-                                }
-                                AppToast.show(context, '群聊已解散');
-                                context.go(AppRoutePaths.chat);
-                              } catch (_) {
-                                if (!context.mounted) {
-                                  return;
-                                }
-                                AppToast.show(context, '解散群聊失败，请稍后重试');
-                              }
-                            },
-                          ),
-                        ],
+                density: SettingsInsetSectionDensity.compact,
+                child: Column(
+                  children: [
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.transferOwnership,
+                      trailing: Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: AppSpacing.iconMedium,
+                        color: chevronColor,
                       ),
-                    );
-                  },
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: AppSpacing.buttonHeight,
-                    child: Center(
-                      child: Text(
-                        UITextConstants.dissolveGroupChat,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w500,
-                          color: SettingsSemanticConstants.exitActionColor(
-                            isDark,
+                      onTap: () => context.push(
+                        AppRoutePaths.chatTransferOwnership(
+                          id: widget.conversationId,
+                        ),
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.groupAdmins,
+                      trailing: Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: AppSpacing.iconMedium,
+                        color: chevronColor,
+                      ),
+                      onTap: () => context.push(
+                        AppRoutePaths.chatAdmins(id: widget.conversationId),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_conversationType != 'circle') ...[
+                SizedBox(
+                  height:
+                      SettingsSemanticConstants.insetFormSectionVerticalGap,
+                ),
+                SettingsInsetGroupedSection(
+                  isDark: isDark,
+                  density: SettingsInsetSectionDensity.compact,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _showDissolveDialog,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: AppSpacing.buttonHeight,
+                      child: Center(
+                        child: Text(
+                          UITextConstants.dissolveGroupChat,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.medium,
+                            color: SettingsSemanticConstants.exitActionColor(
+                              isDark,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _section({
-    required Color blockSurface,
-    required bool isDark,
-    required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-        vertical: SettingsSemanticConstants.sectionVerticalPadding,
-      ),
-      decoration: BoxDecoration(
-        color: blockSurface,
-        border: Border.all(
-          color: SettingsSemanticConstants.blockBorderColor(isDark),
-        ),
-      ),
-      child: child,
-    );
-  }
-
-  Widget _divider(bool isDark) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
-      child: Divider(
-        height: AppSpacing.one,
-        thickness: SettingsSemanticConstants.dividerThickness,
-        color: SettingsSemanticConstants.dividerColor(isDark),
-      ),
-    );
-  }
-
-  Widget _buildSwitchRow({
-    required String label,
-    required bool value,
-    required bool isDark,
-    required ValueChanged<bool> onChanged,
-  }) {
-    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
-    return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
-              ),
-            ),
-            CupertinoSwitch(
-              value: value,
-              onChanged: onChanged,
-              activeTrackColor:
-                  SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor:
-                  SettingsSemanticConstants.switchInactiveTrackColor(isDark),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavRow({
-    required String label,
-    required Color fgPrimary,
-    required Color secondaryColor,
-    required VoidCallback onTap,
-  }) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    color: fgPrimary,
-                  ),
-                ),
-              ),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconMedium,
-                color: secondaryColor,
-              ),
-            ],
-          ),
         ),
       ),
     );

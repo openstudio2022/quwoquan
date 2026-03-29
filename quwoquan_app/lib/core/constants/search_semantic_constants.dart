@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -61,4 +62,48 @@ class SearchSemanticConstants {
 
   static Color iconColor(BuildContext context) =>
       AppColors.iosTertiaryLabel(context);
+
+  // ==================== 嵌入式成员搜索（全屏 / 顶栏下条）====================
+
+  /// 全屏成员搜索页主背景（与 Inset Grouped 表单灰底一致）。
+  static Color embeddedMemberSearchPageBackground(bool isDark) =>
+      SettingsSemanticConstants.insetFormPageBackground(isDark);
+
+  /// 搜索条区域灰带背景（顶栏下或独立页首条）。
+  static Color embeddedMemberSearchChromeBackground(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted);
+
+  /// 「取消」等次要操作文字色（主标签色，非强调蓝）。
+  static Color embeddedMemberSearchActionLabelColor(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+
+  /// 内嵌「选人群」搜索条里，已选成员头像边长（置于输入框内，小于列表行头像）。
+  static double get embeddedMemberSearchChipAvatarSize =>
+      AppSpacing.largeButtonSize * 0.72;
+
+  /// 选人头 + 搜索框容器因换行/增删选中项时的尺寸过渡。
+  static Duration get embeddedMemberSearchChipsLayoutDuration =>
+      const Duration(milliseconds: 220);
+
+  static Curve get embeddedMemberSearchChipsLayoutCurve =>
+      Curves.easeInOutCubic;
+
+  /// 与 [embeddedMemberSearchChipAvatarSize] 对齐的输入区最小高度（含行内对齐）。
+  static double get embeddedMemberSearchChipsRowMinHeight =>
+      embeddedMemberSearchChipAvatarSize + AppSpacing.xs;
+
+  /// 「选人群」芯片条内联输入：占位比 [placeholderTextStyle] 更淡（深浅色均用 tertiary）。
+  static TextStyle embeddedMemberSearchChipsPlaceholderStyle(
+    BuildContext context,
+  ) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return inputTextStyle(context).copyWith(
+      color: AppColors.iosTertiaryLabel(context).withValues(
+        alpha: isDark ? 0.88 : 0.72,
+      ),
+    );
+  }
+
+  /// 与头像同一行时，输入槽最小宽度（约「搜索」二字 + 内边距）；仅当行剩余小于此值时才整段换行。
+  static const double embeddedMemberSearchChipsInlineInputMinWidth = 48.0;
 }

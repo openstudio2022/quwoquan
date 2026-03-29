@@ -165,14 +165,17 @@ func TestEventPublish_MessageRecalled(t *testing.T) {
 	}
 }
 
-func TestEventPublish_MemberJoined(t *testing.T) {
+func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"group","title":"member event"}`)
+	conv := createConversation(t, `{"type":"group","title":"roster event on add"}`)
 	convId := conv["_id"].(string)
 
+	// Create path publishes ConversationRosterUpdated in a goroutine; wait it out.
+	time.Sleep(300 * time.Millisecond)
+
 	channel := "rt:conversation:" + convId
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
 	if err != nil {
@@ -183,17 +186,75 @@ func TestEventPublish_MemberJoined(t *testing.T) {
 
 	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_new_1"]}`, "user_test_001", http.StatusOK)
 
-	select {
-	case raw := <-sub.Channel():
-		var evt mqpkg.DomainEvent
-		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
-			t.Fatalf("unmarshal: %v", err)
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case raw := <-sub.Channel():
+			var evt mqpkg.DomainEvent
+			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if evt.Type != event.ConversationRosterUpdated {
+				continue
+			}
+			if evt.Payload["membersRosterRevision"] == nil {
+				t.Fatal("expected payload.membersRosterRevision")
+			}
+			rev, ok := evt.Payload["membersRosterRevision"].(float64)
+			if !ok {
+				t.Fatalf("membersRosterRevision type %T", evt.Payload["membersRosterRevision"])
+			}
+			if rev < 2 {
+				t.Errorf("expected membersRosterRevision>=2 after add, got %v", rev)
+			}
+			return
+		case <-deadline:
+			t.Fatal("ConversationRosterUpdated event not received within timeout")
 		}
-		if evt.Type != event.MemberJoined {
-			t.Errorf("expected type=%s, got %s", event.MemberJoined, evt.Type)
+	}
+}
+
+func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	conv := createConversation(t, `{"type":"group","title":"roster debounce"}`)
+	convId := conv["_id"].(string)
+	time.Sleep(300 * time.Millisecond)
+
+	channel := "rt:conversation:" + convId
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_a"]}`, "user_test_001", http.StatusOK)
+	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_b"]}`, "user_test_001", http.StatusOK)
+
+	rosterCount := 0
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		select {
+		case raw := <-sub.Channel():
+			var evt mqpkg.DomainEvent
+			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if evt.Type == event.ConversationRosterUpdated {
+				rosterCount++
+				if rosterCount > 1 {
+					t.Fatalf("expected single merged roster event, got %d", rosterCount)
+				}
+			}
+		default:
+			time.Sleep(5 * time.Millisecond)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("MemberJoined event not received within timeout")
+	}
+	if rosterCount != 1 {
+		t.Fatalf("expected exactly 1 ConversationRosterUpdated after debounce window, got %d", rosterCount)
 	}
 }
 
@@ -204,6 +265,8 @@ func TestEventPublish_MemberLeft(t *testing.T) {
 	convId := conv["_id"].(string)
 
 	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_leave_1"]}`, "user_test_001", http.StatusOK)
+	// Let debounced ConversationRosterUpdated from AddMembers flush before we subscribe for RemoveMember.
+	time.Sleep(300 * time.Millisecond)
 
 	channel := "rt:conversation:" + convId
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -217,17 +280,20 @@ func TestEventPublish_MemberLeft(t *testing.T) {
 
 	doDelete(t, "/v1/chat/conversations/"+convId+"/members/user_leave_1", "user_test_001")
 
-	select {
-	case raw := <-sub.Channel():
-		var evt mqpkg.DomainEvent
-		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
-			t.Fatalf("unmarshal: %v", err)
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case raw := <-sub.Channel():
+			var evt mqpkg.DomainEvent
+			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if evt.Type == event.MemberLeft {
+				return
+			}
+		case <-deadline:
+			t.Fatal("MemberLeft event not received within timeout")
 		}
-		if evt.Type != event.MemberLeft {
-			t.Errorf("expected type=%s, got %s", event.MemberLeft, evt.Type)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("MemberLeft event not received within timeout")
 	}
 }
 
@@ -481,6 +547,7 @@ func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 		event.MessageSent,
 		event.MessageRecalled,
 		event.MemberJoined,
+		event.ConversationRosterUpdated,
 		event.MemberLeft,
 		event.ConversationCreated,
 		event.ConversationSettingsUpdated,

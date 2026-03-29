@@ -108,7 +108,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final textField = find.byType(CupertinoSearchTextField);
+      final textField = find.byType(CupertinoTextField);
       expect(textField, findsOneWidget);
 
       await tester.enterText(textField, '李明');
@@ -175,6 +175,7 @@ class _ErrorMembersRepo extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     throw Exception('network error');
   }
@@ -187,6 +188,7 @@ class _EmptyMembersRepo extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     return [];
   }

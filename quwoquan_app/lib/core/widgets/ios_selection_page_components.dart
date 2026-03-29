@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 enum IosSelectionHeaderLeadingStyle { back, close }
 
@@ -79,41 +81,28 @@ class IosSelectionPageHeader extends StatelessWidget
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = AppColors.iosSystemBackground(
       context,
     ).withValues(alpha: 0.94);
     final borderColor = AppColors.iosSeparator(context).withValues(alpha: 0.12);
-    final foreground = AppColors.iosLabel(context);
     return CupertinoNavigationBar(
       backgroundColor: background,
       border: Border(
         bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
       ),
-      leading: leadingStyle == IosSelectionHeaderLeadingStyle.back
-          ? CupertinoNavigationBarBackButton(
-              color: foreground,
-              previousPageTitle: '',
-              onPressed: onBack,
-            )
-          : CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.square(AppSpacing.minInteractiveSize),
-              onPressed: onBack,
-              child: Icon(
-                CupertinoIcons.xmark,
-                color: foreground,
-                size: AppSpacing.iconMedium,
-              ),
-            ),
+      automaticallyImplyLeading: false,
+      leading: AppNavigationBarIconButton(
+        icon: leadingStyle == IosSelectionHeaderLeadingStyle.back
+            ? CupertinoIcons.back
+            : CupertinoIcons.xmark,
+        onPressed: onBack,
+      ),
       middle: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: foreground,
-          fontSize: AppTypography.xl,
-          fontWeight: AppTypography.medium,
-        ),
+        style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
       ),
       trailing: trailing,
     );

@@ -41,6 +41,7 @@ class _PickerChatRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     if (conversationId == 'conv_002') {
       return <Map<String, dynamic>>[

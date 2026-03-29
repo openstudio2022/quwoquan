@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 
 /// 私人助理管理页
 ///
@@ -45,18 +46,13 @@ class _AssistantManagementPageState
       backgroundColor: pageBg,
       navigationBar: AppNavigationBar(
         backgroundColor: blockBg,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: widget.onBack,
-          child: Icon(CupertinoIcons.back, color: fgPrimary),
         ),
         middle: Text(
           AppConceptConstants.assistantManagementTitle,
-          style: TextStyle(
-            fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w700,
-            color: fgPrimary,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
       child: SingleChildScrollView(

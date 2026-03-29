@@ -84,6 +84,8 @@ routes:
     path: /chat/{id}/transfer-ownership
   - id: chatAdmins
     path: /chat/{id}/admins
+  - id: chatMemberSearch
+    path: /chat/{id}/member-search
   - id: rtcOutgoing
     path: /rtc/outgoing/{callId}
   - id: rtcIncoming

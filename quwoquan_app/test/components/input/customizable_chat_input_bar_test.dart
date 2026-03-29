@@ -112,12 +112,12 @@ void main() {
         ),
       );
 
-      expect(find.byIcon(CupertinoIcons.waveform), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.mic), findsOneWidget);
 
       await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.byIcon(CupertinoIcons.keyboard), findsOneWidget);
+      expect(find.byIcon(Icons.keyboard_outlined), findsOneWidget);
       expect(find.text(UITextConstants.chatVoiceHoldToTalk), findsOneWidget);
     });
   });

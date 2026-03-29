@@ -194,6 +194,7 @@ class _ErrorMembersRepo extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     throw Exception('network error');
   }
@@ -206,6 +207,7 @@ class _EmptyMembersRepo extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
+    String? sort,
   }) async {
     return [];
   }

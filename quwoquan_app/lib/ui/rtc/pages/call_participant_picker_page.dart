@@ -7,6 +7,8 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
@@ -204,17 +206,20 @@ class _CallParticipantPickerPageState
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredContacts;
+    final isDark = ref.watch(isDarkProvider);
 
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
           onPressed: () {
             if (context.canPop()) context.pop();
           },
-          child: const Icon(CupertinoIcons.xmark),
         ),
-        middle: const Text('邀请参与者'),
+        middle: Text(
+          '邀请参与者',
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _selectedIds.isNotEmpty ? _onConfirm : null,
@@ -229,10 +234,8 @@ class _CallParticipantPickerPageState
           ),
         ),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          child: Column(
+      child: SafeArea(
+        child: Column(
             children: [
               _buildSourceTabs(),
               if (_source == _ParticipantSource.otherGroups)
@@ -347,7 +350,6 @@ class _CallParticipantPickerPageState
             ],
           ),
         ),
-      ),
     );
   }
 

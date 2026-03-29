@@ -7,6 +7,7 @@ derived_from:
   acceptance: acceptance.yaml
   changelog:
     - specs/changelog/CR-20260324-001-group-create-lifecycle-baseline.yaml
+    - specs/changelog/CR-20260329-001-group-member-roster-version-sync-baseline.yaml
 
 slices:
   - id: P1
@@ -109,4 +110,72 @@ slices:
       - 浅色/深色、compact/regular/expanded 三档体验稳定
       - 一把升级口径、无兼容分支与整版发布回退说明明确
       - `/dev` 可按固定切片顺序执行
+    status: planned
+
+  - id: P7
+    title: roster metadata baseline and app codegen
+    goal: membersRosterRevision、MemberListSort、ConversationRosterUpdated 已落盘；verify-metadata + codegen-app 通过
+    depends_on: []
+    acceptance_refs:
+      - J4
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - make -C quwoquan_service verify-metadata 通过
+      - make -C quwoquan_service codegen-app 通过
+    status: completed
+
+  - id: P8
+    title: chat-service model and publisher align to metadata
+    goal: Go Conversation 含 MembersRosterRevision；事件常量含 ConversationRosterUpdated；Publisher 白名单已注册
+    depends_on:
+      - P7
+    acceptance_refs:
+      - J4
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - go build ./services/chat-service/... 通过
+    status: completed
+
+  - id: P9
+    title: implement ListMembers sort, revision bump, joinedAt monotonicity
+    goal: Mongo 查询、游标与创建路径符合 design；契约测试覆盖
+    depends_on:
+      - P8
+    acceptance_refs:
+      - J4
+    planned_evidence:
+      - T3_cross_service_integration
+    done_when:
+      - member_management / group_lifecycle 相关 contract tests 覆盖 sort 与 revision
+    status: planned
+
+  - id: P10
+    title: profile enrichment and merged ConversationRosterUpdated emission
+    goal: displayName 写入；防抖合并推送；修正仅对新成员发事件
+    depends_on:
+      - P9
+    acceptance_refs:
+      - J4
+    planned_evidence:
+      - T3_cross_service_integration
+    done_when:
+      - EventSpy 验证合并与 revision 负载
+    status: planned
+
+  - id: P11
+    title: app mock parity and realtime handler
+    goal: Mock 与 Remote 一致；RealtimeMessageHandler 消费 ConversationRosterUpdated；conversationMembersProvider 定点刷新
+    depends_on:
+      - P7
+    acceptance_refs:
+      - J2
+      - J4
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - journey / widget 测试覆盖信息页成员刷新
     status: planned

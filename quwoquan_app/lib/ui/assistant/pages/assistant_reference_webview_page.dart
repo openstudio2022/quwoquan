@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
@@ -65,31 +66,24 @@ class _AssistantReferenceWebViewPageState
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final title = widget.source.trim().isNotEmpty
         ? widget.source.trim()
         : widget.title.trim().isNotEmpty
         ? widget.title.trim()
         : UITextConstants.assistantReferenceSectionTitle;
     return AppScaffold(
-      backgroundColor: SettingsSemanticConstants.pageBackground(false),
+      backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: AppNavigationBar(
         middle: Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: SettingsSemanticConstants.labelColor(false),
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () => Navigator.of(context).pop(),
-          child: Icon(
-            CupertinoIcons.back,
-            color: SettingsSemanticConstants.labelColor(false),
-          ),
         ),
         trailing: _isLoading
             ? const Padding(

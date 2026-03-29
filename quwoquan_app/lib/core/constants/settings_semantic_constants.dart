@@ -1,18 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// 设置页统一语义 token，供聊天设置、账号设置等所有设置类页面复用。
 /// 浅色/深色模式均通过 [isDark] 区分，确保一致。
+///
+/// **全屏 Inset Grouped 表单**（iOS 设置式灰底 + 白卡片）：使用 [insetFormPageBackground]、
+/// [insetFormSectionSurface]、[insetFormListHorizontalPadding] 等；页面骨架为
+/// `SettingsInsetFormPageScaffold`（`lib/components/settings_form/settings_inset_form_page.dart`）。
 class SettingsSemanticConstants {
   SettingsSemanticConstants._();
 
   // ==================== 页面与功能块 ====================
-  /// 设置页整体背景色（浅色：偏灰；深色：深灰）
+  /// 列表/表单类设置页整页底色。
+  ///
+  /// **与首页「关注」Tab 一致**：等同 [ColorType.pageBackground] /
+  /// [AppColors.iosPageBackground] 解析结果（`iosGroupedBackground`），勿再用
+  /// [ColorType.backgroundSecondary]（那是卡片表面色，会偏白）。
   static Color pageBackground(bool isDark) =>
-      AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+      AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+
+  /// 状态栏与底部导航栏图标：与 [MainAppShell]、[AppTheme.systemUiOverlayStyleFor] 对齐；
+  /// 页面使用 [pageBackground] 时应包一层 [AnnotatedRegion] 以免被其它页改写后未恢复。
+  static SystemUiOverlayStyle pageChromeOverlayStyle(bool isDark) =>
+      AppTheme.systemUiOverlayStyleFor(
+        isDark ? Brightness.dark : Brightness.light,
+      );
 
   /// 功能块背景色（浅色：白；深色：深黑）
   static Color blockBackground(bool isDark) =>
@@ -29,6 +46,58 @@ class SettingsSemanticConstants {
 
   /// 功能块之间垂直间距（与设计一致，偏小）
   static double get blockSpacing => AppSpacing.sm + AppSpacing.xs; // 12
+
+  // ==================== 全屏 Inset Grouped 表单页（iOS 设置类）====================
+  /// 整页背景：与 [pageBackground] 同源（首页关注 / 灰底 grouped）。
+  static Color insetFormPageBackground(bool isDark) => pageBackground(isDark);
+
+  /// 分组卡片表面（白块 / 深灰块），与 [AppColors.iosGroupedSurface] 一致。
+  static Color insetFormSectionSurface(bool isDark) => isDark
+      ? AppColors.iosGroupedSurfaceDark
+      : AppColors.iosGroupedSurfaceLight;
+
+  /// Inset grouped 分组圆角（与 `settings_page` `_SettingsGroup`、系统设置卡片一致）。
+  static double get insetFormSectionCornerRadius => AppSpacing.largeBorderRadius;
+
+  /// 表单列表相对屏幕的左右内边距（与系统设置列表边距一致）。
+  static double get insetFormListHorizontalPadding =>
+      AppSpacing.semantic[DesignSemanticConstants
+          .container]?[DesignSemanticConstants.md] ??
+      AppSpacing.containerMd;
+
+  /// 相邻分组之间的垂直间距。
+  static double get insetFormSectionVerticalGap => blockSpacing;
+
+  /// 顶栏背景：与页面灰底一致（避免白顶栏 + 灰内容区的材质冲突）。
+  static Color insetFormNavigationBarBackground(bool isDark) =>
+      insetFormPageBackground(isDark);
+
+  /// 顶栏底部分割线（hairline）。
+  static Color insetFormNavigationBarBorderColor(bool isDark) {
+    final c = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    return c.withValues(alpha: isDark ? 0.38 : 0.22);
+  }
+
+  /// 顶栏标题字色（主标签，非强调蓝）。
+  static Color insetFormNavigationBarTitleColor(bool isDark) =>
+      labelColor(isDark);
+
+  /// 顶栏返回、搜索等操作图标色（**禁止**使用品牌蓝作默认返回色）。
+  static Color insetFormNavigationBarActionIconColor(bool isDark) =>
+      labelColor(isDark);
+
+  /// 分组内行分割线（对齐 iOS separator 观感）。
+  static Color insetFormSectionDividerColor(bool isDark) {
+    final c = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    return c.withValues(alpha: isDark ? 0.32 : 0.22);
+  }
+
+  /// 分组内边距：紧凑（多行列表项）。
+  static double get insetFormSectionPaddingVerticalCompact => AppSpacing.containerSm;
+
+  /// 分组内边距：标准（含成员网格等较高内容）。
+  static double get insetFormSectionPaddingVerticalStandard =>
+      sectionVerticalPadding;
 
   /// 功能块圆角
   static double get blockBorderRadius => AppSpacing.borderRadius;

@@ -78,6 +78,7 @@ enums:
   SearchScope: [all, content, social_relation, messages, circles]
   ProfileVisibility: [public, friends, private]
   MemberRole: [owner, admin, member]
+  MemberListSort: [joined_asc, display_name_asc]
   MemberType: [user, assistant]
   TransportType: [websocket, long_poll]
   CallType: [audio, video]

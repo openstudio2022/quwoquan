@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -134,12 +135,8 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         backgroundColor: background,
         navigationBar: AppNavigationBar(
           backgroundColor: Colors.transparent,
-          leading: CupertinoButton(
-            padding: EdgeInsets.zero,
-            child: Icon(
-              CupertinoIcons.back,
-              color: CupertinoColors.label.resolveFrom(context),
-            ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.back,
             onPressed: () => context.canPop()
                 ? context.pop()
                 : context.go(AppRoutePaths.home),
@@ -158,16 +155,13 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     }
 
     final article = _article!;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       backgroundColor: background,
       navigationBar: AppNavigationBar(
         backgroundColor: navBackground,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: Icon(
-            CupertinoIcons.back,
-            color: CupertinoColors.label.resolveFrom(context),
-          ),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.back,
           onPressed: () =>
               context.canPop() ? context.pop() : context.go(AppRoutePaths.home),
         ),
@@ -175,20 +169,11 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
           article.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: CupertinoColors.label.resolveFrom(context),
-            fontSize: AppTypography.base,
-            fontWeight: AppTypography.semiBold,
-          ),
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
+        trailing: AppNavigationBarIconButton(
+          icon: Icons.auto_awesome,
           onPressed: _openAssistantHalfSheet,
-          child: Icon(
-            Icons.auto_awesome,
-            color: CupertinoColors.label.resolveFrom(context),
-          ),
         ),
       ),
       child: Column(

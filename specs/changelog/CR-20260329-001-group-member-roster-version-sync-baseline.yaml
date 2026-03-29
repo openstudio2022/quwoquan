@@ -1,0 +1,85 @@
+id: CR-20260329-001
+title: group member roster version sync baseline
+slug: group-member-roster-version-sync-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/chat-conversation/group-creation-member-management
+  - specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync
+  - contracts/metadata/messages/conversation
+  - contracts/metadata/_shared/types.yaml
+
+entries:
+  - timestamp: "2026-03-29T12:00:00+08:00"
+    summary: >
+      冻结群成员展示名端云一致、ListMembers 双排序、membersRosterRevision/updatedAt 云端统一、
+      ConversationRosterUpdated 合并推送与拉取对齐，以及建群单事务与并发更新分离的 baseline。
+    reason: >
+      端云/Mock 成员展示分叉、排序语义未冻结、MemberJoined 风暴与信息页不刷新等问题需在
+      `/dev` 前有可执行契约；用户明确要求版本/时间戳仅云端管理、推送合并与按 revision 拉取。
+    change_type:
+      - refine
+      - design
+      - plan
+    changed_documents:
+      - path: contracts/metadata/messages/conversation/fields.yaml
+        sections:
+          - Conversation.membersRosterRevision
+      - path: contracts/metadata/messages/conversation/service.yaml
+        sections:
+          - ListMembers.query_params / description
+      - path: contracts/metadata/messages/conversation/events.yaml
+        sections:
+          - ConversationRosterUpdated
+          - MemberJoined.description
+      - path: contracts/metadata/_shared/types.yaml
+        sections:
+          - MemberListSort enum
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/spec.md
+        sections:
+          - 特性树拆分
+          - 功能范围
+          - 非功能目标
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/acceptance.yaml
+        sections:
+          - J4
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/design.md
+        sections:
+          - 关键设计决策 KD-8~KD-12
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/plan.yaml
+        sections:
+          - P7~P11
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/spec.md
+        sections:
+          - all
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/design.md
+        sections:
+          - all
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/acceptance.yaml
+        sections:
+          - all
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/plan.yaml
+        sections:
+          - all
+      - path: quwoquan_service/services/chat-service/internal/domain/conversation/model/conversation.go
+        sections:
+          - MembersRosterRevision
+      - path: quwoquan_service/services/chat-service/internal/domain/conversation/event/events.go
+        sections:
+          - ConversationRosterUpdated
+      - path: quwoquan_service/services/chat-service/internal/adapters/mq/event_publisher.go
+        sections:
+          - SupportedEventTypes
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - chat 聚合 Go 模型未纳入 make codegen；本次按 metadata 手同步字段/常量，/dev 需收口单一生成流程或持续手同步至 gate 一致。
+      - 合并推送防抖、profile enrichment、Mongo sort 与游标修复在 R2~R5 切片实施。

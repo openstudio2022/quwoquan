@@ -11,60 +11,6 @@ type GeoPoint struct {
 
 var _ = time.Now
 
-// Post domain model.
-type Post struct {
-	ID                         string         `json:"_id" bson:"_id"`
-	AuthorId                   string         `json:"authorId" bson:"authorId"`
-	PersonaId                  string         `json:"personaId" bson:"personaId"`
-	ProfileSubjectId           string         `json:"profileSubjectId" bson:"profileSubjectId"`
-	AuthorDisplayNameSnapshot  string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
-	AuthorAvatarUrlSnapshot    string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
-	PersonaContextVersion      int64          `json:"personaContextVersion" bson:"personaContextVersion"`
-	ContentType                string         `json:"contentType" bson:"contentType"`
-	ContentIdentity            string         `json:"contentIdentity" bson:"contentIdentity"`
-	Title                      string         `json:"title" bson:"title"`
-	Body                       string         `json:"body" bson:"body"`
-	Tags                       any            `json:"tags" bson:"tags"`
-	MediaUrls                  any            `json:"mediaUrls" bson:"mediaUrls"`
-	CoverUrl                   string         `json:"coverUrl" bson:"coverUrl"`
-	ArticleDocument            map[string]any `json:"articleDocument" bson:"articleDocument"`
-	ArticleTemplate            string         `json:"articleTemplate" bson:"articleTemplate"`
-	ArticleFontPreset          string         `json:"articleFontPreset" bson:"articleFontPreset"`
-	ArticlePresentationVersion int64          `json:"articlePresentationVersion" bson:"articlePresentationVersion"`
-	VideoUrl                   string         `json:"videoUrl" bson:"videoUrl"`
-	Location                   GeoPoint       `json:"location" bson:"location"`
-	LocationName               string         `json:"locationName" bson:"locationName"`
-	PrimaryHomepageId          string         `json:"primaryHomepageId" bson:"primaryHomepageId"`
-	PrimaryHomepageType        string         `json:"primaryHomepageType" bson:"primaryHomepageType"`
-	PrimaryHomepageSnapshot    map[string]any `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
-	Status                     string         `json:"status" bson:"status"`
-	Visibility                 string         `json:"visibility" bson:"visibility"`
-	AssistantUsePolicy         string         `json:"assistantUsePolicy" bson:"assistantUsePolicy"`
-	CircleId                   string         `json:"circleId" bson:"circleId"`
-	CircleIds                  any            `json:"circleIds" bson:"circleIds"`
-	GroupId                    string         `json:"groupId" bson:"groupId"`
-	NodeId                     string         `json:"nodeId" bson:"nodeId"`
-	SourcePostId               string         `json:"sourcePostId" bson:"sourcePostId"`
-	SourceType                 string         `json:"sourceType" bson:"sourceType"`
-	Summary                    string         `json:"summary" bson:"summary"`
-	IllustrationAssetId        string         `json:"illustrationAssetId" bson:"illustrationAssetId"`
-	PublishLocation            map[string]any `json:"publishLocation" bson:"publishLocation"`
-	DeviceInfo                 map[string]any `json:"deviceInfo" bson:"deviceInfo"`
-	LikeCount                  int64          `json:"likeCount" bson:"likeCount"`
-	CommentCount               int64          `json:"commentCount" bson:"commentCount"`
-	FavoriteCount              int64          `json:"favoriteCount" bson:"favoriteCount"`
-	ShareCount                 int64          `json:"shareCount" bson:"shareCount"`
-	ViewCount                  int64          `json:"viewCount" bson:"viewCount"`
-	Embedding                  any            `json:"embedding" bson:"embedding"`
-	HelperReadSummary          string         `json:"helperReadSummary" bson:"helperReadSummary"`
-	ModerationStatus           string         `json:"moderationStatus" bson:"moderationStatus"`
-	CreatedAt                  time.Time      `json:"createdAt" bson:"createdAt"`
-	UpdatedAt                  time.Time      `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt                time.Time      `json:"publishedAt" bson:"publishedAt"`
-	LastActiveAt               time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
-	DeletedAt                  time.Time      `json:"deletedAt" bson:"deletedAt"`
-}
-
 // Comment domain model.
 type Comment struct {
 	ID                        string    `json:"_id" bson:"_id"`
@@ -82,16 +28,6 @@ type Comment struct {
 	LikeCount                 int64     `json:"likeCount" bson:"likeCount"`
 	Status                    string    `json:"status" bson:"status"`
 	CreatedAt                 time.Time `json:"createdAt" bson:"createdAt"`
-}
-
-// DeletedPostTombstone domain model.
-type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
-	PostId    string    `json:"postId" bson:"postId"`
-	AuthorId  string    `json:"authorId" bson:"authorId"`
-	Reason    string    `json:"reason" bson:"reason"`
-	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
-	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }
 
 // MediaAsset domain model.
@@ -161,19 +97,14 @@ type PostCircleReshare struct {
 	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
-// ProfileInteractionActivityView domain model.
-type ProfileInteractionActivityView struct {
-	ActivityId             string    `json:"activityId" bson:"activityId"`
-	ActivityType           string    `json:"activityType" bson:"activityType"`
-	Direction              string    `json:"direction" bson:"direction"`
-	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
-	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
-	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
-	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
-	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
-	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
-	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
-	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
+// DeletedPostTombstone domain model.
+type DeletedPostTombstone struct {
+	ID        string    `json:"_id" bson:"_id"`
+	PostId    string    `json:"postId" bson:"postId"`
+	AuthorId  string    `json:"authorId" bson:"authorId"`
+	Reason    string    `json:"reason" bson:"reason"`
+	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
+	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }
 
 // PostSearchItemView domain model.
@@ -195,4 +126,73 @@ type PostSearchItemView struct {
 	HighlightText          string    `json:"highlightText" bson:"highlightText"`
 	MatchedField           string    `json:"matchedField" bson:"matchedField"`
 	PublishedAt            time.Time `json:"publishedAt" bson:"publishedAt"`
+}
+
+// Post domain model.
+type Post struct {
+	ID                         string         `json:"_id" bson:"_id"`
+	AuthorId                   string         `json:"authorId" bson:"authorId"`
+	PersonaId                  string         `json:"personaId" bson:"personaId"`
+	ProfileSubjectId           string         `json:"profileSubjectId" bson:"profileSubjectId"`
+	AuthorDisplayNameSnapshot  string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarUrlSnapshot    string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	PersonaContextVersion      int64          `json:"personaContextVersion" bson:"personaContextVersion"`
+	ContentType                string         `json:"contentType" bson:"contentType"`
+	ContentIdentity            string         `json:"contentIdentity" bson:"contentIdentity"`
+	Title                      string         `json:"title" bson:"title"`
+	Body                       string         `json:"body" bson:"body"`
+	Tags                       any            `json:"tags" bson:"tags"`
+	MediaUrls                  any            `json:"mediaUrls" bson:"mediaUrls"`
+	CoverUrl                   string         `json:"coverUrl" bson:"coverUrl"`
+	ArticleDocument            map[string]any `json:"articleDocument" bson:"articleDocument"`
+	ArticleTemplate            string         `json:"articleTemplate" bson:"articleTemplate"`
+	ArticleFontPreset          string         `json:"articleFontPreset" bson:"articleFontPreset"`
+	ArticlePresentationVersion int64          `json:"articlePresentationVersion" bson:"articlePresentationVersion"`
+	VideoUrl                   string         `json:"videoUrl" bson:"videoUrl"`
+	Location                   GeoPoint       `json:"location" bson:"location"`
+	LocationName               string         `json:"locationName" bson:"locationName"`
+	PrimaryHomepageId          string         `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	PrimaryHomepageType        string         `json:"primaryHomepageType" bson:"primaryHomepageType"`
+	PrimaryHomepageSnapshot    map[string]any `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
+	Status                     string         `json:"status" bson:"status"`
+	Visibility                 string         `json:"visibility" bson:"visibility"`
+	AssistantUsePolicy         string         `json:"assistantUsePolicy" bson:"assistantUsePolicy"`
+	CircleId                   string         `json:"circleId" bson:"circleId"`
+	CircleIds                  any            `json:"circleIds" bson:"circleIds"`
+	GroupId                    string         `json:"groupId" bson:"groupId"`
+	NodeId                     string         `json:"nodeId" bson:"nodeId"`
+	SourcePostId               string         `json:"sourcePostId" bson:"sourcePostId"`
+	SourceType                 string         `json:"sourceType" bson:"sourceType"`
+	Summary                    string         `json:"summary" bson:"summary"`
+	IllustrationAssetId        string         `json:"illustrationAssetId" bson:"illustrationAssetId"`
+	PublishLocation            map[string]any `json:"publishLocation" bson:"publishLocation"`
+	DeviceInfo                 map[string]any `json:"deviceInfo" bson:"deviceInfo"`
+	LikeCount                  int64          `json:"likeCount" bson:"likeCount"`
+	CommentCount               int64          `json:"commentCount" bson:"commentCount"`
+	FavoriteCount              int64          `json:"favoriteCount" bson:"favoriteCount"`
+	ShareCount                 int64          `json:"shareCount" bson:"shareCount"`
+	ViewCount                  int64          `json:"viewCount" bson:"viewCount"`
+	Embedding                  any            `json:"embedding" bson:"embedding"`
+	HelperReadSummary          string         `json:"helperReadSummary" bson:"helperReadSummary"`
+	ModerationStatus           string         `json:"moderationStatus" bson:"moderationStatus"`
+	CreatedAt                  time.Time      `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                  time.Time      `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt                time.Time      `json:"publishedAt" bson:"publishedAt"`
+	LastActiveAt               time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
+	DeletedAt                  time.Time      `json:"deletedAt" bson:"deletedAt"`
+}
+
+// ProfileInteractionActivityView domain model.
+type ProfileInteractionActivityView struct {
+	ActivityId             string    `json:"activityId" bson:"activityId"`
+	ActivityType           string    `json:"activityType" bson:"activityType"`
+	Direction              string    `json:"direction" bson:"direction"`
+	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
+	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
+	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
+	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
+	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
+	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
+	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
 }

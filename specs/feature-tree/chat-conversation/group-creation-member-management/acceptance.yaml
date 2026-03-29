@@ -16,6 +16,7 @@ scope:
     - group-create-flow
     - member-add-remove-policy
     - group-settings
+    - group-member-roster-version-sync
   out_of_scope:
     - 企业联系人来源
     - 群二维码/分享邀请
@@ -104,6 +105,36 @@ journey_acceptance:
       planned:
         - private group dissolve contract test
         - circle group destructive action hidden test
+      recorded: []
+    status: specified
+
+  J4:
+    title: 群成员展示、排序与 revision 在端云及 Mock 上一致，且合并推送可驱动多端刷新
+    journey: create or open group -> list members / chat settings -> concurrent adds -> other member receives merged roster signal -> pull by revision
+    scenario_refs:
+      - group-member-roster-version-sync
+    done_when:
+      - ListMembers 默认 joined_asc；可选 display_name_asc 且并列按 userId
+      - 返回展示名为用户展示名，身份以 userId 为准；Mock 与 Remote 语义一致
+      - Conversation 上 membersRosterRevision 与 updatedAt 仅服务端写入且成员变更时单调递增
+      - 对外实时主事件为 ConversationRosterUpdated（合并窗口内多条变更一条推送）；客户端可据此定点拉取
+      - CreateConversation 单事务完成建群与初始成员；AddMembers 等为独立并发事务
+    release_guardrails:
+      - 禁止客户端本地自增 revision
+      - MemberJoined 不得作为唯一同步真相源（迁移期双发须在设计中声明终止条件）
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+        - T4_user_journey
+    tests:
+      planned:
+        - ListMembers sort contract test
+        - roster revision monotonic contract test
+        - mock remote display name parity test
+        - dual client roster consistency journey
       recorded: []
     status: specified
 

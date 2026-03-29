@@ -1,0 +1,49 @@
+id: CR-20260329-002
+title: inset form settings UI baseline for chat group pages
+slug: inset-form-settings-ui-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/chat-conversation/group-creation-member-management/group-settings
+  - quwoquan_app/lib/components/settings_form
+  - quwoquan_app/lib/components/settings_conversation
+  - quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
+  - quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
+  - quwoquan_app/lib/core/constants/settings_semantic_constants.dart
+  - quwoquan_app/lib/core/widgets/global_surface_actions.dart
+
+entries:
+  - timestamp: "2026-03-29T16:00:00+08:00"
+    summary: >
+      冻结群聊信息/群管理等全屏页的 Inset Grouped 表单态组件路径、insetForm* 语义 token、
+      成员网格折叠规则、顶栏全局搜索入口与首页一致的图标规范；明确对话态与表单态分目录。
+    reason: >
+      多页设置 UI 分叉（白顶栏、描边卡片、Material Divider）与 iOS 体验及门禁不一致；
+      需在无契约变更前提下收敛到可复用模板，便于后续其它设置页同步。
+    change_type:
+      - baseline
+      - design
+      - spec
+    changed_documents:
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md
+        sections:
+          - "§9 全屏设置页视觉与交互基线"
+          - "§10 与群管理页关系"
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/design.md
+        sections:
+          - "全屏表单态 UI 工程方案"
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/acceptance.yaml
+        sections:
+          - A9–A13
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/plan.yaml
+        sections:
+          - all
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      cloud_contract_change: false

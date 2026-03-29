@@ -23,9 +23,9 @@ func newInboxTestEnv(t *testing.T) (
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 
 	inboxSvc := application.NewInboxService(chatStore)
-	convSvc := application.NewConversationService(chatStore, convCache, nil)
+	convSvc := application.NewConversationService(chatStore, convCache, nil, nil)
 	msgSvc := application.NewMessageService(chatStore, convCache, nil)
-	memberSvc := application.NewMemberService(chatStore, convCache, nil)
+	memberSvc := application.NewMemberService(chatStore, convCache, nil, nil)
 
 	return inboxSvc, convSvc, msgSvc, memberSvc
 }

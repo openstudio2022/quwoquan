@@ -91,6 +91,15 @@ surfaces:
       - ListMembers
       - UpdateGroupAdmins
 
+  - id: chatMemberSearch
+    owner: chat
+    route_id: chatMemberSearch
+    path_template: /chat/{id}/member-search
+    description: 群成员搜索页（端侧过滤）
+    operation_ids:
+      - GetConversation
+      - ListMembers
+
   - id: assistantDialog
     owner: assistant
     route_id: chatDetail
