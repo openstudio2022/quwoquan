@@ -178,6 +178,36 @@ class _ArgumentCaptureSearchTool implements AssistantTool {
   }
 }
 
+class _ArgumentCaptureUnifiedSearchTool implements AssistantTool {
+  int executeCount = 0;
+  Map<String, dynamic> lastArguments = const <String, dynamic>{};
+
+  @override
+  String get name => 'search';
+
+  @override
+  String get description => 'capture unified search args';
+
+  @override
+  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+    executeCount += 1;
+    lastArguments = Map<String, dynamic>.from(arguments);
+    return const AssistantToolResult(
+      success: true,
+      message: '统一检索结果：ok',
+      data: <String, dynamic>{
+        'summary': 'ok',
+        'sections': <Map<String, dynamic>>[],
+        'hits': <Map<String, dynamic>>[],
+        'references': <Map<String, dynamic>>[],
+        'qualityScore': 0.9,
+        'queryCount': 1,
+        'referenceCount': 0,
+      },
+    );
+  }
+}
+
 class _NoToolPlanProvider implements AssistantLlmProvider {
   int callCount = 0;
 
@@ -559,6 +589,45 @@ void main() {
       (trace) => trace.type == AssistantTraceEventType.thinkingProgress,
     );
     expect(firstThinkingTrace.data?['phase'], equals('search'));
+  });
+
+  test('phase 侧已有 precomputed queryTasks 时优先自动注入 search', () async {
+    final provider = _NoToolPlanProvider();
+    final metadata = ToolMetadataRegistry();
+    await metadata.ensureLoaded();
+    final registry = AssistantToolRegistry(metadataRegistry: metadata);
+    final captureTool = _ArgumentCaptureUnifiedSearchTool();
+    registry.register(captureTool);
+    final runtime = ReactRuntime(
+      llmProvider: provider,
+      toolRegistry: registry,
+      toolMetadataRegistry: metadata,
+    );
+
+    await runtime.run(
+      messages: <Map<String, dynamic>>[
+        const <String, dynamic>{'role': 'user', 'content': '查深圳住宿建议'},
+      ],
+      maxIterations: 2,
+      goal: '查深圳住宿建议',
+      templateVariables: const <String, dynamic>{
+        'problemClass': 'complex_reasoning',
+        'skillExecutionShell': <String, dynamic>{
+          'preComputedQueryTasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'fit_scenarios',
+              'dimension': 'fit_scenarios',
+              'label': '适用场景',
+              'query': '深圳住宿 通勤 景点 夜生活 适合',
+            },
+          ],
+        },
+      },
+    );
+
+    expect(captureTool.executeCount, equals(1));
+    expect(captureTool.lastArguments['query'], equals('深圳住宿 通勤 景点 夜生活 适合'));
+    expect(captureTool.lastArguments['mode'], equals('result'));
   });
 
   test('provider 已产生 delta 时，runtime 仍会上报提取后的 thinkingProgress', () async {

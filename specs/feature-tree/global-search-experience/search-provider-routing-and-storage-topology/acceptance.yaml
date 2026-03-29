@@ -1,0 +1,107 @@
+version: 1
+feature: search-provider-routing-and-storage-topology
+level: L2_feature
+source_path: global-search-experience/search-provider-routing-and-storage-topology
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结统一搜索 contract、对象 taxonomy、provider routing、fallback、本地生命周期与云侧搜索存储弹性。
+  composed_scenarios:
+    - canonical-search-contract
+    - search-object-taxonomy-and-provider-registry
+    - search-execution-routing-policy
+    - circle-group-hybrid-fallback-contract
+    - local-search-lifecycle-and-account-isolation
+    - search-storage-topology-and-elasticity
+  out_of_scope:
+    - 统一高性能读库的本期迁移落地
+    - 低存储设备阈值治理
+
+journey_acceptance:
+  J1:
+    title: 页面与业务层只看到一个 canonical 搜索接口
+    journey: page or journey code -> search(request) -> receive typed results
+    scenario_refs:
+      - canonical-search-contract
+      - search-object-taxonomy-and-provider-registry
+    done_when:
+      - "搜索建议与正式结果共用同一套 `search(request)` contract"
+      - 页面层不再暴露分域搜索方法名
+      - searchable object 通过统一 taxonomy 标识
+      - 同一 contract 可生成 AI agent 检索 tool schema，且模型条件生成受 typed schema 约束
+      - "contract 以单一 `query` 为主输入，支持 `web.document` 与趣我圈对象统一召回，便于 AI 做主题拆分和多轮关键词检索"
+    evidence:
+      primary:
+        - T1_schema
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - search contract ownership review
+        - object taxonomy audit
+        - web-like query-first tool schema review
+      recorded:
+        - make -C quwoquan_service verify-metadata
+        - make codegen-app
+        - flutter test test/ui/search/search_repository_test.dart
+        - flutter test test/assistant/search_tool_test.dart test/assistant/tool_metadata_contract_test.dart
+        - flutter test test/assistant/acceptance_vm_test.dart test/assistant/skill_loader_commercial_test.dart
+        - flutter test test/assistant/react_runtime_tool_observation_contract_test.dart
+    status: implemented
+  J2:
+    title: 执行策略、fallback 与本地生命周期有唯一真相源
+    journey: planner -> provider routing -> local or remote execution -> optional fallback
+    scenario_refs:
+      - search-execution-routing-policy
+      - circle-group-hybrid-fallback-contract
+      - local-search-lifecycle-and-account-isolation
+    done_when:
+      - "`local_only / remote_only / hybrid_remote_fallback_local` 已正式定义"
+      - "`circle.group` fallback 为 typed contract，而不是页面特判"
+      - 本地聊天搜索登出保留、账号隔离、删除同步规则冻结
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - provider routing audit
+        - local lifecycle contract review
+      recorded:
+        - flutter test test/ui/search/search_repository_test.dart
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+        - flutter test test/core/services/local_chat_search_store_test.dart
+        - flutter test test/core/services/local_chat_search_sync_service_test.dart
+        - flutter test test/core/services/local_circle_group_snapshot_store_test.dart
+    status: implemented
+  J3:
+    title: 云侧搜索读路径具备弹性与成本治理基线
+    journey: remote search request -> search read model -> reader slice -> result
+    scenario_refs:
+      - search-storage-topology-and-elasticity
+    done_when:
+      - 搜索读路径与业务写路径分离
+      - 多读切片与独立弹性原则冻结
+      - 长期方案不再定义为扫描业务主集合
+      - 现有 `content / circle / homepage / location` 搜索读路径具备 metadata/header contract evidence
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - reader topology review
+        - reader slice contract review
+      recorded:
+        - flutter test test/cloud/integration/remote_api_path_contract_test.dart
+        - flutter test test/ui/search/search_repository_test.dart
+    status: implemented

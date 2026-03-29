@@ -1,6 +1,6 @@
 {
   "templateId": "synthesizer.final_answer",
-  "version": "2026.03.18",
+  "version": "2026.03.27",
   "stage": "answer",
   "domainId": "global",
   "requiredVariables": [

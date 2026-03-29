@@ -116,6 +116,8 @@ String? _phaseNarrativeFor(String phaseId) {
       return '我先把检索拆成几路并行推进。';
     case 'execution':
       return '我开始并行核对关键资料。';
+    case 'evidence_digest':
+      return '我先把检索结果里真正有用的点筛出来。';
     case 'synthesis':
       return '关键信息差不多齐了，我来整理答案。';
     case 'finalize':

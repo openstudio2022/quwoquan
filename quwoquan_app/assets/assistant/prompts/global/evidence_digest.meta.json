@@ -1,0 +1,18 @@
+{
+  "templateId": "evidence_digest",
+  "version": "2026.03.27",
+  "stage": "digest",
+  "domainId": "global",
+  "requiredVariables": [
+    "userQuery",
+    "understandingSnapshot",
+    "evidenceContext",
+    "currentRuntimeState"
+  ],
+  "outputContract": "retrieval_processing",
+  "selfCheckRules": [
+    "evidence_selected",
+    "key_points_stable",
+    "no_final_answer_leak"
+  ]
+}

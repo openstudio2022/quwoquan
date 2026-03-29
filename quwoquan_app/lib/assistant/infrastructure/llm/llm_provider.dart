@@ -80,6 +80,9 @@ class AssistantFailureCode {
   static const String modelResponseInvalid = 'model_response_invalid';
   static const String modelUnavailable = 'model_unavailable';
   static const String heuristicFallback = 'heuristic_fallback';
+  static const String answerStreamNotStarted = 'answer_stream_not_started';
+  static const String answerStreamFailed = 'answer_stream_failed';
+  static const String processTimelineMissing = 'process_timeline_missing';
 }
 
 abstract class AssistantLlmProvider {
@@ -105,6 +108,7 @@ class LlmCallOptions {
     this.maxTokens,
     this.forceJsonObject = false,
     this.timeoutSeconds,
+    this.streamJsonFieldPaths = const <String>[],
   });
 
   /// Synthesis / structured-answer stage defaults.
@@ -112,19 +116,24 @@ class LlmCallOptions {
     : temperature = 0.2,
       maxTokens = 4096,
       forceJsonObject = true,
-      timeoutSeconds = 45;
+      timeoutSeconds = 45,
+      streamJsonFieldPaths = const <String>[
+        'answerProcessing.readinessSummary',
+      ];
 
   /// Default planning / ReAct stage defaults (mirrors legacy hard-coded values).
   const LlmCallOptions.planning()
     : temperature = 0.3,
       maxTokens = null,
       forceJsonObject = false,
-      timeoutSeconds = 30;
+      timeoutSeconds = 30,
+      streamJsonFieldPaths = const <String>[];
 
   final double? temperature;
   final int? maxTokens;
   final bool forceJsonObject;
   final int? timeoutSeconds;
+  final List<String> streamJsonFieldPaths;
 }
 
 class _ResolvedPromptStack {
@@ -434,6 +443,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       maxTokens: source.maxTokens,
       forceJsonObject: forceJsonObject,
       timeoutSeconds: source.timeoutSeconds,
+      streamJsonFieldPaths: source.streamJsonFieldPaths,
     );
   }
 
@@ -442,6 +452,44 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required bool forceJsonObject,
   }) {
     return 'tools=${enableTools ? 1 : 0}|json=${forceJsonObject ? 1 : 0}';
+  }
+
+  List<JsonFieldStreamExtractor> _buildStreamingReasonExtractors(
+    LlmCallOptions callOptions,
+  ) {
+    if (callOptions.streamJsonFieldPaths.isEmpty) {
+      return <JsonFieldStreamExtractor>[_reasonShortJsonExtractor];
+    }
+    return callOptions.streamJsonFieldPaths
+        .map(JsonFieldStreamExtractor.new)
+        .toList(growable: false);
+  }
+
+  String _consumeStreamingReasonDelta(
+    String textDelta, {
+    required List<JsonFieldStreamExtractor> streamExtractors,
+  }) {
+    for (final extractor in streamExtractors) {
+      final delta = extractor.consume(textDelta);
+      if (delta.isNotEmpty) {
+        return delta;
+      }
+      if (!extractor.hasMatchedField || !extractor.isComplete) {
+        break;
+      }
+    }
+    return '';
+  }
+
+  bool _hasMatchedStreamingReasonExtractor(
+    List<JsonFieldStreamExtractor> streamExtractors,
+  ) {
+    for (final extractor in streamExtractors) {
+      if (extractor.hasMatchedField) {
+        return true;
+      }
+    }
+    return false;
   }
 
   String _normalizeBaseUrl(String value) {
@@ -691,6 +739,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       final reasoningBuffer = StringBuffer();
       final toolCallAccum = <String, _StreamingToolCallAccum>{};
       final profile = _profile;
+      final streamExtractors = _buildStreamingReasonExtractors(callOptions);
+      for (final extractor in streamExtractors) {
+        extractor.reset();
+      }
       Object? usageRaw;
 
       await for (final line in streamedResponse.stream.transform(
@@ -739,9 +791,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
                   thinkingDelta = _extractStreamingThinking(textDelta);
                   break;
                 case ModelReasoningMode.jsonThinkingText:
-                  thinkingDelta = _reasonShortJsonExtractor.consume(textDelta);
+                  thinkingDelta = _consumeStreamingReasonDelta(
+                    textDelta,
+                    streamExtractors: streamExtractors,
+                  );
                   if (thinkingDelta.isEmpty &&
-                      !_reasonShortJsonExtractor.hasMatchedField) {
+                      !_hasMatchedStreamingReasonExtractor(streamExtractors)) {
                     thinkingDelta = _extractStreamingThinking(textDelta);
                   }
                   break;
@@ -1012,6 +1067,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
     required void Function(String delta) onDelta,
+    List<String> streamJsonFieldPaths = const <String>[],
+    void Function(String fieldPath, String delta)? onStructuredDelta,
+    void Function(String failureCode, Map<String, dynamic> diagnostics)?
+    onFailure,
     Map<String, dynamic> templateContext = const <String, dynamic>{},
     Map<String, dynamic> templateVariables = const <String, dynamic>{},
     String templateId = 'synthesizer.final_answer',
@@ -1028,6 +1087,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     );
     if (resolvedPrompt.missingVariables.contains('__template_not_found__') ||
         resolvedPrompt.content.trim().isEmpty) {
+      onFailure?.call(AssistantFailureCode.templateMissing, <String, dynamic>{
+        'templateId': templateId,
+        'templateVersion': templateVersion,
+      });
       return '';
     }
     final requestMessages = _buildRequestMessages(
@@ -1062,10 +1125,21 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         const Duration(seconds: 60),
       );
       if (streamedResponse.statusCode >= 400) {
+        onFailure?.call(AssistantFailureCode.modelHttp, <String, dynamic>{
+          'statusCode': streamedResponse.statusCode,
+          'templateId': templateId,
+          'templateVersion': templateVersion,
+          'modelId': modelId,
+        });
         return '';
       }
       final buffer = StringBuffer();
       _answerJsonExtractor.reset();
+      final structuredExtractors = profile.supportsJsonMode
+          ? streamJsonFieldPaths
+                .map(JsonFieldStreamExtractor.new)
+                .toList(growable: false)
+          : const <JsonFieldStreamExtractor>[];
       var emittedVisibleText = '';
       await for (final chunk in streamedResponse.stream.transform(
         const _SseLineTransformer(),
@@ -1073,6 +1147,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         final delta = _parseSseDelta(chunk);
         if (delta != null && delta.isNotEmpty) {
           buffer.write(delta);
+          for (final extractor in structuredExtractors) {
+            final fieldDelta = extractor.consume(delta);
+            if (fieldDelta.isNotEmpty) {
+              onStructuredDelta?.call(extractor.fieldName, fieldDelta);
+            }
+          }
           var visibleDelta = '';
           if (profile.supportsJsonMode) {
             visibleDelta = _answerJsonExtractor.consume(delta);
@@ -1093,8 +1173,22 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           fallbackVisible.length > emittedVisibleText.length) {
         onDelta(fallbackVisible.substring(emittedVisibleText.length));
       }
+      if (rawOutput.trim().isEmpty) {
+        onFailure?.call(AssistantFailureCode.modelResponseInvalid, <String, dynamic>{
+          'reason': 'empty_stream_payload',
+          'templateId': templateId,
+          'templateVersion': templateVersion,
+          'modelId': modelId,
+        });
+      }
       return rawOutput;
-    } catch (_) {
+    } catch (error) {
+      onFailure?.call(AssistantFailureCode.modelException, <String, dynamic>{
+        'errorType': error.runtimeType.toString(),
+        'templateId': templateId,
+        'templateVersion': templateVersion,
+        'modelId': modelId,
+      });
       return '';
     }
   }
@@ -1742,6 +1836,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
     required void Function(String delta) onDelta,
+    List<String> streamJsonFieldPaths = const <String>[],
+    void Function(String fieldPath, String delta)? onStructuredDelta,
+    void Function(String failureCode, Map<String, dynamic> diagnostics)?
+    onFailure,
     Map<String, dynamic> templateContext = const <String, dynamic>{},
     Map<String, dynamic> templateVariables = const <String, dynamic>{},
     String templateId = 'synthesizer.final_answer',
@@ -1757,10 +1855,16 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     }
     final ref = _activeModelRef;
     var emittedDelta = false;
+    var emittedStructuredDelta = false;
     void forward(String delta) {
       if (delta.trim().isEmpty) return;
       emittedDelta = true;
       onDelta(delta);
+    }
+    void forwardStructured(String fieldPath, String delta) {
+      if (delta.trim().isEmpty) return;
+      emittedStructuredDelta = true;
+      onStructuredDelta?.call(fieldPath, delta);
     }
 
     if (ref != null) {
@@ -1770,6 +1874,9 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
           messages: messages,
           availableTools: availableTools,
           onDelta: forward,
+          streamJsonFieldPaths: streamJsonFieldPaths,
+          onStructuredDelta: forwardStructured,
+          onFailure: onFailure,
           templateContext: templateContext,
           templateVariables: templateVariables,
           templateId: templateId,
@@ -1778,13 +1885,15 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
           runId: runId,
           traceId: traceId,
         );
-        if (emittedDelta && streamed.trim().isNotEmpty) {
+        if ((emittedDelta || emittedStructuredDelta) &&
+            streamed.trim().isNotEmpty) {
           return streamed;
         }
       }
     }
 
     emittedDelta = false;
+    emittedStructuredDelta = false;
     final fallback = await _fallbackProvider.reason(
       messages: messages,
       availableTools: availableTools,
@@ -1797,7 +1906,21 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       traceId: traceId,
       onDelta: forward,
     );
-    return emittedDelta ? fallback.text : '';
+    if (emittedDelta) {
+      return fallback.text;
+    }
+    onFailure?.call(
+      fallback.failureCode.isNotEmpty
+          ? fallback.failureCode
+          : AssistantFailureCode.modelUnavailable,
+      <String, dynamic>{
+        'source': 'switchable_fallback_without_stream',
+        'templateId': templateId,
+        'templateVersion': templateVersion,
+        'modelRef': ref ?? '',
+      },
+    );
+    return '';
   }
 
   @override

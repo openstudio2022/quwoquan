@@ -1,0 +1,49 @@
+version: 1
+feature: circle-group-hybrid-fallback-contract
+level: L3_scenario
+source_path: global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract
+parent_journey: search-provider-routing-and-storage-topology
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    "冻结 `circle.group` 的云优先、本地 fallback contract。"
+  journey_bindings:
+    - J2
+  in_scope:
+    - fallback trigger
+    - fallback signal
+    - local full results
+  out_of_scope:
+    - 远端和本地融合重排
+
+scenario_acceptance:
+  A1:
+    title: "`circle.group` 具备 typed fallback 合约"
+    scenario: circle group hybrid fallback
+    journey_step: remote search fails or returns zero then fallback locally
+    done_when:
+      - 云侧失败、超时、熔断或 0 结果时触发 fallback
+      - fallback 使用端侧本地全量结果
+      - "结果带 `resolvedFrom=local_fallback`"
+    edge_cases:
+      - remote error
+      - remote zero result
+      - local 也为空
+    linked_plan_items:
+      - P1
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - circle group fallback contract test
+      recorded: []
+    status: pending

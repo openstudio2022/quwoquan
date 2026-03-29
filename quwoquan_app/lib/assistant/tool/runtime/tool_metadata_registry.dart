@@ -216,6 +216,15 @@ class ToolMetadataRegistry {
     return routing['supportsQueryTasks'] == true;
   }
 
+  List<String> internalOnlyParameters(String toolName) {
+    final matched = _toolByName(toolName);
+    if (matched.isEmpty) return const <String>[];
+    final routing =
+        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return _requiredStringList(routing['internalOnlyParameters']);
+  }
+
   bool isRetrievalLikeTool(String toolName) {
     return toolKindByName(toolName) == 'retrieval';
   }

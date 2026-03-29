@@ -269,6 +269,8 @@ class AgentExecutionState {
     this.executionPreparation,
     this.executionBridgeSnapshot = const <String, dynamic>{},
     this.intentGraph,
+    this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
+    this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.contextAssembly,
     this.dialogueRoundScript,
     this.slotState,
@@ -291,6 +293,8 @@ class AgentExecutionState {
   final AssistantExecutionPreparation? executionPreparation;
   final Map<String, dynamic> executionBridgeSnapshot;
   final IntentGraph? intentGraph;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
+  final RetrievalProcessingSnapshot retrievalProcessing;
   final ContextAssemblyResult? contextAssembly;
   final DialogueRoundScript? dialogueRoundScript;
   final SlotStateSnapshot? slotState;
@@ -313,6 +317,8 @@ class AgentExecutionState {
     AssistantExecutionPreparation? executionPreparation,
     Map<String, dynamic>? executionBridgeSnapshot,
     IntentGraph? intentGraph,
+    RunArtifactsUnderstandingSnapshot? understandingSnapshot,
+    RetrievalProcessingSnapshot? retrievalProcessing,
     ContextAssemblyResult? contextAssembly,
     DialogueRoundScript? dialogueRoundScript,
     SlotStateSnapshot? slotState,
@@ -336,6 +342,8 @@ class AgentExecutionState {
       executionBridgeSnapshot:
           executionBridgeSnapshot ?? this.executionBridgeSnapshot,
       intentGraph: intentGraph ?? this.intentGraph,
+      understandingSnapshot: understandingSnapshot ?? this.understandingSnapshot,
+      retrievalProcessing: retrievalProcessing ?? this.retrievalProcessing,
       contextAssembly: contextAssembly ?? this.contextAssembly,
       dialogueRoundScript: dialogueRoundScript ?? this.dialogueRoundScript,
       slotState: slotState ?? this.slotState,

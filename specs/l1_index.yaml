@@ -49,8 +49,8 @@ l1:
     key: "global-search-experience"
     directory: "specs/feature-tree/global-search-experience"
     feature_path_prefix: "capability.global-search-experience"
-    services: [gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service]
-    app_modules: [home.discovery, chat.chat_page, circles.circles_page, assistant.assistant_home]
+    services: [gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service, entity-service, integration-service]
+    app_modules: [home.discovery, chat.chat_page, circles.circles_page, assistant.assistant_home, search.global_search, entity.homepage_picker, content.publish_location_selector]
 
   - category: functional
     title: "共享主页网络"

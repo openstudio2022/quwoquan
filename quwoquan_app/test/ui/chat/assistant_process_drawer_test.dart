@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
@@ -11,14 +12,160 @@ AssistantJourneyViewModel _viewModel({
   AssistantJourney journey = const AssistantJourney(),
   bool isRunning = false,
   int elapsedMs = 0,
+  bool allowAnswerStage = true,
+  List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
   RetrievalProcessingSnapshot retrievalProcessing =
       const RetrievalProcessingSnapshot(),
 }) {
+  final effectiveProcessTimeline = processTimeline.isNotEmpty
+      ? processTimeline
+      : _processTimelineFromJourney(
+          journey,
+          retrievalProcessing: retrievalProcessing,
+        );
   return buildAssistantJourneyViewModel(
     journey: journey,
+    processTimeline: effectiveProcessTimeline,
     isRunning: isRunning,
+    allowAnswerStage: allowAnswerStage,
     elapsedMs: elapsedMs,
     retrievalProcessing: retrievalProcessing,
+  );
+}
+
+List<ProcessTimelineFrame> _processTimelineFromJourney(
+  AssistantJourney journey, {
+  RetrievalProcessingSnapshot retrievalProcessing =
+      const RetrievalProcessingSnapshot(),
+}) {
+  if (journey.isEmpty &&
+      retrievalProcessing.processingSummary.trim().isEmpty &&
+      retrievalProcessing.acceptedReferences.isEmpty &&
+      retrievalProcessing.processedDocumentCount <= 0 &&
+      retrievalProcessing.acceptedDocumentCount <= 0) {
+    return const <ProcessTimelineFrame>[];
+  }
+
+  AssistantJourneyStage? stageFor(JourneyStageId stageId) {
+    for (final stage in journey.stages) {
+      if (stage.stageId == stageId) {
+        return stage;
+      }
+    }
+    return null;
+  }
+
+  AssistantJourneyEntry? firstEntryFor(JourneyStageId stageId) {
+    for (final entry in journey.entries) {
+      if (entry.stageId == stageId) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  String firstNonEmpty(Iterable<String?> values) {
+    for (final value in values) {
+      final trimmed = (value ?? '').trim();
+      if (trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+  final analyzeStage = stageFor(JourneyStageId.analyze);
+  final searchStage = stageFor(JourneyStageId.search);
+  final answerStage = stageFor(JourneyStageId.answer);
+  final analyzeEntry = firstEntryFor(JourneyStageId.analyze);
+  final searchEntry = firstEntryFor(JourneyStageId.search);
+  final answerEntry = firstEntryFor(JourneyStageId.answer);
+
+  final analyzeHeadline = firstNonEmpty(<String?>[
+    analyzeEntry?.headline,
+    analyzeEntry?.detail,
+    analyzeStage?.summary,
+  ]);
+  final searchHeadline = firstNonEmpty(<String?>[
+    searchEntry?.headline,
+    searchEntry?.detail,
+    searchStage?.summary,
+    retrievalProcessing.processingSummary,
+  ]);
+  final answerHeadline = firstNonEmpty(<String?>[
+    answerEntry?.headline,
+    answerEntry?.detail,
+    answerStage?.summary,
+  ]);
+
+  final searchReferences =
+      searchEntry?.references
+          .map(
+            (reference) => RetrievalProcessingReference(
+              title: reference.title,
+              url: reference.url,
+              source: reference.source ?? '',
+            ),
+          )
+          .toList(growable: false) ??
+      const <RetrievalProcessingReference>[];
+  final effectiveReferences = retrievalProcessing.acceptedReferences.isNotEmpty
+      ? retrievalProcessing.acceptedReferences
+      : searchReferences;
+
+  final searchUsesRetrievalProcessing =
+      retrievalProcessing.processingSummary.trim().isNotEmpty ||
+      retrievalProcessing.acceptedReferences.isNotEmpty ||
+      searchReferences.isNotEmpty ||
+      searchHeadline.contains('核对') ||
+      searchHeadline.contains('来源');
+
+  final frames = <ProcessTimelineFrame>[
+    if ((analyzeStage != null && analyzeHeadline.isEmpty) ||
+        (analyzeHeadline.isNotEmpty &&
+            !analyzeHeadline.contains('我需要搜索最新的天气信息')))
+      buildProcessTimelineFrame(
+        stepId: ProcessStepId.understanding,
+        status: analyzeStage?.status ?? JourneyStageStatus.completed,
+        headline: analyzeHeadline,
+        detail: (analyzeEntry?.detail ?? '').trim(),
+      ),
+    if (searchStage != null || searchHeadline.isNotEmpty)
+      buildProcessTimelineFrame(
+        stepId: searchUsesRetrievalProcessing
+            ? ProcessStepId.retrievalProcessing
+            : ProcessStepId.retrievalDesign,
+        status: searchStage?.status ?? JourneyStageStatus.completed,
+        headline: searchHeadline,
+        detail: (searchEntry?.detail ?? '').trim(),
+        references: effectiveReferences,
+        retrievalProcessing: searchUsesRetrievalProcessing
+            ? retrievalProcessing
+            : const RetrievalProcessingSnapshot(),
+      ),
+    if (answerStage != null || answerHeadline.isNotEmpty)
+      buildProcessTimelineFrame(
+        stepId: ProcessStepId.answerOrganization,
+        status: answerStage?.status ?? JourneyStageStatus.completed,
+        headline: answerHeadline,
+        detail: (answerEntry?.detail ?? '').trim(),
+        answerProcessing: answerHeadline.isEmpty
+            ? const RunArtifactsAnswerProcessing()
+            : RunArtifactsAnswerProcessing(readinessSummary: answerHeadline),
+      ),
+  ];
+
+  final visibleFrames = frames
+      .where(
+        (frame) =>
+            frame.headline.trim().isNotEmpty ||
+            frame.detail.trim().isNotEmpty ||
+            frame.references.isNotEmpty ||
+            frame.status != JourneyStageStatus.pending,
+      )
+      .toList(growable: false);
+  return normalizeProcessTimeline(
+    visibleFrames.isNotEmpty ? visibleFrames : frames,
   );
 }
 
@@ -88,8 +235,8 @@ const AssistantJourney _referenceJourney = AssistantJourney(
 
 void main() {
   group('AssistantProcessDrawer', () {
-    test('内部规划口吻会转写为用户可读过程文案', () {
-      final built = buildAssistantJourneyViewModel(
+    test('理解阶段的内部规划口吻不会再显示为固定确认句', () {
+      final built = _viewModel(
         journey: const AssistantJourney(
           stages: <AssistantJourneyStage>[
             AssistantJourneyStage(
@@ -127,9 +274,9 @@ void main() {
         isRunning: true,
       );
 
-      expect(built.blocks, hasLength(2));
-      expect(built.blocks.first.headline, contains('我先确认你真正想解决的是深圳天气'));
-      expect(built.blocks[1].headline, contains('我会换几个检索角度继续交叉核对'));
+      expect(built.blocks, hasLength(1));
+      expect(built.blocks.first.headline, contains('我先换几个检索词继续找'));
+      expect(built.blocks.first.headline.contains('我需要搜索最新的天气信息'), isFalse);
     });
 
     test('运行中且 answer gate 未打开时，会继续停留在搜索阶段', () {
@@ -175,19 +322,21 @@ void main() {
         readiness: AssistantJourneyReadiness(finalAnswerReady: false),
       );
 
-      final viewModel = buildAssistantJourneyViewModel(
+      final viewModel = _viewModel(
         journey: journey,
         isRunning: true,
         allowAnswerStage: false,
       );
 
-      expect(viewModel.activeStageId, JourneyStageId.search);
+      expect(viewModel.activeStageId, ProcessStepId.retrievalProcessing);
       expect(
         viewModel.activeStageLabel,
-        UITextConstants.assistantProcessStageSearch,
+        UITextConstants.assistantProcessStageRetrievalProcessing,
       );
       expect(
-        viewModel.blocks.any((block) => block.stageId == JourneyStageId.answer),
+        viewModel.blocks.any(
+          (block) => block.stageId == ProcessStepId.answerOrganization,
+        ),
         isFalse,
       );
     });
@@ -246,6 +395,15 @@ void main() {
                 journey: journey,
                 isRunning: true,
                 elapsedMs: 7000,
+                processTimeline: const <ProcessTimelineFrame>[
+                  ProcessTimelineFrame(
+                    frameId: 'process.understanding',
+                    stepId: ProcessStepId.understanding,
+                    status: JourneyStageStatus.completed,
+                    order: 0,
+                    headline: '我先把问题立住',
+                  ),
+                ],
               ),
               initiallyExpanded: true,
             ),
@@ -334,13 +492,13 @@ void main() {
       );
 
       expect(find.text('我先把问题立住'), findsOneWidget);
-      expect(find.textContaining('接纳1篇'), findsOneWidget);
+      expect(find.textContaining('处理了 1 篇'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
         findsAtLeastNWidgets(1),
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageSearch),
+        find.text(UITextConstants.assistantProcessStageRetrievalProcessing),
         findsAtLeastNWidgets(1),
       );
       expect(
@@ -352,13 +510,13 @@ void main() {
       expect(find.text('整理回答'), findsNothing);
       expect(find.text('来源：官方'), findsNothing);
 
-      await tester.tap(find.textContaining('接纳1篇'));
+      await tester.tap(find.textContaining('处理了 1 篇'));
       await tester.pump();
 
       expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
     });
 
-    testWidgets('search query design 会在无 retrieval snapshot 时回退展示', (
+    testWidgets('无 retrieval snapshot 时不再回退展示自由文本 query design', (
       tester,
     ) async {
       const journey = AssistantJourney(
@@ -372,7 +530,7 @@ void main() {
             stageId: JourneyStageId.search,
             status: JourneyStageStatus.active,
             order: 1,
-            summary: '检索词：实时天气：深圳天气 实时 降雨 温度',
+            summary: '- 实时天气',
           ),
         ],
         entries: <AssistantJourneyEntry>[
@@ -382,7 +540,7 @@ void main() {
             kind: JourneyEntryKind.narrative,
             status: JourneyStageStatus.active,
             order: 0,
-            detail: '我先按最影响结论的几路信息分开核对。\n检索词：实时天气：深圳天气 实时 降雨 温度',
+            detail: '- 实时天气',
           ),
         ],
       );
@@ -398,13 +556,13 @@ void main() {
         ),
       );
 
-      expect(find.text('我会先核对实时天气。'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('实时天气'), findsNothing);
       expect(find.textContaining('深圳天气 实时 降雨 温度'), findsNothing);
     });
 
     test('search 正式 narrative 存在时不会再回退补一遍 summary', () {
-      const queryDesign = '我会先把最影响结论的几路信息拆开核对：\n- 体感与当前状态：深圳 天气 当前温度 体感 湿度 风力';
-      final built = buildAssistantJourneyViewModel(
+      const queryDesign = '- 体感与当前状态';
+      final built = _viewModel(
         journey: const AssistantJourney(
           stages: <AssistantJourneyStage>[
             AssistantJourneyStage(
@@ -434,15 +592,17 @@ void main() {
       final searchNarratives = built.blocks
           .where(
             (block) =>
-                block.stageId == JourneyStageId.search &&
-                block.kind == AssistantJourneyBlockKind.narrative,
+                block.stageId == ProcessStepId.retrievalProcessing &&
+                block.kind == AssistantJourneyBlockKind.searchSummary,
           )
           .toList(growable: false);
 
       expect(searchNarratives, hasLength(1));
-      expect(searchNarratives.single.headline, contains('我会先把最影响结论的几路信息拆开核对'));
+      expect(searchNarratives.single.headline, contains('体感与当前状态'));
       expect(
-        built.blocks.where((block) => block.stageId == JourneyStageId.search),
+        built.blocks.where(
+          (block) => block.stageId == ProcessStepId.retrievalProcessing,
+        ),
         hasLength(1),
       );
     });
@@ -489,8 +649,7 @@ void main() {
             kind: JourneyEntryKind.narrative,
             status: JourneyStageStatus.completed,
             order: 2,
-            detail:
-                '我开始整理Shenzhen tian qi的关键信息。已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
+            detail: '已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
           ),
         ],
         readiness: AssistantJourneyReadiness(finalAnswerReady: true),
@@ -518,7 +677,7 @@ void main() {
         ],
       );
 
-      final viewModel = buildAssistantJourneyViewModel(
+      final viewModel = _viewModel(
         journey: journey,
         isRunning: false,
         retrievalProcessing: retrievalProcessing,
@@ -526,21 +685,73 @@ void main() {
 
       expect(
         viewModel.blocks.map((block) => block.stageId).toList(growable: false),
-        equals(const <JourneyStageId>[
-          JourneyStageId.analyze,
-          JourneyStageId.search,
-          JourneyStageId.answer,
+        equals(const <ProcessStepId>[
+          ProcessStepId.understanding,
+          ProcessStepId.retrievalProcessing,
+          ProcessStepId.answerOrganization,
         ]),
       );
       expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.searchSummary);
       expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
-      expect(viewModel.blocks[1].referenceLabel, '处理10篇文档，接纳3篇如下');
+      expect(viewModel.blocks[1].referenceLabel, '处理了 10 篇，接纳了 3 篇');
       expect(viewModel.blocks[2].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
       expect(viewModel.blocks[2].headline, isNot(contains('Shenzhen tian qi')));
     });
 
+    test('canonical 四阶段过程轨会折叠成可见三阶段，且第一阶段只展示稳定主字段', () {
+      final built = _viewModel(
+        processTimeline: <ProcessTimelineFrame>[
+          buildProcessTimelineFrame(
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+            headline: '我先确认你现在最需要的是实时天气结果。',
+            detail: '关注点：天气现状、出门体感',
+            understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+              intentSummary: '我先确认你现在最需要的是实时天气结果。',
+              userFacingSummary: '我先确认你现在最需要的是实时天气结果。',
+              concernPoints: <String>['天气现状', '出门体感'],
+            ),
+          ),
+          buildProcessTimelineFrame(
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            headline: '我会先按天气现状和出门建议两路来核对。',
+            understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+              queryDesignSummary: '我会先按天气现状和出门建议两路来核对。',
+            ),
+          ),
+          buildProcessTimelineFrame(
+            stepId: ProcessStepId.retrievalProcessing,
+            status: JourneyStageStatus.completed,
+            headline: '能直接回答的关键信息已经收拢好了。',
+            retrievalProcessing: const RetrievalProcessingSnapshot(
+              processingSummary: '能直接回答的关键信息已经收拢好了。',
+            ),
+          ),
+          buildProcessTimelineFrame(
+            stepId: ProcessStepId.answerOrganization,
+            status: JourneyStageStatus.completed,
+            headline: '我把结果压成一句直接结论和一条简洁建议。',
+            answerProcessing: const RunArtifactsAnswerProcessing(
+              readinessSummary: '我把结果压成一句直接结论和一条简洁建议。',
+            ),
+          ),
+        ],
+      );
+
+      expect(
+        built.blocks.map((block) => block.stageId).toList(growable: false),
+        orderedEquals(const <ProcessStepId>[
+          ProcessStepId.understanding,
+          ProcessStepId.retrievalProcessing,
+          ProcessStepId.answerOrganization,
+        ]),
+      );
+      expect(built.blocks.first.detail, isEmpty);
+    });
+
     test('检索引用块不会混入低信号系统状态文案', () {
-      final built = buildAssistantJourneyViewModel(
+      final built = _viewModel(
         journey: const AssistantJourney(),
         isRunning: false,
         retrievalProcessing: const RetrievalProcessingSnapshot(

@@ -1,7 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
@@ -143,23 +146,55 @@ class AssistantMessageBubble extends StatelessWidget {
           );
     final type = message['type'] as String? ?? 'text';
     final content = message['content'] as String? ?? '';
-    final streamFinalAnswer = message['streamFinalAnswer'] as String? ?? '';
     final senderName = message['senderName'] as String? ?? '';
     final avatar = message['senderAvatar'] as String?;
     final isAssistantMessage =
         (message['senderId'] as String?) ==
         AppConceptConstants.assistantSenderId;
-    final previewAnswer =
-        isAssistantMessage && isAssistantRunning && answerGateOpen
-        ? streamFinalAnswer
-        : '';
-    final answerText = isAssistantMessage
+    final persistedDisplayState = isAssistantMessage
+        ? resolvePersistedAssistantDisplayState(message)
+        : const AssistantDisplayState();
+    final fallbackAnswerText = isAssistantMessage
         ? _resolveAssistantVisibleAnswerText(
             message: message,
-            previewAnswer: previewAnswer,
+            previewAnswer: '',
             content: content,
             isStreaming: isAssistantRunning,
           )
+        : content;
+    final resolvedProcessTimeline = isAssistantMessage
+        ? resolveAssistantProcessTimelineFromMessage(message)
+        : const <ProcessTimelineFrame>[];
+    final resolvedRetrievalProcessing = isAssistantMessage
+        ? resolveAssistantRetrievalProcessingFromMessage(message)
+        : const RetrievalProcessingSnapshot();
+    final resolvedDisplayState = isAssistantMessage
+        ? buildAssistantDisplayState(
+            explicitState: persistedDisplayState,
+            processTimeline: resolvedProcessTimeline,
+            understandingSnapshot:
+                resolveAssistantUnderstandingSnapshotFromMessage(message),
+            retrievalProcessing: resolvedRetrievalProcessing,
+            answerProcessing: resolveAssistantAnswerProcessingFromMessage(
+              message,
+            ),
+            answerMarkdown:
+                persistedDisplayState.answer.blocks.isEmpty &&
+                    resolvePersistedAssistantDisplayMarkdown(message).isNotEmpty
+                ? resolvePersistedAssistantDisplayMarkdown(message)
+                : fallbackAnswerText,
+            answerPlainText:
+                persistedDisplayState.answer.blocks.isEmpty &&
+                    resolvePersistedAssistantDisplayPlainText(
+                      message,
+                    ).isNotEmpty
+                ? resolvePersistedAssistantDisplayPlainText(message)
+                : fallbackAnswerText,
+            finalAnswerReady: !isAssistantRunning,
+          )
+        : const AssistantDisplayState();
+    final answerText = isAssistantMessage
+        ? renderAnswerBlocksToMarkdown(resolvedDisplayState.answer.blocks)
         : content;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble &&
@@ -170,9 +205,10 @@ class AssistantMessageBubble extends StatelessWidget {
         ? (journeyViewModel ??
               buildAssistantJourneyViewModel(
                 journey: resolveAssistantJourneyFromMessage(message),
+                processTimeline: resolvedProcessTimeline,
                 isRunning: isAssistantRunning,
-                retrievalProcessing:
-                    resolveAssistantRetrievalProcessingFromMessage(message),
+                displayState: resolvedDisplayState,
+                retrievalProcessing: resolvedRetrievalProcessing,
                 usageStats:
                     (message['uiUsageStats'] as Map?)
                         ?.cast<String, dynamic>() ??
@@ -298,6 +334,7 @@ class AssistantMessageBubble extends StatelessWidget {
         child: AssistantAnswerContent(
           message: message,
           content: answerText,
+          answerBlocks: resolvedDisplayState.answer.blocks,
           textColor: textColor,
           onReferenceTap: onReferenceTap,
         ),
@@ -474,12 +511,12 @@ class _RunningStatusRow extends StatefulWidget {
   const _RunningStatusRow({
     required this.label,
     required this.textColor,
-    this.stageId = JourneyStageId.unknown,
+    this.stageId = ProcessStepId.unknown,
   });
 
   final String label;
   final Color textColor;
-  final JourneyStageId stageId;
+  final ProcessStepId stageId;
 
   @override
   State<_RunningStatusRow> createState() => _RunningStatusRowState();
@@ -538,20 +575,20 @@ class _PhaseActivityIndicator extends StatelessWidget {
     required this.color,
   });
 
-  final JourneyStageId stageId;
+  final ProcessStepId stageId;
   final Animation<double> animation;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
     switch (stageId) {
-      case JourneyStageId.search:
+      case ProcessStepId.retrievalDesign:
+      case ProcessStepId.retrievalProcessing:
         return _SearchingFlowIndicator(animation: animation, color: color);
-      case JourneyStageId.analyze:
-      case JourneyStageId.verify:
-      case JourneyStageId.answer:
+      case ProcessStepId.understanding:
+      case ProcessStepId.answerOrganization:
         return _ThinkingPetalIndicator(animation: animation, color: color);
-      case JourneyStageId.unknown:
+      case ProcessStepId.unknown:
         return _WaitingTwistIndicator(animation: animation, color: color);
     }
   }

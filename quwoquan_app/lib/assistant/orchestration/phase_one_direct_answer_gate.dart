@@ -27,18 +27,6 @@ class PhaseOneDirectAnswerGate {
     required SynthesisReadinessResult synthesisReadiness,
     bool executionSignalsPresent = false,
   }) {
-    if (!synthesisReadiness.ready) {
-      return const PhaseOneDirectAnswerDecision(
-        shouldSkipSynthesis: false,
-        reason: 'synthesis_not_ready',
-      );
-    }
-    if (executionSignalsPresent) {
-      return const PhaseOneDirectAnswerDecision(
-        shouldSkipSynthesis: false,
-        reason: 'phase_one_has_execution_signals',
-      );
-    }
     final parsed = LlmResponseParser.parse(rawFinalText).json;
     if (parsed == null) {
       return const PhaseOneDirectAnswerDecision(
@@ -70,7 +58,7 @@ class PhaseOneDirectAnswerGate {
         projection.hasRenderableContent &&
         normalizedTurn.messageKindType == AssistantMessageKind.progress &&
         (phaseId == 'answering' || rawResultText.isNotEmpty);
-    if (staleProgressCompat) {
+    if (staleProgressCompat && !executionSignalsPresent) {
       final recoveredTurn = AssistantTurnOutput(
         contractId: kAssistantTurnCurrentContractId,
         decision: const AssistantTurnDecisionPayload(
@@ -125,9 +113,21 @@ class PhaseOneDirectAnswerGate {
         actionCode == 'compose_answer' &&
         reasonCode == 'evidence_ready';
     if (!hasDirectAnswerContract) {
+      if (!synthesisReadiness.ready) {
+        return const PhaseOneDirectAnswerDecision(
+          shouldSkipSynthesis: false,
+          reason: 'synthesis_not_ready',
+        );
+      }
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
         reason: 'phase_one_contract_incomplete',
+      );
+    }
+    if (executionSignalsPresent) {
+      return const PhaseOneDirectAnswerDecision(
+        shouldSkipSynthesis: false,
+        reason: 'execution_signals_require_synthesis',
       );
     }
     return PhaseOneDirectAnswerDecision(

@@ -1,8 +1,9 @@
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 enum AssistantJourneyBlockKind { narrative, searchSummary, verificationSummary }
@@ -29,7 +30,7 @@ class AssistantJourneyStageViewModel {
     this.referenceCount = 0,
   });
 
-  final JourneyStageId stageId;
+  final ProcessStepId stageId;
   final int order;
   final String label;
   final JourneyStageStatus status;
@@ -52,14 +53,16 @@ class AssistantJourneyBlockViewModel {
     required this.stageId,
     this.headline = '',
     this.detail = '',
+    this.items = const <String>[],
     this.referenceLabel = '',
     this.references = const <AssistantJourneyReferenceViewModel>[],
   });
 
   final AssistantJourneyBlockKind kind;
-  final JourneyStageId stageId;
+  final ProcessStepId stageId;
   final String headline;
   final String detail;
+  final List<String> items;
   final String referenceLabel;
   final List<AssistantJourneyReferenceViewModel> references;
 
@@ -69,11 +72,13 @@ class AssistantJourneyBlockViewModel {
 class AssistantJourneyViewModel {
   const AssistantJourneyViewModel({
     this.journey = const AssistantJourney(),
+    this.displayState = const AssistantDisplayState(),
+    this.processTimeline = const <ProcessTimelineFrame>[],
     this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.stages = const <AssistantJourneyStageViewModel>[],
     this.blocks = const <AssistantJourneyBlockViewModel>[],
     this.summary = '',
-    this.activeStageId = JourneyStageId.unknown,
+    this.activeStageId = ProcessStepId.unknown,
     this.activeStageLabel = '',
     this.processedDocumentCount = 0,
     this.acceptedDocumentCount = 0,
@@ -87,11 +92,13 @@ class AssistantJourneyViewModel {
   });
 
   final AssistantJourney journey;
+  final AssistantDisplayState displayState;
+  final List<ProcessTimelineFrame> processTimeline;
   final RetrievalProcessingSnapshot retrievalProcessing;
   final List<AssistantJourneyStageViewModel> stages;
   final List<AssistantJourneyBlockViewModel> blocks;
   final String summary;
-  final JourneyStageId activeStageId;
+  final ProcessStepId activeStageId;
   final String activeStageLabel;
   final int processedDocumentCount;
   final int acceptedDocumentCount;
@@ -110,866 +117,654 @@ class AssistantJourneyViewModel {
       isRunning &&
       blocks.isEmpty &&
       stages.isNotEmpty &&
-      activeStageId == JourneyStageId.analyze;
+      activeStageId == ProcessStepId.understanding;
 }
 
 AssistantJourneyViewModel buildAssistantJourneyViewModel({
   required AssistantJourney journey,
+  required List<ProcessTimelineFrame> processTimeline,
   required bool isRunning,
   bool allowAnswerStage = true,
   Map<String, dynamic> usageStats = const <String, dynamic>{},
   int elapsedMs = 0,
+  AssistantDisplayState displayState = const AssistantDisplayState(),
   RetrievalProcessingSnapshot retrievalProcessing =
       const RetrievalProcessingSnapshot(),
 }) {
-  final effectiveJourney = _maskPrematureAnswerJourney(
-    journey,
+  final timelineInput = processTimeline.isNotEmpty
+      ? buildVisibleProcessTimeline(processTimeline)
+      : const <ProcessTimelineFrame>[];
+  final effectiveTimeline = _maskPrematureAnswerTimeline(
+    normalizeProcessTimeline(timelineInput),
     isRunning: isRunning,
     allowAnswerStage: allowAnswerStage,
+    finalAnswerReady: journey.readiness.finalAnswerReady,
   );
-  final timelineJourney = buildAssistantUiProcessTimeline(effectiveJourney);
-  final effectiveRetrievalProcessing = _normalizeRetrievalProcessing(
+  final effectiveRetrievalProcessing = _resolveRetrievalProcessing(
+    effectiveTimeline,
     retrievalProcessing,
-    timelineJourney,
   );
-  final stages = _buildStages(
-    journey: timelineJourney,
-    isRunning: isRunning,
+  final effectiveDisplayState = buildAssistantDisplayState(
+    explicitState: displayState,
+    processTimeline: effectiveTimeline,
+    retrievalProcessing: effectiveRetrievalProcessing,
+    finalAnswerReady: displayState.process.finalAnswerReady,
+  );
+  final fallbackStages = _buildStages(
+    processTimeline: effectiveTimeline,
     retrievalProcessing: effectiveRetrievalProcessing,
   );
-  final blocks = _buildBlocks(
-    timelineJourney,
-    stages: stages,
+  final fallbackBlocks = _buildBlocks(
+    processTimeline: effectiveTimeline,
     retrievalProcessing: effectiveRetrievalProcessing,
   );
-  final activeStage = _resolveActiveStage(stages);
+  final displayStages = effectiveDisplayState.process.blocks.isNotEmpty
+      ? _buildStagesFromDisplayState(
+          process: effectiveDisplayState.process,
+          retrievalProcessing: effectiveRetrievalProcessing,
+        )
+      : const <AssistantJourneyStageViewModel>[];
+  final displayBlocks = effectiveDisplayState.process.blocks.isNotEmpty
+      ? _buildBlocksFromDisplayState(
+          process: effectiveDisplayState.process,
+          retrievalProcessing: effectiveRetrievalProcessing,
+        )
+      : const <AssistantJourneyBlockViewModel>[];
+  final stages = _mergeStages(
+    preferred: displayStages,
+    fallback: fallbackStages,
+  );
+  final blocks = _mergeBlocks(
+    preferred: displayBlocks,
+    fallback: fallbackBlocks,
+  );
+  final activeStage = _resolveActiveStage(stages, isRunning: isRunning);
   final summary = _resolveSummary(
-    timelineJourney,
     stages: stages,
     blocks: blocks,
+    isRunning: isRunning,
   );
-  final acceptedDocumentCount =
-      effectiveRetrievalProcessing.acceptedDocumentCount;
-  final processedDocumentCount =
-      effectiveRetrievalProcessing.processedDocumentCount;
-  final referenceCount = acceptedDocumentCount > 0
-      ? acceptedDocumentCount
-      : timelineJourney.referenceSummary.count > 0
-      ? timelineJourney.referenceSummary.count
-      : <String>{
-          for (final block in blocks)
-            for (final reference in block.references)
-              if (reference.url.trim().isNotEmpty) reference.url.trim(),
-        }.length;
+  final referenceCount = <String>{
+    for (final block in blocks)
+      for (final reference in block.references)
+        if (reference.url.trim().isNotEmpty) reference.url.trim(),
+  }.length;
   return AssistantJourneyViewModel(
-    journey: timelineJourney,
+    journey: journey,
+    displayState: effectiveDisplayState,
+    processTimeline: effectiveTimeline,
     retrievalProcessing: effectiveRetrievalProcessing,
     stages: stages,
     blocks: blocks,
     summary: summary,
     activeStageId: activeStage.stageId,
     activeStageLabel: activeStage.label,
-    processedDocumentCount: processedDocumentCount,
-    acceptedDocumentCount: acceptedDocumentCount,
+    processedDocumentCount:
+        effectiveRetrievalProcessing.processedDocumentCount > 0
+        ? effectiveRetrievalProcessing.processedDocumentCount
+        : effectiveRetrievalProcessing.acceptedDocumentCount,
+    acceptedDocumentCount: effectiveRetrievalProcessing.acceptedDocumentCount,
     referenceCount: referenceCount,
     isRunning: isRunning,
     usageStats: usageStats,
     elapsedMs: elapsedMs,
-    finalAnswerReady: timelineJourney.readiness.finalAnswerReady,
-    clarificationNeeded: timelineJourney.readiness.clarificationNeeded,
-    needExpansion: timelineJourney.readiness.needExpansion,
+    finalAnswerReady: journey.readiness.finalAnswerReady,
+    clarificationNeeded: journey.readiness.clarificationNeeded,
+    needExpansion: journey.readiness.needExpansion,
   );
 }
 
-AssistantJourney _maskPrematureAnswerJourney(
-  AssistantJourney journey, {
+List<ProcessTimelineFrame> _maskPrematureAnswerTimeline(
+  List<ProcessTimelineFrame> processTimeline, {
   required bool isRunning,
   required bool allowAnswerStage,
+  required bool finalAnswerReady,
 }) {
-  if (!isRunning ||
-      allowAnswerStage ||
-      journey.isEmpty ||
-      journey.readiness.finalAnswerReady) {
-    return journey;
+  if (!isRunning || allowAnswerStage || finalAnswerReady) {
+    return processTimeline;
   }
-  var changed = false;
-  final stages = <AssistantJourneyStage>[
-    for (final stage in journey.stages)
-      if (stage.stageId == JourneyStageId.answer)
-        () {
-          changed = true;
-          return AssistantJourneyStage(
-            stageId: stage.stageId,
-            status: JourneyStageStatus.pending,
-            order: stage.order,
-            summary: '',
-            referenceCount: stage.referenceCount,
-          );
-        }()
-      else
-        stage,
-  ];
-  final entries = journey.entries
-      .where((entry) => entry.stageId != JourneyStageId.answer)
+  return processTimeline
+      .where((frame) => frame.stepId != ProcessStepId.answerOrganization)
       .toList(growable: false);
-  if (entries.length != journey.entries.length) {
-    changed = true;
-  }
-  if (!changed) {
-    return journey;
-  }
-  return AssistantJourney(
-    stages: stages,
-    entries: entries,
-    summary: '',
-    referenceSummary: journey.referenceSummary,
-    readiness: journey.readiness,
-  );
 }
 
 List<AssistantJourneyStageViewModel> _buildStages({
-  required AssistantJourney journey,
-  required bool isRunning,
+  required List<ProcessTimelineFrame> processTimeline,
   required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
-  if (journey.isEmpty) {
+  if (processTimeline.isEmpty) {
     return const <AssistantJourneyStageViewModel>[];
   }
-  final rawByStageId = <JourneyStageId, AssistantJourneyStage>{
-    for (final stage in journey.stages) stage.stageId: stage,
-  };
-  return <AssistantJourneyStageViewModel>[
-    _stageViewModel(
-      stageId: JourneyStageId.analyze,
-      order: 0,
-      label: UITextConstants.assistantProcessStageUnderstand,
-      stage: rawByStageId[JourneyStageId.analyze],
-    ),
-    _mergedStageViewModel(
-      stageId: JourneyStageId.search,
-      order: 1,
-      label: UITextConstants.assistantProcessStageSearch,
-      primaryStage: rawByStageId[JourneyStageId.search],
-      secondaryStage: rawByStageId[JourneyStageId.verify],
-      referenceCount: retrievalProcessing.acceptedDocumentCount,
-    ),
-    _stageViewModel(
-      stageId: JourneyStageId.answer,
-      order: 2,
-      label: UITextConstants.assistantProcessStageAnswer,
-      stage: rawByStageId[JourneyStageId.answer],
-    ),
-  ];
+  return processTimeline
+      .map((frame) {
+        return AssistantJourneyStageViewModel(
+          stageId: frame.stepId,
+          order: assistantProcessStepOrder(frame.stepId),
+          label: _processStepLabel(frame.stepId),
+          status: frame.status,
+          summary: _headlineForFrame(frame),
+          referenceCount: frame.stepId == ProcessStepId.retrievalProcessing
+              ? (retrievalProcessing.acceptedDocumentCount > 0
+                    ? retrievalProcessing.acceptedDocumentCount
+                    : retrievalProcessing.acceptedReferences.length)
+              : 0,
+        );
+      })
+      .toList(growable: false);
 }
 
-AssistantJourneyStageViewModel _stageViewModel({
-  required JourneyStageId stageId,
-  required int order,
-  required String label,
-  required AssistantJourneyStage? stage,
-}) {
-  final summary = _sanitizeStageNarrative(
-    stage?.summary ?? '',
-    stageId: stageId,
-  );
-  return AssistantJourneyStageViewModel(
-    stageId: stageId,
-    order: order,
-    label: label,
-    status: stage?.status ?? JourneyStageStatus.pending,
-    summary: summary,
-    referenceCount: stage?.referenceCount ?? 0,
-  );
-}
-
-AssistantJourneyStageViewModel _mergedStageViewModel({
-  required JourneyStageId stageId,
-  required int order,
-  required String label,
-  required AssistantJourneyStage? primaryStage,
-  required AssistantJourneyStage? secondaryStage,
-  int referenceCount = 0,
-}) {
-  return AssistantJourneyStageViewModel(
-    stageId: stageId,
-    order: order,
-    label: label,
-    status: _mergeStageStatus(primaryStage?.status, secondaryStage?.status),
-    summary: _firstNonEmpty(<String>[
-      _sanitizeStageNarrative(secondaryStage?.summary ?? '', stageId: stageId),
-      _sanitizeStageNarrative(primaryStage?.summary ?? '', stageId: stageId),
-    ]),
-    referenceCount: _maxInt(<int>[
-      referenceCount,
-      primaryStage?.referenceCount ?? 0,
-      secondaryStage?.referenceCount ?? 0,
-    ]),
-  );
-}
-
-JourneyStageStatus _mergeStageStatus(
-  JourneyStageStatus? primary,
-  JourneyStageStatus? secondary,
-) {
-  final statuses = <JourneyStageStatus>[?primary, ?secondary];
-  if (statuses.contains(JourneyStageStatus.active)) {
-    return JourneyStageStatus.active;
-  }
-  if (statuses.contains(JourneyStageStatus.blocked)) {
-    return JourneyStageStatus.blocked;
-  }
-  if (statuses.contains(JourneyStageStatus.completed)) {
-    return JourneyStageStatus.completed;
-  }
-  if (statuses.contains(JourneyStageStatus.skipped)) {
-    return JourneyStageStatus.skipped;
-  }
-  if (statuses.contains(JourneyStageStatus.pending)) {
-    return JourneyStageStatus.pending;
-  }
-  return JourneyStageStatus.unknown;
-}
-
-AssistantJourneyStageViewModel _resolveActiveStage(
-  List<AssistantJourneyStageViewModel> stages,
-) {
-  if (stages.isEmpty) {
-    return const AssistantJourneyStageViewModel(
-      stageId: JourneyStageId.unknown,
-      order: -1,
-      label: '',
-    );
-  }
-  return stages.firstWhere(
-    (stage) =>
-        stage.status == JourneyStageStatus.active ||
-        stage.status == JourneyStageStatus.blocked,
-    orElse: () => stages.lastWhere(
-      (stage) => stage.status == JourneyStageStatus.completed,
-      orElse: () => stages.first,
-    ),
-  );
-}
-
-List<AssistantJourneyBlockViewModel> _buildBlocks(
-  AssistantJourney journey, {
-  required List<AssistantJourneyStageViewModel> stages,
+List<AssistantJourneyStageViewModel> _buildStagesFromDisplayState({
+  required AssistantProcessDisplayState process,
   required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
-  final blocks = <AssistantJourneyBlockViewModel>[];
-  final orderedEntries = List<AssistantJourneyEntry>.of(journey.entries)
-    ..sort((a, b) => a.order.compareTo(b.order));
-  for (final entry in orderedEntries) {
-    final block = _buildBlockFromEntry(entry);
-    if (block == null) {
-      continue;
-    }
-    _appendOrMergeSequentialBlock(blocks, block);
+  final grouped = <ProcessStepId, List<AssistantProcessDisplayBlock>>{};
+  for (final block in process.blocks) {
+    grouped
+        .putIfAbsent(block.stepId, () => <AssistantProcessDisplayBlock>[])
+        .add(block);
   }
-  final stageById = <JourneyStageId, AssistantJourneyStageViewModel>{
-    for (final stage in stages) stage.stageId: stage,
-  };
-  _appendFallbackStageBlock(
-    blocks,
-    stageId: JourneyStageId.analyze,
-    candidate: stageById[JourneyStageId.analyze]?.summary ?? '',
-  );
-  _appendFallbackStageBlock(
-    blocks,
-    stageId: JourneyStageId.search,
-    candidate: stageById[JourneyStageId.search]?.summary ?? '',
-    skipLowSignal: true,
-  );
-  _appendFallbackStageBlock(
-    blocks,
-    stageId: JourneyStageId.search,
-    candidate: retrievalProcessing.processingSummary,
-    skipLowSignal: true,
-  );
-  _appendFallbackStageBlock(
-    blocks,
-    stageId: JourneyStageId.search,
-    candidate: retrievalProcessing.expansionReason,
-    skipLowSignal: true,
-  );
-  _appendFallbackStageBlock(
-    blocks,
-    stageId: JourneyStageId.answer,
-    candidate: stageById[JourneyStageId.answer]?.summary ?? '',
-  );
-  _mergeRetrievalProcessingIntoBlocks(blocks, retrievalProcessing);
-  if (blocks.isEmpty) {
-    final summary = _resolveSummary(journey, stages: stages, blocks: blocks);
-    if (summary.isNotEmpty) {
-      blocks.add(
-        AssistantJourneyBlockViewModel(
-          kind: AssistantJourneyBlockKind.narrative,
-          stageId: journey.activeStageId,
-          headline: summary,
-        ),
-      );
-    }
-  }
-  return blocks;
+  final orderedSteps = grouped.keys.toList(growable: false)
+    ..sort(
+      (a, b) =>
+          assistantProcessStepOrder(a).compareTo(assistantProcessStepOrder(b)),
+    );
+  return orderedSteps
+      .map((stepId) {
+        final stepBlocks =
+            grouped[stepId] ?? const <AssistantProcessDisplayBlock>[];
+        final summary = _summaryForProcessBlocks(stepBlocks);
+        return AssistantJourneyStageViewModel(
+          stageId: stepId,
+          order: assistantProcessStepOrder(stepId),
+          label: _processStepLabel(stepId),
+          status: _statusForProcessBlocks(stepBlocks),
+          summary: summary,
+          referenceCount: stepId == ProcessStepId.retrievalProcessing
+              ? _referenceCountForStep(stepBlocks, retrievalProcessing)
+              : 0,
+        );
+      })
+      .toList(growable: false);
 }
 
-List<AssistantJourneyReferenceViewModel> _referenceViewModels(
-  List<AssistantJourneyReference> references,
-) {
-  return references
+List<AssistantJourneyBlockViewModel> _buildBlocks({
+  required List<ProcessTimelineFrame> processTimeline,
+  required RetrievalProcessingSnapshot retrievalProcessing,
+}) {
+  return processTimeline
+      .where((frame) => frame.hasVisibleContent)
       .map(
-        (reference) => AssistantJourneyReferenceViewModel(
-          title: reference.title.trim(),
-          url: reference.url.trim(),
-          source: reference.source.trim(),
+        (frame) => AssistantJourneyBlockViewModel(
+          kind: frame.stepId == ProcessStepId.retrievalProcessing
+              ? AssistantJourneyBlockKind.searchSummary
+              : AssistantJourneyBlockKind.narrative,
+          stageId: frame.stepId,
+          headline: _headlineForFrame(frame),
+          detail: _detailForFrame(
+            frame,
+            fallbackRetrievalProcessing: retrievalProcessing,
+          ),
+          referenceLabel: _referenceLabelForFrame(
+            frame,
+            fallbackRetrievalProcessing: retrievalProcessing,
+          ),
+          references: frame.references
+              .map(
+                (reference) => AssistantJourneyReferenceViewModel(
+                  title: reference.title.trim(),
+                  url: reference.url.trim(),
+                  source: reference.source.trim(),
+                ),
+              )
+              .where(
+                (reference) =>
+                    reference.title.isNotEmpty || reference.url.isNotEmpty,
+              )
+              .toList(growable: false),
         ),
-      )
-      .where(
-        (reference) => reference.title.isNotEmpty && reference.url.isNotEmpty,
       )
       .toList(growable: false);
 }
 
-AssistantJourneyBlockViewModel? _buildBlockFromEntry(AssistantJourneyEntry entry) {
-  final stageId = _displayStageId(entry.stageId);
-  final visibleLines = _filterStageNarrativeLines(
-    stageId,
-    _narrativeLinesForEntry(entry, stageId: stageId),
-  );
-  final references = _referenceViewModels(entry.references);
-  if (visibleLines.isEmpty && references.isEmpty) {
-    return null;
-  }
-  return AssistantJourneyBlockViewModel(
-    kind: references.isNotEmpty
-        ? AssistantJourneyBlockKind.searchSummary
-        : AssistantJourneyBlockKind.narrative,
-    stageId: stageId,
-    headline: visibleLines.isNotEmpty ? visibleLines.first : '',
-    detail: visibleLines.skip(1).join('\n'),
-    referenceLabel: references.isNotEmpty
-        ? _retrievalBlockHeadline(
-            processedCount: 0,
-            acceptedCount: references.length,
-          )
-        : '',
-    references: references,
-  );
-}
-
-List<String> _narrativeLinesForEntry(
-  AssistantJourneyEntry entry, {
-  required JourneyStageId stageId,
+List<AssistantJourneyBlockViewModel> _buildBlocksFromDisplayState({
+  required AssistantProcessDisplayState process,
+  required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
-  final headline = _sanitizeStageNarrative(entry.headline, stageId: stageId);
-  final detail = _sanitizeStageNarrative(entry.detail, stageId: stageId);
-  if (headline.isEmpty && detail.isEmpty) {
-    return const <String>[];
+  final grouped = <ProcessStepId, List<AssistantProcessDisplayBlock>>{};
+  for (final block in process.blocks.where(_hasVisibleProcessBlockForUi)) {
+    grouped
+        .putIfAbsent(block.stepId, () => <AssistantProcessDisplayBlock>[])
+        .add(block);
   }
-  return _distinctNonEmpty(<String>[
-    if (headline.isNotEmpty) headline,
-    if (detail.isNotEmpty && detail != headline)
-      ...detail
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty),
-  ]);
+  final orderedSteps = grouped.keys.toList(growable: false)
+    ..sort(
+      (a, b) =>
+          assistantProcessStepOrder(a).compareTo(assistantProcessStepOrder(b)),
+    );
+  return orderedSteps
+      .map((stepId) {
+        final stepBlocks =
+            grouped[stepId] ?? const <AssistantProcessDisplayBlock>[];
+        var headline = '';
+        var detail = '';
+        final items = <String>[];
+        final references = <AssistantJourneyReferenceViewModel>[];
+        for (final block in stepBlocks) {
+          final title = block.title.trim();
+          final body = block.body.trim();
+          if (headline.isEmpty) {
+            if (title.isNotEmpty) {
+              headline = title;
+            } else if (body.isNotEmpty) {
+              headline = body;
+            }
+          } else if (detail.isEmpty && body.isNotEmpty && body != headline) {
+            detail = body;
+          }
+          items.addAll(
+            block.items
+                .map((item) => _displayItemText(item))
+                .where((item) => item.isNotEmpty),
+          );
+          references.addAll(
+            block.references
+                .map(
+                  (reference) => AssistantJourneyReferenceViewModel(
+                    title: reference.title.trim(),
+                    url: reference.url.trim(),
+                    source: reference.source.trim(),
+                  ),
+                )
+                .where(
+                  (reference) =>
+                      reference.title.isNotEmpty || reference.url.isNotEmpty,
+                ),
+          );
+        }
+        final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
+            ? retrievalProcessing.acceptedDocumentCount
+            : references.length;
+        final processedCount = retrievalProcessing.processedDocumentCount > 0
+            ? retrievalProcessing.processedDocumentCount
+            : acceptedCount;
+        return AssistantJourneyBlockViewModel(
+          kind: stepId == ProcessStepId.retrievalProcessing
+              ? AssistantJourneyBlockKind.searchSummary
+              : AssistantJourneyBlockKind.narrative,
+          stageId: stepId,
+          headline: headline,
+          detail: detail,
+          items: items,
+          referenceLabel: references.isNotEmpty
+              ? UITextConstants.assistantProcessReferenceDigestTemplate
+                    .replaceFirst('%s', processedCount.toString())
+                    .replaceFirst('%s', acceptedCount.toString())
+              : '',
+          references: references,
+        );
+      })
+      .toList(growable: false);
 }
 
-void _appendOrMergeSequentialBlock(
-  List<AssistantJourneyBlockViewModel> blocks,
-  AssistantJourneyBlockViewModel incoming,
-) {
-  if (blocks.isEmpty) {
-    blocks.add(incoming);
-    return;
+List<AssistantJourneyStageViewModel> _mergeStages({
+  required List<AssistantJourneyStageViewModel> preferred,
+  required List<AssistantJourneyStageViewModel> fallback,
+}) {
+  final merged = <ProcessStepId, AssistantJourneyStageViewModel>{
+    for (final stage in fallback) stage.stageId: stage,
+  };
+  for (final stage in preferred) {
+    merged[stage.stageId] = stage;
   }
-  final last = blocks.last;
-  if (last.stageId != incoming.stageId) {
-    blocks.add(incoming);
-    return;
+  final ordered = merged.values.toList(growable: false)
+    ..sort((a, b) => a.order.compareTo(b.order));
+  return ordered;
+}
+
+List<AssistantJourneyBlockViewModel> _mergeBlocks({
+  required List<AssistantJourneyBlockViewModel> preferred,
+  required List<AssistantJourneyBlockViewModel> fallback,
+}) {
+  final preferredByStep =
+      <ProcessStepId, List<AssistantJourneyBlockViewModel>>{};
+  for (final block in preferred) {
+    preferredByStep
+        .putIfAbsent(block.stageId, () => <AssistantJourneyBlockViewModel>[])
+        .add(block);
   }
-  blocks[blocks.length - 1] = _mergeJourneyBlocks(last, incoming);
-}
-
-AssistantJourneyBlockViewModel _mergeJourneyBlocks(
-  AssistantJourneyBlockViewModel current,
-  AssistantJourneyBlockViewModel incoming,
-) {
-  final mergedLines = _distinctNonEmpty(<String>[
-    ..._blockLines(current),
-    ..._blockLines(incoming),
-  ]);
-  final mergedReferences = _mergeBlockReferences(
-    current.references,
-    incoming.references,
-  );
-  final mergedReferenceLabel = incoming.referenceLabel.trim().isNotEmpty
-      ? incoming.referenceLabel.trim()
-      : (current.referenceLabel.trim().isNotEmpty
-            ? current.referenceLabel.trim()
-            : (mergedReferences.isNotEmpty
-                  ? _retrievalBlockHeadline(
-                      processedCount: 0,
-                      acceptedCount: mergedReferences.length,
-                    )
-                  : ''));
-  return AssistantJourneyBlockViewModel(
-    kind: mergedReferences.isNotEmpty
-        ? AssistantJourneyBlockKind.searchSummary
-        : current.kind,
-    stageId: current.stageId,
-    headline: mergedLines.isNotEmpty ? mergedLines.first : '',
-    detail: mergedLines.skip(1).join('\n'),
-    referenceLabel: mergedReferenceLabel,
-    references: mergedReferences,
-  );
-}
-
-List<String> _blockLines(AssistantJourneyBlockViewModel block) {
-  return _distinctNonEmpty(<String>[
-    if (block.headline.trim().isNotEmpty) block.headline.trim(),
-    ...block.detail
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty),
-  ]);
-}
-
-List<AssistantJourneyReferenceViewModel> _mergeBlockReferences(
-  List<AssistantJourneyReferenceViewModel> first,
-  List<AssistantJourneyReferenceViewModel> second,
-) {
-  final seen = <String>{};
-  final merged = <AssistantJourneyReferenceViewModel>[];
-  for (final candidate in <AssistantJourneyReferenceViewModel>[
-    ...first,
-    ...second,
-  ]) {
-    final key = '${candidate.url}::${candidate.title}';
-    if (!seen.add(key)) {
+  final fallbackByStep =
+      <ProcessStepId, List<AssistantJourneyBlockViewModel>>{};
+  for (final block in fallback) {
+    fallbackByStep
+        .putIfAbsent(block.stageId, () => <AssistantJourneyBlockViewModel>[])
+        .add(block);
+  }
+  final orderedStepIds =
+      <ProcessStepId>{
+        ...fallbackByStep.keys,
+        ...preferredByStep.keys,
+      }.toList(growable: false)..sort(
+        (a, b) => assistantProcessStepOrder(
+          a,
+        ).compareTo(assistantProcessStepOrder(b)),
+      );
+  final merged = <AssistantJourneyBlockViewModel>[];
+  for (final stepId in orderedStepIds) {
+    final preferredBlocks = preferredByStep[stepId];
+    if (preferredBlocks != null && preferredBlocks.isNotEmpty) {
+      merged.addAll(preferredBlocks);
       continue;
     }
-    merged.add(candidate);
+    merged.addAll(
+      fallbackByStep[stepId] ?? const <AssistantJourneyBlockViewModel>[],
+    );
   }
   return merged;
 }
 
-void _appendFallbackStageBlock(
-  List<AssistantJourneyBlockViewModel> blocks, {
-  required JourneyStageId stageId,
-  required String candidate,
-  bool skipLowSignal = false,
+AssistantJourneyStageViewModel _resolveActiveStage(
+  List<AssistantJourneyStageViewModel> stages, {
+  required bool isRunning,
 }) {
-  if (blocks.any((block) => block.stageId == stageId)) {
-    return;
+  for (final stage in stages) {
+    if (stage.status == JourneyStageStatus.active) {
+      return stage;
+    }
   }
-  final sanitized = _sanitizeStageNarrative(candidate, stageId: stageId);
-  if (sanitized.isEmpty) {
-    return;
+  if (isRunning) {
+    for (final stage in stages) {
+      if (!stage.isResolved) {
+        return stage;
+      }
+    }
   }
-  if (skipLowSignal && _isLowSignalStageNarrative(stageId, sanitized)) {
-    return;
+  for (final stage in stages.reversed) {
+    if (stage.summary.trim().isNotEmpty || stage.referenceCount > 0) {
+      return stage;
+    }
   }
-  _insertBlockByStageOrder(
-    blocks,
-    AssistantJourneyBlockViewModel(
-      kind: AssistantJourneyBlockKind.narrative,
-      stageId: stageId,
-      headline: sanitized,
-    ),
+  return const AssistantJourneyStageViewModel(
+    stageId: ProcessStepId.unknown,
+    order: -1,
+    label: '',
   );
 }
 
-void _mergeRetrievalProcessingIntoBlocks(
-  List<AssistantJourneyBlockViewModel> blocks,
-  RetrievalProcessingSnapshot retrievalProcessing,
-) {
-  final references = retrievalProcessing.acceptedReferences
-      .map(
-        (reference) => AssistantJourneyReferenceViewModel(
-          title: reference.title.trim(),
-          url: reference.url.trim(),
-          source: reference.source.trim(),
-        ),
-      )
-      .where(
-        (reference) => reference.title.isNotEmpty && reference.url.isNotEmpty,
-      )
-      .toList(growable: false);
-  final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
-      ? retrievalProcessing.acceptedDocumentCount
-      : references.length;
-  final processedCount = retrievalProcessing.processedDocumentCount > 0
-      ? retrievalProcessing.processedDocumentCount
-      : acceptedCount;
-  final referenceLabel =
-      (processedCount > 0 || acceptedCount > 0 || references.isNotEmpty)
-      ? _retrievalBlockHeadline(
-          processedCount: processedCount,
-          acceptedCount: acceptedCount,
-        )
-      : '';
-  if (referenceLabel.isEmpty && references.isEmpty) {
-    return;
-  }
-  final searchIndex = blocks.lastIndexWhere(
-    (block) => block.stageId == JourneyStageId.search,
-  );
-  final retrievalBlock = AssistantJourneyBlockViewModel(
-    kind: AssistantJourneyBlockKind.searchSummary,
-    stageId: JourneyStageId.search,
-    referenceLabel: referenceLabel,
-    references: references,
-  );
-  if (searchIndex < 0) {
-    _insertBlockByStageOrder(blocks, retrievalBlock);
-    return;
-  }
-  blocks[searchIndex] = _mergeJourneyBlocks(blocks[searchIndex], retrievalBlock);
-}
-
-void _insertBlockByStageOrder(
-  List<AssistantJourneyBlockViewModel> blocks,
-  AssistantJourneyBlockViewModel block,
-) {
-  final insertAt = blocks.indexWhere(
-    (existing) => _stageDisplayOrder(existing.stageId) > _stageDisplayOrder(block.stageId),
-  );
-  if (insertAt < 0) {
-    blocks.add(block);
-    return;
-  }
-  blocks.insert(insertAt, block);
-}
-
-int _stageDisplayOrder(JourneyStageId stageId) {
-  switch (stageId) {
-    case JourneyStageId.analyze:
-      return 0;
-    case JourneyStageId.search:
-    case JourneyStageId.verify:
-      return 1;
-    case JourneyStageId.answer:
-      return 2;
-    case JourneyStageId.unknown:
-      return 3;
-  }
-}
-
-bool _isLowSignalRetrievalNarrative(String text) {
-  final normalized = text.trim();
-  return normalized == '已完成资料筛选并进入成答' || normalized == '已完成当前轮资料筛选';
-}
-
-String _sanitizeStageNarrative(String raw, {required JourneyStageId stageId}) {
-  final normalized = stageId == JourneyStageId.analyze
-      ? _sanitizeAnalyzeJourneyText(raw)
-      : _sanitizeJourneyText(raw, stageHint: stageId.name);
-  final sanitized = _stripLowSignalStagePrefix(
-    stageId == JourneyStageId.search
-        ? _normalizeSearchNarrative(normalized)
-        : normalized,
-    stageId: stageId,
-  );
-  if (sanitized.isEmpty || _isLowSignalStageNarrative(stageId, sanitized)) {
-    return '';
-  }
-  return sanitized;
-}
-
-String _sanitizeAnalyzeJourneyText(String raw) {
-  final normalized = AssistantDisplayTextResolver
-      .normalizeUserFacingProcessNarration(raw, stageHint: 'analyze');
-  if (normalized.isEmpty) return '';
-  if (_looksLikeRomanizedQueryFragment(normalized)) return '';
-  return normalized.trim();
-}
-
-String _normalizeSearchNarrative(String raw) {
-  if (raw.trim().isEmpty) {
-    return '';
-  }
-  final lines = raw
-      .replaceAll('\r\n', '\n')
-      .split('\n')
-      .map(_normalizeSearchNarrativeLine)
-      .where((line) => line.isNotEmpty)
-      .toList(growable: false);
-  return lines.join('\n').trim();
-}
-
-String _normalizeSearchNarrativeLine(String rawLine) {
-  final line = rawLine.trim();
-  if (line.isEmpty) {
-    return '';
-  }
-  if (line.startsWith('检索词：')) {
-    final focus = _compactSearchFocusLabel(line.substring(4).trim());
-    return focus.isEmpty ? '' : '我会先核对$focus。';
-  }
-  if (line.startsWith('- ')) {
-    final focus = _compactSearchFocusLabel(line.substring(2).trim());
-    return focus.isEmpty ? '' : '- $focus';
-  }
-  return line;
-}
-
-String _compactSearchFocusLabel(String raw) {
-  final normalized = raw.trim();
-  if (normalized.isEmpty) {
-    return '';
-  }
-  final prefix = normalized.split('：').first.trim().replaceAll('｜', ' · ');
-  if (prefix.isEmpty) {
-    return '';
-  }
-  if (prefix == normalized && normalized.length > 24) {
-    return '';
-  }
-  return prefix;
-}
-
-String _stripLowSignalStagePrefix(
-  String text, {
-  required JourneyStageId stageId,
-}) {
-  var normalized = text.trim();
-  if (normalized.isEmpty) {
-    return '';
-  }
-  switch (stageId) {
-    case JourneyStageId.analyze:
-      normalized = normalized.replaceFirst(
-        RegExp(r'^正在获取[^\n。！？!?]*[。！？!?]?\s*'),
-        '',
-      );
-      break;
-    case JourneyStageId.search:
-      normalized = normalized
-          .replaceFirst(
-            RegExp(r'^正在(?:交叉核对|搜索|查询|检索)[^\n。！？!?]*[。！？!?]?\s*'),
-            '',
-          )
-          .replaceFirst(RegExp(r'^已找到\s*\d+\s*篇相关资料[。！？!?]?\s*'), '')
-          .replaceFirst(RegExp(r'^已经有一批能支撑判断的信息了[^\n。！？!?]*[。！？!?]?\s*'), '');
-      break;
-    case JourneyStageId.answer:
-      normalized = normalized.replaceFirst(
-        RegExp(r'^我开始整理[^\n。！？!?]*[。！？!?]\s*'),
-        '',
-      );
-      break;
-    default:
-      break;
-  }
-  return normalized.trim();
-}
-
-List<String> _filterStageNarrativeLines(
-  JourneyStageId stageId,
-  Iterable<String> lines,
-) {
-  return _distinctNonEmpty(
-    lines.where((line) => !_isLowSignalStageNarrative(stageId, line.trim())),
-  );
-}
-
-bool _isLowSignalStageNarrative(JourneyStageId stageId, String text) {
-  final normalized = text.trim();
-  switch (stageId) {
-    case JourneyStageId.analyze:
-      return RegExp(r'^正在获取.+位置').hasMatch(normalized);
-    case JourneyStageId.search:
-      return _isLowSignalRetrievalNarrative(normalized) ||
-          RegExp(r'^正在(?:交叉核对|搜索|查询|检索).+').hasMatch(normalized) ||
-          RegExp(r'^已找到\s*\d+\s*篇相关资料$').hasMatch(normalized) ||
-          RegExp(r'^已经有一批能支撑判断的信息了.+').hasMatch(normalized);
-    case JourneyStageId.answer:
-      return normalized == '已满足成答条件' ||
-          RegExp(r'^我开始整理.+关键信息').hasMatch(normalized);
-    default:
-      return false;
-  }
-}
-
-RetrievalProcessingSnapshot _normalizeRetrievalProcessing(
-  RetrievalProcessingSnapshot retrievalProcessing,
-  AssistantJourney journey,
-) {
-  final acceptedReferences = retrievalProcessing.acceptedReferences.isNotEmpty
-      ? retrievalProcessing.acceptedReferences
-      : _fallbackAcceptedReferences(journey);
-  final acceptedDocumentCount = retrievalProcessing.acceptedDocumentCount > 0
-      ? retrievalProcessing.acceptedDocumentCount
-      : acceptedReferences.length;
-  final processedDocumentCount = retrievalProcessing.processedDocumentCount > 0
-      ? retrievalProcessing.processedDocumentCount
-      : acceptedDocumentCount;
-  final processingSummary =
-      retrievalProcessing.processingSummary.trim().isNotEmpty
-      ? retrievalProcessing.processingSummary
-      : _fallbackRetrievalProcessingSummary(journey);
-  return RetrievalProcessingSnapshot(
-    processedDocumentCount: processedDocumentCount,
-    acceptedDocumentCount: acceptedDocumentCount,
-    processingSummary: _sanitizeJourneyText(processingSummary),
-    expansionReason: _sanitizeJourneyText(retrievalProcessing.expansionReason),
-    acceptedReferences: acceptedReferences,
-  );
-}
-
-String _fallbackRetrievalProcessingSummary(AssistantJourney journey) {
-  for (final entry in journey.entries.reversed) {
-    if (entry.stageId != JourneyStageId.search &&
-        entry.stageId != JourneyStageId.verify) {
-      continue;
-    }
-    final detail = _sanitizeJourneyText(entry.detail);
-    if (detail.isNotEmpty) {
-      return detail;
-    }
-    final headline = _sanitizeJourneyText(entry.headline);
-    if (headline.isNotEmpty) {
-      return headline;
-    }
-  }
-  for (final stage in journey.stages.reversed) {
-    if (stage.stageId != JourneyStageId.search &&
-        stage.stageId != JourneyStageId.verify) {
-      continue;
-    }
-    final summary = _sanitizeJourneyText(stage.summary);
-    if (summary.isNotEmpty) {
-      return summary;
-    }
-  }
-  return '';
-}
-
-List<RetrievalProcessingReference> _fallbackAcceptedReferences(
-  AssistantJourney journey,
-) {
-  final byUrl = <String, RetrievalProcessingReference>{};
-  for (final reference in journey.referenceSummary.references) {
-    final url = reference.url.trim();
-    final title = reference.title.trim();
-    if (url.isEmpty || title.isEmpty) continue;
-    byUrl[url] = RetrievalProcessingReference(
-      title: title,
-      url: url,
-      source: reference.source.trim(),
-    );
-  }
-  if (byUrl.isNotEmpty) {
-    return byUrl.values.toList(growable: false);
-  }
-  for (final entry in journey.entries) {
-    if (entry.stageId != JourneyStageId.search &&
-        entry.stageId != JourneyStageId.verify) {
-      continue;
-    }
-    for (final reference in entry.references) {
-      final url = reference.url.trim();
-      final title = reference.title.trim();
-      if (url.isEmpty || title.isEmpty) continue;
-      byUrl[url] = RetrievalProcessingReference(
-        title: title,
-        url: url,
-        source: reference.source.trim(),
-      );
-    }
-  }
-  return byUrl.values.toList(growable: false);
-}
-
-String _retrievalBlockHeadline({
-  required int processedCount,
-  required int acceptedCount,
-}) {
-  if (processedCount > 0 && acceptedCount > 0) {
-    return '处理$processedCount篇文档，接纳$acceptedCount篇如下';
-  }
-  if (acceptedCount > 0) {
-    return '接纳$acceptedCount篇资料如下';
-  }
-  if (processedCount > 0) {
-    return '处理$processedCount篇文档';
-  }
-  return '';
-}
-
-JourneyStageId _displayStageId(JourneyStageId stageId) {
-  switch (stageId) {
-    case JourneyStageId.verify:
-      return JourneyStageId.search;
-    default:
-      return stageId;
-  }
-}
-
-String _resolveSummary(
-  AssistantJourney journey, {
+String _resolveSummary({
   required List<AssistantJourneyStageViewModel> stages,
   required List<AssistantJourneyBlockViewModel> blocks,
+  required bool isRunning,
 }) {
-  final summary = _sanitizeJourneyText(journey.summary);
-  if (summary.isNotEmpty) return summary;
-  for (final stage in stages.reversed) {
-    if (stage.summary.isNotEmpty) return stage.summary;
+  if (isRunning) {
+    final active = _resolveActiveStage(stages, isRunning: true);
+    if (active.label.isNotEmpty) {
+      return active.label;
+    }
   }
   for (final block in blocks.reversed) {
-    if (block.headline.isNotEmpty) return block.headline;
+    if (block.headline.trim().isNotEmpty) {
+      return block.headline.trim();
+    }
   }
-  return '';
-}
-
-String _sanitizeJourneyText(String raw, {String stageHint = ''}) {
-  final normalized = AssistantDisplayTextResolver
-      .normalizeUserFacingProcessNarration(raw, stageHint: stageHint);
-  if (normalized.isEmpty) return '';
-  if (_looksLikeRomanizedQueryFragment(normalized)) return '';
-  if (normalized.contains('模型调用') || normalized.toLowerCase().contains('token')) {
-    return '';
-  }
-  return normalized.trim();
-}
-
-bool _looksLikeRomanizedQueryFragment(String text) {
-  return RegExp(
-    r'^[a-z]+(?:\s+[a-z]+){1,7}$',
-    caseSensitive: false,
-  ).hasMatch(text.trim());
-}
-
-String _firstNonEmpty(Iterable<String> values) {
-  for (final value in values) {
-    if (value.trim().isNotEmpty) {
-      return value.trim();
+  for (final stage in stages.reversed) {
+    if (stage.summary.trim().isNotEmpty) {
+      return stage.summary.trim();
     }
   }
   return '';
 }
 
-int _maxInt(Iterable<int> values) {
-  var current = 0;
-  for (final value in values) {
-    if (value > current) {
-      current = value;
+String _summaryForProcessBlocks(List<AssistantProcessDisplayBlock> blocks) {
+  for (final block in blocks) {
+    if (block.title.trim().isNotEmpty) {
+      return block.title.trim();
+    }
+    if (block.body.trim().isNotEmpty) {
+      return block.body.trim();
     }
   }
-  return current;
+  return '';
 }
 
-List<String> _distinctNonEmpty(Iterable<String> values) {
-  final seen = <String>{};
-  final result = <String>[];
-  for (final value in values) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty || !seen.add(trimmed)) {
+JourneyStageStatus _statusForProcessBlocks(
+  List<AssistantProcessDisplayBlock> blocks,
+) {
+  for (final block in blocks) {
+    if (block.status == JourneyStageStatus.active) {
+      return JourneyStageStatus.active;
+    }
+  }
+  for (final block in blocks) {
+    if (block.status != JourneyStageStatus.unknown) {
+      return block.status;
+    }
+  }
+  return JourneyStageStatus.pending;
+}
+
+int _referenceCountForStep(
+  List<AssistantProcessDisplayBlock> blocks,
+  RetrievalProcessingSnapshot retrievalProcessing,
+) {
+  final direct = retrievalProcessing.acceptedDocumentCount > 0
+      ? retrievalProcessing.acceptedDocumentCount
+      : retrievalProcessing.acceptedReferences.length;
+  if (direct > 0) {
+    return direct;
+  }
+  return <String>{
+    for (final block in blocks)
+      for (final reference in block.references)
+        if (reference.url.trim().isNotEmpty) reference.url.trim(),
+  }.length;
+}
+
+String _displayItemText(AssistantDisplayItem item) {
+  final title = item.title.trim();
+  final body = item.body.trim();
+  if (title.isNotEmpty && body.isNotEmpty) {
+    return '$title：$body';
+  }
+  return title.isNotEmpty ? title : body;
+}
+
+bool _hasVisibleProcessBlockForUi(AssistantProcessDisplayBlock block) {
+  return block.title.trim().isNotEmpty ||
+      block.body.trim().isNotEmpty ||
+      block.items.any(
+        (item) => item.title.trim().isNotEmpty || item.body.trim().isNotEmpty,
+      ) ||
+      block.references.any(
+        (reference) =>
+            reference.title.trim().isNotEmpty ||
+            reference.url.trim().isNotEmpty,
+      );
+}
+
+RetrievalProcessingSnapshot _resolveRetrievalProcessing(
+  List<ProcessTimelineFrame> processTimeline,
+  RetrievalProcessingSnapshot fallback,
+) {
+  ProcessTimelineFrame? summaryFrame;
+  ProcessTimelineFrame? refsFallbackFrame;
+  for (final frame in processTimeline) {
+    if (frame.stepId != ProcessStepId.retrievalProcessing) {
       continue;
     }
-    result.add(trimmed);
+    final rp = frame.retrievalProcessing;
+    if (rp.processingSummary.trim().isNotEmpty) {
+      summaryFrame = frame;
+    }
+    if (_retrievalFrameHasSnapshotFallbackSignals(frame)) {
+      refsFallbackFrame = frame;
+    }
   }
-  return result;
+  if (summaryFrame != null) {
+    return _mergeRetrievalSnapshotWithFrameReferences(
+      summaryFrame,
+      summaryFrame.retrievalProcessing,
+    );
+  }
+  if (refsFallbackFrame != null) {
+    return _mergeRetrievalSnapshotWithFrameReferences(
+      refsFallbackFrame,
+      refsFallbackFrame.retrievalProcessing,
+    );
+  }
+  return fallback;
+}
+
+bool _retrievalFrameHasSnapshotFallbackSignals(ProcessTimelineFrame frame) {
+  if (frame.stepId != ProcessStepId.retrievalProcessing) {
+    return false;
+  }
+  final rp = frame.retrievalProcessing;
+  return frame.references.isNotEmpty ||
+      rp.acceptedReferences.isNotEmpty ||
+      rp.selectedKeyPoints.isNotEmpty ||
+      rp.processedDocumentCount > 0 ||
+      rp.acceptedDocumentCount > 0;
+}
+
+/// 将 timeline 帧上的 [ProcessTimelineFrame.references] 并入快照，并补齐计数，避免仅有引用时摘要丢失。
+RetrievalProcessingSnapshot _mergeRetrievalSnapshotWithFrameReferences(
+  ProcessTimelineFrame frame,
+  RetrievalProcessingSnapshot snapshot,
+) {
+  final refs = snapshot.acceptedReferences.isNotEmpty
+      ? snapshot.acceptedReferences
+      : frame.references;
+  final acceptedCount = snapshot.acceptedDocumentCount > 0
+      ? snapshot.acceptedDocumentCount
+      : (refs.isNotEmpty ? refs.length : 0);
+  final processedCount = snapshot.processedDocumentCount > 0
+      ? snapshot.processedDocumentCount
+      : acceptedCount;
+  return RetrievalProcessingSnapshot(
+    processedDocumentCount: processedCount,
+    acceptedDocumentCount: acceptedCount,
+    processingSummary: snapshot.processingSummary,
+    selectedKeyPoints: snapshot.selectedKeyPoints,
+    expansionReason: snapshot.expansionReason,
+    acceptedReferences: refs,
+  );
+}
+
+String _headlineForFrame(ProcessTimelineFrame? frame) {
+  if (frame == null) return '';
+  final lines = _sanitizeProcessLines(frame.headline, stepId: frame.stepId);
+  if (lines.isNotEmpty) {
+    return lines.first;
+  }
+  final detailLines = _sanitizeProcessLines(frame.detail, stepId: frame.stepId);
+  return detailLines.isNotEmpty ? detailLines.first : '';
+}
+
+String _detailForFrame(
+  ProcessTimelineFrame frame, {
+  required RetrievalProcessingSnapshot fallbackRetrievalProcessing,
+}) {
+  if (frame.stepId == ProcessStepId.understanding) {
+    return '';
+  }
+  if (frame.stepId == ProcessStepId.retrievalProcessing &&
+      !_retrievalFrameHasSnapshotFallbackSignals(frame)) {
+    return '';
+  }
+  final detailLines = _sanitizeProcessLines(frame.detail, stepId: frame.stepId);
+  if (detailLines.isEmpty) {
+    return '';
+  }
+  final headline = _headlineForFrame(frame);
+  final remaining = headline.isNotEmpty && detailLines.first == headline
+      ? detailLines.skip(1).toList(growable: false)
+      : detailLines;
+  return remaining.join('\n');
+}
+
+String _referenceLabelForFrame(
+  ProcessTimelineFrame frame, {
+  required RetrievalProcessingSnapshot fallbackRetrievalProcessing,
+}) {
+  if (frame.stepId != ProcessStepId.retrievalProcessing) {
+    return '';
+  }
+  final snapshot = frame.retrievalProcessing.processingSummary.trim().isNotEmpty
+      ? frame.retrievalProcessing
+      : fallbackRetrievalProcessing;
+  var acceptedCount = snapshot.acceptedDocumentCount > 0
+      ? snapshot.acceptedDocumentCount
+      : snapshot.acceptedReferences.length;
+  var processedCount = snapshot.processedDocumentCount > 0
+      ? snapshot.processedDocumentCount
+      : acceptedCount;
+  if (processedCount <= 0 && acceptedCount <= 0) {
+    final refCount = frame.references
+        .where((r) => r.title.trim().isNotEmpty || r.url.trim().isNotEmpty)
+        .length;
+    if (refCount > 0) {
+      acceptedCount = refCount;
+      processedCount = refCount;
+    }
+  }
+  if (processedCount <= 0 && acceptedCount <= 0) {
+    return '';
+  }
+  return UITextConstants.assistantProcessReferenceDigestTemplate
+      .replaceFirst('%s', processedCount.toString())
+      .replaceFirst('%s', acceptedCount.toString());
+}
+
+String _processStepLabel(ProcessStepId stepId) {
+  switch (stepId) {
+    case ProcessStepId.understanding:
+      return UITextConstants.assistantProcessStageUnderstand;
+    case ProcessStepId.retrievalDesign:
+      return UITextConstants.assistantProcessStageUnderstand;
+    case ProcessStepId.retrievalProcessing:
+      return UITextConstants.assistantProcessStageRetrievalProcessing;
+    case ProcessStepId.answerOrganization:
+      return UITextConstants.assistantProcessStageAnswer;
+    case ProcessStepId.unknown:
+      return UITextConstants.assistantProcessStageUnderstand;
+  }
+}
+
+String _sanitizeProcessMultiline(String raw, {required ProcessStepId stepId}) {
+  return _sanitizeProcessLines(raw, stepId: stepId).join('\n');
+}
+
+List<String> _sanitizeProcessLines(
+  String raw, {
+  required ProcessStepId stepId,
+}) {
+  return raw
+      .split('\n')
+      .map((line) => _sanitizeProcessSingleLine(line, stepId: stepId))
+      .where((line) => line.isNotEmpty)
+      .toList(growable: false);
+}
+
+String _sanitizeProcessText(String raw, {required ProcessStepId stepId}) {
+  if (raw.contains('\n')) {
+    return _sanitizeProcessMultiline(raw, stepId: stepId);
+  }
+  return _sanitizeProcessSingleLine(raw, stepId: stepId);
+}
+
+String _sanitizeProcessSingleLine(String raw, {required ProcessStepId stepId}) {
+  final normalized =
+      AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(raw);
+  if (normalized.isEmpty) {
+    return '';
+  }
+  return normalized;
+}
+
+String _bulletList(List<String> items, {required ProcessStepId stepId}) {
+  return items
+      .map((item) => _sanitizeProcessText(item, stepId: stepId))
+      .where((item) => item.isNotEmpty)
+      .map((item) => '- $item')
+      .join('\n');
 }

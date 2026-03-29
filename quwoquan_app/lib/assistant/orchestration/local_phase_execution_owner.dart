@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/assistant/application/assistant_journey_projector.dart';
+import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/agent_run_observability.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
@@ -23,7 +24,9 @@ import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/aggregation_gate.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
@@ -43,7 +46,9 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_perf_probe.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
@@ -52,6 +57,9 @@ import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.da
 import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/phase_one_direct_answer_gate.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_trace_event.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
+import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
@@ -137,6 +145,39 @@ class LocalPhaseExecutionOwner {
     // 仅用于开启 provider 侧流式输出。真正带 phase 的 thinking trace
     // 由 react_runtime 在收到 delta 时直接落库并转发，避免这里丢失阶段信息。
     return (_) {};
+  }
+
+  static void Function(AssistantTraceEvent event)?
+  _buildAnswerProcessTraceForwarder(
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+    String? runId,
+    String? traceId,
+  ) {
+    if (onTraceEvent == null) return null;
+    final processEmitter = ProcessTimelineEmitter(
+      runId: runId ?? '',
+      traceId: traceId ?? '',
+      onTraceEvent: onTraceEvent,
+    );
+    return (event) {
+      onTraceEvent(event);
+      if (event.type == AssistantTraceEventType.thinkingProgress &&
+          event.data?['streaming'] == true &&
+          event.data?['extracted'] == true &&
+          event.data?['fieldPath'] == 'answerProcessing.readinessSummary') {
+        processEmitter.pushDelta(
+          stepId: ProcessStepId.answerOrganization,
+          scope: UserEventScope.aggregation,
+          delta: event.message,
+          phaseId: 'answering',
+          actionCode: 'compose_answer',
+          reasonCode: 'organize_answer',
+          payload: const <String, dynamic>{
+            'fieldPath': 'answerProcessing.readinessSummary',
+          },
+        );
+      }
+    };
   }
 
   static void Function(AssistantTraceEvent event)? _withTraceVisibility(
@@ -668,13 +709,10 @@ class LocalPhaseExecutionOwner {
           .where(
             (t) =>
                 t.isNotEmpty &&
-                !t.contains('"contractId"') &&
-                !t.contains('"decision"') &&
-                !t.contains('assistant_turn') &&
-                !t.contains('queryTasks') &&
-                !t.contains('tool_call') &&
-                !t.contains('<tool_call>') &&
-                !t.contains('provider') &&
+                !AssistantContentFilters.isJsonEnvelope(t) &&
+                !AssistantDisplayTextResolver.containsInternalProcessFragment(
+                  t,
+                ) &&
                 !t.startsWith('{'),
           )
           .join('\n');
@@ -786,22 +824,56 @@ class LocalPhaseExecutionOwner {
           .toList(growable: false);
     }
 
+    List<EvidenceLedgerEntry> mergeEvidenceLedgerEntries({
+      required List<EvidenceLedgerEntry> current,
+      required List<EvidenceLedgerEntry> carried,
+    }) {
+      final merged = <EvidenceLedgerEntry>[];
+      final seen = <String>{};
+      String keyOf(EvidenceLedgerEntry entry) {
+        final evidenceId = entry.evidenceId.trim();
+        if (evidenceId.isNotEmpty) return evidenceId;
+        final url = entry.url.trim();
+        if (url.isNotEmpty) return '${entry.dimension.trim()}::$url';
+        return '${entry.dimension.trim()}::${entry.title.trim()}::${entry.snippet.trim()}';
+      }
+
+      for (final entry in <EvidenceLedgerEntry>[...current, ...carried]) {
+        final key = keyOf(entry);
+        if (key.trim().isEmpty || !seen.add(key)) continue;
+        merged.add(entry);
+      }
+      return merged;
+    }
+
     SynthesisReadinessResult computeSynthesisReadiness(
       ReactRuntimeResult runtimeResult,
       List<Map<String, dynamic>> toolResults,
     ) {
-      final hasToolResult = toolResults.isNotEmpty;
+      final carriedEvidenceLedger =
+          continuationActive &&
+              intentGraph.problemClassType != ProblemClass.realtimeInfo
+          ? (ownerState.previousRunArtifacts?.evidenceLedger ??
+                const <EvidenceLedgerEntry>[])
+          : const <EvidenceLedgerEntry>[];
       final blockingDimensions = _blockingEvidenceDimensions(
         queryTasks: intentGraph.queryTasks,
         toolResults: toolResults,
       );
+      final currentEvidenceLedger = _baselineKernel.buildEvidenceLedger(
+        domainId: domainId,
+        toolResults: _toolResultsForEvidenceLedger(toolResults),
+        slotState: previousSlotState,
+        retrievalPolicy: retrievalPolicy,
+      );
+      final mergedEvidenceLedger = mergeEvidenceLedgerEntries(
+        current: currentEvidenceLedger,
+        carried: carriedEvidenceLedger,
+      );
+      final hasToolResult =
+          toolResults.isNotEmpty || mergedEvidenceLedger.isNotEmpty;
       final evidenceEvaluation = _baselineKernel.evaluateEvidence(
-        ledger: _baselineKernel.buildEvidenceLedger(
-          domainId: domainId,
-          toolResults: _toolResultsForEvidenceLedger(toolResults),
-          slotState: const SlotStateSnapshot(),
-          retrievalPolicy: retrievalPolicy,
-        ),
+        ledger: mergedEvidenceLedger,
         evidenceRequired: answerBoundaryPolicy.evidenceRequired,
         authorityRequired: answerBoundaryPolicy.authorityRequired,
         freshnessHoursMax: answerBoundaryPolicy.freshnessHoursMax,
@@ -898,6 +970,7 @@ class LocalPhaseExecutionOwner {
       'previousDomainPolicyBundle': previousDomainPolicyBundle,
       'retrievalPolicy': retrievalPolicy,
       'answerBoundaryPolicy': answerBoundaryPolicy,
+      'understandingSnapshot': ownerState.understandingSnapshot.toJson(),
       'templateVariables': templateVariables,
       'messages': messages,
       'synthTemplateVersion': synthTemplateVersion,
@@ -1312,6 +1385,15 @@ class LocalPhaseExecutionOwner {
         (request.contextScopeHint['previousAnswerProcessing'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final carriedRetrievalProcessing =
+        (executionSnapshot['retrievalProcessing'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    var blockedProcessStepId = parseProcessStepId(
+      (executionSnapshot['blockedProcessStepId'] as String?)?.trim() ?? '',
+    );
+    var blockedProcessMessage =
+        (executionSnapshot['blockedProcessMessage'] as String?)?.trim() ?? '';
     final historicalThinkingSnapshotForSynthesis =
         (bootstrapPayload['historicalThinkingSnapshot'] as Map?)
             ?.cast<String, dynamic>() ??
@@ -1319,6 +1401,8 @@ class LocalPhaseExecutionOwner {
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final understandingSnapshotForSynthesis =
+        (executionSnapshot['understandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
         (phaseOneParsedJson['understandingSnapshot'] as Map?)
             ?.cast<String, dynamic>() ??
         previousUnderstandingSnapshotForSynthesis;
@@ -1397,14 +1481,17 @@ class LocalPhaseExecutionOwner {
       'queryTasks': synthesisQueryTasks,
       'answerShape': intentGraph.answerShape.wireName,
     };
-    final synthesisInput = <Map<String, dynamic>>[
-      ...messages,
-      <String, dynamic>{
-        'role': 'system',
-        'content': '领域执行结果摘要：${phaseOneResult.finalText}',
-      },
-      <String, dynamic>{'role': 'user', 'content': latestUserQuery},
-    ];
+    List<Map<String, dynamic>> buildSynthesisInput(String phaseOneSummaryText) {
+      return <Map<String, dynamic>>[
+        ...messages,
+        <String, dynamic>{
+          'role': 'system',
+          'content': '领域执行结果摘要：$phaseOneSummaryText',
+        },
+        <String, dynamic>{'role': 'user', 'content': latestUserQuery},
+      ];
+    }
+
     final rawPhaseOneTurn = _tryParseAssistantTurnFromRawText(phaseOneText);
     final rawPhaseOneProjection = rawPhaseOneTurn != null
         ? AssistantDisplayTextResolver.projectTurn(rawPhaseOneTurn)
@@ -1423,7 +1510,14 @@ class LocalPhaseExecutionOwner {
       fallbackProblemClass: intentGraph.problemClassWireName,
       primaryDomainId: domainId,
     );
-    final derivedPhaseOneSkillRunPlans = explicitPhaseOneSkillRunPlans.isEmpty
+    final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
+      synthesisTemplateVars,
+    );
+    final suppressDerivedPhaseOneSkillRunPlans =
+        phaseOneContinuationCarryover && synthesisReadiness.ready;
+    final derivedPhaseOneSkillRunPlans =
+        explicitPhaseOneSkillRunPlans.isEmpty &&
+            !suppressDerivedPhaseOneSkillRunPlans
         ? _buildDerivedSkillRunPlansFromIntent(
             intentGraph: intentGraph,
             latestUserQuery: latestUserQuery,
@@ -1445,16 +1539,15 @@ class LocalPhaseExecutionOwner {
     var phaseOneModelRepairAttempted = false;
     var phaseOneModelRepairProducedText = false;
     var phaseOneModelRepairFailureCode = '';
-    final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
-      synthesisTemplateVars,
-    );
     final allowPhaseOneContractRepair =
         !phaseOneExecutionSignalsPresent || phaseOneContinuationCarryover;
     if (explicitPhaseOneSkillRunPlans.isEmpty &&
         synthesisReadiness.ready &&
         allowPhaseOneContractRepair &&
         (rawDirectAnswerDecision.reason == 'phase_one_not_structured' ||
-            rawDirectAnswerDecision.reason == 'phase_one_not_contract_turn')) {
+            rawDirectAnswerDecision.reason == 'phase_one_not_contract_turn' ||
+            rawDirectAnswerDecision.reason ==
+                'phase_one_contract_incomplete')) {
       final recoveredPhaseOneEnvelopeText =
           _recoverPhaseOneDirectAnswerEnvelopeText(
             rawText: phaseOneText,
@@ -1499,7 +1592,8 @@ class LocalPhaseExecutionOwner {
         phaseOneHasRenderableContent &&
         allowPhaseOneContractRepair &&
         (directAnswerDecision.reason == 'phase_one_not_structured' ||
-            directAnswerDecision.reason == 'phase_one_not_contract_turn');
+            directAnswerDecision.reason == 'phase_one_not_contract_turn' ||
+            directAnswerDecision.reason == 'phase_one_contract_incomplete');
     if (shouldAttemptPhaseOneModelRepair) {
       phaseOneModelRepairAttempted = true;
       final phaseOneRepairResult =
@@ -1545,6 +1639,35 @@ class LocalPhaseExecutionOwner {
         phaseOneModelRepairApplied = directAnswerDecision.shouldSkipSynthesis;
       }
     }
+    var streamedAnswerReadinessSummary = '';
+    final baseSynthesisTraceForwarder = _buildAnswerProcessTraceForwarder(
+      onTraceEvent,
+      runId,
+      traceId,
+    );
+    void captureStreamedReadinessSummary(AssistantTraceEvent event) {
+      if (event.type != AssistantTraceEventType.thinkingProgress) {
+        return;
+      }
+      final data = event.data ?? const <String, dynamic>{};
+      if (data['streaming'] != true ||
+          data['extracted'] != true ||
+          data['fieldPath'] != 'answerProcessing.readinessSummary') {
+        return;
+      }
+      if (event.message.isEmpty) {
+        return;
+      }
+      streamedAnswerReadinessSummary =
+          '$streamedAnswerReadinessSummary${event.message}';
+    }
+
+    final synthesisTraceForwarder = baseSynthesisTraceForwarder == null
+        ? null
+        : (AssistantTraceEvent event) {
+            captureStreamedReadinessSummary(event);
+            baseSynthesisTraceForwarder(event);
+          };
     var templateVersionUsed = synthTemplateVersion;
     var phaseOneRoute = 'formal_synthesis';
     ReactRuntimeResult mergedResult;
@@ -1585,30 +1708,37 @@ class LocalPhaseExecutionOwner {
       );
       answerPayloadBeforeSubagent = effectivePhaseOneAnswerPayload;
       skillRunPlans = phaseOneSkillRunPlans;
-    } else if (directAnswerDecision.shouldSkipSynthesis) {
-      phaseOneRoute = 'phase_one_direct_answer';
-      templateVersionUsed = PhaseOneDirectAnswerGate.directTemplateVersion;
+    } else if (blockedProcessStepId == ProcessStepId.retrievalProcessing &&
+        !directAnswerDecision.shouldSkipSynthesis) {
+      phaseOneRoute = 'retrieval_blocked';
       final shortcutTrace = AssistantTraceEvent(
         type: AssistantTraceEventType.lifecycleStart,
-        message: 'phase one answer ready, skip synthesis',
+        message: 'retrieval processing blocked, stop synthesis',
         timestamp: DateTime.now(),
         runId: runId,
         traceId: traceId,
         visibility: TraceVisibility.system,
         data: <String, dynamic>{
-          'stage': 'phase_one_direct_answer',
-          'reason': directAnswerDecision.reason,
+          'stage': 'retrieval_blocked',
+          'reason': blockedProcessMessage,
         },
       );
       onTraceEvent?.call(shortcutTrace);
+      final failureMessage = blockedProcessMessage.isNotEmpty
+          ? blockedProcessMessage
+          : '这次拿到的结果还不够稳定，我先不继续往下整理答案。';
       mergedResult = ReactRuntimeResult(
-        finalText: directAnswerDecision.normalizedEnvelopeText,
+        finalText: _buildStageFailureAssistantTurnEnvelopeText(
+          stepId: ProcessStepId.retrievalProcessing,
+          failureCode: 'retrieval_processing_blocked',
+          failureMessage: failureMessage,
+        ),
         traces: <AssistantTraceEvent>[
           ...effectivePhaseOneTraces,
           shortcutTrace,
         ],
-        degraded: effectivePhaseOneDegraded,
-        failureCode: effectivePhaseOneFailureCode,
+        degraded: true,
+        failureCode: 'retrieval_processing_blocked',
       );
       answerPayloadBeforeSubagent = _parseAnswerPayload(
         rawFinalText: mergedResult.finalText,
@@ -1616,75 +1746,147 @@ class LocalPhaseExecutionOwner {
       );
       skillRunPlans = const <SubagentPlan>[];
     } else {
-      ReactRuntimeResult synthesisResult;
-      final canStreamSynthesis = synthesisReadiness.ready;
-      if (canStreamSynthesis) {
-        final streamedText = await _runtime.streamSynthesis(
-          messages: synthesisInput,
-          goal: latestUserQuery,
-          onDelta: (_) {},
-          templateContext: templateContext,
-          templateVariables: synthesisTemplateVars,
-          templateId: 'synthesizer.final_answer',
-          templateVersion: synthTemplateVersion,
-          sessionId: sessionId,
-          runId: runId,
-          traceId: traceId,
-          onTraceEvent: onTraceEvent,
-        );
-        if (streamedText.trim().isNotEmpty) {
-          final synthesisInputText = synthesisInput
-              .map((item) => (item['content'] ?? '').toString())
-              .join('\n');
-          final outputTokens = _estimateTokenCount(streamedText);
-          final inputTokens = _estimateTokenCount(synthesisInputText);
-          final synthesisTrace = AssistantTraceEvent(
+      if (directAnswerDecision.shouldSkipSynthesis) {
+        phaseOneRoute = 'phase_one_direct_answer';
+        templateVersionUsed = PhaseOneDirectAnswerGate.directTemplateVersion;
+        onTraceEvent?.call(
+          AssistantTraceEvent(
             type: AssistantTraceEventType.lifecycleStart,
-            message: 'llm request synthesis stream',
+            message: 'phase one answer ready, continue streamed synthesis',
+            timestamp: DateTime.now(),
+            runId: runId,
+            traceId: traceId,
+            visibility: TraceVisibility.system,
+            data: <String, dynamic>{
+              'stage': 'phase_one_direct_answer',
+              'reason': directAnswerDecision.reason,
+            },
+          ),
+        );
+      }
+      final synthesisInput = buildSynthesisInput(effectivePhaseOneText);
+      var synthesisResult = const ReactRuntimeResult(
+        finalText: '',
+        traces: <AssistantTraceEvent>[],
+        degraded: true,
+        failureCode: AssistantFailureCode.answerStreamFailed,
+      );
+      final canStreamSynthesis =
+          synthesisReadiness.ready && _runtime.supportsStructuredStreaming;
+      if (canStreamSynthesis) {
+        const maxAnswerStreamAttempts = 2;
+        ReactRuntimeResult? streamedSynthesisResult;
+        for (
+          var attempt = 1;
+          attempt <= maxAnswerStreamAttempts;
+          attempt += 1
+        ) {
+          streamedAnswerReadinessSummary = '';
+          var sawAnswerDelta = false;
+          var providerFailureCode = AssistantFailureCode.none;
+          var providerFailureDiagnostics = <String, dynamic>{};
+          final streamedText = await _runtime.streamSynthesis(
+            messages: synthesisInput,
+            goal: latestUserQuery,
+            onDelta: (delta) {
+              if (delta.trim().isNotEmpty) {
+                sawAnswerDelta = true;
+              }
+            },
+            streamJsonFieldPaths: const <String>[
+              'answerProcessing.readinessSummary',
+            ],
+            templateContext: templateContext,
+            templateVariables: synthesisTemplateVars,
+            templateId: 'synthesizer.final_answer',
+            templateVersion: synthTemplateVersion,
+            sessionId: sessionId,
+            runId: runId,
+            traceId: traceId,
+            onTraceEvent: synthesisTraceForwarder,
+            onStreamFailure: (failureCode, diagnostics) {
+              providerFailureCode = failureCode;
+              providerFailureDiagnostics = <String, dynamic>{...diagnostics};
+            },
+          );
+          if (streamedText.trim().isNotEmpty && sawAnswerDelta) {
+            final synthesisInputText = synthesisInput
+                .map((item) => (item['content'] ?? '').toString())
+                .join('\n');
+            final outputTokens = _estimateTokenCount(streamedText);
+            final inputTokens = _estimateTokenCount(synthesisInputText);
+            final synthesisTrace = AssistantTraceEvent(
+              type: AssistantTraceEventType.lifecycleStart,
+              message: 'llm request synthesis stream',
+              timestamp: DateTime.now(),
+              runId: runId,
+              traceId: traceId,
+              visibility: TraceVisibility.system,
+              data: <String, dynamic>{
+                'stage': 'synthesis_stream',
+                'attempt': attempt,
+                'estimatedTokens': outputTokens,
+                'usageEntries': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'provider': 'synthesis_stream',
+                    'modelId': 'streaming_final_answer',
+                    'modelRef': 'streaming_final_answer',
+                    'streaming': true,
+                    'source': 'estimated',
+                    'inputTokens': inputTokens,
+                    'outputTokens': outputTokens,
+                    'totalTokens': inputTokens + outputTokens,
+                    'latencyMs': 0,
+                  },
+                ],
+              },
+            );
+            onTraceEvent?.call(synthesisTrace);
+            streamedSynthesisResult = ReactRuntimeResult(
+              finalText: streamedText,
+              traces: <AssistantTraceEvent>[synthesisTrace],
+            );
+            break;
+          }
+          final answerStreamFailureCode = sawAnswerDelta
+              ? AssistantFailureCode.answerStreamFailed
+              : AssistantFailureCode.answerStreamNotStarted;
+          final failureTrace = AssistantTraceEvent(
+            type: AssistantTraceEventType.lifecycleEnd,
+            message: attempt < maxAnswerStreamAttempts
+                ? 'answer stream failed, retry synthesis'
+                : 'answer stream failed, stop synthesis',
             timestamp: DateTime.now(),
             runId: runId,
             traceId: traceId,
             visibility: TraceVisibility.system,
             data: <String, dynamic>{
               'stage': 'synthesis_stream',
-              'estimatedTokens': outputTokens,
-              'usageEntries': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'provider': 'synthesis_stream',
-                  'modelId': 'streaming_final_answer',
-                  'modelRef': 'streaming_final_answer',
-                  'streaming': true,
-                  'source': 'estimated',
-                  'inputTokens': inputTokens,
-                  'outputTokens': outputTokens,
-                  'totalTokens': inputTokens + outputTokens,
-                  'latencyMs': 0,
-                },
-              ],
+              'failureCode': answerStreamFailureCode,
+              'providerFailureCode': providerFailureCode,
+              'attempt': attempt,
+              'maxAttempts': maxAnswerStreamAttempts,
+              'retrying': attempt < maxAnswerStreamAttempts,
+              if (providerFailureDiagnostics.isNotEmpty)
+                'diagnostics': providerFailureDiagnostics,
             },
           );
-          onTraceEvent?.call(synthesisTrace);
-          synthesisResult = ReactRuntimeResult(
-            finalText: streamedText,
-            traces: <AssistantTraceEvent>[synthesisTrace],
-          );
-        } else {
-          synthesisResult = await _runtime.run(
-            messages: synthesisInput,
-            maxIterations: 1,
-            goal: latestUserQuery,
-            availableToolNamesOverride: const <String>[],
-            templateId: 'synthesizer.final_answer',
-            templateVersion: synthTemplateVersion,
-            templateContext: templateContext,
-            templateVariables: synthesisTemplateVars,
-            sessionId: sessionId,
-            runId: runId,
-            traceId: traceId,
-            onTraceEvent: onTraceEvent,
-            callOptions: const LlmCallOptions.synthesis(),
-            onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
-          );
+          onTraceEvent?.call(failureTrace);
+          if (attempt >= maxAnswerStreamAttempts) {
+            synthesisResult = ReactRuntimeResult(
+              finalText: _buildStageFailureAssistantTurnEnvelopeText(
+                stepId: ProcessStepId.answerOrganization,
+                failureCode: answerStreamFailureCode,
+                failureMessage: '这次整理答案失败，我先不强行给你结论，请稍后再试。',
+              ),
+              traces: <AssistantTraceEvent>[failureTrace],
+              degraded: true,
+              failureCode: answerStreamFailureCode,
+            );
+          }
+        }
+        if (streamedSynthesisResult != null) {
+          synthesisResult = streamedSynthesisResult;
         }
       } else {
         synthesisResult = await _runtime.run(
@@ -1699,28 +1901,30 @@ class LocalPhaseExecutionOwner {
           sessionId: sessionId,
           runId: runId,
           traceId: traceId,
-          onTraceEvent: onTraceEvent,
+          onTraceEvent: synthesisTraceForwarder,
           callOptions: const LlmCallOptions.synthesis(),
           onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
         );
       }
-      synthesisResult = await _repairInvalidSynthesisResult(
-        currentResult: synthesisResult,
-        synthesisInput: synthesisInput,
-        latestUserQuery: latestUserQuery,
-        templateContext: templateContext,
-        templateVariables: synthesisTemplateVars,
-        templateId: 'synthesizer.final_answer',
-        templateVersion: synthTemplateVersion,
-        sessionId: sessionId,
-        runId: runId,
-        traceId: traceId,
-        onTraceEvent: onTraceEvent,
-      );
+      if (!synthesisResult.degraded && synthesisResult.failureCode.isEmpty) {
+        synthesisResult = await _repairInvalidSynthesisResult(
+          currentResult: synthesisResult,
+          synthesisInput: synthesisInput,
+          latestUserQuery: latestUserQuery,
+          templateContext: templateContext,
+          templateVariables: synthesisTemplateVars,
+          templateId: 'synthesizer.final_answer',
+          templateVersion: synthTemplateVersion,
+          sessionId: sessionId,
+          runId: runId,
+          traceId: traceId,
+          onTraceEvent: synthesisTraceForwarder,
+        );
+      }
       mergedResult = ReactRuntimeResult(
         finalText: _ensureAssistantTurnEnvelopeText(synthesisResult.finalText),
         traces: <AssistantTraceEvent>[
-          ...phaseOneResult.traces,
+          ...effectivePhaseOneTraces,
           ...synthesisResult.traces,
         ],
         degraded: synthesisResult.degraded,
@@ -1738,12 +1942,14 @@ class LocalPhaseExecutionOwner {
         answerPayloadBeforeSubagent['subagentPlan'] =
             effectivePhaseOneAnswerPayload['subagentPlan'];
       }
-      skillRunPlans = _buildSkillRunPlans(
-        intentGraph: intentGraph,
-        answerPayload: answerPayloadBeforeSubagent,
-        latestUserQuery: latestUserQuery,
-        primaryDomainId: domainId,
-      );
+      skillRunPlans = directAnswerDecision.shouldSkipSynthesis
+          ? const <SubagentPlan>[]
+          : _buildSkillRunPlans(
+              intentGraph: intentGraph,
+              answerPayload: answerPayloadBeforeSubagent,
+              latestUserQuery: latestUserQuery,
+              primaryDomainId: domainId,
+            );
     }
     final phaseOneRoutingDiagnostics = <String, dynamic>{
       'route': phaseOneRoute,
@@ -1868,8 +2074,14 @@ class LocalPhaseExecutionOwner {
           'role': 'system',
           'content':
               '请基于以上子任务结果整合为最终答复。'
-              '必须输出标准 JSON 格式：含 decision（nextAction/confidence/reason）、userMarkdown（用户可见 Markdown）、'
-              'result、evidence、reasoningBasis、selfCheck、diagnostics。'
+              '优先输出最小稳定的 assistant_turn JSON：'
+              '先写 answerProcessing（尤其是 readinessSummary）、userMarkdown、result，'
+              '再补 decision 与其余字段。'
+              '若需要保留跨轮反思，只保留极简 historicalThinkingSnapshot。'
+              'evidence、reasoningBasis、selfCheck、diagnostics 能稳定给出时再补，'
+              '如果不稳可省略，由运行时补齐默认值。'
+              '最终 userMarkdown 不要使用 #/##/### 标题或 emoji 标题，'
+              '路线/方案类只用自然段 + 单层列表。'
               'userMarkdown 不得包含任何 JSON 字段名。',
         },
         <String, dynamic>{'role': 'user', 'content': latestUserQuery},
@@ -1886,7 +2098,7 @@ class LocalPhaseExecutionOwner {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
-        onTraceEvent: onTraceEvent,
+        onTraceEvent: synthesisTraceForwarder,
         callOptions: const LlmCallOptions.synthesis(),
         onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
       );
@@ -1901,7 +2113,7 @@ class LocalPhaseExecutionOwner {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
-        onTraceEvent: onTraceEvent,
+        onTraceEvent: synthesisTraceForwarder,
       );
       mergedResult = ReactRuntimeResult(
         finalText: _ensureAssistantTurnEnvelopeText(
@@ -1921,23 +2133,51 @@ class LocalPhaseExecutionOwner {
       ...supplementalTraces,
       ...mergedResult.traces,
     ];
-    final finalResult = ReactRuntimeResult(
+    var finalResult = ReactRuntimeResult(
       finalText: mergedResult.finalText,
       traces: responseTraces,
       degraded: mergedResult.degraded,
       failureCode: mergedResult.failureCode,
     );
-    final finalResultTurn = _tryParseAssistantTurnFromRawText(
+    var finalResultTurn = _tryParseAssistantTurnFromRawText(
       finalResult.finalText,
     );
-    final finalResultProjection = finalResultTurn != null
+    var finalResultProjection = finalResultTurn != null
         ? AssistantDisplayTextResolver.projectTurn(finalResultTurn)
         : null;
-    final finalResponseHasRenderableContent =
+    var finalResponseHasRenderableContent =
         finalResultProjection?.hasRenderableContent ?? false;
-    final finalResponseIsFallback =
+    var finalResponseIsFallback =
         finalResultTurn?.messageKindType == AssistantMessageKind.fallback ||
         finalResultTurn?.nextActionType == AssistantNextAction.abort;
+    if (blockedProcessStepId == ProcessStepId.unknown &&
+        finalResponseIsFallback &&
+        (finalResult.failureCode.trim().isNotEmpty ||
+            !finalResponseHasRenderableContent)) {
+      blockedProcessStepId = ProcessStepId.answerOrganization;
+      blockedProcessMessage = '这次整理答案失败，我先不强行给你结论，请稍后再试。';
+      finalResult = ReactRuntimeResult(
+        finalText: _buildStageFailureAssistantTurnEnvelopeText(
+          stepId: ProcessStepId.answerOrganization,
+          failureCode: 'answer_organization_failed',
+          failureMessage: blockedProcessMessage,
+        ),
+        traces: responseTraces,
+        degraded: true,
+        failureCode: 'answer_organization_failed',
+      );
+      finalResultTurn = _tryParseAssistantTurnFromRawText(
+        finalResult.finalText,
+      );
+      finalResultProjection = finalResultTurn != null
+          ? AssistantDisplayTextResolver.projectTurn(finalResultTurn)
+          : null;
+      finalResponseHasRenderableContent =
+          finalResultProjection?.hasRenderableContent ?? false;
+      finalResponseIsFallback =
+          finalResultTurn?.messageKindType == AssistantMessageKind.fallback ||
+          finalResultTurn?.nextActionType == AssistantNextAction.abort;
+    }
     return SynthesisDraft(
       runId: runId,
       traceId: traceId,
@@ -1960,12 +2200,16 @@ class LocalPhaseExecutionOwner {
       previousSlotState: previousSlotState,
       phaseOneRoutingDiagnostics: phaseOneRoutingDiagnostics,
       understandingSnapshot: understandingSnapshotForSynthesis,
+      retrievalProcessing: carriedRetrievalProcessing,
       historicalThinkingSnapshot: historicalThinkingSnapshotFromPhaseOne,
+      streamedAnswerReadinessSummary: streamedAnswerReadinessSummary,
       previousDomainPolicyBundle: previousDomainPolicyBundle,
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
       responseDegraded:
           (!finalResponseHasRenderableContent || finalResponseIsFallback) &&
           (finalResult.degraded || _hasDegradedTrace(finalResult.traces)),
+      blockedProcessStepId: blockedProcessStepId,
+      blockedProcessMessage: blockedProcessMessage,
     );
   }
 
@@ -1995,8 +2239,12 @@ class LocalPhaseExecutionOwner {
       previousSlotState: draft.previousSlotState,
       phaseOneRoutingDiagnostics: draft.phaseOneRoutingDiagnostics,
       carriedUnderstandingSnapshot: draft.understandingSnapshot,
+      carriedRetrievalProcessing: draft.retrievalProcessing,
       carriedHistoricalThinkingSnapshot: draft.historicalThinkingSnapshot,
+      streamedAnswerReadinessSummary: draft.streamedAnswerReadinessSummary,
       previousDomainPolicyBundle: draft.previousDomainPolicyBundle,
+      blockedProcessStepId: draft.blockedProcessStepId,
+      blockedProcessMessage: draft.blockedProcessMessage,
       onTraceEvent: onTraceEvent,
       runId: draft.runId,
       traceId: draft.traceId,
@@ -2574,6 +2822,7 @@ class LocalPhaseExecutionOwner {
   String _buildDegradedAssistantTurnEnvelopeText({
     required String failureCode,
   }) {
+    const failureMessage = '这次整理答案失败，我先不强行给你结论，请稍后再试。';
     return jsonEncode(
       AssistantTurnOutput(
         contractId: kAssistantTurnCurrentContractId,
@@ -2581,9 +2830,9 @@ class LocalPhaseExecutionOwner {
           nextAction: AssistantNextAction.abort,
         ),
         messageKind: AssistantMessageKind.fallback,
-        userMarkdown: '',
+        userMarkdown: failureMessage,
         result: AssistantTurnResult(
-          text: '模型输出无效，已停止本轮回答。',
+          text: failureMessage,
           interpretation: failureCode,
         ),
         selfCheck: AssistantTurnSelfCheck(
@@ -2605,11 +2854,79 @@ class LocalPhaseExecutionOwner {
     );
   }
 
+  String _buildStageFailureAssistantTurnEnvelopeText({
+    required ProcessStepId stepId,
+    required String failureCode,
+    required String failureMessage,
+  }) {
+    final normalizedMessage = failureMessage.trim().isNotEmpty
+        ? failureMessage.trim()
+        : '这次处理失败了，我先不强行给你结论，请稍后再试。';
+    final phaseId = stepId == ProcessStepId.understanding
+        ? PlannerPhaseId.understanding
+        : (stepId == ProcessStepId.answerOrganization
+              ? PlannerPhaseId.answering
+              : PlannerPhaseId.aggregating);
+    final actionCode = stepId == ProcessStepId.understanding
+        ? PlannerActionCode.frameProblem
+        : (stepId == ProcessStepId.answerOrganization
+              ? PlannerActionCode.composeAnswer
+              : PlannerActionCode.assessEvidence);
+    final reasonCode = stepId == ProcessStepId.understanding
+        ? PlannerReasonCode.alignGoal
+        : (stepId == ProcessStepId.answerOrganization
+              ? PlannerReasonCode.prepareDelivery
+              : PlannerReasonCode.needMoreEvidence);
+    final answerProcessing = stepId == ProcessStepId.answerOrganization
+        ? AssistantTurnAnswerProcessing(
+            readinessSummary: normalizedMessage,
+            retrieveMoreReason: normalizedMessage,
+          )
+        : const AssistantTurnAnswerProcessing();
+    return jsonEncode(
+      AssistantTurnOutput(
+        contractId: kAssistantTurnCurrentContractId,
+        decision: const AssistantTurnDecisionPayload(
+          nextAction: AssistantNextAction.abort,
+        ),
+        messageKind: AssistantMessageKind.fallback,
+        userMarkdown: normalizedMessage,
+        result: AssistantTurnResult(
+          text: normalizedMessage,
+          interpretation: failureCode,
+          summary: normalizedMessage,
+        ),
+        phaseId: phaseId,
+        actionCode: actionCode,
+        reasonCode: reasonCode,
+        reasonShort: normalizedMessage,
+        answerProcessing: answerProcessing,
+        selfCheck: AssistantTurnSelfCheck(
+          goalSatisfied: false,
+          constraintSatisfied: false,
+          safetyBoundarySatisfied: true,
+          failedItems: <String>[failureCode],
+        ),
+        diagnostics: AssistantTurnDiagnostics(
+          notes: <String>[failureCode, 'fail_closed', stepId.wireName],
+        ),
+        modelSelfScore: const AssistantTurnModelSelfScore(
+          score: 0,
+          reason: 'stage_failed',
+        ),
+        slotState: const SlotStateSnapshot(),
+        askUser: const AssistantTurnAskUser(),
+      ).toEnvelopeMap(),
+    );
+  }
+
   String _buildRecoveredAssistantTurnEnvelopeText({
     required String recoveredMarkdown,
     required String failureCode,
   }) {
-    final plainText = _stripMarkdownForPlainText(recoveredMarkdown);
+    final plainText = AssistantDisplayTextResolver.stripMarkdown(
+      recoveredMarkdown,
+    );
     final normalizedPlain = plainText.isNotEmpty
         ? plainText
         : recoveredMarkdown;
@@ -2620,6 +2937,9 @@ class LocalPhaseExecutionOwner {
           nextAction: AssistantNextAction.answer,
         ),
         messageKind: AssistantMessageKind.answer,
+        phaseId: PlannerPhaseId.answering,
+        actionCode: PlannerActionCode.composeAnswer,
+        reasonCode: PlannerReasonCode.evidenceReady,
         userMarkdown: recoveredMarkdown,
         result: AssistantTurnResult(
           text: normalizedPlain,
@@ -2691,6 +3011,12 @@ class LocalPhaseExecutionOwner {
       if (AssistantContentFilters.isJsonEnvelope(normalized) ||
           AssistantContentFilters.isProgressPlaceholder(normalized) ||
           _containsXmlToolCallMarkup(normalized) ||
+          AssistantDisplayTextResolver.containsInternalProcessFragment(
+            normalized,
+          ) ||
+          AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+            normalized,
+          ) ||
           !_looksLikeRecoverableAnswerText(normalized)) {
         continue;
       }
@@ -3513,10 +3839,14 @@ class LocalPhaseExecutionOwner {
     required SlotStateSnapshot previousSlotState,
     Map<String, dynamic> carriedUnderstandingSnapshot =
         const <String, dynamic>{},
+    Map<String, dynamic> carriedRetrievalProcessing = const <String, dynamic>{},
     Map<String, dynamic> carriedHistoricalThinkingSnapshot =
         const <String, dynamic>{},
+    String streamedAnswerReadinessSummary = '',
     Map<String, dynamic> phaseOneRoutingDiagnostics = const <String, dynamic>{},
     DomainPolicyBundle? previousDomainPolicyBundle,
+    ProcessStepId blockedProcessStepId = ProcessStepId.unknown,
+    String blockedProcessMessage = '',
     void Function(AssistantTraceEvent event)? onTraceEvent,
     String? runId,
     String? traceId,
@@ -3696,18 +4026,21 @@ class LocalPhaseExecutionOwner {
           )
         : _buildUiReferences(toolResults, isRealtimeLike: isRealtimeLike);
     final understandingSnapshot = _buildUnderstandingSnapshot(
-      raw:
-          (answerPayload['understandingSnapshot'] as Map?)
-              ?.cast<String, dynamic>() ??
-          carriedUnderstandingSnapshot,
+      raw: _preferStructuredMap(
+        (answerPayload['understandingSnapshot'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+        carriedUnderstandingSnapshot,
+      ),
       intentGraph: intentGraph,
       latestUserQuery: latestUserQuery,
     );
     final answerProcessingSnapshot = _buildAnswerProcessingSnapshot(
-      raw:
-          (answerPayload['answerProcessing'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      raw: _preferStructuredMap(
+        (answerPayload['answerProcessing'] as Map?)?.cast<String, dynamic>(),
+        const <String, dynamic>{},
+      ),
+      streamedReadinessSummary: streamedAnswerReadinessSummary,
       synthesisReadiness: effectiveSynthesisReadiness,
       stateDecision: effectiveStateDecision,
       evidenceEvaluation: evidenceEvaluation,
@@ -3715,19 +4048,23 @@ class LocalPhaseExecutionOwner {
       answerPayload: answerPayload,
     );
     final historicalThinkingSnapshot = _buildHistoricalThinkingSnapshot(
-      raw:
-          (answerPayload['historicalThinkingSnapshot'] as Map?)
-              ?.cast<String, dynamic>() ??
-          carriedHistoricalThinkingSnapshot,
+      raw: _preferStructuredMap(
+        (answerPayload['historicalThinkingSnapshot'] as Map?)
+            ?.cast<String, dynamic>(),
+        carriedHistoricalThinkingSnapshot,
+      ),
       understandingSnapshot: understandingSnapshot,
     );
-    final directMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
+    final explicitDisplayState = parseAssistantDisplayStateFromMap(
+      (answerPayload['displayState'] as Map?)?.cast<String, dynamic>(),
+    );
+    final directMarkdown = _extractUiMarkdown(answerPayload);
     final preferredMarkdown = directMarkdown.trim();
     final hasDirectMarkdown = preferredMarkdown.isNotEmpty;
-    final answerEligible =
-        effectiveStateDecision.nextActionType == AssistantNextAction.answer &&
-        hasDirectMarkdown;
-    final normalizedMarkdown = preferredMarkdown;
+    final normalizedMarkdown =
+        AssistantDisplayTextResolver.stabilizeFinalAnswerMarkdown(
+          AssistantDisplayTextResolver.normalizeMarkdown(preferredMarkdown),
+        );
     final evidenceLinks = _buildInlineEvidenceLinks(
       answerPayload: answerPayload,
       uiReferences: uiReferences,
@@ -3736,45 +4073,82 @@ class LocalPhaseExecutionOwner {
     final answerEvidenceBindings = evidenceLinks
         .map(AnswerEvidenceBinding.fromJson)
         .toList(growable: false);
-    final linkedMarkdown = _applyInlineEvidenceLinks(
-      normalizedMarkdown,
-      evidenceLinks,
+    final provisionalDisplayPlainText = _resolveDisplayPlainText(
+      answerPayload: answerPayload,
+      displayMarkdown: normalizedMarkdown,
     );
+    final answerEligible =
+        effectiveStateDecision.nextActionType == AssistantNextAction.answer &&
+        (hasDirectMarkdown ||
+            explicitDisplayState.answer.blocks.isNotEmpty ||
+            provisionalDisplayPlainText.trim().isNotEmpty);
     final retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
+      processing: _preferStructuredMap(
+        (answerPayload['retrievalProcessing'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+        carriedRetrievalProcessing,
+      ),
       uiReferences: uiReferences,
       toolResults: toolResults,
-      understandingSnapshot: understandingSnapshot,
       synthesisReadiness: effectiveSynthesisReadiness,
       finalAnswerReady: answerEligible,
     );
-    final displayPlainText = _resolveDisplayPlainText(
-      answerPayload: answerPayload,
-      displayMarkdown: linkedMarkdown,
-      machineEnvelope: result.finalText,
-    );
-    final renderMode = linkedMarkdown.trim().isNotEmpty
-        ? 'md_json_dual'
+    final renderMode = normalizedMarkdown.trim().isNotEmpty
+        ? 'md_json_single_source'
         : 'fallback_text';
     final renderFallback = renderMode == 'fallback_text';
-    final hasAnsweringTrace = result.traces.any(
-      (trace) =>
-          trace.type == AssistantTraceEventType.answerDelta ||
-          trace.type == AssistantTraceEventType.streamDelta,
-    );
-    final synthesizedAnsweringTraces = <AssistantTraceEvent>[];
-    if (linkedMarkdown.isNotEmpty && !hasAnsweringTrace) {
-      for (final chunk in _chunkMarkdownForStreaming(linkedMarkdown)) {
-        synthesizedAnsweringTraces.add(
-          AssistantTraceEvent(
-            type: AssistantTraceEventType.answerDelta,
-            message: chunk,
-            timestamp: DateTime.now(),
-            runId: runId ?? '',
-            traceId: traceId ?? '',
-            data: <String, dynamic>{'delta': chunk, 'phase': 'answering'},
-          ),
-        );
-      }
+    if (onTraceEvent != null &&
+        blockedProcessStepId == ProcessStepId.answerOrganization) {
+      ProcessTimelineEmitter(
+        runId: runId ?? '',
+        traceId: traceId ?? '',
+        onTraceEvent: onTraceEvent,
+      ).commit(
+        stepId: ProcessStepId.answerOrganization,
+        scope: UserEventScope.aggregation,
+        headline: blockedProcessMessage.trim(),
+        detail: '',
+        phaseId: 'answering',
+        actionCode: 'compose_answer',
+        reasonCode: 'prepare_delivery',
+        payload: <String, dynamic>{
+          'summary': blockedProcessMessage.trim(),
+          'status': JourneyStageStatus.blocked.wireName,
+          'answerProcessing': RunArtifactsAnswerProcessing(
+            readinessSummary: blockedProcessMessage.trim(),
+            retrieveMoreReason: blockedProcessMessage.trim(),
+          ).toJson(),
+          'nextAction': AssistantNextAction.abort.wireName,
+          'finalAnswerReady': false,
+        },
+      );
+    } else if (onTraceEvent != null &&
+        blockedProcessStepId != ProcessStepId.retrievalProcessing) {
+      final answerDetail = answerProcessingSnapshot.keyFacts
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .take(4)
+          .join('\n');
+      ProcessTimelineEmitter(
+        runId: runId ?? '',
+        traceId: traceId ?? '',
+        onTraceEvent: onTraceEvent,
+      ).commit(
+        stepId: ProcessStepId.answerOrganization,
+        scope: UserEventScope.aggregation,
+        headline: answerProcessingSnapshot.readinessSummary.trim(),
+        detail: answerDetail,
+        phaseId: 'answering',
+        actionCode: 'compose_answer',
+        reasonCode: answerEligible ? 'evidence_ready' : 'need_more_evidence',
+        payload: <String, dynamic>{
+          'summary': answerProcessingSnapshot.readinessSummary.trim(),
+          'answerProcessing': answerProcessingSnapshot.toJson(),
+          'nextAction': effectiveStateDecision.nextActionType.wireName,
+          'finalAnswerReady': answerEligible,
+        },
+      );
     }
     final domainPolicyBundle = _buildDomainPolicyBundle(
       domainId: dialogueRoundScript.domainId,
@@ -3811,10 +4185,7 @@ class LocalPhaseExecutionOwner {
     if (_toolMetadataRegistry == null) {
       await effectiveToolMetadataRegistry.ensureLoaded();
     }
-    final effectiveJourneyTraces = <AssistantTraceEvent>[
-      ...result.traces,
-      ...synthesizedAnsweringTraces,
-    ];
+    final effectiveJourneyTraces = result.traces;
     final journey = _enrichJourneyWithStructuredSnapshots(
       AssistantJourneyProjector.replay(
         traces: effectiveJourneyTraces,
@@ -3834,7 +4205,10 @@ class LocalPhaseExecutionOwner {
       answerReady: answerEligible,
       stopReason: effectiveStateDecision.finalAnswerModeWireName,
       references: uiReferences,
-      resultSummary: _extractUiSummary(answerPayload, displayPlainText),
+      resultSummary: _extractUiSummary(
+        answerPayload,
+        provisionalDisplayPlainText,
+      ),
     );
     final resolvedAnswerEligibility = answerEligible
         ? effectiveStateDecision.answerEligibilityWireName
@@ -3853,11 +4227,40 @@ class LocalPhaseExecutionOwner {
     final providerReasoningContinuation = _extractProviderReasoningContinuation(
       result.traces,
     );
+    final projectedProcessTimeline = AssistantProcessTimelineProjector.replay(
+      traces: effectiveJourneyTraces,
+    );
+    final processTimeline = _applyBlockedProcessStage(
+      normalizeProcessTimeline(projectedProcessTimeline),
+      blockedProcessStepId: blockedProcessStepId,
+      blockedProcessMessage: blockedProcessMessage,
+      understandingSnapshot: understandingSnapshot,
+      retrievalProcessingSnapshot: retrievalProcessingSnapshot,
+      answerProcessingSnapshot: answerProcessingSnapshot,
+    );
+    final displayState = buildAssistantDisplayState(
+      explicitState: explicitDisplayState,
+      processTimeline: processTimeline,
+      understandingSnapshot: understandingSnapshot,
+      retrievalProcessing: retrievalProcessingSnapshot,
+      answerProcessing: answerProcessingSnapshot,
+      answerMarkdown: normalizedMarkdown,
+      answerPlainText: provisionalDisplayPlainText,
+      finalAnswerReady: answerEligible,
+    );
+    final displayMarkdown = renderAnswerBlocksToMarkdown(
+      displayState.answer.blocks,
+    );
+    final displayPlainText = renderAnswerBlocksToPlainText(
+      displayState.answer.blocks,
+    );
     final runArtifacts = RunArtifacts(
       machineEnvelope: result.finalText,
-      displayMarkdown: linkedMarkdown.trim(),
+      displayMarkdown: displayMarkdown.trim(),
       displayPlainText: displayPlainText,
+      displayState: displayState,
       journey: journey,
+      processTimeline: processTimeline,
       understandingSnapshot: understandingSnapshot,
       answerProcessing: answerProcessingSnapshot,
       historicalThinkingSnapshot: historicalThinkingSnapshot,
@@ -3873,7 +4276,9 @@ class LocalPhaseExecutionOwner {
       },
       diagnostics: <String, dynamic>{
         'domainId': dialogueRoundScript.domainId,
-        'renderMode': renderMode,
+        'renderMode': displayState.answer.blocks.isNotEmpty
+            ? 'typed_display_state'
+            : renderMode,
         'renderFallback': renderFallback,
         'answerEligibility': resolvedAnswerEligibility,
         'qualityGates': effectiveStateDecision.qualityGatesData,
@@ -3897,6 +4302,10 @@ class LocalPhaseExecutionOwner {
     );
     final enrichedAnswerPayload = <String, dynamic>{
       ...answerPayload,
+      'contractId':
+          (answerPayload['contractId'] as String?)?.trim().isNotEmpty == true
+          ? (answerPayload['contractId'] as String).trim()
+          : kAssistantTurnCurrentContractId,
       'intentGraph': intentGraph.toJson(),
       'messageKind': messageKind,
       'subagentPlan': subagentPlan
@@ -3910,9 +4319,19 @@ class LocalPhaseExecutionOwner {
       'slotState': groundedSlotState.toJson(),
       'missingContextSlots': effectiveStateDecision.missingCriticalSlots,
       'understandingSnapshot': understandingSnapshot.toJson(),
+      'processTimeline': processTimeline
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'answerProcessing': answerProcessingSnapshot.toJson(),
       'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
       'retrievalProcessing': retrievalProcessingSnapshot.toJson(),
+      'displayState': displayState.toJson(),
+      'userMarkdown': displayMarkdown,
+      'result': <String, dynamic>{
+        ...((answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{}),
+        'text': displayPlainText,
+      },
       'askUser':
           (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
@@ -3921,6 +4340,20 @@ class LocalPhaseExecutionOwner {
         ...((answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{}),
       },
+      'phaseId':
+          (answerPayload['phaseId'] as String?)?.trim().isNotEmpty == true
+          ? (answerPayload['phaseId'] as String).trim()
+          : PlannerPhaseId.answering.wireName,
+      'actionCode':
+          (answerPayload['actionCode'] as String?)?.trim().isNotEmpty == true
+          ? (answerPayload['actionCode'] as String).trim()
+          : PlannerActionCode.composeAnswer.wireName,
+      'reasonCode':
+          (answerPayload['reasonCode'] as String?)?.trim().isNotEmpty == true
+          ? (answerPayload['reasonCode'] as String).trim()
+          : (answerEligible
+                ? PlannerReasonCode.evidenceReady.wireName
+                : PlannerReasonCode.needMoreEvidence.wireName),
       'journey': journey.toJson(),
       'sessionPreferenceFacts': sessionPreferenceFacts
           .map((item) => item.toJson())
@@ -3929,12 +4362,8 @@ class LocalPhaseExecutionOwner {
           .map((item) => item.toJson())
           .toList(growable: false),
     };
-    if (synthesizedAnsweringTraces.isNotEmpty && onTraceEvent != null) {
-      for (final trace in synthesizedAnsweringTraces) {
-        onTraceEvent(trace);
-      }
-    }
     return <String, dynamic>{
+      ...enrichedAnswerPayload,
       'domainId': dialogueRoundScript.domainId,
       'problemShape': intentGraph.problemShape,
       'primarySkill': intentGraph.primarySkill,
@@ -4031,7 +4460,12 @@ class LocalPhaseExecutionOwner {
           return 0.0;
         }(),
         'roundTraces': toolResults
-            .where((r) => r['tool'] == 'web_search' || r['stepId'] != null)
+            .where(
+              (r) =>
+                  r['tool'] == 'search' ||
+                  r['tool'] == 'web_search' ||
+                  r['stepId'] != null,
+            )
             .map(
               (r) => <String, dynamic>{
                 'stepId': r['stepId'] ?? '',
@@ -4951,6 +5385,8 @@ class LocalPhaseExecutionOwner {
         ? 'fallback_text'
         : (turn != null ? 'assistant_turn_parsed' : 'json_parsed');
     return <String, dynamic>{
+      'contractId':
+          turn?.contractId ?? (parsed['contractId'] as String?)?.trim() ?? '',
       'result': resultPayload,
       'evidence': turn != null
           ? turn.evidence.map((item) => item.toJson()).toList(growable: false)
@@ -4970,20 +5406,44 @@ class LocalPhaseExecutionOwner {
           ? _normalizeModelSelfScore(turn.modelSelfScore.toJson())
           : _normalizeModelSelfScore(parsed['modelSelfScore']),
       'toolCalls': normalizedToolCalls,
-      'userMarkdown': turn?.userMarkdown ?? '',
-      'decision': turn?.decision.toJson() ?? const <String, dynamic>{},
-      'messageKind': turn?.messageKind.wireName ?? '',
-      'slotState': turn?.slotState.toJson() ?? const <String, dynamic>{},
-      'askUser': turn?.askUser.toJson() ?? const <String, dynamic>{},
-      'understandingSnapshot':
-          turn?.understandingSnapshot.toJson() ??
-          _normalizeMap(parsed['understandingSnapshot']),
-      'answerProcessing':
-          turn?.answerProcessing.toJson() ??
-          _normalizeMap(parsed['answerProcessing']),
-      'historicalThinkingSnapshot':
-          turn?.historicalThinkingSnapshot.toJson() ??
-          _normalizeMap(parsed['historicalThinkingSnapshot']),
+      'userMarkdown':
+          turn?.userMarkdown ??
+          (parsed['userMarkdown'] as String?)?.trim() ??
+          '',
+      'decision': turn?.decision.toJson() ?? _normalizeMap(parsed['decision']),
+      'messageKind':
+          turn?.messageKind.wireName ??
+          (parsed['messageKind'] as String?)?.trim() ??
+          '',
+      'phaseId':
+          turn?.phaseIdType.wireName ??
+          (parsed['phaseId'] as String?)?.trim() ??
+          '',
+      'actionCode':
+          turn?.actionCodeType.wireName ??
+          (parsed['actionCode'] as String?)?.trim() ??
+          '',
+      'reasonCode':
+          turn?.reasonCodeType.wireName ??
+          (parsed['reasonCode'] as String?)?.trim() ??
+          '',
+      'reasonShort':
+          turn?.reasonShort ?? (parsed['reasonShort'] as String?)?.trim() ?? '',
+      'slotState':
+          turn?.slotState.toJson() ?? _normalizeMap(parsed['slotState']),
+      'askUser': turn?.askUser.toJson() ?? _normalizeMap(parsed['askUser']),
+      'understandingSnapshot': _preferStructuredMap(
+        turn?.understandingSnapshot.toJson(),
+        _normalizeMap(parsed['understandingSnapshot']),
+      ),
+      'answerProcessing': _preferStructuredMap(
+        turn?.answerProcessing.toJson(),
+        _normalizeMap(parsed['answerProcessing']),
+      ),
+      'historicalThinkingSnapshot': _preferStructuredMap(
+        turn?.historicalThinkingSnapshot.toJson(),
+        _normalizeMap(parsed['historicalThinkingSnapshot']),
+      ),
       'subagentPlan': turn != null
           ? turn.subagentPlan
                 .map((item) => item.toJson())
@@ -5062,6 +5522,22 @@ class LocalPhaseExecutionOwner {
               intentGraph.targetObject,
               latestUserQuery,
             ]),
+      userFacingSummary: parsed.userFacingSummary.isNotEmpty
+          ? parsed.userFacingSummary
+          : buildUnderstandingUserFacingSummary(
+              intentSummary: parsed.intentSummary.isNotEmpty
+                  ? parsed.intentSummary
+                  : _firstNonEmptyText(<String?>[
+                      intentGraph.userGoal,
+                      intentGraph.userJobToBeDone,
+                      intentGraph.targetObject,
+                      latestUserQuery,
+                    ]),
+              concernPoints: concernPoints,
+              queryDesignSummary: parsed.queryDesignSummary.isNotEmpty
+                  ? parsed.queryDesignSummary
+                  : _buildUserFacingQueryDesignSummary(intentGraph.queryTasks),
+            ),
       concernPoints: concernPoints,
       emotionSignal: parsed.emotionSignal,
       queryDesignSummary: parsed.queryDesignSummary.isNotEmpty
@@ -5104,7 +5580,7 @@ class LocalPhaseExecutionOwner {
     if (queryTasks.isEmpty) {
       return '';
     }
-    final lines = <String>[_queryTaskLeadLine(queryTasks.length)];
+    final lines = <String>[];
     final seen = <String>{};
     for (final task in queryTasks) {
       final line = _queryTaskDisplayLine(task);
@@ -5114,10 +5590,6 @@ class LocalPhaseExecutionOwner {
       lines.add(line);
     }
     return lines.join('\n').trim();
-  }
-
-  String _queryTaskLeadLine(int taskCount) {
-    return taskCount >= 2 ? '我会先把会影响判断的几个方面拆开确认：' : '我先确认最影响判断的这一项：';
   }
 
   String _queryTaskDisplayLine(QueryTask task) {
@@ -5179,6 +5651,7 @@ class LocalPhaseExecutionOwner {
 
   RunArtifactsAnswerProcessing _buildAnswerProcessingSnapshot({
     required Map<String, dynamic> raw,
+    String streamedReadinessSummary = '',
     required SynthesisReadinessResult synthesisReadiness,
     required ConversationStateDecision stateDecision,
     required EvidenceEvaluationResult evidenceEvaluation,
@@ -5211,16 +5684,18 @@ class LocalPhaseExecutionOwner {
     return RunArtifactsAnswerProcessing(
       readinessSummary: parsed.readinessSummary.isNotEmpty
           ? parsed.readinessSummary
-          : (stateDecision.finalAnswerReady
-                ? _defaultAnswerReadinessSummary(
-                    keyFacts: keyFacts,
-                    answerPayload: answerPayload,
-                  )
-                : _firstNonEmptyText(<String?>[
-                    synthesisReadiness.reason,
-                    evidenceEvaluation.summary,
-                    '仍有维度待补充',
-                  ])),
+          : (streamedReadinessSummary.trim().isNotEmpty
+                ? streamedReadinessSummary.trim()
+                : (stateDecision.finalAnswerReady
+                      ? _defaultAnswerReadinessSummary(
+                          keyFacts: keyFacts,
+                          answerPayload: answerPayload,
+                        )
+                      : _firstNonEmptyText(<String?>[
+                          synthesisReadiness.reason,
+                          evidenceEvaluation.summary,
+                          '仍有维度待补充',
+                        ]))),
       keyFacts: keyFacts,
       missingDimensions: missingDimensions,
       retrieveMoreReason: retrieveMoreReason,
@@ -5232,7 +5707,15 @@ class LocalPhaseExecutionOwner {
     required Map<String, dynamic> answerPayload,
   }) {
     if (keyFacts.isNotEmpty) {
-      return '我已经把能直接回答这个问题的关键信息收拢好了。';
+      final facts = keyFacts
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .take(2)
+          .toList(growable: false);
+      if (facts.isNotEmpty) {
+        final joined = facts.join('；');
+        return '现在能直接支撑回答的关键信息已经齐了：$joined。接下来我会把它整理成结论和建议。';
+      }
     }
     final resultData =
         (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
@@ -5297,12 +5780,15 @@ class LocalPhaseExecutionOwner {
   }
 
   RetrievalProcessingSnapshot _buildRetrievalProcessingSnapshot({
+    Map<String, dynamic> processing = const <String, dynamic>{},
     required List<Map<String, dynamic>> uiReferences,
     required List<Map<String, dynamic>> toolResults,
-    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
     required SynthesisReadinessResult synthesisReadiness,
     required bool finalAnswerReady,
   }) {
+    final parsed = _hasStructuredContent(processing)
+        ? RetrievalProcessingSnapshot.fromJson(processing)
+        : const RetrievalProcessingSnapshot();
     final acceptedReferences = uiReferences
         .map(
           (item) => RetrievalProcessingReference(
@@ -5324,15 +5810,120 @@ class LocalPhaseExecutionOwner {
       toolResults: toolResults,
       acceptedDocumentCount: acceptedReferences.length,
     );
+    final selectedKeyPoints = parsed.selectedKeyPoints.isNotEmpty
+        ? parsed.selectedKeyPoints
+        : acceptedReferences
+              .map(
+                (item) => item.snippet.trim().isNotEmpty
+                    ? item.snippet.trim()
+                    : item.title.trim(),
+              )
+              .where((item) => item.isNotEmpty)
+              .take(5)
+              .toList(growable: false);
     return RetrievalProcessingSnapshot(
-      processedDocumentCount: processedDocumentCount,
-      acceptedDocumentCount: acceptedReferences.length,
-      processingSummary: understandingSnapshot.queryDesignSummary.trim(),
-      expansionReason: finalAnswerReady
-          ? ''
-          : _firstNonEmptyText(<String?>[synthesisReadiness.reason]),
-      acceptedReferences: acceptedReferences,
+      processedDocumentCount: parsed.processedDocumentCount > 0
+          ? parsed.processedDocumentCount
+          : processedDocumentCount,
+      acceptedDocumentCount: parsed.acceptedDocumentCount > 0
+          ? parsed.acceptedDocumentCount
+          : acceptedReferences.length,
+      processingSummary: parsed.processingSummary.trim().isNotEmpty
+          ? parsed.processingSummary.trim()
+          : (finalAnswerReady
+                ? ''
+                : _firstNonEmptyText(<String?>[synthesisReadiness.reason])),
+      selectedKeyPoints: selectedKeyPoints,
+      expansionReason: parsed.expansionReason.trim().isNotEmpty
+          ? parsed.expansionReason.trim()
+          : (finalAnswerReady
+                ? ''
+                : _firstNonEmptyText(<String?>[synthesisReadiness.reason])),
+      acceptedReferences: parsed.acceptedReferences.isNotEmpty
+          ? parsed.acceptedReferences
+          : acceptedReferences,
     );
+  }
+
+  List<ProcessTimelineFrame> _applyBlockedProcessStage(
+    List<ProcessTimelineFrame> processTimeline, {
+    required ProcessStepId blockedProcessStepId,
+    required String blockedProcessMessage,
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required RetrievalProcessingSnapshot retrievalProcessingSnapshot,
+    required RunArtifactsAnswerProcessing answerProcessingSnapshot,
+  }) {
+    if (blockedProcessStepId == ProcessStepId.unknown ||
+        blockedProcessMessage.trim().isEmpty) {
+      return processTimeline;
+    }
+    final byStep = <ProcessStepId, ProcessTimelineFrame>{
+      for (final frame in normalizeProcessTimeline(processTimeline))
+        frame.stepId: frame,
+    };
+    final blockedFrame = switch (blockedProcessStepId) {
+      ProcessStepId.understanding => buildProcessTimelineFrame(
+        stepId: ProcessStepId.understanding,
+        status: JourneyStageStatus.blocked,
+        headline: blockedProcessMessage.trim(),
+        detail: '',
+        understandingSnapshot: RunArtifactsUnderstandingSnapshot(
+          intentSummary: understandingSnapshot.intentSummary,
+          userFacingSummary: blockedProcessMessage.trim(),
+          concernPoints: understandingSnapshot.concernPoints,
+          emotionSignal: understandingSnapshot.emotionSignal,
+          queryDesignSummary: understandingSnapshot.queryDesignSummary,
+          queryGroups: understandingSnapshot.queryGroups,
+          assumptions: understandingSnapshot.assumptions,
+          mismatchSignal: understandingSnapshot.mismatchSignal,
+          carryForwardFacts: understandingSnapshot.carryForwardFacts,
+          discardedAssumptions: understandingSnapshot.discardedAssumptions,
+        ),
+      ),
+      ProcessStepId.retrievalDesign => buildProcessTimelineFrame(
+        stepId: ProcessStepId.retrievalDesign,
+        status: JourneyStageStatus.blocked,
+        headline: blockedProcessMessage.trim(),
+        detail: '',
+        understandingSnapshot: understandingSnapshot,
+      ),
+      ProcessStepId.retrievalProcessing => buildProcessTimelineFrame(
+        stepId: ProcessStepId.retrievalProcessing,
+        status: JourneyStageStatus.blocked,
+        headline: blockedProcessMessage.trim(),
+        detail: '',
+        references: retrievalProcessingSnapshot.acceptedReferences,
+        retrievalProcessing: RetrievalProcessingSnapshot(
+          processedDocumentCount:
+              retrievalProcessingSnapshot.processedDocumentCount,
+          acceptedDocumentCount:
+              retrievalProcessingSnapshot.acceptedDocumentCount,
+          processingSummary: blockedProcessMessage.trim(),
+          expansionReason: blockedProcessMessage.trim(),
+          acceptedReferences: retrievalProcessingSnapshot.acceptedReferences,
+        ),
+      ),
+      ProcessStepId.answerOrganization => buildProcessTimelineFrame(
+        stepId: ProcessStepId.answerOrganization,
+        status: JourneyStageStatus.blocked,
+        headline: blockedProcessMessage.trim(),
+        detail: '',
+        answerProcessing: RunArtifactsAnswerProcessing(
+          readinessSummary: blockedProcessMessage.trim(),
+          keyFacts: answerProcessingSnapshot.keyFacts,
+          missingDimensions: answerProcessingSnapshot.missingDimensions,
+          retrieveMoreReason: blockedProcessMessage.trim(),
+        ),
+      ),
+      ProcessStepId.unknown => buildProcessTimelineFrame(
+        stepId: ProcessStepId.unknown,
+      ),
+    };
+    byStep[blockedProcessStepId] = blockedFrame;
+    if (blockedProcessStepId == ProcessStepId.retrievalProcessing) {
+      byStep.remove(ProcessStepId.answerOrganization);
+    }
+    return normalizeProcessTimeline(byStep.values.toList(growable: false));
   }
 
   int _resolveProcessedDocumentCount({
@@ -5475,7 +6066,7 @@ class LocalPhaseExecutionOwner {
           ? JourneyStageId.search
           : entry.stageId;
       if (displayStageId != stageId) continue;
-      if (_hasUserVisibleJourneyNarrative(entry, stageId: stageId)) {
+      if (_hasUserVisibleJourneyNarrative(entry)) {
         return true;
       }
       if (entry.references.isNotEmpty && stageId != JourneyStageId.search) {
@@ -5489,45 +6080,23 @@ class LocalPhaseExecutionOwner {
     RunArtifactsUnderstandingSnapshot snapshot,
   ) {
     final intent = snapshot.intentSummary.trim();
-    final concern = snapshot.concernPoints
-        .where((item) => item.trim().isNotEmpty)
-        .take(2)
-        .join('、');
-    final emotion = snapshot.emotionSignal.trim();
-    if (intent.isEmpty && concern.isEmpty && emotion.isEmpty) {
-      return '';
+    final summary = snapshot.userFacingSummary.trim();
+    if (summary.isNotEmpty) {
+      return summary;
     }
-    final buffer = StringBuffer('先确认');
-    if (intent.isNotEmpty) {
-      buffer.write('你想了解的是$intent');
-    } else {
-      buffer.write('当前问题的核心目标');
-    }
-    if (concern.isNotEmpty) {
-      buffer.write('，重点看$concern');
-    }
-    if (emotion.isNotEmpty) {
-      buffer.write('，也考虑到你当前$emotion');
-    }
-    buffer.write('。');
-    return buffer.toString();
+    return intent;
   }
 
   String _buildUnderstandingJourneyDetail(
     RunArtifactsUnderstandingSnapshot snapshot,
   ) {
     final lines = <String>[];
-    final concern = snapshot.concernPoints
-        .where((item) => item.trim().isNotEmpty)
-        .take(3)
-        .toList(growable: false);
-    if (concern.isNotEmpty) {
-      lines.add('你现在更在意的是${concern.join('、')}。');
-    }
-    final emotion = snapshot.emotionSignal.trim();
-    if (emotion.isNotEmpty) {
-      lines.add('我也留意到你现在$emotion。');
-    }
+    lines.addAll(
+      snapshot.concernPoints
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .take(3),
+    );
     final focusGroups = snapshot.queryGroups
         .map(
           (group) => group.why.trim().isNotEmpty
@@ -5538,20 +6107,23 @@ class LocalPhaseExecutionOwner {
         .take(3)
         .toList(growable: false);
     if (focusGroups.isNotEmpty) {
-      lines.add('我会先拆开确认${focusGroups.join('、')}，再判断能不能直接给你结论。');
+      lines.addAll(focusGroups);
     }
     return lines.join('\n').trim();
   }
 
-  bool _hasUserVisibleJourneyNarrative(
-    AssistantJourneyEntry entry, {
-    required JourneyStageId stageId,
-  }) {
+  bool _hasUserVisibleJourneyNarrative(AssistantJourneyEntry entry) {
+    final provenance = entry.provenance;
+    if (provenance.source == 'trace' &&
+        provenance.actionCode == PlannerActionCode.unknown &&
+        provenance.reasonCode == PlannerReasonCode.unknownReason &&
+        entry.references.isEmpty) {
+      return false;
+    }
     final candidates = <String>[entry.headline, entry.detail];
     for (final candidate in candidates) {
       final sanitized = _sanitizeJourneyCandidate(candidate);
-      if (sanitized.isEmpty ||
-          _isLowSignalJourneyNarrative(stageId, sanitized)) {
+      if (sanitized.isEmpty) {
         continue;
       }
       return true;
@@ -5567,43 +6139,16 @@ class LocalPhaseExecutionOwner {
     if (normalized.isEmpty) {
       return '';
     }
-    if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(normalized)) {
-      return '';
-    }
-    if (AssistantContentFilters.isJsonEnvelope(normalized) ||
-        AssistantContentFilters.isDegradedText(normalized) ||
+    if (AssistantContentFilters.isNotDisplayable(normalized) ||
+        AssistantDisplayTextResolver.containsInternalProcessFragment(
+          normalized,
+        ) ||
         AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
           normalized,
-        ) ||
-        AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-          normalized,
-        ) ||
-        AssistantDisplayTextResolver.containsTechnicalFailureFragment(
-          normalized,
-        ) ||
-        normalized.toLowerCase().contains('token')) {
+        )) {
       return '';
     }
     return normalized;
-  }
-
-  bool _isLowSignalJourneyNarrative(JourneyStageId stageId, String text) {
-    final normalized = text.trim();
-    switch (stageId) {
-      case JourneyStageId.analyze:
-        return RegExp(r'^正在获取.+位置').hasMatch(normalized);
-      case JourneyStageId.search:
-        return normalized == '已完成资料筛选并进入成答' ||
-            normalized == '已完成当前轮资料筛选' ||
-            RegExp(r'^正在(?:交叉核对|搜索|查询|检索).+').hasMatch(normalized) ||
-            RegExp(r'^已找到\s*\d+\s*篇相关资料$').hasMatch(normalized) ||
-            RegExp(r'^已经有一批能支撑判断的信息了.+').hasMatch(normalized);
-      case JourneyStageId.answer:
-        return normalized == '已满足成答条件' ||
-            RegExp(r'^我开始整理.+关键信息').hasMatch(normalized);
-      default:
-        return false;
-    }
   }
 
   String _firstNonEmptyText(Iterable<String?> candidates) {
@@ -5781,8 +6326,7 @@ class LocalPhaseExecutionOwner {
         answerPayload,
         _resolveDisplayPlainText(
           answerPayload: answerPayload,
-          displayMarkdown: _extractUiMarkdown(answerPayload, result.finalText),
-          machineEnvelope: result.finalText,
+          displayMarkdown: _extractUiMarkdown(answerPayload),
         ),
       ),
     );
@@ -5877,6 +6421,19 @@ class LocalPhaseExecutionOwner {
     }
     if (value is String && value.trim().isNotEmpty) {
       return <String, dynamic>{'text': value.trim()};
+    }
+    return const <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _preferStructuredMap(
+    Map<String, dynamic>? primary,
+    Map<String, dynamic> fallback,
+  ) {
+    if (primary != null && _hasStructuredContent(primary)) {
+      return primary;
+    }
+    if (_hasStructuredContent(fallback)) {
+      return fallback;
     }
     return const <String, dynamic>{};
   }
@@ -6042,53 +6599,33 @@ class LocalPhaseExecutionOwner {
     return (data['toolName'] as String?)?.trim() ?? '';
   }
 
-  /// 从 finalText（可能是 JSON envelope）提取用于 session/记忆存储的纯文本。
-  /// 委托给 [LlmResponseParser] 统一解析，避免 JSON 原文污染摘要和历史。
-  String _extractDisplayTextForStorage(String finalText) {
-    final t = finalText.trim();
-    if (t.isEmpty) return '';
-    if (!t.startsWith('{') &&
-        !t.startsWith('```') &&
-        !t.startsWith('<think>')) {
-      return t;
-    }
-    final result = LlmResponseParser.parse(t);
-    if (!result.ok) return '';
-    return result.userMarkdown;
-  }
-
   String _resolveDisplayPlainText({
     required Map<String, dynamic> answerPayload,
     required String displayMarkdown,
-    required String machineEnvelope,
   }) {
+    final normalizedMarkdown =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          displayMarkdown,
+          allowJsonExtraction: false,
+        );
+    final plainFromMarkdown = _sanitizeDisplayPlainCandidate(
+      AssistantDisplayTextResolver.stripMarkdown(normalizedMarkdown),
+    );
     final result =
         (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final directText = _sanitizeDisplayPlainCandidate(
       (result['text'] as String?)?.trim() ?? '',
     );
+    if (plainFromMarkdown.isNotEmpty) return plainFromMarkdown;
     if (directText.isNotEmpty) {
       return directText;
     }
     final summaryText = _sanitizeDisplayPlainCandidate(
       (result['summary'] as String?)?.trim() ?? '',
-    );
+    ).trim();
     if (summaryText.isNotEmpty) {
       return summaryText;
-    }
-    final markdownSource = displayMarkdown.trim().isNotEmpty
-        ? displayMarkdown
-        : _extractDisplayTextForStorage(machineEnvelope);
-    final plainFromMarkdown = _sanitizeDisplayPlainCandidate(
-      _stripMarkdownForPlainText(markdownSource),
-    );
-    if (plainFromMarkdown.isNotEmpty) return plainFromMarkdown;
-    final fallback = _sanitizeDisplayPlainCandidate(
-      OpenAiCompatibleLlmProvider.stripXmlToolCalls(machineEnvelope),
-    ).trim();
-    if (fallback.isNotEmpty) {
-      return fallback;
     }
     return '';
   }
@@ -6098,117 +6635,47 @@ class LocalPhaseExecutionOwner {
         AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(raw);
     if (text.isEmpty) return '';
     if (AssistantContentFilters.isProgressPlaceholder(text) ||
-        AssistantContentFilters.isJsonEnvelope(text)) {
-      return '';
-    }
-    if (text.contains('assistant_turn') ||
-        text.contains('contractId') ||
-        text.contains('tool_call') ||
-        text.contains('<tool_call>')) {
+        AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(text)) {
       return '';
     }
     return text;
   }
 
-  String _stripMarkdownForPlainText(String markdown) {
-    final raw = markdown.trim();
-    if (raw.isEmpty) return '';
-    var text = raw
-        .replaceAllMapped(
-          RegExp(r'\[([^\]]+)\]\(([^)]+)\)'),
-          (match) => match.group(1) ?? '',
-        )
-        .replaceAllMapped(RegExp(r'`([^`]+)`'), (match) => match.group(1) ?? '')
-        .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
-        .replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '')
-        .replaceAll(RegExp(r'^\s*\d+\.\s+', multiLine: true), '')
-        .replaceAll('**', '')
-        .replaceAll('__', '')
-        .replaceAll('*', '')
-        .replaceAll('_', '')
-        .replaceAll('```', '')
-        .replaceAll('|', ' ')
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n');
-    final lines = text
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-    text = lines.join('\n');
-    return text.trim();
-  }
-
-  String _extractUiMarkdown(
-    Map<String, dynamic> answerPayload,
-    String fallback,
-  ) {
-    // nextAction != 'answer' 表示中间状态（进度占位），不应作为最终展示内容输出。
+  String _extractUiMarkdown(Map<String, dynamic> answerPayload) {
+    // nextAction 为中间动作时不应作为最终展示内容输出；但 fail-closed 的 abort
+    // 需要把明确失败提示继续暴露给用户。
     // nextAction 来自 _parseAnswerPayload 注入到 result 中的值，属于受控 Map。
     final resultMap =
         (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final nextAction = (resultMap['nextAction'] as String?)?.trim() ?? '';
-    if (nextAction.isNotEmpty && nextAction != 'answer') return '';
-
+    if (nextAction.isNotEmpty &&
+        nextAction != AssistantNextAction.answer.wireName &&
+        nextAction != AssistantNextAction.abort.wireName) {
+      return '';
+    }
     // 优先级 1：userMarkdown（契约标准字段，已通过 AssistantTurnOutput 类型化解析）
-    final userMd = AssistantDisplayTextResolver.normalizeMarkdown(
-      (answerPayload['userMarkdown'] as String?)?.trim() ?? '',
-    );
+    final userMd =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (answerPayload['userMarkdown'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
     if (_isRenderableAssistantAnswerText(userMd)) {
       return userMd;
     }
-    // 优先级 2：fallback（finalText），过滤 JSON 原文和进度文本
-    final fb = AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-      fallback,
-    );
-    if (!_isRenderableAssistantAnswerText(fb)) {
+    final resultText =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (resultMap['text'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
+    if (!_isRenderableAssistantAnswerText(resultText)) {
       return '';
     }
-    return fb;
+    return resultText;
   }
 
   bool _isRenderableAssistantAnswerText(String text) {
-    final normalized = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
-      text,
-    ).trim();
-    if (normalized.isEmpty) return false;
-    if (AssistantContentFilters.isNotDisplayable(normalized)) return false;
-    if (normalized.contains('assistant_turn') ||
-        normalized.contains('contractId') ||
-        normalized.contains('queryTasks') ||
-        normalized.contains('tool_call')) {
-      return false;
-    }
-    return true;
-  }
-
-  List<String> _chunkMarkdownForStreaming(String markdown) {
-    final paragraphs = markdown.split(RegExp(r'\n\n'));
-    final chunks = <String>[];
-    for (int pi = 0; pi < paragraphs.length; pi++) {
-      final paragraph = paragraphs[pi];
-      if (paragraph.isEmpty) continue;
-      final suffix = pi < paragraphs.length - 1 ? '\n\n' : '';
-      if (paragraph.length <= 120) {
-        chunks.add('$paragraph$suffix');
-      } else {
-        final sentences = paragraph.split(RegExp(r'(?<=[。！？；\n])'));
-        final buffer = StringBuffer();
-        for (final sentence in sentences) {
-          buffer.write(sentence);
-          if (buffer.length >= 80) {
-            chunks.add(buffer.toString());
-            buffer.clear();
-          }
-        }
-        if (buffer.isNotEmpty) {
-          chunks.add('${buffer.toString()}$suffix');
-        } else if (suffix.isNotEmpty && chunks.isNotEmpty) {
-          chunks[chunks.length - 1] = '${chunks.last}$suffix';
-        }
-      }
-    }
-    return chunks;
+    return AssistantDisplayTextResolver.isRenderableDisplayText(text);
   }
 
   List<String> _buildNextActions(

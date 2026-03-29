@@ -43,7 +43,8 @@ class AssistantStreamingAnswerDecoder {
   }
 
   void _updatePayloadKind() {
-    if (_payloadKind == AssistantStreamingAnswerPayloadKind.structuredEnvelope) {
+    if (_payloadKind ==
+        AssistantStreamingAnswerPayloadKind.structuredEnvelope) {
       return;
     }
     final trimmed = _rawBuffer.trimLeft();
@@ -87,9 +88,10 @@ class AssistantStreamingAnswerDecoder {
     }
     final nextAction = _extractLenientJsonStringField(raw, 'nextAction').trim();
     if (nextAction.isNotEmpty && nextAction != 'answer') return '';
-    final messageKind = _extractLenientJsonStringField(raw, 'messageKind')
-        .trim()
-        .toLowerCase();
+    final messageKind = _extractLenientJsonStringField(
+      raw,
+      'messageKind',
+    ).trim().toLowerCase();
     if (messageKind == 'progress' ||
         messageKind == 'ask_user' ||
         messageKind == 'tool_call' ||
@@ -103,24 +105,46 @@ class AssistantStreamingAnswerDecoder {
   }
 
   String _answerDeltaFromCandidate(String candidate) {
-    final sanitizedCandidate = _sanitizeStreamingMarkdownCandidate(candidate);
-    if (sanitizedCandidate.isEmpty) {
+    final visibleMarkdown = _sanitizeStreamingMarkdownCandidate(candidate);
+    if (visibleMarkdown.isEmpty) {
       return '';
     }
-    if (AssistantContentFilters.isJsonEnvelope(sanitizedCandidate) ||
-        AssistantContentFilters.isProgressPlaceholder(sanitizedCandidate) ||
-        AssistantContentFilters.isDegradedText(sanitizedCandidate) ||
+    if (AssistantContentFilters.isJsonEnvelope(visibleMarkdown) ||
+        AssistantContentFilters.isProgressPlaceholder(visibleMarkdown) ||
+        AssistantContentFilters.isDegradedText(visibleMarkdown) ||
         AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-          sanitizedCandidate,
+          visibleMarkdown,
         )) {
       return '';
     }
-    if (sanitizedCandidate.length <= _visibleBuffer.length) {
+    final delta = _streamingVisibleDelta(
+      previousVisible: _visibleBuffer,
+      nextVisible: visibleMarkdown,
+    );
+    if (delta.isEmpty && visibleMarkdown == _visibleBuffer) {
       return '';
     }
-    final delta = sanitizedCandidate.substring(_visibleBuffer.length);
-    _visibleBuffer = sanitizedCandidate;
+    _visibleBuffer = visibleMarkdown;
     return delta;
+  }
+
+  String _streamingVisibleDelta({
+    required String previousVisible,
+    required String nextVisible,
+  }) {
+    if (nextVisible.isEmpty || nextVisible == previousVisible) {
+      return '';
+    }
+    if (previousVisible.isEmpty) {
+      return nextVisible;
+    }
+    if (nextVisible.startsWith(previousVisible)) {
+      return nextVisible.substring(previousVisible.length);
+    }
+    if (nextVisible.length <= previousVisible.length) {
+      return '';
+    }
+    return nextVisible.substring(previousVisible.length);
   }
 
   String _sanitizeStreamingMarkdownCandidate(String candidate) {
@@ -131,11 +155,18 @@ class AssistantStreamingAnswerDecoder {
     if (withoutWrapper == null || withoutWrapper.isEmpty) {
       return '';
     }
-    final trailingFenceStart = _trailingUnclosedFenceStart(withoutWrapper);
-    if (trailingFenceStart < 0) {
-      return withoutWrapper;
+    final stabilized =
+        AssistantDisplayTextResolver.stabilizeStreamingMarkdownCandidate(
+          withoutWrapper,
+        );
+    if (stabilized.isEmpty) {
+      return '';
     }
-    return withoutWrapper.substring(0, trailingFenceStart);
+    final trailingFenceStart = _trailingUnclosedFenceStart(stabilized);
+    if (trailingFenceStart < 0) {
+      return stabilized;
+    }
+    return stabilized.substring(0, trailingFenceStart);
   }
 
   String? _stripLeadingStreamingMarkdownWrapper(String text) {
@@ -221,7 +252,8 @@ class AssistantStreamingAnswerDecoder {
     if (normalized.isEmpty) return false;
     if (_looksLikeStructuredPayload(raw)) return true;
     return _structuredPrefixCandidates.any(
-      (prefix) => prefix.startsWith(normalized) || normalized.startsWith(prefix),
+      (prefix) =>
+          prefix.startsWith(normalized) || normalized.startsWith(prefix),
     );
   }
 
@@ -362,7 +394,10 @@ class AssistantStreamingAnswerDecoder {
         _insideXmlToolBlock = false;
         continue;
       }
-      final tagStart = _firstXmlToolTokenStart(remaining, _xmlToolStreamingTokens);
+      final tagStart = _firstXmlToolTokenStart(
+        remaining,
+        _xmlToolStreamingTokens,
+      );
       if (tagStart < 0) {
         final partialStart = _trailingPartialXmlToolStart(remaining);
         if (partialStart >= 0) {

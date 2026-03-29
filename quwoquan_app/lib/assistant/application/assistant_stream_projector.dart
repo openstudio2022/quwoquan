@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/application/assistant_journey_projector.dart';
+import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
@@ -20,11 +23,13 @@ class AssistantStreamingProjector {
     required ToolMetadataRegistry toolMetadataRegistry,
   }) : _journeyProjector = AssistantJourneyProjector(
          toolMetadataRegistry: toolMetadataRegistry,
-       );
+       ),
+       _processTimelineProjector = AssistantProcessTimelineProjector();
 
   final AssistantJourneyProjector _journeyProjector;
+  final AssistantProcessTimelineProjector _processTimelineProjector;
   bool _sawAnswerDelta = false;
-  String _lastJourneySignature = '';
+  String _lastProcessTimelineSignature = '';
 
   bool get sawAnswerDelta => _sawAnswerDelta;
 
@@ -38,7 +43,11 @@ class AssistantStreamingProjector {
       _sawAnswerDelta = true;
       controller.add(AssistantRunStreamEvent.answerDelta(delta));
     }
-    _emitJourney(controller, _journeyProjector.consumeTrace(event));
+    _journeyProjector.consumeTrace(event);
+    _emitProcessTimeline(
+      controller,
+      _processTimelineProjector.consumeTrace(event),
+    );
   }
 
   void emitUserEvent(
@@ -51,11 +60,16 @@ class AssistantStreamingProjector {
       _sawAnswerDelta = true;
       controller.add(AssistantRunStreamEvent.answerDelta(event.message));
     }
+    if (event.type == UserEventType.answerDelta) {
+      _journeyProjector.consumeUserEvent(event);
+    }
     if (event.type == UserEventType.processReplace ||
         event.type == UserEventType.processAppend ||
-        event.type == UserEventType.processCommit ||
-        event.type == UserEventType.answerDelta) {
-      _emitJourney(controller, _journeyProjector.consumeUserEvent(event));
+        event.type == UserEventType.processCommit) {
+      _emitProcessTimeline(
+        controller,
+        _processTimelineProjector.consumeUserEvent(event),
+      );
     }
   }
 
@@ -66,13 +80,10 @@ class AssistantStreamingProjector {
     if (controller.isClosed || chunkText.trim().isEmpty) return;
     _sawAnswerDelta = true;
     controller.add(AssistantRunStreamEvent.answerDelta(chunkText));
-    _emitJourney(
-      controller,
-      _journeyProjector.consumeUserEvent(
-        const UserEvent(
-          type: UserEventType.answerDelta,
-          scope: UserEventScope.aggregation,
-        ),
+    _journeyProjector.consumeUserEvent(
+      const UserEvent(
+        type: UserEventType.answerDelta,
+        scope: UserEventScope.aggregation,
       ),
     );
   }
@@ -111,6 +122,22 @@ class AssistantStreamingProjector {
     return _journeyProjector.snapshot;
   }
 
+  List<ProcessTimelineFrame> resolveCompletedProcessTimeline(
+    AssistantRunResponse response,
+  ) {
+    final direct = resolveAssistantProcessTimelineFromRunResponse(response);
+    final projected = _processTimelineProjector.snapshot;
+    if (hasStructuredProcessTimeline(projected) &&
+        (!hasStructuredProcessTimeline(direct) ||
+            projected.length >= direct.length)) {
+      return projected;
+    }
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    return projected;
+  }
+
   bool _isUnsafeChunkDisplayCandidate(String raw) {
     final text =
         AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
@@ -120,13 +147,7 @@ class AssistantStreamingProjector {
     if (AssistantContentFilters.isNotDisplayable(text)) {
       return true;
     }
-    return text.contains('assistant_turn') ||
-        text.contains('contractId') ||
-        text.contains('queryTasks') ||
-        text.contains('machineEnvelope') ||
-        text.contains('<tool_call>') ||
-        text.contains('</tool_call>') ||
-        text.contains('tool_call');
+    return AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(text);
   }
 
   String _traceAnswerDelta(AssistantTraceEvent event) {
@@ -137,15 +158,18 @@ class AssistantStreamingProjector {
     return ((event.data?['delta'] as String?) ?? event.message).trim();
   }
 
-  void _emitJourney(
+  void _emitProcessTimeline(
     StreamController<AssistantRunStreamEvent> controller,
-    AssistantJourney journey,
+    List<ProcessTimelineFrame> processTimeline,
   ) {
-    if (controller.isClosed) return;
-    final signature = jsonEncode(journey.toJson());
-    if (signature == _lastJourneySignature) return;
-    _lastJourneySignature = signature;
-    controller.add(AssistantRunStreamEvent.journey(journey));
+    final visibleTimeline = buildVisibleProcessTimeline(processTimeline);
+    if (controller.isClosed || visibleTimeline.isEmpty) return;
+    final signature = jsonEncode(
+      visibleTimeline.map((item) => item.toJson()).toList(growable: false),
+    );
+    if (signature == _lastProcessTimelineSignature) return;
+    _lastProcessTimelineSignature = signature;
+    controller.add(AssistantRunStreamEvent.processTimeline(visibleTimeline));
   }
 
   AssistantJourney _journeyFromResponse(AssistantRunResponse response) {

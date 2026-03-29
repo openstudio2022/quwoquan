@@ -10,6 +10,8 @@ export 'package:quwoquan_app/assistant/tool/impl/device/media_gallery_tool.dart'
     show MediaGalleryTool;
 export 'package:quwoquan_app/assistant/tool/impl/memory/memory_search_tool.dart'
     show MemorySearchTool;
+export 'package:quwoquan_app/assistant/tool/impl/search/search_tool.dart'
+    show SearchTool;
 export 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart'
     show ToolMetadataRegistry;
 export 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart'

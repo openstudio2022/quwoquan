@@ -6,10 +6,14 @@ import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_stream_projector.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -34,7 +38,7 @@ class RemoteAssistantEntry {
     try {
       final remote = await _openClawBridge.runRemote(effectiveRequest);
       if (remote != null) {
-        return remote;
+        return _normalizeCompletedResponse(remote);
       }
       return _buildErrorResponse(
         effectiveRequest,
@@ -89,7 +93,10 @@ class RemoteAssistantEntry {
             case OpenClawRemoteStreamEventType.trace:
               if (event.trace != null) {
                 final traceDelta = _traceAnswerDelta(event.trace!);
-                streamedAnswer = _mergeStreamedAnswer(streamedAnswer, traceDelta);
+                streamedAnswer = _mergeStreamedAnswer(
+                  streamedAnswer,
+                  traceDelta,
+                );
                 visibleStreamedAnswer = _mergeStreamedAnswer(
                   visibleStreamedAnswer,
                   streamingAnswerDecoder.appendChunk(traceDelta),
@@ -137,14 +144,43 @@ class RemoteAssistantEntry {
           'remote stream ended without completed payload',
           'remote_stream_incomplete',
         );
-        final resolvedResponse = completed;
+        final resolvedResponse = _normalizeCompletedResponse(completed);
         final resolvedJourney = projector.resolveCompletedJourney(
           resolvedResponse,
         );
-        final finalizedResponse = _attachJourney(
+        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
           resolvedResponse,
+        );
+        if (!controller.isClosed &&
+            !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
+          controller.add(
+            AssistantRunStreamEvent.trace(
+              AssistantTraceEvent(
+                type: AssistantTraceEventType.lifecycleEnd,
+                message: 'process timeline missing at completion',
+                timestamp: DateTime.now(),
+                runId: resolvedResponse.runId,
+                traceId: resolvedResponse.traceId,
+                visibility: TraceVisibility.system,
+                data: <String, dynamic>{
+                  'stage': 'process_timeline',
+                  'failureCode': AssistantFailureCode.processTimelineMissing,
+                },
+              ),
+            ),
+          );
+        }
+        final finalizedResponse = _attachJourney(
+          _attachProcessTimeline(resolvedResponse, canonicalProcessTimeline),
           resolvedJourney,
         );
+        if (!controller.isClosed && canonicalProcessTimeline.isNotEmpty) {
+          controller.add(
+            AssistantRunStreamEvent.processTimeline(
+              buildVisibleProcessTimeline(canonicalProcessTimeline),
+            ),
+          );
+        }
         if (!controller.isClosed) {
           controller.add(AssistantRunStreamEvent.journey(resolvedJourney));
         }
@@ -163,7 +199,39 @@ class RemoteAssistantEntry {
           stackTrace: stackTrace,
         );
         final resolvedJourney = projector.resolveCompletedJourney(fallback);
-        final finalizedFallback = _attachJourney(fallback, resolvedJourney);
+        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
+          fallback,
+        );
+        if (!controller.isClosed &&
+            !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
+          controller.add(
+            AssistantRunStreamEvent.trace(
+              AssistantTraceEvent(
+                type: AssistantTraceEventType.lifecycleEnd,
+                message: 'process timeline missing at completion',
+                timestamp: DateTime.now(),
+                runId: fallback.runId,
+                traceId: fallback.traceId,
+                visibility: TraceVisibility.system,
+                data: <String, dynamic>{
+                  'stage': 'process_timeline',
+                  'failureCode': AssistantFailureCode.processTimelineMissing,
+                },
+              ),
+            ),
+          );
+        }
+        final finalizedFallback = _attachJourney(
+          _attachProcessTimeline(fallback, canonicalProcessTimeline),
+          resolvedJourney,
+        );
+        if (!controller.isClosed && canonicalProcessTimeline.isNotEmpty) {
+          controller.add(
+            AssistantRunStreamEvent.processTimeline(
+              buildVisibleProcessTimeline(canonicalProcessTimeline),
+            ),
+          );
+        }
         if (!controller.isClosed) {
           controller.add(AssistantRunStreamEvent.journey(resolvedJourney));
         }
@@ -368,4 +436,88 @@ class RemoteAssistantEntry {
       profileUpdateProposal: response.profileUpdateProposal,
     );
   }
+
+  AssistantRunResponse _attachProcessTimeline(
+    AssistantRunResponse response,
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    final normalizedIncoming = normalizeProcessTimeline(processTimeline);
+    final normalizedExisting = resolveAssistantProcessTimelineFromRunResponse(
+      response,
+    );
+    final normalizedPreferred =
+        hasStructuredProcessTimeline(normalizedIncoming) &&
+            normalizedIncoming.length >= normalizedExisting.length
+        ? normalizedIncoming
+        : normalizedExisting;
+    if (!hasStructuredProcessTimeline(normalizedPreferred)) {
+      return response;
+    }
+    final structured = <String, dynamic>{...response.structuredResponse};
+    final rawRunArtifacts =
+        (structured['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final encodedTimeline = normalizedPreferred
+        .map((item) => item.toJson())
+        .toList(growable: false);
+    structured['processTimeline'] = encodedTimeline;
+    structured['runArtifacts'] = <String, dynamic>{
+      ...rawRunArtifacts,
+      'processTimeline': encodedTimeline,
+    };
+    return AssistantRunResponse(
+      finalText: response.finalText,
+      traces: response.traces,
+      runId: response.runId,
+      traceId: response.traceId,
+      degraded: response.degraded,
+      errorCode: response.errorCode,
+      structuredResponse: structured,
+      profileUpdateProposal: response.profileUpdateProposal,
+    );
+  }
+
+  AssistantRunResponse _normalizeCompletedResponse(
+    AssistantRunResponse response,
+  ) {
+    final structured = <String, dynamic>{...response.structuredResponse};
+    final rawRunArtifacts =
+        (structured['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final normalizedMarkdown =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (rawRunArtifacts['displayMarkdown'] as String?)?.trim().isNotEmpty ==
+                  true
+              ? (rawRunArtifacts['displayMarkdown'] as String)
+              : ((structured['userMarkdown'] as String?)?.trim().isNotEmpty ==
+                      true
+                  ? (structured['userMarkdown'] as String)
+                  : response.finalText),
+        );
+    if (normalizedMarkdown.isEmpty) {
+      return response;
+    }
+    final normalizedPlainText = AssistantDisplayTextResolver.stripMarkdown(
+      normalizedMarkdown,
+    ).trim();
+    structured['runArtifacts'] = <String, dynamic>{
+      ...rawRunArtifacts,
+      'displayMarkdown': normalizedMarkdown,
+      'displayPlainText': normalizedPlainText.isNotEmpty
+          ? normalizedPlainText
+          : ((rawRunArtifacts['displayPlainText'] as String?)?.trim() ??
+                response.finalText),
+    };
+    return AssistantRunResponse(
+      finalText: response.finalText,
+      traces: response.traces,
+      runId: response.runId,
+      traceId: response.traceId,
+      degraded: response.degraded,
+      errorCode: response.errorCode,
+      structuredResponse: structured,
+      profileUpdateProposal: response.profileUpdateProposal,
+    );
+  }
+
 }

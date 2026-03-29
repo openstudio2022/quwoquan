@@ -1,0 +1,86 @@
+version: 1
+node: global-search-experience/search-provider-routing-and-storage-topology
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze canonical search contract
+    goal: 冻结统一 `search(request)`、`mode=suggest|result`、query-first typed envelope 与 AI agent 可消费的 tool schema
+    depends_on: []
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 页面与业务层只有一个 canonical 搜索接口
+      - 建议与正式结果共用同一 contract
+      - 同一 schema 可生成 App / cloud client / AI agent tool descriptor
+      - 接口可同时覆盖 `web.document` 与趣我圈对象的 query-first 检索
+    status: completed
+
+  - id: P2
+    title: freeze searchable object taxonomy and provider registry
+    goal: 冻结 searchable object 命名、字段归属与 provider registry
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - object taxonomy 已定义
+      - provider registry 已定义
+    status: completed
+
+  - id: P3
+    title: freeze execution routing and group fallback
+    goal: 冻结 `local_only / remote_only / hybrid_remote_fallback_local` 与 `circle.group` fallback contract
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - execution mode 已定义
+      - `circle.group` fallback typed contract 已定义
+    status: completed
+
+  - id: P4
+    title: freeze local lifecycle and account isolation
+    goal: 冻结本地聊天搜索生命周期、子账号隔离与删除同步规则
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 登出保留、子账号隔离、删除同步规则明确
+    status: completed
+
+  - id: P5
+    title: freeze search storage topology and elasticity
+    goal: 冻结云侧搜索读模型、读写分离、多读切片、独立弹性、AI agent tool 资源边界与未来读库替换边界
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J3
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T2_module_interaction
+    done_when:
+      - 读写路径分离
+      - 多读切片与弹性原则明确
+      - agent tool 调用的限流、审计与只读边界明确
+      - 未来统一高性能读库替换边界明确
+      - 现有云侧 provider 的读路径 contract 与 degrade evidence 可验证
+    status: completed

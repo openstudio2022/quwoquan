@@ -1,11 +1,13 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
 import 'package:quwoquan_app/components/assistant/petal_mark.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -25,9 +27,9 @@ const _secondQuery = String.fromEnvironment(
 const _weatherFirstQuery = '深圳今天天气怎么样？需要带外套吗？';
 const _weatherSecondQuery = '明天会下雨吗，要带伞还是外套？';
 const _skeletalProcessHeaders = <String>[
-  '理解问题中',
-  '检索处理中',
-  '整理答案中',
+  '理解问题',
+  '结果处理',
+  '整理答案',
   '已完成深度思考',
   '正在搜索',
   '正在整理',
@@ -66,7 +68,7 @@ const _forbiddenFragments = <String>[
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('真实两轮助理问答界面联调', (tester) async {
+  testWidgets('助理回放与天气问答回归', (tester) async {
     await _runReplayCase(
       tester,
       binding: binding,
@@ -74,9 +76,6 @@ void main() {
       firstQuery: _firstQuery,
       secondQuery: _secondQuery,
     );
-  });
-
-  testWidgets('小趣私人对话-天气问答回归', (tester) async {
     await _runReplayCase(
       tester,
       binding: binding,
@@ -98,6 +97,11 @@ Future<void> _runReplayCase(
   addTearDown(() {
     FlutterError.onError = originalOnError;
   });
+  addTearDown(() async {
+    await _resetAssistantApp(tester);
+  });
+  await _resetAssistantApp(tester);
+  await _wipeAssistantStorage();
   _suppressNetworkImageErrors();
   app.main();
 
@@ -132,6 +136,20 @@ Future<void> _runReplayCase(
       'secondQuery': secondResult.toJson(),
     },
   };
+  await _resetAssistantApp(tester);
+}
+
+Future<void> _resetAssistantApp(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _wipeAssistantStorage() async {
+  final sessionsPath = await getPersonalAssistantStoragePath('sessions.json');
+  final storageDir = Directory(sessionsPath).parent;
+  if (await storageDir.exists()) {
+    await storageDir.delete(recursive: true);
+  }
 }
 
 void _suppressNetworkImageErrors() {
@@ -230,6 +248,10 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   required String query,
 }) async {
   await _ensureAssistantDialogReady(tester);
+  final baselineSnapshot = _latestAssistantSnapshot(tester);
+  final baselineMessageId =
+      (baselineSnapshot?.message['id'] as String?)?.trim() ?? '';
+  final baselineAnswer = baselineSnapshot?.answerText.trim() ?? '';
   final snapshots = <String>[];
   _AssistantBubbleSnapshot? latestSnapshot;
   var phaseLabelSeen = false;
@@ -295,6 +317,7 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   var stableTicks = 0;
   var finalMessageStreaming = true;
   String previousAnswer = '';
+  var observedNewAssistantTurn = false;
   final deadline = DateTime.now().add(const Duration(seconds: 80));
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(seconds: 1));
@@ -308,6 +331,17 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     finalMessageStreaming = snapshot.streaming;
     degraded = snapshot.degraded;
     heuristicFallbackUsed = snapshot.heuristicFallbackUsed;
+    final currentMessageId = (snapshot.message['id'] as String?)?.trim() ?? '';
+    final currentAnswer = latestAnswer.trim();
+    if (!observedNewAssistantTurn &&
+        (snapshot.streaming ||
+            (currentMessageId.isNotEmpty && currentMessageId != baselineMessageId) ||
+            (currentAnswer.isNotEmpty && currentAnswer != baselineAnswer))) {
+      observedNewAssistantTurn = true;
+    }
+    if (!observedNewAssistantTurn) {
+      continue;
+    }
     snapshots.add(latestText);
     _throwIfForbidden(latestText);
     if (_matchesExpectation(query, latestAnswer)) {
@@ -445,9 +479,10 @@ Future<String> _latestAssistantProcessHeaderText(WidgetTester tester) async {
     matching: find.byKey(TestKeys.assistantProcessHeader),
   );
   if (headerFinder.evaluate().isEmpty) return '';
-  await tester.ensureVisible(headerFinder.last);
+  await tester.ensureVisible(headerFinder.first);
   await tester.pump(const Duration(milliseconds: 200));
-  return _collectVisibleText(tester, scope: headerFinder.last);
+  if (headerFinder.evaluate().isEmpty) return '';
+  return _collectVisibleText(tester, scope: headerFinder);
 }
 
 String _collectVisibleText(WidgetTester tester, {Finder? scope}) {
@@ -702,10 +737,15 @@ void _expectReplayResult(_ReplayResult result) {
       anyOf(equals('phase_one_direct_answer'), equals('formal_synthesis')),
       reason: '第二轮连续追问必须稳定收口到 answer，不允许掉回扩检或空路由',
     );
+    final maxModelCalls =
+        route == 'phase_one_direct_answer'
+        ? 4
+        : 5;
     expect(
       result.modelCallCount,
-      lessThanOrEqualTo(4),
-      reason: '第二轮连续追问应避免额外正式 synthesis 带来的调用膨胀',
+      lessThanOrEqualTo(maxModelCalls),
+      reason:
+          '第二轮连续追问应避免掉回 secondary-skill 扩检；若统一走 formal synthesis 主轨，则允许 1 次额外成答调用',
     );
     if (route == 'phase_one_direct_answer') {
       expect(

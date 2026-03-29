@@ -125,7 +125,7 @@ void main() {
       );
     });
 
-    test('主 prompt 改为运行时事件通道承载流式并收紧历史噪音', () {
+    test('主 prompt 改为显式约束单字段流式抽取并收紧历史噪音', () {
       const plannerContentPath =
           'assets/assistant/prompts/global/planner.global_plan.md';
       const synthContentPath =
@@ -135,13 +135,13 @@ void main() {
 
       expect(
         planner,
-        contains('运行时事件通道承载'),
-        reason: 'planner.global_plan 应明确声明阶段1流式由事件通道承载',
+        contains('运行时会直接抽取 `understandingSnapshot.userFacingSummary`'),
+        reason: 'planner.global_plan 应明确声明阶段1主展示字段会被运行时直接抽取',
       );
       expect(
         synth,
-        contains('运行时事件通道承载'),
-        reason: 'synthesizer.final_answer 应明确声明阶段3流式由事件通道承载',
+        contains('运行时会直接抽取 `answerProcessing.readinessSummary` 与 `userMarkdown`'),
+        reason: 'synthesizer.final_answer 应明确声明阶段3字段会被运行时直接抽取',
       );
       expect(
         planner,
@@ -165,7 +165,7 @@ void main() {
       );
     });
 
-    test('phase output contract 保留 reasonShort 并切回事件通道流式', () {
+    test('phase output contract 保留 reasonShort 并切到单字段直接抽取流式', () {
       const phasePlanPath =
           'assets/assistant/prompts/global/phase.output_contract.plan.md';
       const phaseAnswerPath =
@@ -178,15 +178,17 @@ void main() {
         contains('reasonShort'),
         reason: '规划阶段 contract 仍需兼容当前 reasonShort 流式读取',
       );
+      expect(phasePlan, contains('最小稳定优先字段'));
+      expect(phasePlan, contains('唯一推荐保留的反思字段'));
       expect(
         phasePlan,
-        contains('运行时事件通道承载'),
-        reason: '规划阶段 contract 应明确声明运行时事件通道承载流式',
+        contains('运行时会直接抽取 `understandingSnapshot.userFacingSummary`'),
+        reason: '规划阶段 contract 应明确声明主展示字段会被直接抽取流式展示',
       );
       expect(
         phaseAnswer,
-        contains('运行时事件通道承载'),
-        reason: '回答阶段 contract 应明确声明运行时事件通道承载流式',
+        contains('运行时会直接抽取 `answerProcessing.readinessSummary` 与 `userMarkdown`'),
+        reason: '回答阶段 contract 应明确声明主展示字段会被直接抽取流式展示',
       );
       expect(
         phasePlan,
@@ -203,6 +205,60 @@ void main() {
         contains('userMarkdown'),
         reason: '回答阶段 contract 仍需约束最终成答字段 userMarkdown',
       );
+      expect(phaseAnswer, contains('唯一建议保留的反思字段'));
+      expect(phaseAnswer, contains('不要使用 `#` / `##` / `###` 标题'));
+    });
+
+    test('回答阶段 prompt 改为自然成答并注册 evidence_digest 模板', () {
+      const manifestPath = 'assets/assistant/prompts/manifest.json';
+      const evidenceDigestMetaPath =
+          'assets/assistant/prompts/global/evidence_digest.meta.json';
+      const evidenceDigestContentPath =
+          'assets/assistant/prompts/global/evidence_digest.md';
+      const phaseAnswerPath =
+          'assets/assistant/prompts/global/phase.output_contract.answer.md';
+      const plannerContentPath =
+          'assets/assistant/prompts/global/planner.global_plan.md';
+      const synthContentPath =
+          'assets/assistant/prompts/global/synthesizer.final_answer.md';
+      final manifest = File(manifestPath).readAsStringSync();
+      final evidenceDigestMeta = File(evidenceDigestMetaPath).readAsStringSync();
+      final evidenceDigest = File(evidenceDigestContentPath).readAsStringSync();
+      final phaseAnswer = File(phaseAnswerPath).readAsStringSync();
+      final planner = File(plannerContentPath).readAsStringSync();
+      final synth = File(synthContentPath).readAsStringSync();
+
+      expect(phaseAnswer, contains('problemClass + answerShape'));
+      expect(phaseAnswer, contains('不能固定套用'));
+      expect(phaseAnswer, isNot(contains('## 问题理解')));
+      expect(phaseAnswer, isNot(contains('## 关键观点')));
+      expect(phaseAnswer, isNot(contains('## 回答概要')));
+      expect(phaseAnswer, contains('禁止退回成“请去官网查看”'));
+      expect(phaseAnswer, contains('把 `answerProcessing` 与 `userMarkdown` 放在'));
+      expect(phaseAnswer, contains('最小稳定优先字段'));
+      expect(phaseAnswer, contains('运行时会补默认值'));
+      expect(phaseAnswer, contains('不要写成 `-Day1`、`1.时间刚好`、`方案。###标题`'));
+      expect(phaseAnswer, contains('不要自动展开成逐日行程'));
+      expect(phaseAnswer, contains('如果 `answerShape != action_plan`'));
+      expect(synth, contains('只输出自然最终答案'));
+      expect(synth, contains('direct_answer'));
+      expect(synth, contains('如果你已经拿到实时指标，就直接报结果 + 1-2 条简洁建议'));
+      expect(synth, contains('把 `understandingSnapshot`、`retrievalProcessing`、`answerProcessing`、`userMarkdown` 放在'));
+      expect(synth, contains('最小稳定字段集'));
+      expect(synth, contains('输出顺序优先'));
+      expect(synth, contains('不要使用 `#` / `##` / `###` 标题'));
+      expect(synth, contains('如果上一轮的答案结构过重'));
+      expect(synth, contains('不要擅自升级成逐日 itinerary'));
+      expect(planner, contains('优先选择 `options` 或 `decision_ready`'));
+      expect(synth, isNot(contains('## 问题理解')));
+      expect(synth, isNot(contains('## 关键观点')));
+      expect(synth, isNot(contains('## 回答概要')));
+      expect(manifest, contains('evidence_digest.meta.json'));
+      expect(manifest, contains('evidence_digest.md'));
+      expect(evidenceDigestMeta, contains('"templateId": "evidence_digest"'));
+      expect(evidenceDigest, contains('证据提炼阶段'));
+      expect(evidenceDigest, contains('selectedKeyPoints'));
+      expect(evidenceDigest, contains('Markdown'));
     });
   });
 }

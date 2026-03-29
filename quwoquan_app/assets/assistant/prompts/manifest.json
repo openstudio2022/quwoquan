@@ -41,6 +41,10 @@
       "contentPath": "assets/assistant/prompts/global/synthesizer.final_answer.md"
     },
     {
+      "metaPath": "assets/assistant/prompts/global/evidence_digest.meta.json",
+      "contentPath": "assets/assistant/prompts/global/evidence_digest.md"
+    },
+    {
       "metaPath": "assets/assistant/prompts/global/summarize_session.meta.json",
       "contentPath": "assets/assistant/prompts/global/summarize_session.md"
     }

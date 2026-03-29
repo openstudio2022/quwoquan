@@ -23,7 +23,12 @@ void main() {
         );
         request.response.write(
           'event: trace\n'
-          'data: ${jsonEncode(<String, dynamic>{'type': 'thinkingProgress', 'message': '正在理解你的问题', 'timestamp': DateTime.now().toIso8601String(), 'data': <String, dynamic>{'phase': 'analyze'}})}\n\n',
+          'data: ${jsonEncode(<String, dynamic>{
+            'type': 'thinkingProgress',
+            'message': '正在理解你的问题',
+            'timestamp': DateTime.now().toIso8601String(),
+            'data': <String, dynamic>{'phase': 'analyze'},
+          })}\n\n',
         );
         request.response.write(
           'event: answer_delta\n'
@@ -79,6 +84,10 @@ void main() {
     final runArtifacts = (completed.structuredResponse['runArtifacts'] as Map?)
         ?.cast<String, dynamic>();
     expect(runArtifacts, isNotNull);
+    expect(
+      (runArtifacts!['displayMarkdown'] as String?) ?? '',
+      equals('这是远端流式回答。'),
+    );
     final journey = (runArtifacts!['journey'] as Map?)?.cast<String, dynamic>();
     expect(journey, isNotNull);
     expect((journey!['stages'] as List?) ?? const <dynamic>[], isNotEmpty);
@@ -143,6 +152,13 @@ void main() {
     expect(completed, isNotNull);
     expect(completed!.finalText, '来自非流式回退的完整回答');
     expect(completed.errorCode, isNull);
+    final runArtifacts = (completed.structuredResponse['runArtifacts'] as Map?)
+        ?.cast<String, dynamic>();
+    expect(runArtifacts, isNotNull);
+    expect(
+      (runArtifacts!['displayMarkdown'] as String?) ?? '',
+      equals('来自非流式回退的完整回答'),
+    );
   });
 
   test('远端 stream 只有 thinking 或不完整答案时不会误合成 completed', () async {
@@ -159,7 +175,12 @@ void main() {
         );
         request.response.write(
           'event: trace\n'
-          'data: ${jsonEncode(<String, dynamic>{'type': 'thinkingProgress', 'message': 'shen zhen tian qi', 'timestamp': DateTime.now().toIso8601String(), 'data': <String, dynamic>{'phase': 'answering', 'streaming': true, 'extracted': true}})}\n\n',
+          'data: ${jsonEncode(<String, dynamic>{
+            'type': 'thinkingProgress',
+            'message': 'shen zhen tian qi',
+            'timestamp': DateTime.now().toIso8601String(),
+            'data': <String, dynamic>{'phase': 'answering', 'streaming': true, 'extracted': true},
+          })}\n\n',
         );
         request.response.write(
           'event: answer_delta\n'
@@ -217,12 +238,17 @@ void main() {
     expect(completed, isNotNull);
     expect(completed!.finalText, '来自非流式兜底的完整回答');
     expect(completed.errorCode, isNull);
+    final runArtifacts = (completed.structuredResponse['runArtifacts'] as Map?)
+        ?.cast<String, dynamic>();
+    expect(runArtifacts, isNotNull);
+    expect(
+      (runArtifacts!['displayMarkdown'] as String?) ?? '',
+      equals('来自非流式兜底的完整回答'),
+    );
     expect(
       completed.traces.any(
         (trace) =>
-            trace.message.contains(
-              'synthesized response from streamed answer',
-            ),
+            trace.message.contains('synthesized response from streamed answer'),
       ),
       isFalse,
     );

@@ -82,6 +82,25 @@ void main() {
       expect(wildlifePlan.blockingDimensions, isNotEmpty);
     });
 
+    test('检索规划在 search 可用时优先 search 且默认 mode=result', () {
+      final plan = planner.plan(
+        frame: framer.frame(
+          '摄影入门需要准备什么？',
+          intentPayload: const <String, dynamic>{
+            'problemClass': 'evidence_lookup',
+            'requiresExternalEvidence': true,
+          },
+        ),
+        availableTools: const <String>['search', 'web_search'],
+      );
+
+      expect(plan, isNotNull);
+      expect(plan!.calls, isNotEmpty);
+      expect(plan.calls.first.name, equals('search'));
+      expect(plan.calls.first.arguments['mode'], equals('result'));
+      expect(plan.calls.first.arguments['query'], isNotEmpty);
+    });
+
     test('证据评估可把未满配的资料判为 bounded', () {
       final result = evaluator.evaluate(
         ledger: const <EvidenceLedgerEntry>[

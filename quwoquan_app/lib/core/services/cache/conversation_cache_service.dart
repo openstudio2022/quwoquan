@@ -124,6 +124,11 @@ class ConversationCacheService {
     _disk.remove(id);
   }
 
+  void clear() {
+    _memory.clear();
+    _disk.clear();
+  }
+
   void _putMemory(String id, _CacheEntry entry) {
     _memory.remove(id);
     _memory[id] = entry;

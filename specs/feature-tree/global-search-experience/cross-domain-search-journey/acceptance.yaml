@@ -15,7 +15,7 @@ scope:
   composed_scenarios:
     - full-screen-search-shell-and-entry
     - multi-domain-result-composition
-    - social-relationship-search-contract
+    - local-chat-search-contract
     - circle-facet-search-and-filter
     - recent-search-sync-and-voice-asr
     - xiaoqu-entry-handoff
@@ -59,15 +59,17 @@ journey_acceptance:
     journey: input query -> receive suggestions -> expand sections or open network results -> enter target page
     scenario_refs:
       - multi-domain-result-composition
-      - social-relationship-search-contract
+      - local-chat-search-contract
       - circle-facet-search-and-filter
     done_when:
       - 联想页按“最常使用 / 联系人 / 聊天记录 / 搜索网络结果”四段组织
-      - 联系人、聊天记录可页内展开更多，并稳定直达对应会话
+      - 联系人、聊天记录由端侧本地搜索提供，可页内展开更多，并稳定直达对应会话
       - 网络结果页可在小趣搜与群组分类 facet 间切换，并进入对应群组或内容目标页
+      - "`circle.group` 云侧失败或返回 0 结果时，可回退端侧本地全量结果而不阻塞旅程"
     release_guardrails:
       - 不把小趣搜结果混入联想页实时分段
       - 群组分类仅以 circle facet 形式出现
+      - "页面层不直接依赖分域搜索方法名，只消费统一 `search(request)` 接口"
     evidence:
       primary:
         - T3_cross_service_integration

@@ -202,6 +202,22 @@ class ReactPolicy {
     retryableErrorCodes: <String>['rateLimited', 'networkUnavailable'],
     suppressUserErrorRules: <ReactSuppressRule>[
       ReactSuppressRule(
+        toolName: 'search',
+        errorCodes: <String>[
+          'invalidArguments',
+          'networkUnavailable',
+          'rateLimited',
+          'executionFailed',
+        ],
+        messageKeywords: <String>[
+          'api key',
+          '未发现可用搜索 provider',
+          '检索未找到足够信息',
+          '检索完成但信息不足',
+          'proxy',
+        ],
+      ),
+      ReactSuppressRule(
         toolName: 'web_search',
         errorCodes: <String>[
           'invalidArguments',
@@ -219,6 +235,14 @@ class ReactPolicy {
       ),
     ],
     toolStatusRules: <ReactToolStatusRule>[
+      ReactToolStatusRule(
+        toolName: 'search',
+        successWithSummary: 'retrieval_summary',
+        successWithoutSummary: 'retrieval_no_summary',
+        invalidArgumentsStatus: 'retrieval_invalid_args',
+        permissionDeniedStatus: 'retrieval_permission_denied',
+        errorStatus: 'retrieval_error',
+      ),
       ReactToolStatusRule(
         toolName: 'web_search',
         successWithSummary: 'retrieval_summary',

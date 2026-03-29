@@ -3,7 +3,7 @@ name: weather-realtime
 description: 天气查询、出行建议、穿衣推荐、空气质量、紫外线指数。可设出行提醒。
 domain: weather
 mode: hybrid
-allowed_tools: local_context web_search web_fetch memory_search
+allowed_tools: local_context search web_search web_fetch memory_search
 trigger_keywords: [天气, 气温, 降雨, 风力, 湿度, 体感, 预报, 实时天气, 天气预报, 穿衣建议, 出行建议]
 problem_class: realtime_info
 searchPolicy:
@@ -19,7 +19,7 @@ execution_shell:
   providerPolicy: authority_first
   preferredProviders: [web]
 requires:
-  tools: [web_search, web_fetch, memory_search]
+  tools: [search, web_search, web_fetch, memory_search]
   permissions: [location]
 output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
@@ -45,7 +45,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 工具调用策略
 - 缺城市时禁止直接查天气，先补槽位。
-- 城市就绪后调用 `web_search` 查询实时天气与短时趋势。
+- 城市就绪后优先调用 `search` 查询实时天气与短时趋势，必要时再回退到 `web_search`。
 - 工具失败可重试 1 次，仍失败执行降级策略。
 - 调用 `local_context` 时遵循 `local_context_v1` 契约，仅请求位置与权限字段，不含相册数据：`"media": {"included": false}`。
 
@@ -83,7 +83,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
       "toolName": "local_context",
       "arguments": {"requestedFields": ["location", "permissions", "device"]}
     },
-    {"toolName": "web_search", "arguments": {"query": "深圳天气", "freshnessHoursMax": 1}}
+    {"toolName": "search", "arguments": {"query": "深圳天气", "mode": "result", "limit": 6}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在获取你所在城市并准备查询实时天气…"

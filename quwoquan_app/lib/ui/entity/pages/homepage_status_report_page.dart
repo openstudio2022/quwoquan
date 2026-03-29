@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -35,6 +34,13 @@ class _HomepageStatusReportPageState
   String? _errorText;
   String _reason = 'offline';
 
+  bool get _hasUnsavedChanges =>
+      _reason != _reasons.first.value ||
+      _descriptionController.text.trim().isNotEmpty;
+
+  String get _confirmLabel =>
+      (_detail?.status ?? '') == 'offline' ? '主页已下线' : '提交状态上报';
+
   @override
   void initState() {
     super.initState();
@@ -52,175 +58,173 @@ class _HomepageStatusReportPageState
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final canSubmit =
         !_isLoading && !_isSubmitting && (_detail?.status ?? '') != 'offline';
-    return CupertinoPageScaffold(
+    return IosSelectionPageScaffold(
+      title: '状态上报',
+      onBack: _handleCloseRequest,
+      leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('状态上报'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => context.pop(),
-          child: const Icon(CupertinoIcons.xmark),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          AppSpacing.containerLg,
         ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: <Widget>[
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.containerMd,
-                    AppSpacing.containerSm,
-                    AppSpacing.containerMd,
-                    AppSpacing.containerLg,
+        children: <Widget>[
+          if (_isLoading)
+            const Center(child: CupertinoActivityIndicator())
+          else ...<Widget>[
+            _ReportCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _detail?.title ?? '共享主页',
+                    style: const TextStyle(
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.semiBold,
+                    ),
                   ),
-                  children: <Widget>[
-                    if (_isLoading)
-                      const Center(child: CupertinoActivityIndicator())
-                    else ...<Widget>[
-                      _ReportCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              _detail?.title ?? '共享主页',
-                              style: const TextStyle(
-                                fontSize: AppTypography.iosTitle3,
-                                fontWeight: AppTypography.semiBold,
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.intraGroupXs),
-                            Text(
-                              (_detail?.status ?? '') == 'offline'
-                                  ? '该主页已经下线，历史内容会继续保留供浏览。'
-                                  : '如果主页信息失效、重复或长期停用，可以发起状态上报。',
-                              style: TextStyle(
-                                fontSize: AppTypography.iosFootnote,
-                                color: CupertinoColors.secondaryLabel
-                                    .resolveFrom(context),
-                              ),
-                            ),
-                            if (_errorText != null) ...<Widget>[
-                              SizedBox(height: AppSpacing.containerSm),
-                              Text(
-                                _errorText!,
-                                style: const TextStyle(color: AppColors.error),
-                              ),
-                            ],
-                          ],
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Text(
+                    (_detail?.status ?? '') == 'offline'
+                        ? '该主页已经下线，历史内容会继续保留供浏览。'
+                        : '如果主页信息失效、重复或长期停用，可以发起状态上报。',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                    ),
+                  ),
+                  if (_errorText != null) ...<Widget>[
+                    SizedBox(height: AppSpacing.containerSm),
+                    Text(
+                      _errorText!,
+                      style: const TextStyle(color: AppColors.error),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            _ReportCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '选择原因',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  for (var i = 0; i < _reasons.length; i++) ...<Widget>[
+                    if (i > 0) const Divider(height: AppSpacing.one),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: canSubmit
+                          ? () {
+                              setState(() {
+                                _reason = _reasons[i].value;
+                              });
+                            }
+                          : null,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: AppSpacing.containerSm,
                         ),
-                      ),
-                      SizedBox(height: AppSpacing.containerSm),
-                      _ReportCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: <Widget>[
-                            Text(
-                              '选择原因',
-                              style: TextStyle(
-                                fontSize: AppTypography.iosFootnote,
-                                color: CupertinoColors.secondaryLabel
-                                    .resolveFrom(context),
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.intraGroupSm),
-                            for (
-                              var i = 0;
-                              i < _reasons.length;
-                              i++
-                            ) ...<Widget>[
-                              if (i > 0) const Divider(height: AppSpacing.one),
-                              CupertinoButton(
-                                padding: EdgeInsets.zero,
-                                onPressed: canSubmit
-                                    ? () {
-                                        setState(() {
-                                          _reason = _reasons[i].value;
-                                        });
-                                      }
-                                    : null,
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: AppSpacing.containerSm,
-                                  ),
-                                  child: Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: Text(
-                                          _reasons[i].label,
-                                          style: const TextStyle(
-                                            fontSize: AppTypography.iosBody,
-                                            fontWeight: AppTypography.medium,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(
-                                        _reason == _reasons[i].value
-                                            ? CupertinoIcons
-                                                  .check_mark_circled_solid
-                                            : CupertinoIcons.circle,
-                                        color: _reason == _reasons[i].value
-                                            ? AppColors.primaryColor
-                                            : CupertinoColors.secondaryLabel
-                                                  .resolveFrom(context),
-                                      ),
-                                    ],
-                                  ),
+                            Expanded(
+                              child: Text(
+                                _reasons[i].label,
+                                style: const TextStyle(
+                                  fontSize: AppTypography.iosBody,
+                                  fontWeight: AppTypography.medium,
                                 ),
                               ),
-                            ],
-                            SizedBox(height: AppSpacing.containerSm),
-                            Text(
-                              '补充说明',
-                              style: TextStyle(
-                                fontSize: AppTypography.iosFootnote,
-                                color: CupertinoColors.secondaryLabel
-                                    .resolveFrom(context),
-                              ),
                             ),
-                            SizedBox(height: AppSpacing.intraGroupXs),
-                            CupertinoTextField(
-                              controller: _descriptionController,
-                              enabled: canSubmit,
-                              placeholder: '补充说明当前状态，例如已停业、地址变更或重复来源',
-                              maxLines: 4,
+                            Icon(
+                              _reason == _reasons[i].value
+                                  ? CupertinoIcons.check_mark_circled_solid
+                                  : CupertinoIcons.circle,
+                              color: _reason == _reasons[i].value
+                                  ? AppColors.primaryColor
+                                  : CupertinoColors.secondaryLabel.resolveFrom(
+                                      context,
+                                    ),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  MediaQuery.paddingOf(context).bottom + AppSpacing.containerMd,
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.buttonHeight,
-                  child: CupertinoButton.filled(
-                    onPressed: canSubmit ? _submit : null,
-                    child: _isSubmitting
-                        ? const CupertinoActivityIndicator()
-                        : Text(
-                            (_detail?.status ?? '') == 'offline'
-                                ? '主页已下线'
-                                : '提交状态上报',
-                          ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  Text(
+                    '补充说明',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                    ),
                   ),
-                ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  CupertinoTextField(
+                    controller: _descriptionController,
+                    enabled: canSubmit,
+                    placeholder: '补充说明当前状态，例如已停业、地址变更或重复来源',
+                    maxLines: 4,
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        ],
+      ),
+      bottomBar: IosSelectionBottomBar(
+        confirmLabel: _confirmLabel,
+        confirmEnabled: canSubmit,
+        confirmLoading: _isSubmitting,
+        onConfirm: _submit,
       ),
     );
+  }
+
+  Future<void> _handleCloseRequest() async {
+    if (_isSubmitting) {
+      return;
+    }
+    if (!_hasUnsavedChanges) {
+      _pop();
+      return;
+    }
+    final discardChanges = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.unsavedChangesTitle),
+        content: const Text(UITextConstants.unsavedChangesMessage),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(UITextConstants.continueEditing),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(UITextConstants.discard),
+          ),
+        ],
+      ),
+    );
+    if (discardChanges == true && mounted) {
+      _pop();
+    }
+  }
+
+  void _pop() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
   }
 
   Future<void> _load() async {
@@ -265,7 +269,7 @@ class _HomepageStatusReportPageState
         return;
       }
       AppToast.show(context, '状态上报已提交');
-      context.pop(true);
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
         return;

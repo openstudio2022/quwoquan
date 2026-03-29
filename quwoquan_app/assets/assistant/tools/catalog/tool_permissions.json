@@ -4,6 +4,9 @@
     "web_search": {
       "requireConfirmation": false
     },
+    "search": {
+      "requireConfirmation": false
+    },
     "web_fetch": {
       "requireConfirmation": false
     },

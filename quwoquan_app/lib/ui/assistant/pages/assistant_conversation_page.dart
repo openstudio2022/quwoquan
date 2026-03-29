@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
@@ -356,6 +357,7 @@ class _AssistantConversationPageState
   }) {
     return _controller.buildJourneyViewModel(
       journey: resolveAssistantJourneyFromMessage(message),
+      processTimeline: resolveAssistantProcessTimelineFromMessage(message),
       isRunning: isRunning,
       retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
         message,
@@ -719,10 +721,11 @@ class _AssistantConversationPageState
   }) async {
     final originalQuery = (message['sourceQuery'] as String?)?.trim() ?? '';
     if (originalQuery.isEmpty) return;
-    final previousAnswer =
-        (message['content'] as String?)?.trim() ??
-        (message['streamFinalAnswer'] as String?)?.trim() ??
-        '';
+    final previousAnswer = <String>[
+      resolvePersistedAssistantDisplayPlainText(message),
+      resolvePersistedAssistantDisplayMarkdown(message),
+      (message['content'] as String?)?.trim() ?? '',
+    ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
     final rewriteMode = switch (option) {
       RegenerateOption.regenerate => RewriteMode.regenerate,
       RegenerateOption.concise => RewriteMode.concise,
@@ -1123,6 +1126,8 @@ class _AssistantConversationPageState
                               _controller.assistantResponding
                           ? _controller.buildJourneyViewModel(
                               journey: _controller.currentJourney,
+                              processTimeline:
+                                  _controller.currentProcessTimeline,
                               isRunning: true,
                               retrievalProcessing:
                                   _controller.currentRetrievalProcessing,

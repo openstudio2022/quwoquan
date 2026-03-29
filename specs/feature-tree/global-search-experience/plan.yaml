@@ -8,6 +8,7 @@ derived_from:
   changelog:
     - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
     - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
 
 slices:
   - id: P1
@@ -58,4 +59,57 @@ slices:
       - 关键观测指标与 SLO 验证路径明确
       - 无细粒度 feature flag 的整版发布口径清晰
       - 旧实现与新设计之间的回滚边界明确
+    status: completed
+
+  - id: P4
+    title: freeze topology-level search contract and provider routing
+    goal: 在新 L2 `search-provider-routing-and-storage-topology` 中冻结 canonical `search(request)`、web-search-like query-first AI agent tool schema、对象 taxonomy、provider registry 与执行策略
+    depends_on:
+      - P3
+    acceptance_refs:
+      - C2
+      - C4
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - 页面与业务层只消费统一 `SearchRequest / SearchResponse`
+      - AI agent 可复用同一 schema 调用检索 tool
+      - 同一 contract 支持 `web.document` 与趣我圈对象的多轮 query-first 检索
+      - `local_only / remote_only / hybrid_remote_fallback_local` 被正式定义
+      - tree / spec / design / acceptance / plan 与 CR 同步收口
+    status: completed
+
+  - id: P5
+    title: freeze local chat search lifecycle and hybrid fallback policy
+    goal: 收口本地聊天搜索生命周期、账号隔离与 `circle.group` remote-primary/local-fallback 规则
+    depends_on:
+      - P4
+    acceptance_refs:
+      - C3
+      - C4
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 登出不清空、切子账号隔离、删除/撤回同步删索引的规则冻结
+      - `circle.group` 云侧失败或 0 结果 fallback 端侧全量结果的 typed 规则冻结
     status: in_progress
+
+  - id: P6
+    title: freeze cloud search read-model topology and elasticity
+    goal: 冻结云侧搜索读模型、读写分离、多读切片与高并发成本控制的架构基线
+    depends_on:
+      - P5
+    acceptance_refs:
+      - C4
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T2_module_interaction
+    done_when:
+      - 写模型与搜索读模型边界清晰
+      - 多读切片、独立弹性、缓存与降级原则冻结
+      - 未来统一高性能搜索读库的替换边界明确
+      - 现有云侧 provider 的读路径 contract 与 header 审计证据齐备
+    status: completed

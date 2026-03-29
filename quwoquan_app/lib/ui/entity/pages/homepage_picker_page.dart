@@ -109,7 +109,9 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
   }
 
   Widget _buildBody(Color fgSecondary) {
-    final hasSelection = widget.initialSelection != null || _selected != null;
+    final selected = _selected;
+    final selectedVisibleInResults =
+        selected != null && _results.any((item) => item.id == selected.id);
     if (_isLoading && _results.isEmpty) {
       return _buildStatusSection(
         text: UITextConstants.loading,
@@ -118,16 +120,31 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       );
     }
     if (_errorText != null && _results.isEmpty) {
+      if (selected != null) {
+        return _buildSelectedAndMessageSection(
+          selected: selected,
+          text: _errorText!,
+          fgSecondary: fgSecondary,
+        );
+      }
       return _buildStatusSection(text: _errorText!, fgSecondary: fgSecondary);
     }
     if (_results.isEmpty) {
+      if (selected != null) {
+        return _buildSelectedAndMessageSection(
+          selected: selected,
+          text: UITextConstants.attachHomepageEmpty,
+          fgSecondary: fgSecondary,
+          showSuggestAction: true,
+        );
+      }
       return _buildEmptySection(fgSecondary);
     }
 
     return ListView(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupLg),
       children: <Widget>[
-        if (hasSelection) ...<Widget>[
+        if (selected != null && !selectedVisibleInResults) ...<Widget>[
           const IosSelectionSectionHeader(
             title: '当前关联',
             padding: EdgeInsets.fromLTRB(
@@ -137,7 +154,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
               AppSpacing.intraGroupXs,
             ),
           ),
-          _buildClearSelectionTile(),
+          _buildSelectedReferenceTile(selected),
           const SizedBox(height: AppSpacing.interGroupSm),
         ],
         const IosSelectionSectionHeader(
@@ -165,7 +182,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             child: Text(
               _query.isEmpty
                   ? UITextConstants.attachHomepageSuggest
-                  : '补充“$_query”这个主页',
+                  : UITextConstants.attachHomepageSuggestWithQuery(_query),
               style: TextStyle(
                 color: AppColors.iosAccent(context),
                 fontSize: AppTypography.iosFootnote,
@@ -217,15 +234,72 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     }
   }
 
-  Widget _buildClearSelectionTile() {
-    final checked = _selected == null;
+  Widget _buildSelectedAndMessageSection({
+    required HomepageCanonicalReference selected,
+    required String text,
+    required Color fgSecondary,
+    bool showSuggestAction = false,
+  }) {
+    return ListView(
+      padding: EdgeInsets.only(bottom: AppSpacing.interGroupLg),
+      children: <Widget>[
+        const IosSelectionSectionHeader(
+          title: '当前关联',
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerMd,
+            AppSpacing.intraGroupXs,
+            AppSpacing.containerMd,
+            AppSpacing.intraGroupXs,
+          ),
+        ),
+        _buildSelectedReferenceTile(selected),
+        SizedBox(height: AppSpacing.interGroupMd),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+          child: IosSelectionSection(
+            addShadow: false,
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosBody,
+                      color: fgSecondary,
+                      height: AppTypography.bodyLineHeight,
+                    ),
+                  ),
+                  if (showSuggestAction) ...<Widget>[
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    CupertinoButton(
+                      key: TestKeys.homepagePickerSuggestButton,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: _openSuggestPage,
+                      child: Text(UITextConstants.attachHomepageSuggest),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectedReferenceTile(HomepageCanonicalReference selected) {
     return IosSelectionOptionTile(
-      key: TestKeys.homepagePickerClearSelectionTile,
       backgroundColor: AppColors.iosSystemBackground(context),
       pressedColor: AppColors.iosSecondaryFill(context),
-      leading: _buildPlaceholderCover(icon: CupertinoIcons.link),
+      leading: _buildHomepageCover(selected.coverUrl),
       title: Text(
-        UITextConstants.attachHomepageClear,
+        selected.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: AppTypography.iosSubheadline,
           fontWeight: AppTypography.medium,
@@ -233,7 +307,11 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         ),
       ),
       subtitle: Text(
-        UITextConstants.attachHomepageClearHint,
+        [
+          _homepageTypeLabel(selected.homepageType),
+          if ((selected.subtitle ?? '').trim().isNotEmpty)
+            selected.subtitle!.trim(),
+        ].join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -241,7 +319,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
           color: AppColors.iosSecondaryLabel(context),
         ),
       ),
-      trailing: _buildSelectionIndicator(checked: checked),
+      trailing: _buildSelectionIndicator(checked: true),
       onTap: () {
         setState(() {
           _selected = null;
@@ -279,7 +357,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       trailing: _buildSelectionIndicator(checked: checked),
       onTap: () {
         setState(() {
-          _selected = summary.canonicalReference;
+          _selected = checked ? null : summary.canonicalReference;
         });
       },
     );
@@ -433,7 +511,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       ),
     );
     if (submitted == true && mounted) {
-      AppToast.show(context, '已提交主页补充，审核后会出现在搜索中');
+      AppToast.show(context, UITextConstants.addHomepageSubmitted);
       _scheduleRefresh(immediate: true);
     }
   }

@@ -1,9 +1,8 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 class SuggestHomepagePage extends ConsumerStatefulWidget {
@@ -17,205 +16,386 @@ class SuggestHomepagePage extends ConsumerStatefulWidget {
 }
 
 class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
+  static const List<_HomepageTypeOption> _typeOptions = <_HomepageTypeOption>[
+    _HomepageTypeOption(
+      id: 'sight',
+      label: UITextConstants.homepageTypeSight,
+      cluePlaceholder: UITextConstants.addHomepageSightCluePlaceholder,
+      usesLocationFields: true,
+    ),
+    _HomepageTypeOption(
+      id: 'hotel',
+      label: UITextConstants.homepageTypeHotel,
+      cluePlaceholder: UITextConstants.addHomepageHotelCluePlaceholder,
+      usesLocationFields: true,
+    ),
+    _HomepageTypeOption(
+      id: 'restaurant',
+      label: UITextConstants.homepageTypeRestaurant,
+      cluePlaceholder: UITextConstants.addHomepageRestaurantCluePlaceholder,
+      usesLocationFields: true,
+    ),
+    _HomepageTypeOption(
+      id: 'vehicle',
+      label: UITextConstants.homepageTypeVehicle,
+      cluePlaceholder: UITextConstants.addHomepageVehicleCluePlaceholder,
+      usesLocationFields: false,
+    ),
+  ];
+
   late final TextEditingController _titleController;
-  final TextEditingController _subtitleController = TextEditingController();
+  late final TextEditingController _vehicleSeriesController;
+  final TextEditingController _clueController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _vehicleManufacturerController =
+      TextEditingController();
+  final TextEditingController _vehicleTrimController = TextEditingController();
+
   String _homepageType = 'sight';
   bool _isSubmitting = false;
+
+  _HomepageTypeOption get _selectedType => _typeOptions.firstWhere(
+    (option) => option.id == _homepageType,
+    orElse: () => _typeOptions.first,
+  );
+
+  bool get _canSubmit {
+    if (_isSubmitting) {
+      return false;
+    }
+    if (_selectedType.usesLocationFields) {
+      return _titleController.text.trim().isNotEmpty;
+    }
+    return _vehicleManufacturerController.text.trim().isNotEmpty &&
+        _vehicleSeriesController.text.trim().isNotEmpty;
+  }
+
+  bool get _isDirty {
+    final initialQuery = widget.initialQuery.trim();
+    return _homepageType != _typeOptions.first.id ||
+        _titleController.text.trim() != initialQuery ||
+        _vehicleSeriesController.text.trim() != initialQuery ||
+        _clueController.text.trim().isNotEmpty ||
+        _cityController.text.trim().isNotEmpty ||
+        _addressController.text.trim().isNotEmpty ||
+        _vehicleManufacturerController.text.trim().isNotEmpty ||
+        _vehicleTrimController.text.trim().isNotEmpty;
+  }
+
+  void _handleFieldChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.initialQuery.trim());
+    final initialQuery = widget.initialQuery.trim();
+    _titleController = TextEditingController(text: initialQuery);
+    _vehicleSeriesController = TextEditingController(text: initialQuery);
+    for (final controller in <TextEditingController>[
+      _titleController,
+      _vehicleSeriesController,
+      _clueController,
+      _cityController,
+      _addressController,
+      _vehicleManufacturerController,
+      _vehicleTrimController,
+    ]) {
+      controller.addListener(_handleFieldChanged);
+    }
   }
 
   @override
   void dispose() {
+    for (final controller in <TextEditingController>[
+      _titleController,
+      _vehicleSeriesController,
+      _clueController,
+      _cityController,
+      _addressController,
+      _vehicleManufacturerController,
+      _vehicleTrimController,
+    ]) {
+      controller.removeListener(_handleFieldChanged);
+    }
     _titleController.dispose();
-    _subtitleController.dispose();
+    _vehicleSeriesController.dispose();
+    _clueController.dispose();
     _cityController.dispose();
     _addressController.dispose();
+    _vehicleManufacturerController.dispose();
+    _vehicleTrimController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final background = SettingsSemanticConstants.pageBackground(isDark);
-    return CupertinoPageScaffold(
-      backgroundColor: background,
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('补充主页'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => context.pop(),
-          child: const Icon(CupertinoIcons.xmark),
+    return IosSelectionPageScaffold(
+      pageKey: TestKeys.suggestHomepagePage,
+      title: UITextConstants.addHomepageTitle,
+      onBack: _handleCloseRequest,
+      leadingStyle: IosSelectionHeaderLeadingStyle.close,
+      backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          AppSpacing.interGroupLg,
         ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: <Widget>[
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.containerMd,
-                    AppSpacing.containerSm,
-                    AppSpacing.containerMd,
-                    AppSpacing.containerLg,
-                  ),
-                  children: <Widget>[
-                    _FormCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          const Text(
-                            '补充一个缺失主页',
-                            style: TextStyle(
-                              fontSize: AppTypography.iosTitle3,
-                              fontWeight: AppTypography.semiBold,
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.intraGroupXs),
-                          Text(
-                            '提交后会进入审核，审核通过后即可被搜索和关联。',
-                            style: TextStyle(
-                              fontSize: AppTypography.iosFootnote,
-                              color: CupertinoColors.secondaryLabel.resolveFrom(
-                                context,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.containerMd),
-                          _LabeledField(
-                            label: '主页名称',
-                            child: CupertinoTextField(
-                              controller: _titleController,
-                              placeholder: '例如 西湖景区 / 竹隐民宿 / Model X',
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.containerSm),
-                          _LabeledField(
-                            label: '一句话补充',
-                            child: CupertinoTextField(
-                              controller: _subtitleController,
-                              placeholder: '补充主页的识别信息',
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.containerSm),
-                          _LabeledField(
-                            label: '主页类型',
-                            child: CupertinoSlidingSegmentedControl<String>(
-                              groupValue: _homepageType,
-                              children: const <String, Widget>{
-                                'sight': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text('景点'),
-                                ),
-                                'hotel': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text('酒店'),
-                                ),
-                                'restaurant': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text('餐厅'),
-                                ),
-                                'vehicle': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text('车型'),
-                                ),
-                              },
-                              onValueChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _homepageType = value;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.containerSm),
-                          _LabeledField(
-                            label: '城市',
-                            child: CupertinoTextField(
-                              controller: _cityController,
-                              placeholder: '所在城市',
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.containerSm),
-                          _LabeledField(
-                            label: '地址',
-                            child: CupertinoTextField(
-                              controller: _addressController,
-                              placeholder: '更详细的地址或地理描述',
-                              maxLines: 3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  MediaQuery.paddingOf(context).bottom + AppSpacing.containerMd,
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.buttonHeight,
-                  child: CupertinoButton.filled(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child: _isSubmitting
-                        ? const CupertinoActivityIndicator()
-                        : const Text('提交补充'),
-                  ),
-                ),
-              ),
-            ],
+        children: <Widget>[
+          _buildTypeSection(context),
+          SizedBox(height: AppSpacing.interGroupMd),
+          _buildFormSection(context),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Text(
+            UITextConstants.addHomepageFutureTypeHint,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
           ),
-        ),
+        ],
+      ),
+      bottomBar: IosSelectionBottomBar(
+        confirmButtonKey: TestKeys.suggestHomepageSubmitButton,
+        confirmLabel: UITextConstants.addHomepageSubmit,
+        confirmEnabled: _canSubmit,
+        confirmLoading: _isSubmitting,
+        onConfirm: _submit,
       ),
     );
   }
 
-  Future<void> _submit() async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      AppToast.show(context, '请先填写主页名称');
+  Widget _buildTypeSection(BuildContext context) {
+    final background = AppColors.iosSecondaryFill(context);
+    final selectedColor = AppColors.iosLabel(context);
+    final unselectedColor = AppColors.iosSecondaryLabel(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _SectionTitle(title: UITextConstants.addHomepageTypeSectionTitle),
+        SizedBox(height: AppSpacing.intraGroupSm),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.two),
+            child: CupertinoSlidingSegmentedControl<String>(
+              groupValue: _homepageType,
+              thumbColor: AppColors.iosSystemBackground(context),
+              backgroundColor: background,
+              children: <String, Widget>{
+                for (final option in _typeOptions)
+                  option.id: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerSm,
+                      vertical: AppSpacing.intraGroupSm,
+                    ),
+                    child: Text(
+                      option.label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.medium,
+                        color: _homepageType == option.id
+                            ? selectedColor
+                            : unselectedColor,
+                      ),
+                    ),
+                  ),
+              },
+              onValueChanged: (value) {
+                if (value != null) {
+                  _selectType(value);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormSection(BuildContext context) {
+    return IosSelectionSection(
+      child: Column(
+        children: <Widget>[
+          if (_selectedType.usesLocationFields) ...<Widget>[
+            _FormInputRow(
+              label: UITextConstants.addHomepageNameLabel,
+              child: _PlainFormTextField(
+                controller: _titleController,
+                placeholder: UITextConstants.addHomepageNamePlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageClueLabel,
+              child: _PlainFormTextField(
+                controller: _clueController,
+                placeholder: _selectedType.cluePlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageCityLabel,
+              child: _PlainFormTextField(
+                controller: _cityController,
+                placeholder: UITextConstants.addHomepageCityPlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageAddressLabel,
+              child: _PlainFormTextField(
+                controller: _addressController,
+                placeholder: UITextConstants.addHomepageAddressPlaceholder,
+                maxLines: 2,
+              ),
+            ),
+          ] else ...<Widget>[
+            _FormInputRow(
+              label: UITextConstants.addHomepageVehicleManufacturerLabel,
+              child: _PlainFormTextField(
+                controller: _vehicleManufacturerController,
+                placeholder:
+                    UITextConstants.addHomepageVehicleManufacturerPlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageVehicleSeriesLabel,
+              child: _PlainFormTextField(
+                controller: _vehicleSeriesController,
+                placeholder: UITextConstants.addHomepageVehicleSeriesPlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageVehicleTrimLabel,
+              child: _PlainFormTextField(
+                controller: _vehicleTrimController,
+                placeholder: UITextConstants.addHomepageVehicleTrimPlaceholder,
+              ),
+            ),
+            _buildDivider(),
+            _FormInputRow(
+              label: UITextConstants.addHomepageClueLabel,
+              child: _PlainFormTextField(
+                controller: _clueController,
+                placeholder: _selectedType.cluePlaceholder,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return const IosSelectionInlineDivider(indent: AppSpacing.containerMd);
+  }
+
+  void _selectType(String nextType) {
+    if (_homepageType == nextType) {
       return;
     }
+    if (nextType == 'vehicle' &&
+        _vehicleSeriesController.text.trim().isEmpty &&
+        _titleController.text.trim().isNotEmpty) {
+      _vehicleSeriesController.text = _titleController.text.trim();
+    }
+    setState(() {
+      _homepageType = nextType;
+    });
+  }
+
+  Future<void> _handleCloseRequest() async {
+    if (_isSubmitting) {
+      return;
+    }
+    if (!_isDirty) {
+      _pop();
+      return;
+    }
+    final discardChanges = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.unsavedChangesTitle),
+        content: const Text(UITextConstants.unsavedChangesMessage),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(UITextConstants.continueEditing),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(UITextConstants.discard),
+          ),
+        ],
+      ),
+    );
+    if (discardChanges == true && mounted) {
+      _pop();
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_canSubmit) {
+      AppToast.show(
+        context,
+        _selectedType.usesLocationFields
+            ? UITextConstants.addHomepageNameRequired
+            : UITextConstants.addHomepageVehicleRequired,
+      );
+      return;
+    }
+
+    final title = _selectedType.usesLocationFields
+        ? _titleController.text.trim()
+        : _buildVehicleTitle();
+    final subtitle = _selectedType.usesLocationFields
+        ? _clueController.text.trim()
+        : _buildVehicleSubtitle();
+
     setState(() {
       _isSubmitting = true;
     });
     try {
-      await ref
-          .read(homepageRepositoryProvider)
-          .suggestHomepageCandidate(
+      await ref.read(homepageRepositoryProvider).suggestHomepageCandidate(
             draft: HomepageSuggestionDraft(
               title: title,
               homepageType: _homepageType,
-              subtitle: _subtitleController.text.trim(),
-              city: _cityController.text.trim(),
-              address: _addressController.text.trim(),
+              subtitle: subtitle,
+              city: _selectedType.usesLocationFields
+                  ? _cityController.text.trim()
+                  : '',
+              address: _selectedType.usesLocationFields
+                  ? _addressController.text.trim()
+                  : '',
+              categoryTags: _buildCategoryTags(),
             ),
           );
       if (!mounted) {
         return;
       }
-      AppToast.show(context, '已提交补充，等待审核');
-      context.pop(true);
+      AppToast.show(context, UITextConstants.addHomepageSubmitted);
+      Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, '提交失败，请稍后重试');
+      AppToast.show(context, UITextConstants.addHomepageSubmitFailed);
     } finally {
       if (mounted) {
         setState(() {
@@ -224,57 +404,137 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       }
     }
   }
+
+  String _buildVehicleTitle() {
+    final manufacturer = _vehicleManufacturerController.text.trim();
+    final series = _vehicleSeriesController.text.trim();
+    return <String>[manufacturer, series]
+        .where((item) => item.isNotEmpty)
+        .join(' ');
+  }
+
+  String _buildVehicleSubtitle() {
+    return <String>[
+      _vehicleTrimController.text.trim(),
+      _clueController.text.trim(),
+    ].where((item) => item.isNotEmpty).join(' · ');
+  }
+
+  List<String> _buildCategoryTags() {
+    if (_selectedType.id != 'vehicle') {
+      return const <String>[];
+    }
+    final manufacturer = _vehicleManufacturerController.text.trim();
+    if (manufacturer.isEmpty) {
+      return const <String>[];
+    }
+    return <String>[manufacturer];
+  }
+
+  void _pop() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
 }
 
-class _FormCard extends StatelessWidget {
-  const _FormCard({required this.child});
+class _HomepageTypeOption {
+  const _HomepageTypeOption({
+    required this.id,
+    required this.label,
+    required this.cluePlaceholder,
+    required this.usesLocationFields,
+  });
 
-  final Widget child;
+  final String id;
+  final String label;
+  final String cluePlaceholder;
+  final bool usesLocationFields;
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(
-          isDark,
-          ColorType.backgroundPrimary,
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-        border: Border.all(
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.separatorSubtle,
-          ),
-        ),
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: AppTypography.iosFootnote,
+        fontWeight: AppTypography.semiBold,
+        color: AppColors.iosSecondaryLabel(context),
       ),
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      child: child,
     );
   }
 }
 
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child});
+class _FormInputRow extends StatelessWidget {
+  const _FormInputRow({required this.label, required this.child});
 
   final String label;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.containerSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
           ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs),
-        child,
-      ],
+          SizedBox(height: AppSpacing.intraGroupXs),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PlainFormTextField extends StatelessWidget {
+  const _PlainFormTextField({
+    required this.controller,
+    required this.placeholder,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return CupertinoTextField(
+      controller: controller,
+      maxLines: maxLines,
+      minLines: maxLines,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerXs,
+        vertical: maxLines > 1 ? AppSpacing.intraGroupSm : AppSpacing.intraGroupXs,
+      ),
+      style: TextStyle(
+        fontSize: AppTypography.iosBody,
+        color: AppColors.iosLabel(context),
+      ),
+      placeholder: placeholder,
+      placeholderStyle: TextStyle(
+        fontSize: AppTypography.iosBody,
+        color: SettingsSemanticConstants.createInputHintColor(isDark),
+      ),
+      decoration: const BoxDecoration(),
+      cursorColor: AppColors.iosAccent(context),
     );
   }
 }

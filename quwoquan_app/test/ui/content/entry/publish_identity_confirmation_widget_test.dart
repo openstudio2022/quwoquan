@@ -275,7 +275,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
 
-    await tester.tap(find.text('同步圈子'));
+    await tester.tap(find.text('发布到圈子'));
     await tester.pumpAndSettle();
     expect(find.byKey(TestKeys.publishCircleSelectPage), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.xmark), findsNothing);

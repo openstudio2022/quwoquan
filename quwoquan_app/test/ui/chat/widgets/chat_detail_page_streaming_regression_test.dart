@@ -10,10 +10,13 @@ import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/remote_assistant_entry.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -156,8 +159,9 @@ void main() {
                 (((widget.message['content'] as String?) ?? '').contains(
                       '深圳今天天气晴，适合出行。',
                     ) ||
-                    ((widget.message['streamFinalAnswer'] as String?) ?? '')
-                        .contains('深圳今天天气晴，适合出行。')),
+                    _assistantAnswerMarkdownFromBubble(
+                      widget,
+                    ).contains('深圳今天天气晴，适合出行。')),
           )
           .evaluate()
           .isNotEmpty,
@@ -165,9 +169,8 @@ void main() {
 
     final bubble = _latestAssistantBubble(tester);
     final content = (bubble.message['content'] as String?) ?? '';
-    final streamFinalAnswer =
-        (bubble.message['streamFinalAnswer'] as String?) ?? '';
-    final mergedAnswer = '$content$streamFinalAnswer';
+    final mergedAnswer =
+        '$content${_assistantAnswerMarkdownFromBubble(bubble)}';
     expect(mergedAnswer, contains('深圳今天天气晴，适合出行。'));
     expect(mergedAnswer, isNot(contains('remote_stream_incomplete')));
   });
@@ -240,7 +243,7 @@ void main() {
     gateway.emit(AssistantRunStreamEvent.answerDelta('```md'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       isEmpty,
       reason: '未闭合 markdown 包装不应先把 md/fence 残片写进气泡',
     );
@@ -248,11 +251,11 @@ void main() {
     gateway.emit(AssistantRunStreamEvent.answerDelta('\n九寨沟方向'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '九寨沟方向',
     );
     expect(
-      find.text('九寨沟方向'),
+      find.textContaining('九寨沟方向', findRichText: true),
       findsAtLeastNWidgets(1),
       reason: '收到可见 answer chunk 后，正文应立即开始流式显示给用户',
     );
@@ -260,7 +263,7 @@ void main() {
     gateway.emit(AssistantRunStreamEvent.answerDelta('九寨沟方向'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '九寨沟方向',
       reason: '重复到达的 answer chunk 不应再次把同一段正文追加一遍',
     );
@@ -277,19 +280,19 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '九寨沟方向',
       reason: 'process journal 中的 answerDelta 不应再次把正文追加一遍',
     );
     expect(
-      find.text('九寨沟方向'),
+      find.textContaining('九寨沟方向', findRichText: true),
       findsAtLeastNWidgets(1),
       reason: '进入 answering 阶段后，缓冲的答案正文应开始对用户可见',
     );
     expect(
       find.text(UITextConstants.assistantPhaseAnswering),
-      findsAtLeastNWidgets(1),
-      reason: '开始展示答案后，界面仍应保留用户可理解的阶段提示',
+      findsNothing,
+      reason: '仅有 journey 信号时，不应再用旧主轨阶段标签驱动用户界面',
     );
 
     final streamingMessageId =
@@ -298,14 +301,14 @@ void main() {
     gateway.emit(AssistantRunStreamEvent.answerDelta('备选方案'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '九寨沟方向备选方案',
     );
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('方向备选方案'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '九寨沟方向备选方案',
       reason: '重叠 chunk 不应把相同尾段重复拼接到正文里',
     );
@@ -317,17 +320,17 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
-      '九寨沟方向备选方案\n',
-      reason: '未闭合 card fence 不应提前把 payload 写进 streamFinalAnswer',
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
+      '九寨沟方向备选方案',
+      reason: '未闭合 card fence 不应提前把 payload 写进答案显示块',
     );
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('<function=web_'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
-      '九寨沟方向备选方案\n',
-      reason: '拆包的 function 开头不应污染 streamFinalAnswer',
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
+      '九寨沟方向备选方案',
+      reason: '拆包的 function 开头不应污染答案显示块',
     );
 
     gateway.emit(
@@ -337,8 +340,8 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
-      '九寨沟方向备选方案\n',
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
+      '九寨沟方向备选方案',
       reason: 'function 参数正文不应在流式阶段落入用户答案',
     );
 
@@ -349,8 +352,8 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
-      '九寨沟方向备选方案\n',
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
+      '九寨沟方向备选方案',
       reason: 'queryTasks 这类内部协议字段不应通过拆包追加进正文',
     );
 
@@ -359,9 +362,9 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
-      '九寨沟方向备选方案\n',
-      reason: 'function 关闭标签不应残留到 streamFinalAnswer',
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
+      '九寨沟方向备选方案',
+      reason: 'function 关闭标签不应残留到答案显示块',
     );
 
     gateway.emit(
@@ -469,7 +472,7 @@ void main() {
         ((completedBubble.message['content'] as String?)?.trim().isNotEmpty ==
                 true
             ? completedBubble.message['content']
-            : completedBubble.message['streamFinalAnswer']) ??
+            : _assistantAnswerMarkdownFromBubble(completedBubble)) ??
         '';
     expect(completedBubble.message['id'], streamingMessageId);
     expect(finalAnswer, contains('九寨沟方向备选方案'));
@@ -499,6 +502,99 @@ void main() {
       persistedEntries.any((entry) => entry['headline'] == '我在核对九寨沟方向的最新约束'),
       isTrue,
     );
+  });
+
+  testWidgets('assistant 答案轨会直接追加到 displayState.answer.blocks', (tester) async {
+    final gateway = _ControlledRemoteAssistantEntry();
+    addTearDown(gateway.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(
+            _EmptyAssistantChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _AssistantCapabilityRepository(),
+          ),
+          assistantRemoteConfiguredProvider.overrideWith((ref) => true),
+          remoteAssistantEntryProvider.overrideWithValue(gateway),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: AssistantConversationPage(onBack: _noop)),
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find.byType(TextField).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byType(TextField).last);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, '请帮我整理九寨沟路线');
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byIcon(Icons.arrow_upward_rounded).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await gateway.waitUntilSubscribed();
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta('## 问题理解\n\n用户在比较九寨沟方向的几个周末路线。'),
+    );
+    await tester.pump();
+
+    var bubble = _latestAssistantBubble(tester);
+    expect(
+      _assistantAnswerMarkdownFromBubble(bubble),
+      '## 问题理解\n\n用户在比较九寨沟方向的几个周末路线。',
+    );
+    expect(
+      find.textContaining('问题理解', findRichText: true),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('关键观点', findRichText: true), findsNothing);
+    final streamingMessageId = bubble.message['id'] as String? ?? '';
+
+    gateway.emit(AssistantRunStreamEvent.answerDelta('\n\n## 关键'));
+    await tester.pump();
+
+    bubble = _assistantBubbleByMessageId(tester, streamingMessageId);
+    expect(
+      _assistantAnswerMarkdownFromBubble(bubble),
+      '## 问题理解\n\n用户在比较九寨沟方向的几个周末路线。\n\n## 关键',
+      reason: '答案轨不再维护 section reveal 状态，增量会直接进入预览内容',
+    );
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta('观点\n\n- 经典线更稳妥\n- 黄龙可按天气补充'),
+    );
+    await tester.pump();
+
+    bubble = _assistantBubbleByMessageId(tester, streamingMessageId);
+    final secondStagePreview = _assistantAnswerMarkdownFromBubble(bubble);
+    expect(secondStagePreview, contains('## 问题理解'));
+    expect(secondStagePreview, contains('## 关键观点'));
+    expect(secondStagePreview, isNot(contains('## 回答概要')));
+    expect(
+      find.textContaining('关键观点', findRichText: true),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('回答概要', findRichText: true), findsNothing);
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        '\n\n## 回答概要\n\n建议先走经典线，再按天气决定是否串黄龙。',
+      ),
+    );
+    await tester.pump();
+
+    bubble = _assistantBubbleByMessageId(tester, streamingMessageId);
+    expect(_assistantAnswerMarkdownFromBubble(bubble), contains('## 回答概要'));
   });
 
   testWidgets('无真实 journey 信号时不展示 seeded 假过程抽屉', (tester) async {
@@ -552,7 +648,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(AssistantProcessDrawer), findsOneWidget);
+    expect(
+      find.byType(AssistantProcessDrawer),
+      findsNothing,
+      reason: 'journey-only 信号不应再驱动过程抽屉，必须等待 processTimeline 主轨',
+    );
   });
 
   testWidgets('structured answer stream 在成答前不应闪出内部 JSON 字段', (tester) async {
@@ -613,7 +713,7 @@ void main() {
     await tester.pump();
 
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       isEmpty,
       reason: '结构化 envelope 尚未进入 userMarkdown 前，不应把 JSON 前缀写进气泡',
     );
@@ -623,7 +723,7 @@ void main() {
     gateway.emit(AssistantRunStreamEvent.answerDelta('kdown":"深圳今天天气晴'));
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '深圳今天天气晴',
     );
     expect(find.text('深圳今天天气晴'), findsAtLeastNWidgets(1));
@@ -636,7 +736,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      _assistantAnswerMarkdownFromBubble(_latestAssistantBubble(tester)),
       '深圳今天天气晴，适合出行。',
     );
     expect(find.textContaining('assistant_turn'), findsNothing);
@@ -662,7 +762,7 @@ void main() {
     final finalAnswer =
         ((finalBubble.message['content'] as String?)?.trim().isNotEmpty == true
             ? finalBubble.message['content']
-            : finalBubble.message['streamFinalAnswer']) ??
+            : _assistantAnswerMarkdownFromBubble(finalBubble)) ??
         '';
     expect(finalAnswer, contains('深圳今天天气晴，适合出行。'));
     expect(find.textContaining('contractId'), findsNothing);
@@ -1040,6 +1140,24 @@ AssistantMessageBubble _latestAssistantBubble(WidgetTester tester) {
     description: 'assistant bubble',
   );
   return tester.widget<AssistantMessageBubble>(finder.last);
+}
+
+AssistantMessageBubble _assistantBubbleByMessageId(
+  WidgetTester tester,
+  String messageId,
+) {
+  final finder = find.byWidgetPredicate(
+    (widget) =>
+        widget is AssistantMessageBubble &&
+        (widget.message['id'] as String?) == messageId,
+    description: 'assistant bubble $messageId',
+  );
+  return tester.widget<AssistantMessageBubble>(finder.last);
+}
+
+String _assistantAnswerMarkdownFromBubble(AssistantMessageBubble bubble) {
+  final displayState = resolvePersistedAssistantDisplayState(bubble.message);
+  return renderAnswerBlocksToMarkdown(displayState.answer.blocks);
 }
 
 Future<void> _pumpUntil(

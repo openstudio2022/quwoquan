@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
@@ -38,6 +39,19 @@ class AssistantRunResponse {
 
   String get displayPlainText =>
       runArtifacts?.displayPlainText.trim() ?? '';
+
+  AssistantDisplayState get displayState {
+    final raw = (structuredResponse['displayState'] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw != null && raw.isNotEmpty) {
+      return parseAssistantDisplayStateFromMap(raw);
+    }
+    final artifacts = runArtifacts;
+    if (artifacts != null) {
+      return resolveAssistantDisplayStateFromRunArtifacts(artifacts);
+    }
+    return const AssistantDisplayState();
+  }
 
   String get followupPrompt =>
       (structuredResponse['followupPrompt'] as String?)?.trim() ?? '';

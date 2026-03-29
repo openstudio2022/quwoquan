@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 
@@ -32,14 +33,14 @@ abstract final class AssistantDisplayTextResolver {
     r'^(#{1,6}|[-*+]\s|\d+\.\s|>\s?|[A-Za-z\u4E00-\u9FFF])',
   );
   static final RegExp _internalFieldRe = RegExp(
-    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|tool_call)',
+    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|toolResult)',
   );
   static final RegExp _assistantProtocolFragmentRe = RegExp(
-    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|<tool_call>|</tool_call>)',
+    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|toolResult|<tool_call>|</tool_call>)',
     caseSensitive: false,
   );
   static final RegExp _processOnlyFragmentRe = RegExp(
-    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用|\{\{[^}]+\}\}|已完成\s+\d+/\d+\s+步|用户想(?:了解|知道|确认|判断|解决)|我需要(?:搜索|检索|查询|调用|补充|分析|整理|确认)|我(?:先|再|正(?:在)?|已(?:经)?|会)?(?:聚焦|核对|整理|确认|搜索|检索|查询|补充|获取|拿到|找到))',
+    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用|中间结果|\{\{[^}]+\}\}|已完成\s+\d+/\d+\s+步)',
     caseSensitive: false,
   );
   static final RegExp _technicalFailureFragmentRe = RegExp(
@@ -47,7 +48,7 @@ abstract final class AssistantDisplayTextResolver {
     caseSensitive: false,
   );
   static final RegExp _internalPlannerNarrationFragmentRe = RegExp(
-    r'(用户(?:想|要|在(?:问|询问)|希望|关注|需要)|我需要(?:搜索|检索|查询|调用)|我(?:准备|打算|将要)(?:搜索|检索|查询|调用)|基于搜索结果整理)',
+    r'(\{\{[^}]+\}\}|<tool_call>|</tool_call>|assistant_turn|contractId|runArtifacts)',
     caseSensitive: false,
   );
   static final RegExp _hardInternalProcessFragmentRe = RegExp(
@@ -61,23 +62,37 @@ abstract final class AssistantDisplayTextResolver {
   static final RegExp _romanizedQueryLeakFragmentRe = RegExp(
     r'\b(?:[A-Z][a-z]+|[a-z]+)(?:\s+[a-z]+){1,7}\b',
   );
-
   static AssistantDisplayProjection projectTurn(AssistantTurnOutput turn) {
     final answerLike =
         turn.nextActionType == AssistantNextAction.answer &&
         turn.messageKindType != AssistantMessageKind.progress;
-    final sanitizedMarkdown = normalizeMarkdown(turn.userMarkdown);
+    final displayStateMarkdown = renderAnswerBlocksToMarkdown(
+      turn.displayState.answer.blocks,
+    );
+    final displayStatePlainText = renderAnswerBlocksToPlainText(
+      turn.displayState.answer.blocks,
+    );
+    final sanitizedMarkdown = stabilizeFinalAnswerMarkdown(
+      normalizeMarkdown(turn.userMarkdown),
+    );
     final fallbackMarkdown = answerLike
-        ? normalizeMarkdown(turn.resultText)
+        ? stabilizeFinalAnswerMarkdown(normalizeMarkdown(turn.resultText))
         : '';
-    final markdown = sanitizedMarkdown.isNotEmpty
+    final markdown = displayStateMarkdown.isNotEmpty
+        ? displayStateMarkdown
+        : sanitizedMarkdown.isNotEmpty
         ? sanitizedMarkdown
         : fallbackMarkdown;
     final sanitizedPlain = normalizePlainText(turn.resultText);
-    final plainText = sanitizedPlain.isNotEmpty
+    final plainText = displayStatePlainText.isNotEmpty
+        ? displayStatePlainText
+        : sanitizedPlain.isNotEmpty
         ? sanitizedPlain
         : (markdown.isNotEmpty ? stripMarkdown(markdown) : '');
-    final sanitizedSummary = normalizePlainText(turn.result.summary);
+    final sanitizedSummary =
+        normalizePlainText(turn.displayState.answer.summary).isNotEmpty
+        ? normalizePlainText(turn.displayState.answer.summary)
+        : normalizePlainText(turn.result.summary);
     return AssistantDisplayProjection(
       markdown: markdown,
       plainText: plainText,
@@ -98,6 +113,7 @@ abstract final class AssistantDisplayTextResolver {
         interpretation: turn.result.interpretation,
         actionHints: turn.result.actionHints,
       ),
+      displayState: turn.displayState,
       evidence: turn.evidence,
       reasoningBasis: turn.reasoningBasis,
       selfCheck: turn.selfCheck,
@@ -139,7 +155,7 @@ abstract final class AssistantDisplayTextResolver {
         );
       }
     }
-    return normalizeMarkdown(text);
+    return stabilizeFinalAnswerMarkdown(normalizeMarkdown(text));
   }
 
   static String normalizeCompletedPlainTextCandidate(
@@ -199,6 +215,29 @@ abstract final class AssistantDisplayTextResolver {
     if (_internalFieldRe.hasMatch(text) && !_looksLikeAnswerBody(text)) {
       return '';
     }
+    text = _normalizeMarkdownStructuralSpacing(text, aggressive: false);
+    return text;
+  }
+
+  static String stabilizeStreamingMarkdownCandidate(String raw) {
+    final text = raw.trimRight();
+    if (text.isEmpty) return '';
+    return _normalizeMarkdownStructuralSpacing(
+      text,
+      aggressive: false,
+    ).trimRight();
+  }
+
+  static String stabilizeFinalAnswerMarkdown(String raw) {
+    var text = raw.trim();
+    if (text.isEmpty) return '';
+    text = _normalizeMarkdownStructuralSpacing(text, aggressive: true);
+    text = _demoteGenericMarkdownHeadings(text);
+    text = _normalizeMarkdownStructuralSpacing(text, aggressive: true);
+    text = text
+        .replaceAll(RegExp(r'^\s*•\s*$', multiLine: true), '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
     return text;
   }
 
@@ -206,6 +245,61 @@ abstract final class AssistantDisplayTextResolver {
     final markdown = normalizeMarkdown(raw);
     if (markdown.isEmpty) return '';
     return stripMarkdown(markdown);
+  }
+
+  static String _normalizeMarkdownStructuralSpacing(
+    String raw, {
+    required bool aggressive,
+  }) {
+    var text = raw.replaceAll('\r\n', '\n');
+    text = text.replaceAllMapped(
+      RegExp(r'(^|\n)(#{1,6})(?=[^\s#])', multiLine: true),
+      (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''} ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'([。！？!?：:])([ \t]*)(#{1,6}\s*)'),
+      (match) => '${match.group(1) ?? ''}\n\n${match.group(3) ?? ''}',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'(^|\n)(#{1,6})(?=[^\s#])', multiLine: true),
+      (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''} ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'([。！？!?：:])([ \t]*)(\d+)\.(?=\S)'),
+      (match) => '${match.group(1) ?? ''}\n\n${match.group(3) ?? ''}. ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'([。！？!?：:])([ \t]*)(?:([-+•])|(\*(?!\*)))(?=\S)'),
+      (match) => '${match.group(1) ?? ''}\n- ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'(^|\n)(?:([-+•])|(\*(?!\*)))(?=\S)', multiLine: true),
+      (match) => '${match.group(1) ?? ''}- ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'(^|\n)(\d+)\.(?=\S)', multiLine: true),
+      (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''}. ',
+    );
+    if (aggressive) {
+      text = text.replaceAllMapped(
+        RegExp(r'^(\*\*.+\*\*)\n(?!\n)', multiLine: true),
+        (match) => '${match.group(1) ?? ''}\n\n',
+      );
+    }
+    return text.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+  }
+
+  static String _demoteGenericMarkdownHeadings(String markdown) {
+    return markdown.replaceAllMapped(
+      RegExp(r'^\s*#{1,6}\s*(.+?)\s*$', multiLine: true),
+      (match) {
+        final title = (match.group(1) ?? '').trim();
+        if (title.isEmpty) {
+          return '';
+        }
+        return '**$title**';
+      },
+    );
   }
 
   static bool containsInternalAssistantProtocolFragment(String raw) {
@@ -241,10 +335,7 @@ abstract final class AssistantDisplayTextResolver {
     return _internalPlannerNarrationFragmentRe.hasMatch(text);
   }
 
-  static String normalizeUserFacingProcessNarration(
-    String raw, {
-    String stageHint = '',
-  }) {
+  static String normalizeUserFacingProcessNarration(String raw) {
     final stripped = stripRomanizedQueryLeakSentences(raw);
     if (stripped.isEmpty) return '';
     var text = normalizeMarkdown(stripped);
@@ -265,172 +356,28 @@ abstract final class AssistantDisplayTextResolver {
     if (text.startsWith('{') || text.startsWith('[')) {
       return '';
     }
-    return _rewritePlannerNarration(text, stageHint: stageHint);
+    return text.trim();
   }
 
-  static bool containsRomanizedQueryLeakFragment(String raw) {
+  static bool containsUnsafeDisplayProtocolLeak(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return false;
+    return AssistantContentFilters.isJsonEnvelope(text) ||
+        containsInternalAssistantProtocolFragment(text);
+  }
+
+  static bool isRenderableDisplayText(String raw) {
+    final text = OpenAiCompatibleLlmProvider.stripXmlToolCalls(raw).trim();
+    if (text.isEmpty) return false;
+    return !AssistantContentFilters.isNotDisplayable(text) &&
+        !containsUnsafeDisplayProtocolLeak(text) &&
+        !containsTechnicalFailureFragment(text);
+  }
+
+  static bool _containsRomanizedQueryLeakFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return _romanizedQueryLeakFragmentRe.hasMatch(text);
-  }
-
-  static String _rewritePlannerNarration(String text, {String stageHint = ''}) {
-    final normalized = text.trim().replaceAll('\r\n', '\n');
-    if (normalized.isEmpty) {
-      return '';
-    }
-    final compact = normalized.replaceAll(RegExp(r'[ \t]+'), ' ');
-    final stage = _normalizeProcessStageHint(stageHint);
-    final shouldRewrite =
-        _internalPlannerNarrationFragmentRe.hasMatch(compact) ||
-        _looksLikeStageProcessNarration(compact, stage: stage);
-    if (!shouldRewrite) {
-      return normalized;
-    }
-    switch (stage) {
-      case 'analyze':
-        return _rewriteAnalyzePlannerNarration(compact);
-      case 'search':
-        return _rewriteSearchPlannerNarration(compact);
-      case 'answer':
-        return _rewriteAnswerPlannerNarration(compact);
-      default:
-        return _rewriteGenericPlannerNarration(compact);
-    }
-  }
-
-  static String _normalizeProcessStageHint(String raw) {
-    final text = raw.trim().toLowerCase();
-    if (text.contains('understand') || text.contains('analy')) {
-      return 'analyze';
-    }
-    if (text.contains('search') || text.contains('verify')) {
-      return 'search';
-    }
-    if (text.contains('answer')) {
-      return 'answer';
-    }
-    return '';
-  }
-
-  static bool _looksLikeStageProcessNarration(
-    String text, {
-    required String stage,
-  }) {
-    switch (stage) {
-      case 'search':
-        return text.contains('换几个检索词') ||
-            text.contains('换几组检索词') ||
-            text.contains('继续找');
-      case 'answer':
-        return text.contains('开始整理') ||
-            text.contains('整理成答案') ||
-            text.contains('可以直接回答');
-      default:
-        return false;
-    }
-  }
-
-  static String _rewriteAnalyzePlannerNarration(String text) {
-    final goal = _extractNarratedGoal(text);
-    if (goal.isNotEmpty) {
-      return '我先确认你真正想解决的是$goal，再核对最新信息。';
-    }
-    if (text.contains('我需要搜索') ||
-        text.contains('我需要检索') ||
-        text.contains('我需要查询') ||
-        text.contains('我准备搜索') ||
-        text.contains('我打算搜索')) {
-      return '我先把你最关心的问题范围确认清楚，再去核对最新资料。';
-    }
-    if (text.contains('问题焦点') ||
-        text.contains('聚焦') ||
-        text.contains('关注点')) {
-      return '我先把你真正关心的重点对齐清楚。';
-    }
-    return '我先把这次问题的核心目标确认清楚。';
-  }
-
-  static String _rewriteSearchPlannerNarration(String text) {
-    final goal = _extractNarratedGoal(text);
-    final target = _extractSearchTarget(text);
-    if (text.contains('换几个检索词') ||
-        text.contains('换几组检索词') ||
-        text.contains('继续找')) {
-      return '我会换几个检索角度继续交叉核对。';
-    }
-    if (target.isNotEmpty) {
-      return '我先围绕$target补齐几组最新证据，再收束结论。';
-    }
-    if (goal.isNotEmpty) {
-      return '我先把和$goal最相关的几路信息拆开核对。';
-    }
-    if (text.contains('基于搜索结果整理')) {
-      return '我先把已经找到的资料交叉核对，筛出能支撑结论的部分。';
-    }
-    return '我先把最影响结论的几路信息拆开核对。';
-  }
-
-  static String _rewriteAnswerPlannerNarration(String text) {
-    final goal = _extractNarratedGoal(text);
-    if (text.contains('基于搜索结果整理')) {
-      return '我把已经核对过的信息收束成结论。';
-    }
-    if (text.contains('开始整理') ||
-        text.contains('整理成答案') ||
-        text.contains('可以直接回答') ||
-        text.contains('信息已经够用了') ||
-        text.contains('关键信息已经够用了')) {
-      if (goal.isNotEmpty) {
-        return '我已经把$goal需要的关键信息核对好，开始整理结论。';
-      }
-      return '证据已经足够支撑回答，我开始把结论和建议整理清楚。';
-    }
-    return '我开始把已经核对好的信息整理成结论。';
-  }
-
-  static String _rewriteGenericPlannerNarration(String text) {
-    final goal = _extractNarratedGoal(text);
-    if (goal.isNotEmpty) {
-      return '我先围绕$goal把关键信息理清，再继续推进。';
-    }
-    final target = _extractSearchTarget(text);
-    if (target.isNotEmpty) {
-      return '我先围绕$target补齐关键信息。';
-    }
-    return text;
-  }
-
-  static String _extractNarratedGoal(String text) {
-    final match = RegExp(
-      r'^用户(?:想|要|在(?:问|询问)|希望|关注|需要)(?:了解|知道|确认|判断|解决|查(?:询)?|看看|弄清)?(.+?)(?:[，。；;]|$)',
-    ).firstMatch(text);
-    if (match == null) {
-      return '';
-    }
-    return _stripLeadingNarrationParticle(match.group(1) ?? '');
-  }
-
-  static String _extractSearchTarget(String text) {
-    final match = RegExp(
-      r'我(?:需要|准备|打算|将要)?(?:搜索|检索|查询)(.+?)(?:[，。；;]|$)',
-    ).firstMatch(text);
-    if (match == null) {
-      return '';
-    }
-    return _stripLeadingNarrationParticle(match.group(1) ?? '');
-  }
-
-  static String _stripLeadingNarrationParticle(String raw) {
-    var text = raw.trim();
-    if (text.isEmpty) {
-      return '';
-    }
-    text = text
-        .replaceFirst(RegExp(r'^(的是|的是关于|关于|一下|一下子|当前|现在)'), '')
-        .replaceFirst(RegExp(r'^(最新的|相关的|有关的)'), '')
-        .trim();
-    return text;
   }
 
   static String stripRomanizedQueryLeakSentences(String raw) {
@@ -446,7 +393,7 @@ abstract final class AssistantDisplayTextResolver {
         r'[^。！？!?]+[。！？!?]?',
       ).allMatches(line).toList();
       if (sentenceMatches.isEmpty) {
-        if (!containsRomanizedQueryLeakFragment(line)) {
+        if (!_containsRomanizedQueryLeakFragment(line)) {
           preservedLines.add(line);
         }
         continue;
@@ -455,7 +402,7 @@ abstract final class AssistantDisplayTextResolver {
       for (final match in sentenceMatches) {
         final sentence = (match.group(0) ?? '').trim();
         if (sentence.isEmpty ||
-            containsRomanizedQueryLeakFragment(sentence) ||
+            _containsRomanizedQueryLeakFragment(sentence) ||
             AssistantContentFilters.isDegradedText(sentence) ||
             containsInternalAssistantProtocolFragment(sentence) ||
             containsTechnicalFailureFragment(sentence)) {

@@ -76,6 +76,7 @@
 
 - result page 只负责筛选和展示。
 - facet bucket 的定义来自群组搜索结果。
+- 若 `circle.group` 触发 local fallback，facet 仍遵循统一 typed contract 返回，不在页面层临时拼接第二套规则。
 
 ### KD5：metadata / codegen 方案
 

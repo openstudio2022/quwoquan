@@ -33,6 +33,8 @@ void main() {
       expect(skill.channelScopes, contains('feishu'));
       expect(skill.deviceScopes, contains('pc'));
       expect(skill.defaultEnabled, isTrue);
+      expect(skill.allowedTools, contains('search'));
+      expect(skill.allowedTools.first, equals('search'));
     });
 
     test('loads weather skill from SKILL.md with instruction body', () async {
@@ -42,7 +44,12 @@ void main() {
       expect(weather, isNotEmpty);
       final skill = weather.first;
       expect(skill.domainId, equals('weather'));
+      expect(skill.allowedTools, contains('search'));
       expect(skill.allowedTools, contains('web_search'));
+      expect(
+        skill.allowedTools.indexOf('search'),
+        lessThan(skill.allowedTools.indexOf('web_search')),
+      );
       expect(skill.retrievalPolicy['domainId'], equals('weather'));
       expect(skill.executionShell.problemClass, equals('realtime_info'));
       expect(skill.executionShell.variantBudget, equals(0));
@@ -71,7 +78,9 @@ void main() {
         expect(fallback, isNotEmpty);
         final skill = fallback.first;
         expect(skill.domainId, equals('fallback_general_search'));
+        expect(skill.allowedTools, contains('search'));
         expect(skill.allowedTools, contains('web_search'));
+        expect(skill.allowedTools.first, equals('search'));
         expect(skill.executionShell.problemClass, equals('general'));
         expect(skill.executionShell.maxIterations, equals(4));
         expect(skill.executionShell.toolBudget, equals(2));
@@ -89,7 +98,9 @@ void main() {
       expect(fortune, isNotEmpty);
       final skill = fortune.first;
       expect(skill.domainId, equals('divination_fortune'));
+      expect(skill.allowedTools, contains('search'));
       expect(skill.allowedTools, contains('web_search'));
+      expect(skill.allowedTools.first, equals('search'));
       final matched = router.resolveSkillForDomain(
         userText: '今天的运势怎么样？',
         domainId: 'divination_fortune',

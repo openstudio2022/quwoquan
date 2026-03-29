@@ -61,5 +61,20 @@ void main() {
       expect(plan, isNotNull);
       expect(plan!.calls.single.arguments['query'], contains('深圳博物馆开放时间'));
     });
+
+    test('search 与 web_search 同时可用时优先 search', () {
+      final plan = kernel.buildRetrievalPlan(
+        '深圳天气怎么样',
+        const <String>['search', 'web_search'],
+        intentPayload: const <String, dynamic>{
+          'problemClass': 'realtime_info',
+          'requiresExternalEvidence': true,
+        },
+      );
+
+      expect(plan, isNotNull);
+      expect(plan!.calls.single.name, equals('search'));
+      expect(plan.calls.single.arguments['mode'], equals('result'));
+    });
   });
 }

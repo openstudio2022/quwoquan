@@ -1,12 +1,14 @@
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -63,6 +65,8 @@ class RetrievalDesignPhase implements Phase {
       forceRefresh: forceRefreshCatalog,
     );
     await toolMetadataRegistry?.ensureLoaded();
+    final designSummary = input.state.understandingSnapshot.queryDesignSummary
+        .trim();
 
     final authorityDomains = intentGraph.authorityDomains;
     final freshnessHoursMax = intentGraph.freshnessHoursMax;
@@ -86,7 +90,7 @@ class RetrievalDesignPhase implements Phase {
                   runtime?.listAvailableToolNames() ?? const <String>[];
               return toolNames.isNotEmpty
                   ? toolNames
-                  : const <String>['web_search'];
+                  : const <String>['search', 'web_search'];
             })(),
           );
     final continuitySlotState = _recoverPreviousSlotState(
@@ -127,6 +131,10 @@ class RetrievalDesignPhase implements Phase {
           )
           .toList(growable: false),
     );
+    final updatedUnderstandingSnapshot = _updatedUnderstandingSnapshot(
+      current: input.state.understandingSnapshot,
+      queryTasks: queryTasks,
+    );
     final updatedIntentGraph = IntentGraph.fromJson(<String, dynamic>{
       ...intentGraph.toJson(),
       'queryTasks': QueryTask.toJsonList(queryTasks),
@@ -157,6 +165,11 @@ class RetrievalDesignPhase implements Phase {
     );
 
     if (queryTasks.isNotEmpty) {
+      final traceToolName = _preferredRetrievalToolName(
+        updatedPreparation.allowedToolNames.isNotEmpty
+            ? updatedPreparation.allowedToolNames
+            : (runtime?.listAvailableToolNames() ?? const <String>[]),
+      );
       input.onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.searchQueryGenerated,
@@ -165,7 +178,7 @@ class RetrievalDesignPhase implements Phase {
           runId: input.runId,
           traceId: input.traceId,
           data: <String, dynamic>{
-            'toolName': 'web_search',
+            'toolName': traceToolName.isNotEmpty ? traceToolName : 'search',
             'queryTasks': QueryTask.toJsonList(queryTasks),
             'query': latestUserQuery,
             'problemClass': updatedIntentGraph.problemClassWireName,
@@ -176,14 +189,99 @@ class RetrievalDesignPhase implements Phase {
         ),
       );
     }
-
+    final detail = queryTasks
+        .map((task) {
+          final label = task.effectiveLabel.trim().isNotEmpty
+              ? task.effectiveLabel.trim()
+              : task.query.trim();
+          final query = task.query.trim();
+          if (label.isEmpty) return '';
+          if (query.isEmpty || query == label) return label;
+          return '$label：$query';
+        })
+        .where((item) => item.isNotEmpty)
+        .take(4)
+        .join('\n');
     return PhaseOutput(
       state: input.state.copyWith(
         intentGraph: updatedIntentGraph,
         queryTasks: queryTasks,
+        understandingSnapshot: updatedUnderstandingSnapshot,
         executionPreparation: updatedPreparation,
       ),
     );
+  }
+
+  RunArtifactsUnderstandingSnapshot _updatedUnderstandingSnapshot({
+    required RunArtifactsUnderstandingSnapshot current,
+    required List<QueryTask> queryTasks,
+  }) {
+    final queryDesignSummary = current.queryDesignSummary.trim().isNotEmpty
+        ? current.queryDesignSummary.trim()
+        : _buildQueryDesignSummary(queryTasks);
+    final queryGroups = current.queryGroups.isNotEmpty
+        ? current.queryGroups
+        : _buildQueryGroups(queryTasks);
+    return RunArtifactsUnderstandingSnapshot(
+      intentSummary: current.intentSummary,
+      userFacingSummary: current.userFacingSummary,
+      concernPoints: current.concernPoints,
+      emotionSignal: current.emotionSignal,
+      queryDesignSummary: queryDesignSummary,
+      queryGroups: queryGroups,
+      assumptions: current.assumptions,
+      mismatchSignal: current.mismatchSignal,
+      carryForwardFacts: current.carryForwardFacts,
+      discardedAssumptions: current.discardedAssumptions,
+    );
+  }
+
+  String _buildQueryDesignSummary(List<QueryTask> queryTasks) {
+    if (queryTasks.isEmpty) {
+      return '';
+    }
+    final labels = queryTasks
+        .map((task) => task.effectiveLabel.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .take(3)
+        .toList(growable: false);
+    if (labels.isEmpty) {
+      return '我把要核对的信息拆成几条检索线索了。';
+    }
+    if (labels.length == 1) {
+      return '我先确认${labels.first}这一路信息。';
+    }
+    return '我会先按${labels.join('、')}这几路信息分开核对。';
+  }
+
+  List<RunArtifactsUnderstandingQueryGroup> _buildQueryGroups(
+    List<QueryTask> queryTasks,
+  ) {
+    final grouped = <String, List<String>>{};
+    final reasons = <String, String>{};
+    for (final task in queryTasks) {
+      final dimension = task.dimensionLabel.trim().isNotEmpty
+          ? task.dimensionLabel.trim()
+          : (task.effectiveLabel.trim().isNotEmpty
+                ? task.effectiveLabel.trim()
+                : '综合');
+      final query = task.query.trim();
+      if (query.isEmpty) {
+        continue;
+      }
+      grouped.putIfAbsent(dimension, () => <String>[]).add(query);
+      reasons[dimension] = task.label.trim();
+    }
+    return grouped.entries
+        .map(
+          (entry) => RunArtifactsUnderstandingQueryGroup(
+            dimension: entry.key,
+            queries: entry.value.toSet().toList(growable: false),
+            why: reasons[entry.key]?.trim() ?? '',
+          ),
+        )
+        .toList(growable: false);
   }
 
   List<QueryTask> _resolveQueryTasksWithoutModel({
@@ -220,6 +318,16 @@ class RetrievalDesignPhase implements Phase {
     required List<QueryTask> queryTasks,
   }) {
     return QueryTask.normalizeList(QueryTask.toJsonList(queryTasks));
+  }
+
+  String _preferredRetrievalToolName(List<String> toolNames) {
+    if (toolNames.contains('search')) {
+      return 'search';
+    }
+    if (toolNames.contains('web_search')) {
+      return 'web_search';
+    }
+    return '';
   }
 
   SkillExecutionShell inputSkillExecutionShell(IntentGraph intentGraph) {

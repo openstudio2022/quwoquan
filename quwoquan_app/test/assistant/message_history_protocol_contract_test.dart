@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:test/test.dart';
 
@@ -120,6 +121,7 @@ Map<String, dynamic> _canonicalAssistantMessage({
     'content': content,
     ...buildPersistedAssistantTurnFields(
       journey: journey,
+      processTimeline: buildProcessTimelineFramesFromJourneyFallback(journey),
       displayMarkdown: content,
       displayPlainText: content,
       followupPrompt: '要不要我顺便看下今晚体感和穿衣建议？',
@@ -194,18 +196,16 @@ void main() {
       equals(assistantTurnSchemaVersion),
     );
     expect(
-      (assistantMsg[assistantUiProcessTimelineField] as Map?)?.isNotEmpty,
+      (assistantMsg[assistantProcessTimelineField] as List?)?.isNotEmpty,
       isTrue,
     );
     expect(
-      ((assistantMsg[assistantUiProcessTimelineField] as Map?)?['stages']
-              as List?)
-          ?.length,
-      equals(3),
+      (assistantMsg[assistantProcessTimelineField] as List?)?.length,
+      equals(4),
     );
   });
 
-  test('Rule-3: v4 中 assistant 历史不满足 canonical schema 时整段清理', () async {
+  test('Rule-3: 当前 v1 assistant 历史不满足 canonical schema 时整段清理', () async {
     final sm = await _loadFrom(tempDir, {
       'version': assistantHistoryStorageVersion,
       'activeSessionId': 'assistant',
@@ -251,10 +251,7 @@ void main() {
       expect(messages[0]['content'], equals('你好'));
       expect(messages[1]['role'], equals('assistant'));
       expect(messages[1]['content'], equals('深圳今天晴，25°C，适合出行。'));
-      expect(
-        messages[1][assistantUiProcessTimelineField],
-        isA<Map<String, dynamic>>(),
-      );
+      expect(messages[1][assistantProcessTimelineField], isA<List<dynamic>>());
       expect(
         messages[1][assistantTurnSchemaVersionField],
         assistantTurnSchemaVersion,
@@ -282,7 +279,7 @@ void main() {
     expect(summary.contains('{{'), isFalse);
   });
 
-  test('Rule-6: root-level/v1 历史格式不再兼容，load() 后直接清空', () async {
+  test('Rule-6: root-level 旧历史格式不再兼容，load() 后直接清空', () async {
     final sm = await _loadFrom(tempDir, {
       'assistant': [
         {'role': 'user', 'content': '问题'},

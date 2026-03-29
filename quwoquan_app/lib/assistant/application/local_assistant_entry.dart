@@ -5,7 +5,11 @@ import 'package:quwoquan_app/assistant/application/assistant_request_policy.dart
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_stream_projector.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -59,21 +63,48 @@ class LocalAssistantEntry {
             projector.emitTrace(event, controller);
           },
         );
-        if (!projector.sawAnswerDelta) {
-          final completedText = projector.resolveCompletedDisplayText(response);
-          if (completedText.isNotEmpty && !controller.isClosed) {
-            controller.add(AssistantRunStreamEvent.answerDelta(completedText));
-          }
-        }
-        if (!controller.isClosed) {
+        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
+          response,
+        );
+        if (!controller.isClosed &&
+            !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
-            AssistantRunStreamEvent.journey(
-              projector.resolveCompletedJourney(response),
+            AssistantRunStreamEvent.trace(
+              AssistantTraceEvent(
+                type: AssistantTraceEventType.lifecycleEnd,
+                message: 'process timeline missing at completion',
+                timestamp: DateTime.now(),
+                runId: response.runId,
+                traceId: response.traceId,
+                visibility: TraceVisibility.system,
+                data: <String, dynamic>{
+                  'stage': 'process_timeline',
+                  'failureCode': AssistantFailureCode.processTimelineMissing,
+                },
+              ),
+            ),
+          );
+        }
+        final finalizedResponse = _attachProcessTimeline(
+          response,
+          canonicalProcessTimeline,
+        );
+        if (!controller.isClosed && canonicalProcessTimeline.isNotEmpty) {
+          controller.add(
+            AssistantRunStreamEvent.processTimeline(
+              buildVisibleProcessTimeline(canonicalProcessTimeline),
             ),
           );
         }
         if (!controller.isClosed) {
-          controller.add(AssistantRunStreamEvent.completed(response));
+          controller.add(
+            AssistantRunStreamEvent.journey(
+              projector.resolveCompletedJourney(finalizedResponse),
+            ),
+          );
+        }
+        if (!controller.isClosed) {
+          controller.add(AssistantRunStreamEvent.completed(finalizedResponse));
         }
       } catch (error, stackTrace) {
         final projector = AssistantStreamingProjector(
@@ -89,15 +120,48 @@ class LocalAssistantEntry {
         for (final trace in fallback.traces) {
           projector.emitTrace(trace, controller);
         }
-        if (!controller.isClosed) {
+        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
+          fallback,
+        );
+        if (!controller.isClosed &&
+            !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
-            AssistantRunStreamEvent.journey(
-              projector.resolveCompletedJourney(fallback),
+            AssistantRunStreamEvent.trace(
+              AssistantTraceEvent(
+                type: AssistantTraceEventType.lifecycleEnd,
+                message: 'process timeline missing at completion',
+                timestamp: DateTime.now(),
+                runId: fallback.runId,
+                traceId: fallback.traceId,
+                visibility: TraceVisibility.system,
+                data: <String, dynamic>{
+                  'stage': 'process_timeline',
+                  'failureCode': AssistantFailureCode.processTimelineMissing,
+                },
+              ),
+            ),
+          );
+        }
+        final finalizedFallback = _attachProcessTimeline(
+          fallback,
+          canonicalProcessTimeline,
+        );
+        if (!controller.isClosed && canonicalProcessTimeline.isNotEmpty) {
+          controller.add(
+            AssistantRunStreamEvent.processTimeline(
+              buildVisibleProcessTimeline(canonicalProcessTimeline),
             ),
           );
         }
         if (!controller.isClosed) {
-          controller.add(AssistantRunStreamEvent.completed(fallback));
+          controller.add(
+            AssistantRunStreamEvent.journey(
+              projector.resolveCompletedJourney(finalizedFallback),
+            ),
+          );
+        }
+        if (!controller.isClosed) {
+          controller.add(AssistantRunStreamEvent.completed(finalizedFallback));
         }
       } finally {
         if (!controller.isClosed) {
@@ -155,6 +219,46 @@ class LocalAssistantEntry {
           'hardCutSource': source,
         },
       },
+    );
+  }
+
+  AssistantRunResponse _attachProcessTimeline(
+    AssistantRunResponse response,
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    final normalizedIncoming = normalizeProcessTimeline(processTimeline);
+    final normalizedExisting = resolveAssistantProcessTimelineFromRunResponse(
+      response,
+    );
+    final normalizedPreferred =
+        hasStructuredProcessTimeline(normalizedIncoming) &&
+            normalizedIncoming.length >= normalizedExisting.length
+        ? normalizedIncoming
+        : normalizedExisting;
+    if (!hasStructuredProcessTimeline(normalizedPreferred)) {
+      return response;
+    }
+    final structured = <String, dynamic>{...response.structuredResponse};
+    final rawRunArtifacts =
+        (structured['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final encodedTimeline = normalizedPreferred
+        .map((item) => item.toJson())
+        .toList(growable: false);
+    structured['processTimeline'] = encodedTimeline;
+    structured['runArtifacts'] = <String, dynamic>{
+      ...rawRunArtifacts,
+      'processTimeline': encodedTimeline,
+    };
+    return AssistantRunResponse(
+      finalText: response.finalText,
+      traces: response.traces,
+      runId: response.runId,
+      traceId: response.traceId,
+      degraded: response.degraded,
+      errorCode: response.errorCode,
+      structuredResponse: structured,
+      profileUpdateProposal: response.profileUpdateProposal,
     );
   }
 }

@@ -1,0 +1,37 @@
+version: 1
+node: global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze searchable object taxonomy
+    goal: 冻结 searchable object 命名与枚举，覆盖 `web.document` 与趣我圈内部对象
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - objectType 已定义
+      - `web.document` 已进入统一 taxonomy
+    status: planned
+
+  - id: P2
+    title: freeze provider registry
+    goal: 冻结 objectType -> provider -> executionMode 的注册表
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - provider registry 已定义
+    status: planned

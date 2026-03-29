@@ -19,7 +19,7 @@ void main() {
       );
 
       expect(decision.shouldSkipSynthesis, isFalse);
-      expect(decision.reason, 'phase_one_has_execution_signals');
+      expect(decision.reason, 'execution_signals_require_synthesis');
     });
 
     test('契约字段不完整时不允许 direct answer', () {

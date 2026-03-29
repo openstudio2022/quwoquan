@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
+import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
+import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 
 Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -13,6 +17,18 @@ Widget _buildApp({
   ),
 }) {
   return ProviderScope(
+    child: MaterialApp(
+      home: SearchNetworkResultsPage(launchContext: launchContext),
+    ),
+  );
+}
+
+Widget _buildAppWithSearchRepository({
+  required SearchLaunchContext launchContext,
+  required SearchRepository repository,
+}) {
+  return ProviderScope(
+    overrides: [searchRepositoryProvider.overrideWithValue(repository)],
     child: MaterialApp(
       home: SearchNetworkResultsPage(launchContext: launchContext),
     ),
@@ -59,6 +75,43 @@ void main() {
     expect(find.byType(HomepageSummaryCard), findsWidgets);
   });
 
+  testWidgets('群组 tab 可展示圈子与群组结果', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '光影',
+          initialNetworkTabId: 'groups',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.text('群组'), findsWidgets);
+    expect(find.text('没有找到相关群组'), findsNothing);
+    expect(find.byType(PostPreviewListTile), findsWidgets);
+  });
+
+  testWidgets('位置 tab 可展示 integration location 结果', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '西湖',
+          initialNetworkTabId: 'locations',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('位置'), findsWidgets);
+    expect(find.text('西湖风景名胜区'), findsWidgets);
+  });
+
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
     await tester.pumpWidget(
       _buildApp(
@@ -78,4 +131,82 @@ void main() {
 
     expect(find.text('UI设计的心理学原理：色彩、布局与用户认知'), findsWidgets);
   });
+}
+
+class _FakeNetworkSearchRepository implements SearchRepository {
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    final normalized = request.normalized();
+    if (normalized.objectTypes.contains(SearchObjectType.circleGroup) ||
+        normalized.objectTypes.contains(SearchObjectType.circleCircle)) {
+      return SearchResponse(
+        request: normalized,
+        sections: <SearchSection>[
+          SearchSection(
+            id: 'groups',
+            title: '群组',
+            objectTypes: const <SearchObjectType>[
+              SearchObjectType.circleGroup,
+              SearchObjectType.circleCircle,
+            ],
+            hits: const <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.circleGroup,
+                objectId: 'group_light_photo',
+                title: '光影摄影社主群',
+                subtitle: '圈子主群',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: <String, dynamic>{
+                  'circleId': 'circle_photo_01',
+                  'groupId': 'group_light_photo',
+                  'name': '光影摄影社主群',
+                  'description': '圈子主群',
+                  'circleName': '光影摄影社',
+                },
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        ],
+      );
+    }
+    if (normalized.objectTypes.contains(
+      SearchObjectType.integrationLocationPoi,
+    )) {
+      return SearchResponse(
+        request: normalized,
+        sections: <SearchSection>[
+          SearchSection(
+            id: 'locations',
+            title: '位置',
+            objectTypes: const <SearchObjectType>[
+              SearchObjectType.integrationLocationPoi,
+            ],
+            hits: const <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.integrationLocationPoi,
+                objectId: 'poi_west_lake',
+                title: '西湖风景名胜区',
+                subtitle: '杭州市西湖区龙井路1号',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: <String, dynamic>{
+                  'id': 'poi_west_lake',
+                  'name': '西湖风景名胜区',
+                  'latitude': 30.2431,
+                  'longitude': 120.1500,
+                  'address': '杭州市西湖区龙井路1号',
+                  'distanceMeters': 1200,
+                },
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        ],
+      );
+    }
+    return const SearchResponse(
+      request: SearchRequest(query: ''),
+      sections: <SearchSection>[],
+    );
+  }
 }

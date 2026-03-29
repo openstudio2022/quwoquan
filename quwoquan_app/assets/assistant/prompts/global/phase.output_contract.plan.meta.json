@@ -1,6 +1,6 @@
 {
   "templateId": "phase.output_contract.plan",
-  "version": "2026.03.18",
+  "version": "2026.03.27",
   "stage": "plan",
   "domainId": "global",
   "requiredVariables": ["_static"],

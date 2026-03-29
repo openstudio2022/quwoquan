@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -53,6 +56,10 @@ Map<String, dynamic> _assistantMessage({
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
   final journey = _extractJourney(extra);
+  final effectiveJourney = journey ?? const AssistantJourney();
+  final processTimeline = journey == null
+      ? const <ProcessTimelineFrame>[]
+      : buildProcessTimelineFramesFromJourneyFallback(effectiveJourney);
   return <String, dynamic>{
     'id': id,
     'conversationId': AppConceptConstants.assistantConversationId,
@@ -64,15 +71,15 @@ Map<String, dynamic> _assistantMessage({
     'timestamp': '10:10',
     'isRead': true,
     'isSelf': false,
-    if (journey != null)
-      ...buildPersistedAssistantTurnFields(
-        journey: journey,
-        displayMarkdown: content,
-        displayPlainText: content,
-        followupPrompt: '',
-        actionHints: const <String>[],
-        elapsedMs: 4200,
-      ),
+    ...buildPersistedAssistantTurnFields(
+      journey: effectiveJourney,
+      processTimeline: processTimeline,
+      displayMarkdown: content,
+      displayPlainText: content,
+      followupPrompt: '',
+      actionHints: const <String>[],
+      elapsedMs: 4200,
+    ),
     ...extra,
   };
 }
@@ -180,7 +187,6 @@ void main() {
       find.text(UITextConstants.assistantProcessStageAnswer),
       findsNothing,
     );
-    expect(find.text('先把会影响判断的冲突信息排掉，再组织最终答案。'), findsOneWidget);
   });
 
   testWidgets('助理过程抽屉可从 runArtifacts.journey 恢复来源摘要', (tester) async {
@@ -228,6 +234,12 @@ void main() {
       id: 'assistant_msg_run_artifacts_journey',
       content: '深圳天气晴朗',
       extra: {
+        assistantRetrievalProcessingField: <String, dynamic>{
+          'processedDocumentCount': 1,
+          'acceptedDocumentCount': 1,
+          'processingSummary': '已核对 1 个天气来源',
+          'acceptedReferences': references,
+        },
         'runArtifacts': <String, dynamic>{'journey': journey},
       },
     );
@@ -241,7 +253,7 @@ void main() {
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.textContaining('接纳1篇'));
+    await tester.tap(find.textContaining('处理了 1 篇'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('1. 中国气象局 · weather.cma.cn'), findsOneWidget);
@@ -374,8 +386,14 @@ void main() {
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('天气部分已核对完成'), findsOneWidget);
-    expect(find.textContaining('出游部分已补充'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.assistantProcessStageUnderstand),
+      findsAtLeastNWidgets(1),
+    );
+    expect(
+      find.text(UITextConstants.assistantProcessStageSearch),
+      findsAtLeastNWidgets(1),
+    );
     expect(find.textContaining('已汇总成最终建议'), findsAtLeastNWidgets(1));
   });
 
@@ -391,8 +409,7 @@ void main() {
 
     expect(find.text('结论'), findsWidgets);
     expect(find.textContaining('先做流式'), findsWidgets);
-    expect(find.text('产品对比'), findsWidgets);
-    expect(find.textContaining('wechat'), findsWidgets);
+    expect(find.textContaining('```card:compare'), findsNothing);
   });
 
   testWidgets('助理 Markdown 结构块解析失败时安全降级显示', (tester) async {
@@ -440,7 +457,19 @@ void main() {
     final message = _assistantMessage(
       id: 'assistant_msg_streaming',
       content: '',
-      extra: {'streamFinalAnswer': '九寨沟方向备选方案已经整理出来了。'},
+      extra: {
+        assistantDisplayStateField: const AssistantDisplayState(
+          answer: AssistantAnswerDisplayState(
+            blocks: <AssistantAnswerDisplayBlock>[
+              AssistantAnswerDisplayBlock(
+                blockId: 'streaming_answer',
+                kind: DisplayBlockKind.markdown,
+                body: '九寨沟方向备选方案已经整理出来了。',
+              ),
+            ],
+          ),
+        ).toJson(),
+      },
     );
 
     await tester.pumpWidget(
@@ -467,6 +496,7 @@ void main() {
               ),
             ],
           ),
+          processTimeline: const [],
           isRunning: true,
         ),
         answerGateOpen: true,
@@ -481,6 +511,119 @@ void main() {
       find.text(UITextConstants.assistantProcessStageAnswer),
       findsAtLeastNWidgets(1),
     );
+  });
+
+  testWidgets('assistant 流式中会直接渲染 displayState answer 预览', (tester) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_streaming_preview',
+      content: '旧的完成态答案',
+      extra: {
+        assistantDisplayStateField: const AssistantDisplayState(
+          answer: AssistantAnswerDisplayState(
+            blocks: <AssistantAnswerDisplayBlock>[
+              AssistantAnswerDisplayBlock(
+                blockId: 'streaming_answer_preview',
+                kind: DisplayBlockKind.markdown,
+                body: '先给结论：经典线更稳妥，再按天气决定是否串黄龙。',
+              ),
+            ],
+          ),
+        ).toJson(),
+      },
+    );
+
+    await tester.pumpWidget(
+      _bubbleHarness(
+        message,
+        journeyViewModel: buildAssistantJourneyViewModel(
+          journey: const AssistantJourney(
+            stages: <AssistantJourneyStage>[
+              AssistantJourneyStage(
+                stageId: JourneyStageId.answer,
+                status: JourneyStageStatus.active,
+                order: 3,
+                summary: '我在组织最终回答',
+              ),
+            ],
+            entries: <AssistantJourneyEntry>[
+              AssistantJourneyEntry(
+                entryId: 'journey.answer.streaming.sections',
+                stageId: JourneyStageId.answer,
+                kind: JourneyEntryKind.narrative,
+                status: JourneyStageStatus.active,
+                order: 0,
+                headline: '我在组织最终回答',
+              ),
+            ],
+          ),
+          processTimeline: const [],
+          isRunning: true,
+        ),
+        answerGateOpen: true,
+        isAssistantRunning: true,
+        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('经典线更稳妥', findRichText: true), findsWidgets);
+    expect(find.textContaining('旧的完成态答案', findRichText: true), findsNothing);
+    expect(
+      find.text(UITextConstants.assistantProcessStageAnswer),
+      findsAtLeastNWidgets(1),
+    );
+  });
+
+  testWidgets('completed displayMarkdown 会优先渲染自然最终成答并保留引用', (tester) async {
+    Map<String, dynamic>? tappedRef;
+    const structuredMarkdown =
+        '深圳今天有雨，外出建议带伞。[来源1](https://weather.cma.cn/shenzhen)\n\n'
+        '如果你会晚点出门，带把折叠伞更稳妥。';
+    final message = _assistantMessage(
+      id: 'assistant_msg_natural_completed',
+      content: '旧的一句话答案',
+      extra: {
+        'displayMarkdown': structuredMarkdown,
+        'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
+        'runArtifacts': <String, dynamic>{
+          'displayMarkdown': structuredMarkdown,
+          'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
+          'answerEvidenceBindings': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'bindingId': 'binding_weather_1',
+              'label': '来源1',
+              'claim': '深圳今天有雨，外出建议带伞。',
+              'evidenceId': 'weather_ev_1',
+              'url': 'https://weather.cma.cn/shenzhen',
+              'title': '深圳天气预报 - 中国气象局',
+              'source': 'weather.cma.cn',
+              'snippet': '深圳今天有雨，外出建议带伞。',
+            },
+          ],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      _bubbleHarness(message, onReferenceTap: (ref) => tappedRef = ref),
+    );
+    await tester.pump();
+
+    expect(find.text('旧的一句话答案'), findsNothing);
+    expect(find.textContaining('深圳今天有雨', findRichText: true), findsWidgets);
+    expect(find.textContaining('问题理解', findRichText: true), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant_reference_chip_1')),
+    );
+    await tester.pump();
+
+    expect(tappedRef, isNotNull);
+    expect(tappedRef!['url'], equals('https://weather.cma.cn/shenzhen'));
   });
 
   testWidgets('answerEvidenceBindings 会渲染为可点击递增角标', (tester) async {

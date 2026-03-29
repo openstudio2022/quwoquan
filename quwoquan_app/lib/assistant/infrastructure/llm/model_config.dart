@@ -66,7 +66,7 @@ class ModelCapabilityProfile {
     supportsReasoningField: true,
     reasoningFieldName: 'reasoning_content',
     reasoningRequestObject: <String, dynamic>{'enabled': true},
-    supportsJsonMode: false,
+    supportsJsonMode: true,
     reasoningMode: ModelReasoningMode.nativeField,
     toolCallMode: ModelToolCallMode.jsonEnvelope,
     defaultTemperature: 0.6,

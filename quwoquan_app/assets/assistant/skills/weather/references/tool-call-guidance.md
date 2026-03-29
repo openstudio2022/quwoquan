@@ -2,7 +2,7 @@
 
 ## 调用顺序
 1. `local_context`（仅在缺少城市时调用）
-2. `web_search`（查询天气摘要）
+2. `search`（统一检索天气摘要，必要时回退 `web_search`）
 
 ## 重试策略
 - 对 `timeout` / `retryable=true` 的错误最多重试 1 次。
@@ -10,7 +10,8 @@
 
 ## 参数规范
 - `local_context.requestedFields`: `["location", "permissions", "device"]`
-- `web_search.query`: `{{city}}天气`
+- `search.query`: `{{city}}天气`
+- `search.mode`: `result`
 - 参数保持最小、确定、可复现，避免宽泛查询。
 
 ## 时间槽位规范

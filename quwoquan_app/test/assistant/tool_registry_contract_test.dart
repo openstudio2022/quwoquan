@@ -107,6 +107,35 @@ void main() {
       expect(fakeLocal.executeCount, equals(1));
     });
 
+    test('rejects unsupported enum argument for search', () async {
+      final metadata = ToolMetadataRegistry();
+      await metadata.ensureLoaded();
+      final registry = AssistantToolRegistry(metadataRegistry: metadata);
+      final fakeSearch = _FakeTool(
+        toolName: 'search',
+        resultFactory: (_) => const AssistantToolResult(
+          success: true,
+          message: 'ok',
+          data: <String, dynamic>{
+            'summary': 'ok',
+            'sections': <Map<String, dynamic>>[],
+            'hits': <Map<String, dynamic>>[],
+          },
+        ),
+      );
+      registry.register(fakeSearch);
+
+      final result = await registry.execute('search', <String, dynamic>{
+        'query': '摄影',
+        'mode': 'bad_mode',
+      });
+
+      expect(result.success, isFalse);
+      expect(result.errorCode, AssistantErrorCode.invalidArguments);
+      expect(result.message, contains('"mode"'));
+      expect(fakeSearch.executeCount, equals(0));
+    });
+
     test(
       'retries transient web_search failure once before succeeding',
       () async {
@@ -149,6 +178,47 @@ void main() {
         expect((result.data?['retry'] as Map?)?['recovered'], isTrue);
       },
     );
+
+    test('retries transient search failure once before succeeding', () async {
+      final metadata = ToolMetadataRegistry();
+      await metadata.ensureLoaded();
+      final registry = AssistantToolRegistry(metadataRegistry: metadata);
+      var attempt = 0;
+      final fakeSearch = _FakeTool(
+        toolName: 'search',
+        resultFactory: (_) {
+          attempt += 1;
+          if (attempt == 1) {
+            return const AssistantToolResult(
+              success: false,
+              message: '统一检索暂时不可用，稍后重试。',
+              errorCode: AssistantErrorCode.networkUnavailable,
+              degraded: true,
+            );
+          }
+          return const AssistantToolResult(
+            success: true,
+            message: 'ok',
+            data: <String, dynamic>{
+              'summary': 'recovered',
+              'sections': <Map<String, dynamic>>[],
+              'hits': <Map<String, dynamic>>[],
+            },
+          );
+        },
+      );
+      registry.register(fakeSearch);
+
+      final result = await registry.execute('search', <String, dynamic>{
+        'query': '深圳天气',
+        'mode': 'result',
+      });
+
+      expect(result.success, isTrue);
+      expect(fakeSearch.executeCount, equals(2));
+      expect((result.data?['retry'] as Map?)?['attempts'], equals(2));
+      expect((result.data?['retry'] as Map?)?['recovered'], isTrue);
+    });
 
     test('opens breaker after repeated transient web_fetch failures', () async {
       final metadata = ToolMetadataRegistry();

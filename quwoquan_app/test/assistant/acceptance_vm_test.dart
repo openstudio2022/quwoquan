@@ -25,6 +25,7 @@ void main() {
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('pa_acceptance_vm_');
       toolRegistry = AssistantToolRegistry()
+        ..register(_DeterministicSearchTool())
         ..register(_DeterministicWebSearchTool());
       final runtime = ReactRuntime(
         llmProvider: const HeuristicLocalLlmProvider(),
@@ -49,7 +50,7 @@ void main() {
     });
 
     test(
-      'Scenario A: voice command can invoke knowledge skill (web search)',
+      'Scenario A: voice command knowledge skill defaults to unified search',
       () async {
         const manifest = PersonalAssistantSkillManifest(
           id: 'web.quick_search',
@@ -60,7 +61,7 @@ void main() {
           executionTarget: 'tool_chain',
           parametersSchema: <String, dynamic>{},
           visibility: 'both',
-          allowedTools: <String>['web_search'],
+          allowedTools: <String>['search', 'web_search'],
           domainId: 'knowledge_qa',
           toolChainProfile: 'knowledge_qa',
         );
@@ -68,7 +69,6 @@ void main() {
         final result = await skillExecutor.invoke(
           skill: manifest,
           arguments: <String, dynamic>{
-            'toolName': 'web_search',
             'toolArgs': <String, dynamic>{
               'query': voiceText,
               'provider': 'perplexity',
@@ -80,12 +80,14 @@ void main() {
         expect(result.success, isTrue);
         expect(result.message, contains('结论：'));
         expect(result.message, contains('不确定性：'));
+        expect(result.message, contains('统一检索命中'));
       },
     );
 
     test(
       'Scenario A2: feishu voice -> OpenClaw bridge -> gateway invoke skill',
       () async {
+        var invokedToolName = '';
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         server.listen((request) async {
           if (request.uri.path.contains('/v1/skills/invoke') &&
@@ -96,6 +98,10 @@ void main() {
                 ? decoded.cast<String, dynamic>()
                 : <String, dynamic>{};
             final skillId = json['skill_id']?.toString() ?? '';
+            final arguments =
+                (json['arguments'] as Map?)?.cast<String, dynamic>() ??
+                const <String, dynamic>{};
+            invokedToolName = arguments['toolName']?.toString() ?? '';
             request.response.headers.contentType = ContentType.json;
             request.response.write(
               jsonEncode(<String, dynamic>{
@@ -123,6 +129,7 @@ void main() {
         expect(text, isNotNull);
         final normalized = text!.toLowerCase();
         expect(normalized, anyOf(contains('success'), contains('unavailable')));
+        expect(invokedToolName, equals('search'));
       },
     );
 
@@ -194,6 +201,40 @@ class _DeterministicWebSearchTool implements AssistantTool {
             },
           ],
         },
+      },
+    );
+  }
+}
+
+class _DeterministicSearchTool implements AssistantTool {
+  @override
+  String get name => 'search';
+
+  @override
+  String get description => 'Deterministic unified search stub for VM tests.';
+
+  @override
+  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+    final query = (arguments['query'] as String?)?.trim() ?? '';
+    if (query.isEmpty) {
+      return const AssistantToolResult(
+        success: false,
+        message: 'Missing query',
+        errorCode: AssistantErrorCode.invalidArguments,
+      );
+    }
+    return AssistantToolResult(
+      success: true,
+      message: '统一检索完成',
+      data: <String, dynamic>{
+        'summary': '统一检索命中：杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
+        'results': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'title': '统一检索天气摘要',
+            'summary': '统一检索命中：杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
+            'url': 'https://example.com/search/weather/hangzhou',
+          },
+        ],
       },
     );
   }

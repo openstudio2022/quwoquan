@@ -1,0 +1,54 @@
+version: 1
+node: global-search-experience/cross-domain-search-journey/local-chat-search-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze local chat searchable objects
+    goal: 冻结 `chat.contact / chat.conversation / chat.message` taxonomy 与统一 hit model
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - S1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - canonical object type 已定义
+      - 页面层不再依赖聊天域方法名
+    status: planned
+
+  - id: P2
+    title: freeze local index namespace and lifecycle rules
+    goal: 冻结本地 snapshot / index、账号隔离、登出保留与删除同步规则
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A2
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 本地索引按 owner / sub account 隔离
+      - 登出不清空、删除/撤回同步删索引规则明确
+    status: planned
+
+  - id: P3
+    title: integrate local chat hits into unified search journey
+    goal: 让 Journey 通过 canonical `search(request)` 消费本地聊天命中并稳定跳转
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 本地聊天命中可进入统一结果模型
+      - 点击后稳定进入单聊或群聊上下文
+    status: planned

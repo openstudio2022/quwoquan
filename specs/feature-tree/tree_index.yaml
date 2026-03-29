@@ -1290,12 +1290,12 @@ features:
               domain: ""
               status: in_progress
               tags: []
-            - id: social-relationship-search-contract
-              name: social-relationship-search-contract
+            - id: local-chat-search-contract
+              name: local-chat-search-contract
               level: L3_story
-              path: global-search-experience/cross-domain-search-journey/social-relationship-search-contract
+              path: global-search-experience/cross-domain-search-journey/local-chat-search-contract
               domain: ""
-              status: in_progress
+              status: specified
               tags: []
             - id: xiaoqu-entry-handoff
               name: xiaoqu-entry-handoff
@@ -1303,6 +1303,56 @@ features:
               path: global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
               domain: ""
               status: in_progress
+              tags: []
+        - id: search-provider-routing-and-storage-topology
+          name: search-provider-routing-and-storage-topology
+          level: L2_feature
+          path: global-search-experience/search-provider-routing-and-storage-topology
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: canonical-search-contract
+              name: canonical-search-contract
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: search-object-taxonomy-and-provider-registry
+              name: search-object-taxonomy-and-provider-registry
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+              domain: ""
+              status: specified
+              tags: []
+            - id: search-execution-routing-policy
+              name: search-execution-routing-policy
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+              domain: ""
+              status: specified
+              tags: []
+            - id: circle-group-hybrid-fallback-contract
+              name: circle-group-hybrid-fallback-contract
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: local-search-lifecycle-and-account-isolation
+              name: local-search-lifecycle-and-account-isolation
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation
+              domain: ""
+              status: specified
+              tags: []
+            - id: search-storage-topology-and-elasticity
+              name: search-storage-topology-and-elasticity
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+              domain: ""
+              status: specified
               tags: []
     - id: platform-ops-governance
       name: platform-ops-governance

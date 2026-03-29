@@ -215,6 +215,144 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
   }
 }
 
+class _ThreeSectionNormalizationWeatherLlm implements AssistantLlmProvider {
+  int planCallCount = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    final hasToolMessage = messages.any((item) => item['role'] == 'tool');
+
+    if (!isPlannerCall && !isSynthesisCall) {
+      return const AssistantModelOutput(
+        text: '{"summary": "用户想确认深圳今天的天气和出门准备。"}',
+      );
+    }
+
+    if (isIntentStage) {
+      return AssistantModelOutput(
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '确认深圳今天的天气和出门准备',
+            problemClass: 'realtime_info',
+            mode: 'qa',
+            normalizedQuery: '深圳今天下不下雨，要不要带伞',
+          ),
+        ),
+      );
+    }
+
+    if (isPlannerCall &&
+        !hasToolMessage &&
+        availableTools.contains('web_search')) {
+      planCallCount += 1;
+      return AssistantModelOutput(
+        text: jsonEncode(<String, dynamic>{
+          'contractId': 'assistant_turn',
+          'decision': const <String, dynamic>{'nextAction': 'tool_call'},
+          'toolCalls': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'toolName': 'web_search',
+              'arguments': <String, dynamic>{
+                'query': '深圳 今日 降雨 带伞 建议',
+                'queryVariants': <String>['深圳今天下不下雨', '深圳今天带伞建议'],
+                'freshnessHoursMax': 6,
+              },
+            },
+          ],
+        }),
+        toolCalls: const <AssistantToolCall>[
+          AssistantToolCall(
+            name: 'web_search',
+            arguments: <String, dynamic>{
+              'query': '深圳 今日 降雨 带伞 建议',
+              'queryVariants': <String>['深圳今天下不下雨', '深圳今天带伞建议'],
+              'freshnessHoursMax': 6,
+            },
+          ),
+        ],
+      );
+    }
+
+    return AssistantModelOutput(
+      text: jsonEncode(<String, dynamic>{
+        'contractId': 'assistant_turn',
+        'decision': const <String, dynamic>{'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown':
+            '## 深圳天气\n\n- 深圳今天有雨，外出建议带伞。[来源1](https://weather.cma.cn/shenzhen)',
+        'result': const <String, dynamic>{
+          'text': '深圳今天有雨，外出建议带伞。',
+          'summary': '深圳今天有雨，外出建议带伞',
+          'interpretation': '确认深圳今天的天气和出门准备',
+        },
+        'understandingSnapshot': const <String, dynamic>{
+          'intentSummary': '你现在主要想确认深圳今天的天气和出门准备',
+          'concernPoints': <String>['是否会下雨', '要不要带伞'],
+        },
+        'answerProcessing': const <String, dynamic>{
+          'readinessSummary': '天气实况和出门建议已经齐备',
+          'keyFacts': <String>['深圳今天有雨，外出建议带伞。'],
+          'missingDimensions': <String>[],
+          'retrieveMoreReason': '',
+        },
+        'evidence': const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'evidenceId': 'weather_ev_1',
+            'claim': '深圳今天有雨，外出建议带伞。',
+            'title': '深圳天气预报 - 中国气象局',
+            'url': 'https://weather.cma.cn/shenzhen',
+            'source': '中国气象局',
+            'snippet': '深圳今天有雨，外出建议带伞。',
+            'text': '深圳今天有雨，外出建议带伞。',
+          },
+        ],
+        'reasoningBasis': const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'evidenceId': 'weather_ev_1',
+            'claim': '深圳今天有雨，外出建议带伞。',
+            'text': '降雨信息和出门建议已经交叉确认。',
+            'confidence': 0.95,
+          },
+        ],
+        'selfCheck': const <String, dynamic>{
+          'goalSatisfied': true,
+          'constraintSatisfied': true,
+          'safetyBoundarySatisfied': true,
+          'failedItems': <String>[],
+        },
+        'diagnostics': const <String, dynamic>{
+          'emergedTags': <Map<String, dynamic>>[],
+          'failedChecks': <String>[],
+          'parseStatus': '',
+          'notes': <String>['three_section_normalization_fixture'],
+        },
+        'modelSelfScore': const <String, dynamic>{
+          'score': 93,
+          'reason': 'weather_evidence_ready',
+        },
+        'toolCalls': const <dynamic>[],
+      }),
+    );
+  }
+}
+
 class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
   int planCallCount = 0;
 
@@ -1589,7 +1727,9 @@ void main() {
       // ---- 用户旅程验证 ----
       final journey = response.runArtifacts?.journey;
       expect(journey, isNotNull);
-      final journeyStages = journey!.stages.map((item) => item.stageId.name).toSet();
+      final journeyStages = journey!.stages
+          .map((item) => item.stageId.name)
+          .toSet();
       final hasToolStartTrace = traces.any(
         (item) => item.type == AssistantTraceEventType.toolStart,
       );
@@ -1611,11 +1751,7 @@ void main() {
         isTrue,
         reason: '检索阶段应以 journey 或真实 toolStart 证据体现',
       );
-      expect(
-        journeyStages.contains('answer'),
-        isTrue,
-        reason: '应覆盖 answer 阶段',
-      );
+      expect(journeyStages.contains('answer'), isTrue, reason: '应覆盖 answer 阶段');
       expect(
         journey.readiness.finalAnswerReady || journeyStages.contains('answer'),
         isTrue,
@@ -1745,7 +1881,8 @@ void main() {
             journey.stages.any((item) => item.summary.trim().isNotEmpty) ||
             journey.entries.any(
               (item) =>
-                  item.headline.trim().isNotEmpty || item.detail.trim().isNotEmpty,
+                  item.headline.trim().isNotEmpty ||
+                  item.detail.trim().isNotEmpty,
             ),
         isTrue,
         reason: '应输出统一用户旅程摘要',
@@ -1762,9 +1899,7 @@ void main() {
         reason: '天气过程区应保留至少一个筛选后的权威来源',
       );
       expect(
-        blockRefs.any(
-          (item) => item.url.contains('weather.cma.cn'),
-        ),
+        blockRefs.any((item) => item.url.contains('weather.cma.cn')),
         isTrue,
         reason: '天气过程区应优先展示权威天气来源',
       );
@@ -1831,7 +1966,13 @@ void main() {
         reason: '天气过程语言应带当前问题语义，而不是只显示系统状态',
       );
       expect(
-        userMessages.any((item) => item.contains('先确认') || item.contains('我在')),
+        userMessages.any(
+          (item) =>
+              item.contains('先确认') ||
+              item.contains('我在') ||
+              item.contains('我先') ||
+              item.contains('先把'),
+        ),
         isTrue,
         reason: '过程事件应解释当前为什么这样收敛，而不是只报系统状态',
       );
@@ -1853,8 +1994,9 @@ void main() {
         reason: '过程事件不应退化成通用系统状态文案',
       );
       AssistantJourneyEntry? rootIntentEntry;
-      for (final entry in response.runArtifacts?.journey.entries ??
-          const <AssistantJourneyEntry>[]) {
+      for (final entry
+          in response.runArtifacts?.journey.entries ??
+              const <AssistantJourneyEntry>[]) {
         if (entry.stageId.name == 'analyze' ||
             entry.provenance.actionCode.name == 'frameProblem') {
           rootIntentEntry = entry;
@@ -1884,9 +2026,61 @@ void main() {
       expect(rootIntentSummary, isNot(contains('收一收')));
       expect(rootIntentSummary, isNot(contains('你更像是想知道')));
       expect(
-        journey.entries.any((item) => item.references.isNotEmpty) || hasToolStartTrace,
+        journey.entries.any((item) => item.references.isNotEmpty) ||
+            hasToolStartTrace,
         isTrue,
         reason: '若过程区不再合成 references 事件，至少要保留真实工具执行证据',
+      );
+    });
+
+    test('完成态保留自然成答，同时把三阶段快照写入 artifacts', () async {
+      final normalizationLoop = LocalPhaseExecutionOwner(
+        ReactRuntime(
+          llmProvider: _ThreeSectionNormalizationWeatherLlm(),
+          toolRegistry: AssistantToolRegistry()
+            ..register(_FakeWeatherSearchTool()),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions_three_section_answer.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/memory_three_section_answer.json',
+          ),
+        ),
+      );
+
+      final response = await normalizationLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_three_section_answer',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '深圳今天下不下雨，要不要带伞？'),
+          ],
+        ),
+      );
+
+      final markdown = response.displayMarkdown;
+      final plainText = response.displayPlainText;
+      final artifacts = response.runArtifacts;
+
+      expect(markdown, contains('深圳天气'));
+      expect(markdown, isNot(contains('## 深圳天气')));
+      expect(markdown, isNot(contains('## 问题理解')));
+      expect(markdown, isNot(contains('## 关键观点')));
+      expect(markdown, isNot(contains('## 回答概要')));
+      expect(markdown, contains('[来源1](https://weather.cma.cn/shenzhen'));
+      expect(plainText, contains('深圳今天有雨'));
+      expect(plainText, isNot(contains('问题理解')));
+      expect(artifacts, isNotNull);
+      expect(artifacts!.displayMarkdown, equals(markdown));
+      expect(artifacts.displayPlainText, equals(plainText));
+      expect(artifacts.answerEvidenceBindings, isNotEmpty);
+      expect(artifacts.understandingSnapshot.intentSummary, isNotEmpty);
+      expect(artifacts.answerProcessing.keyFacts, isNotEmpty);
+      expect(artifacts.retrievalProcessing.selectedKeyPoints, isNotEmpty);
+      expect(
+        artifacts.answerEvidenceBindings.first.url,
+        contains('weather.cma.cn/shenzhen'),
       );
     });
 
@@ -2135,12 +2329,14 @@ void main() {
       }
 
       final journey = secondResponse.runArtifacts?.journey;
-      final narrativeEvents = (journey?.entries ?? const <AssistantJourneyEntry>[])
-          .where(
-            (item) =>
-                item.headline.trim().isNotEmpty || item.detail.trim().isNotEmpty,
-          )
-          .toList(growable: false);
+      final narrativeEvents =
+          (journey?.entries ?? const <AssistantJourneyEntry>[])
+              .where(
+                (item) =>
+                    item.headline.trim().isNotEmpty ||
+                    item.detail.trim().isNotEmpty,
+              )
+              .toList(growable: false);
       expect(narrativeEvents, isNotEmpty);
       for (final event in narrativeEvents) {
         final summary = event.headline.trim().isNotEmpty
@@ -2164,10 +2360,7 @@ void main() {
       expect(firstResponse.displayMarkdown, isNot(contains('先给你当前最稳的部分')));
       expect(secondResponse.displayMarkdown, contains('土拨鼠'));
       expect(secondResponse.displayMarkdown, isNot(contains('先给你当前最稳的部分')));
-      expect(
-        secondResponse.displayMarkdown,
-        isNot(contains('contractId')),
-      );
+      expect(secondResponse.displayMarkdown, isNot(contains('contractId')));
       expect(secondResponse.displayMarkdown, isNot(contains('<tool_call>')));
       expect(secondResponse.displayMarkdown, isNot(contains('九寨沟方向备选方案')));
       expect(
@@ -2280,14 +2473,15 @@ void main() {
 
       final structured = response.structuredResponse;
       final markdown = response.displayMarkdown.trim();
-      expect(markdown, isEmpty);
+      expect(markdown, contains('这次整理答案失败'));
       expect(response.degraded, isTrue);
       expect(markdown, isNot(contains('<tool_call>')));
       expect(markdown, isNot(contains('contractId')));
       final journey = response.runArtifacts?.journey;
       expect(
         (journey?.summary.trim().isNotEmpty ?? false) ||
-            (journey?.stages.any((item) => item.summary.trim().isNotEmpty) ?? false) ||
+            (journey?.stages.any((item) => item.summary.trim().isNotEmpty) ??
+                false) ||
             (journey?.entries.any(
                   (item) =>
                       item.headline.trim().isNotEmpty ||
@@ -2300,7 +2494,8 @@ void main() {
       expect(journey?.referenceSummary.count, equals(0));
       expect(
         journey?.entries.any(
-          (item) => item.headline.trim().isNotEmpty || item.detail.trim().isNotEmpty,
+          (item) =>
+              item.headline.trim().isNotEmpty || item.detail.trim().isNotEmpty,
         ),
         isTrue,
       );
@@ -2332,7 +2527,7 @@ void main() {
 
       final markdown = response.displayMarkdown.trim();
       expect(markdown, isNot(contains('<tool_call>')));
-      expect(markdown, isEmpty);
+      expect(markdown, contains('这次整理答案失败'));
       expect(response.degraded, isTrue);
       expect(markdown, isNot(contains('contractId')));
     });
@@ -2367,8 +2562,8 @@ void main() {
       final plainText = response.displayPlainText.trim();
 
       expect(response.degraded, isTrue);
-      expect(markdown, isEmpty);
-      expect(plainText, contains('模型输出无效'));
+      expect(markdown, contains('这次整理答案失败'));
+      expect(plainText, contains('这次整理答案失败'));
     });
 
     test('phase one 检索后若只产出过程性自由文本，必须继续 formal synthesis 成答', () async {
@@ -2538,7 +2733,7 @@ void main() {
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      expect(skillRuns.length, greaterThanOrEqualTo(3));
+      expect(skillRuns.length, greaterThanOrEqualTo(2));
 
       final weatherRun = skillRuns.firstWhere(
         (item) => item['domainId'] == 'weather',
@@ -2554,7 +2749,7 @@ void main() {
           (travelRun['shell'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       expect(travelShell['problemClass'], equals('complex_reasoning'));
-      expect(travelShell['maxIterations'], equals(4));
+      expect(travelShell['maxIterations'], equals(2));
       expect(travelShell['toolBudget'], equals(2));
       expect(travelShell['variantBudget'], equals(1));
       expect(travelShell['reflectionBudget'], equals(1));

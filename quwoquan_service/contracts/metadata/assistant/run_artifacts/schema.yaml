@@ -11,7 +11,9 @@ fields:
   - { name: machineEnvelope, type: string, default: '' }
   - { name: displayMarkdown, type: string, default: '' }
   - { name: displayPlainText, type: string, default: '' }
+  - { name: displayState, type: object, ref: display_state, default: {} }
   - { name: journey, type: object, ref: AssistantJourney, default: {} }
+  - { name: processTimeline, type: list<object>, ref: process_timeline_frame, default: [] }
   - { name: understandingSnapshot, type: object, ref: understanding_snapshot, default: {} }
   - { name: answerProcessing, type: object, ref: answer_processing, default: {} }
   - { name: historicalThinkingSnapshot, type: object, ref: historical_thinking_snapshot, default: {} }
@@ -23,6 +25,63 @@ fields:
   - { name: diagnostics, type: map, default: {} }
   - { name: domainPolicyBundle, type: object, ref: policy_bundle }
 subcontracts:
+  display_state:
+    class_name: AssistantDisplayState
+    fields:
+      - { name: process, type: object, ref: process_display_state, default: {} }
+      - { name: answer, type: object, ref: answer_display_state, default: {} }
+  process_display_state:
+    class_name: AssistantProcessDisplayState
+    fields:
+      - { name: activeStepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: summary, type: string, default: '' }
+      - { name: blocks, type: list<object>, ref: process_display_block, default: [] }
+      - { name: finalAnswerReady, type: bool, default: false }
+  process_display_block:
+    class_name: AssistantProcessDisplayBlock
+    fields:
+      - { name: blockId, type: string, required: true }
+      - { name: stepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: pending }
+      - { name: kind, type: enum, enum_ref: ProcessDisplayBlockKind, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: items, type: list<object>, ref: display_item, default: [] }
+      - { name: references, type: list<object>, ref: retrieval_reference, default: [] }
+  answer_display_state:
+    class_name: AssistantAnswerDisplayState
+    fields:
+      - { name: summary, type: string, default: '' }
+      - { name: blocks, type: list<object>, ref: answer_display_block, default: [] }
+  answer_display_block:
+    class_name: AssistantAnswerDisplayBlock
+    fields:
+      - { name: blockId, type: string, required: true }
+      - { name: kind, type: enum, enum_ref: DisplayBlockKind, default: '' }
+      - { name: listStyle, type: enum, enum_ref: DisplayListStyle, default: plain }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: items, type: list<object>, ref: display_item, default: [] }
+  display_item:
+    class_name: AssistantDisplayItem
+    fields:
+      - { name: itemId, type: string, required: true }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: referenceIds, type: list<string>, default: [] }
+  process_timeline_frame:
+    class_name: ProcessTimelineFrame
+    fields:
+      - { name: frameId, type: string, required: true }
+      - { name: stepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: pending }
+      - { name: order, type: int, default: 0 }
+      - { name: headline, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: references, type: list<object>, ref: retrieval_reference, default: [] }
+      - { name: understandingSnapshot, type: object, ref: understanding_snapshot, default: {} }
+      - { name: retrievalProcessing, type: object, ref: retrieval_processing, default: {} }
+      - { name: answerProcessing, type: object, ref: answer_processing, default: {} }
   evidence_ledger_entry:
     class_name: EvidenceLedgerEntry
     fields:
@@ -88,6 +147,7 @@ subcontracts:
     class_name: RunArtifactsUnderstandingSnapshot
     fields:
       - { name: intentSummary, type: string, default: '' }
+      - { name: userFacingSummary, type: string, default: '' }
       - { name: concernPoints, type: list<string>, default: [] }
       - { name: emotionSignal, type: string, default: '' }
       - { name: queryDesignSummary, type: string, default: '' }
@@ -129,5 +189,6 @@ subcontracts:
       - { name: processedDocumentCount, type: int, default: 0 }
       - { name: acceptedDocumentCount, type: int, default: 0 }
       - { name: processingSummary, type: string, default: '' }
+      - { name: selectedKeyPoints, type: list<string>, default: [] }
       - { name: expansionReason, type: string, default: '' }
       - { name: acceptedReferences, type: list<object>, ref: retrieval_reference, default: [] }

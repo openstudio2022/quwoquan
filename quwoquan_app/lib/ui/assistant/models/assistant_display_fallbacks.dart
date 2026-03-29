@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 
 Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
   final direct = response.structuredResponse;
@@ -34,8 +35,9 @@ String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
       nextAction == 'ask_user' ||
       messageKind == 'progress' ||
       messageKind == 'tool_call' ||
-      rawSignals.contains('<tool_call>') ||
-      rawSignals.contains('tool_call');
+      AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(
+        rawSignals,
+      );
   if (!looksActionLike) {
     return '';
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -26,13 +28,30 @@ class RealtimeMessageHandler {
         _ref.read(chatMessageProvider(conversationId).notifier).addMessage(msg);
 
         _updateConversationCacheForNewMessage(conversationId, payload);
+        unawaited(
+          _ref
+              .read(localChatSearchSyncProvider)
+              .ingestRealtimeMessage(
+                conversationId: conversationId,
+                payload: payload,
+              ),
+        );
 
       case 'MessageRecalled':
         if (conversationId.isEmpty) return;
         final messageId = payload['messageId'] as String? ?? '';
         if (messageId.isNotEmpty) {
-          _ref.read(chatMessageProvider(conversationId).notifier)
+          _ref
+              .read(chatMessageProvider(conversationId).notifier)
               .markRecalled(messageId);
+          unawaited(
+            _ref
+                .read(localChatSearchSyncProvider)
+                .markMessageRecalled(
+                  conversationId: conversationId,
+                  messageId: messageId,
+                ),
+          );
         }
 
       case 'ReadReceiptSent':
@@ -40,20 +59,12 @@ class RealtimeMessageHandler {
 
       case 'MemberJoined':
         if (conversationId.isEmpty) return;
-        _insertSystemMessage(
-          conversationId,
-          payload,
-          '加入了群聊',
-        );
+        _insertSystemMessage(conversationId, payload, '加入了群聊');
         _refreshConversationCache(conversationId);
 
       case 'MemberLeft':
         if (conversationId.isEmpty) return;
-        _insertSystemMessage(
-          conversationId,
-          payload,
-          '离开了群聊',
-        );
+        _insertSystemMessage(conversationId, payload, '离开了群聊');
         _refreshConversationCache(conversationId);
 
       case 'ConversationSettingsUpdated':
@@ -95,9 +106,10 @@ class RealtimeMessageHandler {
     Map<String, dynamic> payload,
     String action,
   ) {
-    final userName = payload['userName'] as String?
-        ?? payload['displayName'] as String?
-        ?? '';
+    final userName =
+        payload['userName'] as String? ??
+        payload['displayName'] as String? ??
+        '';
     final msg = MessageDto(
       id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
       conversationId: conversationId,
@@ -117,6 +129,11 @@ class RealtimeMessageHandler {
     try {
       final syncService = _ref.read(conversationSyncProvider);
       syncService.sync(force: true);
+      unawaited(
+        _ref
+            .read(localChatSearchSyncProvider)
+            .syncConversation(conversationId: conversationId, forceFull: true),
+      );
     } catch (_) {}
   }
 
@@ -125,6 +142,7 @@ class RealtimeMessageHandler {
     try {
       final syncService = _ref.read(conversationSyncProvider);
       syncService.sync(force: true);
+      unawaited(_ref.read(localChatSearchSyncProvider).sync(force: true));
     } catch (_) {}
   }
 }

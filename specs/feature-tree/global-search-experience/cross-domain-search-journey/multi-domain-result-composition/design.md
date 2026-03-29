@@ -90,8 +90,7 @@
 ### KD3：每个域各自负责结果对象，不负责综合排序
 
 - `content`：内容项
-- `user`：社交关系项
-- `messages`：会话项、消息项
+- `messages`：本地联系人项、会话项、消息项
 - `circle`：群组项、facet buckets
 
 ### KD4：局部降级优先
@@ -110,9 +109,10 @@
   - `SearchMessages`
   - `ConversationSearchItemView`
   - `MessageSearchItemView`
-- `user/user_profile`：
-  - `SearchSocialRelations`
-  - `SocialRelationSearchItemView`
+- `local chat provider`：
+  - `ContactSearchHit`
+  - `ConversationSearchItemView`
+  - `MessageSearchItemView`
 - `social/circle`：
   - `SearchCircles`
   - `CircleSearchItemView`
@@ -143,7 +143,7 @@
 
 ## TDD / ATDD 策略
 
-- `T1_schema`：统一 `SearchRequest / SearchResponse`、四域 search DTO 与 unified result model
+- `T1_schema`：统一 `SearchRequest / SearchResponse`、本地聊天 + 远端对象 DTO 与 unified result model
 - `T2_module_interaction`：分组渲染、空态、降级态
 - `T3_cross_service_integration`：并发 fan-out、部分失败
 - `T4_user_journey`：搜索结果进入详情

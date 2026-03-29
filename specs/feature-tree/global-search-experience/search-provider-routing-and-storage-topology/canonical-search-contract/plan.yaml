@@ -1,0 +1,25 @@
+version: 1
+node: global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze canonical search schema
+    goal: 冻结 `SearchRequest / SearchResponse / SearchHit / SearchSection`、query-first keyword search 结构与 AI agent tool schema
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 统一 schema 已定义
+      - `mode=suggest|result` 已定义
+      - agent tool descriptor 已可由同一 schema 生成
+      - schema 已明确以 `query` 为主输入，不引入复杂嵌套 query language
+    status: planned

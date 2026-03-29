@@ -35,10 +35,14 @@ class SynthesisDraft {
     required this.previousSlotState,
     this.phaseOneRoutingDiagnostics = const <String, dynamic>{},
     this.understandingSnapshot = const <String, dynamic>{},
+    this.retrievalProcessing = const <String, dynamic>{},
     this.historicalThinkingSnapshot = const <String, dynamic>{},
+    this.streamedAnswerReadinessSummary = '',
     this.previousDomainPolicyBundle,
     this.profileUpdateProposal,
     this.responseDegraded = false,
+    this.blockedProcessStepId = ProcessStepId.unknown,
+    this.blockedProcessMessage = '',
   });
 
   final String runId;
@@ -62,8 +66,12 @@ class SynthesisDraft {
   final SlotStateSnapshot previousSlotState;
   final Map<String, dynamic> phaseOneRoutingDiagnostics;
   final Map<String, dynamic> understandingSnapshot;
+  final Map<String, dynamic> retrievalProcessing;
   final Map<String, dynamic> historicalThinkingSnapshot;
+  final String streamedAnswerReadinessSummary;
   final DomainPolicyBundle? previousDomainPolicyBundle;
   final ProfileUpdateProposal? profileUpdateProposal;
   final bool responseDegraded;
+  final ProcessStepId blockedProcessStepId;
+  final String blockedProcessMessage;
 }

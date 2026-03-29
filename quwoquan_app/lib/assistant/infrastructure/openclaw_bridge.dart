@@ -286,7 +286,8 @@ class OpenClawBridge {
                     ? (decoded['type'] as String? ?? 'process_append')
                     : eventName,
                 'scope': (decoded['scope'] as String? ?? 'root'),
-                'message': (decoded['message'] as String?)?.trim() ?? payloadRaw,
+                'message':
+                    (decoded['message'] as String?)?.trim() ?? payloadRaw,
                 'nodeId': (decoded['nodeId'] as String? ?? ''),
                 'runId': (decoded['runId'] as String? ?? ''),
                 'payload':
@@ -317,7 +318,9 @@ class OpenClawBridge {
           'payload':
               (decoded['payload'] as Map?)?.cast<String, dynamic>() ?? decoded,
         };
-        return OpenClawRemoteStreamEvent.userEvent(UserEvent.fromJson(eventJson));
+        return OpenClawRemoteStreamEvent.userEvent(
+          UserEvent.fromJson(eventJson),
+        );
       }
       final chunk = decoded != null
           ? ((decoded['chunk'] as String?)?.trim().isNotEmpty == true
@@ -400,8 +403,8 @@ class OpenClawBridge {
     final result = await invokeSkillRemote(
       skillId: 'web.quick_search',
       arguments: <String, dynamic>{
-        'toolName': 'web_search',
-        'toolArgs': <String, dynamic>{'query': trimmed},
+        'toolName': 'search',
+        'toolArgs': <String, dynamic>{'query': trimmed, 'mode': 'result'},
       },
     );
     if (result == null) {

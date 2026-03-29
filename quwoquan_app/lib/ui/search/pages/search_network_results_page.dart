@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
@@ -13,6 +16,7 @@ import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
 
@@ -42,6 +46,8 @@ class _SearchNetworkResultsPageState
   AssistantSearchResultView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<HomepageSummary> _homepageResults = const <HomepageSummary>[];
+  List<SearchHit> _groupResults = const <SearchHit>[];
+  List<LocationPoiDto> _locationResults = const <LocationPoiDto>[];
 
   @override
   void initState() {
@@ -163,6 +169,16 @@ class _SearchNetworkResultsPageState
         label: '主页',
         description: '搜索共享主页并进入详情',
       ),
+      _SearchNetworkTab(
+        id: 'groups',
+        label: SearchRegistry.sectionById('groups')?.title ?? '群组',
+        description: '搜索圈子与群组结果',
+      ),
+      _SearchNetworkTab(
+        id: 'locations',
+        label: SearchRegistry.sectionById('locations')?.title ?? '位置',
+        description: '搜索站内可挂载的位置结果',
+      ),
     ];
     for (final entry in CircleMockData.categoryConfig.entries) {
       final value = entry.value;
@@ -220,6 +236,47 @@ class _SearchNetworkResultsPageState
           _StatusMessage(text: '没有找到相关主页', isDark: isDark)
         else
           ..._buildHomepageResultTiles(),
+      ];
+    }
+
+    if (_activeTabId == 'groups') {
+      return <Widget>[
+        _CategorySummaryCard(
+          title: activeTab.label,
+          description: activeTab.description,
+          count: _groupResults.length,
+          isDark: isDark,
+        ),
+        if (_isLoading)
+          _StatusMessage(text: '正在加载群组结果', isDark: isDark, loading: true)
+        else if (_errorText != null)
+          _StatusMessage(text: _errorText!, isDark: isDark)
+        else if (_groupResults.isEmpty)
+          _StatusMessage(text: '没有找到相关群组', isDark: isDark)
+        else
+          ..._buildGroupResultTiles(isDark: isDark, fgSecondary: fgSecondary),
+      ];
+    }
+
+    if (_activeTabId == 'locations') {
+      return <Widget>[
+        _CategorySummaryCard(
+          title: activeTab.label,
+          description: activeTab.description,
+          count: _locationResults.length,
+          isDark: isDark,
+        ),
+        if (_isLoading)
+          _StatusMessage(text: '正在加载位置结果', isDark: isDark, loading: true)
+        else if (_errorText != null)
+          _StatusMessage(text: _errorText!, isDark: isDark)
+        else if (_locationResults.isEmpty)
+          _StatusMessage(text: '没有找到相关位置', isDark: isDark)
+        else
+          ..._buildLocationResultTiles(
+            isDark: isDark,
+            fgSecondary: fgSecondary,
+          ),
       ];
     }
 
@@ -339,6 +396,68 @@ class _SearchNetworkResultsPageState
     ];
   }
 
+  List<Widget> _buildGroupResultTiles({
+    required bool isDark,
+    required Color fgSecondary,
+  }) {
+    final cards = _groupResults
+        .map(_GroupResultCardModel.fromHit)
+        .toList(growable: false);
+    return <Widget>[
+      for (var i = 0; i < cards.length; i++) ...[
+        PostPreviewListTile(
+          isDark: isDark,
+          title: cards[i].title,
+          supportingText: cards[i].supportingText,
+          coverUrl: cards[i].coverUrl,
+          eyebrowText: cards[i].eyebrowText,
+          footer: Text(
+            cards[i].footerLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+          onTap: () => _openGroup(cards[i]),
+        ),
+        if (i != cards.length - 1) SizedBox(height: AppSpacing.containerSm),
+      ],
+    ];
+  }
+
+  List<Widget> _buildLocationResultTiles({
+    required bool isDark,
+    required Color fgSecondary,
+  }) {
+    final cards = _locationResults
+        .map(_LocationResultCardModel.fromDto)
+        .toList(growable: false);
+    return <Widget>[
+      for (var i = 0; i < cards.length; i++) ...[
+        PostPreviewListTile(
+          isDark: isDark,
+          title: cards[i].title,
+          supportingText: cards[i].supportingText,
+          coverUrl: '',
+          eyebrowText: cards[i].eyebrowText,
+          footer: Text(
+            cards[i].footerLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+          onTap: () {},
+        ),
+        if (i != cards.length - 1) SizedBox(height: AppSpacing.containerSm),
+      ],
+    ];
+  }
+
   void _scheduleRefresh({bool immediate = false}) {
     _debounceTimer?.cancel();
     if (immediate) {
@@ -358,6 +477,10 @@ class _SearchNetworkResultsPageState
         _xiaoquResult = null;
       } else if (_activeTabId == 'homepages') {
         _homepageResults = const <HomepageSummary>[];
+      } else if (_activeTabId == 'groups') {
+        _groupResults = const <SearchHit>[];
+      } else if (_activeTabId == 'locations') {
+        _locationResults = const <LocationPoiDto>[];
       } else {
         _contentResults = const <PostSearchItemView>[];
       }
@@ -391,6 +514,34 @@ class _SearchNetworkResultsPageState
         return;
       }
 
+      if (_activeTabId == 'groups') {
+        final items = trimmedQuery.isEmpty
+            ? const <SearchHit>[]
+            : await _loadGroupResults(trimmedQuery);
+        if (!mounted || token != _requestToken) {
+          return;
+        }
+        setState(() {
+          _groupResults = items;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (_activeTabId == 'locations') {
+        final items = trimmedQuery.isEmpty
+            ? const <LocationPoiDto>[]
+            : await _loadLocationResults(trimmedQuery);
+        if (!mounted || token != _requestToken) {
+          return;
+        }
+        setState(() {
+          _locationResults = items;
+          _isLoading = false;
+        });
+        return;
+      }
+
       final items = trimmedQuery.isEmpty
           ? const <PostSearchItemView>[]
           : await _loadContentResults(trimmedQuery);
@@ -413,38 +564,24 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<PostSearchItemView>> _loadContentResults(String query) async {
-    final repository = ref.read(contentRepositoryProvider);
     final categoryId = _activeTabId == 'all' ? null : _activeTabId;
     final selection = widget.launchContext.searchObjectSelection.normalized();
-    final selectedTypes = SearchContentTypeFilter.values
-        .where(selection.contentTypes.contains)
+    final response = await ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
+            query: query,
+            mode: SearchMode.result,
+            objectTypes: const <SearchObjectType>{SearchObjectType.contentPost},
+            limit: 12,
+            categoryId: categoryId,
+            contentTypes: selection.contentTypes,
+          ),
+        );
+    final results = response.hits
+        .where((hit) => hit.objectType == SearchObjectType.contentPost)
+        .map((hit) => PostSearchItemView.fromMap(hit.payload))
         .toList(growable: false);
-    if (selectedTypes.isEmpty) {
-      return repository.searchPosts(
-        query: query,
-        categoryId: categoryId,
-        limit: 12,
-      );
-    }
-
-    final merged = <String, PostSearchItemView>{};
-    for (final type in selectedTypes) {
-      final items = await repository.searchPosts(
-        query: query,
-        identity: type.identity,
-        type: type.contentType,
-        categoryId: categoryId,
-        limit: 12,
-      );
-      for (final item in items) {
-        merged.putIfAbsent(item.postId, () => item);
-      }
-      if (merged.length >= 12) {
-        break;
-      }
-    }
-
-    final results = merged.values.toList(growable: false);
     results.sort((left, right) {
       final leftTime = left.publishedAt;
       final rightTime = right.publishedAt;
@@ -462,10 +599,67 @@ class _SearchNetworkResultsPageState
     return results.take(12).toList(growable: false);
   }
 
-  Future<List<HomepageSummary>> _loadHomepageResults(String query) {
-    return ref
-        .read(homepageRepositoryProvider)
-        .searchHomepages(query: query, limit: 12);
+  Future<List<HomepageSummary>> _loadHomepageResults(String query) async {
+    final response = await ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
+            query: query,
+            mode: SearchMode.result,
+            objectTypes: const <SearchObjectType>{
+              SearchObjectType.entityHomepage,
+            },
+            limit: 12,
+          ),
+        );
+    return response.hits
+        .where((hit) => hit.objectType == SearchObjectType.entityHomepage)
+        .map((hit) => HomepageSummary.fromMap(hit.payload))
+        .toList(growable: false);
+  }
+
+  Future<List<SearchHit>> _loadGroupResults(String query) async {
+    final response = await ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
+            query: query,
+            mode: SearchMode.result,
+            objectTypes: const <SearchObjectType>{
+              SearchObjectType.circleGroup,
+              SearchObjectType.circleCircle,
+            },
+            limit: 12,
+          ),
+        );
+    return response.hits
+        .where(
+          (hit) =>
+              hit.objectType == SearchObjectType.circleGroup ||
+              hit.objectType == SearchObjectType.circleCircle,
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<LocationPoiDto>> _loadLocationResults(String query) async {
+    final response = await ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
+            query: query,
+            mode: SearchMode.result,
+            objectTypes: const <SearchObjectType>{
+              SearchObjectType.integrationLocationPoi,
+            },
+            limit: 12,
+          ),
+        );
+    return response.hits
+        .where(
+          (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
+        )
+        .map((hit) => LocationPoiDto.fromMap(hit.payload))
+        .toList(growable: false);
   }
 
   Future<void> _openPost(String postId) async {
@@ -510,6 +704,13 @@ class _SearchNetworkResultsPageState
       return;
     }
     context.push(AppRoutePaths.homepageDetail(id: homepageId));
+  }
+
+  void _openGroup(_GroupResultCardModel group) {
+    if (group.circleId.trim().isEmpty) {
+      return;
+    }
+    context.push(AppRoutePaths.circleDetail(id: group.circleId));
   }
 
   Future<void> _openAssistantCitation(
@@ -778,6 +979,82 @@ class _NetworkResultCardModel {
                 : '网络结果'),
       likeCount: item.likeCount,
       showVideoBadge: item.contentType == 'video',
+    );
+  }
+}
+
+class _GroupResultCardModel {
+  const _GroupResultCardModel({
+    required this.circleId,
+    required this.title,
+    required this.supportingText,
+    required this.coverUrl,
+    required this.footerLabel,
+    required this.eyebrowText,
+  });
+
+  final String circleId;
+  final String title;
+  final String supportingText;
+  final String coverUrl;
+  final String footerLabel;
+  final String eyebrowText;
+
+  factory _GroupResultCardModel.fromHit(SearchHit hit) {
+    final isCircle = hit.objectType == SearchObjectType.circleCircle;
+    final payload = hit.payload;
+    final circleId = isCircle
+        ? hit.objectId
+        : (payload['circleId']?.toString() ?? hit.objectId);
+    final memberCount = (payload['memberCount'] as num?)?.toInt() ?? 0;
+    final postCount = (payload['postCount'] as num?)?.toInt() ?? 0;
+    final footerSegments = <String>[
+      if ((payload['circleName'] ?? '').toString().trim().isNotEmpty)
+        payload['circleName'].toString().trim(),
+      if (memberCount > 0) '$memberCount 人',
+      if (postCount > 0) '$postCount 篇内容',
+      if (hit.resolvedFrom == SearchResolvedFrom.localFallback) '本地回退',
+    ];
+    return _GroupResultCardModel(
+      circleId: circleId,
+      title: hit.title,
+      supportingText: hit.snippet?.trim().isNotEmpty == true
+          ? hit.snippet!.trim()
+          : (hit.subtitle?.trim().isNotEmpty == true
+                ? hit.subtitle!.trim()
+                : '打开相关圈子'),
+      coverUrl: (payload['coverUrl'] ?? payload['cover'])?.toString() ?? '',
+      footerLabel: footerSegments.isEmpty ? '群组结果' : footerSegments.join(' · '),
+      eyebrowText: isCircle ? '圈子' : '群组',
+    );
+  }
+}
+
+class _LocationResultCardModel {
+  const _LocationResultCardModel({
+    required this.title,
+    required this.supportingText,
+    required this.footerLabel,
+    required this.eyebrowText,
+  });
+
+  final String title;
+  final String supportingText;
+  final String footerLabel;
+  final String eyebrowText;
+
+  factory _LocationResultCardModel.fromDto(LocationPoiDto dto) {
+    final footerSegments = <String>[
+      if (dto.distanceMeters != null) '${dto.distanceMeters} m',
+      '${dto.latitude.toStringAsFixed(4)}, ${dto.longitude.toStringAsFixed(4)}',
+    ];
+    return _LocationResultCardModel(
+      title: dto.name,
+      supportingText: (dto.address ?? '').trim().isNotEmpty
+          ? dto.address!.trim()
+          : '站内位置结果',
+      footerLabel: footerSegments.join(' · '),
+      eyebrowText: '位置',
     );
   }
 }

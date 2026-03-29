@@ -9,6 +9,7 @@ import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
     as phase_owner;
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
+import 'package:quwoquan_app/assistant/orchestration/phases/evidence_digest_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/execution_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_orchestrator.dart';
@@ -71,6 +72,10 @@ class AssistantAgentLoop {
           skillRouter: skillRouter,
         ),
         ExecutionPhase(owner),
+        EvidenceDigestPhase(
+          runtime: runtime,
+          templateCatalogRuntime: templateCatalogRuntime,
+        ),
         SynthesisPhase(owner),
         FinalizePhase(owner),
       ],

@@ -1,0 +1,61 @@
+version: 1
+
+modes:
+  - id: suggest
+    description: 轻量联想与建议，优先低成本 lexical 路径
+  - id: result
+    description: 正式结果与 assistant 检索结果，允许多对象召回
+
+execution_strategies:
+  - id: local_only
+    description: 仅端侧本地缓存或索引执行
+  - id: remote_only
+    description: 仅远端 provider 执行
+  - id: hybrid_remote_fallback_local
+    description: 远端优先，失败或 0 结果时回退本地
+
+resolved_sources:
+  - id: local
+    description: 本地直接命中
+  - id: remote
+    description: 远端直接命中
+  - id: local_fallback
+    description: 远端失败或空结果后回退本地
+
+conversation_types:
+  - id: direct
+    description: 单聊或点对点会话
+  - id: group
+    description: 群聊或群组会话
+
+content_type_filters:
+  - id: article
+    description: 文章内容
+  - id: image
+    description: 图片内容
+  - id: video
+    description: 视频内容
+  - id: moment
+    description: 动态内容
+
+defaults:
+  suggest_limit: 12
+  result_limit: 20
+  assistant_limit: 8
+
+tool_contract:
+  name: search
+  description: 统一检索网页与趣我圈对象的 query-first tool
+  required_fields:
+    - query
+  optional_fields:
+    - mode
+    - objectTypes
+    - limit
+    - conversationType
+    - contentTypes
+    - categoryId
+    - subCategory
+  internal_optional_fields:
+    - queryVariants
+    - queryTasks

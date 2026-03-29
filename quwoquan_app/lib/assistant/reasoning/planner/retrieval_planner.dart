@@ -28,8 +28,10 @@ class DefaultRetrievalPlanner {
     List<QueryTask>? preComputedQueryTasks,
   }) {
     if (frame.normalizedQuery.isEmpty) return null;
-    if (!availableTools.contains('web_search')) return null;
-    final queryTasks = (preComputedQueryTasks != null && preComputedQueryTasks.isNotEmpty)
+    final retrievalToolName = _preferredRetrievalToolName(availableTools);
+    if (retrievalToolName.isEmpty) return null;
+    final queryTasks =
+        (preComputedQueryTasks != null && preComputedQueryTasks.isNotEmpty)
         ? preComputedQueryTasks
         : _buildQueryTasks(frame);
     final blockingDimensions = queryTasks
@@ -42,9 +44,10 @@ class DefaultRetrievalPlanner {
       blockingDimensions: blockingDimensions,
       calls: <AssistantToolCall>[
         AssistantToolCall(
-          name: 'web_search',
+          name: retrievalToolName,
           arguments: <String, dynamic>{
             'query': frame.normalizedQuery,
+            'mode': 'result',
             'queryNormalization': _queryNormalization(frame),
             if (queryTasks.isNotEmpty)
               'queryTasks': queryTasks
@@ -58,6 +61,16 @@ class DefaultRetrievalPlanner {
         ),
       ],
     );
+  }
+
+  String _preferredRetrievalToolName(List<String> availableTools) {
+    if (availableTools.contains('search')) {
+      return 'search';
+    }
+    if (availableTools.contains('web_search')) {
+      return 'web_search';
+    }
+    return '';
   }
 
   Map<String, dynamic> _queryNormalization(ProblemFrame frame) {

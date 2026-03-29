@@ -38,46 +38,152 @@ class JsonFieldStreamExtractor {
   }
 
   static _JsonFieldExtraction? _extractField(String raw, String fieldName) {
-    final key = '"$fieldName"';
-    final fieldIndex = raw.indexOf(key);
-    if (fieldIndex < 0) return null;
-    var cursor = fieldIndex + key.length;
-    while (cursor < raw.length && _isWhitespace(raw.codeUnitAt(cursor))) {
-      cursor += 1;
-    }
-    if (cursor >= raw.length || raw[cursor] != ':') return null;
-    cursor += 1;
-    while (cursor < raw.length && _isWhitespace(raw.codeUnitAt(cursor))) {
-      cursor += 1;
-    }
-    if (cursor >= raw.length || raw[cursor] != '"') return null;
-    cursor += 1;
-    final valueStart = cursor;
-    var escaped = false;
-    while (cursor < raw.length) {
-      final ch = raw[cursor];
-      if (escaped) {
-        escaped = false;
-        cursor += 1;
-        continue;
-      }
-      if (ch == r'\') {
-        escaped = true;
-        cursor += 1;
-        continue;
-      }
-      if (ch == '"') {
-        return _JsonFieldExtraction(
-          encodedValue: raw.substring(valueStart, cursor),
-          complete: true,
-        );
-      }
-      cursor += 1;
-    }
-    return _JsonFieldExtraction(
-      encodedValue: raw.substring(valueStart),
-      complete: false,
+    final segments = fieldName
+        .split('.')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) return null;
+    return _extractFieldAtPath(
+      raw,
+      segments,
+      segmentIndex: 0,
+      searchStart: 0,
+      searchEnd: raw.length,
     );
+  }
+
+  static _JsonFieldExtraction? _extractFieldAtPath(
+    String raw,
+    List<String> segments, {
+    required int segmentIndex,
+    required int searchStart,
+    required int searchEnd,
+  }) {
+    final value = _extractValueForKey(
+      raw,
+      segments[segmentIndex],
+      searchStart: searchStart,
+      searchEnd: searchEnd,
+    );
+    if (value == null) return null;
+    if (segmentIndex == segments.length - 1) {
+      if (value.kind != _JsonValueKind.string) return null;
+      return _JsonFieldExtraction(
+        encodedValue: value.encodedValue,
+        complete: value.complete,
+      );
+    }
+    if (value.kind != _JsonValueKind.object) return null;
+    return _extractFieldAtPath(
+      raw,
+      segments,
+      segmentIndex: segmentIndex + 1,
+      searchStart: value.objectSearchStart,
+      searchEnd: value.objectSearchEnd,
+    );
+  }
+
+  static _JsonValueExtraction? _extractValueForKey(
+    String raw,
+    String fieldName, {
+    required int searchStart,
+    required int searchEnd,
+  }) {
+    final key = '"$fieldName"';
+    final fieldIndex = raw.indexOf(key, searchStart);
+    if (fieldIndex < 0 || fieldIndex >= searchEnd) return null;
+    var cursor = fieldIndex + key.length;
+    while (cursor < raw.length &&
+        cursor < searchEnd &&
+        _isWhitespace(raw.codeUnitAt(cursor))) {
+      cursor += 1;
+    }
+    if (cursor >= raw.length || cursor >= searchEnd || raw[cursor] != ':') {
+      return null;
+    }
+    cursor += 1;
+    while (cursor < raw.length &&
+        cursor < searchEnd &&
+        _isWhitespace(raw.codeUnitAt(cursor))) {
+      cursor += 1;
+    }
+    if (cursor >= raw.length || cursor >= searchEnd) return null;
+    final marker = raw[cursor];
+    if (marker == '"') {
+      cursor += 1;
+      final valueStart = cursor;
+      var escaped = false;
+      while (cursor < raw.length && cursor < searchEnd) {
+        final ch = raw[cursor];
+        if (escaped) {
+          escaped = false;
+          cursor += 1;
+          continue;
+        }
+        if (ch == r'\') {
+          escaped = true;
+          cursor += 1;
+          continue;
+        }
+        if (ch == '"') {
+          return _JsonValueExtraction.string(
+            encodedValue: raw.substring(valueStart, cursor),
+            complete: true,
+          );
+        }
+        cursor += 1;
+      }
+      return _JsonValueExtraction.string(
+        encodedValue: raw.substring(valueStart),
+        complete: false,
+      );
+    }
+    if (marker == '{') {
+      final objectStart = cursor + 1;
+      cursor += 1;
+      var depth = 1;
+      var inString = false;
+      var escaped = false;
+      while (cursor < raw.length && cursor < searchEnd) {
+        final ch = raw[cursor];
+        if (inString) {
+          if (escaped) {
+            escaped = false;
+          } else if (ch == r'\') {
+            escaped = true;
+          } else if (ch == '"') {
+            inString = false;
+          }
+          cursor += 1;
+          continue;
+        }
+        if (ch == '"') {
+          inString = true;
+          cursor += 1;
+          continue;
+        }
+        if (ch == '{') {
+          depth += 1;
+        } else if (ch == '}') {
+          depth -= 1;
+          if (depth == 0) {
+            return _JsonValueExtraction.object(
+              objectSearchStart: objectStart,
+              objectSearchEnd: cursor,
+              complete: true,
+            );
+          }
+        }
+        cursor += 1;
+      }
+      return _JsonValueExtraction.object(
+        objectSearchStart: objectStart,
+        objectSearchEnd: searchEnd,
+        complete: false,
+      );
+    }
+    return _JsonValueExtraction.other();
   }
 
   static String _decodeLenientJsonString(String encoded) {
@@ -106,5 +212,45 @@ class _JsonFieldExtraction {
   });
 
   final String encodedValue;
+  final bool complete;
+}
+
+enum _JsonValueKind { string, object, other }
+
+class _JsonValueExtraction {
+  const _JsonValueExtraction._({
+    required this.kind,
+    this.encodedValue = '',
+    this.objectSearchStart = 0,
+    this.objectSearchEnd = 0,
+    this.complete = false,
+  });
+
+  const _JsonValueExtraction.string({
+    required String encodedValue,
+    required bool complete,
+  }) : this._(
+         kind: _JsonValueKind.string,
+         encodedValue: encodedValue,
+         complete: complete,
+       );
+
+  const _JsonValueExtraction.object({
+    required int objectSearchStart,
+    required int objectSearchEnd,
+    required bool complete,
+  }) : this._(
+         kind: _JsonValueKind.object,
+         objectSearchStart: objectSearchStart,
+         objectSearchEnd: objectSearchEnd,
+         complete: complete,
+       );
+
+  const _JsonValueExtraction.other() : this._(kind: _JsonValueKind.other);
+
+  final _JsonValueKind kind;
+  final String encodedValue;
+  final int objectSearchStart;
+  final int objectSearchEnd;
   final bool complete;
 }

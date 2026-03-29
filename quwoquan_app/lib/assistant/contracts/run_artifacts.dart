@@ -1,8 +1,16 @@
 export 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
     show
+        DisplayBlockKind,
+        DisplayListStyle,
+        ProcessStepId,
+        ProcessDisplayBlockKind,
         SlotValueStatus,
         TraceVisibility,
+        parseDisplayBlockKind,
+        parseDisplayListStyle,
+        parseProcessStepId,
+        parseProcessDisplayBlockKind,
         parseSlotValueStatus,
         parseTraceVisibility;
 

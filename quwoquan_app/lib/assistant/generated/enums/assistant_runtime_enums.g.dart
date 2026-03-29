@@ -721,6 +721,166 @@ extension JourneyEntryKindX on JourneyEntryKind {
   }
 }
 
+enum ProcessStepId {
+  unknown,
+  understanding,
+  retrievalDesign,
+  retrievalProcessing,
+  answerOrganization,
+}
+
+ProcessStepId parseProcessStepId(String raw) {
+  switch (raw.trim()) {
+    case "understanding":
+      return ProcessStepId.understanding;
+    case "retrieval_design":
+      return ProcessStepId.retrievalDesign;
+    case "retrieval_processing":
+      return ProcessStepId.retrievalProcessing;
+    case "answer_organization":
+      return ProcessStepId.answerOrganization;
+    default:
+      return ProcessStepId.unknown;
+  }
+}
+
+extension ProcessStepIdX on ProcessStepId {
+  String get wireName {
+    switch (this) {
+      case ProcessStepId.unknown:
+        return "";
+      case ProcessStepId.understanding:
+        return "understanding";
+      case ProcessStepId.retrievalDesign:
+        return "retrieval_design";
+      case ProcessStepId.retrievalProcessing:
+        return "retrieval_processing";
+      case ProcessStepId.answerOrganization:
+        return "answer_organization";
+    }
+  }
+}
+
+enum DisplayBlockKind {
+  unknown,
+  markdown,
+  paragraph,
+  bulletList,
+  numberedList,
+  referenceList,
+  callout,
+}
+
+DisplayBlockKind parseDisplayBlockKind(String raw) {
+  switch (raw.trim()) {
+    case "markdown":
+      return DisplayBlockKind.markdown;
+    case "paragraph":
+      return DisplayBlockKind.paragraph;
+    case "bullet_list":
+      return DisplayBlockKind.bulletList;
+    case "numbered_list":
+      return DisplayBlockKind.numberedList;
+    case "reference_list":
+      return DisplayBlockKind.referenceList;
+    case "callout":
+      return DisplayBlockKind.callout;
+    default:
+      return DisplayBlockKind.unknown;
+  }
+}
+
+extension DisplayBlockKindX on DisplayBlockKind {
+  String get wireName {
+    switch (this) {
+      case DisplayBlockKind.unknown:
+        return "";
+      case DisplayBlockKind.markdown:
+        return "markdown";
+      case DisplayBlockKind.paragraph:
+        return "paragraph";
+      case DisplayBlockKind.bulletList:
+        return "bullet_list";
+      case DisplayBlockKind.numberedList:
+        return "numbered_list";
+      case DisplayBlockKind.referenceList:
+        return "reference_list";
+      case DisplayBlockKind.callout:
+        return "callout";
+    }
+  }
+}
+
+enum DisplayListStyle {
+  unknown,
+  plain,
+  bullet,
+  numbered,
+}
+
+DisplayListStyle parseDisplayListStyle(String raw) {
+  switch (raw.trim()) {
+    case "plain":
+      return DisplayListStyle.plain;
+    case "bullet":
+      return DisplayListStyle.bullet;
+    case "numbered":
+      return DisplayListStyle.numbered;
+    default:
+      return DisplayListStyle.unknown;
+  }
+}
+
+extension DisplayListStyleX on DisplayListStyle {
+  String get wireName {
+    switch (this) {
+      case DisplayListStyle.unknown:
+        return "";
+      case DisplayListStyle.plain:
+        return "plain";
+      case DisplayListStyle.bullet:
+        return "bullet";
+      case DisplayListStyle.numbered:
+        return "numbered";
+    }
+  }
+}
+
+enum ProcessDisplayBlockKind {
+  unknown,
+  summary,
+  points,
+  references,
+}
+
+ProcessDisplayBlockKind parseProcessDisplayBlockKind(String raw) {
+  switch (raw.trim()) {
+    case "summary":
+      return ProcessDisplayBlockKind.summary;
+    case "points":
+      return ProcessDisplayBlockKind.points;
+    case "references":
+      return ProcessDisplayBlockKind.references;
+    default:
+      return ProcessDisplayBlockKind.unknown;
+  }
+}
+
+extension ProcessDisplayBlockKindX on ProcessDisplayBlockKind {
+  String get wireName {
+    switch (this) {
+      case ProcessDisplayBlockKind.unknown:
+        return "";
+      case ProcessDisplayBlockKind.summary:
+        return "summary";
+      case ProcessDisplayBlockKind.points:
+        return "points";
+      case ProcessDisplayBlockKind.references:
+        return "references";
+    }
+  }
+}
+
 enum TraceVisibility {
   userVisible,
   system,

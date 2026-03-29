@@ -38,6 +38,17 @@ class AssistantJourneyProjector {
   }
 
   AssistantJourney consumeTrace(AssistantTraceEvent event) {
+    if (event.visibility == TraceVisibility.internal) {
+      return AssistantJourney(
+        stages: List<AssistantJourneyStage>.unmodifiable(_stages.values),
+        entries: List<AssistantJourneyEntry>.unmodifiable(_entries),
+        readiness: _readiness,
+      );
+    }
+    final syntheticUserEvent = _syntheticUserEventFromTrace(event);
+    if (syntheticUserEvent != null) {
+      return consumeUserEvent(syntheticUserEvent);
+    }
     final data = event.data ?? const <String, dynamic>{};
     final provenance = AssistantJourneyProvenance(
       phaseId: parsePlannerPhaseId(
@@ -64,10 +75,10 @@ class AssistantJourneyProjector {
           (data['phase'] as String?)?.trim() ?? '',
         );
         _activateStage(stageId);
-        final message = _sanitizeThinkingStreamText(
-          event.message,
-          stageHint: stageId.name,
-        );
+        if (data['extracted'] == true) {
+          break;
+        }
+        final message = _sanitizeThinkingStreamText(event.message);
         final isStreaming =
             data['streaming'] == true || data['extracted'] == true;
         final supportsProcessStreaming =
@@ -86,10 +97,7 @@ class AssistantJourneyProjector {
         break;
       case AssistantTraceEventType.searchQueryGenerated:
         _activateStage(JourneyStageId.search);
-        final detail = _searchQueryGeneratedDetail(
-          message: event.message,
-          data: data,
-        );
+        final detail = _searchQueryGeneratedDetail(data: data);
         if (detail.isNotEmpty) {
           _upsertNarrativeEntry(
             key:
@@ -398,6 +406,53 @@ class AssistantJourneyProjector {
         break;
     }
     return snapshot;
+  }
+
+  UserEvent? _syntheticUserEventFromTrace(AssistantTraceEvent event) {
+    final data = event.data ?? const <String, dynamic>{};
+    if (data['syntheticUserEvent'] != true) {
+      return null;
+    }
+    return UserEvent(
+      type: _syntheticUserEventType(
+        (data['userEventType'] as String?)?.trim() ?? '',
+      ),
+      scope: _syntheticUserEventScope(
+        (data['userEventScope'] as String?)?.trim() ?? '',
+      ),
+      message: event.message,
+      nodeId: (data['nodeId'] as String?)?.trim() ?? '',
+      runId: event.runId ?? '',
+      payload: data,
+    );
+  }
+
+  UserEventType _syntheticUserEventType(String raw) {
+    switch (raw) {
+      case 'process_replace':
+        return UserEventType.processReplace;
+      case 'process_append':
+        return UserEventType.processAppend;
+      case 'process_commit':
+        return UserEventType.processCommit;
+      case 'answer_delta':
+        return UserEventType.answerDelta;
+      default:
+        return UserEventType.unknown;
+    }
+  }
+
+  UserEventScope _syntheticUserEventScope(String raw) {
+    switch (raw) {
+      case 'root':
+        return UserEventScope.root;
+      case 'skill':
+        return UserEventScope.skill;
+      case 'aggregation':
+        return UserEventScope.aggregation;
+      default:
+        return UserEventScope.unknown;
+    }
   }
 
   AssistantJourney applyReadiness({
@@ -839,10 +894,15 @@ class AssistantJourneyProjector {
 
   JourneyStageId _stageFromPhaseHint(String phase) {
     final normalized = phase.trim().toLowerCase();
-    if (normalized.contains('answer')) return JourneyStageId.answer;
-    if (normalized.contains('search')) return JourneyStageId.search;
-    if (normalized.contains('verify')) return JourneyStageId.verify;
-    return JourneyStageId.analyze;
+    return switch (normalized) {
+      'answer' || 'answering' || 'synthesis' => JourneyStageId.answer,
+      'search' ||
+      'retrieval' ||
+      'retrieval_processing' ||
+      'retrieval_design' => JourneyStageId.search,
+      'verify' || 'verification' || 'evidence_digest' => JourneyStageId.verify,
+      _ => JourneyStageId.analyze,
+    };
   }
 
   JourneyStageId _stageForTool(String toolName) {
@@ -876,31 +936,16 @@ class AssistantJourneyProjector {
         '';
   }
 
-  String _searchQueryGeneratedDetail({
-    required String message,
-    required Map<String, dynamic> data,
-  }) {
-    final parts = <String>[];
+  String _searchQueryGeneratedDetail({required Map<String, dynamic> data}) {
     final queryTasks = _queryTasksFromData(data);
     if (queryTasks.isNotEmpty) {
-      parts.add(_queryTaskLeadLine(queryTasks));
-      parts.addAll(_formattedQueryTaskLines(queryTasks));
-    } else {
-      final narrative = _sanitizeJourneyText(message);
-      if (narrative.isNotEmpty && !_isLowSignalSearchPlanningMessage(narrative)) {
-        parts.add(narrative);
-      }
-      final query = (data['query'] as String?)?.trim() ?? '';
-      if (query.isNotEmpty) {
-        parts.add('- $query');
-      }
+      return _formattedQueryTaskLines(queryTasks).join('\n').trim();
     }
-    return parts.join('\n').trim();
-  }
-
-  bool _isLowSignalSearchPlanningMessage(String text) {
-    final normalized = text.trim();
-    return normalized == '生成检索计划';
+    final query = (data['query'] as String?)?.trim() ?? '';
+    if (query.isEmpty) {
+      return '';
+    }
+    return '- $query';
   }
 
   List<Map<String, dynamic>> _queryTasksFromData(Map<String, dynamic> data) {
@@ -912,13 +957,6 @@ class AssistantJourneyProjector {
         .whereType<Map>()
         .map((item) => item.cast<String, dynamic>())
         .toList(growable: false);
-  }
-
-  String _queryTaskLeadLine(List<Map<String, dynamic>> queryTasks) {
-    if (queryTasks.length >= 2) {
-      return '我会先把最影响结论的几路信息拆开核对：';
-    }
-    return '我先核对最影响结论的这一项：';
   }
 
   List<String> _formattedQueryTaskLines(List<Map<String, dynamic>> queryTasks) {
@@ -946,7 +984,8 @@ class AssistantJourneyProjector {
       if (displayLabel.isNotEmpty) displayLabel,
     ];
     final prefix = prefixParts.join('｜');
-    if (prefix.isEmpty || _normalizedCompact(prefix) == _normalizedCompact(query)) {
+    if (prefix.isEmpty ||
+        _normalizedCompact(prefix) == _normalizedCompact(query)) {
       return '- $query';
     }
     return '- $prefix';
@@ -973,7 +1012,8 @@ class AssistantJourneyProjector {
     Map<String, dynamic> task, {
     required String query,
   }) {
-    final anchors = (task['entityAnchors'] as List?)
+    final anchors =
+        (task['entityAnchors'] as List?)
             ?.whereType<String>()
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
@@ -984,14 +1024,16 @@ class AssistantJourneyProjector {
       return '';
     }
     final joined = anchors.join(' / ');
-    return _normalizedCompact(joined) == _normalizedCompact(query) ? '' : joined;
+    return _normalizedCompact(joined) == _normalizedCompact(query)
+        ? ''
+        : joined;
   }
 
   String _normalizedCompact(String raw) {
-    return raw
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\s:：|｜/、,，。！？!?._-]+'), '');
+    return raw.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s:：|｜/、,，。！？!?._-]+'),
+      '',
+    );
   }
 
   String _searchQueryPlanKey(Map<String, dynamic> data) {
@@ -1143,11 +1185,11 @@ class AssistantJourneyProjector {
     return text;
   }
 
-  String _sanitizeThinkingStreamText(String raw, {String stageHint = ''}) {
-    final text = AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(
-      raw,
-      stageHint: stageHint,
-    ).trim();
+  String _sanitizeThinkingStreamText(String raw) {
+    final text =
+        AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(
+          raw,
+        ).trim();
     if (text.isEmpty) return '';
     if (_looksLikeRomanizedQueryFragment(text)) return '';
     return text;

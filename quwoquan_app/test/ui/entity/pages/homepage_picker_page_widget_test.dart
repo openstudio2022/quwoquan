@@ -43,7 +43,7 @@ void main() {
     expect(find.byKey(TestKeys.homepagePickerClearSelectionTile), findsNothing);
   });
 
-  testWidgets('主页 picker 可清除当前关联并通过底部确认返回', (tester) async {
+  testWidgets('主页 picker 再次点击已选主页可取消关联并通过底部确认返回', (tester) async {
     await tester.pumpWidget(
       _buildApp(
         _HomepagePickerHarness(
@@ -56,12 +56,9 @@ void main() {
     await tester.tap(find.text('打开主页选择'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(TestKeys.homepagePickerClearSelectionTile),
-      findsOneWidget,
-    );
+    expect(find.byKey(TestKeys.homepagePickerClearSelectionTile), findsNothing);
 
-    await tester.tap(find.byKey(TestKeys.homepagePickerClearSelectionTile));
+    await tester.tap(find.text('西湖景区').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(TestKeys.homepagePickerConfirmButton));
     await tester.pumpAndSettle();

@@ -977,6 +977,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         fullscreenDialog: true,
         builder: (_) => _CreatePublishConfirmSheet(
           initialSettings: state.settings,
+          contentIdentity: CreateDraft(id: '', updatedAtMs: 0, state: state).identity,
           title: state.title.trim(),
           body: state.body.trim(),
           imageCount: state.imagePaths.length,
@@ -2653,6 +2654,7 @@ enum _CreateMediaOption { addImages, capture, video }
 class _CreatePublishConfirmSheet extends StatefulWidget {
   const _CreatePublishConfirmSheet({
     required this.initialSettings,
+    required this.contentIdentity,
     required this.title,
     required this.body,
     required this.imageCount,
@@ -2663,6 +2665,7 @@ class _CreatePublishConfirmSheet extends StatefulWidget {
   });
 
   final PublishSettings initialSettings;
+  final CreateContentIdentity contentIdentity;
   final String title;
   final String body;
   final int imageCount;
@@ -2798,13 +2801,23 @@ class _CreatePublishConfirmSheetState
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           _buildSettingRow(
             context: context,
-            title: '同步圈子',
+            title: UITextConstants.selectPublishCirclesLabel,
             value: !_settings.isPublic
                 ? '仅公开内容可选'
                 : _settings.circleNames.isEmpty
                 ? '未选圈子'
                 : _settings.circleNames.join('、'),
             onTap: _settings.isPublic ? _pickCircles : null,
+            borderRadius: BorderRadius.zero,
+          ),
+          const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+          _buildSettingRow(
+            context: context,
+            title: UITextConstants.circlePublishModeLabel,
+            value: widget.contentIdentity == CreateContentIdentity.work
+                ? UITextConstants.circlePublishModeWork
+                : UITextConstants.circlePublishModeMoment,
+            onTap: null,
             borderRadius: BorderRadius.vertical(
               bottom: Radius.circular(AppSpacing.radiusTwentyEight),
             ),
@@ -2955,22 +2968,23 @@ class _CreatePublishConfirmSheetState
     VoidCallback? onTap,
     BorderRadius borderRadius = BorderRadius.zero,
   }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return IosSelectionOptionTile(
       title: Text(
         title,
         style: TextStyle(
           color: AppColors.iosLabel(context),
-          fontSize: AppTypography.iosBody,
+          fontSize: AppTypography.iosCallout,
           fontWeight: AppTypography.normal,
         ),
       ),
       additionalInfo: value,
       additionalInfoTextStyle: TextStyle(
-        color: AppColors.iosAccent(context),
-        fontSize: AppTypography.iosBody,
+        color: SettingsSemanticConstants.createSettingItemValueColor(isDark),
+        fontSize: AppTypography.iosCallout,
         fontWeight: AppTypography.normal,
       ),
-      showChevron: true,
+      showChevron: onTap != null,
       onTap: onTap,
       backgroundColor: Colors.transparent,
       pressedColor: AppColors.iosSecondaryFill(context),

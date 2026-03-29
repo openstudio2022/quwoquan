@@ -485,16 +485,16 @@ class UITextConstants {
   static const String assistantRunningHint = '小趣正在规划与执行中...';
 
   /// v3 用户视角阶段：先帮用户理清问题
-  static const String assistantPhaseUnderstanding = '理解问题中';
+  static const String assistantPhaseUnderstanding = '理解问题';
 
   /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '检索处理中';
+  static const String assistantPhaseSearching = '结果处理';
 
   /// v3 用户视角阶段：替用户整理判断
-  static const String assistantPhaseAnalyzing = '检索处理中';
+  static const String assistantPhaseAnalyzing = '结果处理';
 
   /// v3 用户视角阶段：替用户组织最终回答
-  static const String assistantPhaseAnswering = '整理答案中';
+  static const String assistantPhaseAnswering = '整理答案';
 
   /// v3 用户视角阶段：确认当前信息是否已经够答
   static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
@@ -546,8 +546,10 @@ class UITextConstants {
   static const String assistantProcessStatusSkipped = '已跳过';
   static const String assistantProcessStatusFailed = '待补稳';
   static const String assistantProcessReferenceCountTemplate = '接纳 %s 篇资料';
+  static const String assistantProcessReferenceDigestTemplate =
+      '处理了 %s 篇，接纳了 %s 篇';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
-  static const String assistantProcessRunningSummary = '深度思考中';
+  static const String assistantProcessRunningSummary = '深度思考';
   static const String assistantProcessCompletedSummary = '已完成深度思考';
   static const String assistantProcessCompletedSummaryReferencesTemplate =
       '已完成深度思考，处理 %s 篇文档';
@@ -555,11 +557,13 @@ class UITextConstants {
       '已完成深度思考，耗时 %s 秒';
   static const String assistantProcessCompletedSummaryFullTemplate =
       '已完成深度思考，处理 %s 篇文档，耗时 %s 秒';
-  static const String assistantProcessStageUnderstand = '理解问题中';
-  static const String assistantProcessStageSearch = '检索处理中';
-  static const String assistantProcessStageAnalyze = '检索处理中';
-  static const String assistantProcessStageVerify = '交叉核对中';
-  static const String assistantProcessStageAnswer = '整理答案中';
+  static const String assistantProcessStageUnderstand = '理解问题';
+  static const String assistantProcessStageSearch = '理解问题';
+  static const String assistantProcessStageRetrievalDesign = '理解问题';
+  static const String assistantProcessStageRetrievalProcessing = '结果处理';
+  static const String assistantProcessStageAnalyze = '结果处理';
+  static const String assistantProcessStageVerify = '结果处理';
+  static const String assistantProcessStageAnswer = '整理答案';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
   static const String assistantProcessLongWaitReassurance = '正在深入处理，请稍候…';
@@ -683,13 +687,57 @@ class UITextConstants {
   static const String attachHomepageClear = '暂不关联主页';
   static const String attachHomepageClearHint = '移除当前关联，按普通公开内容发布';
   static const String attachHomepageSearchHint = '搜索景点、酒店、餐厅、车型';
-  static const String attachHomepageSuggest = '找不到？补充一个主页';
-  static const String attachHomepageEmpty = '没有找到匹配主页，试试补充一个新主页';
+  static const String attachHomepageSuggest = '找不到？添加一个主页';
+  static const String attachHomepageEmpty = '没有找到匹配主页，试试添加一个新主页';
   static const String attachHomepageUnavailable = '共享主页暂时不可用，请稍后重试';
+  static const String addHomepageTitle = '添加主页';
+  static const String addHomepageIntroTitle = '添加一个缺失主页';
+  static const String addHomepageIntroSubtitle =
+      '先选择主页类型，再补充最少必要信息。提交后会进入审核，审核通过后才会出现在搜索和关联中。';
+  static const String addHomepageTypeSectionTitle = '主页类型';
+  static const String addHomepageBasicInfoSectionTitle = '基础信息';
+  static const String addHomepageFutureTypeHint = '学校等组织型主页会在后续单独支持。';
+  static const String addHomepageNameLabel = '主页名称';
+  static const String addHomepageNamePlaceholder = '输入主页名称';
+  static const String addHomepageClueLabel = '补充说明';
+  static const String addHomepageCityLabel = '城市';
+  static const String addHomepageCityPlaceholder = '输入城市';
+  static const String addHomepageAddressLabel = '地址';
+  static const String addHomepageAddressPlaceholder = '输入地址';
+  static const String addHomepageVehicleManufacturerLabel = '厂商';
+  static const String addHomepageVehicleManufacturerPlaceholder = '例如 丰田';
+  static const String addHomepageVehicleSeriesLabel = '车系 / 型号';
+  static const String addHomepageVehicleSeriesPlaceholder = '例如 RAV4';
+  static const String addHomepageVehicleTrimLabel = '版本补充';
+  static const String addHomepageVehicleTrimPlaceholder = '例如 双擎四驱';
+  static const String addHomepageVehicleHint = '车型主页按厂商 + 车系创建，版本信息可作为补充说明提交。';
+  static const String addHomepageSubmit = '提交添加';
+  static const String addHomepageSubmitted = '已提交添加，等待审核';
+  static const String addHomepageSubmitFailed = '提交失败，请稍后重试';
+  static const String addHomepageNameRequired = '请先填写主页名称';
+  static const String addHomepageVehicleRequired = '请补充厂商和车系 / 型号';
+  static const String homepageTypeSight = '景点';
+  static const String homepageTypeSightHint = '景区、公园、展馆';
+  static const String homepageTypeHotel = '酒店';
+  static const String homepageTypeHotelHint = '酒店、民宿、度假住处';
+  static const String homepageTypeRestaurant = '餐厅';
+  static const String homepageTypeRestaurantHint = '正餐、小馆、咖啡酒馆';
+  static const String homepageTypeVehicle = '车型';
+  static const String homepageTypeVehicleHint = '车型、车系、版本';
+  static const String addHomepageSightCluePlaceholder = '例如 景区入口或游玩亮点';
+  static const String addHomepageHotelCluePlaceholder = '例如 房型特色或所在片区';
+  static const String addHomepageRestaurantCluePlaceholder = '例如 菜系或招牌菜';
+  static const String addHomepageVehicleCluePlaceholder = '例如 动力形式或主要卖点';
+  static const String unsavedChangesTitle = '放弃本次修改？';
+  static const String unsavedChangesMessage = '未提交的内容会丢失。';
+  static const String continueEditing = '继续编辑';
   static const String circleWorksCountSuffix = '件作品';
 
   /// 创作页圈子入口/空态；国际化请用 l10n.selectPublishCirclesLabel / l10n.noCirclesAvailable
-  static const String selectPublishCirclesLabel = '发布的圈子';
+  static const String selectPublishCirclesLabel = '发布到圈子';
+  static const String circlePublishModeLabel = '圈子内形式';
+  static const String circlePublishModeMoment = '点滴';
+  static const String circlePublishModeWork = '作品';
   static const String noCirclesAvailable = '加入圈子，发现同好';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
@@ -870,6 +918,9 @@ class UITextConstants {
   static const String saveDraftConfirm = '保存草稿？';
   static const String saveDraftHint = '如果不保存，当前编辑的内容将会丢失。';
   static const String discardAndExit = '放弃并退出';
+
+  static String attachHomepageSuggestWithQuery(String query) =>
+      '添加“$query”这个主页';
   static const String saveAndExit = '保存并退出';
   static const String draftCount = '草稿箱';
   static const String draftMoment = '点滴草稿';

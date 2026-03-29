@@ -1,6 +1,6 @@
 {
   "templateId": "stack.persona",
-  "version": "2026.03.05",
+  "version": "2026.03.27",
   "stage": "global",
   "domainId": "global",
   "requiredVariables": ["skillPersona"],

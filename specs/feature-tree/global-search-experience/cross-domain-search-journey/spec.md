@@ -16,6 +16,7 @@
 3. “联系人/聊天记录/用户关系”边界在产品和领域层不一致。
 4. `群组` 已成为首页与搜索中的统一用户词，但网络结果页仍停留在“圈子频道”提法，造成入口与结果面认知不一致。
 5. 小趣搜、最近搜索与站内搜索是分散设计，未形成统一用户旅程。
+6. 聊天对象、本地搜索、群组 fallback 与云侧搜索拓扑缺少统一治理，导致体验与架构容易分叉。
 
 ## 目标用户
 
@@ -41,7 +42,7 @@
 |---|---|---|
 | `full-screen-search-shell-and-entry` | 初始历史页、实时联想页、统一入口、默认上下文、返回路径 | `global-search-experience` |
 | `multi-domain-result-composition` | 联想分段与独立网络结果页编排 | `global-search-experience` |
-| `social-relationship-search-contract` | “联系人”可行动对象边界与会话直达契约 | `messages` 主导，`user` 补充身份信息 |
+| `local-chat-search-contract` | 本地联系人 / 会话 / 消息搜索对象边界、账号隔离与会话直达契约 | `messages` 主导，`global-search-experience` 消费 |
 | `circle-facet-search-and-filter` | 网络结果页群组分类 facet 与内容过滤 | `circle` 主导，`global-search-experience` 消费 |
 | `recent-search-sync-and-voice-asr` | 最近搜索、本地+云同步、历史管理态、语音转词 | `global-search-experience` |
 | `xiaoqu-entry-handoff` | `小趣搜` assistant 结果 tab 与后续 assistant continuation | `assistant` 主导，`global-search-experience` 消费 |
@@ -74,6 +75,8 @@
 - 最近搜索由用户手动清除前持续保留；自动过期时间后续统一治理。
 - `小趣搜` 必须提供真实 assistant 搜索结果，不能只保留占位 handoff。
 - 发布策略为一把上线，不做双轨兼容；但需要整体回滚口径。
+- 本 Journey 统一消费 `search(request)` canonical contract，不再向页面暴露分域搜索方法名。
+- `chat.contact / chat.conversation / chat.message` 由端侧本地搜索 provider 承担；`circle.group` 在旅程内允许云优先、本地 fallback。
 
 ## 对标输入与吸收结论
 
@@ -89,17 +92,18 @@
 |---|---|
 | `global-search-experience` | Journey 壳层、联想编排、网络结果页、历史、语音 |
 | `content` | 内容对象与内容详情跳转契约 |
-| `messages` | 联系人/聊天记录与会话直达契约 |
-| `user` | 联系人身份信息补充与后续扩展真相源 |
+| `messages` | 本地联系人/会话/消息搜索对象与会话直达契约 |
+| `user` | 当前不作为搜索 Journey 中“人”的主搜索对象，仅保留身份补充与后续扩展真相源 |
 | `circle` | 群组结果与群组分类 facet 投影 |
 | `assistant` | `小趣搜` assistant 结果、引用与后续会话接续 |
+| `search-provider-routing-and-storage-topology` | 提供 canonical contract、execution mode 与 fallback 策略真相源 |
 
 ## 既有 Story 覆盖矩阵
 
 | 历史节点 / 原型 | 当前状态 | Journey 内新归属 |
 |---|---|---|
-| `contact-search-index` | 删除历史节点 | `social-relationship-search-contract` |
-| `search-query-contract` | 删除历史节点 | `social-relationship-search-contract` |
+| `contact-search-index` | 删除历史节点 | `local-chat-search-contract` |
+| `search-query-contract` | 删除历史节点 | `local-chat-search-contract` |
 | `GlobalSearchSheet` 原型 | 作为旧实现待替换 | `full-screen-search-shell-and-entry` |
 
 ## 数据生命周期合同

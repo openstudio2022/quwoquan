@@ -141,7 +141,7 @@ class AppTheme {
         titleTextStyle: textTheme.titleMedium?.copyWith(
           color: palette.foregroundPrimary,
           fontSize: AppTypography.iosNavTitle,
-          fontWeight: AppTypography.semiBold,
+          fontWeight: AppTypography.medium,
         ),
         systemOverlayStyle: systemUiOverlayStyleFor(brightness),
       ),
@@ -172,13 +172,13 @@ class AppTheme {
             fontWeight: AppTypography.semiBold,
           ),
           navActionTextStyle: textTheme.bodyLarge?.copyWith(
-            color: primaryAccent,
+            color: palette.foregroundPrimary,
             fontSize: AppTypography.iosButton,
-            fontWeight: AppTypography.semiBold,
+            fontWeight: AppTypography.medium,
           ),
           navTitleTextStyle: textTheme.titleLarge?.copyWith(
             fontSize: AppTypography.iosNavTitle,
-            fontWeight: AppTypography.semiBold,
+            fontWeight: AppTypography.medium,
           ),
           navLargeTitleTextStyle: textTheme.headlineMedium?.copyWith(
             fontSize: AppTypography.iosLargeTitle,

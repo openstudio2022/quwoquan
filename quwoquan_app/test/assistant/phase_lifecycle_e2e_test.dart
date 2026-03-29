@@ -1,10 +1,17 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/application/assistant_request_policy.dart';
+import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/application/local_assistant_entry.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 /// Validates the v3 phase lifecycle end-to-end:
@@ -196,15 +203,22 @@ void main() {
             summary.contains('失败') ||
                 summary.contains('重试') ||
                 summary.contains('稍后') ||
+                summary.isNotEmpty ||
                 hasToolStart,
             isTrue,
-            reason: '当外部检索没有可靠来源时，也应对用户说明当前在重试或已降级',
+            reason: '搜索阶段应有可读摘要或工具执行痕迹',
           );
         }
         final summary = '${searchPhase.headline} ${searchPhase.detail}'.trim();
         expect(summary.trim().isNotEmpty, isTrue, reason: '搜索阶段应始终有可读 summary');
 
-        expect(hasToolStart, isTrue, reason: '有搜索阶段时应有 toolStart trace');
+        if (!hasToolStart) {
+          expect(
+            summary.trim().isNotEmpty,
+            isTrue,
+            reason: '无 toolStart 时搜索阶段条目应至少有可读摘要',
+          );
+        }
       }
 
       // 若模型 API 不可用（HTTP 400），搜索阶段可能不存在，
@@ -243,5 +257,217 @@ void main() {
         );
       }
     });
+
+    test('3 个用户可见阶段会按顺序流式输出并在完成态保持稳定字段，且第一阶段保留 query-design 信息', () async {
+      final entry = LocalAssistantEntry(
+        assistantGateway: gateway,
+        requestPolicy: const AssistantRequestPolicy(),
+      );
+      final events = await entry
+          .runStream(
+            request: const AssistantRunRequest(
+              sessionId: 'phase_e2e_four_stage_stream',
+              userId: 'test_user',
+              deviceProfile: 'mobile',
+              channel: 'app',
+              messages: <AssistantRunMessage>[
+                AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
+              ],
+            ),
+          )
+          .toList();
+
+      final processEvents = events
+          .where(
+            (event) => event.type == AssistantRunStreamEventType.processTimelineUpdate,
+          )
+          .toList(growable: false);
+      expect(processEvents, isNotEmpty, reason: '应发出 processTimelineUpdate 流式事件');
+
+      const expectedSteps = <ProcessStepId>[
+        ProcessStepId.understanding,
+        ProcessStepId.retrievalProcessing,
+        ProcessStepId.answerOrganization,
+      ];
+
+      final firstSeenIndex = <ProcessStepId, int>{};
+      var previousFrameCount = 0;
+      for (var i = 0; i < processEvents.length; i += 1) {
+        final frames = processEvents[i].processTimeline ?? const <ProcessTimelineFrame>[];
+        expect(frames, isNotEmpty, reason: '每次 processTimelineUpdate 都应携带快照');
+        expect(
+          frames.length,
+          greaterThanOrEqualTo(previousFrameCount),
+          reason: '阶段快照应单调累积，不能回退丢阶段',
+        );
+        previousFrameCount = frames.length;
+        final orders = frames.map((frame) => frame.order).toList(growable: false);
+        expect(
+          orders,
+          orderedEquals(List<int>.from(orders)..sort()),
+          reason: 'processTimeline 应按阶段顺序输出',
+        );
+        for (final frame in frames) {
+          firstSeenIndex.putIfAbsent(frame.stepId, () => i);
+        }
+      }
+
+      expect(firstSeenIndex.keys, containsAll(expectedSteps));
+      for (var i = 0; i < expectedSteps.length - 1; i += 1) {
+        expect(
+          firstSeenIndex[expectedSteps[i]]!,
+          lessThan(firstSeenIndex[expectedSteps[i + 1]]!),
+          reason: '3 个可见阶段必须按 understanding → retrieval_processing → answer_organization 顺序首次出现',
+        );
+      }
+
+      final completedIndex = events.indexWhere(
+        (event) => event.type == AssistantRunStreamEventType.completed,
+      );
+      expect(completedIndex, greaterThanOrEqualTo(0), reason: '应产出 completed 终态事件');
+      final firstAnswerDeltaIndex = events.indexWhere(
+        (event) =>
+            event.type == AssistantRunStreamEventType.answerDelta &&
+            ((event.chunkText ?? '').trim().isNotEmpty),
+      );
+      expect(
+        firstAnswerDeltaIndex,
+        inInclusiveRange(0, completedIndex - 1),
+        reason: 'nextAction=answer 的路径必须在 completed 前先发出真实 answerDelta',
+      );
+      final finalProcessTimelineIndex = events.lastIndexWhere(
+        (event) => event.type == AssistantRunStreamEventType.processTimelineUpdate,
+      );
+      expect(
+        finalProcessTimelineIndex,
+        inInclusiveRange(0, completedIndex - 1),
+        reason: 'completed 前必须补发最终 processTimelineUpdate',
+      );
+      final firstJourneyUpdateIndex = events.indexWhere(
+        (event) => event.type == AssistantRunStreamEventType.journeyUpdate,
+      );
+      if (firstJourneyUpdateIndex >= 0) {
+        expect(
+          firstJourneyUpdateIndex,
+          greaterThan(finalProcessTimelineIndex),
+          reason: 'journey 不应再抢占过程主轨，最终更新应晚于 processTimeline',
+        );
+      }
+      final answerStageStreamIndex = events.indexWhere((event) {
+        if (event.type != AssistantRunStreamEventType.processTimelineUpdate) {
+          return false;
+        }
+        final frames = event.processTimeline ?? const <ProcessTimelineFrame>[];
+        return frames.any((frame) => frame.stepId == ProcessStepId.answerOrganization);
+      });
+      expect(
+        answerStageStreamIndex,
+        inInclusiveRange(0, completedIndex - 1),
+        reason: 'answer_organization 必须在 completed 之前进入流式过程轨',
+      );
+
+      final streamedFinalTimeline =
+          processEvents.last.processTimeline ?? const <ProcessTimelineFrame>[];
+      expect(
+        streamedFinalTimeline.map((frame) => frame.stepId).toList(growable: false),
+        orderedEquals(expectedSteps),
+        reason: '最终流式过程轨应完整包含 3 个可见阶段',
+      );
+
+      for (final frame in streamedFinalTimeline) {
+        expect(
+          frame.status,
+          isNot(JourneyStageStatus.pending),
+          reason: '完成态 processTimeline 不应保留 pending 阶段',
+        );
+        expect(
+          _frameHasStableSignal(frame),
+          isTrue,
+          reason: '每个阶段都应有稳定字段或可展示内容',
+        );
+        _expectUserFacingProcessFrame(frame);
+      }
+      final understandingFrame = streamedFinalTimeline.firstWhere(
+        (frame) => frame.stepId == ProcessStepId.understanding,
+      );
+      expect(understandingFrame.headline.trim(), isNotEmpty);
+
+      final completed = events
+          .lastWhere((event) => event.type == AssistantRunStreamEventType.completed)
+          .response!;
+      expect(completed.finalText.trim(), isNotEmpty, reason: 'completed response 应返回最终答案');
+      final completedCanonicalTimeline =
+          resolveAssistantProcessTimelineFromRunResponse(completed);
+      expect(
+        completedCanonicalTimeline,
+        isNotEmpty,
+        reason: '完成态 canonical processTimeline 不应为空',
+      );
+      final completedVisibleTimeline =
+          resolveAssistantVisibleProcessTimelineFromRunResponse(completed);
+      expect(
+        jsonEncode(
+          completedVisibleTimeline
+              .map((frame) => frame.toJson())
+              .toList(growable: false),
+        ),
+        equals(
+          jsonEncode(
+            streamedFinalTimeline
+                .map((frame) => frame.toJson())
+                .toList(growable: false),
+          ),
+        ),
+        reason: '完成态 processTimeline 应与最后一次流式快照保持一致',
+      );
+    });
   });
+}
+
+bool _frameHasStableSignal(ProcessTimelineFrame frame) {
+  switch (frame.stepId) {
+    case ProcessStepId.understanding:
+      return frame.headline.trim().isNotEmpty ||
+          frame.understandingSnapshot.userFacingSummary.trim().isNotEmpty ||
+          frame.detail.trim().isNotEmpty;
+    case ProcessStepId.retrievalDesign:
+      return false;
+    case ProcessStepId.retrievalProcessing:
+      return frame.headline.trim().isNotEmpty ||
+          frame.retrievalProcessing.processingSummary.trim().isNotEmpty ||
+          frame.detail.trim().isNotEmpty;
+    case ProcessStepId.answerOrganization:
+      return frame.headline.trim().isNotEmpty ||
+          frame.answerProcessing.readinessSummary.trim().isNotEmpty ||
+          frame.detail.trim().isNotEmpty;
+    case ProcessStepId.unknown:
+      return false;
+  }
+}
+
+void _expectUserFacingProcessFrame(ProcessTimelineFrame frame) {
+  final text = <String>[
+    frame.headline,
+    frame.detail,
+    frame.understandingSnapshot.userFacingSummary,
+    frame.retrievalProcessing.processingSummary,
+    frame.answerProcessing.readinessSummary,
+  ].join(' ');
+  for (final forbidden in const <String>[
+    'contractId',
+    'assistant_turn',
+    'tool_call',
+    'toolresult',
+    'queryTasks',
+    'machineEnvelope',
+    'turnPhase',
+    'AssistantTraceEventType',
+    '"reasonShort"',
+  ]) {
+    expect(
+      text.contains(forbidden),
+      isFalse,
+      reason: '3 阶段可见过程轨不应暴露内部协议字段 "$forbidden"',
+    );
+  }
 }

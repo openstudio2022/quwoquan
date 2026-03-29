@@ -12,12 +12,14 @@ class AssistantAnswerContent extends StatelessWidget {
     required this.message,
     required this.content,
     required this.textColor,
+    this.answerBlocks = const <AssistantAnswerDisplayBlock>[],
     this.onReferenceTap,
   });
 
   final Map<String, dynamic> message;
   final String content;
   final Color textColor;
+  final List<AssistantAnswerDisplayBlock> answerBlocks;
   final void Function(Map<String, dynamic> reference)? onReferenceTap;
 
   static final RegExp _referenceBlockPattern = RegExp(
@@ -35,7 +37,10 @@ class AssistantAnswerContent extends StatelessWidget {
     final cleaned = content
         .replaceFirst(_referenceBlockPattern, '')
         .trimRight();
-    if (cleaned.isEmpty && references.isEmpty) {
+    final visibleBlocks = answerBlocks
+        .where(_hasVisibleAnswerBlock)
+        .toList(growable: false);
+    if (cleaned.isEmpty && visibleBlocks.isEmpty && references.isEmpty) {
       return const SizedBox.shrink();
     }
     final textStyle = TextStyle(
@@ -108,19 +113,63 @@ class AssistantAnswerContent extends StatelessWidget {
       tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
       tableBody: textStyle,
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ..._buildMarkdownSegments(
-          context: context,
-          cleaned: cleaned,
-          mdStyle: mdStyle,
-          textStyle: textStyle,
-          linkColor: linkColor,
-          references: references,
-        ),
-      ],
-    );
+    final children = visibleBlocks.isNotEmpty
+        ? _buildTypedBlocks(
+            context: context,
+            blocks: visibleBlocks,
+            mdStyle: mdStyle,
+            textStyle: textStyle,
+            linkColor: linkColor,
+            references: references,
+          )
+        : _buildMarkdownSegments(
+            context: context,
+            cleaned: cleaned,
+            mdStyle: mdStyle,
+            textStyle: textStyle,
+            linkColor: linkColor,
+            references: references,
+          );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  }
+
+  List<Widget> _buildTypedBlocks({
+    required BuildContext context,
+    required List<AssistantAnswerDisplayBlock> blocks,
+    required MarkdownStyleSheet mdStyle,
+    required TextStyle textStyle,
+    required Color linkColor,
+    required List<_AssistantReferenceItem> references,
+  }) {
+    return blocks.map((block) {
+      switch (block.kind) {
+        case DisplayBlockKind.markdown:
+          return _safeMarkdownBody(
+            markdownText: block.body.trim(),
+            styleSheet: mdStyle,
+            textStyle: textStyle,
+            references: references,
+            linkColor: linkColor,
+          );
+        case DisplayBlockKind.bulletList:
+        case DisplayBlockKind.numberedList:
+        case DisplayBlockKind.referenceList:
+          return _buildListBlock(
+            block: block,
+            textStyle: textStyle,
+            textColor: textColor,
+          );
+        case DisplayBlockKind.callout:
+          return _buildCalloutBlock(
+            block: block,
+            textStyle: textStyle,
+            linkColor: linkColor,
+          );
+        case DisplayBlockKind.paragraph:
+        case DisplayBlockKind.unknown:
+          return _buildParagraphBlock(block: block, textStyle: textStyle);
+      }
+    }).toList(growable: false);
   }
 
   List<Widget> _buildMarkdownSegments({
@@ -163,6 +212,128 @@ class AssistantAnswerContent extends StatelessWidget {
           );
         })
         .toList(growable: false);
+  }
+
+  Widget _buildParagraphBlock({
+    required AssistantAnswerDisplayBlock block,
+    required TextStyle textStyle,
+  }) {
+    final title = block.title.trim();
+    final body = block.body.trim();
+    final children = <Widget>[
+      if (title.isNotEmpty)
+        Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.one),
+          child: SelectableText(
+            title,
+            style: textStyle.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      if (body.isNotEmpty)
+        Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+          child: SelectableText(body, style: textStyle),
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  Widget _buildListBlock({
+    required AssistantAnswerDisplayBlock block,
+    required TextStyle textStyle,
+    required Color textColor,
+  }) {
+    final title = block.title.trim();
+    final items = block.items
+        .map(_displayItemText)
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    final useNumbers =
+        block.kind == DisplayBlockKind.numberedList ||
+        block.listStyle == DisplayListStyle.numbered;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.one),
+              child: SelectableText(
+                title,
+                style: textStyle.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          if (block.body.trim().isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.one),
+              child: SelectableText(block.body.trim(), style: textStyle),
+            ),
+          ...items.asMap().entries.map((entry) {
+            final marker = useNumbers ? '${entry.key + 1}.' : '•';
+            return Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.one),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: AppSpacing.lg,
+                    child: Text(
+                      marker,
+                      style: textStyle.copyWith(color: textColor),
+                    ),
+                  ),
+                  Expanded(
+                    child: SelectableText(entry.value, style: textStyle),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalloutBlock({
+    required AssistantAnswerDisplayBlock block,
+    required TextStyle textStyle,
+    required Color linkColor,
+  }) {
+    final title = block.title.trim();
+    final body = block.body.trim();
+    return Container(
+      margin: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      decoration: BoxDecoration(
+        color: linkColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(color: linkColor.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.one),
+              child: SelectableText(
+                title,
+                style: textStyle.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          if (body.isNotEmpty) SelectableText(body, style: textStyle),
+        ],
+      ),
+    );
   }
 
   Widget _safeMarkdownBody({
@@ -510,6 +681,23 @@ class _AssistantReferenceItem {
       'label': label,
     };
   }
+}
+
+bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
+  return block.title.trim().isNotEmpty ||
+      block.body.trim().isNotEmpty ||
+      block.items.any(
+        (item) => item.title.trim().isNotEmpty || item.body.trim().isNotEmpty,
+      );
+}
+
+String _displayItemText(AssistantDisplayItem item) {
+  final title = item.title.trim();
+  final body = item.body.trim();
+  if (title.isNotEmpty && body.isNotEmpty) {
+    return '$title：$body';
+  }
+  return title.isNotEmpty ? title : body;
 }
 
 class _MarkdownSegment {

@@ -5,6 +5,80 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
+class AssistantAnswerDisplayBlock {
+  const AssistantAnswerDisplayBlock({
+    required this.blockId,
+    this.kind = DisplayBlockKind.unknown,
+    this.listStyle = DisplayListStyle.plain,
+    this.title = "",
+    this.body = "",
+    this.items = const <AssistantDisplayItem>[],
+  });
+
+  final String blockId;
+  final DisplayBlockKind kind;
+  final DisplayListStyle listStyle;
+  final String title;
+  final String body;
+  final List<AssistantDisplayItem> items;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'blockId': blockId,
+        'kind': kind.wireName,
+        'listStyle': listStyle.wireName,
+        'title': title,
+        'body': body,
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory AssistantAnswerDisplayBlock.fromJson(Map<String, dynamic> json) {
+    return AssistantAnswerDisplayBlock(
+      blockId: (json['blockId'] as String?)?.trim() ?? "",
+      kind: parseDisplayBlockKind((json['kind'] as String?)?.trim() ?? ""),
+      listStyle: parseDisplayListStyle((json['listStyle'] as String?)?.trim() ?? "plain"),
+      title: (json['title'] as String?)?.trim() ?? "",
+      body: (json['body'] as String?)?.trim() ?? "",
+      items: (json['items'] as List?)?.whereType<Map>().map((item) => AssistantDisplayItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantDisplayItem>[],
+    );
+  }
+}
+
+class AssistantAnswerDisplayBlockFields {
+  static const String blockId = 'blockId';
+  static const String kind = 'kind';
+  static const String listStyle = 'listStyle';
+  static const String title = 'title';
+  static const String body = 'body';
+  static const String items = 'items';
+}
+
+class AssistantAnswerDisplayState {
+  const AssistantAnswerDisplayState({
+    this.summary = "",
+    this.blocks = const <AssistantAnswerDisplayBlock>[],
+  });
+
+  final String summary;
+  final List<AssistantAnswerDisplayBlock> blocks;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'summary': summary,
+        'blocks': blocks.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory AssistantAnswerDisplayState.fromJson(Map<String, dynamic> json) {
+    return AssistantAnswerDisplayState(
+      summary: (json['summary'] as String?)?.trim() ?? "",
+      blocks: (json['blocks'] as List?)?.whereType<Map>().map((item) => AssistantAnswerDisplayBlock.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantAnswerDisplayBlock>[],
+    );
+  }
+}
+
+class AssistantAnswerDisplayStateFields {
+  static const String summary = 'summary';
+  static const String blocks = 'blocks';
+}
+
 class AnswerEvidenceBinding {
   const AnswerEvidenceBinding({
     required this.bindingId,
@@ -104,6 +178,78 @@ class RunArtifactsAnswerProcessingFields {
   static const String keyFacts = 'keyFacts';
   static const String missingDimensions = 'missingDimensions';
   static const String retrieveMoreReason = 'retrieveMoreReason';
+}
+
+class AssistantDisplayItem {
+  const AssistantDisplayItem({
+    required this.itemId,
+    this.title = "",
+    this.body = "",
+    this.referenceIds = const <String>[],
+  });
+
+  final String itemId;
+  final String title;
+  final String body;
+  final List<String> referenceIds;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'itemId': itemId,
+        'title': title,
+        'body': body,
+        'referenceIds': referenceIds,
+      };
+
+  factory AssistantDisplayItem.fromJson(Map<String, dynamic> json) {
+    return AssistantDisplayItem(
+      itemId: (json['itemId'] as String?)?.trim() ?? "",
+      title: (json['title'] as String?)?.trim() ?? "",
+      body: (json['body'] as String?)?.trim() ?? "",
+      referenceIds: _assistantStringList(json['referenceIds']),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class AssistantDisplayItemFields {
+  static const String itemId = 'itemId';
+  static const String title = 'title';
+  static const String body = 'body';
+  static const String referenceIds = 'referenceIds';
+}
+
+class AssistantDisplayState {
+  const AssistantDisplayState({
+    this.process = const AssistantProcessDisplayState(),
+    this.answer = const AssistantAnswerDisplayState(),
+  });
+
+  final AssistantProcessDisplayState process;
+  final AssistantAnswerDisplayState answer;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'process': process.toJson(),
+        'answer': answer.toJson(),
+      };
+
+  factory AssistantDisplayState.fromJson(Map<String, dynamic> json) {
+    return AssistantDisplayState(
+      process: json['process'] is Map ? AssistantProcessDisplayState.fromJson((json['process'] as Map).cast<String, dynamic>()) : const AssistantProcessDisplayState(),
+      answer: json['answer'] is Map ? AssistantAnswerDisplayState.fromJson((json['answer'] as Map).cast<String, dynamic>()) : const AssistantAnswerDisplayState(),
+    );
+  }
+
+}
+
+class AssistantDisplayStateFields {
+  static const String process = 'process';
+  static const String answer = 'answer';
 }
 
 class EvidenceLedgerEntry {
@@ -304,11 +450,174 @@ class DomainPolicyBundleFields {
   static const String narrativePolicy = 'narrativePolicy';
 }
 
+class AssistantProcessDisplayBlock {
+  const AssistantProcessDisplayBlock({
+    required this.blockId,
+    this.stepId = ProcessStepId.unknown,
+    this.status = JourneyStageStatus.pending,
+    this.kind = ProcessDisplayBlockKind.unknown,
+    this.title = "",
+    this.body = "",
+    this.items = const <AssistantDisplayItem>[],
+    this.references = const <RetrievalProcessingReference>[],
+  });
+
+  final String blockId;
+  final ProcessStepId stepId;
+  final JourneyStageStatus status;
+  final ProcessDisplayBlockKind kind;
+  final String title;
+  final String body;
+  final List<AssistantDisplayItem> items;
+  final List<RetrievalProcessingReference> references;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'blockId': blockId,
+        'stepId': stepId.wireName,
+        'status': status.wireName,
+        'kind': kind.wireName,
+        'title': title,
+        'body': body,
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+        'references': references.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory AssistantProcessDisplayBlock.fromJson(Map<String, dynamic> json) {
+    return AssistantProcessDisplayBlock(
+      blockId: (json['blockId'] as String?)?.trim() ?? "",
+      stepId: parseProcessStepId((json['stepId'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "pending"),
+      kind: parseProcessDisplayBlockKind((json['kind'] as String?)?.trim() ?? ""),
+      title: (json['title'] as String?)?.trim() ?? "",
+      body: (json['body'] as String?)?.trim() ?? "",
+      items: (json['items'] as List?)?.whereType<Map>().map((item) => AssistantDisplayItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantDisplayItem>[],
+      references: (json['references'] as List?)?.whereType<Map>().map((item) => RetrievalProcessingReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RetrievalProcessingReference>[],
+    );
+  }
+}
+
+class AssistantProcessDisplayBlockFields {
+  static const String blockId = 'blockId';
+  static const String stepId = 'stepId';
+  static const String status = 'status';
+  static const String kind = 'kind';
+  static const String title = 'title';
+  static const String body = 'body';
+  static const String items = 'items';
+  static const String references = 'references';
+}
+
+class AssistantProcessDisplayState {
+  const AssistantProcessDisplayState({
+    this.activeStepId = ProcessStepId.unknown,
+    this.summary = "",
+    this.blocks = const <AssistantProcessDisplayBlock>[],
+    this.finalAnswerReady = false,
+  });
+
+  final ProcessStepId activeStepId;
+  final String summary;
+  final List<AssistantProcessDisplayBlock> blocks;
+  final bool finalAnswerReady;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'activeStepId': activeStepId.wireName,
+        'summary': summary,
+        'blocks': blocks.map((item) => item.toJson()).toList(growable: false),
+        'finalAnswerReady': finalAnswerReady,
+      };
+
+  factory AssistantProcessDisplayState.fromJson(Map<String, dynamic> json) {
+    return AssistantProcessDisplayState(
+      activeStepId: parseProcessStepId((json['activeStepId'] as String?)?.trim() ?? ""),
+      summary: (json['summary'] as String?)?.trim() ?? "",
+      blocks: (json['blocks'] as List?)?.whereType<Map>().map((item) => AssistantProcessDisplayBlock.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantProcessDisplayBlock>[],
+      finalAnswerReady: json['finalAnswerReady'] == true,
+    );
+  }
+}
+
+class AssistantProcessDisplayStateFields {
+  static const String activeStepId = 'activeStepId';
+  static const String summary = 'summary';
+  static const String blocks = 'blocks';
+  static const String finalAnswerReady = 'finalAnswerReady';
+}
+
+class ProcessTimelineFrame {
+  const ProcessTimelineFrame({
+    required this.frameId,
+    this.stepId = ProcessStepId.unknown,
+    this.status = JourneyStageStatus.pending,
+    this.order = 0,
+    this.headline = "",
+    this.detail = "",
+    this.references = const <RetrievalProcessingReference>[],
+    this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
+    this.retrievalProcessing = const RetrievalProcessingSnapshot(),
+    this.answerProcessing = const RunArtifactsAnswerProcessing(),
+  });
+
+  final String frameId;
+  final ProcessStepId stepId;
+  final JourneyStageStatus status;
+  final int order;
+  final String headline;
+  final String detail;
+  final List<RetrievalProcessingReference> references;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
+  final RetrievalProcessingSnapshot retrievalProcessing;
+  final RunArtifactsAnswerProcessing answerProcessing;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'frameId': frameId,
+        'stepId': stepId.wireName,
+        'status': status.wireName,
+        'order': order,
+        'headline': headline,
+        'detail': detail,
+        'references': references.map((item) => item.toJson()).toList(growable: false),
+        'understandingSnapshot': understandingSnapshot.toJson(),
+        'retrievalProcessing': retrievalProcessing.toJson(),
+        'answerProcessing': answerProcessing.toJson(),
+      };
+
+  factory ProcessTimelineFrame.fromJson(Map<String, dynamic> json) {
+    return ProcessTimelineFrame(
+      frameId: (json['frameId'] as String?)?.trim() ?? "",
+      stepId: parseProcessStepId((json['stepId'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "pending"),
+      order: (json['order'] as num?)?.toInt() ?? 0,
+      headline: (json['headline'] as String?)?.trim() ?? "",
+      detail: (json['detail'] as String?)?.trim() ?? "",
+      references: (json['references'] as List?)?.whereType<Map>().map((item) => RetrievalProcessingReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RetrievalProcessingReference>[],
+      understandingSnapshot: json['understandingSnapshot'] is Map ? RunArtifactsUnderstandingSnapshot.fromJson((json['understandingSnapshot'] as Map).cast<String, dynamic>()) : const RunArtifactsUnderstandingSnapshot(),
+      retrievalProcessing: json['retrievalProcessing'] is Map ? RetrievalProcessingSnapshot.fromJson((json['retrievalProcessing'] as Map).cast<String, dynamic>()) : const RetrievalProcessingSnapshot(),
+      answerProcessing: json['answerProcessing'] is Map ? RunArtifactsAnswerProcessing.fromJson((json['answerProcessing'] as Map).cast<String, dynamic>()) : const RunArtifactsAnswerProcessing(),
+    );
+  }
+
+}
+
+class ProcessTimelineFrameFields {
+  static const String frameId = 'frameId';
+  static const String stepId = 'stepId';
+  static const String status = 'status';
+  static const String order = 'order';
+  static const String headline = 'headline';
+  static const String detail = 'detail';
+  static const String references = 'references';
+  static const String understandingSnapshot = 'understandingSnapshot';
+  static const String retrievalProcessing = 'retrievalProcessing';
+  static const String answerProcessing = 'answerProcessing';
+}
+
 class RetrievalProcessingSnapshot {
   const RetrievalProcessingSnapshot({
     this.processedDocumentCount = 0,
     this.acceptedDocumentCount = 0,
     this.processingSummary = "",
+    this.selectedKeyPoints = const <String>[],
     this.expansionReason = "",
     this.acceptedReferences = const <RetrievalProcessingReference>[],
   });
@@ -316,6 +625,7 @@ class RetrievalProcessingSnapshot {
   final int processedDocumentCount;
   final int acceptedDocumentCount;
   final String processingSummary;
+  final List<String> selectedKeyPoints;
   final String expansionReason;
   final List<RetrievalProcessingReference> acceptedReferences;
 
@@ -323,6 +633,7 @@ class RetrievalProcessingSnapshot {
         'processedDocumentCount': processedDocumentCount,
         'acceptedDocumentCount': acceptedDocumentCount,
         'processingSummary': processingSummary,
+        'selectedKeyPoints': selectedKeyPoints,
         'expansionReason': expansionReason,
         'acceptedReferences': acceptedReferences.map((item) => item.toJson()).toList(growable: false),
       };
@@ -332,9 +643,17 @@ class RetrievalProcessingSnapshot {
       processedDocumentCount: (json['processedDocumentCount'] as num?)?.toInt() ?? 0,
       acceptedDocumentCount: (json['acceptedDocumentCount'] as num?)?.toInt() ?? 0,
       processingSummary: (json['processingSummary'] as String?)?.trim() ?? "",
+      selectedKeyPoints: _assistantStringList(json['selectedKeyPoints']),
       expansionReason: (json['expansionReason'] as String?)?.trim() ?? "",
       acceptedReferences: (json['acceptedReferences'] as List?)?.whereType<Map>().map((item) => RetrievalProcessingReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RetrievalProcessingReference>[],
     );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
   }
 }
 
@@ -342,6 +661,7 @@ class RetrievalProcessingSnapshotFields {
   static const String processedDocumentCount = 'processedDocumentCount';
   static const String acceptedDocumentCount = 'acceptedDocumentCount';
   static const String processingSummary = 'processingSummary';
+  static const String selectedKeyPoints = 'selectedKeyPoints';
   static const String expansionReason = 'expansionReason';
   static const String acceptedReferences = 'acceptedReferences';
 }
@@ -559,6 +879,7 @@ class RunArtifactsUnderstandingQueryGroupFields {
 class RunArtifactsUnderstandingSnapshot {
   const RunArtifactsUnderstandingSnapshot({
     this.intentSummary = "",
+    this.userFacingSummary = "",
     this.concernPoints = const <String>[],
     this.emotionSignal = "",
     this.queryDesignSummary = "",
@@ -570,6 +891,7 @@ class RunArtifactsUnderstandingSnapshot {
   });
 
   final String intentSummary;
+  final String userFacingSummary;
   final List<String> concernPoints;
   final String emotionSignal;
   final String queryDesignSummary;
@@ -581,6 +903,7 @@ class RunArtifactsUnderstandingSnapshot {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'intentSummary': intentSummary,
+        'userFacingSummary': userFacingSummary,
         'concernPoints': concernPoints,
         'emotionSignal': emotionSignal,
         'queryDesignSummary': queryDesignSummary,
@@ -594,6 +917,7 @@ class RunArtifactsUnderstandingSnapshot {
   factory RunArtifactsUnderstandingSnapshot.fromJson(Map<String, dynamic> json) {
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
+      userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
       concernPoints: _assistantStringList(json['concernPoints']),
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
       queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
@@ -615,6 +939,7 @@ class RunArtifactsUnderstandingSnapshot {
 
 class RunArtifactsUnderstandingSnapshotFields {
   static const String intentSummary = 'intentSummary';
+  static const String userFacingSummary = 'userFacingSummary';
   static const String concernPoints = 'concernPoints';
   static const String emotionSignal = 'emotionSignal';
   static const String queryDesignSummary = 'queryDesignSummary';
@@ -630,7 +955,9 @@ class RunArtifacts {
     this.machineEnvelope = "",
     this.displayMarkdown = "",
     this.displayPlainText = "",
+    this.displayState = const AssistantDisplayState(),
     this.journey = const AssistantJourney(),
+    this.processTimeline = const <ProcessTimelineFrame>[],
     this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
     this.answerProcessing = const RunArtifactsAnswerProcessing(),
     this.historicalThinkingSnapshot = const RunArtifactsHistoricalThinkingSnapshot(),
@@ -646,7 +973,9 @@ class RunArtifacts {
   final String machineEnvelope;
   final String displayMarkdown;
   final String displayPlainText;
+  final AssistantDisplayState displayState;
   final AssistantJourney journey;
+  final List<ProcessTimelineFrame> processTimeline;
   final RunArtifactsUnderstandingSnapshot understandingSnapshot;
   final RunArtifactsAnswerProcessing answerProcessing;
   final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
@@ -662,7 +991,9 @@ class RunArtifacts {
         'machineEnvelope': machineEnvelope,
         'displayMarkdown': displayMarkdown,
         'displayPlainText': displayPlainText,
+        'displayState': displayState.toJson(),
         'journey': journey.toJson(),
+        'processTimeline': processTimeline.map((item) => item.toJson()).toList(growable: false),
         'understandingSnapshot': understandingSnapshot.toJson(),
         'answerProcessing': answerProcessing.toJson(),
         'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
@@ -680,7 +1011,9 @@ class RunArtifacts {
       machineEnvelope: (json['machineEnvelope'] as String?)?.trim() ?? "",
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",
+      displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
+      processTimeline: (json['processTimeline'] as List?)?.whereType<Map>().map((item) => ProcessTimelineFrame.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ProcessTimelineFrame>[],
       understandingSnapshot: json['understandingSnapshot'] is Map ? RunArtifactsUnderstandingSnapshot.fromJson((json['understandingSnapshot'] as Map).cast<String, dynamic>()) : const RunArtifactsUnderstandingSnapshot(),
       answerProcessing: json['answerProcessing'] is Map ? RunArtifactsAnswerProcessing.fromJson((json['answerProcessing'] as Map).cast<String, dynamic>()) : const RunArtifactsAnswerProcessing(),
       historicalThinkingSnapshot: json['historicalThinkingSnapshot'] is Map ? RunArtifactsHistoricalThinkingSnapshot.fromJson((json['historicalThinkingSnapshot'] as Map).cast<String, dynamic>()) : const RunArtifactsHistoricalThinkingSnapshot(),
@@ -700,7 +1033,9 @@ class RunArtifactsFields {
   static const String machineEnvelope = 'machineEnvelope';
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';
+  static const String displayState = 'displayState';
   static const String journey = 'journey';
+  static const String processTimeline = 'processTimeline';
   static const String understandingSnapshot = 'understandingSnapshot';
   static const String answerProcessing = 'answerProcessing';
   static const String historicalThinkingSnapshot = 'historicalThinkingSnapshot';

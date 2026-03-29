@@ -3,7 +3,7 @@ name: fallback_general_search
 description: 通用搜索兜底。当其他技能都不匹配时使用。
 domain: fallback_general_search
 mode: qa
-allowed_tools: web_search local_context
+allowed_tools: search web_search local_context web_fetch
 trigger_keywords: []
 searchPolicy:
   maxReflection: 2
@@ -20,7 +20,7 @@ execution_shell:
   authorityDomains: []
   freshnessHoursMax: 24
 requires:
-  tools: [web_search]
+  tools: [search, web_search]
 output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
@@ -38,6 +38,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ## 工具调用策略
 - 优先使用当前问句与历史记忆完成关键槽位补全。
 - 仅在必要时调用工具，且必须遵守最小权限原则。
+- 统一检索优先调用 `search`；仅当外部网页召回单独失败时，才回退到 `web_search`。
 - 工具失败允许一次重试；失败后返回降级说明与下一步。
 
 ## 触发与禁用条件
@@ -62,7 +63,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {},
   "toolPlan": [
-    {"toolName": "web_search", "arguments": {"query": "示例查询"}}
+    {"toolName": "search", "arguments": {"query": "示例查询", "mode": "result"}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询相关信息…"

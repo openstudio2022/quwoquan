@@ -20,6 +20,10 @@ versionPolicy: semver
 permissions:
   - network
 permissionScopes:
+  - search
+  - web_search
+allowedTools:
+  - search
   - web_search
 parametersSchema:
   type: object

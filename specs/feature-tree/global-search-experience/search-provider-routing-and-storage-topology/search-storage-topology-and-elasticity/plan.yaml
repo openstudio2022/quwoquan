@@ -1,0 +1,26 @@
+version: 1
+node: global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze read-model and reader-slice topology
+    goal: 冻结搜索读模型、读写分离、多读切片与未来统一读库替换边界
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T2_module_interaction
+    done_when:
+      - read model 与 write model 边界已定义
+      - reader slice 与独立弹性规则已定义
+      - 现有 provider 的搜索读路径与 header 审计 contract 可验证
+    status: completed

@@ -6,8 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
@@ -68,6 +72,10 @@ Widget _buildApp({
   ),
 }) {
   return ProviderScope(
+    overrides: [
+      searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
+      assistantRepositoryProvider.overrideWithValue(_FakeAssistantRepository()),
+    ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
     ),
@@ -277,7 +285,12 @@ void main() {
 
     expect(find.text('李泽'), findsOneWidget);
 
-    await tester.tap(find.text('李想').last);
+    final liXiangButton = find.ancestor(
+      of: find.text('李想').last,
+      matching: find.byType(CupertinoButton),
+    );
+    await tester.ensureVisible(liXiangButton.first);
+    tester.widget<CupertinoButton>(liXiangButton.first).onPressed!.call();
     await tester.pumpAndSettle();
 
     expect(find.text('chat:conv_007'), findsOneWidget);
@@ -324,10 +337,16 @@ void main() {
       '王',
     );
     await tester.pump(const Duration(milliseconds: 220));
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('王芳').evaluate().isNotEmpty,
+    );
 
     await tester.tap(find.text('王芳').last);
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('chat:conv_002').evaluate().isNotEmpty,
+    );
 
     expect(find.text('chat:conv_002'), findsOneWidget);
   });
@@ -341,10 +360,16 @@ void main() {
       '冰',
     );
     await tester.pump(const Duration(milliseconds: 220));
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('冰 相关主页').evaluate().isNotEmpty,
+    );
 
     await tester.tap(find.text('冰').last);
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('小趣搜').evaluate().isNotEmpty,
+    );
 
     expect(find.text('小趣搜'), findsWidgets);
     expect(find.text('推荐'), findsOneWidget);
@@ -359,16 +384,307 @@ void main() {
       '西湖',
     );
     await tester.pump(const Duration(milliseconds: 220));
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('西湖 相关主页').evaluate().isNotEmpty,
+    );
 
     expect(find.text('西湖 相关主页'), findsOneWidget);
 
     await tester.tap(find.text('西湖 相关主页'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('主页').evaluate().isNotEmpty,
+    );
 
-    expect(find.text('主页'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('network_results_homepages')),
+      findsOneWidget,
+    );
     expect(find.text('西湖景区'), findsWidgets);
   });
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester, {
+  required bool Function() condition,
+  Duration step = const Duration(milliseconds: 50),
+  int maxTicks = 80,
+}) async {
+  for (var i = 0; i < maxTicks; i++) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  throw TestFailure('Timed out while waiting for condition.');
+}
+
+class _FakeSearchRepository implements SearchRepository {
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    final normalized = request.normalized();
+    if (normalized.mode == SearchMode.suggest) {
+      final hits = <SearchHit>[
+        ..._contactHits(normalized.query),
+        ..._conversationHits(normalized.query),
+      ];
+      return SearchResponse(request: normalized, sections: _sectionsFor(hits));
+    }
+
+    if (normalized.objectTypes.contains(SearchObjectType.entityHomepage) &&
+        normalized.query == '西湖') {
+      final hits = <SearchHit>[
+        SearchHit(
+          objectType: SearchObjectType.entityHomepage,
+          objectId: 'homepage_west_lake',
+          title: '西湖景区',
+          subtitle: '杭州',
+          resolvedFrom: SearchResolvedFrom.remote,
+          payload: const <String, dynamic>{
+            'homepageId': 'homepage_west_lake',
+            'homepageType': 'place',
+            'title': '西湖景区',
+            'subtitle': '杭州西湖风景名胜区',
+            'city': '杭州',
+            'address': '浙江省杭州市西湖区',
+          },
+        ),
+      ];
+      return SearchResponse(request: normalized, sections: _sectionsFor(hits));
+    }
+
+    return SearchResponse(
+      request: normalized,
+      sections: const <SearchSection>[],
+    );
+  }
+
+  List<SearchHit> _contactHits(String query) {
+    switch (query) {
+      case '李':
+        return const <SearchHit>[
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_li_ming',
+            title: '李明',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_li_ming',
+              'displayName': '李明',
+              'conversationId': 'conv_001',
+            },
+          ),
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_li_xiang',
+            title: '李想',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_li_xiang',
+              'displayName': '李想',
+              'conversationId': 'conv_007',
+            },
+          ),
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_li_qing',
+            title: '李青',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_li_qing',
+              'displayName': '李青',
+              'conversationId': 'conv_008',
+            },
+          ),
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_li_yue',
+            title: '李悦',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_li_yue',
+              'displayName': '李悦',
+              'conversationId': 'conv_009',
+            },
+          ),
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_li_ze',
+            title: '李泽',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_li_ze',
+              'displayName': '李泽',
+              'conversationId': 'conv_010',
+            },
+          ),
+        ];
+      case '王':
+        return const <SearchHit>[
+          SearchHit(
+            objectType: SearchObjectType.chatContact,
+            objectId: 'user_wang_fang',
+            title: '王芳',
+            resolvedFrom: SearchResolvedFrom.local,
+            payload: <String, dynamic>{
+              'contactId': 'user_wang_fang',
+              'displayName': '王芳',
+              'conversationId': 'conv_002',
+            },
+          ),
+        ];
+      default:
+        return const <SearchHit>[];
+    }
+  }
+
+  List<SearchHit> _conversationHits(String query) {
+    if (query != '群') {
+      return const <SearchHit>[];
+    }
+    return const <SearchHit>[
+      SearchHit(
+        objectType: SearchObjectType.chatConversation,
+        objectId: 'conv_002',
+        title: '周末登山群',
+        resolvedFrom: SearchResolvedFrom.local,
+        payload: <String, dynamic>{
+          'conversationId': 'conv_002',
+          'type': 'group',
+          'title': '周末登山群',
+          'memberCount': 15,
+          'lastMessagePreview': '周六早上8点出发',
+        },
+      ),
+      SearchHit(
+        objectType: SearchObjectType.chatConversation,
+        objectId: 'conv_grid_3',
+        title: '3人测试群',
+        resolvedFrom: SearchResolvedFrom.local,
+        payload: <String, dynamic>{
+          'conversationId': 'conv_grid_3',
+          'type': 'group',
+          'title': '3人测试群',
+          'memberCount': 3,
+          'lastMessagePreview': '测试群聊',
+        },
+      ),
+      SearchHit(
+        objectType: SearchObjectType.chatConversation,
+        objectId: 'conv_grid_4',
+        title: '4人测试群',
+        resolvedFrom: SearchResolvedFrom.local,
+        payload: <String, dynamic>{
+          'conversationId': 'conv_grid_4',
+          'type': 'group',
+          'title': '4人测试群',
+          'memberCount': 4,
+          'lastMessagePreview': '测试群聊',
+        },
+      ),
+      SearchHit(
+        objectType: SearchObjectType.chatConversation,
+        objectId: 'conv_grid_5',
+        title: '5人测试群',
+        resolvedFrom: SearchResolvedFrom.local,
+        payload: <String, dynamic>{
+          'conversationId': 'conv_grid_5',
+          'type': 'group',
+          'title': '5人测试群',
+          'memberCount': 5,
+          'lastMessagePreview': '测试群聊',
+        },
+      ),
+    ];
+  }
+
+  List<SearchSection> _sectionsFor(List<SearchHit> hits) {
+    final contacts = hits
+        .where((item) => item.objectType == SearchObjectType.chatContact)
+        .toList(growable: false);
+    final conversations = hits
+        .where((item) => item.objectType == SearchObjectType.chatConversation)
+        .toList(growable: false);
+    final homepages = hits
+        .where((item) => item.objectType == SearchObjectType.entityHomepage)
+        .toList(growable: false);
+    return <SearchSection>[
+      if (contacts.isNotEmpty)
+        SearchSection(
+          id: 'contacts',
+          title: '联系人',
+          objectTypes: const <SearchObjectType>[SearchObjectType.chatContact],
+          hits: contacts,
+          resolvedFrom: SearchResolvedFrom.local,
+        ),
+      if (conversations.isNotEmpty)
+        SearchSection(
+          id: 'chat_records',
+          title: '聊天记录',
+          objectTypes: const <SearchObjectType>[
+            SearchObjectType.chatConversation,
+          ],
+          hits: conversations,
+          resolvedFrom: SearchResolvedFrom.local,
+        ),
+      if (homepages.isNotEmpty)
+        SearchSection(
+          id: 'homepages',
+          title: '主页',
+          objectTypes: const <SearchObjectType>[
+            SearchObjectType.entityHomepage,
+          ],
+          hits: homepages,
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+    ];
+  }
+}
+
+class _FakeAssistantRepository implements AssistantRepository {
+  @override
+  Future<AssistantSkillConsent> grantSkillConsent({
+    required String skillId,
+    String grantedScope = kPersonalContentAccessSkillId,
+  }) async {
+    return AssistantSkillConsent(
+      skillId: skillId,
+      grantedScope: grantedScope,
+      granted: true,
+      updatedAt: DateTime(2026, 3, 27),
+    );
+  }
+
+  @override
+  Future<List<AssistantSkillConsent>> listConsents() async {
+    return const <AssistantSkillConsent>[];
+  }
+
+  @override
+  Future<void> revokeSkillConsent({required String skillId}) async {}
+
+  @override
+  Future<AssistantSearchResultView> searchXiaoquResults({
+    required String query,
+    String searchIntensity = 'balanced',
+  }) async {
+    return AssistantSearchResultView(
+      queryEcho: query,
+      summary: '$query 的推荐结果',
+      searchIntensity: searchIntensity,
+      citations: const <AssistantSearchCitationView>[
+        AssistantSearchCitationView(
+          citationId: 'citation_1',
+          objectType: 'content.post',
+          objectId: 'post_1',
+          title: '冰雪旅行推荐',
+          snippet: '适合冬季出行的内容推荐',
+          sourceDomain: '小趣搜',
+        ),
+      ],
+    );
+  }
 }
 
 Map<String, dynamic> _historyEntry(String query) {

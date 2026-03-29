@@ -8,11 +8,12 @@ derived_from:
   changelog:
     - specs/changelog/CR-20260322-001-global-search-experience-prd-baseline.yaml
     - specs/changelog/CR-20260324-002-group-hub-and-circle-kernel-prd-baseline.yaml
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
 
 slices:
   - id: P1
     title: freeze search metadata topology
-    goal: 收口 `_shared` 路由/surface/request context、统一 `Search` 接口与四个业务域 `Search*` provider contract 的 metadata 真相源
+    goal: 收口 `_shared` 路由/surface/request context、canonical `Search` 接口与 Journey 消费的 provider contract 真相源
     depends_on: []
     acceptance_refs:
       - J1
@@ -21,7 +22,8 @@ slices:
       - T1_schema
     done_when:
       - `globalSearch` route、landing/result surfaces、page ids 已定义
-      - `SearchRequest / SearchResponse` 与 `SearchPosts / SearchSocialRelations / SearchConversations / SearchMessages / SearchCircles` contract 结构明确
+      - Journey 已明确消费 topology L2 冻结的 `SearchRequest / SearchResponse`
+      - 本地聊天 provider、`circle.group` fallback 与远端对象 contract 结构明确
       - recent search sync 与 xiaoqu handoff 的 metadata 落点明确
     status: completed
 
@@ -61,7 +63,7 @@ slices:
 
   - id: P4
     title: land search coordinator and result composition
-    goal: 建立统一 `Search` 接口、`SearchCoordinator`、typed result model 与多域并发编排
+    goal: 建立统一 `Search` 接口、`SearchCoordinator`、typed result model、本地聊天搜索接入与 `circle.group` fallback 编排
     depends_on:
       - P3
     acceptance_refs:
@@ -71,7 +73,7 @@ slices:
       - T3_cross_service_integration
     done_when:
       - query debounce、fan-out、局部降级与分组展示成立
-      - 社交关系与群组 facet 的对象边界在结果页稳定可见
+      - 本地聊天搜索与群组 facet / fallback 的对象边界在结果页稳定可见
       - 结果点击可稳定进入详情或列表
     status: in_progress
 

@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -30,6 +28,24 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
   String? _errorText;
   String _claimTier = 'basic';
 
+  bool get _hasUnsavedChanges =>
+      _claimTier != 'basic' ||
+      _phoneController.text.trim().isNotEmpty ||
+      _licenseController.text.trim().isNotEmpty ||
+      _idFrontController.text.trim().isNotEmpty ||
+      _idBackController.text.trim().isNotEmpty ||
+      _noteController.text.trim().isNotEmpty;
+
+  String get _confirmLabel {
+    if ((_detail?.claimStatus ?? '') == 'claimed') {
+      return '该主页已被认领';
+    }
+    if ((_detail?.status ?? '') == 'offline') {
+      return '主页已下线';
+    }
+    return '提交认领申请';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -54,168 +70,170 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         !_isSubmitting &&
         (_detail?.status ?? '') != 'offline' &&
         (_detail?.claimStatus ?? '') != 'claimed';
-    return CupertinoPageScaffold(
+    return IosSelectionPageScaffold(
+      title: '认领主页',
+      onBack: _handleCloseRequest,
+      leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('认领主页'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => context.pop(),
-          child: const Icon(CupertinoIcons.xmark),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerSm,
+          AppSpacing.containerMd,
+          AppSpacing.containerLg,
         ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: <Widget>[
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.containerMd,
-                    AppSpacing.containerSm,
-                    AppSpacing.containerMd,
-                    AppSpacing.containerLg,
+        children: <Widget>[
+          if (_isLoading)
+            const Center(child: CupertinoActivityIndicator())
+          else ...<Widget>[
+            _EntityFormCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _detail?.title ?? '共享主页',
+                    style: const TextStyle(
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.semiBold,
+                    ),
                   ),
-                  children: <Widget>[
-                    if (_isLoading)
-                      const Center(child: CupertinoActivityIndicator())
-                    else ...<Widget>[
-                      _EntityFormCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              _detail?.title ?? '共享主页',
-                              style: const TextStyle(
-                                fontSize: AppTypography.iosTitle3,
-                                fontWeight: AppTypography.semiBold,
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.intraGroupXs),
-                            Text(
-                              (_detail?.status ?? '') == 'offline'
-                                  ? '该主页已下线，仅保留历史内容，当前不可继续认领。'
-                                  : (_detail?.claimStatus ?? '') == 'claimed'
-                                  ? '该主页已被认领，如信息有误可通过状态上报反馈。'
-                                  : '提交后会进入审核，审核通过后即可维护主页基本信息。',
-                              style: TextStyle(
-                                fontSize: AppTypography.iosFootnote,
-                                color: CupertinoColors.secondaryLabel
-                                    .resolveFrom(context),
-                              ),
-                            ),
-                            if (_errorText != null) ...<Widget>[
-                              SizedBox(height: AppSpacing.containerSm),
-                              Text(
-                                _errorText!,
-                                style: const TextStyle(color: AppColors.error),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: AppSpacing.containerSm),
-                      _EntityFormCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            _EntityFieldLabel('认领等级'),
-                            CupertinoSlidingSegmentedControl<String>(
-                              groupValue: _claimTier,
-                              children: const <String, Widget>{
-                                'basic': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
-                                  child: Text('基础'),
-                                ),
-                                'verified': Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
-                                  child: Text('认证'),
-                                ),
-                              },
-                              onValueChanged: (value) {
-                                if (!canSubmit || value == null) {
-                                  return;
-                                }
-                                setState(() {
-                                  _claimTier = value;
-                                });
-                              },
-                            ),
-                            SizedBox(height: AppSpacing.containerSm),
-                            _EntityFieldLabel('联系电话'),
-                            CupertinoTextField(
-                              controller: _phoneController,
-                              enabled: canSubmit,
-                              keyboardType: TextInputType.phone,
-                              placeholder: '用于审核联系',
-                            ),
-                            SizedBox(height: AppSpacing.containerSm),
-                            _EntityFieldLabel('营业执照材料链接'),
-                            CupertinoTextField(
-                              controller: _licenseController,
-                              enabled: canSubmit,
-                              placeholder: '可选，上传后填入链接',
-                            ),
-                            SizedBox(height: AppSpacing.containerSm),
-                            _EntityFieldLabel('身份证正面材料链接'),
-                            CupertinoTextField(
-                              controller: _idFrontController,
-                              enabled: canSubmit,
-                              placeholder: '可选，上传后填入链接',
-                            ),
-                            SizedBox(height: AppSpacing.containerSm),
-                            _EntityFieldLabel('身份证反面材料链接'),
-                            CupertinoTextField(
-                              controller: _idBackController,
-                              enabled: canSubmit,
-                              placeholder: '可选，上传后填入链接',
-                            ),
-                            SizedBox(height: AppSpacing.containerSm),
-                            _EntityFieldLabel('补充说明'),
-                            CupertinoTextField(
-                              controller: _noteController,
-                              enabled: canSubmit,
-                              placeholder: '说明你与该主页的关系',
-                              maxLines: 4,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Text(
+                    (_detail?.status ?? '') == 'offline'
+                        ? '该主页已下线，仅保留历史内容，当前不可继续认领。'
+                        : (_detail?.claimStatus ?? '') == 'claimed'
+                        ? '该主页已被认领，如信息有误可通过状态上报反馈。'
+                        : '提交后会进入审核，审核通过后即可维护主页基本信息。',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                    ),
+                  ),
+                  if (_errorText != null) ...<Widget>[
+                    SizedBox(height: AppSpacing.containerSm),
+                    Text(
+                      _errorText!,
+                      style: const TextStyle(color: AppColors.error),
+                    ),
                   ],
-                ),
+                ],
               ),
-              Container(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  MediaQuery.paddingOf(context).bottom + AppSpacing.containerMd,
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.buttonHeight,
-                  child: CupertinoButton.filled(
-                    onPressed: canSubmit ? _submit : null,
-                    child: _isSubmitting
-                        ? const CupertinoActivityIndicator()
-                        : Text(
-                            (_detail?.claimStatus ?? '') == 'claimed'
-                                ? '该主页已被认领'
-                                : (_detail?.status ?? '') == 'offline'
-                                ? '主页已下线'
-                                : '提交认领申请',
-                          ),
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            _EntityFormCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _EntityFieldLabel('认领等级'),
+                  CupertinoSlidingSegmentedControl<String>(
+                    groupValue: _claimTier,
+                    children: const <String, Widget>{
+                      'basic': Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('基础'),
+                      ),
+                      'verified': Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('认证'),
+                      ),
+                    },
+                    onValueChanged: (value) {
+                      if (!canSubmit || value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _claimTier = value;
+                      });
+                    },
                   ),
-                ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  _EntityFieldLabel('联系电话'),
+                  CupertinoTextField(
+                    controller: _phoneController,
+                    enabled: canSubmit,
+                    keyboardType: TextInputType.phone,
+                    placeholder: '用于审核联系',
+                  ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  _EntityFieldLabel('营业执照材料链接'),
+                  CupertinoTextField(
+                    controller: _licenseController,
+                    enabled: canSubmit,
+                    placeholder: '可选，上传后填入链接',
+                  ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  _EntityFieldLabel('身份证正面材料链接'),
+                  CupertinoTextField(
+                    controller: _idFrontController,
+                    enabled: canSubmit,
+                    placeholder: '可选，上传后填入链接',
+                  ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  _EntityFieldLabel('身份证反面材料链接'),
+                  CupertinoTextField(
+                    controller: _idBackController,
+                    enabled: canSubmit,
+                    placeholder: '可选，上传后填入链接',
+                  ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  _EntityFieldLabel('补充说明'),
+                  CupertinoTextField(
+                    controller: _noteController,
+                    enabled: canSubmit,
+                    placeholder: '说明你与该主页的关系',
+                    maxLines: 4,
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        ],
+      ),
+      bottomBar: IosSelectionBottomBar(
+        confirmLabel: _confirmLabel,
+        confirmEnabled: canSubmit,
+        confirmLoading: _isSubmitting,
+        onConfirm: _submit,
       ),
     );
+  }
+
+  Future<void> _handleCloseRequest() async {
+    if (_isSubmitting) {
+      return;
+    }
+    if (!_hasUnsavedChanges) {
+      _pop();
+      return;
+    }
+    final discardChanges = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.unsavedChangesTitle),
+        content: const Text(UITextConstants.unsavedChangesMessage),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(UITextConstants.continueEditing),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(UITextConstants.discard),
+          ),
+        ],
+      ),
+    );
+    if (discardChanges == true && mounted) {
+      _pop();
+    }
+  }
+
+  void _pop() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
   }
 
   Future<void> _load() async {
@@ -269,7 +287,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         return;
       }
       AppToast.show(context, '认领申请已提交');
-      context.pop(true);
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
         return;

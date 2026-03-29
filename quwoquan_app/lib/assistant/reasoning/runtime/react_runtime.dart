@@ -5,6 +5,7 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/react_planner.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
@@ -88,6 +89,10 @@ class ReactRuntime {
   Future<void>? _phaseHintsLoading;
   static const int _maxConsecutiveEmptyIterations = 2;
 
+  bool get supportsStructuredStreaming =>
+      _llmProvider is SwitchableAssistantLlmProvider ||
+      _llmProvider is OpenAiCompatibleLlmProvider;
+
   List<String> listAvailableToolNames() {
     return _toolRegistry
         .listTools()
@@ -95,12 +100,13 @@ class ReactRuntime {
         .toList(growable: false);
   }
 
-  /// Streams synthesis output token by token using SSE if provider supports it.
-  /// Calls [onDelta] for each token, and emits [streamDelta] trace events.
-  Future<String> streamSynthesis({
+  /// Streams structured JSON output while optionally surfacing visible answer deltas.
+  /// Structured field deltas are emitted as `thinkingProgress` traces so callers
+  /// can project them into the process timeline.
+  Future<String> streamStructuredOutput({
     required List<Map<String, dynamic>> messages,
-    required String goal,
     required void Function(String delta) onDelta,
+    List<String> streamJsonFieldPaths = const <String>[],
     Map<String, dynamic> templateContext = const <String, dynamic>{},
     Map<String, dynamic> templateVariables = const <String, dynamic>{},
     String templateId = 'synthesizer.final_answer',
@@ -109,10 +115,18 @@ class ReactRuntime {
     String? runId,
     String? traceId,
     void Function(AssistantTraceEvent event)? onTraceEvent,
+    void Function(String failureCode, Map<String, dynamic> diagnostics)?
+    onStreamFailure,
+    String streamTraceStage = 'structured_output',
+    String structuredPhaseId = '',
+    bool emitVisibleStreamTrace = false,
   }) async {
     final provider = _llmProvider;
     void forwardDelta(String delta) {
       onDelta(delta);
+      if (!emitVisibleStreamTrace) {
+        return;
+      }
       onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.streamDelta,
@@ -120,7 +134,29 @@ class ReactRuntime {
           timestamp: DateTime.now(),
           runId: runId,
           traceId: traceId,
-          data: const <String, dynamic>{'stage': 'synthesis'},
+          data: <String, dynamic>{'stage': streamTraceStage},
+        ),
+      );
+    }
+
+    void forwardStructuredDelta(String fieldPath, String delta) {
+      if (delta.trim().isEmpty) return;
+      onTraceEvent?.call(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: delta,
+          timestamp: DateTime.now(),
+          runId: runId,
+          traceId: traceId,
+          data: <String, dynamic>{
+            'phase': structuredPhaseId.isNotEmpty
+                ? structuredPhaseId
+                : streamTraceStage,
+            'stage': streamTraceStage,
+            'streaming': true,
+            'extracted': true,
+            'fieldPath': fieldPath,
+          },
         ),
       );
     }
@@ -130,6 +166,9 @@ class ReactRuntime {
         messages: messages,
         availableTools: const <String>[],
         onDelta: forwardDelta,
+        streamJsonFieldPaths: streamJsonFieldPaths,
+        onStructuredDelta: forwardStructuredDelta,
+        onFailure: onStreamFailure,
         templateContext: templateContext,
         templateVariables: templateVariables,
         templateId: templateId,
@@ -145,6 +184,9 @@ class ReactRuntime {
         messages: messages,
         availableTools: const <String>[],
         onDelta: forwardDelta,
+        streamJsonFieldPaths: streamJsonFieldPaths,
+        onStructuredDelta: forwardStructuredDelta,
+        onFailure: onStreamFailure,
         templateContext: templateContext,
         templateVariables: templateVariables,
         templateId: templateId,
@@ -155,6 +197,45 @@ class ReactRuntime {
       );
     }
     return '';
+  }
+
+  /// Streams synthesis output token by token using SSE if provider supports it.
+  /// Calls [onDelta] for each token, and emits [streamDelta] trace events.
+  Future<String> streamSynthesis({
+    required List<Map<String, dynamic>> messages,
+    required String goal,
+    required void Function(String delta) onDelta,
+    List<String> streamJsonFieldPaths = const <String>[
+      'answerProcessing.readinessSummary',
+    ],
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'synthesizer.final_answer',
+    String templateVersion = '',
+    String sessionId = '',
+    String? runId,
+    String? traceId,
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+    void Function(String failureCode, Map<String, dynamic> diagnostics)?
+    onStreamFailure,
+  }) async {
+    return streamStructuredOutput(
+      messages: messages,
+      onDelta: onDelta,
+      streamJsonFieldPaths: streamJsonFieldPaths,
+      templateContext: templateContext,
+      templateVariables: templateVariables,
+      templateId: templateId,
+      templateVersion: templateVersion,
+      sessionId: sessionId,
+      runId: runId,
+      traceId: traceId,
+      onTraceEvent: onTraceEvent,
+      onStreamFailure: onStreamFailure,
+      streamTraceStage: 'synthesis',
+      structuredPhaseId: 'answering',
+      emitVisibleStreamTrace: true,
+    );
   }
 
   Future<ReactRuntimeResult> run({
@@ -278,6 +359,7 @@ class ReactRuntime {
         AssistantTraceEvent(
           type: AssistantTraceEventType.thinkingProgress,
           message: _seedThinkingProgressMessage(currentPhase, state.goal),
+          visibility: TraceVisibility.internal,
           timestamp: DateTime.now(),
           runId: runId,
           traceId: traceId,
@@ -298,6 +380,7 @@ class ReactRuntime {
                   timestamp: DateTime.now(),
                   runId: runId,
                   traceId: traceId,
+                  visibility: TraceVisibility.internal,
                   data: <String, dynamic>{
                     'phase': currentPhase,
                     'iteration': state.iteration,
@@ -754,8 +837,8 @@ class ReactRuntime {
                 '若关键槽位已齐但外部能力失败，则给出基于现有信息的稳妥降级答复，并说明是否值得重试。',
           });
         }
-        // Layer 3 反思循环：当 web_search 质量评分不足时，注入反思提示驱动 LLM 重写查询
-        if (step.toolName == 'web_search' && isOk) {
+        // Layer 3 反思循环：当检索工具质量评分不足时，注入反思提示驱动 LLM 重写查询
+        if (_isRetrievalLikeTool(step.toolName) && isOk) {
           final data =
               (result.data as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{};
@@ -783,6 +866,9 @@ class ReactRuntime {
                 .map((r) => r['snippet'] ?? r['title'] ?? '')
                 .where((s) => s.isNotEmpty)
                 .toList();
+            final retryToolName = _preferredRetrievalToolName(
+              availableToolNames,
+            );
             messages.add(<String, String>{
               'role': 'system',
               'content':
@@ -794,7 +880,7 @@ class ReactRuntime {
                   '这是第 ${reflectionRound + 1} 次反思（最多$allowedReflectionRounds次）。'
                   '请输出 JSON：failureReason（从 authority_domain_miss/query_too_generic/time_constraint_too_strict/provider_cache_stale/language_mismatch/missing_geo_context 中选）、'
                   'rewrittenQueries（3条，每条覆盖不同召回角度）、retryProvider。'
-                  '然后重新调用 web_search 工具并选用不同 provider。\n'
+                  '然后重新调用 ${retryToolName.isNotEmpty ? retryToolName : step.toolName} 工具并选用不同 provider。\n'
                   '注意：重写查询词必须与已使用的查询词有实质性差异，避免重复失败。',
             });
           }
@@ -842,6 +928,10 @@ class ReactRuntime {
           shouldReplan: replan,
           policy: _reactPolicy,
         );
+        final assessmentVisibility =
+            assessment.assessmentType == AssessmentType.toolFailed
+            ? TraceVisibility.internal
+            : TraceVisibility.userVisible;
         pushTrace(
           AssistantTraceEvent(
             type: AssistantTraceEventType.toolResult,
@@ -849,6 +939,7 @@ class ReactRuntime {
             timestamp: DateTime.now(),
             runId: runId,
             traceId: traceId,
+            visibility: assessmentVisibility,
             data: <String, dynamic>{
               'assessment': assessment.toJson(),
               'assessmentType': assessment.assessmentType.wireName,
@@ -1076,6 +1167,16 @@ class ReactRuntime {
     return registry?.isRetrievalLikeTool(toolName) ?? false;
   }
 
+  String _preferredRetrievalToolName(List<String> toolNames) {
+    if (toolNames.contains('search')) {
+      return 'search';
+    }
+    if (toolNames.contains('web_search')) {
+      return 'web_search';
+    }
+    return '';
+  }
+
   String _toolKind(String toolName) {
     final registry = _toolMetadataRegistry;
     return registry?.toolKindByName(toolName) ?? '';
@@ -1168,10 +1269,13 @@ class ReactRuntime {
     final hasContextCall = sanitized.any(
       (call) => _toolKind(call.name) == 'context',
     );
+    final preferredRetrievalTool = _preferredRetrievalToolName(
+      availableToolNames,
+    );
     final shouldAutoInjectRetrieval =
         !hasRetrievalCall &&
         shell.preComputedQueryTasks.isNotEmpty &&
-        availableToolNames.contains('web_search') &&
+        preferredRetrievalTool.isNotEmpty &&
         (sanitized.isEmpty || hasContextCall);
     if (shouldAutoInjectRetrieval) {
       final queryTasks = _buildSearchQueryTasks(
@@ -1183,14 +1287,15 @@ class ReactRuntime {
         if (firstQuery.isNotEmpty) {
           sanitized.add(
             AssistantToolCall(
-              name: 'web_search',
+              name: preferredRetrievalTool,
               arguments: <String, dynamic>{
                 'query': firstQuery,
+                'mode': 'result',
                 'queryTasks': queryTasks,
               },
               id: hasContextCall
-                  ? 'auto_web_search_after_context'
-                  : 'auto_web_search_from_precomputed_tasks',
+                  ? 'auto_${preferredRetrievalTool}_after_context'
+                  : 'auto_${preferredRetrievalTool}_from_precomputed_tasks',
             ),
           );
         }
@@ -1278,7 +1383,9 @@ class ReactRuntime {
       return 0;
     }
     final configuredBudget = shell.variantBudget > 0 ? shell.variantBudget : 4;
-    return configuredBudget < availableCount ? configuredBudget : availableCount;
+    return configuredBudget < availableCount
+        ? configuredBudget
+        : availableCount;
   }
 
   List<Map<String, dynamic>> _coerceSearchTasks(Object? raw) {
@@ -1453,6 +1560,8 @@ class ReactRuntime {
     }
   }
 
+  static const Set<String> _jsonOnlyTemplateIds = <String>{'evidence_digest'};
+
   /// Determines the user-facing phase based on current state.
   String _determineUserPhase(
     ReactRunState state,
@@ -1461,6 +1570,9 @@ class ReactRuntime {
     required bool hasPrecomputedSearch,
   }) {
     final normalizedTemplateId = templateId.trim();
+    if (_jsonOnlyTemplateIds.contains(normalizedTemplateId)) {
+      return normalizedTemplateId;
+    }
     final answeringTemplate =
         normalizedTemplateId == 'synthesizer.final_answer' ||
         normalizedTemplateId == 'phase_one_direct_answer';
@@ -1469,6 +1581,11 @@ class ReactRuntime {
     }
     if (hasPrecomputedSearch && state.iteration == 1 && state.usedTools == 0) {
       return 'search';
+    }
+    if (normalizedTemplateId == 'planner.global_plan' &&
+        state.iteration == 1 &&
+        state.usedTools == 0) {
+      return 'understanding';
     }
     if (state.iteration == 1 &&
         state.evidences.isEmpty &&
@@ -1486,6 +1603,8 @@ class ReactRuntime {
 
   /// Builds a phase hint system message from config + tool metadata prompts.
   String _buildPhaseHint(String phase, List<String> toolNames) {
+    if (_jsonOnlyTemplateIds.contains(phase)) return '';
+
     final phases = _phaseHintsConfig['phases'] as Map?;
     final phaseConfig = (phases?[phase] as Map?)?.cast<String, dynamic>();
     final baseHint = (phaseConfig?['systemHint'] as String?) ?? '';
@@ -1657,7 +1776,7 @@ class ReactRuntime {
         }
         return '我先把最影响结论的几路信息拆开核对。';
       default:
-        return '理解问题中';
+        return '理解问题';
     }
   }
 

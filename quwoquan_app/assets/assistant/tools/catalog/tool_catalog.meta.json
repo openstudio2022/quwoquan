@@ -96,6 +96,109 @@
       }
     },
     {
+      "toolName": "search",
+      "displayName": "统一检索",
+      "purpose": "统一检索网页与趣我圈内部对象，使用 query-first 的简单接口",
+      "whenToUse": [
+        "需要同时检索网页与站内对象",
+        "需要让模型拆分主题并做多轮关键词检索",
+        "需要按对象类型限制检索范围"
+      ],
+      "routing": {
+        "toolKind": "retrieval",
+        "supportsQueryTasks": true,
+        "internalOnlyParameters": ["queryVariants", "queryTasks"]
+      },
+      "uiContribution": {
+        "references": true,
+        "locationContext": false
+      },
+      "userInteraction": {
+        "journeyStageId": "search",
+        "phaseTitle": "统一检索",
+        "phaseIcon": "search",
+        "reasoning": {
+          "label": "检索策略设计",
+          "promptHint": "请用用户可见的过程说明自然解释：1. 为什么需要统一检索 2. 你准备检索哪些关键词 3. 你会优先检索网页还是站内对象，以及为什么",
+          "example": "用户在问某个主题时，我会先拆出 2 到 3 个关键词，再分别搜索网页资料和站内内容，最后汇总可靠线索。"
+        },
+        "executing": {
+          "startLabel": "正在统一检索相关线索",
+          "progressTemplate": "正在跨网页与站内对象检索",
+          "completedTemplate": "已整理 {{hits.length}} 条检索结果"
+        },
+        "resultDisplay": {
+          "showKeywords": true,
+          "showReferences": true,
+          "referenceCountPath": "references.length",
+          "referenceTitlePath": "references[].title",
+          "referenceSourcePath": "references[].source"
+        },
+        "replanLabel": "补充更多检索轮次"
+      },
+      "parameterSummary": [
+        {"name": "query", "type": "string", "required": true, "description": "检索关键词"},
+        {"name": "mode", "type": "string", "required": false, "description": "suggest 或 result，默认 result"},
+        {"name": "objectTypes", "type": "array<string>", "required": false, "description": "可选对象类型白名单，如 web.document、content.post、circle.group、entity.homepage"},
+        {"name": "limit", "type": "integer", "required": false, "description": "单轮返回条数"},
+        {"name": "conversationType", "type": "string", "required": false, "description": "聊天对象过滤，direct 或 group"},
+        {"name": "contentTypes", "type": "array<string>", "required": false, "description": "内容类型过滤，如 article/image/video/moment"},
+        {"name": "categoryId", "type": "string", "required": false, "description": "圈子或内容分类过滤"},
+        {"name": "subCategory", "type": "string", "required": false, "description": "细分类过滤"}
+      ],
+      "requiredOutputPaths": ["sections", "hits"],
+      "openAiFunction": {
+        "name": "search",
+        "description": "统一检索网页与趣我圈对象。使用 query-first 的简单参数，适合多轮小查询，不要构造复杂 DSL。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "核心检索词"},
+            "mode": {
+              "type": "string",
+              "enum": ["suggest", "result"],
+              "description": "suggest 或 result"
+            },
+            "objectTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "web.document",
+                  "chat.contact",
+                  "chat.conversation",
+                  "chat.message",
+                  "circle.group",
+                  "circle.circle",
+                  "content.post",
+                  "entity.homepage",
+                  "integration.location_poi"
+                ]
+              },
+              "description": "对象类型白名单，如 web.document、content.post、chat.contact、chat.conversation、chat.message、circle.group、entity.homepage"
+            },
+            "limit": {"type": "integer", "description": "返回条数"},
+            "conversationType": {
+              "type": "string",
+              "enum": ["direct", "group"],
+              "description": "聊天对象过滤：direct 或 group"
+            },
+            "contentTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["article", "image", "video", "moment"]
+              },
+              "description": "内容类型过滤：article、image、video、moment"
+            },
+            "categoryId": {"type": "string"},
+            "subCategory": {"type": "string"}
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
       "toolName": "local_context",
       "displayName": "本地上下文",
       "purpose": "获取设备上下文与地理位置信息（不包含相册数据）",
@@ -574,11 +677,15 @@
   "domainToolMatrix": [
     {
       "domainId": "weather",
-      "allowedTools": ["local_context", "web_search", "web_fetch"]
+      "allowedTools": ["local_context", "search", "web_search", "web_fetch"]
+    },
+    {
+      "domainId": "fallback_general_search",
+      "allowedTools": ["search", "web_search", "local_context", "web_fetch"]
     },
     {
       "domainId": "divination_fortune",
-      "allowedTools": ["web_search"]
+      "allowedTools": ["search", "web_search"]
     }
   ]
 }

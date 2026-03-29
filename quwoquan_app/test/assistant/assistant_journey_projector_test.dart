@@ -3,6 +3,7 @@ import 'package:quwoquan_app/assistant/application/assistant_journey_projector.d
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_trace_event.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 
@@ -34,7 +35,7 @@ void main() {
       expect(journey.summary, isEmpty);
     });
 
-    test('理解阶段的用户语言流式会进入用户抽屉', () {
+    test('理解阶段的模板化确认句不会进入用户抽屉', () {
       final projector = AssistantJourneyProjector(
         toolMetadataRegistry: ToolMetadataRegistry(),
       );
@@ -56,11 +57,10 @@ void main() {
         journey.stageFor(JourneyStageId.analyze)?.status,
         JourneyStageStatus.active,
       );
-      expect(journey.entries, isNotEmpty);
-      expect(journey.entries.first.headline, contains('我先确认你更在意的是今天出门会不会被雨淋到'));
+      expect(journey.entries, isEmpty);
     });
 
-    test('理解阶段的内部规划口吻会转写为用户可读叙事', () {
+    test('理解阶段的内部规划口吻不会再合成为固定确认句', () {
       final projector = AssistantJourneyProjector(
         toolMetadataRegistry: ToolMetadataRegistry(),
       );
@@ -82,11 +82,7 @@ void main() {
         journey.stageFor(JourneyStageId.analyze)?.status,
         JourneyStageStatus.active,
       );
-      expect(journey.entries, isNotEmpty);
-      expect(
-        journey.entries.first.headline,
-        contains('我先确认你真正想解决的是深圳天气'),
-      );
+      expect(journey.entries, isEmpty);
     });
 
     test('检索阶段 trace thinkingProgress 会进入用户抽屉', () {
@@ -108,7 +104,7 @@ void main() {
         JourneyStageStatus.active,
       );
       expect(journey.entries, isNotEmpty);
-      expect(journey.entries.first.headline, contains('换几个检索角度继续交叉核对'));
+      expect(journey.entries.first.headline, contains('我先换几个检索词继续找'));
     });
 
     test('searchQueryGenerated 会把检索设计投影为用户可见 search 过程', () {
@@ -138,7 +134,6 @@ void main() {
       );
       expect(journey.entries, hasLength(1));
       expect(journey.entries.first.headline, isEmpty);
-      expect(journey.entries.first.detail, contains('我会先把最影响结论的几路信息拆开核对'));
       expect(journey.entries.first.detail, contains('- 实时天气'));
       expect(journey.entries.first.detail, contains('- 出行影响'));
       expect(journey.entries.first.detail, isNot(contains('深圳天气 实时 降雨 温度')));
@@ -190,6 +185,44 @@ void main() {
       );
       expect(journey.entries, isEmpty);
       expect(journey.summary, isEmpty);
+    });
+
+    test('synthetic process trace 会按稳定 snapshot 投影为过程块', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        buildSyntheticProcessTrace(
+          type: UserEventType.processCommit,
+          scope: UserEventScope.skill,
+          stageId: JourneyStageId.search,
+          runId: 'run_synthetic_process',
+          traceId: 'trace_synthetic_process',
+          message: '我先把检索结果里真正有用的点筛出来。',
+          payload: const <String, dynamic>{
+            'headline': '我先把检索结果里真正有用的点筛出来。',
+            'detail': '深圳今天有雨。\n外出建议带伞。',
+            'summary': '已筛出 2 条关键点。',
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '深圳天气预报',
+                'url': 'https://example.com/weather',
+                'source': '官方',
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(journey.summary, '已筛出 2 条关键点。');
+      final searchEntry = journey.entries.firstWhere(
+        (entry) => entry.stageId == JourneyStageId.search,
+      );
+      expect(searchEntry.headline, '我先把检索结果里真正有用的点筛出来。');
+      expect(searchEntry.detail, contains('深圳今天有雨'));
+      expect(searchEntry.references, hasLength(1));
+      expect(searchEntry.references.first.url, 'https://example.com/weather');
     });
 
     test('process user event 会驱动 canonical journey 过程块', () {

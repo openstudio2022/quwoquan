@@ -5,7 +5,15 @@ l2:
     l3:
       - feature: full-screen-search-shell-and-entry
       - feature: multi-domain-result-composition
-      - feature: social-relationship-search-contract
+      - feature: local-chat-search-contract
       - feature: circle-facet-search-and-filter
       - feature: recent-search-sync-and-voice-asr
       - feature: xiaoqu-entry-handoff
+  - feature: search-provider-routing-and-storage-topology
+    l3:
+      - feature: canonical-search-contract
+      - feature: search-object-taxonomy-and-provider-registry
+      - feature: search-execution-routing-policy
+      - feature: circle-group-hybrid-fallback-contract
+      - feature: local-search-lifecycle-and-account-isolation
+      - feature: search-storage-topology-and-elasticity

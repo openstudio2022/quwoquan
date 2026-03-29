@@ -24,6 +24,7 @@ void main() {
         _NoopPhase('understand'),
         _NoopPhase('retrieval_design'),
         _NoopPhase('execution'),
+        _NoopPhase('evidence_digest'),
       ],
     );
 
@@ -49,6 +50,7 @@ void main() {
       'understand',
       'retrieval_design',
       'execution',
+      'evidence_digest',
     ]));
   });
 }

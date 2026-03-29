@@ -68,6 +68,7 @@ class FinalizeRunner {
       elapsedMs: executionSnapshot['elapsedMs'] is num
           ? (executionSnapshot['elapsedMs'] as num).toInt()
           : 0,
+      processTimeline: completedArtifact.processTimeline,
       understandingSnapshot:
           (structuredResponse[assistantUnderstandingSnapshotField] as Map?)
               ?.cast<String, dynamic>() ??

@@ -1,0 +1,101 @@
+version: 1
+feature: local-chat-search-contract
+level: L3_scenario
+source_path: global-search-experience/cross-domain-search-journey/local-chat-search-contract
+parent_journey: cross-domain-search-journey
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结本地联系人 / 会话 / 消息搜索对象、账号隔离、删除同步与统一结果跳转语义。
+  journey_bindings:
+    - J2
+  in_scope:
+    - "`chat.contact / chat.conversation / chat.message`"
+    - 本地搜索对象展示与跳转
+    - 账号隔离
+    - 删除 / 撤回同步删本地索引
+  out_of_scope:
+    - 公开用户主页搜索
+    - 低存储设备阈值治理
+
+scenario_acceptance:
+  A1:
+    title: 聊天对象以本地搜索 contract 统一进入全局搜索旅程
+    scenario: local chat search contract
+    journey_step: search local chat objects and open chat context
+    done_when:
+      - 搜索中的联系人、会话、消息统一由本地搜索 provider 提供
+      - "页面层不直接调用聊天域搜索方法名，只消费统一 `search(request)` 结果"
+      - 用户可从本地结果稳定进入单聊或群聊上下文
+    edge_cases:
+      - 本地无命中
+      - 本地有命中但网络不可用
+      - 会话已不存在或被删除
+    linked_plan_items:
+      - P1
+      - P3
+    evidence:
+      primary:
+        - T1_schema
+        - T4_user_journey
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - local chat search contract test
+        - chat search navigation journey test
+      recorded:
+        - flutter test test/ui/search/search_repository_test.dart
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
+    status: implemented
+  A2:
+    title: 本地聊天搜索生命周期与账号隔离规则冻结
+    scenario: local chat search lifecycle and account isolation
+    journey_step: switch sub account, delete content, and keep search namespace isolated
+    done_when:
+      - 登出不清空本地搜索索引
+      - 切换子账号后只读取当前子账号命名空间
+      - 消息撤回、删除或用户显式清理时，同步删除本地索引项
+    edge_cases:
+      - 子账号切换后旧结果残留
+      - 消息撤回后索引项未删
+      - 用户主动清理后仍能命中历史项
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - local index namespace isolation test
+        - delete and recall sync test
+      recorded:
+        - flutter test test/core/services/local_chat_search_store_test.dart
+        - flutter test test/ui/search/search_repository_test.dart
+    status: implemented
+
+story_readiness:
+  S1:
+    title: 旧社交关系挂载不再作为搜索旅程主路径
+    done_when:
+      - 旧社交关系挂载不再被特性树作为本 Journey 主节点引用
+      - "历史 chat 搜索节点被 `local-chat-search-contract` 替代"
+    evidence:
+      primary:
+        - T1_schema
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - feature tree replacement audit
+      recorded:
+        - make gate-full
+    status: implemented

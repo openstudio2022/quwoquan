@@ -10,12 +10,16 @@ execution:
 scope:
   summary: >
     冻结全局搜索作为独立一级能力的边界、领域划分、两段式统一入口、
-    独立网络结果页编排、最近搜索生命周期与小趣搜 assistant 结果规则。
+    独立网络结果页编排、最近搜索生命周期、小趣搜 assistant 结果规则、
+    统一搜索 contract、对象执行策略与云侧搜索存储弹性方案。
   owned_journeys:
     - cross-domain-search-journey
+  owned_topology_features:
+    - search-provider-routing-and-storage-topology
   out_of_scope:
-    - 域内索引实现与搜索引擎选型
-    - 助手 runtime / skill / tool 改造
+    - 统一高性能搜索读库的本期迁移落地
+    - 低存储设备阈值与自动淘汰策略
+    - 与 unified search 无关的通用助手 runtime / skill 平台重构
     - 密信账号分割能力本身
 
 level_acceptance:
@@ -24,7 +28,7 @@ level_acceptance:
     done_when:
       - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
       - chat 历史搜索节点从特性树中移除，不再保留平行治理路径
-      - content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `群组`
+      - "content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `群组`"
     evidence:
       primary:
         - T1_schema
@@ -37,8 +41,8 @@ level_acceptance:
         - l1 index consistency review
       recorded:
         - make verify-metadata
-        - make gate
-    status: pending
+        - make gate-full
+    status: implemented
   C2:
     title: 全局搜索的 metadata 真相源边界冻结
     done_when:
@@ -57,9 +61,11 @@ level_acceptance:
         - route and surface traceability review
       recorded:
         - make verify-metadata
+        - make codegen-app
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - make gate
-    status: pending
+        - flutter test test/ui/search/search_repository_test.dart
+        - make gate-full
+    status: implemented
   C3:
     title: 商用基线与发布边界可判定
     done_when:
@@ -80,3 +86,33 @@ level_acceptance:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
         - make gate
     status: pending
+  C4:
+    title: 统一搜索 contract、执行策略与搜索存储拓扑冻结
+    done_when:
+      - "页面与业务层只有 canonical `search(request)` 接口，建议与正式结果共用同一 contract"
+      - "`chat.contact / chat.conversation / chat.message` 冻结为 `local_only`，`circle.group` 冻结为 `hybrid_remote_fallback_local`"
+      - 云侧搜索读路径采用读模型 / projection、读写分离、多读切片与独立弹性，不把扫描主业务集合定义为长期方案
+      - 未来统一高性能搜索读库仅作为可替换读侧实现，不改变 canonical contract
+      - canonical contract 可直接生成 AI agent 检索 tool schema，模型生成条件受 typed schema、allowlist 与资源边界约束
+      - "canonical contract 以 web-search-like 的单一 `query` 为主输入，支持 `web.document` 与趣我圈内部对象统一召回，不引入复杂嵌套 DSL"
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - search contract ownership review
+        - provider routing and fallback audit
+        - search storage topology review
+        - query-first assistant tool decomposition review
+      recorded:
+        - make -C quwoquan_service verify-metadata
+        - make codegen-app
+        - flutter test test/ui/search/search_repository_test.dart
+        - flutter test test/assistant/search_tool_test.dart test/assistant/tool_metadata_contract_test.dart
+        - flutter test test/assistant/acceptance_vm_test.dart test/assistant/skill_loader_commercial_test.dart
+        - flutter test test/assistant/react_runtime_tool_observation_contract_test.dart
+        - flutter test test/cloud/integration/remote_api_path_contract_test.dart
+    status: implemented

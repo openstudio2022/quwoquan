@@ -12,6 +12,17 @@ import 'package:quwoquan_app/assistant/skills/assistant_skill_executor.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 
 AssistantRuntime createDefaultAssistantRuntime() {
   return _createAssistantRuntime(
@@ -41,9 +52,41 @@ AssistantRuntime _createAssistantRuntime({
   final memoryRepository = AssistantMemoryRepository(memoryStore);
   final toolMetadataRegistry = ToolMetadataRegistry();
   final retrievalBroker = ToolRetrievalBroker();
+  final webSearchTool = WebSearchTool(broker: retrievalBroker);
+  final conversationCache = ConversationCacheService();
+  final chatRepository = RemoteChatRepository();
+  final circleRepository = RemoteCircleRepository();
+  final contentRepository = RemoteContentRepository();
+  final homepageRepository = RemoteHomepageRepository();
+  final integrationRepository = RemoteIntegrationRepository();
+  final userRepository = RemoteUserRepository();
+  final localChatSearchStore = LocalChatSearchStore.shared;
+  final localCircleGroupSnapshotStore = LocalCircleGroupSnapshotStore.shared;
+  final localChatSearchSyncService = LocalChatSearchSyncService(
+    chatRepository: chatRepository,
+    conversationCache: conversationCache,
+    store: localChatSearchStore,
+    personaContextLoader: userRepository.getActivePersonaContext,
+  );
+  final unifiedSearchRepository = buildAppSearchRepository(
+    circleRepository: circleRepository,
+    contentRepository: contentRepository,
+    homepageRepository: homepageRepository,
+    integrationRepository: integrationRepository,
+    localChatSearchStore: localChatSearchStore,
+    localChatSearchSyncService: localChatSearchSyncService,
+    localCircleGroupSnapshotStore: localCircleGroupSnapshotStore,
+    personaContextLoader: userRepository.getActivePersonaContext,
+  );
   final toolRegistry =
       AssistantToolRegistry(metadataRegistry: toolMetadataRegistry)
-        ..register(WebSearchTool(broker: retrievalBroker))
+        ..register(
+          SearchTool(
+            searchRepository: unifiedSearchRepository,
+            webSearchTool: webSearchTool,
+          ),
+        )
+        ..register(webSearchTool)
         ..register(WebFetchTool(broker: retrievalBroker))
         ..register(MemorySearchTool(memoryRepository: memoryRepository))
         ..register(LocalContextTool(channelAdapter))

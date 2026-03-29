@@ -1,0 +1,24 @@
+version: 1
+node: global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260327-001-global-search-experience-unified-search-topology-baseline.yaml
+
+slices:
+  - id: P1
+    title: freeze local lifecycle rules
+    goal: 冻结登出保留、账号隔离、删除同步规则
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 生命周期规则已定义
+      - 命名空间规则已定义
+    status: completed

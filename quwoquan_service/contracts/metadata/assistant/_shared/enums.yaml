@@ -225,6 +225,58 @@ enums:
       - name: milestone
         wire: milestone
 
+  - name: ProcessStepId
+    values:
+      - name: unknown
+        wire: ''
+      - name: understanding
+        wire: understanding
+      - name: retrievalDesign
+        wire: retrieval_design
+      - name: retrievalProcessing
+        wire: retrieval_processing
+      - name: answerOrganization
+        wire: answer_organization
+
+  - name: DisplayBlockKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: markdown
+        wire: markdown
+      - name: paragraph
+        wire: paragraph
+      - name: bulletList
+        wire: bullet_list
+      - name: numberedList
+        wire: numbered_list
+      - name: referenceList
+        wire: reference_list
+      - name: callout
+        wire: callout
+
+  - name: DisplayListStyle
+    values:
+      - name: unknown
+        wire: ''
+      - name: plain
+        wire: plain
+      - name: bullet
+        wire: bullet
+      - name: numbered
+        wire: numbered
+
+  - name: ProcessDisplayBlockKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: summary
+        wire: summary
+      - name: points
+        wire: points
+      - name: references
+        wire: references
+
   - name: TraceVisibility
     values:
       - name: userVisible

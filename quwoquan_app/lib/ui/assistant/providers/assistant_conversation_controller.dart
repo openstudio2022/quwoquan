@@ -8,12 +8,15 @@ import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -47,8 +50,14 @@ class AssistantConversationController extends ChangeNotifier {
 
   List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   AssistantJourney _currentJourney = const AssistantJourney();
+  List<ProcessTimelineFrame> _currentCanonicalProcessTimeline =
+      const <ProcessTimelineFrame>[];
+  List<ProcessTimelineFrame> _currentProcessTimeline =
+      const <ProcessTimelineFrame>[];
   RetrievalProcessingSnapshot _currentRetrievalProcessing =
       const RetrievalProcessingSnapshot();
+  RunArtifactsUnderstandingSnapshot _currentUnderstandingSnapshot =
+      const RunArtifactsUnderstandingSnapshot();
   Timer? _assistantProgressTimer;
   DateTime? _assistantProgressStartedAt;
   String _assistantPhaseLabel = '';
@@ -67,6 +76,8 @@ class AssistantConversationController extends ChangeNotifier {
 
   List<Map<String, dynamic>> get messages => _messages;
   AssistantJourney get currentJourney => _currentJourney;
+  List<ProcessTimelineFrame> get currentProcessTimeline =>
+      _currentProcessTimeline;
   RetrievalProcessingSnapshot get currentRetrievalProcessing =>
       _currentRetrievalProcessing;
   String get assistantPhaseLabel => _assistantPhaseLabel;
@@ -231,11 +242,13 @@ class AssistantConversationController extends ChangeNotifier {
           final normalizedContent = isUser
               ? (item['content'] ?? '').toString()
               : _assistantHistoryContentForModel(item);
-          final hasPersistedTimeline =
-              !isUser && !resolvePersistedAssistantTimeline(item).isEmpty;
+          final hasPersistedTurn =
+              !isUser &&
+              (!resolvePersistedAssistantTimeline(item).isEmpty ||
+                  isCanonicalPersistedAssistantTurnMessage(item));
           if (!isUser &&
               normalizedContent.trim().isEmpty &&
-              !hasPersistedTimeline) {
+              !hasPersistedTurn) {
             return null;
           }
           serial += 1;
@@ -361,7 +374,10 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantResponding = true;
     _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
     _currentJourney = const AssistantJourney();
+    _currentCanonicalProcessTimeline = const <ProcessTimelineFrame>[];
+    _currentProcessTimeline = const <ProcessTimelineFrame>[];
     _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
+    _currentUnderstandingSnapshot = const RunArtifactsUnderstandingSnapshot();
     _currentJourneyElapsedMs = 0;
     _messages.add(<String, dynamic>{
       'id': streamingAssistantMessageId,
@@ -490,6 +506,12 @@ class AssistantConversationController extends ChangeNotifier {
                 _consumeJourneyUpdate(journey);
               }
               continue;
+            case AssistantRunStreamEventType.processTimelineUpdate:
+              final processTimeline = streamEvent.processTimeline;
+              if (processTimeline != null) {
+                _consumeProcessTimelineUpdate(processTimeline);
+              }
+              continue;
           }
           if (response != null) break;
         }
@@ -516,14 +538,8 @@ class AssistantConversationController extends ChangeNotifier {
       final artifactMarkdown = _responseArtifactDisplayMarkdown(runResponse);
       final displayMarkdown =
           AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-            artifactMarkdown.isNotEmpty
-                ? artifactMarkdown
-                : (runResponse.displayMarkdown.trim().isNotEmpty
-                      ? runResponse.displayMarkdown
-                      : displayText),
-            allowJsonExtraction:
-                artifactMarkdown.isNotEmpty ||
-                runResponse.displayMarkdown.trim().isNotEmpty,
+            artifactMarkdown.isNotEmpty ? artifactMarkdown : displayText,
+            allowJsonExtraction: false,
           );
       _resetStreamingAnswerDecoder();
       final resolvedSessionId =
@@ -565,36 +581,76 @@ class AssistantConversationController extends ChangeNotifier {
         excludeMessageId: streamingAssistantMessageId,
       );
       final resolvedJourney = resolveAssistantJourneyFromResponse(runResponse);
+      final resolvedCanonicalProcessTimeline =
+          resolveAssistantProcessTimelineFromRunResponse(runResponse);
+      final resolvedProcessTimeline = buildVisibleProcessTimeline(
+        resolvedCanonicalProcessTimeline,
+      );
       final effectiveJourney = _persistableAssistantJourney(
         response: runResponse,
         journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
       );
       final retrievalProcessing =
           resolveAssistantRetrievalProcessingFromResponse(runResponse);
+      final understandingSnapshot =
+          (runResponse.structuredResponse[assistantUnderstandingSnapshotField]
+                  as Map?)
+              ?.cast<String, dynamic>();
       if (_disposed) return;
       _currentJourney = effectiveJourney;
+      _currentCanonicalProcessTimeline =
+          resolvedCanonicalProcessTimeline.isNotEmpty
+          ? resolvedCanonicalProcessTimeline
+          : _currentCanonicalProcessTimeline;
+      _currentProcessTimeline = resolvedProcessTimeline.isNotEmpty
+          ? resolvedProcessTimeline
+          : _currentProcessTimeline;
       _currentRetrievalProcessing = retrievalProcessing;
+      _currentUnderstandingSnapshot =
+          understandingSnapshot != null && understandingSnapshot.isNotEmpty
+          ? RunArtifactsUnderstandingSnapshot.fromJson(understandingSnapshot)
+          : _understandingSnapshotFromTimeline(
+              _currentCanonicalProcessTimeline,
+            );
       _currentJourneyElapsedMs = elapsedMs;
       final persistedTurnFields = _buildAssistantPersistedTurnFieldsForResponse(
         response: runResponse,
         journey: effectiveJourney,
+        processTimeline: _currentCanonicalProcessTimeline,
         displayMarkdown: displayMarkdown,
         displayPlainText: displayPlainText,
         elapsedMs: elapsedMs,
       );
       _ensureMessagesGrowable();
-      final existingIndex = _messages.indexWhere(
-        (item) => (item['id'] as String?) == streamingAssistantMessageId,
+      final existingIndex = _findStreamingAssistantMessageIndex(
+        streamingAssistantMessageId,
       );
       if (existingIndex >= 0) {
-        final existingMessage = _messages[existingIndex];
-        final effectiveDisplayText = _reconcileCompletedAnswerText(
-          streamedText: (existingMessage['streamFinalAnswer'] as String?) ?? '',
-          completedText: displayText,
+        final existingMessage = _clearStreamingAnswerState(
+          _messages[existingIndex],
+        );
+        final completedDisplayState =
+            resolveAssistantDisplayStateFromRunResponse(runResponse);
+        final responseDisplayState = AssistantDisplayState(
+          process: buildAssistantDisplayState(
+            explicitState: AssistantDisplayState(
+              answer: completedDisplayState.answer,
+            ),
+            processTimeline: _currentCanonicalProcessTimeline,
+            understandingSnapshot: _currentUnderstandingSnapshot,
+            retrievalProcessing: _currentRetrievalProcessing,
+            answerProcessing: _answerProcessingFromResponse(runResponse),
+            finalAnswerReady: true,
+          ).process,
+          answer: _resolvedCompletedAnswerState(
+            completedDisplayState: completedDisplayState,
+            displayMarkdown: displayMarkdown,
+            existingMessage: existingMessage,
+          ),
         );
         _messages[existingIndex] = <String, dynamic>{
           ...existingMessage,
-          'content': effectiveDisplayText,
+          'content': displayMarkdown,
           'timestamp': replyTime,
           'runId': runResponse.runId ?? '',
           'traceId': runResponse.traceId ?? '',
@@ -617,22 +673,48 @@ class AssistantConversationController extends ChangeNotifier {
               (((runResponse.structuredResponse['qualityMetrics'] as Map?)
                   ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
               true,
-          'runArtifacts': _responseRunArtifactsMap(runResponse),
+          'runArtifacts': _withDisplayOverrides(
+            _responseRunArtifactsMap(runResponse),
+            displayMarkdown: displayMarkdown,
+            displayPlainText: displayPlainText,
+            displayState: responseDisplayState,
+          ),
           'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
           'dialogueState': dialogueRuntime,
           'uiReferences': uiReferences,
           'uiActions': uiActions,
           'uiUsageStats': uiUsageStats,
           ...persistedTurnFields,
+          assistantDisplayMarkdownField: displayMarkdown,
+          assistantDisplayPlainTextField: displayPlainText,
+          assistantDisplayStateField: responseDisplayState.toJson(),
           'streamFinalAnswer': '',
           'streaming': false,
         };
       } else {
+        final completedDisplayState =
+            resolveAssistantDisplayStateFromRunResponse(runResponse);
+        final responseDisplayState = AssistantDisplayState(
+          process: buildAssistantDisplayState(
+            explicitState: AssistantDisplayState(
+              answer: completedDisplayState.answer,
+            ),
+            processTimeline: _currentCanonicalProcessTimeline,
+            understandingSnapshot: _currentUnderstandingSnapshot,
+            retrievalProcessing: _currentRetrievalProcessing,
+            answerProcessing: _answerProcessingFromResponse(runResponse),
+            finalAnswerReady: true,
+          ).process,
+          answer: _resolvedCompletedAnswerState(
+            completedDisplayState: completedDisplayState,
+            displayMarkdown: displayMarkdown,
+          ),
+        );
         _messages.add({
           'id': assistantMessageId,
           'conversationId': AppConceptConstants.assistantConversationId,
           'type': 'text',
-          'content': displayText,
+          'content': displayMarkdown,
           'senderId': AppConceptConstants.assistantSenderId,
           'senderName': AppConceptConstants.assistantLabel,
           'senderAvatar': '',
@@ -660,13 +742,21 @@ class AssistantConversationController extends ChangeNotifier {
               (((runResponse.structuredResponse['qualityMetrics'] as Map?)
                   ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
               true,
-          'runArtifacts': _responseRunArtifactsMap(runResponse),
+          'runArtifacts': _withDisplayOverrides(
+            _responseRunArtifactsMap(runResponse),
+            displayMarkdown: displayMarkdown,
+            displayPlainText: displayPlainText,
+            displayState: responseDisplayState,
+          ),
           'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
           'dialogueState': dialogueRuntime,
           'uiReferences': uiReferences,
           'uiActions': uiActions,
           'uiUsageStats': uiUsageStats,
           ...persistedTurnFields,
+          assistantDisplayMarkdownField: displayMarkdown,
+          assistantDisplayPlainTextField: displayPlainText,
+          assistantDisplayStateField: responseDisplayState.toJson(),
         });
       }
       _assistantResponding = false;
@@ -790,7 +880,10 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantResponding = true;
     _assistantPhaseLabel = UITextConstants.assistantPhaseAnswering;
     _currentJourney = const AssistantJourney();
+    _currentCanonicalProcessTimeline = const <ProcessTimelineFrame>[];
+    _currentProcessTimeline = const <ProcessTimelineFrame>[];
     _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
+    _currentUnderstandingSnapshot = const RunArtifactsUnderstandingSnapshot();
     _currentJourneyElapsedMs = 0;
     _messages.add(<String, dynamic>{
       'id': streamingAssistantMessageId,
@@ -843,6 +936,12 @@ class AssistantConversationController extends ChangeNotifier {
               _appendStreamingAnswerChunk(streamEvent.chunkText!);
             }
             continue;
+          case AssistantRunStreamEventType.processTimelineUpdate:
+            final processTimeline = streamEvent.processTimeline;
+            if (processTimeline != null) {
+              _consumeProcessTimelineUpdate(processTimeline);
+            }
+            continue;
           case AssistantRunStreamEventType.completed:
             if (streamEvent.response != null) response = streamEvent.response;
             break;
@@ -863,6 +962,11 @@ class AssistantConversationController extends ChangeNotifier {
         final resolvedJourney = resolveAssistantJourneyFromResponse(
           finalResponse,
         );
+        final resolvedCanonicalProcessTimeline =
+            resolveAssistantProcessTimelineFromRunResponse(finalResponse);
+        final resolvedProcessTimeline = buildVisibleProcessTimeline(
+          resolvedCanonicalProcessTimeline,
+        );
         final effectiveJourney = _persistableAssistantJourney(
           response: finalResponse,
           journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
@@ -876,39 +980,66 @@ class AssistantConversationController extends ChangeNotifier {
         );
         final displayMarkdown =
             AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-              artifactMarkdown.isNotEmpty
-                  ? artifactMarkdown
-                  : (finalResponse.displayMarkdown.trim().isNotEmpty
-                        ? finalResponse.displayMarkdown
-                        : finalText),
-              allowJsonExtraction:
-                  artifactMarkdown.isNotEmpty ||
-                  finalResponse.displayMarkdown.trim().isNotEmpty,
+              artifactMarkdown.isNotEmpty ? artifactMarkdown : finalText,
+              allowJsonExtraction: false,
             );
         _resetStreamingAnswerDecoder();
         _currentJourney = effectiveJourney;
+        _currentCanonicalProcessTimeline =
+            resolvedCanonicalProcessTimeline.isNotEmpty
+            ? resolvedCanonicalProcessTimeline
+            : _currentCanonicalProcessTimeline;
+        _currentProcessTimeline = resolvedProcessTimeline.isNotEmpty
+            ? resolvedProcessTimeline
+            : _currentProcessTimeline;
+        final understandingSnapshot =
+            (finalResponse
+                        .structuredResponse[assistantUnderstandingSnapshotField]
+                    as Map?)
+                ?.cast<String, dynamic>();
+        _currentUnderstandingSnapshot =
+            understandingSnapshot != null && understandingSnapshot.isNotEmpty
+            ? RunArtifactsUnderstandingSnapshot.fromJson(understandingSnapshot)
+            : _understandingSnapshotFromTimeline(
+                _currentCanonicalProcessTimeline,
+              );
         final persistedTurnFields =
             _buildAssistantPersistedTurnFieldsForResponse(
               response: finalResponse,
               journey: effectiveJourney,
+              processTimeline: _currentCanonicalProcessTimeline,
               displayMarkdown: displayMarkdown,
               displayPlainText: displayPlainText,
               elapsedMs: _currentJourneyElapsedMs,
             );
         _ensureMessagesGrowable();
-        final idx = _messages.indexWhere(
-          (item) => (item['id'] as String?) == streamingAssistantMessageId,
+        final idx = _findStreamingAssistantMessageIndex(
+          streamingAssistantMessageId,
         );
         if (idx >= 0) {
-          final existingMessage = _messages[idx];
-          final effectiveFinalText = _reconcileCompletedAnswerText(
-            streamedText:
-                (existingMessage['streamFinalAnswer'] as String?) ?? '',
-            completedText: finalText,
+          final existingMessage = _clearStreamingAnswerState(_messages[idx]);
+          final completedDisplayState =
+              resolveAssistantDisplayStateFromRunResponse(finalResponse);
+          final responseDisplayState = AssistantDisplayState(
+            process: buildAssistantDisplayState(
+              explicitState: AssistantDisplayState(
+                answer: completedDisplayState.answer,
+              ),
+              processTimeline: _currentCanonicalProcessTimeline,
+              understandingSnapshot: _currentUnderstandingSnapshot,
+              retrievalProcessing: _currentRetrievalProcessing,
+              answerProcessing: _answerProcessingFromResponse(finalResponse),
+              finalAnswerReady: true,
+            ).process,
+            answer: _resolvedCompletedAnswerState(
+              completedDisplayState: completedDisplayState,
+              displayMarkdown: displayMarkdown,
+              existingMessage: existingMessage,
+            ),
           );
           _messages[idx] = <String, dynamic>{
             ...existingMessage,
-            'content': effectiveFinalText,
+            'content': displayMarkdown,
             'streamFinalAnswer': '',
             'streaming': false,
             'sourceQuery': query,
@@ -930,9 +1061,17 @@ class AssistantConversationController extends ChangeNotifier {
                 (((finalResponse.structuredResponse['qualityMetrics'] as Map?)
                     ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
                 true,
-            'runArtifacts': _responseRunArtifactsMap(finalResponse),
+            'runArtifacts': _withDisplayOverrides(
+              _responseRunArtifactsMap(finalResponse),
+              displayMarkdown: displayMarkdown,
+              displayPlainText: displayPlainText,
+              displayState: responseDisplayState,
+            ),
             'uiUsageStats': uiUsageStats,
             ...persistedTurnFields,
+            assistantDisplayMarkdownField: displayMarkdown,
+            assistantDisplayPlainTextField: displayPlainText,
+            assistantDisplayStateField: responseDisplayState.toJson(),
           };
         }
       }
@@ -1242,17 +1381,20 @@ class AssistantConversationController extends ChangeNotifier {
 
   AssistantJourneyViewModel buildJourneyViewModel({
     required AssistantJourney journey,
+    List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
     required bool isRunning,
     Map<String, dynamic> usageStats = const <String, dynamic>{},
     int? elapsedMs,
+    AssistantDisplayState displayState = const AssistantDisplayState(),
     RetrievalProcessingSnapshot retrievalProcessing =
         const RetrievalProcessingSnapshot(),
   }) {
     return buildAssistantJourneyViewModel(
       journey: journey,
+      processTimeline: processTimeline,
       isRunning: isRunning,
-      allowAnswerStage:
-          !isRunning || _answerGateOpen || journey.readiness.finalAnswerReady,
+      allowAnswerStage: !isRunning || _answerGateOpen,
+      displayState: displayState,
       retrievalProcessing: retrievalProcessing,
       usageStats: usageStats,
       elapsedMs: elapsedMs ?? _currentJourneyElapsedMs,
@@ -1341,10 +1483,15 @@ class AssistantConversationController extends ChangeNotifier {
 
   String _assistantPhaseLabelFromJourney(
     AssistantJourney journey, {
+    List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
     required bool isRunning,
   }) {
+    if (isRunning && processTimeline.isEmpty) {
+      return UITextConstants.assistantProcessStageUnderstand;
+    }
     final viewModel = buildJourneyViewModel(
       journey: journey,
+      processTimeline: processTimeline,
       isRunning: isRunning,
     );
     if (isRunning && viewModel.activeStageLabel.isNotEmpty) {
@@ -1366,27 +1513,149 @@ class AssistantConversationController extends ChangeNotifier {
     _currentJourney = journey;
     _assistantPhaseLabel = _assistantPhaseLabelFromJourney(
       journey,
+      processTimeline: _currentProcessTimeline,
       isRunning: true,
     );
     if (_shouldOpenAnswerGateForJourney(journey)) {
       _answerGateOpen = true;
     }
     if (messageId != null && messageId.isNotEmpty) {
-      final index = _messages.indexWhere(
-        (item) => (item['id'] as String?) == messageId,
-      );
+      final index = _findStreamingAssistantMessageIndex(messageId);
       if (index >= 0) {
+        final uiProcessTimeline =
+            buildAssistantUiProcessTimelineFromProcessTimeline(
+              _currentCanonicalProcessTimeline,
+              fallbackJourney: journey,
+            );
         _messages[index] = <String, dynamic>{
           ..._messages[index],
           assistantJourneyField: journey.toJson(),
-          assistantUiProcessTimelineField: buildAssistantUiProcessTimeline(
-            journey,
-          ).toJson(),
+          assistantUiProcessTimelineField: uiProcessTimeline.toJson(),
+          if (_currentCanonicalProcessTimeline.isNotEmpty)
+            assistantProcessTimelineField: _currentCanonicalProcessTimeline
+                .map((item) => item.toJson())
+                .toList(growable: false),
           'assistantElapsedMs': _currentJourneyElapsedMs,
         };
       }
     }
     _notify();
+  }
+
+  void _consumeProcessTimelineUpdate(
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    if (_disposed || !_assistantResponding) return;
+    final messageId = _activeAssistantStreamingMessageId;
+    _currentProcessTimeline = buildVisibleProcessTimeline(processTimeline);
+    _currentCanonicalProcessTimeline =
+        rebuildCanonicalProcessTimelineFromVisible(
+          visibleProcessTimeline: _currentProcessTimeline,
+          seedProcessTimeline: _currentCanonicalProcessTimeline,
+        );
+    final retrievalProcessing = _retrievalProcessingFromTimeline(
+      _currentCanonicalProcessTimeline,
+    );
+    if (_hasStructuredRetrievalProcessing(retrievalProcessing)) {
+      _currentRetrievalProcessing = retrievalProcessing;
+    }
+    final understandingSnapshot = _understandingSnapshotFromTimeline(
+      _currentCanonicalProcessTimeline,
+    );
+    if (_hasStructuredUnderstandingSummary(understandingSnapshot)) {
+      _currentUnderstandingSnapshot = understandingSnapshot;
+    }
+    _assistantPhaseLabel = _assistantPhaseLabelFromJourney(
+      _currentJourney,
+      processTimeline: _currentProcessTimeline,
+      isRunning: true,
+    );
+    if (messageId != null && messageId.isNotEmpty) {
+      final index = _findStreamingAssistantMessageIndex(messageId);
+      if (index >= 0) {
+        final uiProcessTimeline =
+            buildAssistantUiProcessTimelineFromProcessTimeline(
+              _currentCanonicalProcessTimeline,
+              fallbackJourney: _currentJourney,
+            );
+        final existingMessage = _messages[index];
+        final mergedDisplayState = _mergeStreamingDisplayState(
+          message: existingMessage,
+          understandingSnapshot: _currentUnderstandingSnapshot,
+        );
+        _messages[index] = <String, dynamic>{
+          ...existingMessage,
+          if (_currentCanonicalProcessTimeline.isNotEmpty)
+            assistantProcessTimelineField: _currentCanonicalProcessTimeline
+                .map((item) => item.toJson())
+                .toList(growable: false),
+          if (!uiProcessTimeline.isEmpty)
+            assistantUiProcessTimelineField: uiProcessTimeline.toJson(),
+          if (_hasStructuredUnderstandingSummary(_currentUnderstandingSnapshot))
+            assistantUnderstandingSnapshotField: _currentUnderstandingSnapshot
+                .toJson(),
+          if (hasAssistantDisplayState(mergedDisplayState))
+            assistantDisplayStateField: mergedDisplayState.toJson(),
+          'assistantElapsedMs': _currentJourneyElapsedMs,
+        };
+      }
+    }
+    _notify();
+  }
+
+  RetrievalProcessingSnapshot _retrievalProcessingFromTimeline(
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    for (final frame in processTimeline) {
+      if (frame.stepId != ProcessStepId.retrievalProcessing) {
+        continue;
+      }
+      if (_hasStructuredRetrievalProcessing(frame.retrievalProcessing)) {
+        return frame.retrievalProcessing;
+      }
+    }
+    return const RetrievalProcessingSnapshot();
+  }
+
+  RunArtifactsUnderstandingSnapshot _understandingSnapshotFromTimeline(
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    for (final frame in processTimeline) {
+      if (frame.stepId != ProcessStepId.understanding) {
+        continue;
+      }
+      if (_hasStructuredUnderstandingSummary(frame.understandingSnapshot)) {
+        return frame.understandingSnapshot;
+      }
+    }
+    return const RunArtifactsUnderstandingSnapshot();
+  }
+
+  bool _hasStructuredRetrievalProcessing(RetrievalProcessingSnapshot snapshot) {
+    return snapshot.processingSummary.trim().isNotEmpty ||
+        snapshot.selectedKeyPoints.isNotEmpty ||
+        snapshot.acceptedReferences.isNotEmpty ||
+        snapshot.processedDocumentCount > 0 ||
+        snapshot.acceptedDocumentCount > 0;
+  }
+
+  bool _hasStructuredUnderstandingSummary(
+    RunArtifactsUnderstandingSnapshot snapshot,
+  ) {
+    return snapshot.userFacingSummary.trim().isNotEmpty;
+  }
+
+  RunArtifactsAnswerProcessing _answerProcessingFromResponse(
+    AssistantRunResponse response,
+  ) {
+    final direct =
+        (response.structuredResponse[assistantAnswerProcessingField] as Map?)
+            ?.cast<String, dynamic>();
+    if (direct != null && direct.isNotEmpty) {
+      return RunArtifactsAnswerProcessing.fromJson(direct);
+    }
+    return response.runArtifacts?.answerProcessing ??
+        const RunArtifactsAnswerProcessing();
   }
 
   void _resetStreamingAnswerDecoder() {
@@ -1395,6 +1664,23 @@ class AssistantConversationController extends ChangeNotifier {
 
   String _visibleStreamingAnswerChunk(String rawChunk) {
     return _streamingAnswerDecoder.appendChunk(rawChunk);
+  }
+
+  int _findStreamingAssistantMessageIndex(String messageId) {
+    if (messageId.isEmpty) return -1;
+    final exactIndex = _messages.indexWhere(
+      (item) => (item['id'] as String?) == messageId,
+    );
+    if (exactIndex >= 0) return exactIndex;
+    for (var index = _messages.length - 1; index >= 0; index--) {
+      final message = _messages[index];
+      if ((message['senderId'] as String?) ==
+              AppConceptConstants.assistantSenderId &&
+          message['streaming'] == true) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   String _mergeStreamingAnswerText({
@@ -1429,27 +1715,34 @@ class AssistantConversationController extends ChangeNotifier {
     final now = DateTime.now();
     final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
     _ensureMessagesGrowable();
-    final existingIndex = _messages.indexWhere(
-      (item) => (item['id'] as String?) == messageId,
-    );
+    final existingIndex = _findStreamingAssistantMessageIndex(messageId);
     if (existingIndex >= 0) {
-      final prev =
-          (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
-      final merged = _mergeStreamingAnswerText(previous: prev, incoming: value);
-      if (merged == prev) {
+      final existingMessage = _messages[existingIndex];
+      final mergedDisplayState = _mergeStreamingDisplayState(
+        message: existingMessage,
+        streamedAnswerDelta: value,
+      );
+      final prevMarkdown = renderAnswerBlocksToMarkdown(
+        resolvePersistedAssistantDisplayState(existingMessage).answer.blocks,
+      );
+      final nextMarkdown = renderAnswerBlocksToMarkdown(
+        mergedDisplayState.answer.blocks,
+      );
+      if (nextMarkdown == prevMarkdown) {
         return;
       }
       _messages[existingIndex] = <String, dynamic>{
-        ..._messages[existingIndex],
-        'streamFinalAnswer': merged,
+        ...existingMessage,
+        assistantDisplayStateField: mergedDisplayState.toJson(),
       };
     } else {
+      final initialDisplayState = _streamingAnswerDisplayState(value);
       _messages.add(<String, dynamic>{
         'id': messageId,
         'conversationId': AppConceptConstants.assistantConversationId,
         'type': 'text',
         'content': '',
-        'streamFinalAnswer': value,
+        'streamFinalAnswer': '',
         'senderId': AppConceptConstants.assistantSenderId,
         'senderName': AppConceptConstants.assistantLabel,
         'senderAvatar': '',
@@ -1457,6 +1750,8 @@ class AssistantConversationController extends ChangeNotifier {
         'isRead': true,
         'isSelf': false,
         'streaming': true,
+        if (hasAssistantDisplayState(initialDisplayState))
+          assistantDisplayStateField: initialDisplayState.toJson(),
       });
     }
     if (value.trim().isNotEmpty ||
@@ -1466,44 +1761,110 @@ class AssistantConversationController extends ChangeNotifier {
     _notify();
   }
 
-  String _reconcileCompletedAnswerText({
-    required String streamedText,
-    required String completedText,
+  AssistantDisplayState _streamingAnswerDisplayState(String markdown) {
+    final normalizedMarkdown =
+        AssistantDisplayTextResolver.stabilizeStreamingMarkdownCandidate(
+          markdown,
+        );
+    if (normalizedMarkdown.isEmpty) {
+      return const AssistantDisplayState();
+    }
+    return AssistantDisplayState(
+      answer: AssistantAnswerDisplayState(
+        blocks: <AssistantAnswerDisplayBlock>[
+          AssistantAnswerDisplayBlock(
+            blockId: 'answer_stream_markdown',
+            kind: DisplayBlockKind.markdown,
+            body: normalizedMarkdown,
+          ),
+        ],
+      ),
+    );
+  }
+
+  AssistantDisplayState _mergeStreamingDisplayState({
+    required Map<String, dynamic> message,
+    String streamedAnswerDelta = '',
+    RunArtifactsUnderstandingSnapshot? understandingSnapshot,
   }) {
-    final streamed = streamedText.trim();
-    final completed = completedText.trim();
-    final sanitizedCompleted = _sanitizeCompletedDisplayCandidate(
-      completed,
-      allowJsonExtraction: true,
+    final current = resolvePersistedAssistantDisplayState(message);
+    final currentMarkdown = renderAnswerBlocksToMarkdown(current.answer.blocks);
+    final mergedMarkdown = streamedAnswerDelta.trim().isEmpty
+        ? currentMarkdown
+        : _mergeStreamingAnswerText(
+            previous: currentMarkdown,
+            incoming: streamedAnswerDelta,
+          );
+    final effectiveUnderstandingSnapshot =
+        understandingSnapshot ??
+        (_hasStructuredUnderstandingSummary(_currentUnderstandingSnapshot)
+            ? _currentUnderstandingSnapshot
+            : resolveAssistantUnderstandingSnapshotFromMessage(message));
+    final answerState = _streamingAnswerDisplayState(mergedMarkdown).answer;
+    final mergedProcess = buildAssistantDisplayState(
+      explicitState: AssistantDisplayState(answer: current.answer),
+      processTimeline: resolveAssistantProcessTimelineFromMessage(message),
+      understandingSnapshot: effectiveUnderstandingSnapshot,
+      retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
+        message,
+      ),
+      answerProcessing: resolveAssistantAnswerProcessingFromMessage(message),
+      finalAnswerReady: false,
+    ).process;
+    return AssistantDisplayState(process: mergedProcess, answer: answerState);
+  }
+
+  AssistantAnswerDisplayState _resolvedCompletedAnswerState({
+    required AssistantDisplayState completedDisplayState,
+    required String displayMarkdown,
+    Map<String, dynamic>? existingMessage,
+  }) {
+    if (completedDisplayState.answer.blocks.isNotEmpty) {
+      return completedDisplayState.answer;
+    }
+    final carriedAnswer = existingMessage == null
+        ? const AssistantAnswerDisplayState()
+        : resolvePersistedAssistantDisplayState(existingMessage).answer;
+    if (carriedAnswer.blocks.isNotEmpty) {
+      return AssistantAnswerDisplayState(
+        summary: completedDisplayState.answer.summary,
+        blocks: carriedAnswer.blocks,
+      );
+    }
+    final fallback = _streamingAnswerDisplayState(displayMarkdown).answer;
+    return AssistantAnswerDisplayState(
+      summary: completedDisplayState.answer.summary,
+      blocks: fallback.blocks,
     );
-    final sanitizedStreamed = _sanitizeCompletedDisplayCandidate(
-      streamed,
-      allowJsonExtraction: true,
-    );
-    if (sanitizedCompleted.isNotEmpty) {
-      if (sanitizedStreamed.isEmpty) return sanitizedCompleted;
-      if (sanitizedCompleted == sanitizedStreamed) return sanitizedCompleted;
-      if (sanitizedCompleted.startsWith(sanitizedStreamed)) {
-        return sanitizedCompleted;
-      }
-      if (sanitizedCompleted.length >= sanitizedStreamed.length) {
-        return sanitizedCompleted;
-      }
-    }
-    if (sanitizedStreamed.isNotEmpty) return sanitizedStreamed;
-    if (completed.isEmpty) return streamed;
-    if (streamed.isEmpty) return completed;
-    if (completed == streamed) return completed;
-    if (_containsInternalDisplayFragment(streamed) &&
-        !_containsInternalDisplayFragment(completed)) {
-      return completed;
-    }
-    if (completed.startsWith(streamed)) return completed;
-    if (completed.length >= streamed.length &&
-        !_containsInternalDisplayFragment(completed)) {
-      return completed;
-    }
-    return streamed;
+  }
+
+  Map<String, dynamic> _clearStreamingAnswerState(
+    Map<String, dynamic> message,
+  ) {
+    return <String, dynamic>{...message, 'streamFinalAnswer': ''};
+  }
+
+  Map<String, dynamic> _withDisplayOverrides(
+    Map<String, dynamic> runArtifacts, {
+    required String displayMarkdown,
+    required String displayPlainText,
+    AssistantDisplayState displayState = const AssistantDisplayState(),
+  }) {
+    return <String, dynamic>{
+      ...runArtifacts,
+      assistantDisplayMarkdownField:
+          AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+            displayMarkdown,
+            allowJsonExtraction: false,
+          ),
+      assistantDisplayPlainTextField:
+          AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+            displayPlainText,
+            allowJsonExtraction: false,
+          ),
+      if (hasAssistantDisplayState(displayState))
+        assistantDisplayStateField: displayState.toJson(),
+    };
   }
 
   String _firstCompletedDisplayCandidate(Iterable<String> candidates) {
@@ -1681,10 +2042,9 @@ class AssistantConversationController extends ChangeNotifier {
     if (_isInternalChunk(sanitized)) return '';
     if (AssistantContentFilters.isDegradedText(sanitized)) return '';
     if (AssistantContentFilters.isProgressPlaceholder(sanitized)) return '';
-    if (sanitized.contains('tool_call') ||
-        sanitized.contains('queryTasks') ||
-        sanitized.contains('queryVariants') ||
-        sanitized.contains('正在调用工具')) {
+    if (AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(
+      sanitized,
+    )) {
       return '';
     }
     return sanitized;
@@ -1732,13 +2092,152 @@ class AssistantConversationController extends ChangeNotifier {
     return response.runArtifacts?.toJson() ?? const <String, dynamic>{};
   }
 
+  AssistantDisplayProjection? _assistantTurnProjectionFromMap(
+    Map<String, dynamic> payload,
+  ) {
+    if (payload.isEmpty) return null;
+    final turn = tryParseAssistantTurnOutput(payload);
+    if (turn == null) return null;
+    final projection = AssistantDisplayTextResolver.projectTurn(
+      AssistantDisplayTextResolver.normalizeTurn(turn),
+    );
+    if (!projection.hasRenderableContent) return null;
+    return projection;
+  }
+
+  AssistantDisplayProjection? _assistantTurnProjectionFromRawText(String raw) {
+    final markdown =
+        AssistantDisplayTextResolver.extractDisplayMarkdownFromStructuredText(
+          raw,
+        ).trim();
+    final plainText =
+        AssistantDisplayTextResolver.extractPlainTextFromStructuredText(
+          raw,
+        ).trim();
+    if (markdown.isEmpty && plainText.isEmpty) return null;
+    final effectiveMarkdown = markdown.isNotEmpty ? markdown : plainText;
+    final effectivePlainText = plainText.isNotEmpty
+        ? plainText
+        : AssistantDisplayTextResolver.stripMarkdown(effectiveMarkdown).trim();
+    return AssistantDisplayProjection(
+      markdown: effectiveMarkdown,
+      plainText: effectivePlainText,
+      summary: effectivePlainText.isNotEmpty
+          ? effectivePlainText
+          : effectiveMarkdown,
+    );
+  }
+
+  AssistantDisplayProjection? _structuredResponseAssistantTurnProjection(
+    AssistantRunResponse response,
+  ) {
+    final topLevel = _assistantTurnProjectionFromMap(
+      response.structuredResponse,
+    );
+    if (topLevel != null) return topLevel;
+    final nested =
+        (response.structuredResponse['answerPayload'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return _assistantTurnProjectionFromMap(nested);
+  }
+
   String _responseArtifactDisplayMarkdown(AssistantRunResponse response) {
+    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
+    if (displayState.answer.blocks.isNotEmpty) {
+      final markdown = renderAnswerBlocksToMarkdown(displayState.answer.blocks);
+      if (markdown.isNotEmpty) {
+        return _firstCompletedDisplayCandidate(<String>[markdown]);
+      }
+    }
+    final projection = _structuredResponseAssistantTurnProjection(response);
+    if (projection != null) {
+      return _firstCompletedDisplayCandidate(<String>[
+        projection.markdown,
+        projection.plainText,
+      ]);
+    }
     final runArtifacts = _responseRunArtifactsMap(response);
+    final normalized =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+    final normalizedPlain =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          (runArtifacts['displayPlainText'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
+    if (normalizedPlain.isNotEmpty) {
+      return normalizedPlain;
+    }
+    final rawProjection = _assistantTurnProjectionFromRawText(
+      response.finalText,
+    );
+    if (rawProjection != null) {
+      return _firstCompletedDisplayCandidate(<String>[
+        rawProjection.markdown,
+        rawProjection.plainText,
+      ]);
+    }
     return (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '';
   }
 
   String _responseArtifactDisplayPlainText(AssistantRunResponse response) {
+    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
+    if (displayState.answer.blocks.isNotEmpty) {
+      final plain = renderAnswerBlocksToPlainText(displayState.answer.blocks);
+      if (plain.isNotEmpty) {
+        return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          plain,
+          allowJsonExtraction: false,
+        );
+      }
+    }
+    final projection = _structuredResponseAssistantTurnProjection(response);
+    if (projection != null) {
+      final effectivePlainText = projection.plainText.trim().isNotEmpty
+          ? projection.plainText
+          : AssistantDisplayTextResolver.stripMarkdown(projection.markdown);
+      return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        effectivePlainText,
+        allowJsonExtraction: false,
+      );
+    }
     final runArtifacts = _responseRunArtifactsMap(response);
+    final normalizedPlain =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          (runArtifacts['displayPlainText'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
+    if (normalizedPlain.isNotEmpty) {
+      return normalizedPlain;
+    }
+    final normalizedMarkdown =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '',
+          allowJsonExtraction: false,
+        );
+    if (normalizedMarkdown.isNotEmpty) {
+      return AssistantDisplayTextResolver.stripMarkdown(
+        normalizedMarkdown,
+      ).trim();
+    }
+    final rawProjection = _assistantTurnProjectionFromRawText(
+      response.finalText,
+    );
+    if (rawProjection != null) {
+      final effectivePlainText = rawProjection.plainText.trim().isNotEmpty
+          ? rawProjection.plainText
+          : AssistantDisplayTextResolver.stripMarkdown(rawProjection.markdown);
+      return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        effectivePlainText,
+        allowJsonExtraction: false,
+      );
+    }
     return (runArtifacts['displayPlainText'] as String?)?.trim() ?? '';
   }
 
@@ -1746,8 +2245,6 @@ class AssistantConversationController extends ChangeNotifier {
     final displayText = _firstCompletedDisplayCandidate(<String>[
       _responseArtifactDisplayMarkdown(response),
       _responseArtifactDisplayPlainText(response),
-      response.displayMarkdown,
-      response.displayPlainText,
     ]);
     if (displayText.isNotEmpty) {
       return displayText;
@@ -1762,9 +2259,7 @@ class AssistantConversationController extends ChangeNotifier {
   String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
     final artifactPlain =
         AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          _responseArtifactDisplayPlainText(response).isNotEmpty
-              ? _responseArtifactDisplayPlainText(response)
-              : response.displayPlainText,
+          _responseArtifactDisplayPlainText(response),
           allowJsonExtraction: false,
         );
     if (artifactPlain.isNotEmpty) {
@@ -1772,9 +2267,7 @@ class AssistantConversationController extends ChangeNotifier {
     }
     final artifactMarkdown =
         AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          _responseArtifactDisplayMarkdown(response).isNotEmpty
-              ? _responseArtifactDisplayMarkdown(response)
-              : response.displayMarkdown,
+          _responseArtifactDisplayMarkdown(response),
           allowJsonExtraction: false,
         );
     if (artifactMarkdown.isNotEmpty) {
@@ -1786,17 +2279,50 @@ class AssistantConversationController extends ChangeNotifier {
   Map<String, dynamic> _buildAssistantPersistedTurnFieldsForResponse({
     required AssistantRunResponse response,
     required AssistantJourney journey,
+    required List<ProcessTimelineFrame> processTimeline,
     required String displayMarkdown,
     required String displayPlainText,
     required int elapsedMs,
   }) {
+    final runArtifacts = response.runArtifacts;
+    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
     return buildPersistedAssistantTurnFields(
       journey: journey,
+      processTimeline: processTimeline,
       displayMarkdown: displayMarkdown,
       displayPlainText: displayPlainText,
+      displayState: displayState.toJson(),
       followupPrompt: resolveAssistantFollowupPromptFromResponse(response),
       actionHints: resolveAssistantActionHintsFromResponse(response),
       elapsedMs: elapsedMs,
+      understandingSnapshot:
+          (response.structuredResponse[assistantUnderstandingSnapshotField]
+                  as Map?)
+              ?.cast<String, dynamic>() ??
+          runArtifacts?.understandingSnapshot.toJson() ??
+          const <String, dynamic>{},
+      answerProcessing:
+          (response.structuredResponse[assistantAnswerProcessingField] as Map?)
+              ?.cast<String, dynamic>() ??
+          runArtifacts?.answerProcessing.toJson() ??
+          const <String, dynamic>{},
+      historicalThinkingSnapshot:
+          (response.structuredResponse[assistantHistoricalThinkingSnapshotField]
+                  as Map?)
+              ?.cast<String, dynamic>() ??
+          runArtifacts?.historicalThinkingSnapshot.toJson() ??
+          const <String, dynamic>{},
+      retrievalProcessing:
+          (response.structuredResponse[assistantRetrievalProcessingField]
+                  as Map?)
+              ?.cast<String, dynamic>() ??
+          runArtifacts?.retrievalProcessing.toJson() ??
+          const <String, dynamic>{},
+      providerReasoningContinuation:
+          (response.structuredResponse[assistantProviderReasoningContinuationField]
+                  as String?)
+              ?.trim() ??
+          '',
     );
   }
 

@@ -125,6 +125,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     if (_isLongWaitWithoutProgress) {
       return _waitReassuranceText();
     }
+    if (_viewModel.isRunning) {
+      final phase = _viewModel.activeStageLabel.trim();
+      if (phase.isNotEmpty) {
+        return phase;
+      }
+    }
     return '';
   }
 
@@ -284,7 +290,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color textColor,
     required Color secondaryTextColor,
   }) {
-    final bulletLines = _bulletLines(block.detail);
+    final bulletLines = block.items.isNotEmpty
+        ? block.items
+        : _bulletLines(block.detail);
     final paragraphLines = _paragraphLines(block.detail);
     final isExpanded = _expandedBlockIndices.contains(index);
     return Padding(
@@ -438,17 +446,17 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     return _referenceCountLabel(block.references.length);
   }
 
-  String _stageLabelFor(JourneyStageId stageId) {
+  String _stageLabelFor(ProcessStepId stageId) {
     switch (stageId) {
-      case JourneyStageId.analyze:
+      case ProcessStepId.understanding:
         return UITextConstants.assistantProcessStageUnderstand;
-      case JourneyStageId.search:
-        return UITextConstants.assistantProcessStageSearch;
-      case JourneyStageId.verify:
-        return UITextConstants.assistantProcessStageVerify;
-      case JourneyStageId.answer:
+      case ProcessStepId.retrievalDesign:
+        return UITextConstants.assistantProcessStageUnderstand;
+      case ProcessStepId.retrievalProcessing:
+        return UITextConstants.assistantProcessStageRetrievalProcessing;
+      case ProcessStepId.answerOrganization:
         return UITextConstants.assistantProcessStageAnswer;
-      case JourneyStageId.unknown:
+      case ProcessStepId.unknown:
         return UITextConstants.assistantProcessStageUnderstand;
     }
   }

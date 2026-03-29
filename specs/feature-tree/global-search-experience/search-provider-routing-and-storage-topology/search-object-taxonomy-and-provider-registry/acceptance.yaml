@@ -1,0 +1,48 @@
+version: 1
+feature: search-object-taxonomy-and-provider-registry
+level: L3_scenario
+source_path: global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+parent_journey: search-provider-routing-and-storage-topology
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 searchable object taxonomy 与 provider registry。
+  journey_bindings:
+    - J1
+  in_scope:
+    - objectType
+    - provider registry
+  out_of_scope:
+    - provider 内部实现
+
+scenario_acceptance:
+  A1:
+    title: searchable object 有统一 taxonomy 与 provider registry
+    scenario: object taxonomy and provider registry
+    journey_step: planner resolves object types
+    done_when:
+      - searchable object 通过统一 taxonomy 注册
+      - provider routing 可通过 registry 解析
+      - 页面层不再手写 objectType 字符串
+      - "`web.document` 与趣我圈内部对象共用同一 registry，可供 AI 按对象类型做多轮检索"
+    edge_cases:
+      - 未注册 objectType
+      - objectType 被多个 provider 竞争
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - object registry schema test
+      recorded: []
+    status: pending

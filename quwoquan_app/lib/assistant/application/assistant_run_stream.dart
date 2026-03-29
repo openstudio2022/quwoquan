@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
@@ -9,6 +10,7 @@ enum AssistantRunStreamEventType {
   failed,
   answerDelta,
   journeyUpdate,
+  processTimelineUpdate,
 }
 
 class AssistantRunStreamEvent {
@@ -19,6 +21,7 @@ class AssistantRunStreamEvent {
     this.response,
     this.errorMessage,
     this.journey,
+    this.processTimeline,
   });
 
   factory AssistantRunStreamEvent.trace(AssistantTraceEvent trace) =>
@@ -57,10 +60,18 @@ class AssistantRunStreamEvent {
         journey: journey,
       );
 
+  factory AssistantRunStreamEvent.processTimeline(
+    List<ProcessTimelineFrame> processTimeline,
+  ) => AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.processTimelineUpdate,
+        processTimeline: processTimeline,
+      );
+
   final AssistantRunStreamEventType type;
   final AssistantTraceEvent? trace;
   final String? chunkText;
   final AssistantRunResponse? response;
   final String? errorMessage;
   final AssistantJourney? journey;
+  final List<ProcessTimelineFrame>? processTimeline;
 }

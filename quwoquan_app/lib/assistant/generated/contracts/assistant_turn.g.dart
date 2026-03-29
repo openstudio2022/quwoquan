@@ -541,6 +541,7 @@ class AssistantTurnUnderstandingQueryGroupFields {
 class AssistantTurnUnderstandingSnapshot {
   const AssistantTurnUnderstandingSnapshot({
     this.intentSummary = "",
+    this.userFacingSummary = "",
     this.concernPoints = const <String>[],
     this.emotionSignal = "",
     this.queryDesignSummary = "",
@@ -552,6 +553,7 @@ class AssistantTurnUnderstandingSnapshot {
   });
 
   final String intentSummary;
+  final String userFacingSummary;
   final List<String> concernPoints;
   final String emotionSignal;
   final String queryDesignSummary;
@@ -563,6 +565,7 @@ class AssistantTurnUnderstandingSnapshot {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'intentSummary': intentSummary,
+        'userFacingSummary': userFacingSummary,
         'concernPoints': concernPoints,
         'emotionSignal': emotionSignal,
         'queryDesignSummary': queryDesignSummary,
@@ -576,6 +579,7 @@ class AssistantTurnUnderstandingSnapshot {
   factory AssistantTurnUnderstandingSnapshot.fromJson(Map<String, dynamic> json) {
     return AssistantTurnUnderstandingSnapshot(
       intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
+      userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
       concernPoints: _assistantStringList(json['concernPoints']),
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
       queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
@@ -597,6 +601,7 @@ class AssistantTurnUnderstandingSnapshot {
 
 class AssistantTurnUnderstandingSnapshotFields {
   static const String intentSummary = 'intentSummary';
+  static const String userFacingSummary = 'userFacingSummary';
   static const String concernPoints = 'concernPoints';
   static const String emotionSignal = 'emotionSignal';
   static const String queryDesignSummary = 'queryDesignSummary';
@@ -614,6 +619,7 @@ class AssistantTurnOutput {
     required this.messageKind,
     required this.userMarkdown,
     this.result = const AssistantTurnResult(),
+    this.displayState = const AssistantDisplayState(),
     this.evidence = const <AssistantTurnEvidenceItem>[],
     this.reasoningBasis = const <AssistantTurnReasoningBasisItem>[],
     this.selfCheck = const AssistantTurnSelfCheck(),
@@ -647,6 +653,7 @@ class AssistantTurnOutput {
   final AssistantMessageKind messageKind;
   final String userMarkdown;
   final AssistantTurnResult result;
+  final AssistantDisplayState displayState;
   final List<AssistantTurnEvidenceItem> evidence;
   final List<AssistantTurnReasoningBasisItem> reasoningBasis;
   final AssistantTurnSelfCheck selfCheck;
@@ -680,6 +687,7 @@ class AssistantTurnOutput {
         'messageKind': messageKind.wireName,
         'userMarkdown': userMarkdown,
         'result': result.toJson(),
+        'displayState': displayState.toJson(),
         'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
         'reasoningBasis': reasoningBasis.map((item) => item.toJson()).toList(growable: false),
         'selfCheck': selfCheck.toJson(),
@@ -715,6 +723,7 @@ class AssistantTurnOutput {
       messageKind: parseAssistantMessageKind((json['messageKind'] as String?)?.trim() ?? ""),
       userMarkdown: (json['userMarkdown'] as String?)?.trim() ?? "",
       result: json['result'] is Map ? AssistantTurnResult.fromJson((json['result'] as Map).cast<String, dynamic>()) : const AssistantTurnResult(),
+      displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
       evidence: (json['evidence'] as List?)?.whereType<Map>().map((item) => AssistantTurnEvidenceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnEvidenceItem>[],
       reasoningBasis: (json['reasoningBasis'] as List?)?.whereType<Map>().map((item) => AssistantTurnReasoningBasisItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnReasoningBasisItem>[],
       selfCheck: json['selfCheck'] is Map ? AssistantTurnSelfCheck.fromJson((json['selfCheck'] as Map).cast<String, dynamic>()) : const AssistantTurnSelfCheck(),
@@ -758,6 +767,7 @@ class AssistantTurnOutputFields {
   static const String messageKind = 'messageKind';
   static const String userMarkdown = 'userMarkdown';
   static const String result = 'result';
+  static const String displayState = 'displayState';
   static const String evidence = 'evidence';
   static const String reasoningBasis = 'reasoningBasis';
   static const String selfCheck = 'selfCheck';

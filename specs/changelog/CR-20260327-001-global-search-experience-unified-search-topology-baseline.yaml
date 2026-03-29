@@ -1,0 +1,325 @@
+id: CR-20260327-001
+title: global search experience unified search topology baseline
+slug: global-search-experience-unified-search-topology-baseline
+revision: 3
+status: active
+
+affected_nodes:
+  - specs/feature-tree/global-search-experience
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+  - specs/feature-tree/tree_index.yaml
+  - specs/l1_index.yaml
+
+entries:
+  - timestamp: "2026-03-27T16:30:00+08:00"
+    summary: >
+      基于最新搜索澄清结果，完成 `global-search-experience` 的 unified search topology baseline：
+      将聊天搜索收口为本地搜索 contract，新增治理型 L2 承接 canonical search contract、
+      object taxonomy、execution routing、`circle.group` fallback，以及云侧搜索读模型弹性拓扑。
+    reason: >
+      既有 `global-search-experience` 基线已经冻结了统一旅程，但新的业务前提进一步明确：
+      聊天相关对象必须端侧搜索、`circle.group` 需云优先再本地 fallback、搜索建议只能有一个接口、
+      云侧搜索读路径必须具备读写分离、多读切片与未来统一高性能读库的替换边界。若继续仅靠 Journey 文档承接，
+      将再次出现页面体验统一、接口语义分裂、provider routing 分散与存储拓扑缺失的问题，因此必须完成一次新的
+      baseline 增量，把体验与架构分别冻结为两个 L2。
+    change_type:
+      - refine
+      - expand
+      - split
+      - design
+      - plan
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/tree.yaml
+        sections:
+          - l2
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 2026-03-27 基线扩展
+          - 能力边界
+          - 关键 Journey
+          - 领域服务与业务对象
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/design.md
+        sections:
+          - 2026-03-27 增量基线扩展
+          - 架构总览
+          - KD8
+          - KD9
+          - KD10
+          - KD11
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C4
+      - path: specs/feature-tree/global-search-experience/plan.yaml
+        sections:
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/spec.md
+        sections:
+          - 特性树拆分
+          - 约束
+          - 角色分工
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/design.md
+        sections:
+          - 方案 C
+          - KD10
+          - KD11
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
+        sections:
+          - J2
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/plan.yaml
+        sections:
+          - P1
+          - P4
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/spec.md
+        sections:
+          - 功能范围
+          - 约束
+          - 数据生命周期合同
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - S1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+        sections:
+          - 子场景拆分
+          - 能力边界
+          - 约束
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md
+        sections:
+          - 功能范围
+      - path: specs/l1_index.yaml
+        sections:
+          - global-search-experience
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - global-search-experience
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次为 `/baseline` 增量冻结，已将体验旅程与搜索架构分别挂到两个 L2。
+      - `social-relationship-search-contract` 已退出主特性树引用，聊天搜索主语义由 `local-chat-search-contract` 承接。
+      - 云侧搜索方案冻结为“按域写入、读模型查询、多读切片弹性、未来统一读库可替换”。
+  - timestamp: "2026-03-27T16:55:00+08:00"
+    summary: >
+      进一步补强 unified search baseline：明确 canonical `search(request)` 必须可直接生成
+      AI agent 检索 tool schema，查询条件允许由模型生成但必须受 typed schema / allowlist /
+      资源边界约束；同时删除旧的 `social-relationship-search-contract` 目录文件，避免保留旧真相源。
+    reason: >
+      用户进一步要求后续端云开发按高规格推进，统一搜索接口除了服务页面与云端之外，还必须稳定复用于
+      AI agent tool 调用场景；这要求 contract 在设计阶段就具备 tool-facing、typed、可审计、可限流的边界。
+      同时，旧 `social-relationship-search-contract` 目录若继续保留，会与新的 `local-chat-search-contract`
+      主语义形成干扰，因此需要在 baseline 阶段直接清理。
+    change_type:
+      - refine
+      - expand
+      - cleanup
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 2026-03-27 基线扩展
+          - 能力边界
+          - 约束与适用边界
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C4
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+        sections:
+          - 能力边界
+          - 约束
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md
+        sections:
+          - KD7
+          - metadata / codegen 方案
+          - feature flag、观测、SLO 验证与回滚方案
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/acceptance.yaml
+        sections:
+          - J1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
+        sections:
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/acceptance.yaml
+        sections:
+          - A1
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/spec.md
+        sections:
+          - deleted
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/design.md
+        sections:
+          - deleted
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/acceptance.yaml
+        sections:
+          - deleted
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/plan.yaml
+        sections:
+          - deleted
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/tasks.md
+        sections:
+          - deleted
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - unified search contract 已明确可作为 AI agent 检索 tool 的唯一接口真相源。
+      - AI 模型只能生成 schema allowlist 允许的条件，不能生成自由执行表达式。
+      - 旧 `social-relationship-search-contract` 目录文件已全部删除。
+  - timestamp: "2026-03-27T17:10:00+08:00"
+    summary: >
+      进一步把 unified search contract 冻结为 web-search-like 的 query-first 接口：
+      AI 在私人助理回答中可基于同一 tool 做“主题拆分 -> 关键词检索”，并统一召回
+      `web.document` 与趣我圈内内容、关系、群组、实体对象。
+    reason: >
+      用户进一步强调，搜索接口不仅要可被 AI agent 调用，还必须像网页检索一样简单，
+      让模型稳定生成关键词而不是被复杂 DSL 绕住。为避免后续 `/dev` 回到重表达式、深嵌套结构、
+      或把网页检索与站内检索拆成两套接口，本次将“query-first、web-like、统一召回源”正式写入
+      spec / acceptance / plan / topology 设计。
+    change_type:
+      - refine
+      - simplify
+      - expand
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 2026-03-27 基线扩展
+          - 能力边界
+          - 领域服务与业务对象
+          - 功能范围
+          - 约束与适用边界
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/acceptance.yaml
+        sections:
+          - C4
+      - path: specs/feature-tree/global-search-experience/plan.yaml
+        sections:
+          - P4
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+        sections:
+          - 能力边界
+          - 约束
+          - 非功能目标
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md
+        sections:
+          - KD1
+          - KD7
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/acceptance.yaml
+        sections:
+          - J1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/plan.yaml
+        sections:
+          - P1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - Out of Scope
+          - 约束
+          - 验收重点
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/design.md
+        sections:
+          - 方案 B
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/acceptance.yaml
+        sections:
+          - A1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/plan.yaml
+        sections:
+          - P1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+        sections:
+          - 功能范围
+          - 约束
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/acceptance.yaml
+        sections:
+          - A1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/plan.yaml
+        sections:
+          - P1
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - canonical `search(request)` 已被明确为 query-first、web-search-like、AI 易拆解的接口。
+      - `web.document` 已进入统一 taxonomy，与趣我圈内部对象共用同一检索 contract。
+      - 接口设计明确偏向“多次简单查询”而非“单次复杂 DSL 查询”。

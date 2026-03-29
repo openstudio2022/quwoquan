@@ -202,12 +202,13 @@ class AssistantToolRegistry {
   }) {
     final parameters = _metadataRegistry?.functionParametersByToolName(name);
     if (parameters == null || parameters.isEmpty) return null;
-    final requiredKeys = (parameters['required'] as List?)
-            ?.whereType<String>()
-            .toList(growable: false) ??
+    final requiredKeys =
+        (parameters['required'] as List?)?.whereType<String>().toList(
+          growable: false,
+        ) ??
         const <String>[];
-    final properties = (parameters['properties'] as Map?)
-            ?.cast<String, dynamic>() ??
+    final properties =
+        (parameters['properties'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final normalizedArgs = <String, dynamic>{};
     for (final entry in arguments.entries) {
@@ -236,7 +237,8 @@ class AssistantToolRegistry {
     for (final entry in normalizedArgs.entries) {
       final schema = properties[entry.key];
       if (schema is! Map) continue;
-      final expectedType = (schema['type'] as String?)?.trim() ?? '';
+      final typedSchema = schema.cast<String, dynamic>();
+      final expectedType = (typedSchema['type'] as String?)?.trim() ?? '';
       if (expectedType.isEmpty) continue;
       if (!_matchesType(expectedType, entry.value)) {
         return AssistantToolResult(
@@ -247,6 +249,14 @@ class AssistantToolRegistry {
           degraded: true,
         );
       }
+      final enumError = _validateEnum(
+        key: entry.key,
+        schema: typedSchema,
+        value: entry.value,
+      );
+      if (enumError != null) {
+        return enumError;
+      }
     }
     return null;
   }
@@ -256,7 +266,8 @@ class AssistantToolRegistry {
     required AssistantToolResult result,
   }) {
     if (!result.success) return null;
-    final requiredPaths = _metadataRegistry?.requiredOutputPathsByToolName(name) ??
+    final requiredPaths =
+        _metadataRegistry?.requiredOutputPathsByToolName(name) ??
         const <String>[];
     if (requiredPaths.isEmpty) return null;
     final data = result.data ?? const <String, dynamic>{};
@@ -292,6 +303,60 @@ class AssistantToolRegistry {
     }
   }
 
+  AssistantToolResult? _validateEnum({
+    required String key,
+    required Map<String, dynamic> schema,
+    required Object? value,
+  }) {
+    final enumValues =
+        (schema['enum'] as List?)?.whereType<String>().toSet() ??
+        const <String>{};
+    if (enumValues.isNotEmpty) {
+      if (value is! String || !enumValues.contains(value)) {
+        return AssistantToolResult(
+          success: false,
+          message:
+              'Tool argument invalid: "$key" must be one of ${enumValues.join(", ")}',
+          errorCode: AssistantErrorCode.invalidArguments,
+          degraded: true,
+        );
+      }
+    }
+    final expectedType = (schema['type'] as String?)?.trim() ?? '';
+    if (expectedType != 'array' || value is! List) {
+      return null;
+    }
+    final itemSchema = (schema['items'] as Map?)?.cast<String, dynamic>();
+    if (itemSchema == null) {
+      return null;
+    }
+    final itemType = (itemSchema['type'] as String?)?.trim() ?? '';
+    if (itemType.isNotEmpty &&
+        value.any((item) => !_matchesType(itemType, item))) {
+      return AssistantToolResult(
+        success: false,
+        message:
+            'Tool argument invalid: "$key" contains item that is not $itemType',
+        errorCode: AssistantErrorCode.invalidArguments,
+        degraded: true,
+      );
+    }
+    final itemEnums =
+        (itemSchema['enum'] as List?)?.whereType<String>().toSet() ??
+        const <String>{};
+    if (itemEnums.isNotEmpty &&
+        value.any((item) => item is! String || !itemEnums.contains(item))) {
+      return AssistantToolResult(
+        success: false,
+        message:
+            'Tool argument invalid: "$key" contains unsupported enum value',
+        errorCode: AssistantErrorCode.invalidArguments,
+        degraded: true,
+      );
+    }
+    return null;
+  }
+
   bool _hasPath(Map<String, dynamic> data, String path) {
     final parts = path.split('.');
     Object? current = data;
@@ -307,6 +372,13 @@ class AssistantToolRegistry {
 class _ToolResilienceManager {
   final Map<String, _ToolResiliencePolicy> _policies =
       <String, _ToolResiliencePolicy>{
+        'search': _ToolResiliencePolicy(
+          maxAttempts: 2,
+          retryDelay: Duration.zero,
+          breakerThreshold: 2,
+          breakerWindow: const Duration(minutes: 1),
+          breakerDuration: const Duration(seconds: 30),
+        ),
         'web_search': _ToolResiliencePolicy(
           maxAttempts: 2,
           retryDelay: Duration.zero,
@@ -346,8 +418,10 @@ class _ToolResiliencePolicy {
   AssistantToolResult? checkBeforeExecute(String toolName) {
     final now = DateTime.now();
     if (_breakerOpenUntil != null && now.isBefore(_breakerOpenUntil!)) {
-      final remainingSeconds =
-          _breakerOpenUntil!.difference(now).inSeconds.clamp(1, 60);
+      final remainingSeconds = _breakerOpenUntil!
+          .difference(now)
+          .inSeconds
+          .clamp(1, 60);
       return AssistantToolResult(
         success: false,
         message: '$toolName 当前处于短暂保护期，请在 ${remainingSeconds}s 后重试。',

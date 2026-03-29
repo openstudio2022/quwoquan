@@ -3,15 +3,22 @@ import 'dart:convert';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_trace_event.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
@@ -90,9 +97,18 @@ class UnderstandPhase implements Phase {
           intentGraph: normalizedIntent,
           recallResult: bootstrapContext?.recallResult,
         );
+        final understandingSnapshot = _fallbackUnderstandingSnapshot(
+          intentGraph: normalizedIntent,
+          latestUserQuery: latestUserQuery,
+        );
+        _emitUnderstandingSnapshot(
+          input: input,
+          snapshot: understandingSnapshot,
+        );
         return PhaseOutput(
           state: input.state.copyWith(
             intentGraph: normalizedIntent,
+            understandingSnapshot: understandingSnapshot,
             queryTasks: normalizedIntent.queryTasks,
             dialogueRoundScript: dialogueRoundScript,
             executionPreparation: AssistantExecutionPreparation(
@@ -106,7 +122,7 @@ class UnderstandPhase implements Phase {
       }
     }
 
-    final modelIntentGraph = await _resolveIntentGraphWithModel(
+    final modelUnderstanding = await _resolveIntentGraphWithModel(
       request: request,
       bootstrapContext: bootstrapContext,
       latestUserQuery: latestUserQuery,
@@ -114,8 +130,14 @@ class UnderstandPhase implements Phase {
       runId: input.runId,
       traceId: input.traceId,
       onTraceEvent: input.onTraceEvent,
+      processEmitter: ProcessTimelineEmitter(
+        runId: input.runId,
+        traceId: input.traceId,
+        onTraceEvent: input.onTraceEvent,
+      ),
     );
-    if (modelIntentGraph != null) {
+    if (modelUnderstanding != null) {
+      final modelIntentGraph = modelUnderstanding.intentGraph;
       final normalizedIntent = _normalizeIntentGraph(
         request: request,
         intentGraph: modelIntentGraph,
@@ -139,9 +161,12 @@ class UnderstandPhase implements Phase {
         intentGraph: normalizedIntent,
         recallResult: bootstrapContext?.recallResult,
       );
+      final understandingSnapshot = modelUnderstanding.understandingSnapshot;
+      _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
       return PhaseOutput(
         state: input.state.copyWith(
           intentGraph: normalizedIntent,
+          understandingSnapshot: understandingSnapshot,
           queryTasks: normalizedIntent.queryTasks,
           dialogueRoundScript: dialogueRoundScript,
           executionPreparation: AssistantExecutionPreparation(
@@ -173,10 +198,16 @@ class UnderstandPhase implements Phase {
       intentGraph: intentGraph,
       recallResult: bootstrapContext?.recallResult,
     );
+    final understandingSnapshot = _fallbackUnderstandingSnapshot(
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+    );
+    _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
 
     return PhaseOutput(
       state: input.state.copyWith(
         intentGraph: intentGraph,
+        understandingSnapshot: understandingSnapshot,
         queryTasks: intentGraph.queryTasks,
         dialogueRoundScript: dialogueRoundScript,
         executionPreparation: AssistantExecutionPreparation(
@@ -359,7 +390,7 @@ class UnderstandPhase implements Phase {
     return normalized.isNotEmpty ? normalized : ProblemClass.general.wireName;
   }
 
-  Future<IntentGraph?> _resolveIntentGraphWithModel({
+  Future<_ResolvedUnderstanding?> _resolveIntentGraphWithModel({
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
     required String latestUserQuery,
@@ -367,6 +398,7 @@ class UnderstandPhase implements Phase {
     required String runId,
     required String traceId,
     void Function(dynamic event)? onTraceEvent,
+    required ProcessTimelineEmitter processEmitter,
   }) async {
     final runtime = this.runtime;
     if (runtime == null) return null;
@@ -417,50 +449,235 @@ class UnderstandPhase implements Phase {
       request: request,
       bootstrapContext: bootstrapContext,
     );
-    final result = await runtime.run(
-      messages: <Map<String, dynamic>>[
-        <String, dynamic>{
-          'role': 'system',
-          'content': _buildIntentPlanningContext(
-            continuityMode: continuityMode,
-            problemClass: problemClass,
-          ),
-        },
-        for (final item in plannerMessages)
-          <String, dynamic>{'role': item.role, 'content': item.content},
+    final plannerMessagesPayload = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'role': 'system',
+        'content': _buildIntentPlanningContext(
+          continuityMode: continuityMode,
+          problemClass: problemClass,
+        ),
+      },
+      for (final item in plannerMessages)
+        <String, dynamic>{'role': item.role, 'content': item.content},
+    ];
+    final plannerTemplateVars = <String, dynamic>{
+      'userQuery': latestUserQuery,
+      'skillCatalog': bootstrapContext?.skillCatalog ?? '',
+      'sharedContext': sharedContextJson,
+      'currentRuntimeState': currentRuntimeStateJson,
+      'dialogueContinuity': dialogueContinuityJson,
+    };
+    void forwardTrace(AssistantTraceEvent event) {
+      onTraceEvent?.call(event.copyWith(visibility: TraceVisibility.internal));
+      if (event.type == AssistantTraceEventType.thinkingProgress &&
+          event.data?['streaming'] == true &&
+          event.data?['extracted'] == true &&
+          event.data?['fieldPath'] ==
+              'understandingSnapshot.userFacingSummary') {
+        processEmitter.pushDelta(
+          stepId: ProcessStepId.understanding,
+          scope: UserEventScope.root,
+          delta: event.message,
+          phaseId: 'understanding',
+          actionCode: 'frame_problem',
+          reasonCode: 'align_goal',
+          payload: const <String, dynamic>{
+            'fieldPath': 'understandingSnapshot.userFacingSummary',
+          },
+        );
+      }
+    }
+
+    var rawOutput = await runtime.streamStructuredOutput(
+      messages: plannerMessagesPayload,
+      onDelta: (_) {},
+      streamJsonFieldPaths: const <String>[
+        'understandingSnapshot.userFacingSummary',
       ],
-      maxIterations: 1,
-      goal: latestUserQuery,
-      availableToolNamesOverride: const <String>[],
+      templateContext: mergedScopeHint,
+      templateVariables: plannerTemplateVars,
       templateId: 'planner.global_plan',
       templateVersion: templateVersion,
-      templateContext: mergedScopeHint,
-      templateVariables: <String, dynamic>{
-        'userQuery': latestUserQuery,
-        'skillCatalog': bootstrapContext?.skillCatalog ?? '',
-        'sharedContext': sharedContextJson,
-        'currentRuntimeState': currentRuntimeStateJson,
-        'dialogueContinuity': dialogueContinuityJson,
-      },
       sessionId: bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
       runId: runId,
       traceId: traceId,
-      onTraceEvent: onTraceEvent == null
-          ? null
-          : (event) => onTraceEvent(
-              event.copyWith(visibility: TraceVisibility.internal),
-            ),
-      callOptions: const LlmCallOptions(
-        temperature: 0.2,
-        maxTokens: 1400,
-        forceJsonObject: true,
-        timeoutSeconds: 20,
+      onTraceEvent: onTraceEvent == null ? null : forwardTrace,
+      streamTraceStage: 'understanding',
+      structuredPhaseId: 'understanding',
+      emitVisibleStreamTrace: false,
+    );
+    if (rawOutput.trim().isEmpty) {
+      final fallbackResult = await runtime.run(
+        messages: plannerMessagesPayload,
+        maxIterations: 1,
+        goal: latestUserQuery,
+        availableToolNamesOverride: const <String>[],
+        templateId: 'planner.global_plan',
+        templateVersion: templateVersion,
+        templateContext: mergedScopeHint,
+        templateVariables: plannerTemplateVars,
+        sessionId: bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
+        runId: runId,
+        traceId: traceId,
+        onTraceEvent: onTraceEvent == null ? null : forwardTrace,
+        callOptions: const LlmCallOptions(
+          temperature: 0.2,
+          maxTokens: 1400,
+          forceJsonObject: true,
+          timeoutSeconds: 20,
+          streamJsonFieldPaths: <String>[
+            'understandingSnapshot.userFacingSummary',
+          ],
+        ),
+      );
+      rawOutput = fallbackResult.finalText;
+    }
+    final parsed = LlmResponseParser.parse(rawOutput).json ?? <String, dynamic>{};
+    final turn = tryParseAssistantTurnOutput(parsed);
+    final intentGraph = extractIntentGraphFromModelPayload(
+      parsed,
+      parsedTurn: turn,
+    );
+    if (intentGraph == null) return null;
+    return _ResolvedUnderstanding(
+      intentGraph: intentGraph,
+      understandingSnapshot: _normalizeUnderstandingSnapshot(
+        snapshot: parsed['understandingSnapshot'] is Map
+            ? RunArtifactsUnderstandingSnapshot.fromJson(
+                (parsed['understandingSnapshot'] as Map)
+                    .cast<String, dynamic>(),
+              )
+            : const RunArtifactsUnderstandingSnapshot(),
+        intentGraph: intentGraph,
+        latestUserQuery: latestUserQuery,
       ),
     );
-    final parsed =
-        LlmResponseParser.parse(result.finalText).json ?? <String, dynamic>{};
-    final turn = tryParseAssistantTurnOutput(parsed);
-    return extractIntentGraphFromModelPayload(parsed, parsedTurn: turn);
+  }
+
+  RunArtifactsUnderstandingSnapshot _fallbackUnderstandingSnapshot({
+    required IntentGraph intentGraph,
+    required String latestUserQuery,
+  }) {
+    final concernPoints = <String>[
+      ...intentGraph.hardConstraints.map((item) => item.trim()),
+      ...intentGraph.softConstraints.map((item) => item.trim()),
+    ].where((item) => item.isNotEmpty).take(3).toList(growable: false);
+    final queryDesignSummary = intentGraph.queryTasks.isNotEmpty
+        ? '先按${intentGraph.queryTasks.take(2).map((item) => item.effectiveLabel.trim()).where((item) => item.isNotEmpty).join('、')}这几路信息分开核对。'
+        : '先把最影响结论的关键信息拆开核对。';
+    return RunArtifactsUnderstandingSnapshot(
+      intentSummary: intentGraph.userGoal.trim().isNotEmpty
+          ? intentGraph.userGoal.trim()
+          : latestUserQuery,
+      userFacingSummary: buildUnderstandingUserFacingSummary(
+        intentSummary: intentGraph.userGoal.trim().isNotEmpty
+            ? intentGraph.userGoal.trim()
+            : latestUserQuery,
+        concernPoints: concernPoints,
+        queryDesignSummary: queryDesignSummary,
+      ),
+      concernPoints: concernPoints,
+      emotionSignal: 'neutral',
+      queryDesignSummary: queryDesignSummary,
+      queryGroups: _buildUnderstandingQueryGroups(intentGraph.queryTasks),
+    );
+  }
+
+  RunArtifactsUnderstandingSnapshot _normalizeUnderstandingSnapshot({
+    required RunArtifactsUnderstandingSnapshot snapshot,
+    required IntentGraph intentGraph,
+    required String latestUserQuery,
+  }) {
+    final normalizedIntent = snapshot.intentSummary.trim().isNotEmpty
+        ? snapshot.intentSummary.trim()
+        : (intentGraph.userGoal.trim().isNotEmpty
+              ? intentGraph.userGoal.trim()
+              : latestUserQuery);
+    final normalizedConcernPoints = snapshot.concernPoints
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    final normalizedQueryDesign = snapshot.queryDesignSummary.trim().isNotEmpty
+        ? snapshot.queryDesignSummary.trim()
+        : _fallbackUnderstandingSnapshot(
+            intentGraph: intentGraph,
+            latestUserQuery: latestUserQuery,
+          ).queryDesignSummary;
+    final normalizedQueryGroups = snapshot.queryGroups.isNotEmpty
+        ? snapshot.queryGroups
+        : _buildUnderstandingQueryGroups(intentGraph.queryTasks);
+    return RunArtifactsUnderstandingSnapshot(
+      intentSummary: normalizedIntent,
+      userFacingSummary: snapshot.userFacingSummary.trim().isNotEmpty
+          ? snapshot.userFacingSummary.trim()
+          : buildUnderstandingUserFacingSummary(
+              intentSummary: normalizedIntent,
+              concernPoints: normalizedConcernPoints,
+              queryDesignSummary: normalizedQueryDesign,
+            ),
+      concernPoints: normalizedConcernPoints,
+      emotionSignal: snapshot.emotionSignal,
+      queryDesignSummary: normalizedQueryDesign,
+      queryGroups: normalizedQueryGroups,
+      assumptions: snapshot.assumptions,
+      mismatchSignal: snapshot.mismatchSignal,
+      carryForwardFacts: snapshot.carryForwardFacts,
+      discardedAssumptions: snapshot.discardedAssumptions,
+    );
+  }
+
+  List<RunArtifactsUnderstandingQueryGroup> _buildUnderstandingQueryGroups(
+    List<QueryTask> queryTasks,
+  ) {
+    final grouped = <String, List<String>>{};
+    final reasons = <String, String>{};
+    for (final task in queryTasks) {
+      final dimension = task.dimensionLabel.trim().isNotEmpty
+          ? task.dimensionLabel.trim()
+          : (task.effectiveLabel.trim().isNotEmpty
+                ? task.effectiveLabel.trim()
+                : '综合');
+      final query = task.query.trim();
+      if (query.isEmpty) {
+        continue;
+      }
+      grouped.putIfAbsent(dimension, () => <String>[]).add(query);
+      reasons[dimension] = task.label.trim();
+    }
+    return grouped.entries
+        .map(
+          (entry) => RunArtifactsUnderstandingQueryGroup(
+            dimension: entry.key,
+            queries: entry.value.toSet().toList(growable: false),
+            why: reasons[entry.key]?.trim() ?? '',
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  void _emitUnderstandingSnapshot({
+    required PhaseInput input,
+    required RunArtifactsUnderstandingSnapshot snapshot,
+  }) {
+    final detail = buildUnderstandingDetail(snapshot.concernPoints);
+    ProcessTimelineEmitter(
+      runId: input.runId,
+      traceId: input.traceId,
+      onTraceEvent: input.onTraceEvent,
+    ).commit(
+      stepId: ProcessStepId.understanding,
+      scope: UserEventScope.root,
+      headline: snapshot.userFacingSummary.trim(),
+      detail: detail,
+      phaseId: 'understanding',
+      actionCode: 'frame_problem',
+      reasonCode: 'align_goal',
+      payload: <String, dynamic>{
+        'summary': snapshot.userFacingSummary.trim(),
+        'understandingSnapshot': snapshot.toJson(),
+      },
+    );
   }
 
   Map<String, dynamic> inputSafeContextEnvelope(
@@ -974,4 +1191,14 @@ class UnderstandPhase implements Phase {
 
   TemplateCatalogRuntime get _templateCatalogRuntime =>
       templateCatalogRuntime ?? TemplateCatalogRuntime();
+}
+
+class _ResolvedUnderstanding {
+  const _ResolvedUnderstanding({
+    required this.intentGraph,
+    required this.understandingSnapshot,
+  });
+
+  final IntentGraph intentGraph;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
 }

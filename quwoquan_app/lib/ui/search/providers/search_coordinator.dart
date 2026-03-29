@@ -4,8 +4,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final searchCoordinatorProvider = ChangeNotifierProvider.autoDispose
@@ -315,8 +318,6 @@ class SearchCoordinator extends ChangeNotifier {
       return const <SearchSuggestionSection>[];
     }
 
-    final chatRepository = _ref.read(chatRepositoryProvider);
-    final circleRepository = _ref.read(circleRepositoryProvider);
     final selection = state.selection.normalized();
     final objectTarget = selection.activeObjectTarget;
     final includesContacts =
@@ -329,57 +330,55 @@ class SearchCoordinator extends ChangeNotifier {
     final includesCircles =
         objectTarget == null || objectTarget == SearchObjectTarget.circles;
     final includesNetwork = selection.enabledContentTypes.isNotEmpty;
-
-    final contactsFuture = includesContacts
-        ? chatRepository.searchContacts(
+    final response = await _ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
             query: normalizedQuery,
+            mode: SearchMode.suggest,
+            objectTypes: _searchObjectTypesForSelection(selection),
             limit: _conversationSearchLimit,
-          )
-        : Future<List<Map<String, dynamic>>>.value(
-            const <Map<String, dynamic>>[],
-          );
-    final allConversationsFuture = includesContacts || includesChatRecords
-        ? chatRepository.listConversations(limit: 100)
-        : Future<List<Map<String, dynamic>>>.value(
-            const <Map<String, dynamic>>[],
-          );
-    final conversationHitsFuture = includesChatRecords
-        ? chatRepository.searchConversations(
-            query: normalizedQuery,
-            limit: _conversationSearchLimit,
-          )
-        : Future<List<ConversationSearchItemView>>.value(
-            const <ConversationSearchItemView>[],
-          );
-    final messageHitsFuture = includesChatRecords
-        ? chatRepository.searchMessages(
-            query: normalizedQuery,
-            limit: _messageSearchLimit,
-          )
-        : Future<List<MessageSearchItemView>>.value(
-            const <MessageSearchItemView>[],
-          );
-    final circleHitsFuture = includesCircles
-        ? circleRepository.searchCircles(query: normalizedQuery, limit: 8)
-        : Future<CircleSearchResultView>.value(const CircleSearchResultView());
+            conversationType: _conversationTypeForSelection(objectTarget),
+          ),
+        );
 
-    final contacts = await contactsFuture;
-    final allConversationsRaw = await allConversationsFuture;
-    final conversationHits = await conversationHitsFuture;
-    final messageHits = await messageHitsFuture;
-    final circleHits = await circleHitsFuture;
-
-    final allConversations = allConversationsRaw
+    final contacts = response.hits
+        .where((hit) => hit.objectType == SearchObjectType.chatContact)
+        .map((hit) => hit.payload)
+        .toList(growable: false);
+    final conversationHits = response.hits
+        .where((hit) => hit.objectType == SearchObjectType.chatConversation)
+        .map((hit) => ConversationSearchItemView.fromMap(hit.payload))
+        .toList(growable: false);
+    final messageHits = response.hits
+        .where((hit) => hit.objectType == SearchObjectType.chatMessage)
+        .map((hit) => MessageSearchItemView.fromMap(hit.payload))
+        .toList(growable: false);
+    final circleSuggestions = response.hits
+        .where(
+          (hit) =>
+              hit.objectType == SearchObjectType.circleGroup ||
+              hit.objectType == SearchObjectType.circleCircle,
+        )
+        .map((hit) => CircleSearchItemView.fromMap(hit.payload))
+        .toList(growable: false);
+    final allConversations = _ref
+        .read(conversationCacheProvider)
+        .getAll()
         .map(ConversationSearchItemView.fromMap)
         .toList(growable: false);
+    final seededConversations = <String, ConversationSearchItemView>{
+      for (final item in allConversations) item.conversationId: item,
+      for (final item in conversationHits) item.conversationId: item,
+    }.values.toList(growable: false);
     final contactSuggestions = _buildContactSuggestions(
       contacts: contacts,
-      allConversations: allConversations,
+      allConversations: seededConversations,
     );
     final chatRecordSuggestions = _buildChatRecordSuggestions(
       conversationHits: conversationHits,
       messageHits: messageHits,
-      allConversations: allConversations,
+      allConversations: seededConversations,
     );
     final filteredChatRecordSuggestions = chatRecordSuggestions
         .where((item) {
@@ -389,14 +388,11 @@ class SearchCoordinator extends ChangeNotifier {
           return includesDirectChats;
         })
         .toList(growable: false);
-    final circleSuggestions = includesCircles
-        ? circleHits.items
-        : const <CircleSearchItemView>[];
     final mostUsedSuggestions =
         _buildMostUsedSuggestions(
               contacts: contactSuggestions,
               chatRecords: filteredChatRecordSuggestions,
-              circles: circleHits.items,
+              circles: circleSuggestions,
             )
             .where((item) => _allowsMostUsedItem(selection, item))
             .toList(growable: false);
@@ -486,6 +482,41 @@ class SearchCoordinator extends ChangeNotifier {
 
   bool _isGroupConversation(String? conversationType) {
     return conversationType?.trim().toLowerCase() == 'group';
+  }
+
+  Set<SearchObjectType> _searchObjectTypesForSelection(
+    SearchObjectSelection selection,
+  ) {
+    final objectTarget = selection.activeObjectTarget;
+    return switch (objectTarget) {
+      SearchObjectTarget.contacts => <SearchObjectType>{
+        SearchObjectType.chatContact,
+      },
+      SearchObjectTarget.directChats ||
+      SearchObjectTarget.groupChats => <SearchObjectType>{
+        SearchObjectType.chatConversation,
+        SearchObjectType.chatMessage,
+      },
+      SearchObjectTarget.circles => <SearchObjectType>{
+        SearchObjectType.circleGroup,
+        SearchObjectType.circleCircle,
+      },
+      null => <SearchObjectType>{
+        SearchObjectType.chatContact,
+        SearchObjectType.chatConversation,
+        SearchObjectType.chatMessage,
+        SearchObjectType.circleGroup,
+        SearchObjectType.circleCircle,
+      },
+    };
+  }
+
+  String? _conversationTypeForSelection(SearchObjectTarget? target) {
+    return switch (target) {
+      SearchObjectTarget.directChats => 'direct',
+      SearchObjectTarget.groupChats => 'group',
+      _ => null,
+    };
   }
 
   List<SearchSuggestionSection> _applyExpansionFlags(
@@ -714,6 +745,18 @@ class SearchCoordinator extends ChangeNotifier {
         title: '$query 相关主页',
         subtitle: '搜索 $query 的共享主页',
         initialTabId: 'homepages',
+      ),
+      NetworkSearchSuggestion(
+        query: query,
+        title: '$query 相关群组',
+        subtitle: '搜索 $query 的圈子与群组',
+        initialTabId: 'groups',
+      ),
+      NetworkSearchSuggestion(
+        query: query,
+        title: '$query 相关位置',
+        subtitle: '搜索 $query 的位置结果',
+        initialTabId: 'locations',
       ),
       NetworkSearchSuggestion(query: query, subtitle: '直接搜索 $query'),
       NetworkSearchSuggestion(query: '$query群组', subtitle: '搜索 $query群组 的网络结果'),

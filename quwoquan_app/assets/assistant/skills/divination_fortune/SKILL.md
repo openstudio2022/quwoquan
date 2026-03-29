@@ -2,7 +2,7 @@
 name: fortune-daily
 description: 回答今日运势与短期建议问题，支持生日信息确认、历史记忆补全与精美 Markdown 输出。
 domain: divination_fortune
-allowed_tools: web_search
+allowed_tools: search web_search
 trigger_keywords: 运势 运程 卜卦 八字 今日运势 桃花 财运 事业
 output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
@@ -27,7 +27,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 工具调用策略
 - 默认以知识推理 + 已有上下文回答，不强制外部工具。
-- 当用户请求"实时黄历/节气/天象"等外部证据时，可调用 `web_search`。
+- 当用户请求"实时黄历/节气/天象"等外部证据时，优先调用 `search`，必要时回退到 `web_search`。
 - 工具失败可重试 1 次，仍失败需降级说明并给下一步。
 
 ## 触发与禁用条件
@@ -52,7 +52,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "focusArea": {"value": "overall", "source": "user_query|default"}
   },
   "toolPlan": [
-    {"toolName": "web_search", "arguments": {"query": "今日黄历 节气 信息"}}
+    {"toolName": "search", "arguments": {"query": "今日黄历 节气 信息", "mode": "result"}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在为你生成今日运势…"

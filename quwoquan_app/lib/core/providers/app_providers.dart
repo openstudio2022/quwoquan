@@ -15,6 +15,7 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
@@ -34,9 +35,14 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/client_state_sync.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
 
@@ -1057,6 +1063,14 @@ final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
       : MockHomepageRepository();
 });
 
+/// Integration Repository（外部能力集成：位置 nearby / search）
+final integrationRepositoryProvider = Provider<IntegrationRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteIntegrationRepository()
+      : const MockIntegrationRepository();
+});
+
 /// Chat Repository（按业务对象组织的端侧入口）
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -1083,6 +1097,15 @@ final conversationSyncProvider = Provider<ConversationSyncService>((ref) {
     cache: ref.watch(conversationCacheProvider),
   );
 });
+
+final localChatSearchStoreProvider = Provider<LocalChatSearchStore>((ref) {
+  return LocalChatSearchStore.shared;
+});
+
+final localCircleGroupSnapshotStoreProvider =
+    Provider<LocalCircleGroupSnapshotStore>((ref) {
+      return LocalCircleGroupSnapshotStore.shared;
+    });
 
 /// User Repository（按业务对象组织的端侧入口）
 final userRepositoryProvider = Provider<UserRepository>((ref) {
@@ -1194,6 +1217,36 @@ final circleRepositoryProvider = Provider<CircleRepository>((ref) {
   return mode == AppDataSourceMode.remote
       ? RemoteCircleRepository()
       : MockCircleRepository();
+});
+
+final activePersonaContextLoaderProvider = Provider<PersonaContextLoader>((
+  ref,
+) {
+  return ref.read(userRepositoryProvider).getActivePersonaContext;
+});
+
+final localChatSearchSyncProvider = Provider<LocalChatSearchSyncService>((ref) {
+  return LocalChatSearchSyncService(
+    chatRepository: ref.watch(chatRepositoryProvider),
+    conversationCache: ref.watch(conversationCacheProvider),
+    store: ref.watch(localChatSearchStoreProvider),
+    personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
+  );
+});
+
+final searchRepositoryProvider = Provider<SearchRepository>((ref) {
+  return buildAppSearchRepository(
+    circleRepository: ref.watch(circleRepositoryProvider),
+    contentRepository: ref.watch(contentRepositoryProvider),
+    homepageRepository: ref.watch(homepageRepositoryProvider),
+    integrationRepository: ref.watch(integrationRepositoryProvider),
+    localChatSearchStore: ref.watch(localChatSearchStoreProvider),
+    localChatSearchSyncService: ref.watch(localChatSearchSyncProvider),
+    localCircleGroupSnapshotStore: ref.watch(
+      localCircleGroupSnapshotStoreProvider,
+    ),
+    personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
+  );
 });
 
 /// RTC Repository（实时通话：发起、接听、挂断、录制等）

@@ -28,6 +28,10 @@ fields:
     type: object
     ref: result
     default: {}
+  - name: displayState
+    type: object
+    ref: AssistantDisplayState
+    default: {}
   - name: evidence
     type: list<object>
     ref: evidence_item
@@ -201,6 +205,7 @@ subcontracts:
     class_name: AssistantTurnUnderstandingSnapshot
     fields:
       - { name: intentSummary, type: string, default: '' }
+      - { name: userFacingSummary, type: string, default: '' }
       - { name: concernPoints, type: list<string>, default: [] }
       - { name: emotionSignal, type: string, default: '' }
       - { name: queryDesignSummary, type: string, default: '' }

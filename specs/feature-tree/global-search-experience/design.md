@@ -5,7 +5,7 @@
 `global-search-experience` 是一次能力归属重构，而不是一次普通页面改版。PRD 已经冻结三件事：
 
 1. 全局搜索是独立 `L1_capability`，不再挂靠 `discovery-content`。
-2. “社交关系”与“频道 facet” 的对象边界已经明确，不再复用历史 chat 搜索节点。
+2. “本地聊天搜索 / 群组 facet / 网络结果” 的对象边界必须明确，不再复用历史 chat 搜索节点。
 3. 问小趣只作为快捷 handoff，不参与综合搜索结果混排。
 
 如果没有一版能力级设计，后续实现仍会回到三个旧问题：
@@ -24,17 +24,26 @@
 - `小趣搜` 不再是首页快捷 handoff，而是独立网络结果页最左侧的 assistant 结果 tab。
 - 群组能力在搜索中只表现为网络结果页顶部的群组二级分类 tab。
 
+## 2026-03-27 增量基线扩展
+
+本轮 baseline 在上述体验基线之上，额外冻结两层新增设计：
+
+1. `global-search-experience` 下新增治理型 `L2`：`search-provider-routing-and-storage-topology`，用于收口统一 `search(request)` contract、对象 taxonomy、执行策略与云侧搜索读模型拓扑。
+2. `cross-domain-search-journey` 内的“人”结果契约不再以旧社交关系搜索挂载为主，而改为 `local-chat-search-contract`：`chat.contact / chat.conversation / chat.message` 统一走端侧本地搜索。
+3. `circle.group` 固定为 `hybrid_remote_fallback_local`：云侧优先，失败或 0 结果时回退端侧本地全量结果。
+4. 云侧搜索不再以“直接扫描业务主集合”为设计基线，而改为“写模型按域，搜索读路径走 projection / read model，读写分离，多读切片可独立弹性”。
+
 ## 上游输入评审
 
 | 输入 | 当前结论 |
 |---|---|
 | `global-search-experience/spec.md` | 已冻结能力边界、领域服务、数据生命周期、NFR 与历史节点清理口径 |
-| `global-search-experience/acceptance.yaml` | `C1/C2/C3` 足以承载能力级设计与后续 plan |
+| `global-search-experience/acceptance.yaml` | `C1/C2/C3` 为旧基线；本轮需补充统一搜索 contract、执行策略与存储拓扑验收 |
 | `cross-domain-search-journey/spec.md` | 已冻结统一入口、综合结果、最近搜索、语音与问小趣的完整旅程 |
-| 6 个 L3 Scenario spec / acceptance | 已冻结对象边界与最小实施单元 |
+| Journey 与 topology 两条 L2 及其 L3 docs | 本轮 baseline 需一起冻结，避免体验与架构分裂 |
 | `PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md` | 助手 handoff 必须沿 typed contract / metadata 走，不得进入 runtime 垂类特判 |
 | `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md` | 助手相关设计必须说明影响层、真相源映射、无字符串硬编码与无第二真相源 |
-| 当前 metadata / app 现状 | 仅 `SearchContacts` 已存在；`app_routes / ui_surfaces / request_context` 尚无 C 端 global search 真相源 |
+| 当前 metadata / app 现状 | 现有搜索以旅程型统一接口为主，但尚未冻结本地聊天搜索、`circle.group` fallback 与云侧搜索拓扑 |
 
 结论：
 
@@ -110,7 +119,7 @@
 
 - 新建独立 `global-search-experience` 能力与路由/surface 真相源。
 - App 对页面与业务层只暴露一个统一 `SearchRepository.search(SearchRequest)` 接口。
-- 统一接口内部由 `SearchCoordinator` 编排 `content / user / messages / circle` 四个域的 typed provider。
+- 统一接口内部由 `SearchPlanner + SearchCoordinator` 编排 `local_only / remote_only / hybrid_remote_fallback_local` 三类 provider。
 - 问小趣复用 `assistant_run` 既有 typed contract，只新增 handoff trigger，不做 AI 结果混排。
 
 优点：
@@ -140,14 +149,21 @@
 
 1. root surfaces：`home / chat / circle / assistant`
 2. search shell：`global search landing / result page`
-3. app orchestration：`SearchRepository`、`SearchCoordinator`、`SearchSessionState`、`RecentSearchSyncEngine`
-4. internal domain providers：
-   - `ContentRepository.searchPosts`
-   - `UserProfileRepository.searchSocialRelations`
-   - `ChatRepository.searchConversations / searchMessages`
-   - `CircleRepository.searchCircles`
-5. assistant handoff：`AssistantRepository.createRun*`
-6. local + cloud sync：recent search local store + user-scoped cloud sync
+3. app orchestration：`UnifiedSearchFacade`、`SearchPlanner`、`SearchCoordinator`、`SearchSessionState`、`RecentSearchSyncEngine`
+4. local providers：
+   - `chat.contact`
+   - `chat.conversation`
+   - `chat.message`
+5. hybrid provider：
+   - `circle.group`（remote primary + local fallback）
+6. remote providers：
+   - `content.post`
+   - `circle.circle`
+   - `entity.homepage`
+   - `integration.location_poi`
+7. assistant handoff：`AssistantRepository.createRun*`
+8. local + cloud sync：recent search local store + user-scoped cloud sync
+9. cloud search storage：write model by domain + search read model / projection + read/write separation + multi-reader elasticity
 
 ## 关键设计决策
 
@@ -168,17 +184,19 @@
 - `SearchResponse`
 - `SearchSection`
 - `SearchResultItem`
+- `SearchObjectType`
+- `SearchExecutionStrategy`
 
 对内部 provider：
 
-- `content/post`：`SearchPosts`
-- `user/user_profile`：`SearchSocialRelations`
-- `messages/conversation`：`SearchConversations`、`SearchMessages`
-- `social/circle`：`SearchCircles`
+- `chat.contact / chat.conversation / chat.message`：local provider
+- `circle.group`：hybrid provider
+- `content.post / circle.circle / entity.homepage / integration.location_poi`：remote provider
 
 `SearchCoordinator` 只作为统一接口背后的实现细节，负责：
 
 - query debounce
+- stale request cancel
 - 并发 fan-out
 - 局部超时降级
 - 结果分组与排序
@@ -236,10 +254,13 @@
 | `_shared/app_routes.yaml` | 新增 `globalSearch` route | `app_route_paths.g.dart` |
 | `_shared/ui_surfaces.yaml` | 新增 search landing / result surfaces | `app_ui_surfaces.g.dart` |
 | `_shared/request_context.yaml` | 新增 global search page ids 与内部 provider `Search*` request page ids | `*_request_page_ids.g.dart` |
+| `_shared/search/search_contract.yaml` | 冻结 `SearchRequest / SearchResponse / SearchObjectType / SearchExecutionStrategy` | 端云统一搜索 contract codegen |
+| `_shared/search/search_objects.yaml` | 冻结 searchable object taxonomy、provider registry、execution mode | 端云 object registry codegen |
 | `content/post/service.yaml` | 新增 `SearchPosts` | content API metadata / DTO |
-| `user/user_profile/service.yaml` | 新增 `SearchSocialRelations`、history sync contracts | user API metadata / DTO |
-| `messages/conversation/service.yaml` | 新增 `SearchConversations`、`SearchMessages` | chat API metadata / DTO |
-| `social/circle/service.yaml` | 新增 `SearchCircles` + facet 返回，承接用户词为 `群组` 的结果 | circle API metadata / DTO |
+| `messages/conversation/service.yaml` | 仅保留同步与会话读取主契约；不再把聊天搜索 operation 作为产品主入口 | chat API metadata / DTO |
+| `social/circle/service.yaml` | 新增 / 对齐 `SearchCircles`、`SearchCircleGroups` 与 group fallback 所需 contract | circle API metadata / DTO |
+| `entity/homepage/service.yaml` | 对齐共享主页搜索对象 | entity API metadata / DTO |
+| `integration/location/service.yaml` | 对齐位置搜索对象 | integration API metadata / DTO |
 | `assistant/assistant_run/*` | 新增 handoff trigger 枚举或上下文字段 | assistant generated contracts |
 
 ### KD7：不设计细粒度灰度，保留整版回滚与观测
@@ -250,6 +271,35 @@
 - 不做双轨入口并存
 - 保留整版回滚口径
 - 强化观测与超时降级
+
+### KD8：新增治理型 L2，体验旅程与搜索架构分别挂载
+
+- `cross-domain-search-journey` 只负责用户旅程、页面组织、跳转与体验验收。
+- `search-provider-routing-and-storage-topology` 负责统一 contract、对象 taxonomy、provider routing、fallback 与云侧存储拓扑。
+- 页面内搜索、全局搜索和 picker 搜索统一消费同一个 canonical `search(request)`，但是否本地执行由 provider registry 决定。
+
+### KD9：聊天搜索冻结为端侧本地搜索
+
+- `chat.contact`、`chat.conversation`、`chat.message` 统一走端侧本地索引。
+- 登出不清空本地索引，但必须按 owner / sub account 分区隔离。
+- 切换子账号不得读到其他子账号分区。
+- 消息撤回、删除与用户显式清理时，必须同步删除本地索引项。
+- 云端 `messages` 的 14 天 TTL 与端侧长期保留可不一致；本期端侧生命周期以“用户主动删除”为主。
+
+### KD10：`circle.group` 固定为 remote primary + local fallback
+
+- `circle.group` 首先查询云侧。
+- 云侧失败、超时、熔断或返回 0 结果时，回退端侧本地全量结果。
+- fallback 结果必须返回 `resolvedFrom=local_fallback` 一类 typed 降级标记，以支撑 UI 和观测。
+- 本期不做 remote + local 融合重排，只做云优先 / 本地兜底，控制复杂度和成本。
+
+### KD11：云侧搜索读路径必须与业务写路径分离
+
+- 写模型继续按域落在现有 Mongo / PostgreSQL 主存储。
+- 搜索读请求统一落到 search read model / projection，不把“扫描业务主集合”作为长期方案。
+- 读侧按 objectType 拆分，支持多读切片与独立副本数。
+- `suggest` 模式默认 lexical-only，并优先缓存 / 热点建议，避免在最高 QPS 路径默认启用 semantic/vector。
+- 未来若需要统一高性能搜索读库，可替换 read model 的底层实现，但不改变 canonical `search(request)` contract。
 
 ## metadata / codegen 方案
 
@@ -287,7 +337,8 @@ G1 基线已实际执行并通过：
 
 - recent search 采用 local + cloud 双写
 - 查询结果不做长期双写，仅当前会话读模型
-- `SearchContacts` 作为已有 chat contract 保留，但不再作为“社交关系”产品真相源
+- 聊天搜索结果仅存在于本地索引 / 本地 snapshot，不新增云侧搜索结果双写
+- `SearchContacts`、`SearchConversations`、`SearchMessages` 若短期保留，仅允许作为实现过渡，不再作为产品主 contract
 - 页面与业务层不直接依赖分域 `Search*` 接口
 
 ## feature flag、观测、SLO 验证与回滚方案
@@ -308,6 +359,10 @@ G1 基线已实际执行并通过：
 - `global_search_history_sync_failure_count`
 - `global_search_asr_failure_count`
 - `global_search_xiaoqu_handoff_count`
+- `global_search_local_index_hit_count`
+- `global_search_circle_group_local_fallback_count`
+- `global_search_remote_reader_latency_ms`
+- `global_search_reader_cache_hit_rate`
 
 ### SLO 验证
 
@@ -315,6 +370,8 @@ G1 基线已实际执行并通过：
 - query 后首批结果分组 `P95 < 1.5s`
 - 单域失败不阻塞整页
 - 问小趣 handoff `P95 < 800ms` 完成页面接续
+- `suggest` 默认 lexical-only，semantic 不进入最高 QPS 路径
+- 云侧读侧查询不得长期依赖扫描业务主集合
 
 ### 回滚
 
@@ -344,6 +401,9 @@ G1 基线已实际执行并通过：
 | `P1` | 冻结 capability 级 metadata、统一搜索接口与内部 provider 拓扑 | `C1/C2` | `T1_schema` |
 | `P2` | 建立 Journey / Scenario 设计基线与 codegen baseline | `C1/C2/C3` | `T1_schema`, `T3_cross_service_integration` |
 | `P3` | 建立发布观测、SLO 与整体回滚口径 | `C2/C3` | `T2_module_interaction`, `T4_user_journey` |
+| `P4` | 冻结治理型 L2：canonical contract、对象 taxonomy、执行策略与 fallback | `C2/C4` | `T1_schema`, `T3_cross_service_integration` |
+| `P5` | 冻结本地聊天搜索生命周期与账号隔离规则 | `C3/C4` | `T2_module_interaction`, `T4_user_journey` |
+| `P6` | 冻结云侧搜索读模型、读写分离与多读切片弹性方案 | `C4` | `T3_cross_service_integration`, `T4_release_rehearsal` |
 
 ## 未来演进
 

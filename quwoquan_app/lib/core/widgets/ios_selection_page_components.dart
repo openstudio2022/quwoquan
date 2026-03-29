@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
+enum IosSelectionHeaderLeadingStyle { back, close }
+
 class IosSelectionPageScaffold extends StatelessWidget {
   const IosSelectionPageScaffold({
     super.key,
@@ -13,6 +15,7 @@ class IosSelectionPageScaffold extends StatelessWidget {
     this.trailing,
     this.backgroundColor,
     this.pageKey,
+    this.leadingStyle = IosSelectionHeaderLeadingStyle.back,
   });
 
   final String title;
@@ -22,6 +25,7 @@ class IosSelectionPageScaffold extends StatelessWidget {
   final Widget? trailing;
   final Color? backgroundColor;
   final Key? pageKey;
+  final IosSelectionHeaderLeadingStyle leadingStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +46,7 @@ class IosSelectionPageScaffold extends StatelessWidget {
           title: title,
           onBack: onBack,
           trailing: trailing,
+          leadingStyle: leadingStyle,
         ),
         // Keep a transparent Material host, matching `AppScaffold`, to avoid
         // Cupertino pages rendering emphasized/underlined text artifacts on
@@ -63,12 +68,14 @@ class IosSelectionPageHeader extends StatelessWidget
     required this.onBack,
     this.backLabel,
     this.trailing,
+    this.leadingStyle = IosSelectionHeaderLeadingStyle.back,
   });
 
   final String title;
   final String? backLabel;
   final VoidCallback onBack;
   final Widget? trailing;
+  final IosSelectionHeaderLeadingStyle leadingStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -76,23 +83,36 @@ class IosSelectionPageHeader extends StatelessWidget
       context,
     ).withValues(alpha: 0.94);
     final borderColor = AppColors.iosSeparator(context).withValues(alpha: 0.12);
+    final foreground = AppColors.iosLabel(context);
     return CupertinoNavigationBar(
       backgroundColor: background,
       border: Border(
         bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
       ),
-      leading: CupertinoNavigationBarBackButton(
-        previousPageTitle: '',
-        onPressed: onBack,
-      ),
+      leading: leadingStyle == IosSelectionHeaderLeadingStyle.back
+          ? CupertinoNavigationBarBackButton(
+              color: foreground,
+              previousPageTitle: '',
+              onPressed: onBack,
+            )
+          : CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.square(AppSpacing.minInteractiveSize),
+              onPressed: onBack,
+              child: Icon(
+                CupertinoIcons.xmark,
+                color: foreground,
+                size: AppSpacing.iconMedium,
+              ),
+            ),
       middle: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: AppColors.iosLabel(context),
-          fontSize: AppTypography.iosNavTitle,
-          fontWeight: AppTypography.semiBold,
+          color: foreground,
+          fontSize: AppTypography.xl,
+          fontWeight: AppTypography.medium,
         ),
       ),
       trailing: trailing,
@@ -151,7 +171,7 @@ class IosSelectionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = AppColors.iosSeparator(context).withValues(alpha: 0.08);
+    final borderColor = AppColors.iosSeparator(context).withValues(alpha: 0.06);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.iosGroupedSurface(context),
@@ -242,6 +262,8 @@ class _IosSelectionOptionTileState extends State<IosSelectionOptionTile> {
     final pressedColor = widget.pressedColor ?? AppColors.iosFill(context);
     final chevronColor = AppColors.iosTertiaryLabel(context);
     final hasSubtitle = widget.subtitle != null;
+    final additionalInfoText = (widget.additionalInfo ?? '').trim();
+    final maxAdditionalInfoWidth = MediaQuery.sizeOf(context).width * 0.42;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
@@ -287,21 +309,32 @@ class _IosSelectionOptionTileState extends State<IosSelectionOptionTile> {
                   ],
                 ),
               ),
-              if ((widget.additionalInfo ?? '').trim().isNotEmpty) ...<Widget>[
+              if (additionalInfoText.isNotEmpty) ...<Widget>[
                 SizedBox(width: AppSpacing.containerSm),
                 Flexible(
-                  child: Text(
-                    widget.additionalInfo!.trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style:
-                        widget.additionalInfoTextStyle ??
-                        TextStyle(
-                          fontSize: AppTypography.iosBody,
-                          color: AppColors.iosAccent(context),
-                          fontWeight: AppTypography.normal,
-                        ),
+                  flex: 0,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth:
+                          AppSpacing.avatarUserLg + AppSpacing.intraGroupSm,
+                      maxWidth: maxAdditionalInfoWidth,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        additionalInfoText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style:
+                            widget.additionalInfoTextStyle ??
+                            TextStyle(
+                              fontSize: AppTypography.iosBody,
+                              color: AppColors.iosAccent(context),
+                              fontWeight: AppTypography.normal,
+                            ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -356,6 +389,8 @@ class IosSelectionBottomBar extends StatelessWidget {
     this.confirmLabel = UITextConstants.confirm,
     this.confirmButtonKey,
     this.cancelButtonKey,
+    this.confirmEnabled = true,
+    this.confirmLoading = false,
   });
 
   final VoidCallback onConfirm;
@@ -364,6 +399,8 @@ class IosSelectionBottomBar extends StatelessWidget {
   final String confirmLabel;
   final Key? confirmButtonKey;
   final Key? cancelButtonKey;
+  final bool confirmEnabled;
+  final bool confirmLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +442,8 @@ class IosSelectionBottomBar extends StatelessWidget {
               label: confirmLabel,
               filled: true,
               onPressed: onConfirm,
+              enabled: confirmEnabled,
+              loading: confirmLoading,
             ),
           ),
         ],
@@ -419,36 +458,55 @@ class _IosSelectionActionButton extends StatelessWidget {
     required this.label,
     required this.filled,
     required this.onPressed,
+    this.enabled = true,
+    this.loading = false,
   });
 
   final String label;
   final bool filled;
   final VoidCallback onPressed;
+  final bool enabled;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final accent = AppColors.iosAccent(context).withValues(alpha: 0.92);
+    final neutralBackground = AppColors.iosSecondaryFill(context);
+    final neutralForeground = AppColors.iosLabel(context);
+    final disabledBackground =
+        SettingsSemanticConstants.actionButtonDisabledBackground(isDark);
+    final disabledForeground =
+        SettingsSemanticConstants.actionButtonDisabledForeground(isDark);
     final radius = AppSpacing.largeBorderRadius + AppSpacing.two;
+    final background = enabled
+        ? (filled ? accent : neutralBackground)
+        : disabledBackground;
+    final foreground = enabled
+        ? (filled ? CupertinoColors.white : neutralForeground)
+        : disabledForeground;
 
     return SizedBox(
       height: AppSpacing.buttonHeight,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: filled ? accent : AppColors.iosSecondaryFill(context),
+          color: background,
           borderRadius: BorderRadius.circular(radius),
         ),
         child: CupertinoButton(
           padding: EdgeInsets.zero,
           borderRadius: BorderRadius.circular(radius),
-          onPressed: onPressed,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: filled ? CupertinoColors.white : accent,
-              fontSize: AppTypography.iosButton,
-              fontWeight: AppTypography.semiBold,
-            ),
-          ),
+          onPressed: enabled && !loading ? onPressed : null,
+          child: loading
+              ? CupertinoActivityIndicator(color: foreground)
+              : Text(
+                  label,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: AppTypography.iosButton,
+                    fontWeight: AppTypography.medium,
+                  ),
+                ),
         ),
       ),
     );

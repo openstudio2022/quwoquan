@@ -349,7 +349,7 @@ void main() {
       expect(assistantContents, isEmpty, reason: '旧版历史不再兼容，应在 load() 时整体清空');
     });
 
-    test('canonical v3 assistant 消息会被保留', () async {
+    test('canonical assistant 消息会被保留', () async {
       final sessionsPath = '${tempDir.path}/sessions_normal.json';
       final normalData = {
         'version': assistantHistoryStorageVersion,

@@ -1,0 +1,48 @@
+version: 1
+feature: search-execution-routing-policy
+level: L3_scenario
+source_path: global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+parent_journey: search-provider-routing-and-storage-topology
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 search planner 的执行策略与降级语义。
+  journey_bindings:
+    - J2
+  in_scope:
+    - execution mode
+    - typed degrade signal
+  out_of_scope:
+    - provider 内部逻辑
+
+scenario_acceptance:
+  A1:
+    title: planner 基于 execution mode 决定搜索执行位置
+    scenario: search execution routing policy
+    journey_step: planner routes search requests
+    done_when:
+      - "`local_only / remote_only / hybrid_remote_fallback_local` 已正式定义"
+      - 页面层不再用 if/switch 判断执行位置
+      - 降级语义以 typed signal 返回
+    edge_cases:
+      - provider timeout
+      - provider 0 result
+      - provider hard failure
+    linked_plan_items:
+      - P1
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - execution policy contract test
+      recorded: []
+    status: pending

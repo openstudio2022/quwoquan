@@ -1,0 +1,80 @@
+version: 1
+
+object_types:
+  - id: web.document
+    label: 网页
+    domain: external
+    execution_strategy: remote_only
+    provider: web_search
+  - id: chat.contact
+    label: 联系人
+    domain: messages
+    execution_strategy: local_only
+    provider: chat_local
+  - id: chat.conversation
+    label: 聊天会话
+    domain: messages
+    execution_strategy: local_only
+    provider: chat_local
+  - id: chat.message
+    label: 聊天消息
+    domain: messages
+    execution_strategy: local_only
+    provider: chat_local
+  - id: circle.group
+    label: 群组
+    domain: circle
+    execution_strategy: hybrid_remote_fallback_local
+    provider: circle_remote_local
+  - id: circle.circle
+    label: 圈子
+    domain: circle
+    execution_strategy: remote_only
+    provider: circle_remote
+  - id: content.post
+    label: 内容
+    domain: content
+    execution_strategy: remote_only
+    provider: content_remote
+  - id: entity.homepage
+    label: 主页
+    domain: entity
+    execution_strategy: remote_only
+    provider: homepage_remote
+  - id: integration.location_poi
+    label: 位置
+    domain: integration
+    execution_strategy: remote_only
+    provider: location_remote
+
+section_kinds:
+  - id: contacts
+    title: 联系人
+    default_object_types:
+      - chat.contact
+  - id: chat_records
+    title: 聊天记录
+    default_object_types:
+      - chat.conversation
+      - chat.message
+  - id: groups
+    title: 群组
+    default_object_types:
+      - circle.group
+      - circle.circle
+  - id: content
+    title: 内容
+    default_object_types:
+      - content.post
+  - id: homepages
+    title: 主页
+    default_object_types:
+      - entity.homepage
+  - id: locations
+    title: 位置
+    default_object_types:
+      - integration.location_poi
+  - id: web
+    title: 网页
+    default_object_types:
+      - web.document

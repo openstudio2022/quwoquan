@@ -1,0 +1,56 @@
+version: 1
+feature: search-storage-topology-and-elasticity
+level: L3_scenario
+source_path: global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+parent_journey: search-provider-routing-and-storage-topology
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结云侧搜索读模型、读写分离、多读切片与独立弹性规则。
+  journey_bindings:
+    - J3
+  in_scope:
+    - read model
+    - reader slice
+    - elasticity
+    - future unified reader boundary
+  out_of_scope:
+    - 本期统一高性能读库迁移
+
+scenario_acceptance:
+  A1:
+    title: 云侧搜索读路径具备读写分离和多读切片基线
+    scenario: search storage topology and elasticity
+    journey_step: remote search hits search read model
+    done_when:
+      - 搜索读路径与业务写路径分离
+      - 读侧可按 objectType 或 query class 拆成多个 reader slice
+      - 每个 reader slice 支持独立弹性
+      - 未来统一高性能读库被明确为 read model 替换，而不是主存储迁移承诺
+      - "`content / circle / homepage / location` 读路径已通过 metadata path/query/header contract test 验证"
+    edge_cases:
+      - 单 reader slice 热点
+      - reader cache miss
+      - 单 reader slice 故障
+      - "assistant `search` tool 对单 slice 故障 fail-closed"
+    linked_plan_items:
+      - P1
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - search storage topology review
+        - reader slice contract review
+      recorded:
+        - flutter test test/cloud/integration/remote_api_path_contract_test.dart
+        - flutter test test/ui/search/search_repository_test.dart
+    status: implemented
