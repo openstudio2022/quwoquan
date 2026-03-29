@@ -271,18 +271,21 @@ class AssistantTurnHistoricalThinkingSnapshot {
     this.continuityMode = "",
     this.mismatchSignal = "",
     this.carryForwardFacts = const <String>[],
+    this.needsRecheckFacts = const <String>[],
     this.discardedAssumptions = const <String>[],
   });
 
   final String continuityMode;
   final String mismatchSignal;
   final List<String> carryForwardFacts;
+  final List<String> needsRecheckFacts;
   final List<String> discardedAssumptions;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'continuityMode': continuityMode,
         'mismatchSignal': mismatchSignal,
         'carryForwardFacts': carryForwardFacts,
+        'needsRecheckFacts': needsRecheckFacts,
         'discardedAssumptions': discardedAssumptions,
       };
 
@@ -291,6 +294,7 @@ class AssistantTurnHistoricalThinkingSnapshot {
       continuityMode: (json['continuityMode'] as String?)?.trim() ?? "",
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
       carryForwardFacts: _assistantStringList(json['carryForwardFacts']),
+      needsRecheckFacts: _assistantStringList(json['needsRecheckFacts']),
       discardedAssumptions: _assistantStringList(json['discardedAssumptions']),
     );
   }
@@ -307,6 +311,7 @@ class AssistantTurnHistoricalThinkingSnapshotFields {
   static const String continuityMode = 'continuityMode';
   static const String mismatchSignal = 'mismatchSignal';
   static const String carryForwardFacts = 'carryForwardFacts';
+  static const String needsRecheckFacts = 'needsRecheckFacts';
   static const String discardedAssumptions = 'discardedAssumptions';
 }
 

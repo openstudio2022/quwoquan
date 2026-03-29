@@ -55,6 +55,10 @@ abstract final class AssistantDisplayTextResolver {
     r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用)',
     caseSensitive: false,
   );
+  static final RegExp _reportStyleProcessFragmentRe = RegExp(
+    r'(处理了\s*\d+\s*篇|检索了\s*\d+\s*条|交叉核对|信息已就位|进入成答|资料筛选|收拢到\s*\d+\s*条)',
+    caseSensitive: false,
+  );
   static final RegExp _residualXmlToolFragmentRe = RegExp(
     r'</?<?(?:tool_call|function|parameter)[^>\n\r]*>?',
     caseSensitive: false,
@@ -347,6 +351,7 @@ abstract final class AssistantDisplayTextResolver {
       return '';
     }
     if (_hardInternalProcessFragmentRe.hasMatch(text) ||
+        _reportStyleProcessFragmentRe.hasMatch(text) ||
         containsInternalAssistantProtocolFragment(text) ||
         containsTechnicalFailureFragment(text) ||
         AssistantContentFilters.isJsonEnvelope(text) ||

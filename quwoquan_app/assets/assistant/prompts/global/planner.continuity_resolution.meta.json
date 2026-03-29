@@ -5,11 +5,13 @@
   "domainId": "global",
   "requiredVariables": [
     "currentQuery",
+    "conversationSpine",
     "referenceQueries",
     "historySummary",
     "previousIntentGraph",
     "previousUnderstandingSnapshot",
     "previousAnswerProcessing",
+    "previousHistoricalThinkingSnapshot",
     "previousSlotState",
     "previousAnswerSummary"
   ],

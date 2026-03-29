@@ -118,6 +118,7 @@ class LlmCallOptions {
       forceJsonObject = true,
       timeoutSeconds = 45,
       streamJsonFieldPaths = const <String>[
+        'retrievalProcessing.processingSummary',
         'answerProcessing.readinessSummary',
       ];
 
@@ -1267,12 +1268,19 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       stackLayers.add(text);
     }
 
-    // Prompt ordering: identity → safety → model_thinking_policy → task →
-    // output_contract → persona → tool_policy.
+    // Prompt ordering: identity → safety → model_thinking_policy →
+    // conversation_spine(optional) → task → output_contract → persona →
+    // tool_policy.
     // Stable prefix maximizes cache hits; instructions precede data.
     await appendLayer('stack.identity');
     await appendLayer('stack.safety');
     await appendLayer('stack.model_thinking_policy');
+    final hasConversationSpine =
+        (templateVariables['conversationSpine'] as String?)?.trim().isNotEmpty ==
+        true;
+    if (hasConversationSpine) {
+      await appendLayer('stack.conversation_spine');
+    }
     // §3: Stage-specific task prompt (planner / synthesizer / etc.)
     final stageText = stagePrompt.rendered.content.trim();
     if (stageText.isNotEmpty) {

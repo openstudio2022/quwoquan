@@ -8,24 +8,24 @@ class SynthesisReadinessResult {
   const SynthesisReadinessResult({
     this.ready = false,
     this.reason = "",
-    this.gapFillTask,
+    this.replanTask,
   });
 
   final bool ready;
   final String reason;
-  final ContextFillTask? gapFillTask;
+  final ContextFillTask? replanTask;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'ready': ready,
         'reason': reason,
-        'gapFillTask': gapFillTask?.toJson(),
+        'replanTask': replanTask?.toJson(),
       };
 
   factory SynthesisReadinessResult.fromJson(Map<String, dynamic> json) {
     return SynthesisReadinessResult(
       ready: json['ready'] == true,
       reason: (json['reason'] as String?)?.trim() ?? "",
-      gapFillTask: json['gapFillTask'] is Map ? ContextFillTask.fromJson((json['gapFillTask'] as Map).cast<String, dynamic>()) : null,
+      replanTask: json['replanTask'] is Map ? ContextFillTask.fromJson((json['replanTask'] as Map).cast<String, dynamic>()) : null,
     );
   }
 
@@ -34,5 +34,5 @@ class SynthesisReadinessResult {
 class SynthesisReadinessResultFields {
   static const String ready = 'ready';
   static const String reason = 'reason';
-  static const String gapFillTask = 'gapFillTask';
+  static const String replanTask = 'replanTask';
 }

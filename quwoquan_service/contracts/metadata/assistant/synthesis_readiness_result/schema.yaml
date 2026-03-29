@@ -9,4 +9,4 @@ imports:
 fields:
   - { name: ready, type: bool, default: false }
   - { name: reason, type: string, default: '' }
-  - { name: gapFillTask, type: object, ref: ContextFillTask }
+  - { name: replanTask, type: object, ref: ContextFillTask }

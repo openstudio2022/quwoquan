@@ -301,7 +301,7 @@ class AnswerOutcomeResolver {
       reason: (candidate?.reason.trim().isNotEmpty ?? false)
           ? candidate!.reason.trim()
           : 'final_answer_materialized',
-      gapFillTask: candidate?.gapFillTask,
+      replanTask: candidate?.replanTask,
     );
   }
 

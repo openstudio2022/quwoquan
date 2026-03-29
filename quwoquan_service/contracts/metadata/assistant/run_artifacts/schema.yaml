@@ -175,6 +175,7 @@ subcontracts:
       - { name: continuityMode, type: string, default: '' }
       - { name: mismatchSignal, type: string, default: '' }
       - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: needsRecheckFacts, type: list<string>, default: [] }
       - { name: discardedAssumptions, type: list<string>, default: [] }
   retrieval_reference:
     class_name: RetrievalProcessingReference

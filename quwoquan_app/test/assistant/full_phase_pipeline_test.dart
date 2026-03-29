@@ -246,15 +246,23 @@ class _ThreeSectionNormalizationWeatherLlm implements AssistantLlmProvider {
 
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(
-          _intentPlanningEnvelope(
+        text: jsonEncode(<String, dynamic>{
+          ..._intentPlanningEnvelope(
             primarySkill: 'weather',
             inferredMotive: '确认深圳今天的天气和出门准备',
             problemClass: 'realtime_info',
             mode: 'qa',
             normalizedQuery: '深圳今天下不下雨，要不要带伞',
           ),
-        ),
+          'understandingSnapshot': const <String, dynamic>{
+            'userFacingSummary':
+                '你现在主要想先确认深圳今天的天气结论，再决定出门要不要带伞。我会先核对今天的降雨情况和最影响出门判断的天气变化。',
+            'intentSummary': '你现在主要想确认深圳今天的天气和出门准备',
+            'concernPoints': <String>['是否会下雨', '要不要带伞'],
+            'emotionSignal': 'neutral',
+            'queryDesignSummary': '优先确认今天的降雨情况与出门判断最相关的天气变化。',
+          },
+        }),
       );
     }
 
@@ -303,11 +311,28 @@ class _ThreeSectionNormalizationWeatherLlm implements AssistantLlmProvider {
           'interpretation': '确认深圳今天的天气和出门准备',
         },
         'understandingSnapshot': const <String, dynamic>{
+          'userFacingSummary':
+              'Shenzhen tian qi。\n我会先把最影响判断的关键信息核清，再把能直接支撑回答的依据收拢。',
           'intentSummary': '你现在主要想确认深圳今天的天气和出门准备',
           'concernPoints': <String>['是否会下雨', '要不要带伞'],
         },
+        'retrievalProcessing': const <String, dynamic>{
+          'processedDocumentCount': 6,
+          'acceptedDocumentCount': 1,
+          'processingSummary':
+              '围绕你最关心的出门判断，已经确认今天有雨，这个信息足以直接决定要不要带伞；其余背景我不会展开。',
+          'selectedKeyPoints': <String>['深圳今天有雨', '外出建议带伞'],
+          'acceptedReferences': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '深圳天气预报 - 中国气象局',
+              'url': 'https://weather.cma.cn/shenzhen',
+              'source': '中国气象局',
+              'snippet': '深圳今天有雨，外出建议带伞。',
+            },
+          ],
+        },
         'answerProcessing': const <String, dynamic>{
-          'readinessSummary': '天气实况和出门建议已经齐备',
+          'readinessSummary': '最终答案会先直接告诉你今天是否下雨，再补一条带伞建议；其它背景不会继续展开。',
           'keyFacts': <String>['深圳今天有雨，外出建议带伞。'],
           'missingDimensions': <String>[],
           'retrieveMoreReason': '',
@@ -1661,11 +1686,11 @@ void main() {
             'runtime 不再按 query 场景自动注入 authorityDomains，权威约束应来自 typed plan 或 tool metadata',
       );
 
-      // ---- LLM 至少调用 2 轮（plan + answer/synthesis）----
+      // ---- 当前 direct-owner 链路至少包含规划 + synthesis 两类模型调用 ----
       expect(
         mockLlm.totalCallCount,
         greaterThanOrEqualTo(2),
-        reason: '至少 2 轮 LLM 调用（plan + synthesis）',
+        reason: '至少要经过规划与 synthesis 两类模型调用',
       );
 
       // ---- trace 类型覆盖检查 ----
@@ -2076,8 +2101,28 @@ void main() {
       expect(artifacts.displayPlainText, equals(plainText));
       expect(artifacts.answerEvidenceBindings, isNotEmpty);
       expect(artifacts.understandingSnapshot.intentSummary, isNotEmpty);
+      expect(
+        artifacts.understandingSnapshot.userFacingSummary,
+        equals('你现在主要想先确认深圳今天的天气结论，再决定出门要不要带伞。我会先核对今天的降雨情况和最影响出门判断的天气变化。'),
+      );
+      expect(
+        artifacts.understandingSnapshot.userFacingSummary,
+        isNot(contains('Shenzhen tian qi')),
+      );
       expect(artifacts.answerProcessing.keyFacts, isNotEmpty);
       expect(artifacts.retrievalProcessing.selectedKeyPoints, isNotEmpty);
+      expect(
+        artifacts.retrievalProcessing.processedDocumentCount,
+        greaterThan(0),
+      );
+      expect(
+        artifacts.retrievalProcessing.processedDocumentCount,
+        greaterThanOrEqualTo(
+          artifacts.retrievalProcessing.acceptedDocumentCount,
+        ),
+      );
+      expect(artifacts.retrievalProcessing.acceptedDocumentCount, equals(1));
+      expect(artifacts.retrievalProcessing.acceptedReferences, isNotEmpty);
       expect(
         artifacts.answerEvidenceBindings.first.url,
         contains('weather.cma.cn/shenzhen'),
@@ -2473,7 +2518,7 @@ void main() {
 
       final structured = response.structuredResponse;
       final markdown = response.displayMarkdown.trim();
-      expect(markdown, contains('这次整理答案失败'));
+      expect(markdown, contains('这次生成答案失败'));
       expect(response.degraded, isTrue);
       expect(markdown, isNot(contains('<tool_call>')));
       expect(markdown, isNot(contains('contractId')));
@@ -2527,7 +2572,7 @@ void main() {
 
       final markdown = response.displayMarkdown.trim();
       expect(markdown, isNot(contains('<tool_call>')));
-      expect(markdown, contains('这次整理答案失败'));
+      expect(markdown, contains('这次生成答案失败'));
       expect(response.degraded, isTrue);
       expect(markdown, isNot(contains('contractId')));
     });
@@ -2562,8 +2607,8 @@ void main() {
       final plainText = response.displayPlainText.trim();
 
       expect(response.degraded, isTrue);
-      expect(markdown, contains('这次整理答案失败'));
-      expect(plainText, contains('这次整理答案失败'));
+      expect(markdown, contains('这次生成答案失败'));
+      expect(plainText, contains('这次生成答案失败'));
     });
 
     test('phase one 检索后若只产出过程性自由文本，必须继续 formal synthesis 成答', () async {

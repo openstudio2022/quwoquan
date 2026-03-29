@@ -27,9 +27,16 @@ Map<String, dynamic> _intentEnvelope({
     'reasonCode': 'align_goal',
     'reasonShort': '先聚焦用户目标，再决定如何获取资料。',
     'decision': <String, dynamic>{
-      'nextAction': 'answer',
+      'nextAction': 'tool_call',
       'confidence': 0.82,
       'reasoning': '先识别领域与问题类型',
+    },
+    'understandingSnapshot': <String, dynamic>{
+      'userFacingSummary': '我先确认你现在最需要的是深圳的实时天气结论，再核对最新实况与关键体感信息。',
+      'intentSummary': '用户当前要一个能直接使用的深圳天气判断。',
+      'concernPoints': const <String>['实时天气', '是否适合出门'],
+      'emotionSignal': 'neutral',
+      'queryDesignSummary': '优先核对最新天气实况，再补对出行判断最关键的体感信息。',
     },
     'userMarkdown': '我先聚焦你的问题主线，再开始处理。',
     'result': <String, dynamic>{
@@ -113,7 +120,19 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
             'contractId': 'assistant_turn',
+            'messageKind': 'progress',
+            'phaseId': 'understanding',
+            'actionCode': 'frame_problem',
+            'reasonCode': 'align_goal',
+            'reasonShort': '需要先查最新天气实况。',
             'decision': <String, dynamic>{'nextAction': 'tool_call'},
+            'understandingSnapshot': const <String, dynamic>{
+              'userFacingSummary': '我先核对深圳今天的最新天气，再把最影响判断的体感信息补齐。',
+              'intentSummary': '先拿到能直接回答当前问题的实时天气依据。',
+              'concernPoints': <String>['天气实况', '体感与出行影响'],
+              'emotionSignal': 'neutral',
+              'queryDesignSummary': '优先检索最新天气实况，再核对关键体感指标。',
+            },
             'toolCalls': const <Map<String, dynamic>>[
               <String, dynamic>{
                 'toolName': 'web_search',
@@ -124,7 +143,6 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
                 },
               },
             ],
-            'reasonShort': '需要先查最新天气实况。',
           }),
           toolCalls: const <AssistantToolCall>[
             AssistantToolCall(
@@ -146,9 +164,20 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
         'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
+        'phaseId': 'answering',
+        'actionCode': 'compose_answer',
+        'reasonCode': 'evidence_ready',
+        'reasonShort': '关键信息已经齐了，我开始整理成你能直接使用的答案。',
+        'answerProcessing': const <String, dynamic>{
+          'readinessSummary': '深圳当前天气的关键信息已经齐备，已经能直接回答你今天的实时天气情况。',
+          'keyFacts': <String>['深圳今天天气晴朗', '温度约 25°C'],
+          'missingDimensions': <String>[],
+          'retrieveMoreReason': '',
+        },
         'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，适合轻装出门。',
         'result': const <String, dynamic>{
           'text': '今天深圳天气晴朗，温度约25°C。',
+          'summary': '深圳今天晴朗，约 25°C，适合轻装出门。',
           'interpretation': '深圳当前天气概况',
         },
         'evidence': const <Map<String, dynamic>>[
@@ -196,6 +225,9 @@ class _FakeWeatherSearchTool implements AssistantTool {
       data: <String, dynamic>{
         'provider': 'duckduckgo',
         'summary': '深圳今天天气晴朗，温度25°C',
+        'qualityScore': 0.92,
+        'authorityScore': 0.96,
+        'freshnessHours': 1,
         'totalReferences': 1,
         'references': <Map<String, dynamic>>[
           <String, dynamic>{
@@ -203,6 +235,8 @@ class _FakeWeatherSearchTool implements AssistantTool {
             'url': 'https://weather.cma.cn/shenzhen',
             'source': '中国气象局',
             'snippet': '深圳今天晴，温度25°C。',
+            'authorityScore': 0.96,
+            'freshnessHours': 1,
           },
         ],
       },

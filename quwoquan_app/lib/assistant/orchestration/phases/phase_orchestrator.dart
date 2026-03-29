@@ -8,9 +8,8 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 /// execution → synthesis → finalize. Execution phase delegates to legacy until
 /// migration completes.
 class PhaseOrchestrator {
-  PhaseOrchestrator({
-    required List<Phase> phases,
-  }) : _phases = List<Phase>.unmodifiable(phases);
+  PhaseOrchestrator({required List<Phase> phases})
+    : _phases = List<Phase>.unmodifiable(phases);
 
   final List<Phase> _phases;
 
@@ -19,31 +18,37 @@ class PhaseOrchestrator {
     dynamic response;
 
     // 首条用户可见消息：1 秒内发出，符合 world-class 等待体验
-    input.onTraceEvent?.call(_phaseNarrativeEvent(
-      narrative: '正在处理你的请求…',
-      phaseId: 'bootstrap',
-      runId: input.runId,
-      traceId: input.traceId,
-    ));
+    input.onTraceEvent?.call(
+      _phaseNarrativeEvent(
+        narrative: '正在处理你的请求…',
+        phaseId: 'bootstrap',
+        runId: input.runId,
+        traceId: input.traceId,
+      ),
+    );
 
     for (final phase in _phases) {
       final narrative = _phaseNarrativeFor(phase.phaseId);
       if (narrative != null && phase.phaseId != 'bootstrap') {
-        input.onTraceEvent?.call(_phaseNarrativeEvent(
-          narrative: narrative,
-          phaseId: phase.phaseId,
+        input.onTraceEvent?.call(
+          _phaseNarrativeEvent(
+            narrative: narrative,
+            phaseId: phase.phaseId,
+            runId: input.runId,
+            traceId: input.traceId,
+          ),
+        );
+      }
+      final result = await phase.run(
+        PhaseInput(
+          request: input.request,
+          state: state,
           runId: input.runId,
           traceId: input.traceId,
-        ));
-      }
-      final result = await phase.run(PhaseInput(
-        request: input.request,
-        state: state,
-        runId: input.runId,
-        traceId: input.traceId,
-        sessionId: input.sessionId ?? 'default',
-        onTraceEvent: input.onTraceEvent,
-      ));
+          sessionId: input.sessionId ?? 'default',
+          onTraceEvent: input.onTraceEvent,
+        ),
+      );
       state = result.state ?? state;
       if (result.response != null) {
         response = result.response;
@@ -76,10 +81,7 @@ class PhaseOrchestratorInput {
 }
 
 class PhaseOrchestratorResult {
-  const PhaseOrchestratorResult({
-    required this.state,
-    this.response,
-  });
+  const PhaseOrchestratorResult({required this.state, this.response});
 
   final AgentExecutionState state;
   final dynamic response;
@@ -119,7 +121,7 @@ String? _phaseNarrativeFor(String phaseId) {
     case 'evidence_digest':
       return '我先把检索结果里真正有用的点筛出来。';
     case 'synthesis':
-      return '关键信息差不多齐了，我来整理答案。';
+      return '关键信息差不多齐了，我来生成答案。';
     case 'finalize':
       return '我在收尾并准备把结果交给你。';
   }

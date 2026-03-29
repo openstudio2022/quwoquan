@@ -17,6 +17,7 @@ import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.da
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
 import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
@@ -53,6 +54,8 @@ class UnderstandPhase implements Phase {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
         : '';
+    final inlinePlanningOwnsUnderstanding =
+        request.contextScopeHint['inlinePlanningOwnsUnderstanding'] == true;
     final mergedScopeHint = _mergedScopeHint(
       request: request,
       bootstrapContext: bootstrapContext,
@@ -122,59 +125,63 @@ class UnderstandPhase implements Phase {
       }
     }
 
-    final modelUnderstanding = await _resolveIntentGraphWithModel(
-      request: request,
-      bootstrapContext: bootstrapContext,
-      latestUserQuery: latestUserQuery,
-      previousRunArtifacts: input.state.previousRunArtifacts,
-      runId: input.runId,
-      traceId: input.traceId,
-      onTraceEvent: input.onTraceEvent,
-      processEmitter: ProcessTimelineEmitter(
+    if (!inlinePlanningOwnsUnderstanding) {
+      final modelUnderstanding = await _resolveIntentGraphWithModel(
+        request: request,
+        bootstrapContext: bootstrapContext,
+        latestUserQuery: latestUserQuery,
+        previousRunArtifacts: input.state.previousRunArtifacts,
         runId: input.runId,
         traceId: input.traceId,
         onTraceEvent: input.onTraceEvent,
-      ),
-    );
-    if (modelUnderstanding != null) {
-      final modelIntentGraph = modelUnderstanding.intentGraph;
-      final normalizedIntent = _normalizeIntentGraph(
-        request: request,
-        intentGraph: modelIntentGraph,
-        fallbackDomainId: modelIntentGraph.primarySkill.trim().isNotEmpty
-            ? modelIntentGraph.primarySkill.trim()
-            : _domainRouter.fallbackDomainId,
-        recallResult: bootstrapContext?.recallResult,
-        bootstrapContext: bootstrapContext,
-        previousRunArtifacts: input.state.previousRunArtifacts,
-      );
-      final domainId = normalizedIntent.primarySkill.trim().isNotEmpty
-          ? normalizedIntent.primarySkill.trim()
-          : _domainRouter.fallbackDomainId;
-      final dialogueRoundScript = await _dialogueStateRuntime.buildRoundScript(
-        domainId: domainId,
-        userQuery: latestUserQuery,
-        contextScopeHint: mergedScopeHint,
-        forceRefreshCatalog: bootstrapContext?.forceRefreshCatalog ?? false,
-      );
-      final modeDecision = modeDecider.decide(
-        intentGraph: normalizedIntent,
-        recallResult: bootstrapContext?.recallResult,
-      );
-      final understandingSnapshot = modelUnderstanding.understandingSnapshot;
-      _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
-      return PhaseOutput(
-        state: input.state.copyWith(
-          intentGraph: normalizedIntent,
-          understandingSnapshot: understandingSnapshot,
-          queryTasks: normalizedIntent.queryTasks,
-          dialogueRoundScript: dialogueRoundScript,
-          executionPreparation: AssistantExecutionPreparation(
-            domainId: domainId,
-            modeDecision: modeDecision,
-          ),
+        processEmitter: ProcessTimelineEmitter(
+          runId: input.runId,
+          traceId: input.traceId,
+          onTraceEvent: input.onTraceEvent,
         ),
       );
+      if (modelUnderstanding != null) {
+        final modelIntentGraph = modelUnderstanding.intentGraph;
+        final normalizedIntent = _normalizeIntentGraph(
+          request: request,
+          intentGraph: modelIntentGraph,
+          fallbackDomainId: modelIntentGraph.primarySkill.trim().isNotEmpty
+              ? modelIntentGraph.primarySkill.trim()
+              : _domainRouter.fallbackDomainId,
+          recallResult: bootstrapContext?.recallResult,
+          bootstrapContext: bootstrapContext,
+          previousRunArtifacts: input.state.previousRunArtifacts,
+        );
+        final domainId = normalizedIntent.primarySkill.trim().isNotEmpty
+            ? normalizedIntent.primarySkill.trim()
+            : _domainRouter.fallbackDomainId;
+        final dialogueRoundScript = await _dialogueStateRuntime
+            .buildRoundScript(
+              domainId: domainId,
+              userQuery: latestUserQuery,
+              contextScopeHint: mergedScopeHint,
+              forceRefreshCatalog:
+                  bootstrapContext?.forceRefreshCatalog ?? false,
+            );
+        final modeDecision = modeDecider.decide(
+          intentGraph: normalizedIntent,
+          recallResult: bootstrapContext?.recallResult,
+        );
+        final understandingSnapshot = modelUnderstanding.understandingSnapshot;
+        _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
+        return PhaseOutput(
+          state: input.state.copyWith(
+            intentGraph: normalizedIntent,
+            understandingSnapshot: understandingSnapshot,
+            queryTasks: normalizedIntent.queryTasks,
+            dialogueRoundScript: dialogueRoundScript,
+            executionPreparation: AssistantExecutionPreparation(
+              domainId: domainId,
+              modeDecision: modeDecision,
+            ),
+          ),
+        );
+      }
     }
 
     final intentGraph = _buildFallbackIntentGraph(
@@ -414,6 +421,24 @@ class UnderstandPhase implements Phase {
         bootstrapContext?.contextContinuityPolicy.continuityMode.wireName ?? '';
     final problemClass =
         bootstrapContext?.contextContinuityPolicy.problemClass.trim() ?? '';
+    final conversationSpineJson = jsonEncode(
+      buildConversationSpine(
+        stageId: 'understanding',
+        userQuery: latestUserQuery,
+        problemClass: problemClass,
+        historyAssessment: buildHistoryAssessmentFromPolicy(
+          policy:
+              bootstrapContext?.contextContinuityPolicy ??
+              const ContextContinuityPolicy(),
+          overrideSlots: bootstrapContext?.continuityOverrideSlots ??
+              const <String, dynamic>{},
+        ),
+        stageState: <String, dynamic>{
+          'allowedChoices': const <String>['tool_call', 'ask_user', 'answer'],
+          'continuationActive': _isContinuationContext(bootstrapContext),
+        },
+      ),
+    );
     final sharedContextJson = jsonEncode(
       _plannerSharedContextPayload(
         bootstrapContext: bootstrapContext,
@@ -462,11 +487,13 @@ class UnderstandPhase implements Phase {
     ];
     final plannerTemplateVars = <String, dynamic>{
       'userQuery': latestUserQuery,
+      'conversationSpine': conversationSpineJson,
       'skillCatalog': bootstrapContext?.skillCatalog ?? '',
       'sharedContext': sharedContextJson,
       'currentRuntimeState': currentRuntimeStateJson,
       'dialogueContinuity': dialogueContinuityJson,
     };
+    var streamedUserFacingSummary = '';
     void forwardTrace(AssistantTraceEvent event) {
       onTraceEvent?.call(event.copyWith(visibility: TraceVisibility.internal));
       if (event.type == AssistantTraceEventType.thinkingProgress &&
@@ -474,6 +501,10 @@ class UnderstandPhase implements Phase {
           event.data?['extracted'] == true &&
           event.data?['fieldPath'] ==
               'understandingSnapshot.userFacingSummary') {
+        streamedUserFacingSummary = _mergeStableNarrativeText(
+          previous: streamedUserFacingSummary,
+          incoming: event.message,
+        );
         processEmitter.pushDelta(
           stepId: ProcessStepId.understanding,
           scope: UserEventScope.root,
@@ -516,7 +547,8 @@ class UnderstandPhase implements Phase {
         templateVersion: templateVersion,
         templateContext: mergedScopeHint,
         templateVariables: plannerTemplateVars,
-        sessionId: bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
+        sessionId:
+            bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
         runId: runId,
         traceId: traceId,
         onTraceEvent: onTraceEvent == null ? null : forwardTrace,
@@ -532,22 +564,38 @@ class UnderstandPhase implements Phase {
       );
       rawOutput = fallbackResult.finalText;
     }
-    final parsed = LlmResponseParser.parse(rawOutput).json ?? <String, dynamic>{};
+    final parsed =
+        LlmResponseParser.parse(rawOutput).json ?? <String, dynamic>{};
     final turn = tryParseAssistantTurnOutput(parsed);
     final intentGraph = extractIntentGraphFromModelPayload(
       parsed,
       parsedTurn: turn,
     );
     if (intentGraph == null) return null;
+    final parsedSnapshot = parsed['understandingSnapshot'] is Map
+        ? RunArtifactsUnderstandingSnapshot.fromJson(
+            (parsed['understandingSnapshot'] as Map).cast<String, dynamic>(),
+          )
+        : const RunArtifactsUnderstandingSnapshot();
+    final stabilizedSnapshot = RunArtifactsUnderstandingSnapshot(
+      intentSummary: parsedSnapshot.intentSummary,
+      userFacingSummary: _mergeStableNarrativeFinalText(
+        streamed: streamedUserFacingSummary,
+        finalized: parsedSnapshot.userFacingSummary,
+      ),
+      concernPoints: parsedSnapshot.concernPoints,
+      emotionSignal: parsedSnapshot.emotionSignal,
+      queryDesignSummary: parsedSnapshot.queryDesignSummary,
+      queryGroups: parsedSnapshot.queryGroups,
+      assumptions: parsedSnapshot.assumptions,
+      mismatchSignal: parsedSnapshot.mismatchSignal,
+      carryForwardFacts: parsedSnapshot.carryForwardFacts,
+      discardedAssumptions: parsedSnapshot.discardedAssumptions,
+    );
     return _ResolvedUnderstanding(
       intentGraph: intentGraph,
       understandingSnapshot: _normalizeUnderstandingSnapshot(
-        snapshot: parsed['understandingSnapshot'] is Map
-            ? RunArtifactsUnderstandingSnapshot.fromJson(
-                (parsed['understandingSnapshot'] as Map)
-                    .cast<String, dynamic>(),
-              )
-            : const RunArtifactsUnderstandingSnapshot(),
+        snapshot: stabilizedSnapshot,
         intentGraph: intentGraph,
         latestUserQuery: latestUserQuery,
       ),
@@ -562,9 +610,10 @@ class UnderstandPhase implements Phase {
       ...intentGraph.hardConstraints.map((item) => item.trim()),
       ...intentGraph.softConstraints.map((item) => item.trim()),
     ].where((item) => item.isNotEmpty).take(3).toList(growable: false);
-    final queryDesignSummary = intentGraph.queryTasks.isNotEmpty
-        ? '先按${intentGraph.queryTasks.take(2).map((item) => item.effectiveLabel.trim()).where((item) => item.isNotEmpty).join('、')}这几路信息分开核对。'
-        : '先把最影响结论的关键信息拆开核对。';
+    final queryDesignSummary = buildUnderstandingQueryDesignSummary(
+      concernPoints: concernPoints,
+      queryTasks: intentGraph.queryTasks,
+    );
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: intentGraph.userGoal.trim().isNotEmpty
           ? intentGraph.userGoal.trim()
@@ -625,6 +674,62 @@ class UnderstandPhase implements Phase {
       carryForwardFacts: snapshot.carryForwardFacts,
       discardedAssumptions: snapshot.discardedAssumptions,
     );
+  }
+
+  String _mergeStableNarrativeText({
+    required String previous,
+    required String incoming,
+  }) {
+    if (incoming.isEmpty) return previous;
+    if (previous.isEmpty) return incoming;
+    if (previous.endsWith(incoming) || previous.contains(incoming)) {
+      return previous;
+    }
+    if (incoming.endsWith(previous)) {
+      return incoming;
+    }
+    final maxOverlap = previous.length < incoming.length
+        ? previous.length
+        : incoming.length;
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      if (previous.substring(previous.length - overlap) ==
+          incoming.substring(0, overlap)) {
+        return '$previous${incoming.substring(overlap)}';
+      }
+    }
+    return '$previous$incoming';
+  }
+
+  String _mergeStableNarrativeFinalText({
+    required String streamed,
+    required String finalized,
+  }) {
+    final streamedText = streamed.trim();
+    final finalizedText = finalized.trim();
+    if (streamedText.isEmpty) return finalizedText;
+    if (finalizedText.isEmpty) return streamedText;
+    if (finalizedText == streamedText) {
+      return streamedText;
+    }
+    if (streamedText.startsWith(finalizedText)) {
+      return streamedText;
+    }
+    final overlap = _suffixPrefixOverlap(streamedText, finalizedText);
+    if (overlap > 0 && overlap < finalizedText.length) {
+      return '$streamedText${finalizedText.substring(overlap)}'.trim();
+    }
+    return streamedText;
+  }
+
+  int _suffixPrefixOverlap(String left, String right) {
+    final maxOverlap = left.length < right.length ? left.length : right.length;
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      if (left.substring(left.length - overlap) ==
+          right.substring(0, overlap)) {
+        return overlap;
+      }
+    }
+    return 0;
   }
 
   List<RunArtifactsUnderstandingQueryGroup> _buildUnderstandingQueryGroups(
@@ -830,7 +935,7 @@ class UnderstandPhase implements Phase {
     required String problemClass,
   }) {
     return [
-      '请把公共外壳中的 shared_context / current_runtime_state / dialogue_continuity 当作唯一上下文入口。',
+      '请先把 conversation_spine 当作当前轮唯一主线，再参考 shared_context / current_runtime_state / dialogue_continuity。',
       if (continuityMode.isNotEmpty) '连续性判断：$continuityMode',
       if (problemClass.isNotEmpty) '已知问题类型提示：$problemClass',
       '如果本轮是在纠正上一轮理解，优先修正旧假设。',
@@ -946,11 +1051,20 @@ class UnderstandPhase implements Phase {
               ? previousIntentGraph.problemClass
               : ProblemClass.general)
         : hintedProblemClass;
+    final recalledPrimarySkill = recallResult?.topK
+            .map((item) => item.domainId.trim())
+            .firstWhere(
+              (item) => item.isNotEmpty && item != fallbackDomainId,
+              orElse: () => '',
+            ) ??
+        '';
     final primarySkill =
         continuationActive &&
             previousIntentGraph?.primarySkill.trim().isNotEmpty == true
         ? previousIntentGraph!.primarySkill.trim()
-        : fallbackDomainId;
+        : (recalledPrimarySkill.isNotEmpty
+              ? recalledPrimarySkill
+              : fallbackDomainId);
     return IntentGraph(
       userGoal: latestUserQuery,
       problemShape:

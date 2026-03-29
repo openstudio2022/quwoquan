@@ -5,6 +5,7 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
+    "conversationSpine",
     "skillCatalog",
     "sharedContext",
     "currentRuntimeState",

@@ -49,6 +49,12 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 工具失败可重试 1 次，仍失败执行降级策略。
 - 调用 `local_context` 时遵循 `local_context_v1` 契约，仅请求位置与权限字段，不含相册数据：`"media": {"included": false}`。
 
+## 成答策略
+- 这类问题优先走“直接报结果 + 1-2 条简洁建议”，不要把实时天气问题展开成长卡片或百科说明。
+- 当用户问的是“能不能出门 / 要不要带伞 / 穿什么 / 现在天气怎么样”，首句直接给最关键结果，再补最相关的行动建议。
+- 只有当用户明确要更长时间范围、分时变化、穿衣细节或空气质量细项时，才扩展更多维度。
+- 如果历史里的城市、时间或天气结论没有被这轮重新坐实，优先 `replan` 或澄清，不要直接沿用旧结果。
+
 ## 工具失败降级策略
 1. 1 句话说明查不到 + 原因（如"搜索服务暂时不可用"）
 2. 给 2~3 条替代方案（手机天气 App / 中国天气网 / 稍后再问）
@@ -74,7 +80,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ```json
 {
   "contractId": "assistant_turn",
-  "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
+  "decision": {"nextAction": "tool_call|answer|ask_user|replan|retry|abort"},
   "slotState": {
     "city": {"value": "", "source": "user_query|memory|local_context|unknown"}
   },

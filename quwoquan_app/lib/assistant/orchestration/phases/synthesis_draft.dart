@@ -37,6 +37,7 @@ class SynthesisDraft {
     this.understandingSnapshot = const <String, dynamic>{},
     this.retrievalProcessing = const <String, dynamic>{},
     this.historicalThinkingSnapshot = const <String, dynamic>{},
+    this.streamedRetrievalProcessingSummary = '',
     this.streamedAnswerReadinessSummary = '',
     this.previousDomainPolicyBundle,
     this.profileUpdateProposal,
@@ -68,6 +69,7 @@ class SynthesisDraft {
   final Map<String, dynamic> understandingSnapshot;
   final Map<String, dynamic> retrievalProcessing;
   final Map<String, dynamic> historicalThinkingSnapshot;
+  final String streamedRetrievalProcessingSummary;
   final String streamedAnswerReadinessSummary;
   final DomainPolicyBundle? previousDomainPolicyBundle;
   final ProfileUpdateProposal? profileUpdateProposal;

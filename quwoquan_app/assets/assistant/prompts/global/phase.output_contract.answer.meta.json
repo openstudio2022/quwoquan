@@ -5,5 +5,10 @@
   "domainId": "global",
   "requiredVariables": ["_static"],
   "outputContract": "assistant_turn",
-  "selfCheckRules": ["has_title", "key_values_bold", "no_json_leak", "evidence_sufficient", "fallback_explained"]
+  "selfCheckRules": [
+    "stable_answer_fields",
+    "no_json_leak",
+    "licensed_evidence_only",
+    "fallback_explained"
+  ]
 }

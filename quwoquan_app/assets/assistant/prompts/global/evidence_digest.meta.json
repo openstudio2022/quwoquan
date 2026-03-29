@@ -5,9 +5,11 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
+    "conversationSpine",
     "understandingSnapshot",
     "evidenceContext",
-    "currentRuntimeState"
+    "currentRuntimeState",
+    "dialogueContinuity"
   ],
   "outputContract": "retrieval_processing",
   "selfCheckRules": [

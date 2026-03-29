@@ -71,12 +71,12 @@ void main() {
         '东京三日行程整理',
       );
       await tester.pump();
-      await tester.tap(find.byKey(TestKeys.createIdentityWork));
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(TestKeys.createCloseButton));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(TestKeys.createSaveAndExitButton));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
 
       expect(find.text('打开创作'), findsOneWidget);
@@ -85,17 +85,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(TestKeys.createDraftsButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('作品草稿').first);
+      await tester.tap(find.text('文字草稿').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('作品·笔记'), findsOneWidget);
-      final articleBody = tester.widget<CupertinoTextField>(
-        find.descendant(
-          of: find.byKey(TestKeys.createArticleBodyInput),
-          matching: find.byType(CupertinoTextField),
-        ),
+      expect(find.byKey(TestKeys.createPage), findsOneWidget);
+      final bodyInput = tester.widget<CupertinoTextField>(
+        find.byKey(TestKeys.createMomentInput),
       );
-      expect(articleBody.controller?.text, '东京三日行程整理');
+      expect(bodyInput.controller?.text, '东京三日行程整理');
     });
 
     testWidgets('有内容时 10 秒自动保存草稿到本地缓存', (tester) async {

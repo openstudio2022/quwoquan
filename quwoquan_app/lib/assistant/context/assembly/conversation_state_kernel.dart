@@ -197,16 +197,16 @@ class ConversationStateKernel {
         finalAnswerModeType = FinalAnswerMode.boundedAnswer;
       } else if (aggregationState.needExpansion ||
           requiresEvidenceContinuation) {
-        nextActionType = AssistantNextAction.retry;
-        finalAnswerModeType = FinalAnswerMode.retry;
+        nextActionType = AssistantNextAction.replan;
+        finalAnswerModeType = FinalAnswerMode.replan;
       } else {
         nextActionType = AssistantNextAction.answer;
         finalAnswerModeType = FinalAnswerMode.boundedAnswer;
       }
     } else if (aggregationState.needExpansion &&
         !aggregationState.finalAnswerReady) {
-      nextActionType = AssistantNextAction.retry;
-      finalAnswerModeType = FinalAnswerMode.retry;
+      nextActionType = AssistantNextAction.replan;
+      finalAnswerModeType = FinalAnswerMode.replan;
     } else {
       nextActionType = AssistantNextAction.answer;
       finalAnswerModeType = FinalAnswerMode.full;
@@ -238,7 +238,7 @@ class ConversationStateKernel {
       evidenceSafe:
           evidenceEvaluation.passed ||
           evidenceStatusType == EvidenceStatus.bounded,
-      renderSafe: finalAnswerModeType != FinalAnswerMode.retry,
+      renderSafe: finalAnswerModeType != FinalAnswerMode.replan,
     );
     return ConversationStateDecision(
       nextAction: nextActionType,

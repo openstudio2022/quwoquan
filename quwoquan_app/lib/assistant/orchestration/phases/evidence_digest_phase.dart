@@ -1,11 +1,13 @@
 import 'dart:convert';
 
+import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
+import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
 import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
@@ -16,6 +18,7 @@ import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_s
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 
 class EvidenceDigestPhase implements Phase {
   const EvidenceDigestPhase({this.runtime, this.templateCatalogRuntime});
@@ -53,24 +56,9 @@ class EvidenceDigestPhase implements Phase {
       understandingSnapshot: understandingSnapshot,
       synthesisReadiness: synthesisReadiness,
     );
-    final processEmitter = ProcessTimelineEmitter(
-      runId: input.runId,
-      traceId: input.traceId,
-      onTraceEvent: input.onTraceEvent,
-    );
-    final modelSnapshot = await _digestWithModel(
-      input: input,
-      request: request,
-      latestUserQuery: latestUserQuery,
-      understandingSnapshot: understandingSnapshot,
-      synthesisReadiness: synthesisReadiness,
-      toolResults: toolResults,
-      fallbackSnapshot: fallbackSnapshot,
-      processEmitter: processEmitter,
-    );
     final stageBlocked = !synthesisReadiness.ready;
     final snapshot = _normalizeRetrievalSnapshot(
-      snapshot: modelSnapshot ?? fallbackSnapshot,
+      snapshot: fallbackSnapshot,
       fallbackSnapshot: fallbackSnapshot,
       blocked: stageBlocked,
       blockedMessage: _buildRetrievalBlockedMessage(synthesisReadiness.reason),
@@ -86,11 +74,9 @@ class EvidenceDigestPhase implements Phase {
           : '',
       'skipAnswerStage': stageBlocked,
     };
-    _emitRetrievalProcessing(
-      input: input,
-      snapshot: snapshot,
-      blocked: stageBlocked,
-    );
+    if (stageBlocked) {
+      _emitRetrievalProcessing(input: input, snapshot: snapshot, blocked: true);
+    }
     return PhaseOutput(
       state: input.state.copyWith(
         executionBridgeSnapshot: updatedExecutionSnapshot,
@@ -122,6 +108,7 @@ class EvidenceDigestPhase implements Phase {
       'evidence_digest',
       fallback: '',
     );
+    final bootstrapContext = input.state.bootstrapContext;
     final evidenceContext = <String, dynamic>{
       'toolResults': toolResults,
       'acceptedReferences': fallbackSnapshot.acceptedReferences
@@ -138,15 +125,71 @@ class EvidenceDigestPhase implements Phase {
         'synthesisReason': synthesisReadiness.reason,
       },
     };
+    final dialogueContinuity = <String, dynamic>{
+      'continuityMode':
+          bootstrapContext?.contextContinuityPolicy.continuityMode.wireName ??
+          '',
+      'previousUnderstandingSnapshot':
+          bootstrapContext?.previousUnderstandingSnapshot.toJson() ??
+          const <String, dynamic>{},
+      'previousAnswerProcessing':
+          bootstrapContext?.previousAnswerProcessing.toJson() ??
+          const <String, dynamic>{},
+      'historicalThinkingSnapshot':
+          bootstrapContext?.historicalThinkingSnapshot.toJson() ??
+          const <String, dynamic>{},
+      'previousAnswerSummary': bootstrapContext?.previousAnswerSummary ?? '',
+    };
+    final conversationSpine = buildConversationSpine(
+      stageId: 'retrieval_processing',
+      userQuery: latestUserQuery,
+      userGoal: input.state.intentGraph?.userGoal ?? '',
+      primarySkill: input.state.intentGraph?.primarySkill ?? '',
+      problemClass: input.state.intentGraph?.problemClass.wireName ?? '',
+      answerShape: input.state.intentGraph?.answerShape.wireName ?? '',
+      historyAssessment: mergeHistoryAssessments(<Map<String, dynamic>>[
+        buildHistoryAssessmentFromPolicy(
+          policy:
+              bootstrapContext?.contextContinuityPolicy ??
+              const ContextContinuityPolicy(),
+          overrideSlots:
+              bootstrapContext?.continuityOverrideSlots ??
+              const <String, dynamic>{},
+        ),
+        buildHistoryAssessmentFromSnapshot(
+          snapshot:
+              bootstrapContext?.historicalThinkingSnapshot ??
+              const RunArtifactsHistoricalThinkingSnapshot(),
+        ),
+      ]),
+      stageState: <String, dynamic>{
+        'allowedChoices': const <String>['answer', 'replan'],
+        'answerReady': synthesisReadiness.ready,
+        'replanRequested': !synthesisReadiness.ready,
+        if (!synthesisReadiness.ready &&
+            synthesisReadiness.reason.trim().isNotEmpty)
+          'replanReason': synthesisReadiness.reason.trim(),
+      },
+    );
     final digestMessages = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'role': 'system',
+        'content': _buildEvidenceDigestNarrativeBaton(
+          understandingSnapshot: understandingSnapshot,
+          dialogueContinuity: dialogueContinuity,
+        ),
+      },
       <String, dynamic>{'role': 'user', 'content': latestUserQuery},
     ];
     final digestTemplateVariables = <String, dynamic>{
       'userQuery': latestUserQuery,
+      'conversationSpine': jsonEncode(conversationSpine),
       'understandingSnapshot': jsonEncode(understandingSnapshot.toJson()),
       'evidenceContext': jsonEncode(evidenceContext),
       'currentRuntimeState': jsonEncode(currentRuntimeState),
+      'dialogueContinuity': jsonEncode(dialogueContinuity),
     };
+    var streamedProcessingSummary = '';
     void forwardTrace(AssistantTraceEvent event) {
       input.onTraceEvent?.call(
         event.copyWith(visibility: TraceVisibility.internal),
@@ -154,8 +197,11 @@ class EvidenceDigestPhase implements Phase {
       if (event.type == AssistantTraceEventType.thinkingProgress &&
           event.data?['streaming'] == true &&
           event.data?['extracted'] == true &&
-          event.data?['fieldPath'] ==
-              'retrievalProcessing.processingSummary') {
+          event.data?['fieldPath'] == 'retrievalProcessing.processingSummary') {
+        streamedProcessingSummary = _mergeStableNarrativeText(
+          previous: streamedProcessingSummary,
+          incoming: event.message,
+        );
         processEmitter.pushDelta(
           stepId: ProcessStepId.retrievalProcessing,
           scope: UserEventScope.skill,
@@ -207,7 +253,9 @@ class EvidenceDigestPhase implements Phase {
           maxTokens: 800,
           forceJsonObject: true,
           timeoutSeconds: 20,
-          streamJsonFieldPaths: <String>['retrievalProcessing.processingSummary'],
+          streamJsonFieldPaths: <String>[
+            'retrievalProcessing.processingSummary',
+          ],
         ),
       );
       rawOutput = fallbackResult.finalText;
@@ -220,11 +268,21 @@ class EvidenceDigestPhase implements Phase {
     if (payload.isEmpty ||
         !payload.containsKey('processingSummary') &&
             !payload.containsKey('selectedKeyPoints')) {
-      return _tryExtractFromNaturalLanguage(rawOutput, fallbackSnapshot);
+      final naturalLanguageSnapshot = _tryExtractFromNaturalLanguage(
+        rawOutput,
+        fallbackSnapshot,
+      );
+      return _withStableProcessingSummary(
+        snapshot: naturalLanguageSnapshot,
+        streamedProcessingSummary: streamedProcessingSummary,
+      );
     }
-    return _mergeRetrievalProcessing(
-      raw: payload,
-      fallbackSnapshot: fallbackSnapshot,
+    return _withStableProcessingSummary(
+      snapshot: _mergeRetrievalProcessing(
+        raw: payload,
+        fallbackSnapshot: fallbackSnapshot,
+      ),
+      streamedProcessingSummary: streamedProcessingSummary,
     );
   }
 
@@ -242,18 +300,11 @@ class EvidenceDigestPhase implements Phase {
       acceptedReferences: acceptedReferences,
       toolResults: toolResults,
     );
-    final focusSummary = understandingSnapshot.concernPoints
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .take(2)
-        .join('、');
-    final processingSummary = acceptedReferences.isNotEmpty
-        ? (focusSummary.isNotEmpty
-              ? '我先按$focusSummary把能直接回答问题的关键信息筛出来了。'
-              : '我先把检索结果里真正能支撑回答的依据筛出来了。')
-        : (focusSummary.isNotEmpty
-              ? '我先围绕$focusSummary把当前结果里有用的信息收拢出来。'
-              : '我先把当前检索结果里有用的点收敛出来。');
+    final processingSummary = _buildFallbackProcessingSummary(
+      understandingSnapshot: understandingSnapshot,
+      selectedKeyPoints: selectedKeyPoints,
+      acceptedReferenceCount: acceptedReferences.length,
+    );
     return RetrievalProcessingSnapshot(
       processedDocumentCount: processedDocumentCount,
       acceptedDocumentCount: acceptedReferences.length,
@@ -271,6 +322,16 @@ class EvidenceDigestPhase implements Phase {
     required RetrievalProcessingSnapshot fallbackSnapshot,
   }) {
     final parsed = RetrievalProcessingSnapshot.fromJson(raw);
+    final parsedSelectedKeyPoints = parsed.selectedKeyPoints
+        .map(_sanitizeKeyPoint)
+        .where((item) => item.isNotEmpty)
+        .take(5)
+        .toList(growable: false);
+    final parsedAcceptedReferences = parsed.acceptedReferences
+        .map(_sanitizeAcceptedReference)
+        .where(_hasRenderableReference)
+        .take(5)
+        .toList(growable: false);
     return RetrievalProcessingSnapshot(
       processedDocumentCount: parsed.processedDocumentCount > 0
           ? parsed.processedDocumentCount
@@ -281,14 +342,14 @@ class EvidenceDigestPhase implements Phase {
       processingSummary: parsed.processingSummary.trim().isNotEmpty
           ? parsed.processingSummary.trim()
           : fallbackSnapshot.processingSummary,
-      selectedKeyPoints: parsed.selectedKeyPoints.isNotEmpty
-          ? parsed.selectedKeyPoints
+      selectedKeyPoints: parsedSelectedKeyPoints.isNotEmpty
+          ? parsedSelectedKeyPoints
           : fallbackSnapshot.selectedKeyPoints,
       expansionReason: parsed.expansionReason.trim().isNotEmpty
           ? parsed.expansionReason.trim()
           : fallbackSnapshot.expansionReason,
-      acceptedReferences: parsed.acceptedReferences.isNotEmpty
-          ? parsed.acceptedReferences.take(5).toList(growable: false)
+      acceptedReferences: parsedAcceptedReferences.isNotEmpty
+          ? parsedAcceptedReferences
           : fallbackSnapshot.acceptedReferences,
     );
   }
@@ -350,13 +411,18 @@ class EvidenceDigestPhase implements Phase {
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       for (final reference in references) {
-        final title = (reference['title'] as String?)?.trim() ?? '';
+        final title = SafeReferenceNormalizer.normalizeText(
+          (reference['title'] as String?)?.trim() ?? '',
+        );
         final url = (reference['url'] as String?)?.trim() ?? '';
-        final source =
-            (reference['source'] as String?)?.trim() ??
-            (reference['sourceHost'] as String?)?.trim() ??
-            '';
-        final snippet = (reference['snippet'] as String?)?.trim() ?? '';
+        final source = SafeReferenceNormalizer.normalizeText(
+          (reference['source'] as String?)?.trim() ??
+              (reference['sourceHost'] as String?)?.trim() ??
+              '',
+        );
+        final snippet = SafeReferenceNormalizer.normalizeSnippet(
+          (reference['snippet'] as String?)?.trim() ?? '',
+        );
         final key = url.isNotEmpty ? url : '$title::$source';
         if (key.trim().isEmpty || byUrl.containsKey(key)) {
           continue;
@@ -364,12 +430,16 @@ class EvidenceDigestPhase implements Phase {
         if (title.isEmpty && url.isEmpty && source.isEmpty) {
           continue;
         }
-        byUrl[key] = RetrievalProcessingReference(
+        final sanitized = RetrievalProcessingReference(
           title: title,
           url: url,
           source: source,
           snippet: snippet,
         );
+        if (!_hasRenderableReference(sanitized)) {
+          continue;
+        }
+        byUrl[key] = sanitized;
       }
     }
     return byUrl.values.take(5).toList(growable: false);
@@ -405,7 +475,7 @@ class EvidenceDigestPhase implements Phase {
     final seen = <String>{};
 
     void collect(String raw) {
-      final value = raw.trim();
+      final value = _sanitizeKeyPoint(raw);
       if (value.isEmpty || value.length < 6 || !seen.add(value)) return;
       points.add(value);
     }
@@ -526,8 +596,155 @@ class EvidenceDigestPhase implements Phase {
   String _buildRetrievalBlockedMessage(String rawReason) {
     final reason = rawReason.trim();
     if (reason.isEmpty) {
-      return '这次拿到的结果还不够稳定，我先不继续往下整理答案。';
+      return '这次拿到的结果还不够稳定，我先不继续往下生成答案。';
     }
     return '这次拿到的结果还不够稳定，$reason';
+  }
+
+  RetrievalProcessingSnapshot? _withStableProcessingSummary({
+    required RetrievalProcessingSnapshot? snapshot,
+    required String streamedProcessingSummary,
+  }) {
+    if (snapshot == null) {
+      return null;
+    }
+    final mergedSummary = _mergeStableNarrativeFinalText(
+      streamed: streamedProcessingSummary,
+      finalized: snapshot.processingSummary,
+    );
+    return RetrievalProcessingSnapshot(
+      processedDocumentCount: snapshot.processedDocumentCount,
+      acceptedDocumentCount: snapshot.acceptedDocumentCount,
+      processingSummary: mergedSummary,
+      selectedKeyPoints: snapshot.selectedKeyPoints,
+      expansionReason: snapshot.expansionReason,
+      acceptedReferences: snapshot.acceptedReferences,
+    );
+  }
+
+  RetrievalProcessingReference _sanitizeAcceptedReference(
+    RetrievalProcessingReference reference,
+  ) {
+    return RetrievalProcessingReference(
+      title: SafeReferenceNormalizer.normalizeText(reference.title),
+      url: reference.url.trim(),
+      source: SafeReferenceNormalizer.normalizeText(reference.source),
+      snippet: SafeReferenceNormalizer.normalizeSnippet(reference.snippet),
+    );
+  }
+
+  bool _hasRenderableReference(RetrievalProcessingReference reference) {
+    return reference.title.isNotEmpty ||
+        reference.url.isNotEmpty ||
+        reference.source.isNotEmpty;
+  }
+
+  String _sanitizeKeyPoint(String raw) {
+    return SafeReferenceNormalizer.normalizeFact(raw);
+  }
+
+  String _mergeStableNarrativeText({
+    required String previous,
+    required String incoming,
+  }) {
+    if (incoming.isEmpty) return previous;
+    if (previous.isEmpty) return incoming;
+    if (previous.endsWith(incoming) || previous.contains(incoming)) {
+      return previous;
+    }
+    if (incoming.endsWith(previous)) {
+      return incoming;
+    }
+    final maxOverlap = previous.length < incoming.length
+        ? previous.length
+        : incoming.length;
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      if (previous.substring(previous.length - overlap) ==
+          incoming.substring(0, overlap)) {
+        return '$previous${incoming.substring(overlap)}';
+      }
+    }
+    return '$previous$incoming';
+  }
+
+  String _mergeStableNarrativeFinalText({
+    required String streamed,
+    required String finalized,
+  }) {
+    final streamedText = streamed.trim();
+    final finalizedText = finalized.trim();
+    if (streamedText.isEmpty) return finalizedText;
+    if (finalizedText.isEmpty) return streamedText;
+    if (finalizedText == streamedText) {
+      return streamedText;
+    }
+    if (streamedText.startsWith(finalizedText)) {
+      return streamedText;
+    }
+    final overlap = _suffixPrefixOverlap(streamedText, finalizedText);
+    if (overlap > 0 && overlap < finalizedText.length) {
+      return '$streamedText${finalizedText.substring(overlap)}'.trim();
+    }
+    return streamedText;
+  }
+
+  int _suffixPrefixOverlap(String left, String right) {
+    final maxOverlap = left.length < right.length ? left.length : right.length;
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      if (left.substring(left.length - overlap) ==
+          right.substring(0, overlap)) {
+        return overlap;
+      }
+    }
+    return 0;
+  }
+
+  String _buildEvidenceDigestNarrativeBaton({
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required Map<String, dynamic> dialogueContinuity,
+  }) {
+    final lines = <String>['连续叙事接力：请沿用这轮已经确认的目标与口吻，继续说明哪些信息真正可用，不要另起一套检索报告。'];
+    final understandingSummary = understandingSnapshot.userFacingSummary.trim();
+    if (understandingSummary.isNotEmpty) {
+      lines.add('上一阶段已确认：$understandingSummary');
+    }
+    final mismatchSignal =
+        ((dialogueContinuity['historicalThinkingSnapshot'] as Map?)
+                ?.cast<String, dynamic>())?['mismatchSignal']
+            ?.toString()
+            .trim() ??
+        '';
+    if (mismatchSignal.isNotEmpty) {
+      lines.add('本轮纠偏提醒：$mismatchSignal');
+    }
+    return lines.join('\n');
+  }
+
+  String _buildFallbackProcessingSummary({
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required List<String> selectedKeyPoints,
+    required int acceptedReferenceCount,
+  }) {
+    final focusSummary = understandingSnapshot.concernPoints
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(2)
+        .join('、');
+    final lead = focusSummary.isNotEmpty
+        ? '围绕你刚才最关心的$focusSummary'
+        : '顺着你刚才最关心的结果';
+    final strongestFacts = selectedKeyPoints
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(2)
+        .toList(growable: false);
+    if (strongestFacts.isNotEmpty) {
+      final facts = strongestFacts.join('；');
+      return '$lead，现在已经能直接确认的是：$facts。其余背景线索我不会直接带进最终答案。';
+    }
+    if (acceptedReferenceCount > 0) {
+      return '$lead，我已经先把真正能直接支撑回答的依据收拢出来了，其余只作为背景线索保留。';
+    }
+    return '$lead，我还在继续筛掉噪音，只保留能直接支撑回答的依据。';
   }
 }

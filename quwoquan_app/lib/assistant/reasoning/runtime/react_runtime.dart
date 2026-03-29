@@ -206,6 +206,7 @@ class ReactRuntime {
     required String goal,
     required void Function(String delta) onDelta,
     List<String> streamJsonFieldPaths = const <String>[
+      'retrievalProcessing.processingSummary',
       'answerProcessing.readinessSummary',
     ],
     Map<String, dynamic> templateContext = const <String, dynamic>{},

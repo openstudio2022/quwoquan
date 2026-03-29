@@ -177,75 +177,72 @@ LocalPhaseExecutionOwner _buildLoop({
 }
 
 void main() {
-  test(
-    '流式成答连续失败时会 fail-closed，而不是偷偷切到另一条非流式 repair 答案',
-    () async {
-      final planningJson = _assistantTurnJson(
-        markdown: '## 中间结果\n- 我正在整理最终答案。',
-        interpretation: 'phase one',
-      );
-      final repairedJson = _assistantTurnJson(
-        markdown: '## 修复后的答案\n- 现在直接给出用户可见结果。',
-        interpretation: 'repaired',
-      );
-      final server = await _startMockServer((body) async {
-        final messages =
-            (body['messages'] as List?)?.whereType<Map>().toList() ??
-            const <Map>[];
-        final joined = messages
-            .map((item) => (item['content'] ?? '').toString())
-            .join('\n');
-        final isStream = body['stream'] == true;
-        if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
-            joined.contains('上一次输出未通过最终成答契约校验') ||
-            joined.contains('结构化 JSON 仍然无效') ||
-            joined.contains('上一次输出无效')) {
-          return isStream
-              ? _MockChatResponse.sse(_chunk(repairedJson))
-              : _MockChatResponse.json(repairedJson);
-        }
-        if (isStream && joined.contains('领域执行结果摘要')) {
-          return const _MockChatResponse.sse(<String>[
-            '<tool_call><name>web_search</name></tool_call>',
-          ]);
-        }
+  test('流式成答连续失败时会 fail-closed，而不是偷偷切到另一条非流式 repair 答案', () async {
+    final planningJson = _assistantTurnJson(
+      markdown: '## 中间结果\n- 我正在整理最终答案。',
+      interpretation: 'phase one',
+    );
+    final repairedJson = _assistantTurnJson(
+      markdown: '## 修复后的答案\n- 现在直接给出用户可见结果。',
+      interpretation: 'repaired',
+    );
+    final server = await _startMockServer((body) async {
+      final messages =
+          (body['messages'] as List?)?.whereType<Map>().toList() ??
+          const <Map>[];
+      final joined = messages
+          .map((item) => (item['content'] ?? '').toString())
+          .join('\n');
+      final isStream = body['stream'] == true;
+      if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
+          joined.contains('上一次输出未通过最终成答契约校验') ||
+          joined.contains('结构化 JSON 仍然无效') ||
+          joined.contains('上一次输出无效')) {
         return isStream
-            ? _MockChatResponse.sse(_chunk(planningJson))
-            : _MockChatResponse.json(planningJson);
-      });
-      addTearDown(() async {
-        await server.close(force: true);
-      });
-      final tempDir = await Directory.systemTemp.createTemp(
-        'pa_synthesis_guard_',
-      );
-      addTearDown(() async {
-        await tempDir.delete(recursive: true);
-      });
-      final loop = _buildLoop(
-        provider: _buildProvider(server),
-        tempDirPath: tempDir.path,
-      );
+            ? _MockChatResponse.sse(_chunk(repairedJson))
+            : _MockChatResponse.json(repairedJson);
+      }
+      if (isStream && joined.contains('领域执行结果摘要')) {
+        return const _MockChatResponse.sse(<String>[
+          '<tool_call><name>web_search</name></tool_call>',
+        ]);
+      }
+      return isStream
+          ? _MockChatResponse.sse(_chunk(planningJson))
+          : _MockChatResponse.json(planningJson);
+    });
+    addTearDown(() async {
+      await server.close(force: true);
+    });
+    final tempDir = await Directory.systemTemp.createTemp(
+      'pa_synthesis_guard_',
+    );
+    addTearDown(() async {
+      await tempDir.delete(recursive: true);
+    });
+    final loop = _buildLoop(
+      provider: _buildProvider(server),
+      tempDirPath: tempDir.path,
+    );
 
-      final response = await loop.run(
-        const AssistantRunRequest(
-          sessionId: 'repair-invalid-synthesis',
-          messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '请直接给我最终结论'),
-          ],
-        ),
-      );
-      final markdown = response.displayMarkdown;
+    final response = await loop.run(
+      const AssistantRunRequest(
+        sessionId: 'repair-invalid-synthesis',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '请直接给我最终结论'),
+        ],
+      ),
+    );
+    final markdown = response.displayMarkdown;
 
-      expect(response.degraded, isTrue);
-      expect(markdown, contains('这次整理答案失败'));
-      expect(markdown, isNot(contains('## 问题理解')));
-      expect(markdown, isNot(contains('## 关键观点')));
-      expect(markdown, isNot(contains('## 回答概要')));
-      expect(markdown, isNot(contains('<tool_call>')));
-      expect(markdown, isNot(contains('"toolCalls"')));
-    },
-  );
+    expect(response.degraded, isTrue);
+    expect(markdown, contains('这次生成答案失败'));
+    expect(markdown, isNot(contains('## 问题理解')));
+    expect(markdown, isNot(contains('## 关键观点')));
+    expect(markdown, isNot(contains('## 回答概要')));
+    expect(markdown, isNot(contains('<tool_call>')));
+    expect(markdown, isNot(contains('"toolCalls"')));
+  });
 
   test('repair 仍失败时会终止成答并把答案阶段标记为 blocked', () async {
     final planningJson = _assistantTurnJson(
@@ -299,7 +296,7 @@ void main() {
       ),
     );
 
-    expect(response.displayMarkdown, contains('这次整理答案失败'));
+    expect(response.displayMarkdown, contains('这次生成答案失败'));
     final timeline =
         response.runArtifacts?.processTimeline ??
         const <ProcessTimelineFrame>[];
@@ -307,7 +304,7 @@ void main() {
       (frame) => frame.stepId == ProcessStepId.answerOrganization,
     );
     expect(answerFrame.status, JourneyStageStatus.blocked);
-    expect(answerFrame.headline, contains('这次整理答案失败'));
+    expect(answerFrame.headline, contains('这次生成答案失败'));
   });
 
   test('injects inline evidence links into streamed final markdown', () async {
@@ -389,7 +386,8 @@ void main() {
         interpretation: 'phase one',
       );
       final synthesisJson = _assistantTurnJson(
-        markdown: '## 深圳天气\n\n- 深圳今天有雨，外出建议带伞。[来源1](https://example.com/weather)',
+        markdown:
+            '## 深圳天气\n\n- 深圳今天有雨，外出建议带伞。[来源1](https://example.com/weather)',
         text: '深圳今天有雨，外出建议带伞。',
         summary: '深圳今天有雨，外出建议带伞',
         interpretation: '确认深圳今天的天气和出门准备',

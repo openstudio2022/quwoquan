@@ -693,7 +693,9 @@ void main() {
       );
       expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.searchSummary);
       expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
+      expect(viewModel.blocks[1].items, isEmpty);
       expect(viewModel.blocks[1].referenceLabel, '处理了 10 篇，接纳了 3 篇');
+      expect(viewModel.blocks[1].references, hasLength(3));
       expect(viewModel.blocks[2].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
       expect(viewModel.blocks[2].headline, isNot(contains('Shenzhen tian qi')));
     });

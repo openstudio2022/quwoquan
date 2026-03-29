@@ -652,7 +652,7 @@ void main() {
     });
 
     test(
-      'evidence digest phase 会产出 retrievalProcessing 并发出 processCommit',
+      'evidence digest phase 在普通 ready 链路只产出 retrievalProcessing 快照，不再单独发出 processCommit',
       () async {
         final phase = EvidenceDigestPhase();
         final traces = <AssistantTraceEvent>[];
@@ -717,18 +717,15 @@ void main() {
           result.state!.retrievalProcessing.acceptedReferences.first.url,
           'https://example.com/weather',
         );
-        final commitTrace = traces.singleWhere(
-          (trace) =>
-              trace.data?['syntheticUserEvent'] == true &&
-              trace.data?['userEventType'] == 'process_commit',
-        );
-        expect(commitTrace.data?['stageId'], JourneyStageId.search.wireName);
         expect(
-          ((commitTrace.data?['retrievalProcessing']
-                      as Map?)?['selectedKeyPoints']
-                  as List?) ??
-              const <dynamic>[],
-          isNotEmpty,
+          traces.where(
+            (trace) =>
+                trace.data?['syntheticUserEvent'] == true &&
+                trace.data?['processStepId'] ==
+                    ProcessStepId.retrievalProcessing.wireName,
+          ),
+          isEmpty,
+          reason: '普通链路的阶段2流式应在 synthesis 第二轮统一输出，而不是 evidence digest 单独再起一轮',
         );
       },
     );

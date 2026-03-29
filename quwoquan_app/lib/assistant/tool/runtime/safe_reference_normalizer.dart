@@ -16,6 +16,9 @@ class SafeReferenceNormalizer {
     '_hsenc',
     '_hsmi',
   ];
+  static final RegExp _phoneLikeRe = RegExp(
+    r'(?:(?:\+?86[- ]?)?1[3-9]\d(?:[- ]?\d){8,10})',
+  );
 
   static Map<String, dynamic>? normalize(Map<String, dynamic> raw) {
     final originalUrl = (raw['url'] as String?)?.trim() ?? '';
@@ -95,6 +98,23 @@ class SafeReferenceNormalizer {
     return decoded.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  static String normalizeSnippet(String raw, {int maxChars = 120}) {
+    final text = normalizeText(raw);
+    if (text.isEmpty) return '';
+    if (_phoneLikeRe.hasMatch(text)) {
+      return '';
+    }
+    final primary = text
+        .split(RegExp(r'[。！？!?；;\n]'))
+        .map((item) => item.trim())
+        .firstWhere((item) => item.isNotEmpty, orElse: () => text);
+    return _truncate(primary, maxChars);
+  }
+
+  static String normalizeFact(String raw, {int maxChars = 96}) {
+    return normalizeSnippet(raw, maxChars: maxChars);
+  }
+
   static bool _looksLikeUrl(String text) {
     final normalized = text.toLowerCase();
     return normalized.startsWith('http://') ||
@@ -154,5 +174,12 @@ class SafeReferenceNormalizer {
       return code != null ? String.fromCharCode(code) : m.group(0)!;
     });
     return result;
+  }
+
+  static String _truncate(String text, int maxChars) {
+    if (text.length <= maxChars) {
+      return text;
+    }
+    return '${text.substring(0, maxChars).trim()}...';
   }
 }

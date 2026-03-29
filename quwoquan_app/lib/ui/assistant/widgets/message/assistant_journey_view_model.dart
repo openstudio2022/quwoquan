@@ -350,8 +350,11 @@ List<AssistantJourneyBlockViewModel> _buildBlocksFromDisplayState({
         final items = <String>[];
         final references = <AssistantJourneyReferenceViewModel>[];
         for (final block in stepBlocks) {
-          final title = block.title.trim();
-          final body = block.body.trim();
+          final title = _sanitizeProcessText(
+            block.title.trim(),
+            stepId: stepId,
+          );
+          final body = _sanitizeProcessText(block.body.trim(), stepId: stepId);
           if (headline.isEmpty) {
             if (title.isNotEmpty) {
               headline = title;
@@ -363,7 +366,12 @@ List<AssistantJourneyBlockViewModel> _buildBlocksFromDisplayState({
           }
           items.addAll(
             block.items
-                .map((item) => _displayItemText(item))
+                .map(
+                  (item) => _sanitizeProcessText(
+                    _displayItemText(item),
+                    stepId: stepId,
+                  ),
+                )
                 .where((item) => item.isNotEmpty),
           );
           references.addAll(

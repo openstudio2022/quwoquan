@@ -72,6 +72,10 @@ void main() {
     test('synthesis defaults register answer organization stream field', () {
       expect(
         const LlmCallOptions.synthesis().streamJsonFieldPaths,
+        contains('retrievalProcessing.processingSummary'),
+      );
+      expect(
+        const LlmCallOptions.synthesis().streamJsonFieldPaths,
         contains('answerProcessing.readinessSummary'),
       );
     });

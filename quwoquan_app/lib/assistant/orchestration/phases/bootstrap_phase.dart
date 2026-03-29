@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
@@ -89,26 +87,16 @@ class BootstrapPhase implements Phase {
       latestAssistant,
       previousRunArtifacts,
     );
-    final continuityDecision = await _resolveContinuityWithModel(
-      request: request,
-      latestUserQuery: latestUserQuery,
-      sessionId: sessionId,
-      runId: input.runId,
-      traceId: input.traceId,
+    final continuityPolicy = _fallbackContinuityPolicy(
+      query: latestUserQuery,
       sessionHistory: priorSessionHistory,
-      previousRunArtifacts: previousRunArtifacts,
-      onTraceEvent: input.onTraceEvent,
+      previousIntentGraph: previousIntentGraph,
+      previousAnswerSummary: previousAnswerSummary,
     );
-    final continuityPolicy =
-        continuityDecision?.policy ??
-        _fallbackContinuityPolicy(
-          query: latestUserQuery,
-          sessionHistory: priorSessionHistory,
-          previousIntentGraph: previousIntentGraph,
-          previousAnswerSummary: previousAnswerSummary,
-        );
     final continuityOverrideSlots =
-        continuityDecision?.overrideSlots ?? const <String, dynamic>{};
+        (request.contextScopeHint['continuityOverrideSlots'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     final carryPreviousTurn = _shouldCarryPreviousTurn(continuityPolicy);
     final carriedPreviousRunArtifacts = carryPreviousTurn
         ? previousRunArtifacts
@@ -335,119 +323,6 @@ class BootstrapPhase implements Phase {
     return result.finalText.trim();
   }
 
-  Future<_ModelContinuityDecision?> _resolveContinuityWithModel({
-    required AssistantRunRequest request,
-    required String latestUserQuery,
-    required String sessionId,
-    required String runId,
-    required String traceId,
-    required List<Map<String, dynamic>> sessionHistory,
-    required RunArtifacts? previousRunArtifacts,
-    void Function(dynamic event)? onTraceEvent,
-  }) async {
-    if (latestUserQuery.trim().isEmpty) return null;
-    final templateVersion = templateCatalogRuntime.latestVersionFor(
-      'planner.continuity_resolution',
-      fallback: '',
-    );
-    final recentQueries = _recentUserQueries(sessionHistory);
-    final latestAssistant = _latestAssistantMessage(sessionHistory);
-    final previousIntentGraph =
-        (latestAssistant?['intentGraph'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final previousUnderstandingSnapshot = _assistantStructuredMap(
-      latestAssistant,
-      'understandingSnapshot',
-      previousRunArtifacts?.understandingSnapshot.toJson(),
-    );
-    final previousAnswerProcessing = _assistantStructuredMap(
-      latestAssistant,
-      'answerProcessing',
-      previousRunArtifacts?.answerProcessing.toJson(),
-    );
-    final previousSlotState =
-        previousRunArtifacts?.slotState.toJson() ??
-        ((latestAssistant?['runArtifacts'] as Map?)
-                    ?.cast<String, dynamic>()['slotState']
-                as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final previousAnswerSummary =
-        (latestAssistant?['displayPlainText'] as String?)?.trim().isNotEmpty ==
-            true
-        ? (latestAssistant!['displayPlainText'] as String).trim()
-        : (latestAssistant?['content'] as String?)?.trim() ?? '';
-    final result = await runtime.run(
-      messages: <Map<String, dynamic>>[
-        <String, dynamic>{'role': 'user', 'content': latestUserQuery},
-      ],
-      maxIterations: 1,
-      goal: '判断当前问题是否需要承接上一轮上下文',
-      availableToolNamesOverride: const <String>[],
-      templateId: 'planner.continuity_resolution',
-      templateVersion: templateVersion,
-      templateVariables: <String, dynamic>{
-        'currentQuery': latestUserQuery,
-        'referenceQueries': jsonEncode(recentQueries),
-        'historySummary': _recentAssistantHistorySummary(sessionHistory),
-        'previousIntentGraph': jsonEncode(previousIntentGraph),
-        'previousUnderstandingSnapshot': jsonEncode(
-          previousUnderstandingSnapshot,
-        ),
-        'previousAnswerProcessing': jsonEncode(previousAnswerProcessing),
-        'previousSlotState': jsonEncode(previousSlotState),
-        'previousAnswerSummary': previousAnswerSummary,
-      },
-      templateContext: request.contextScopeHint,
-      sessionId: sessionId,
-      runId: runId,
-      traceId: traceId,
-      onTraceEvent: onTraceEvent == null
-          ? null
-          : (event) => onTraceEvent(
-              event.copyWith(visibility: TraceVisibility.internal),
-            ),
-      callOptions: const LlmCallOptions(
-        temperature: 0.1,
-        maxTokens: 700,
-        forceJsonObject: true,
-        timeoutSeconds: 15,
-      ),
-    );
-    final parsed =
-        LlmResponseParser.parse(result.finalText).json ?? <String, dynamic>{};
-    if (parsed.isEmpty) return null;
-    final continuityMode = parseContextContinuityMode(
-      (parsed['continuityMode'] as String?)?.trim() ?? '',
-    );
-    if (continuityMode == ContextContinuityMode.unknown) {
-      return null;
-    }
-    final policy = ContextContinuityPolicy(
-      queryIntent: (parsed['queryIntent'] as String?)?.trim() ?? '',
-      problemClass: (parsed['problemClass'] as String?)?.trim() ?? '',
-      continuityMode: continuityMode,
-      explicitContinuation: parsed['explicitContinuation'] == true,
-      topicOverlap: ((parsed['topicOverlap'] as num?) ?? 0).toDouble(),
-      allowHistorySummary: parsed['allowHistorySummary'] == true,
-      allowLongtermMemory: parsed['allowLongtermMemory'] == true,
-      allowLocationHints: parsed['allowLocationHints'] == true,
-      referenceQueries:
-          (parsed['referenceQueries'] as List?)
-              ?.whereType<String>()
-              .map((item) => item.trim())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          recentQueries,
-    );
-    return _ModelContinuityDecision(
-      policy: policy,
-      overrideSlots:
-          (parsed['overrideSlots'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-    );
-  }
-
   IntentGraph? _parsePreviousIntentGraph(
     Map<String, dynamic>? latestAssistant,
   ) {
@@ -625,6 +500,13 @@ class BootstrapPhase implements Phase {
         previousAnswerSummary,
       ),
       referenceQueries: referenceQueries,
+      carryForwardFacts: <String>[
+        if ((previousIntentGraph?.userGoal.trim() ?? '').isNotEmpty)
+          previousIntentGraph!.userGoal.trim(),
+      ],
+      needsRecheckFacts: const <String>[],
+      discardedAssumptions: const <String>[],
+      mismatchSignal: '',
     );
   }
 
@@ -669,14 +551,4 @@ class BootstrapPhase implements Phase {
     return policy.continuityMode != ContextContinuityMode.unknown &&
         policy.continuityMode != ContextContinuityMode.freshTopic;
   }
-}
-
-class _ModelContinuityDecision {
-  const _ModelContinuityDecision({
-    required this.policy,
-    required this.overrideSlots,
-  });
-
-  final ContextContinuityPolicy policy;
-  final Map<String, dynamic> overrideSlots;
 }

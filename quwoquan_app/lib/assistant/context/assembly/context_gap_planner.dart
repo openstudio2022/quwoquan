@@ -54,7 +54,7 @@ class ContextGapPlanner {
       if (realtimeEvidence != 'ready') {
         fillTasks.add(
           ContextFillTask(
-            fillType: ContextFillType.gapFill,
+            fillType: ContextFillType.replan,
             targetSlot: ContextTargetSlot.realtimeEvidence,
             reason: '实时问题需要检索证据支撑回答。',
             generatedQueryConditions: [query],

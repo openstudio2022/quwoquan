@@ -122,8 +122,8 @@ void main() {
       );
 
       expect(readiness.ready, isFalse);
-      expect(readiness.gapFillTask, isNotNull);
-      expect(readiness.gapFillTask!.fillType, equals(ContextFillType.gapFill));
+      expect(readiness.replanTask, isNotNull);
+      expect(readiness.replanTask!.fillType, equals(ContextFillType.replan));
     });
 
     test('tool result 已返回但证据仍为 retry 时继续拦 synthesis', () {
@@ -173,7 +173,7 @@ void main() {
 
       expect(readiness.ready, isFalse);
       expect(readiness.reason, contains('证据还不够稳'));
-      expect(readiness.gapFillTask, isNotNull);
+      expect(readiness.replanTask, isNotNull);
     });
 
     test('bounded 证据可放行 synthesis readiness', () {

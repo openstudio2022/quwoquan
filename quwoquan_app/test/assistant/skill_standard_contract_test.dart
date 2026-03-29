@@ -37,6 +37,7 @@ void main() {
       '## 轮次状态定义',
     ];
     const allowedToolSet = <String>{
+      'search',
       'web_search',
       'web_fetch',
       'memory_search',

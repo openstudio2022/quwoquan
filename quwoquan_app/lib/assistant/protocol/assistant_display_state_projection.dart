@@ -206,10 +206,6 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
     ProcessStepId.retrievalProcessing,
   );
   final status = frame?.status ?? JourneyStageStatus.pending;
-  final keyPoints = snapshot.selectedKeyPoints
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
   final refs = snapshot.acceptedReferences
       .where(
         (item) =>
@@ -218,12 +214,7 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
             item.source.trim().isNotEmpty,
       )
       .toList(growable: false);
-  final summary = _resolveRetrievalSummary(
-    frame: frame,
-    snapshot: snapshot,
-    hasKeyPoints: keyPoints.isNotEmpty,
-    hasReferences: refs.isNotEmpty,
-  );
+  final summary = _resolveRetrievalSummary(frame: frame, snapshot: snapshot);
   final blocks = <AssistantProcessDisplayBlock>[];
   if (summary.isNotEmpty) {
     blocks.add(
@@ -233,17 +224,6 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
         status: status,
         kind: ProcessDisplayBlockKind.summary,
         title: summary,
-      ),
-    );
-  }
-  if (keyPoints.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'retrieval_points',
-        stepId: ProcessStepId.retrievalProcessing,
-        status: status,
-        kind: ProcessDisplayBlockKind.points,
-        items: _buildItems(keyPoints),
       ),
     );
   }
@@ -264,32 +244,14 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
 String _resolveRetrievalSummary({
   required ProcessTimelineFrame? frame,
   required RetrievalProcessingSnapshot snapshot,
-  required bool hasKeyPoints,
-  required bool hasReferences,
 }) {
   final frameHeadline = _firstProcessLine(frame?.headline ?? '');
   if (frameHeadline.isNotEmpty) {
-    final hasLegacySnapshotOnlySummary =
-        frame != null &&
-        frame.detail.trim().isEmpty &&
-        frameHeadline == snapshot.processingSummary.trim() &&
-        (hasKeyPoints ||
-            hasReferences ||
-            snapshot.processedDocumentCount > 0 ||
-            snapshot.acceptedDocumentCount > 0);
-    if (!hasLegacySnapshotOnlySummary) {
-      return frameHeadline;
-    }
+    return frameHeadline;
   }
   final frameDetail = _firstProcessLine(frame?.detail ?? '');
   if (frameDetail.isNotEmpty) {
     return frameDetail;
-  }
-  if (hasKeyPoints ||
-      hasReferences ||
-      snapshot.processedDocumentCount > 0 ||
-      snapshot.acceptedDocumentCount > 0) {
-    return '';
   }
   return snapshot.processingSummary.trim();
 }
@@ -304,10 +266,6 @@ List<AssistantProcessDisplayBlock> _buildAnswerOrganizationBlocks(
   );
   final status = frame?.status ?? JourneyStageStatus.pending;
   final summary = snapshot.readinessSummary.trim();
-  final keyFacts = snapshot.keyFacts
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
   final blocks = <AssistantProcessDisplayBlock>[];
   if (summary.isNotEmpty) {
     blocks.add(
@@ -320,31 +278,7 @@ List<AssistantProcessDisplayBlock> _buildAnswerOrganizationBlocks(
       ),
     );
   }
-  if (keyFacts.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'answer_points',
-        stepId: ProcessStepId.answerOrganization,
-        status: status,
-        kind: ProcessDisplayBlockKind.points,
-        items: _buildItems(keyFacts),
-      ),
-    );
-  }
   return blocks;
-}
-
-List<AssistantDisplayItem> _buildItems(List<String> lines) {
-  return lines
-      .asMap()
-      .entries
-      .map(
-        (entry) => AssistantDisplayItem(
-          itemId: 'item_${entry.key}',
-          body: entry.value,
-        ),
-      )
-      .toList(growable: false);
 }
 
 ProcessTimelineFrame? _frameForStep(

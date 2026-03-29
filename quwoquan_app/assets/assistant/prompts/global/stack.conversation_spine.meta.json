@@ -1,0 +1,9 @@
+{
+  "templateId": "stack.conversation_spine",
+  "version": "2026.03.27",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["conversationSpine"],
+  "outputContract": "none",
+  "selfCheckRules": ["single_source_of_truth"]
+}

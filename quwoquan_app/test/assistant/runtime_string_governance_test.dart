@@ -346,7 +346,7 @@ void main() {
 
       expect(content, contains('AssistantJourneyProjector('));
       expect(content, contains('resolveCompletedJourney'));
-      expect(content, contains('AssistantRunStreamEvent.journey'));
+      expect(content, contains('AssistantRunStreamEvent.processTimeline'));
       expect(content, isNot(contains('emitRemoteProcessJournal')));
       expect(content, isNot(contains('processJournalEvent')));
       expect(content, isNot(contains('explainableFlowEvent')));

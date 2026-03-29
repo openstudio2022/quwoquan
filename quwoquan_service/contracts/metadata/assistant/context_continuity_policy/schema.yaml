@@ -14,3 +14,7 @@ fields:
   - { name: allowLongtermMemory, type: bool, default: false }
   - { name: allowLocationHints, type: bool, default: false }
   - { name: referenceQueries, type: list<string>, default: [] }
+  - { name: carryForwardFacts, type: list<string>, default: [] }
+  - { name: needsRecheckFacts, type: list<string>, default: [] }
+  - { name: discardedAssumptions, type: list<string>, default: [] }
+  - { name: mismatchSignal, type: string, default: '' }

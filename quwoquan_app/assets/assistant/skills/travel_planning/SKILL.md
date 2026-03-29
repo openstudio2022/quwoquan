@@ -30,6 +30,13 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 仅在必要时调用工具，且必须遵守最小权限原则。
 - 工具失败允许一次重试；失败后返回降级说明与下一步。
 
+## 成答策略
+- 先跟随当前轮的 `answerShape`，不要默认把所有旅行问题都展开成多日行程。
+- 当 `answerShape=options` 或 `decision_ready` 时，优先输出 2-4 个可选方案、适合人群、关键差异与推荐顺序；不要自动扩写成 `Day 1 / Day 2` 行程。
+- 只有当用户明确要详细安排，或当前轮已经进入 `action_plan`，才输出逐日 itinerary。
+- 若用户没有明确索取报名方式、导游信息、商家联系方式或客服电话，禁止主动输出电话号码、微信号、报名 CTA 或营销文案。
+- 如果历史方案需要重查预算、季节、票务或开放状态，优先触发 `replan`，不要沿用旧行程直接作答。
+
 ## 触发与禁用条件
 - 触发信号：命中本技能关键词与领域语义。
 - 禁用信号：明显属于其他垂类时不应强行触发。
@@ -49,7 +56,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ```json
 {
   "contractId": "assistant_turn",
-  "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
+  "decision": {"nextAction": "tool_call|answer|ask_user|replan|retry|abort"},
   "slotState": {
     "destination": {"value": "", "source": "user_query|memory|unknown"},
     "duration": {"value": "", "source": "user_query|memory|unknown"},

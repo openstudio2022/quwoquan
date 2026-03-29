@@ -107,6 +107,8 @@ enums:
         wire: bounded_answer
       - name: clarify
         wire: clarify
+      - name: replan
+        wire: replan
       - name: retry
         wire: retry
       - name: blocked
@@ -164,6 +166,8 @@ enums:
         wire: answer
       - name: askUser
         wire: ask_user
+      - name: replan
+        wire: replan
       - name: retry
         wire: retry
       - name: abort
@@ -512,6 +516,8 @@ enums:
         wire: context_fill
       - name: gapFill
         wire: gap_fill
+      - name: replan
+        wire: replan
       - name: unknown
         wire: ''
 

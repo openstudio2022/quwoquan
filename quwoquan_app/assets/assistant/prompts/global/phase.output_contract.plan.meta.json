@@ -5,5 +5,9 @@
   "domainId": "global",
   "requiredVariables": ["_static"],
   "outputContract": "assistant_turn",
-  "selfCheckRules": ["slot_complete", "query_normalized", "safety_boundary"]
+  "selfCheckRules": [
+    "stable_understanding",
+    "decision_aligned",
+    "safety_boundary"
+  ]
 }

@@ -77,7 +77,7 @@ class AggregationGate {
                 ? FinalAnswerMode.boundedAnswer
                 : (clarificationNeeded
                       ? FinalAnswerMode.clarify
-                      : FinalAnswerMode.retry)),
+                      : FinalAnswerMode.replan)),
       clarificationNeeded: clarificationNeeded,
       answerOwner: answerOwner,
       clarificationSource: clarificationSource,
@@ -93,6 +93,8 @@ class AggregationGate {
         return FinalAnswerMode.boundedAnswer;
       case 'clarify':
         return FinalAnswerMode.clarify;
+      case 'replan':
+        return FinalAnswerMode.replan;
       case 'retry':
         return FinalAnswerMode.retry;
       default:

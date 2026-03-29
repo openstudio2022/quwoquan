@@ -153,6 +153,7 @@ class DefaultProcessingCopyBank {
         return '## 还差一个关键信息';
       case 'bounded':
         return '## 已确认的关键信息';
+      case 'replan':
       case 'retry':
         return '## 还需要再补一轮核对';
       case 'realtime':
@@ -170,11 +171,13 @@ class DefaultProcessingCopyBank {
 
   static const String clarifyInterpretation = '需要补齐关键信息后再继续';
   static const String boundedInterpretation = '证据未完全收敛，先输出部分结论';
+  static const String replanInterpretation = '当前证据路径不够稳，需要重新规划并补查关键事实';
   static const String retryInterpretation = '证据不足，先输出可执行框架';
   static const String realtimeInterpretation = '实时证据不足';
   static const String defaultInterpretation = '默认兜底回答';
 
   static const String boundedPlainText = '先把已经确认的关键信息整理给你。';
+  static const String replanPlainText = '这类问题还需要重新规划并补一轮核对。';
   static const String retryPlainText = '这类问题还需要再补一轮核对。';
   static const String realtimePlainText = '当前信息还不够稳，我先不硬答。';
   static const String defaultPlainText = '我先给你一个稳妥版本。';
@@ -277,9 +280,9 @@ class DefaultProcessingCopyBank {
       case ToolAssessMessageKey.finalMulti:
         return '关键信息已经够用了，我开始把$queryCount个方向里的重复和差异收拢成结论。';
       case ToolAssessMessageKey.finalRefs:
-        return '关键依据已经基本对齐了，我开始按你更容易看的顺序整理答案。';
+        return '关键依据已经基本对齐了，我开始按你更容易看的顺序生成答案。';
       case ToolAssessMessageKey.finalDefault:
-        return '关键信息已经够用了，我开始整理答案。';
+        return '关键信息已经够用了，我开始生成答案。';
     }
   }
 

@@ -288,7 +288,7 @@ class PersonalAssistantContextOrchestrator {
       return SynthesisReadinessResult(
         ready: false,
         reason: policy.summary.isNotEmpty ? policy.summary : '外部证据尚未形成。',
-        gapFillTask: _buildEvidenceGapFillTask(
+        replanTask: _buildEvidenceReplanTask(
           query: query,
           generatedQueryConditions: generatedQueryConditions,
           policy: policy,
@@ -309,7 +309,7 @@ class PersonalAssistantContextOrchestrator {
         return SynthesisReadinessResult(
           ready: false,
           reason: reason,
-          gapFillTask: _buildEvidenceGapFillTask(
+          replanTask: _buildEvidenceReplanTask(
             query: query,
             generatedQueryConditions: generatedQueryConditions,
             policy: policy,
@@ -374,13 +374,13 @@ class PersonalAssistantContextOrchestrator {
     );
   }
 
-  ContextFillTask _buildEvidenceGapFillTask({
+  ContextFillTask _buildEvidenceReplanTask({
     required String query,
     required List<String> generatedQueryConditions,
     required AnswerBoundaryPolicy policy,
   }) {
     return ContextFillTask(
-      fillType: ContextFillType.gapFill,
+      fillType: ContextFillType.replan,
       targetSlot: ContextTargetSlot.realtimeEvidence,
       reason: '需要先完成至少一轮证据检索，再进入最终成答。',
       generatedQueryConditions: generatedQueryConditions.isNotEmpty

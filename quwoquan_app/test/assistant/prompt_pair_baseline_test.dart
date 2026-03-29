@@ -37,7 +37,7 @@ void main() {
       );
     });
 
-    test('主 prompt 改为运行时事件通道承载流式并去除历史噪音', () {
+    test('主 prompt 保留稳定主展示字段并去除历史噪音', () {
       const plannerPath = 'assets/assistant/prompts/global/planner.global_plan.md';
       const synthPath =
           'assets/assistant/prompts/global/synthesizer.final_answer.md';
@@ -45,15 +45,17 @@ void main() {
       final planner = File(plannerPath).readAsStringSync();
       final synth = File(synthPath).readAsStringSync();
 
-      expect(planner, contains('运行时事件通道承载'));
-      expect(synth, contains('运行时事件通道承载'));
+      expect(planner, contains('understandingSnapshot.userFacingSummary'));
+      expect(planner, contains('不存在单独的“历史判定”模型轮次'));
+      expect(synth, contains('retrievalProcessing.processingSummary'));
+      expect(synth, contains('answerProcessing.readinessSummary'));
       expect(planner, isNot(contains('understanding.streamText')));
       expect(synth, isNot(contains('answerProcessing.streamText')));
       expect(planner, isNot(contains('uiProcessTimelineV2')));
       expect(synth, isNot(contains('whyThisAnswer')));
     });
 
-    test('phase contract 保留 reasonShort 并切回事件通道流式', () {
+    test('phase contract 保留 reasonShort 并只要求稳定主字段', () {
       const phasePlanPath =
           'assets/assistant/prompts/global/phase.output_contract.plan.md';
       const phaseAnswerPath =
@@ -63,9 +65,10 @@ void main() {
       final phaseAnswer = File(phaseAnswerPath).readAsStringSync();
 
       expect(phasePlan, contains('reasonShort'));
-      expect(phasePlan, contains('运行时事件通道承载'));
+      expect(phasePlan, contains('主展示只来自 `understandingSnapshot.userFacingSummary`'));
       expect(phasePlan, isNot(contains('understanding.streamText')));
-      expect(phaseAnswer, contains('运行时事件通道承载'));
+      expect(phaseAnswer, contains('retrievalProcessing.processingSummary'));
+      expect(phaseAnswer, contains('answerProcessing.readinessSummary'));
       expect(phaseAnswer, isNot(contains('answerProcessing.streamText')));
       expect(phaseAnswer, contains('userMarkdown'));
     });

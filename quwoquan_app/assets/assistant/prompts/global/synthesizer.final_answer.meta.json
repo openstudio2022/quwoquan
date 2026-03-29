@@ -5,8 +5,10 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
+    "conversationSpine",
     "userGoal",
     "understandingSnapshot",
+    "retrievalProcessing",
     "sharedContext",
     "currentRuntimeState",
     "dialogueContinuity",

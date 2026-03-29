@@ -488,13 +488,13 @@ class UITextConstants {
   static const String assistantPhaseUnderstanding = '理解问题';
 
   /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '结果处理';
+  static const String assistantPhaseSearching = '处理问题';
 
   /// v3 用户视角阶段：替用户整理判断
-  static const String assistantPhaseAnalyzing = '结果处理';
+  static const String assistantPhaseAnalyzing = '处理问题';
 
   /// v3 用户视角阶段：替用户组织最终回答
-  static const String assistantPhaseAnswering = '整理答案';
+  static const String assistantPhaseAnswering = '生成答案';
 
   /// v3 用户视角阶段：确认当前信息是否已经够答
   static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
@@ -560,10 +560,10 @@ class UITextConstants {
   static const String assistantProcessStageUnderstand = '理解问题';
   static const String assistantProcessStageSearch = '理解问题';
   static const String assistantProcessStageRetrievalDesign = '理解问题';
-  static const String assistantProcessStageRetrievalProcessing = '结果处理';
-  static const String assistantProcessStageAnalyze = '结果处理';
-  static const String assistantProcessStageVerify = '结果处理';
-  static const String assistantProcessStageAnswer = '整理答案';
+  static const String assistantProcessStageRetrievalProcessing = '处理问题';
+  static const String assistantProcessStageAnalyze = '处理问题';
+  static const String assistantProcessStageVerify = '处理问题';
+  static const String assistantProcessStageAnswer = '生成答案';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
   static const String assistantProcessLongWaitReassurance = '正在深入处理，请稍候…';

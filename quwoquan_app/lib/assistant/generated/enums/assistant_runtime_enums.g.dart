@@ -331,6 +331,7 @@ enum FinalAnswerMode {
   full,
   boundedAnswer,
   clarify,
+  replan,
   retry,
   blocked,
 }
@@ -343,6 +344,8 @@ FinalAnswerMode parseFinalAnswerMode(String raw) {
       return FinalAnswerMode.boundedAnswer;
     case "clarify":
       return FinalAnswerMode.clarify;
+    case "replan":
+      return FinalAnswerMode.replan;
     case "retry":
       return FinalAnswerMode.retry;
     case "blocked":
@@ -361,6 +364,8 @@ extension FinalAnswerModeX on FinalAnswerMode {
         return "bounded_answer";
       case FinalAnswerMode.clarify:
         return "clarify";
+      case FinalAnswerMode.replan:
+        return "replan";
       case FinalAnswerMode.retry:
         return "retry";
       case FinalAnswerMode.blocked:
@@ -515,6 +520,7 @@ enum AssistantNextAction {
   toolCall,
   answer,
   askUser,
+  replan,
   retry,
   abort,
   unknown,
@@ -528,6 +534,8 @@ AssistantNextAction parseAssistantNextAction(String raw) {
       return AssistantNextAction.answer;
     case "ask_user":
       return AssistantNextAction.askUser;
+    case "replan":
+      return AssistantNextAction.replan;
     case "retry":
       return AssistantNextAction.retry;
     case "abort":
@@ -546,6 +554,8 @@ extension AssistantNextActionX on AssistantNextAction {
         return "answer";
       case AssistantNextAction.askUser:
         return "ask_user";
+      case AssistantNextAction.replan:
+        return "replan";
       case AssistantNextAction.retry:
         return "retry";
       case AssistantNextAction.abort:
@@ -1528,6 +1538,7 @@ extension EvidenceStatusX on EvidenceStatus {
 enum ContextFillType {
   contextFill,
   gapFill,
+  replan,
   unknown,
 }
 
@@ -1537,6 +1548,8 @@ ContextFillType parseContextFillType(String raw) {
       return ContextFillType.contextFill;
     case "gap_fill":
       return ContextFillType.gapFill;
+    case "replan":
+      return ContextFillType.replan;
     default:
       return ContextFillType.unknown;
   }
@@ -1549,6 +1562,8 @@ extension ContextFillTypeX on ContextFillType {
         return "context_fill";
       case ContextFillType.gapFill:
         return "gap_fill";
+      case ContextFillType.replan:
+        return "replan";
       case ContextFillType.unknown:
         return "";
     }

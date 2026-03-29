@@ -13,6 +13,10 @@
       "contentPath": "assets/assistant/prompts/global/stack.model_thinking_policy.md"
     },
     {
+      "metaPath": "assets/assistant/prompts/global/stack.conversation_spine.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.conversation_spine.md"
+    },
+    {
       "metaPath": "assets/assistant/prompts/global/stack.persona.meta.json",
       "contentPath": "assets/assistant/prompts/global/stack.persona.md"
     },
@@ -31,10 +35,6 @@
     {
       "metaPath": "assets/assistant/prompts/global/planner.global_plan.meta.json",
       "contentPath": "assets/assistant/prompts/global/planner.global_plan.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/global/planner.continuity_resolution.meta.json",
-      "contentPath": "assets/assistant/prompts/global/planner.continuity_resolution.md"
     },
     {
       "metaPath": "assets/assistant/prompts/global/synthesizer.final_answer.meta.json",

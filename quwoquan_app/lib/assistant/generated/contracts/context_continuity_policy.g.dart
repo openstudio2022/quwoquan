@@ -15,6 +15,10 @@ class ContextContinuityPolicy {
     this.allowLongtermMemory = false,
     this.allowLocationHints = false,
     this.referenceQueries = const <String>[],
+    this.carryForwardFacts = const <String>[],
+    this.needsRecheckFacts = const <String>[],
+    this.discardedAssumptions = const <String>[],
+    this.mismatchSignal = "",
   });
 
   final String queryIntent;
@@ -26,6 +30,10 @@ class ContextContinuityPolicy {
   final bool allowLongtermMemory;
   final bool allowLocationHints;
   final List<String> referenceQueries;
+  final List<String> carryForwardFacts;
+  final List<String> needsRecheckFacts;
+  final List<String> discardedAssumptions;
+  final String mismatchSignal;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'queryIntent': queryIntent,
@@ -37,6 +45,10 @@ class ContextContinuityPolicy {
         'allowLongtermMemory': allowLongtermMemory,
         'allowLocationHints': allowLocationHints,
         'referenceQueries': referenceQueries,
+        'carryForwardFacts': carryForwardFacts,
+        'needsRecheckFacts': needsRecheckFacts,
+        'discardedAssumptions': discardedAssumptions,
+        'mismatchSignal': mismatchSignal,
       };
 
   factory ContextContinuityPolicy.fromJson(Map<String, dynamic> json) {
@@ -50,6 +62,10 @@ class ContextContinuityPolicy {
       allowLongtermMemory: json['allowLongtermMemory'] == true,
       allowLocationHints: json['allowLocationHints'] == true,
       referenceQueries: _assistantStringList(json['referenceQueries']),
+      carryForwardFacts: _assistantStringList(json['carryForwardFacts']),
+      needsRecheckFacts: _assistantStringList(json['needsRecheckFacts']),
+      discardedAssumptions: _assistantStringList(json['discardedAssumptions']),
+      mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
     );
   }
 
@@ -71,4 +87,8 @@ class ContextContinuityPolicyFields {
   static const String allowLongtermMemory = 'allowLongtermMemory';
   static const String allowLocationHints = 'allowLocationHints';
   static const String referenceQueries = 'referenceQueries';
+  static const String carryForwardFacts = 'carryForwardFacts';
+  static const String needsRecheckFacts = 'needsRecheckFacts';
+  static const String discardedAssumptions = 'discardedAssumptions';
+  static const String mismatchSignal = 'mismatchSignal';
 }

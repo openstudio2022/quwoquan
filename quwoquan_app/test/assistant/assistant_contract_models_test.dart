@@ -62,7 +62,7 @@ void main() {
         'allSkillsReady': false,
         'blockingSkills': <String>['travel'],
         'blockedBy': <String, dynamic>{
-          'travel': <String, dynamic>{'stopReason': 'retry', 'answerReady': false},
+          'travel': <String, dynamic>{'stopReason': 'replan', 'answerReady': false},
         },
         'canGivePartialAnswer': true,
         'needExpansion': true,
@@ -82,7 +82,10 @@ void main() {
       expect(state.needExpansion, isTrue);
       expect(state.canGivePartialAnswer, isTrue);
       expect(state.blockingSkills, <String>['travel']);
-      expect(state.blockedBy['travel']?.stopReason, equals(FinalAnswerMode.retry));
+      expect(
+        state.blockedBy['travel']?.stopReason,
+        equals(FinalAnswerMode.replan),
+      );
       expect(
         state.expansionPlan.policy,
         equals(ContextScopeExpansionPolicy.expandScopeAndRequery),

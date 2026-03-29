@@ -50,8 +50,14 @@ void main() {
       );
 
       expect(state.process.activeStepId, ProcessStepId.answerOrganization);
-      expect(state.process.blocks.length, 5);
+      expect(state.process.blocks.length, 4);
       expect(state.process.blocks.first.title, '我先确认你的核心问题和约束。');
+      expect(
+        state.process.blocks.any(
+          (block) => block.kind == ProcessDisplayBlockKind.points,
+        ),
+        isFalse,
+      );
       expect(
         state.process.blocks.any(
           (block) =>
