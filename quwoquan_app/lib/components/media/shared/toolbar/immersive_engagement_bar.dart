@@ -215,8 +215,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                                         end: Alignment.centerRight,
                                         stops: [start, 1.0],
                                         colors: const [
-                                          Colors.white,
-                                          Colors.transparent,
+                                          AppColors.white,
+                                          AppColors.transparent,
                                         ],
                                       ).createShader(bounds);
                                     },

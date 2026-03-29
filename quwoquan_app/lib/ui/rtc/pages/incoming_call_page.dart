@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +7,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
@@ -61,8 +61,8 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
     final initiatorId = session.session?.initiatorId ?? '';
     final isVideo = session.callType.isVideo;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+    return AppScaffold(
+      backgroundColor: AppColors.transparent,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(

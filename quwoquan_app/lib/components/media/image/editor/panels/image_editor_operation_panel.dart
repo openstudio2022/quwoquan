@@ -372,38 +372,33 @@ class ImageEditorOperationPanel extends StatelessWidget {
           final color = item.selected
               ? (index == 0 ? AppColors.primaryColor : foregroundColor)
               : foregroundSecondary.withValues(alpha: 0.8);
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: item.onTap,
-              borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
+          return CupertinoButton(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
+            minimumSize: Size.zero,
+            onPressed: item.onTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  item.icon,
+                  color: color,
+                  size: AppSpacing.toolPanelItemIconSize,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      item.icon,
-                      color: color,
-                      size: AppSpacing.toolPanelItemIconSize,
-                    ),
-                    SizedBox(width: AppSpacing.toolPanelItemIconLabelGap),
-                    Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: AppTypography.toolPanelItemLabel,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ],
+                SizedBox(width: AppSpacing.toolPanelItemIconLabelGap),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: AppTypography.toolPanelItemLabel,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
-              ),
+              ],
             ),
           );
         }).toList(growable: false),
@@ -537,9 +532,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ];
     }
     return <Color>[
-      Colors.black,
+      AppColors.black,
       HSLColor.fromColor(selectedColor).withLightness(0.5).toColor(),
-      Colors.white,
+      AppColors.white,
     ];
   }
 
@@ -706,20 +701,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(
-              Icons.close,
-              color: AppColors.white,
-              weight: 700,
-              size: AppSpacing.iconLarge,
-            ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
             onPressed: onExitProPanel,
-            tooltip: UITextConstants.cancel,
-            style: IconButton.styleFrom(
-              minimumSize: Size(
-                AppSpacing.iconButtonMinSizeMd,
-                AppSpacing.iconButtonMinSizeMd,
-              ),
+            child: Icon(
+              CupertinoIcons.xmark,
+              color: AppColors.white,
+              size: AppSpacing.iconLarge,
             ),
           ),
           if (isAdjustPanel)
@@ -747,20 +736,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
                 ),
               ),
             ),
-          IconButton(
-            icon: Icon(
-              Icons.check,
-              color: AppColors.white,
-              weight: 700,
-              size: AppSpacing.iconLarge,
-            ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
             onPressed: onConfirmProPanel,
-            tooltip: UITextConstants.confirm,
-            style: IconButton.styleFrom(
-              minimumSize: Size(
-                AppSpacing.iconButtonMinSizeMd,
-                AppSpacing.iconButtonMinSizeMd,
-              ),
+            child: Icon(
+              CupertinoIcons.checkmark,
+              color: AppColors.white,
+              size: AppSpacing.iconLarge,
             ),
           ),
         ],
@@ -1097,22 +1080,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
   }
 
   Widget _buildFilterRemoveChip() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onFilterRemove,
-        borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-        child: SizedBox(
-          width: AppSpacing.subTabNavigationHeight,
-          height: AppSpacing.subTabNavigationHeight,
-          child: Center(
-            child: Icon(
-              Icons.do_not_disturb_on_outlined,
-              color: foregroundSecondary.withValues(alpha: 0.82),
-              size: AppSpacing.iconMedium,
-            ),
-          ),
-        ),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.square(AppSpacing.subTabNavigationHeight),
+      onPressed: onFilterRemove,
+      child: Icon(
+        CupertinoIcons.clear_circled,
+        color: foregroundSecondary.withValues(alpha: 0.82),
+        size: AppSpacing.iconMedium,
       ),
     );
   }
@@ -1465,21 +1440,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
         ),
         child: Row(
           children: [
-            IconButton(
-              icon: Icon(
-                Icons.close,
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
+              onPressed: onCancelPanel,
+              child: Icon(
+                CupertinoIcons.xmark,
                 color: AppColors.white,
                 size: AppSpacing.iconLarge,
-                weight: 700,
-              ),
-              onPressed: onCancelPanel,
-              tooltip: UITextConstants.cancel,
-              style: IconButton.styleFrom(
-                minimumSize: Size(
-                  AppSpacing.iconButtonMinSizeMd,
-                  AppSpacing.iconButtonMinSizeMd,
-                ),
-                iconSize: AppSpacing.iconLarge,
               ),
             ),
             Expanded(
@@ -1493,32 +1461,41 @@ class ImageEditorOperationPanel extends StatelessWidget {
                           height: AppSpacing.buttonHeightForSize(
                             DesignSemanticConstants.md,
                           ),
-                          child: TextButton.icon(
+                          child: CupertinoButton(
                             key: const ValueKey('crop-reset'),
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
                             onPressed: onCropReset,
-                            icon: Icon(
-                              Icons.refresh,
-                              size: AppSpacing.iconMedium,
-                              color: foregroundColor,
-                            ),
-                            label: Text(
-                              UITextConstants.imageEditorCropReset,
-                              style: TextStyle(
-                                color: foregroundColor,
-                                fontSize: AppTypography.md,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
+                            child: Container(
                               padding: AppSpacing.buttonPadding(
                                 context,
                                 DesignSemanticConstants.md,
                               ),
-                              backgroundColor:
-                                  foregroundSecondary.withValues(alpha: 0.12),
-                              shape: RoundedRectangleBorder(
+                              decoration: BoxDecoration(
+                                color: foregroundSecondary.withValues(
+                                  alpha: 0.12,
+                                ),
                                 borderRadius: BorderRadius.circular(
                                   AppSpacing.largeBorderRadius,
                                 ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.refresh,
+                                    size: AppSpacing.iconMedium,
+                                    color: foregroundColor,
+                                  ),
+                                  SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    UITextConstants.imageEditorCropReset,
+                                    style: TextStyle(
+                                      color: foregroundColor,
+                                      fontSize: AppTypography.md,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -1527,21 +1504,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
                 ),
               ),
             ),
-            IconButton(
-              icon: Icon(
-                Icons.check,
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
+              onPressed: onConfirmPanel,
+              child: Icon(
+                CupertinoIcons.checkmark,
                 color: AppColors.white,
                 size: AppSpacing.iconLarge,
-                weight: 700,
-              ),
-              onPressed: onConfirmPanel,
-              tooltip: UITextConstants.confirm,
-              style: IconButton.styleFrom(
-                minimumSize: Size(
-                  AppSpacing.iconButtonMinSizeMd,
-                  AppSpacing.iconButtonMinSizeMd,
-                ),
-                iconSize: AppSpacing.iconLarge,
               ),
             ),
           ],
@@ -1560,21 +1530,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(
-              Icons.close,
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
+            onPressed: onCancelPanel,
+            child: Icon(
+              CupertinoIcons.xmark,
               color: AppColors.white,
               size: AppSpacing.iconLarge,
-              weight: 700,
-            ),
-            onPressed: onCancelPanel,
-            tooltip: UITextConstants.cancel,
-            style: IconButton.styleFrom(
-              minimumSize: Size(
-                AppSpacing.iconButtonMinSizeMd,
-                AppSpacing.iconButtonMinSizeMd,
-              ),
-              iconSize: AppSpacing.iconLarge,
             ),
           ),
           if (showSlider)
@@ -1605,32 +1568,39 @@ class ImageEditorOperationPanel extends StatelessWidget {
                           height: AppSpacing.buttonHeightForSize(
                             DesignSemanticConstants.md,
                           ),
-                          child: TextButton.icon(
+                          child: CupertinoButton(
                             key: const ValueKey('rotate-reset'),
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
                             onPressed: onRotateReset,
-                            icon: Icon(
-                              Icons.refresh,
-                              size: AppSpacing.iconMedium,
-                              color: AppColors.white,
-                            ),
-                            label: Text(
-                              UITextConstants.imageEditorCropReset,
-                              style: TextStyle(
-                                color: AppColors.white,
-                                fontSize: AppTypography.md,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
+                            child: Container(
                               padding: AppSpacing.buttonPadding(
                                 context,
                                 DesignSemanticConstants.md,
                               ),
-                              backgroundColor:
-                                  AppColors.white.withValues(alpha: 0.12),
-                              shape: RoundedRectangleBorder(
+                              decoration: BoxDecoration(
+                                color: AppColors.white.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(
                                   AppSpacing.largeBorderRadius,
                                 ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.refresh,
+                                    size: AppSpacing.iconMedium,
+                                    color: AppColors.white,
+                                  ),
+                                  SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    UITextConstants.imageEditorCropReset,
+                                    style: TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: AppTypography.md,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -1641,21 +1611,14 @@ class ImageEditorOperationPanel extends StatelessWidget {
             )
           else
             const Spacer(),
-          IconButton(
-            icon: Icon(
-              Icons.check,
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeMd),
+            onPressed: onConfirmPanel,
+            child: Icon(
+              CupertinoIcons.checkmark,
               color: AppColors.white,
               size: AppSpacing.iconLarge,
-              weight: 700,
-            ),
-            onPressed: onConfirmPanel,
-            tooltip: UITextConstants.confirm,
-            style: IconButton.styleFrom(
-              minimumSize: Size(
-                AppSpacing.iconButtonMinSizeMd,
-                AppSpacing.iconButtonMinSizeMd,
-              ),
-              iconSize: AppSpacing.iconLarge,
             ),
           ),
         ],
@@ -1794,9 +1757,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
     final borderWidth = selected
         ? AppSpacing.toolPanelItemBorderWidthSelected
         : AppSpacing.toolPanelItemBorderWidthUnselected;
-    return InkWell(
-      onTap: () => onCropRatioChanged(entry.value),
-      borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: () => onCropRatioChanged(entry.value),
       child: SizedBox(
         width: double.infinity,
         child: Column(
@@ -1868,39 +1832,37 @@ class ImageEditorOperationPanel extends StatelessWidget {
     VoidCallback? onTap,
     double? fontSize,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap ?? () {},
-        borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      minimumSize: Size.zero,
+      onPressed: onTap ?? () {},
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? foregroundColor
+                  : foregroundSecondary.withValues(alpha: 0.75),
+              fontSize: fontSize ?? AppTypography.toolPanelCategoryLabel,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected
-                      ? foregroundColor
-                      : foregroundSecondary.withValues(alpha: 0.75),
-                  fontSize: fontSize ?? AppTypography.toolPanelCategoryLabel,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-              Container(
-                margin: EdgeInsets.only(top: AppSpacing.xs / 2),
-                height: AppSpacing.xs / 2,
-                width: AppSpacing.iconSmall,
-                color: selected ? foregroundColor : Colors.transparent,
-              ),
-            ],
+          Container(
+            margin: EdgeInsets.only(top: AppSpacing.xs / 2),
+            height: AppSpacing.xs / 2,
+            width: AppSpacing.iconSmall,
+            decoration: BoxDecoration(
+              color: selected ? foregroundColor : AppColors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.xs / 4),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

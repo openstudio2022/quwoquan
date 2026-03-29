@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 
@@ -23,14 +22,14 @@ class AssistantAnswerToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final iconColor = isDark
-        ? const Color(0xFF98989F)
-        : const Color(0xFF8E8E93);
+        ? AppColors.iosToolbarSecondaryIconDark
+        : AppColors.iosToolbarSecondaryIconLight;
     final activeColor = isDark
-        ? const Color(0xFF64D2FF)
-        : const Color(0xFF007AFF);
+        ? AppColors.iosSystemCyanAccent
+        : AppColors.primaryColor;
 
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.xs),
@@ -94,10 +93,10 @@ class _ToolbarIcon extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: EdgeInsets.all(AppSpacing.xs),
         child: Icon(
           icon,
-          size: 18,
+          size: AppSpacing.eighteen,
           color: color,
           semanticLabel: semanticLabel,
         ),
@@ -121,10 +120,10 @@ class _RegenerateButton extends StatelessWidget {
       onTap: () => _showPopup(context),
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: EdgeInsets.all(AppSpacing.xs),
         child: Icon(
           CupertinoIcons.arrow_2_circlepath,
-          size: 18,
+          size: AppSpacing.eighteen,
           color: iconColor,
         ),
       ),
@@ -141,7 +140,7 @@ class _RegenerateButton extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'dismiss',
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       pageBuilder: (ctx, anim1, anim2) {
         return RegenerateOptionsPopup(
           anchorRect: Rect.fromLTWH(

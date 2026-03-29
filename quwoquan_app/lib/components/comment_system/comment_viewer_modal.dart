@@ -27,7 +27,7 @@ class CommentViewer {
   }) async {
     await showCupertinoModalPopup(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (ctx) => _CommentSheet(
         postId: postId,
         config: config,
@@ -88,7 +88,8 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
   @override
   Widget build(BuildContext context) {
     final commentState = ref.watch(commentProviderFamily(widget.postId));
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
 
     if (!_initialLoaded) {
       _initialLoaded = true;
@@ -354,7 +355,7 @@ class _SortToggle extends StatelessWidget {
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primaryColor.withValues(alpha: 0.1)
-              : Colors.transparent,
+              : AppColors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
         ),
         child: Text(

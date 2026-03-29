@@ -24,7 +24,8 @@ class ParticipantListSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final participantsState = ref.watch(callParticipantsProvider);
     final participants = participantsState.participants;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final outer = SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),

@@ -4,7 +4,6 @@ import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart'
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -454,17 +453,6 @@ class BootstrapPhase implements Phase {
       }
     }
     return null;
-  }
-
-  String _recentAssistantHistorySummary(
-    List<Map<String, dynamic>> sessionHistory,
-  ) {
-    final assistant = _latestAssistantMessage(sessionHistory);
-    if (assistant == null) return '';
-    final displayPlainText =
-        (assistant['displayPlainText'] as String?)?.trim() ?? '';
-    if (displayPlainText.isNotEmpty) return displayPlainText;
-    return (assistant['content'] as String?)?.trim() ?? '';
   }
 
   ContextContinuityPolicy _fallbackContinuityPolicy({

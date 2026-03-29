@@ -23,9 +23,12 @@ class AppSpacing {
   static const double oneHundred = 100.0;
   static const double twoHundredTwenty = 220.0;
   static const double threeHundredTwenty = 320.0;
+  static const double radiusTwo = 2.0;
   static const double radiusTen = 10.0;
+  static const double radiusEighteen = 18.0;
   static const double radiusTwenty = 20.0;
   static const double radiusTwentyEight = 28.0;
+  static const double radiusThirtyTwo = 32.0;
   static const double radiusNinetyNine = 99.0;
 
   // ==================== 响应式断点 ====================
@@ -213,6 +216,13 @@ class AppSpacing {
 
   /// 横向头像栏高度
   static const double avatarRailHeight = 90.0;
+
+  // ==================== 欢迎页动效（Figma WelcomeScreen） ====================
+  static const double welcomePetalWidth = 56.0;
+  static const double welcomePetalHeight = 96.0;
+  static const double welcomePetalCornerRadius = 30.0;
+  static const double welcomeDropDiameter = 112.0;
+  static const double welcomeDropBorderWidth = 1.0;
 
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;

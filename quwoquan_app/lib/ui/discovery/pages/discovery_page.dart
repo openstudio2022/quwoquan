@@ -275,12 +275,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final targetBg = _activeType == 'work'
         ? AppColors.worksBackground
         : _isVideoMode
-        ? Colors.black
+        ? AppColors.black
         : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
 
     return AppScaffold(
       key: TestKeys.discoveryPage,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.transparent,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -292,7 +292,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           if (_activeType == 'work')
             AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
+                statusBarColor: AppColors.transparent,
                 statusBarIconBrightness: Brightness.light,
                 statusBarBrightness: Brightness.dark,
               ),
@@ -301,7 +301,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           else if (_isVideoMode)
             AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
+                statusBarColor: AppColors.transparent,
                 statusBarIconBrightness: Brightness.light,
                 statusBarBrightness: Brightness.dark,
               ),
@@ -525,17 +525,27 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             Text(
               context.l10n.loadFailed,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
+                color: AppColors.error,
                 fontSize: AppTypography.base,
               ),
               textAlign: TextAlign.center,
             ),
             SizedBox(height: AppSpacing.interGroupMd),
-            TextButton.icon(
+            CupertinoButton.filled(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerMd,
+                vertical: AppSpacing.sm,
+              ),
               onPressed: () =>
                   ref.read(discoveryFeedMapProvider.notifier).load(tabId),
-              icon: const Icon(Icons.refresh),
-              label: Text(context.l10n.retry),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.refresh, size: AppSpacing.iconSmall),
+                  SizedBox(width: AppSpacing.xs),
+                  Text(context.l10n.retry),
+                ],
+              ),
             ),
           ],
         ),
@@ -1152,15 +1162,14 @@ class _MomentPostCardState extends State<_MomentPostCard>
                 ),
               ),
               if (widget.onMoreTap != null)
-                IconButton(
-                  icon: Icon(
-                    Icons.more_horiz,
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  onPressed: () => widget.onMoreTap!(item),
+                  child: Icon(
+                    CupertinoIcons.ellipsis,
                     size: AppSpacing.iconMedium,
                     color: muted,
-                  ),
-                  onPressed: () => widget.onMoreTap!(item),
-                  style: IconButton.styleFrom(
-                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                   ),
                 ),
             ],
@@ -1327,8 +1336,10 @@ class _ArticleCardPlaceholder extends StatelessWidget {
         ? article.normalizedBody
         : '';
 
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
         decoration: BoxDecoration(
@@ -1479,10 +1490,10 @@ class _DiscoveryItemCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          color: Colors.grey.shade200,
+          color: AppColors.gridImagePlaceholderLight,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: AppColors.black.withValues(alpha: 0.06),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -1495,18 +1506,18 @@ class _DiscoveryItemCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: thumb.isEmpty
                   ? Container(
-                      color: Colors.grey.shade300,
+                      color: AppColors.discoveryPostGridInnerFallback,
                       child: Icon(
                         Icons.image_not_supported_outlined,
                         size: AppSpacing.largeButtonSize,
-                        color: Colors.grey.shade600,
+                        color: AppColors.discoveryPostGridIconMuted,
                       ),
                     )
                   : CachedNetworkImage(
                       imageUrl: thumb,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
-                        color: Colors.grey.shade300,
+                        color: AppColors.discoveryPostGridInnerFallback,
                         child: Center(
                           child: SizedBox(
                             width: AppSpacing.largeButtonSize,
@@ -1516,11 +1527,11 @@ class _DiscoveryItemCard extends StatelessWidget {
                         ),
                       ),
                       errorWidget: (context, url, error) => Container(
-                        color: Colors.grey.shade300,
+                        color: AppColors.discoveryPostGridInnerFallback,
                         child: Icon(
                           Icons.image_not_supported_outlined,
                           size: AppSpacing.largeButtonSize,
-                          color: Colors.grey.shade600,
+                          color: AppColors.discoveryPostGridIconMuted,
                         ),
                       ),
                     ),
@@ -1538,12 +1549,12 @@ class _DiscoveryItemCard extends StatelessWidget {
                         vertical: AppSpacing.xs / 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        color: AppColors.black.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(
                           AppSpacing.smallBorderRadius,
                         ),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: AppColors.white.withValues(alpha: 0.1),
                         ),
                       ),
                       child: Text(
@@ -1551,7 +1562,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: AppTypography.xs,
                           fontWeight: AppTypography.black,
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: AppColors.white.withValues(alpha: 0.9),
                         ),
                       ),
                     ),
@@ -1559,16 +1570,16 @@ class _DiscoveryItemCard extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.all(AppSpacing.xs),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        color: AppColors.black.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: AppColors.white.withValues(alpha: 0.1),
                         ),
                       ),
                       child: Icon(
                         Icons.play_arrow,
                         size: AppSpacing.iconSmall,
-                        color: Colors.white,
+                        color: AppColors.white,
                       ),
                     ),
                 ],
@@ -1584,8 +1595,8 @@ class _DiscoveryItemCard extends StatelessWidget {
                     isLiked ? Icons.favorite : Icons.favorite_border,
                     size: AppSpacing.iconSmall,
                     color: isLiked
-                        ? Colors.red
-                        : Colors.white.withValues(alpha: 0.9),
+                        ? AppColors.error
+                        : AppColors.white.withValues(alpha: 0.9),
                   ),
                   if (likesCount != null && likesCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1593,7 +1604,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                       '$likesCount',
                       style: TextStyle(
                         fontSize: AppTypography.xs,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: AppColors.white.withValues(alpha: 0.9),
                       ),
                     ),
                   ],
@@ -1602,8 +1613,8 @@ class _DiscoveryItemCard extends StatelessWidget {
                     isSaved ? Icons.bookmark : Icons.bookmark_border,
                     size: AppSpacing.iconSmall,
                     color: isSaved
-                        ? Colors.amber
-                        : Colors.white.withValues(alpha: 0.9),
+                        ? AppColors.primaryColor
+                        : AppColors.white.withValues(alpha: 0.9),
                   ),
                   if (bookmarksCount != null && bookmarksCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1611,7 +1622,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                       '$bookmarksCount',
                       style: TextStyle(
                         fontSize: AppTypography.xs,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: AppColors.white.withValues(alpha: 0.9),
                       ),
                     ),
                   ],
@@ -1772,7 +1783,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black,
+      color: AppColors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1814,7 +1825,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                           thumbnail,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
-                              Container(color: Colors.grey.shade900),
+                              Container(
+                                color: AppColors.momentVideoCardBackdrop,
+                              ),
                         ),
                         // 底部渐变
                         Container(
@@ -1823,8 +1836,8 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.8),
+                                AppColors.transparent,
+                                AppColors.black.withValues(alpha: 0.8),
                               ],
                             ),
                           ),
@@ -1857,7 +1870,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                         children: [
                                           CircleAvatar(
                                             radius: AppSpacing.buttonHeight / 2,
-                                            backgroundColor: Colors.white,
+                                            backgroundColor: AppColors.white,
                                             backgroundImage: NetworkImage(
                                               authorAvatar,
                                             ),
@@ -1953,7 +1966,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                       filled: _savedIndexes.contains(index),
                                       color: _savedIndexes.contains(index)
                                           ? AppColors.warning
-                                          : Colors.white.withValues(
+                                          : AppColors.white.withValues(
                                               alpha: 0.78,
                                             ),
                                     ),
@@ -1975,7 +1988,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                   _videoActionWidget(
                                     AppBubbleIcon(
                                       size: AppSpacing.iconMedium,
-                                      color: Colors.white.withValues(
+                                      color: AppColors.white.withValues(
                                         alpha: 0.78,
                                       ),
                                     ),
@@ -1989,7 +2002,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     Icon(
                                       CupertinoIcons.arrowshape_turn_up_right,
                                       size: AppSpacing.iconMedium,
-                                      color: Colors.white.withValues(
+                                      color: AppColors.white.withValues(
                                         alpha: 0.78,
                                       ),
                                     ),
@@ -2022,7 +2035,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     style: TextStyle(
                                       fontSize: AppTypography.lg,
                                       fontWeight: AppTypography.medium,
-                                      color: Colors.white,
+                                      color: AppColors.white,
                                     ),
                                   ),
                                 ),
@@ -2031,7 +2044,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                   post.normalizedBody,
                                   style: TextStyle(
                                     fontSize: AppTypography.base,
-                                    color: Colors.white.withValues(alpha: 0.9),
+                                    color: AppColors.white.withValues(alpha: 0.9),
                                   ),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
@@ -2042,7 +2055,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     Icon(
                                       Icons.music_note,
                                       size: AppSpacing.iconSmall,
-                                      color: Colors.white,
+                                      color: AppColors.white,
                                     ),
                                     SizedBox(width: AppSpacing.intraGroupSm),
                                     Expanded(
@@ -2050,7 +2063,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                         '${UITextConstants.discovery} • $authorName 创作的原声',
                                         style: TextStyle(
                                           fontSize: AppTypography.sm,
-                                          color: Colors.white.withValues(
+                                          color: AppColors.white.withValues(
                                             alpha: 0.8,
                                           ),
                                         ),
@@ -2098,15 +2111,13 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   },
                   onHorizontalDragEnd: _onPrimaryDragEnd,
                   trailingActions: [
-                    IconButton(
-                      tooltip: UITextConstants.assistantEntryFind,
-                      icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
-                      onPressed: widget.onAssistantTap,
-                      style: IconButton.styleFrom(
-                        minimumSize: Size.square(
-                          AppSpacing.iconButtonMinSizeSm,
-                        ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.square(
+                        AppSpacing.iconButtonMinSizeSm,
                       ),
+                      onPressed: widget.onAssistantTap,
+                      child: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
                     ),
                   ],
                 ),
@@ -2133,7 +2144,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
       icon == CupertinoIcons.heart
           ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
           : icon,
-      color: filled ? AppColors.error : Colors.white.withValues(alpha: 0.78),
+      color: filled ? AppColors.error : AppColors.white.withValues(alpha: 0.78),
       size: AppSpacing.iconMedium,
     );
     return Padding(
@@ -2153,7 +2164,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
-                color: Colors.white,
+                color: AppColors.white,
               ),
             ),
           ],
@@ -2190,7 +2201,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
-                color: Colors.white,
+                color: AppColors.white,
               ),
             ),
           ],

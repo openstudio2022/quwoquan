@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/search_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -98,7 +97,7 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
                         AppSpacing.sm,
                       ),
                       decoration: const BoxDecoration(
-                        color: Colors.transparent,
+                        color: AppColors.transparent,
                       ),
                       cursorColor: AppColors.iosAccent(context),
                       clearButtonMode: OverlayVisibilityMode.never,

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -36,7 +35,7 @@ class MemberListNavigateTile extends StatelessWidget {
         member['avatarUrl'] as String? ?? member['avatar'] as String? ?? '';
     final subtitle = subtitleText?.trim() ?? '';
     return CupertinoListTile(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.transparent,
       onTap: onTap,
       padding: EdgeInsets.symmetric(
         horizontal: SettingsSemanticConstants.blockHorizontalPadding,

@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -161,7 +161,9 @@ class _HomePageState extends ConsumerState<HomePage>
     // 沉浸式模式（精品页）直接返回全屏 Viewer
     if (_activeTab == 'featured') {
       return CupertinoPageScaffold(
-        backgroundColor: Colors.black, // Immersive background
+        backgroundColor: AppColors.black,
+        // 与 AppScaffold 一致：Cupertino 壳下补透明 Material，避免 Text 继承到错误的
+        // DefaultTextStyle/Material 回退样式（真机易出现黄色下划线等强调线）。
         child: Material(
           type: MaterialType.transparency,
           child: WorksImmersiveViewer(

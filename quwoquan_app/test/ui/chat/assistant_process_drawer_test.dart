@@ -104,7 +104,7 @@ List<ProcessTimelineFrame> _processTimelineFromJourney(
             (reference) => RetrievalProcessingReference(
               title: reference.title,
               url: reference.url,
-              source: reference.source ?? '',
+              source: reference.source,
             ),
           )
           .toList(growable: false) ??

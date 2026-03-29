@@ -94,7 +94,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
         }
       },
       child: AppScaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.transparent,
         child: GestureDetector(
           onTap: _toggleControls,
           behavior: HitTestBehavior.opaque,
@@ -133,7 +133,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                           onTap: () {
                             showCupertinoModalPopup<void>(
                               context: context,
-                              barrierColor: Colors.transparent,
+                              barrierColor: AppColors.transparent,
                               builder: (_) => ParticipantListSheet(
                                 maxParticipants:
                                     session.session?.maxParticipants ?? 32,

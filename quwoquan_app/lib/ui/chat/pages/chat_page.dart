@@ -621,7 +621,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                           child: Text(
                             UITextConstants.secretUnlockButton,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.white,
                               fontWeight: AppTypography.semiBold,
                               fontSize: AppTypography.iosSubheadline,
                             ),
@@ -1356,10 +1356,11 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                     decoration: BoxDecoration(
                       color: isActive
                           ? AppColorsFunctional.getColor(
-                              Theme.of(context).brightness == Brightness.dark,
+                              CupertinoTheme.of(context).brightness ==
+                                  Brightness.dark,
                               ColorType.selectionForeground,
                             )
-                          : Colors.transparent,
+                          : AppColors.transparent,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -1367,7 +1368,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                       style: TextStyle(
                         fontSize: AppTypography.xs,
                         fontWeight: AppTypography.semiBold,
-                        color: isActive ? Colors.white : widget.fgSecondary,
+                        color: isActive ? AppColors.white : widget.fgSecondary,
                       ),
                     ),
                   ),
@@ -1470,14 +1471,14 @@ class _ConversationTile extends StatelessWidget {
                         color: AppColors.primaryColor,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
+                          color: AppColors.iosSystemBackground(context),
                           width: AppSpacing.oneHalf,
                         ),
                       ),
                       child: Icon(
                         CupertinoIcons.lock_fill,
                         size: AppTypography.xs,
-                        color: Colors.white,
+                        color: AppColors.white,
                       ),
                     ),
                   ),
@@ -1496,7 +1497,7 @@ class _ConversationTile extends StatelessWidget {
                           AppSpacing.radiusTen,
                         ),
                         border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
+                          color: AppColors.iosSystemBackground(context),
                           width: AppSpacing.oneHalf,
                         ),
                       ),
@@ -1504,7 +1505,7 @@ class _ConversationTile extends StatelessWidget {
                         unread > 99 ? '99+' : '$unread',
                         style: TextStyle(
                           fontSize: AppTypography.xs,
-                          color: Colors.white,
+                          color: AppColors.white,
                           fontWeight: FontWeight.w600,
                           height: AppTypography.lineHeightTight,
                         ),
@@ -1639,8 +1640,8 @@ class _InboxConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scaffoldBackground = Theme.of(context).scaffoldBackgroundColor;
-    final dividerColor = Theme.of(context).dividerColor;
+    final scaffoldBackground = AppColors.iosPageBackground(context);
+    final dividerColor = AppColors.iosSeparator(context);
     final subtitleColor = fgSecondary.withValues(alpha: 0.9);
     final timeColor = fgSecondary.withValues(alpha: 0.72);
 
@@ -1651,7 +1652,7 @@ class _InboxConversationTile extends StatelessWidget {
       child: Container(
         color: item.isPinned
             ? fgSecondary.withValues(alpha: 0.04)
-            : Colors.transparent,
+            : AppColors.transparent,
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         child: Column(
           children: [
@@ -1696,7 +1697,7 @@ class _InboxConversationTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: AppTypography.xs,
                                 fontWeight: AppTypography.semiBold,
-                                color: Colors.white,
+                                color: AppColors.white,
                                 height: AppTypography.lineHeightTight,
                               ),
                             ),

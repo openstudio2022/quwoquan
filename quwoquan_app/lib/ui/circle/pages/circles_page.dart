@@ -487,7 +487,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                                                   AppTypography.semiBold,
                                               color: joined
                                                   ? accentBlue
-                                                  : Colors.white,
+                                                  : AppColors.white,
                                             ),
                                           ),
                                         ),
@@ -530,7 +530,8 @@ class _CirclesDirectoryTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final bg = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
@@ -639,7 +640,7 @@ class _CirclesDirectoryMenuItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? accentColor.withValues(alpha: 0.1)
-              : Colors.transparent,
+              : AppColors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         ),
         child: Text(

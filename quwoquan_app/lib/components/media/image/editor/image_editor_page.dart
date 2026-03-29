@@ -1419,11 +1419,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                     final unselectedColor = AppColors.white.withValues(
                       alpha: 0.6,
                     );
-                    return InkWell(
-                      onTap: () => _openProEditorFromToolbox(entry),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.borderRadius,
-                      ),
+                    return CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () => _openProEditorFromToolbox(entry),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -3273,7 +3272,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                           color: AppColors.white,
                           width: AppSpacing.xs / 2,
                         ),
-                        color: Colors.transparent,
+                        color: AppColors.transparent,
                       ),
                     ),
                   ),
@@ -3406,7 +3405,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                   AppColors.white.withValues(alpha: 0.90),
                   AppColors.white.withValues(alpha: 0.58),
                   AppColors.white.withValues(alpha: 0.22),
-                  Colors.transparent,
+                  AppColors.transparent,
                 ],
                 const <double>[0.0, 0.22, 0.56, 0.84, 1.0],
               ),
@@ -3560,37 +3559,38 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           Positioned(
             left: center.dx - AppSpacing.bottomNavHeight,
             top: center.dy - AppSpacing.bottomNavHeight * 1.25,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(
-                      onPressed: _copySelectedLocalAnchor,
-                      child: Text(
-                        UITextConstants.imageEditorProAnchorCopy,
-                        style: TextStyle(color: AppColors.black),
-                      ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    minimumSize: Size.zero,
+                    onPressed: _copySelectedLocalAnchor,
+                    child: Text(
+                      UITextConstants.imageEditorProAnchorCopy,
+                      style: TextStyle(color: AppColors.black),
                     ),
-                    Container(
-                      width: AppSpacing.xs / 2,
-                      height: AppSpacing.iconLarge,
-                      color: AppColors.black.withValues(alpha: 0.12),
+                  ),
+                  Container(
+                    width: AppSpacing.xs / 2,
+                    height: AppSpacing.iconLarge,
+                    color: AppColors.black.withValues(alpha: 0.12),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    minimumSize: Size.zero,
+                    onPressed: _deleteSelectedLocalAnchor,
+                    child: Text(
+                      UITextConstants.imageEditorProAnchorDelete,
+                      style: TextStyle(color: AppColors.black),
                     ),
-                    TextButton(
-                      onPressed: _deleteSelectedLocalAnchor,
-                      child: Text(
-                        UITextConstants.imageEditorProAnchorDelete,
-                        style: TextStyle(color: AppColors.black),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -4066,7 +4066,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     );
     showCupertinoModalPopup<void>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (context) {
         return AppBottomModalSurface(
           onDismiss: () => Navigator.of(context).pop(),
@@ -4091,9 +4091,11 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                       ),
                     ),
                     const Spacer(),
-                    IconButton(
-                      icon: Icon(Icons.close, color: fgSecondary),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.square(AppSpacing.minInteractiveSize),
                       onPressed: () => Navigator.of(context).pop(),
+                      child: Icon(CupertinoIcons.xmark, color: fgSecondary),
                     ),
                   ],
                 ),
@@ -4112,29 +4114,31 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.refresh,
-                              color: fgSecondary,
-                              size: AppSpacing.iconSmall,
-                            ),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.square(AppSpacing.minInteractiveSize),
                             onPressed: () {
                               Navigator.of(context).pop();
                               _redoStepAt(index);
                             },
-                            tooltip: UITextConstants.imageEditorRedoStep,
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.delete_outline,
+                            child: Icon(
+                              CupertinoIcons.refresh,
                               color: fgSecondary,
                               size: AppSpacing.iconSmall,
                             ),
+                          ),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.square(AppSpacing.minInteractiveSize),
                             onPressed: () {
                               _removeStepAt(index);
                               Navigator.of(context).pop();
                             },
-                            tooltip: UITextConstants.imageEditorRemoveStep,
+                            child: Icon(
+                              CupertinoIcons.trash,
+                              color: fgSecondary,
+                              size: AppSpacing.iconSmall,
+                            ),
                           ),
                         ],
                       ),

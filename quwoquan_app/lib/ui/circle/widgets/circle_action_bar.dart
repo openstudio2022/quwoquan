@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 
@@ -217,7 +216,7 @@ class _CircleIosActionButton extends StatelessWidget {
           _CircleIosActionStyle.outlined => AppColors.iosSeparator(
             context,
           ).withValues(alpha: 0.24),
-          _ => Colors.transparent,
+          _ => AppColors.transparent,
         };
 
     return CupertinoButton(

@@ -32,10 +32,10 @@ String buildUnderstandingQueryDesignSummary({
   List<String> concernPoints = const <String>[],
   List<QueryTask> queryTasks = const <QueryTask>[],
 }) {
-  final focusPhrases = <String>[
+  final focusPhrases = <String>{
     ...concernPoints.map(_sanitizeFocusPhrase).where((item) => item.isNotEmpty),
     ...queryTasks.map(_queryTaskFocusPhrase).where((item) => item.isNotEmpty),
-  ].toSet().take(3).toList(growable: false);
+  }.take(3).toList(growable: false);
   if (focusPhrases.isEmpty) {
     return '我会先把最影响判断的关键信息核清，再把能直接支撑回答的依据收拢。';
   }

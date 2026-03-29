@@ -117,7 +117,7 @@ class PetalMark extends StatelessWidget {
                     borderRadius: BorderRadius.circular(_petalBorderRadius),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(
+                        color: AppColors.black.withValues(
                           alpha: isDarkMode ? 0.26 : 0.2,
                         ),
                         blurRadius: _shadowBlur,
@@ -138,8 +138,8 @@ class PetalMark extends StatelessWidget {
     final coreSize = size * centerCoreScale;
     final coreBorderWidth = (_scale * 1.6).clamp(0.6, 1.2);
     final borderColor = isDarkMode
-        ? Colors.white.withValues(alpha: centerCoreBorderAlphaDark)
-        : Colors.black.withValues(alpha: centerCoreBorderAlphaLight);
+        ? AppColors.white.withValues(alpha: centerCoreBorderAlphaDark)
+        : AppColors.black.withValues(alpha: centerCoreBorderAlphaLight);
     return Container(
       width: coreSize,
       height: coreSize,
@@ -148,9 +148,9 @@ class PetalMark extends StatelessWidget {
         gradient: RadialGradient(
           center: const Alignment(-0.15, -0.15),
           colors: [
-            Colors.white,
-            Colors.white.withValues(alpha: 0.94),
-            Colors.white.withValues(alpha: 0.78),
+            AppColors.white,
+            AppColors.white.withValues(alpha: 0.94),
+            AppColors.white.withValues(alpha: 0.78),
           ],
           stops: const [0.0, 0.65, 1.0],
         ),
@@ -160,7 +160,7 @@ class PetalMark extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDarkMode ? 0.16 : 0.08),
+            color: AppColors.black.withValues(alpha: isDarkMode ? 0.16 : 0.08),
             blurRadius: (_scale * 6).clamp(1.2, 2.6),
             offset: Offset(0, (_scale * 2).clamp(0.4, 1.0)),
           ),

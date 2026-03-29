@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
@@ -235,9 +235,7 @@ class AssistantMessageBubble extends StatelessWidget {
             Text(
               '今日待办提醒',
               style: TextStyle(
-                fontSize:
-                    Theme.of(context).textTheme.bodySmall?.fontSize ??
-                    AppSpacing.containerSm,
+                fontSize: AppTypography.sm,
                 fontWeight: FontWeight.w600,
                 color: textColor,
               ),
@@ -266,9 +264,7 @@ class AssistantMessageBubble extends StatelessWidget {
                       child: Text(
                         '$title · $time',
                         style: TextStyle(
-                          fontSize:
-                              Theme.of(context).textTheme.bodySmall?.fontSize ??
-                              AppSpacing.containerSm,
+                          fontSize: AppTypography.sm,
                           color: textColor,
                         ),
                       ),
@@ -356,10 +352,8 @@ class AssistantMessageBubble extends StatelessWidget {
             answerText,
             textAlign: TextAlign.left,
             style: TextStyle(
-              fontSize:
-                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                  AppSpacing.md,
-              color: Colors.white,
+              fontSize: AppTypography.lg,
+              color: AppColors.white,
               height: AppTypography.bodyLineHeight,
             ),
           ),
@@ -380,9 +374,7 @@ class AssistantMessageBubble extends StatelessWidget {
           child: SelectableText(
             answerText,
             style: TextStyle(
-              fontSize:
-                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                  AppSpacing.md,
+              fontSize: AppTypography.lg,
               color: textColor,
             ),
           ),
@@ -860,7 +852,7 @@ class _BubbleTailPainter extends CustomPainter {
     final path = _BubbleWithTail._path(w, h, isRight);
     if (!isRight) canvas.translate(tailExtent, 0);
     final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.06)
+      ..color = AppColors.black.withValues(alpha: 0.06)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.save();
     canvas.translate(0, 2);
@@ -912,13 +904,12 @@ class _AssistantFollowupCard extends StatelessWidget {
               runSpacing: AppSpacing.xs,
               children: actionHints
                   .map(
-                    (hint) => InkWell(
-                      onTap: onActionHintTap == null
+                    (hint) => CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: onActionHintTap == null
                           ? null
                           : () => onActionHintTap!(hint),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.fullBorderRadius,
-                      ),
                       child: Container(
                         padding: EdgeInsets.symmetric(
                           horizontal: AppSpacing.containerSm,
@@ -928,7 +919,7 @@ class _AssistantFollowupCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(
                             AppSpacing.fullBorderRadius,
                           ),
-                          color: Colors.white.withValues(alpha: 0.8),
+                          color: AppColors.white.withValues(alpha: 0.8),
                         ),
                         child: Text(
                           hint,

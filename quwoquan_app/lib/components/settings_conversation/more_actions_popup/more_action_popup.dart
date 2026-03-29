@@ -1,6 +1,5 @@
 // 对话态设置 UI：贴底半屏、保留上层上下文（与全屏 `settings_form/` 区分）。
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -23,7 +22,7 @@ class MoreActionPopup extends StatelessWidget {
     if (config is MediaPostMoreActionConfig) {
       await showCupertinoModalPopup(
         context: context,
-        barrierColor: Colors.transparent,
+        barrierColor: AppColors.transparent,
         builder: (context) => _MediaPostMoreActionSheet(config: config),
       );
     }

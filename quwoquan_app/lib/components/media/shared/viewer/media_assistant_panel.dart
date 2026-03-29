@@ -390,20 +390,18 @@ class _MediaSuggestionChip extends StatelessWidget {
           ),
         ],
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-            vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: AppTypography.sm.sp,
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-            ),
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(
+          horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+          vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+        ),
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: AppTypography.sm.sp,
+            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
           ),
         ),
       ),
@@ -453,7 +451,7 @@ class _MediaAssistantInput extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               decoration: BoxDecoration(
-                color: Colors.transparent,
+                color: AppColors.transparent,
               ),
               placeholder: UITextConstants.assistantAskPlaceholder,
               placeholderStyle: TextStyle(

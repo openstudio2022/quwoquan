@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
@@ -789,7 +788,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
                           )
                         : 0.0;
                     final coverTitleStyle = titleStyle.copyWith(
-                      color: Colors.white,
+                      color: AppColors.white,
                       height: coverTitleLineHeight,
                       shadows: <Shadow>[
                         Shadow(
@@ -827,13 +826,13 @@ class _ArticleEditorState extends State<ArticleEditor> {
                                           begin: Alignment.topCenter,
                                           end: Alignment.bottomCenter,
                                           colors: <Color>[
-                                            Colors.black.withValues(
+                                            AppColors.black.withValues(
                                               alpha: 0.04,
                                             ),
-                                            Colors.black.withValues(
+                                            AppColors.black.withValues(
                                               alpha: 0.18,
                                             ),
-                                            Colors.black.withValues(
+                                            AppColors.black.withValues(
                                               alpha: 0.74,
                                             ),
                                           ],
@@ -855,7 +854,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
                                       style: coverTitleStyle,
                                       placeholderStyle: coverTitleStyle
                                           .copyWith(
-                                            color: Colors.white.withValues(
+                                            color: AppColors.white.withValues(
                                               alpha: 0.72,
                                             ),
                                           ),

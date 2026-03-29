@@ -37,7 +37,7 @@ class _AssistantReferenceWebViewPageState
     _uri = Uri.parse(widget.initialUrl);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
+      ..setBackgroundColor(AppColors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
@@ -68,7 +68,8 @@ class _AssistantReferenceWebViewPageState
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final title = widget.source.trim().isNotEmpty
         ? widget.source.trim()
         : widget.title.trim().isNotEmpty
@@ -108,9 +109,9 @@ class _AssistantReferenceWebViewPageState
               ),
               padding: EdgeInsets.all(AppSpacing.containerSm),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.white,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                border: Border.all(color: AppColors.black.withValues(alpha: 0.06)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +124,7 @@ class _AssistantReferenceWebViewPageState
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black.withValues(alpha: 0.86),
+                        color: AppColors.black.withValues(alpha: 0.86),
                         height: AppTypography.bodyLineHeight,
                       ),
                     ),
@@ -135,7 +136,7 @@ class _AssistantReferenceWebViewPageState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: AppTypography.sm,
-                      color: Colors.black.withValues(alpha: 0.52),
+                      color: AppColors.black.withValues(alpha: 0.52),
                     ),
                   ),
                 ],
@@ -150,12 +151,12 @@ class _AssistantReferenceWebViewPageState
                   AppSpacing.containerMd,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.white,
                   borderRadius: BorderRadius.circular(
                     AppSpacing.largeBorderRadius,
                   ),
                   border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: AppColors.black.withValues(alpha: 0.06),
                   ),
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -176,7 +177,7 @@ class _AssistantReferenceWebViewPageState
                         right: 0,
                         child: LinearProgressIndicator(
                           minHeight: 2,
-                          backgroundColor: Colors.transparent,
+                          backgroundColor: AppColors.transparent,
                           color: AppColors.primaryColor,
                         ),
                       ),
@@ -216,7 +217,7 @@ class _ReferenceLoadError extends StatelessWidget {
             Icon(
               CupertinoIcons.exclamationmark_triangle,
               size: AppSpacing.iconLarge + AppSpacing.sm,
-              color: Colors.black.withValues(alpha: 0.3),
+              color: AppColors.black.withValues(alpha: 0.3),
             ),
             SizedBox(height: AppSpacing.sm),
             Text(
@@ -224,7 +225,7 @@ class _ReferenceLoadError extends StatelessWidget {
               style: TextStyle(
                 fontSize: AppTypography.lg,
                 fontWeight: FontWeight.w600,
-                color: Colors.black.withValues(alpha: 0.82),
+                color: AppColors.black.withValues(alpha: 0.82),
               ),
             ),
             SizedBox(height: AppSpacing.xs),
@@ -235,7 +236,7 @@ class _ReferenceLoadError extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.sm,
-                color: Colors.black.withValues(alpha: 0.56),
+                color: AppColors.black.withValues(alpha: 0.56),
               ),
             ),
             SizedBox(height: AppSpacing.md),

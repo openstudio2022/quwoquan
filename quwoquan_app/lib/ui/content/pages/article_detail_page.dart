@@ -134,7 +134,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       return AppScaffold(
         backgroundColor: background,
         navigationBar: AppNavigationBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.transparent,
           leading: AppNavigationBarIconButton(
             icon: CupertinoIcons.back,
             onPressed: () => context.canPop()

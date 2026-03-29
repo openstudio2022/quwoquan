@@ -481,14 +481,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                 decoration: BoxDecoration(
                   color: selected
                       ? (widget.isDark
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : Colors.black.withValues(alpha: 0.06))
+                            ? AppColors.white.withValues(alpha: 0.1)
+                            : AppColors.black.withValues(alpha: 0.06))
                       : null,
                   borderRadius: BorderRadius.circular(
                     AppSpacing.circularBorderRadius,
                   ),
                   border: Border.all(
-                    color: widget.isDark ? Colors.white24 : Colors.black12,
+                    color: widget.isDark
+                        ? AppColors.white.withValues(alpha: 0.24)
+                        : AppColors.black.withValues(alpha: 0.12),
                   ),
                 ),
                 child: Text(
@@ -780,13 +782,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           vertical: AppSpacing.intraGroupXs,
         ),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.32),
+          color: AppColors.black.withValues(alpha: 0.32),
           borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
         ),
         child: Text(
           typeLabel,
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: AppTypography.xs,
             fontWeight: AppTypography.semiBold,
           ),
@@ -1043,13 +1045,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         vertical: AppSpacing.intraGroupXs,
       ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.32),
+        color: AppColors.black.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
       ),
       child: Text(
         _articleTemplateLabel(item),
         style: TextStyle(
-          color: Colors.white,
+          color: AppColors.white,
           fontSize: AppTypography.xs,
           fontWeight: AppTypography.semiBold,
         ),
@@ -1325,7 +1327,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         border: Border.all(color: borderColor.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: widget.isDark ? 0.16 : 0.05),
+            color: AppColors.black.withValues(alpha: widget.isDark ? 0.16 : 0.05),
             blurRadius: AppSpacing.md,
             offset: const Offset(0, 8),
           ),

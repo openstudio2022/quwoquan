@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
@@ -49,7 +48,7 @@ class SettingsPage extends ConsumerWidget {
                     trailingText: _appearanceSummary(snapshot, appearanceState),
                     onTap: () => showCupertinoModalPopup<void>(
                       context: context,
-                      barrierColor: Colors.transparent,
+                      barrierColor: AppColors.transparent,
                       builder: (_) => const _AppearanceSettingsSheet(),
                     ),
                   ),

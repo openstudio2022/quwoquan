@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// 欢迎页
 ///
@@ -114,9 +115,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.welcomeBackground,
-      child: Stack(
+    // 与 AppScaffold 一致：CupertinoPageScaffold + 透明 Material，避免无 Material 祖先时的调试下划线。
+    return AppScaffold(
+      backgroundColor: AppColors.welcomeBackground,
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
           _buildBackground(),
           _buildMainContent(),
@@ -151,10 +155,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 height: MediaQuery.of(context).size.width * 0.8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha:0.05),
+                  color: AppColors.white.withValues(alpha:0.05),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha:0.1),
+                      color: AppColors.black.withValues(alpha:0.1),
                       blurRadius: 120,
                       spreadRadius: 0,
                     ),
@@ -174,21 +178,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     return Positioned(
       top: MediaQuery.of(context).padding.top + AppSpacing.lg,
       right: AppSpacing.lg,
-      child: Material(
-        color: AppColors.welcomeButtonBg,
-        borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
-          child: Text(
-            '$_countdownRemaining',
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              fontWeight: AppTypography.semiBold,
-              color: AppColors.welcomeForeground.withValues(alpha: 0.9),
-            ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.welcomeButtonBg,
+          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        child: Text(
+          '$_countdownRemaining',
+          style: TextStyle(
+            fontSize: AppTypography.lg,
+            fontWeight: AppTypography.semiBold,
+            color: AppColors.welcomeForeground.withValues(alpha: 0.9),
+            decoration: TextDecoration.none,
           ),
         ),
       ),
@@ -257,16 +262,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         height: parentSize,
         child: Center(
           child: Transform.translate(
-            offset: const Offset(0, -0.5 * 96),
+            offset: Offset(0, -0.5 * AppSpacing.welcomePetalHeight),
             child: Container(
-              width: 56,
-              height: 96,
+              width: AppSpacing.welcomePetalWidth,
+              height: AppSpacing.welcomePetalHeight,
               decoration: BoxDecoration(
                 color: _petalColors[index],
-                borderRadius: BorderRadius.circular(30),
+                borderRadius:
+                    BorderRadius.circular(AppSpacing.welcomePetalCornerRadius),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha:0.2),
+                    color: AppColors.black.withValues(alpha:0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -293,31 +299,31 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         );
       },
       child: Container(
-        width: 112,
-        height: 112,
+        width: AppSpacing.welcomeDropDiameter,
+        height: AppSpacing.welcomeDropDiameter,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
             center: const Alignment(0.5, 0.4),
             colors: [
-              Colors.white.withValues(alpha:0.4),
-              Colors.white.withValues(alpha:0.1),
-              Colors.white.withValues(alpha:0.02),
+              AppColors.white.withValues(alpha:0.4),
+              AppColors.white.withValues(alpha:0.1),
+              AppColors.white.withValues(alpha:0.02),
             ],
             stops: const [0.0, 0.5, 1.0],
           ),
           border: Border.all(
-            color: Colors.white.withValues(alpha:0.1),
-            width: 1,
+            color: AppColors.white.withValues(alpha:0.1),
+            width: AppSpacing.welcomeDropBorderWidth,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.white.withValues(alpha:0.2),
+              color: AppColors.white.withValues(alpha:0.2),
               blurRadius: 20,
               spreadRadius: 0,
             ),
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.1),
+              color: AppColors.black.withValues(alpha:0.1),
               blurRadius: 40,
               offset: const Offset(0, 10),
             ),
@@ -356,8 +362,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               style: TextStyle(
                 fontSize: AppTypography.welcomeHeroTitle,
                 fontWeight: AppTypography.black,
-                color: Colors.white,
+                color: AppColors.white,
                 letterSpacing: -0.5,
+                decoration: TextDecoration.none,
               ),
             ),
           ),
@@ -373,6 +380,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     fontWeight: AppTypography.medium,
                     color: AppColors.welcomeForegroundMuted,
                     letterSpacing: 1.0,
+                    decoration: TextDecoration.none,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -418,6 +426,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   fontWeight: AppTypography.medium,
                   color: AppColors.welcomeForegroundMuted.withValues(alpha: 0.8),
                   letterSpacing: 0.5,
+                  decoration: TextDecoration.none,
                 ),
               ),
             ),

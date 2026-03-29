@@ -231,7 +231,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   /// 与聊天气泡正文一致：Theme `bodyLarge` + 统一行高。
   TextStyle _composerTextStyle(BuildContext context) {
     final fontSize =
-        Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md;
+        AppTypography.base;
     return TextStyle(
       fontSize: fontSize,
       height: AppTypography.bodyLineHeight,
@@ -776,7 +776,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
               decoration: BoxDecoration(
                 color: isPressed
                     ? AppColors.primaryColor.withValues(alpha: 0.1)
-                    : Colors.transparent,
+                    : AppColors.transparent,
                 border: Border.all(
                   color: isPressed ? AppColors.primaryColor : sepIdle,
                 ),
@@ -932,19 +932,15 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                     Positioned(
                       left: AppSpacing.sm,
                       top: AppSpacing.xs,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: IconButton(
-                          key: TestKeys.chatInputExpandButton,
-                          onPressed: _openExpandedEditor,
-                          padding: EdgeInsets.zero,
-                          constraints: BoxConstraints(
-                            minWidth: AppSpacing.iconButtonMinSizeSm,
-                            minHeight: AppSpacing.iconButtonMinSizeSm,
-                          ),
+                      child: CupertinoButton(
+                        key: TestKeys.chatInputExpandButton,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                        onPressed: _openExpandedEditor,
+                        child: Align(
                           alignment: Alignment.centerLeft,
-                          icon: Icon(
-                            Icons.open_in_full,
+                          child: Icon(
+                            CupertinoIcons.arrow_up_left_arrow_down_right,
                             size: AppSpacing.iconSmall,
                             color: secondary,
                           ),
@@ -1143,18 +1139,15 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildAttachmentPreview(),
-          if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
-          _buildComposerRow(),
-          _buildEmojiPanel(),
-          _buildAddPanel(),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildAttachmentPreview(),
+        if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
+        _buildComposerRow(),
+        _buildEmojiPanel(),
+        _buildAddPanel(),
+      ],
     );
   }
 }
@@ -1245,7 +1238,7 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
   @override
   Widget build(BuildContext context) {
     final composerFontSize =
-        Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md;
+        AppTypography.base;
     final composerStyle = TextStyle(
       fontSize: composerFontSize,
       height: AppTypography.bodyLineHeight,
@@ -1290,23 +1283,20 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
                     AppSpacing.largeBorderRadius,
                   ),
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    maxLines: null,
-                    expands: true,
-                    textAlignVertical: TextAlignVertical.top,
-                    cursorColor: AppColors.primaryColor,
-                    style: composerStyle,
-                    decoration: InputDecoration(
-                      hintText: widget.hintText,
-                      hintStyle: composerStyle.copyWith(
-                        color: _foregroundSecondary(context),
-                      ),
-                      border: InputBorder.none,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  cursorColor: AppColors.primaryColor,
+                  style: composerStyle,
+                  decoration: InputDecoration(
+                    hintText: widget.hintText,
+                    hintStyle: composerStyle.copyWith(
+                      color: _foregroundSecondary(context),
                     ),
+                    border: InputBorder.none,
                   ),
                 ),
               ),

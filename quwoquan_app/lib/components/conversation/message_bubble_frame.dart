@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// Shared outer frame for conversation message renderers.
 class MessageBubbleFrame extends StatelessWidget {
@@ -49,9 +50,7 @@ class MessageBubbleFrame extends StatelessWidget {
                     child: Text(
                       senderName,
                       style: TextStyle(
-                        fontSize:
-                            Theme.of(context).textTheme.bodySmall?.fontSize ??
-                            AppSpacing.containerSm,
+                        fontSize: AppTypography.sm,
                         color: textColor.withValues(alpha: 0.8),
                       ),
                     ),

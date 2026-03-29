@@ -124,7 +124,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
             end: Alignment.bottomCenter,
             colors: [
               AppColors.overlayStrong,
-              Colors.transparent,
+              AppColors.transparent,
             ],
           ),
         ),
@@ -197,7 +197,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
             end: Alignment.topCenter,
             colors: [
               AppColors.overlayStrong,
-              Colors.transparent,
+              AppColors.transparent,
             ],
           ),
         ),

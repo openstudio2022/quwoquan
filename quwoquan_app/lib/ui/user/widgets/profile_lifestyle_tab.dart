@@ -156,8 +156,8 @@ class ProfileLifestyleTab extends ConsumerWidget {
                                   begin: Alignment.bottomCenter,
                                   end: Alignment.topCenter,
                                   colors: [
-                                    Colors.black.withValues(alpha: 0.6),
-                                    Colors.transparent,
+                                    AppColors.black.withValues(alpha: 0.6),
+                                    AppColors.transparent,
                                   ],
                                 ),
                               ),
@@ -166,7 +166,7 @@ class ProfileLifestyleTab extends ConsumerWidget {
                                 style: TextStyle(
                                   fontSize: AppTypography.xs,
                                   fontWeight: AppTypography.semiBold,
-                                  color: Colors.white,
+                                  color: AppColors.white,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,

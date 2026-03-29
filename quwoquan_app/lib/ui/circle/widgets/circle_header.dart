@@ -37,7 +37,7 @@ class CircleHeader extends StatelessWidget {
         border: Border.all(color: bg, width: _avatarBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.12),
+            color: AppColors.black.withValues(alpha: isDark ? 0.24 : 0.12),
             blurRadius: AppSpacing.lg,
             offset: const Offset(0, 8),
           ),

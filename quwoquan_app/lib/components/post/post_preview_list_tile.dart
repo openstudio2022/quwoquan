@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// Post 列表预览组件。
@@ -80,7 +79,7 @@ class PostPreviewListTile extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+            color: AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05),
             blurRadius: AppSpacing.containerMd,
             offset: const Offset(0, 10),
           ),
@@ -131,7 +130,7 @@ class PostPreviewListTile extends StatelessWidget {
                           right: AppSpacing.intraGroupSm,
                           child: Icon(
                             CupertinoIcons.play_circle_fill,
-                            color: Colors.white,
+                            color: AppColors.white,
                             size: AppSpacing.iconMedium,
                           ),
                         ),

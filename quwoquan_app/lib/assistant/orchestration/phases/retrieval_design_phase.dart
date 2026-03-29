@@ -1,14 +1,12 @@
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
-import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -65,8 +63,6 @@ class RetrievalDesignPhase implements Phase {
       forceRefresh: forceRefreshCatalog,
     );
     await toolMetadataRegistry?.ensureLoaded();
-    final designSummary = input.state.understandingSnapshot.queryDesignSummary
-        .trim();
 
     final authorityDomains = intentGraph.authorityDomains;
     final freshnessHoursMax = intentGraph.freshnessHoursMax;
@@ -189,19 +185,6 @@ class RetrievalDesignPhase implements Phase {
         ),
       );
     }
-    final detail = queryTasks
-        .map((task) {
-          final label = task.effectiveLabel.trim().isNotEmpty
-              ? task.effectiveLabel.trim()
-              : task.query.trim();
-          final query = task.query.trim();
-          if (label.isEmpty) return '';
-          if (query.isEmpty || query == label) return label;
-          return '$label：$query';
-        })
-        .where((item) => item.isNotEmpty)
-        .take(4)
-        .join('\n');
     return PhaseOutput(
       state: input.state.copyWith(
         intentGraph: updatedIntentGraph,

@@ -31,9 +31,10 @@ class ContentShareSheet extends StatefulWidget {
   }) {
     return showCupertinoModalPopup<void>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (sheetContext) {
-        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        final isDark =
+            CupertinoTheme.of(sheetContext).brightness == Brightness.dark;
         return AppBottomModalSurface(
         onDismiss: () => Navigator.of(sheetContext).pop(),
         backgroundColor:

@@ -1,6 +1,6 @@
 // ignore_for_file: unnecessary_underscores
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -185,11 +185,11 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                   ),
                 ),
                 if (widget.showCloseButton)
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: widget.onClose,
+                  CupertinoButton(
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                    onPressed: widget.onClose,
+                    child: const Icon(CupertinoIcons.xmark),
                   ),
               ],
             ),

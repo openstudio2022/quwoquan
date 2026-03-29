@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -13,10 +13,8 @@ class UnifiedMediaViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: Colors.black,
-      child: Material(
-        type: MaterialType.transparency,
-        child: WorksImmersiveViewer(
+      backgroundColor: AppColors.black,
+      child: WorksImmersiveViewer(
           showWorksToolbar: true,
           showTopNavigation: extra.showWorksNavigation,
           externalPosts: extra.dtoPosts,
@@ -51,7 +49,6 @@ class UnifiedMediaViewerPage extends StatelessWidget {
               },
           onAssistantTap: () {},
         ),
-      ),
     );
   }
 }

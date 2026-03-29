@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class LocalChatSearchStore {
@@ -817,8 +816,8 @@ class LocalChatSearchStore {
   }
 
   Future<String> _resolveDatabasePath() async {
-    if (_databasePath != null && _databasePath!.trim().isNotEmpty) {
-      final path = _databasePath!.trim();
+    if (_databasePath != null && _databasePath.trim().isNotEmpty) {
+      final path = _databasePath.trim();
       final lastSeparator = path.lastIndexOf(Platform.pathSeparator);
       if (lastSeparator > 0) {
         await Directory(

@@ -241,10 +241,10 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: AppColors.transparent,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarColor: AppColors.transparent,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
       );
@@ -254,10 +254,10 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -267,10 +267,10 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -411,7 +411,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   }
 
   void _showAssistantPanel(PostSummaryView? post) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final suggestions = _buildAssistantSuggestions(post);
     final contextId = post?.id.isNotEmpty == true ? post!.id : 'media-viewer';
     AssistantChatStore.normalizeMessages();
@@ -428,7 +428,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     );
     showCupertinoModalPopup(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (context) {
         return MediaAssistantPanel(
           isDark: isDark,
@@ -739,13 +739,13 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   Widget build(BuildContext context) {
     if (!widget.isOpen) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final currentPost =
         widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
         ? widget.posts[_currentPostIndex]
         : null;
 
-    return Material(
+    return ColoredBox(
       color: AppColors.black,
       child: Stack(
         children: [

@@ -632,11 +632,8 @@ List<ProcessTimelineFrame> buildVisibleProcessTimeline(
   );
   final visible = <ProcessTimelineFrame>[
     if (understanding != null && understanding.hasVisibleContent) understanding,
-    if (byStep[ProcessStepId.retrievalProcessing]
-        case final retrievalProcessing?)
-      retrievalProcessing,
-    if (byStep[ProcessStepId.answerOrganization] case final answerOrganization?)
-      answerOrganization,
+    ?byStep[ProcessStepId.retrievalProcessing],
+    ?byStep[ProcessStepId.answerOrganization],
   ];
   return normalizeProcessTimeline(
     visible
@@ -795,30 +792,6 @@ JourneyStageStatus _mergeVisibleStatus(List<JourneyStageStatus> statuses) {
     return JourneyStageStatus.skipped;
   }
   return JourneyStageStatus.pending;
-}
-
-String _queryGroupsToDetail(
-  List<RunArtifactsUnderstandingQueryGroup> queryGroups,
-) {
-  return queryGroups
-      .map((group) {
-        final label = group.dimension.trim().isNotEmpty
-            ? group.dimension.trim()
-            : '关注维度';
-        final queries = group.queries
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .take(2)
-            .join(' / ');
-        final why = group.why.trim();
-        if (queries.isEmpty) {
-          return why;
-        }
-        return why.isNotEmpty ? '$label：$queries\n$why' : '$label：$queries';
-      })
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .join('\n');
 }
 
 String _firstNonEmpty(List<String> values) {

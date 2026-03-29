@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -95,7 +94,7 @@ class _PublishLocationSelectorPageState
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       navigationBar: AppNavigationBar(
         middle: Text(
@@ -312,7 +311,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       navigationBar: AppNavigationBar(
         middle: Text(

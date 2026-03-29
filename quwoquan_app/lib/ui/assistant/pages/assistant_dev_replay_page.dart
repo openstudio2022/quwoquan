@@ -31,8 +31,34 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final titleStyle = TextStyle(
+      fontSize: AppTypography.lg,
+      fontWeight: FontWeight.w600,
+      color: fgPrimary,
+    );
+    final bodyStyle = TextStyle(
+      fontSize: AppTypography.base,
+      color: fgPrimary,
+    );
+    final labelStyle = TextStyle(
+      fontSize: AppTypography.sm,
+      fontWeight: FontWeight.w500,
+      color: fgSecondary,
+    );
+    final captionStyle = TextStyle(
+      fontSize: AppTypography.xs,
+      color: fgSecondary,
+    );
     return AppScaffold(
       navigationBar: AppNavigationBar(
         automaticallyImplyLeading: false,
@@ -54,13 +80,13 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
           children: [
             Text(
               UITextConstants.assistantDevReplayRun,
-              style: theme.textTheme.titleMedium,
+              style: titleStyle,
             ),
             SizedBox(height: AppSpacing.sm),
             if (widget.records.isEmpty)
               Text(
                 UITextConstants.assistantNoReplayData,
-                style: theme.textTheme.bodyMedium,
+                style: bodyStyle,
               )
             else
               ...widget.records.map((record) {
@@ -88,20 +114,20 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(runId, style: theme.textTheme.labelMedium),
+                        Text(runId, style: labelStyle),
                         SizedBox(height: AppSpacing.xs),
                         Text(
                           '${UITextConstants.assistantDevReplayQuery}：$query',
-                          style: theme.textTheme.bodyMedium,
+                          style: bodyStyle,
                         ),
                         SizedBox(height: AppSpacing.xs),
                         Text(
                           '${UITextConstants.assistantDevReplayAnswer}：$answer',
-                          style: theme.textTheme.bodyMedium,
+                          style: bodyStyle,
                         ),
                         if (createdAt.isNotEmpty) ...[
                           SizedBox(height: AppSpacing.xs),
-                          Text(createdAt, style: theme.textTheme.labelSmall),
+                          Text(createdAt, style: captionStyle),
                         ],
                         SizedBox(height: AppSpacing.sm),
                         _JsonSection(
@@ -133,7 +159,7 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
             SizedBox(height: AppSpacing.md),
             Text(
               UITextConstants.assistantDevReplayScore,
-              style: theme.textTheme.titleMedium,
+              style: titleStyle,
             ),
             SizedBox(height: AppSpacing.sm),
             FutureBuilder<Map<String, dynamic>>(
@@ -182,17 +208,33 @@ class _JsonSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = const JsonEncoder.withIndent('  ').convert(data);
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final panelTint = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(AppSpacing.containerSm),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: panelTint.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: FontWeight.w600,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundPrimary,
+              ),
+            ),
+          ),
           SizedBox(height: AppSpacing.xs),
           SelectableText(
             text,
@@ -233,12 +275,25 @@ class _FeedbackStatsSection extends StatelessWidget {
       children: [
         Text(
           '显式标注统计',
-          style: Theme.of(context).textTheme.titleMedium,
+          style: TextStyle(
+            fontSize: AppTypography.lg,
+            fontWeight: FontWeight.w600,
+            color: AppColorsFunctional.getColor(
+              CupertinoTheme.of(context).brightness == Brightness.dark,
+              ColorType.foregroundPrimary,
+            ),
+          ),
         ),
         SizedBox(height: AppSpacing.xs),
         Text(
           '总标注 $explicitTotal | 有帮助 $helpfulCount | 没帮助 $unhelpfulCount | 纠正 $correctionCount',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: TextStyle(
+            fontSize: AppTypography.base,
+            color: AppColorsFunctional.getColor(
+              CupertinoTheme.of(context).brightness == Brightness.dark,
+              ColorType.foregroundSecondary,
+            ),
+          ),
         ),
         SizedBox(height: AppSpacing.sm),
         _DistributionBlock(
@@ -272,20 +327,47 @@ class _DistributionBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = distribution.entries.toList(growable: false);
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final panelTint = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(AppSpacing.containerSm),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        color: panelTint.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: FontWeight.w600,
+              color: fgPrimary,
+            ),
+          ),
           SizedBox(height: AppSpacing.xs),
           if (entries.isEmpty)
-            Text('暂无数据', style: Theme.of(context).textTheme.bodySmall)
+            Text(
+              '暂无数据',
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: fgSecondary,
+              ),
+            )
           else
             Wrap(
               spacing: AppSpacing.xs,

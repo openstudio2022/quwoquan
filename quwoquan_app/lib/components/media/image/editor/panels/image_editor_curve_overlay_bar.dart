@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -111,23 +112,25 @@ class ImageEditorCurveOverlayBar extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: AppColors.white,
-                    weight: 700,
-                  ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(AppSpacing.minInteractiveSize),
                   onPressed: onCancel,
-                  tooltip: UITextConstants.cancel,
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.check,
+                  child: Icon(
+                    CupertinoIcons.xmark,
                     color: AppColors.white,
-                    weight: 700,
+                    size: AppSpacing.iconMedium,
                   ),
+                ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(AppSpacing.minInteractiveSize),
                   onPressed: onConfirm,
-                  tooltip: UITextConstants.confirm,
+                  child: Icon(
+                    CupertinoIcons.checkmark,
+                    color: AppColors.white,
+                    size: AppSpacing.iconMedium,
+                  ),
                 ),
               ],
             ),

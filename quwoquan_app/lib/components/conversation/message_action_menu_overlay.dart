@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// Shared long-press action menu for conversation messages.
 class ConversationMessageActionMenuOverlay extends StatelessWidget {
@@ -103,15 +105,24 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
         Positioned(
           left: left,
           top: top,
-          child: Material(
-            elevation: AppSpacing.sm,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            child: SizedBox(
-              width: menuWidth,
-              child: CupertinoPopupSurface(
-                isSurfacePainted: true,
-                child: Material(
-                  color: Colors.transparent,
+          child: Container(
+            width: menuWidth,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.2),
+                  blurRadius: AppSpacing.sm * 2,
+                  offset: Offset(0, AppSpacing.xs),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+              child: SizedBox(
+                width: menuWidth,
+                child: CupertinoPopupSurface(
+                  isSurfacePainted: true,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: actions.asMap().entries.map((indexedEntry) {
@@ -162,11 +173,7 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
                               Text(
                                 entry.value,
                                 style: TextStyle(
-                                  fontSize:
-                                      Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium?.fontSize ??
-                                      AppSpacing.containerMd,
+                                  fontSize: AppTypography.base,
                                   fontWeight: FontWeight.w500,
                                   color: foreground,
                                 ),

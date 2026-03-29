@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 enum RegenerateOption {
@@ -58,15 +57,15 @@ class RegenerateOptionsPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppColors.iosSystemSurfaceDark : AppColors.white;
     final textColor = isDark
-        ? const Color(0xFFEBEBF5)
-        : const Color(0xFF1C1C1E);
+        ? AppColors.iosPopupPrimaryLabelOnDark
+        : AppColors.iosPopupPrimaryLabelOnLight;
     final dividerColor = isDark
-        ? const Color(0xFF38383A)
-        : const Color(0xFFE5E5EA);
+        ? AppColors.iosPopupHairlineSeparatorDark
+        : AppColors.iosPopupHairlineSeparatorLight;
 
     final popupHeight = _options.length * _itemHeight;
     final popupTop = anchorRect.top - popupHeight - 8;
@@ -88,8 +87,8 @@ class RegenerateOptionsPopup extends StatelessWidget {
             8.0,
             MediaQuery.of(context).size.height - popupHeight - 8,
           ),
-          child: Material(
-            color: Colors.transparent,
+          child: ColoredBox(
+            color: AppColors.transparent,
             child: Container(
               width: _popupWidth,
               decoration: BoxDecoration(
@@ -97,7 +96,7 @@ class RegenerateOptionsPopup extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+                    color: AppColors.black.withValues(alpha: isDark ? 0.4 : 0.12),
                     blurRadius: 16,
                     offset: const Offset(0, -4),
                   ),
@@ -111,8 +110,10 @@ class RegenerateOptionsPopup extends StatelessWidget {
                     for (int i = 0; i < _options.length; i++) ...[
                       if (i > 0)
                         Container(
-                          height: 0.5,
-                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                          height: AppSpacing.hairline,
+                          margin: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.intraGroupLg,
+                          ),
                           color: dividerColor,
                         ),
                       _buildItem(_options[i], textColor),
@@ -134,15 +135,19 @@ class RegenerateOptionsPopup extends StatelessWidget {
       child: SizedBox(
         height: _itemHeight,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.fourteen),
           child: Row(
             children: [
-              Icon(option.icon, size: 16, color: textColor),
-              const SizedBox(width: 10),
+              Icon(
+                option.icon,
+                size: AppSpacing.iconSmall,
+                color: textColor,
+              ),
+              SizedBox(width: AppSpacing.sm + AppSpacing.xs / 2),
               Text(
                 option.label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: AppTypography.base,
                   color: textColor,
                   fontWeight: FontWeight.w400,
                 ),

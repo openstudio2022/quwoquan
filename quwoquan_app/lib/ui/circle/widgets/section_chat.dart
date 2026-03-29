@@ -119,7 +119,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
                 style: TextStyle(
                   fontSize: AppTypography.xs,
                   fontWeight: AppTypography.bold,
-                  color: Colors.white,
+                  color: AppColors.white,
                 ),
               ),
             ),

@@ -37,7 +37,7 @@ class CreationVisibilityPopup extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
+            color: AppColors.black.withValues(alpha: 0.12),
             blurRadius: AppSpacing.sm,
             offset: Offset(0, AppSpacing.intraGroupXs),
           ),

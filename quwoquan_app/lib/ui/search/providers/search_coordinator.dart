@@ -37,7 +37,6 @@ class SearchCoordinator extends ChangeNotifier {
   static const int _collapsedChatRecordsCount = 3;
   static const int _maxMostUsedCount = 3;
   static const int _conversationSearchLimit = 12;
-  static const int _messageSearchLimit = 36;
   static const int _maxNetworkSuggestions = 6;
 
   final Ref _ref;
@@ -354,14 +353,16 @@ class SearchCoordinator extends ChangeNotifier {
         .where((hit) => hit.objectType == SearchObjectType.chatMessage)
         .map((hit) => MessageSearchItemView.fromMap(hit.payload))
         .toList(growable: false);
-    final circleSuggestions = response.hits
-        .where(
-          (hit) =>
-              hit.objectType == SearchObjectType.circleGroup ||
-              hit.objectType == SearchObjectType.circleCircle,
-        )
-        .map((hit) => CircleSearchItemView.fromMap(hit.payload))
-        .toList(growable: false);
+    final circleSuggestions = includesCircles
+        ? response.hits
+              .where(
+                (hit) =>
+                    hit.objectType == SearchObjectType.circleGroup ||
+                    hit.objectType == SearchObjectType.circleCircle,
+              )
+              .map((hit) => CircleSearchItemView.fromMap(hit.payload))
+              .toList(growable: false)
+        : const <CircleSearchItemView>[];
     final allConversations = _ref
         .read(conversationCacheProvider)
         .getAll()
@@ -437,7 +438,7 @@ class SearchCoordinator extends ChangeNotifier {
             _ => null,
           },
         ),
-      if (circleSuggestions.isNotEmpty)
+      if (includesCircles && circleSuggestions.isNotEmpty)
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.circles,
           items: circleSuggestions

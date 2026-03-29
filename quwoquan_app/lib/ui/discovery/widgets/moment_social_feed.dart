@@ -132,7 +132,7 @@ class MomentSocialFeed extends ConsumerWidget {
               Text(
                 context.l10n.loadFailed,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
+                  color: AppColors.error,
                   fontSize: AppTypography.iosBody,
                 ),
                 textAlign: TextAlign.center,
@@ -1008,11 +1008,11 @@ class _MomentVideoCard extends StatelessWidget {
                 height: AppSpacing.videoPlayOverlaySize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.42),
+                  color: AppColors.black.withValues(alpha: 0.42),
                 ),
                 child: Icon(
                   CupertinoIcons.play_fill,
-                  color: Colors.white,
+                  color: AppColors.white,
                   size: AppSpacing.videoPlayOverlayIconSize,
                 ),
               ),
@@ -1037,7 +1037,7 @@ class _MomentVideoCard extends StatelessWidget {
                     _formatDuration(dto.durationMs!),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontWeight: AppTypography.semiBold,
                     ),
                   ),

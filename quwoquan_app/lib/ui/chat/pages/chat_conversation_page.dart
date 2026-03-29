@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -605,10 +604,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           )
         : null;
 
-    final bodyContent = Material(
-      color: Colors.transparent,
-      child: Column(
-        children: [
+    final bodyContent = Column(
+      children: [
           if (widget.searchAnchorContext case final anchor?)
             _SearchAnchorBanner(
               sourceQuery: anchor.sourceQuery,
@@ -642,9 +639,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                           child: Text(
                             timeStr,
                             style: TextStyle(
-                              fontSize:
-                                  Theme.of(context).textTheme.bodySmall?.fontSize ??
-                                  AppSpacing.containerSm,
+                              fontSize: AppTypography.sm,
                               color: fgPrimary.withValues(alpha: 0.5),
                             ),
                           ),
@@ -656,7 +651,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       bubbleColor: msg['isSelf'] == true
                           ? AppColors.chatBubbleOutgoing
                           : AppColors.chatBubbleIncoming,
-                      textColor: msg['isSelf'] == true ? Colors.white : fgPrimary,
+                      textColor: msg['isSelf'] == true ? AppColors.white : fgPrimary,
                       isSelectionMode: _isSelectionMode,
                       isSelected: _selectedIds.contains(msg['id']),
                       onLongPressStart: (details) =>
@@ -734,7 +729,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
             ),
           ),
         ],
-      ),
     );
 
     return ConversationPageScaffold(

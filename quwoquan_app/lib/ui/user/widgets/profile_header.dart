@@ -36,7 +36,7 @@ class ProfileHeader extends StatelessWidget {
         border: Border.all(color: bg, width: _avatarBorder),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
+            color: AppColors.black.withValues(alpha: isDark ? 0.18 : 0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),

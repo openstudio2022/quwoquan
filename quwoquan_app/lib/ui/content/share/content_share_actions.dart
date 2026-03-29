@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -129,7 +130,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
         : AppColors.welcomeBackground;
     final background = Paint()
       ..shader = ui.Gradient.linear(rect.topLeft, rect.bottomRight, <Color>[
-        Colors.white,
+        AppColors.white,
         accent.withValues(alpha: 0.08),
       ]);
     canvas.drawRect(rect, background);
@@ -139,7 +140,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
         const Rect.fromLTWH(56, 56, width - 112, height - 112),
         const Radius.circular(48),
       ),
-      Paint()..color = Colors.white.withValues(alpha: 0.92),
+      Paint()..color = AppColors.white.withValues(alpha: 0.92),
     );
 
     _paintText(
@@ -159,7 +160,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       const Offset(96, 182),
       style: TextStyle(
         fontSize: AppTypography.sharePosterSubtitle,
-        color: Colors.black54,
+        color: AppColors.black.withValues(alpha: 0.54),
       ),
       maxWidth: width - 192,
     );
@@ -170,7 +171,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       style: const TextStyle(
         fontSize: AppTypography.sharePosterHeadline,
         fontWeight: FontWeight.w700,
-        color: Colors.black87,
+        color: AppColors.sharePosterInkHighContrast,
       ),
       maxWidth: width - 192,
       maxLines: 3,
@@ -182,7 +183,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       style: TextStyle(
         fontSize: AppTypography.sharePosterBody,
         height: AppTypography.lineHeightRelaxed,
-        color: Colors.black87,
+        color: AppColors.black.withValues(alpha: 0.87),
       ),
       maxWidth: width - 192,
       maxLines: 6,
@@ -208,9 +209,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(96, deeplinkTop, width - 192, 240),
-        const Radius.circular(32),
+        Radius.circular(AppSpacing.radiusThirtyTwo),
       ),
-      Paint()..color = Colors.grey.shade100,
+      Paint()..color = AppColors.sharePosterDeeplinkSurface,
     );
     _paintText(
       canvas,
@@ -219,7 +220,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       style: const TextStyle(
         fontSize: AppTypography.sharePosterDeeplink,
         height: AppTypography.bodyLineHeight,
-        color: Colors.black87,
+        color: AppColors.sharePosterInkHighContrast,
       ),
       maxWidth: width - 256,
       maxLines: 4,
@@ -230,7 +231,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       const Offset(96, 1360),
       style: TextStyle(
         fontSize: AppTypography.sharePosterMeta,
-        color: Colors.black54,
+        color: AppColors.black.withValues(alpha: 0.54),
       ),
       maxWidth: width - 192,
     );

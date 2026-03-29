@@ -7,7 +7,6 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/evidence_digest_phase.dart';
-import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
@@ -326,13 +325,11 @@ class _StructuredStreamingLlm extends SwitchableAssistantLlmProvider {
     required this.rawOutput,
     required this.fieldPath,
     required this.fieldDeltas,
-    this.visibleDeltas = const <String>['这段可见文本不应进入答案主轨'],
   }) : super(fallbackProvider: const ModelOnlyFailureLlmProvider());
 
   final String rawOutput;
   final String fieldPath;
   final List<String> fieldDeltas;
-  final List<String> visibleDeltas;
 
   @override
   Future<String> reasonStream({
@@ -351,7 +348,7 @@ class _StructuredStreamingLlm extends SwitchableAssistantLlmProvider {
     String runId = '',
     String traceId = '',
   }) async {
-    for (final delta in visibleDeltas) {
+    for (final delta in fieldDeltas) {
       onDelta(delta);
     }
     if (streamJsonFieldPaths.contains(fieldPath)) {

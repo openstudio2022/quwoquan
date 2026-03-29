@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:test/test.dart';
 
 void main() {

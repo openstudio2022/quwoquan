@@ -59,7 +59,7 @@ class MediaViewerTopBar extends StatelessWidget {
               end: Alignment.bottomCenter,
               colors: [
                 AppColors.overlayStrong,
-                Colors.transparent,
+                AppColors.transparent,
               ],
             ),
           ),
@@ -95,18 +95,14 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildBackButton(BuildContext context) {
-    return InkWell(
-      onTap: onBack,
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: Container(
-        width: AppSpacing.buttonSize,
-        height: AppSpacing.buttonSize,
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          color: AppColors.white,
-          size: AppSpacing.iconMedium,
-        ),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.square(AppSpacing.buttonSize),
+      onPressed: onBack,
+      child: Icon(
+        CupertinoIcons.back,
+        color: AppColors.white,
+        size: AppSpacing.iconMedium,
       ),
     );
   }
@@ -131,9 +127,10 @@ class MediaViewerTopBar extends StatelessWidget {
 
   /// 头像、名字、关注按钮为一组，整体居中对齐；名字与按钮紧贴，超过 5 字用渐变遮挡
   Widget _buildAuthorInfo(BuildContext context) {
-    return InkWell(
-      onTap: onAuthorTap,
-      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onAuthorTap,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -219,7 +216,7 @@ class MediaViewerTopBar extends StatelessWidget {
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      Colors.transparent,
+                      AppColors.transparent,
                       AppColors.black,
                     ],
                   ),
@@ -260,9 +257,10 @@ class MediaViewerTopBar extends StatelessWidget {
     required double height,
   }) {
     final buttonText = isFollowing ? UITextConstants.following : UITextConstants.follow;
-    return InkWell(
-      onTap: onFollow,
-      borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onFollow,
       child: Container(
         constraints: BoxConstraints(
           maxWidth: AppSpacing.followButtonWidthCompact,
@@ -290,18 +288,14 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildMoreButton(BuildContext context) {
-    return InkWell(
-      onTap: onMore,
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: Container(
-        width: AppSpacing.buttonSize,
-        height: AppSpacing.buttonSize,
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.more_horiz,
-          color: AppColors.white,
-          size: AppSpacing.iconMedium,
-        ),
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.square(AppSpacing.buttonSize),
+      onPressed: onMore,
+      child: Icon(
+        CupertinoIcons.ellipsis,
+        color: AppColors.white,
+        size: AppSpacing.iconMedium,
       ),
     );
   }
@@ -348,7 +342,7 @@ class MediaViewerBottomBar extends StatelessWidget {
           end: Alignment.topCenter,
           colors: [
             AppColors.overlayStrong,
-            Colors.transparent,
+            AppColors.transparent,
           ],
         ),
       ),
@@ -425,31 +419,29 @@ class MediaViewerActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-          horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            iconWidget,
-            if (count > 0) ...[
-              SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
-              Text(
-                formatCompactActionCount(count),
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontSize: AppTypography.sm,
-                  fontWeight: AppTypography.medium,
-                ),
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+        horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+      ),
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          iconWidget,
+          if (count > 0) ...[
+            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            Text(
+              formatCompactActionCount(count),
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.medium,
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

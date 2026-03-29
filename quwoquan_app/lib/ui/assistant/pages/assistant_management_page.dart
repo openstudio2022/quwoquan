@@ -126,51 +126,45 @@ class _AssistantManagementPageState
             SizedBox(height: AppSpacing.interGroupXl),
             _buildSectionTitle(Icons.delete_outline, '记忆管理', fgSecondary),
             SizedBox(height: AppSpacing.interGroupMd),
-            Material(
-              color: AppColors.error.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(
-                SettingsSemanticConstants.blockBorderRadius,
-              ),
-              child: InkWell(
-                onTap: () {
-                  AppToast.show(context, '一键清除记忆（确认逻辑待接入）');
-                },
-                borderRadius: BorderRadius.circular(
-                  SettingsSemanticConstants.blockBorderRadius,
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () {
+                AppToast.show(context, '一键清除记忆（确认逻辑待接入）');
+              },
+              child: Container(
+                padding: EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(
+                    SettingsSemanticConstants.blockBorderRadius,
+                  ),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.3),
+                  ),
                 ),
-                child: Container(
-                  padding: EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(
-                      SettingsSemanticConstants.blockBorderRadius,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      color: AppColors.error,
+                      size: AppSpacing.twenty,
                     ),
-                    border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete_outline,
+                    SizedBox(width: AppSpacing.interGroupSm),
+                    Text(
+                      '一键清除记忆',
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.error,
-                        size: AppSpacing.twenty,
                       ),
-                      SizedBox(width: AppSpacing.interGroupSm),
-                      Text(
-                        '一键清除记忆',
-                        style: TextStyle(
-                          fontSize: AppTypography.base,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.error,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        CupertinoIcons.chevron_forward,
-                        color: AppColors.error.withValues(alpha: 0.7),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      color: AppColors.error.withValues(alpha: 0.7),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -267,32 +261,29 @@ class _AssistantManagementPageState
     );
     final active = _personality == id;
     return Expanded(
-      child: Material(
-        color: active
-            ? AppColors.primaryColor.withValues(alpha: 0.1)
-            : (isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.03)),
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.blockBorderRadius,
-        ),
-        child: InkWell(
-          onTap: () => setState(() => _personality = id),
-          borderRadius: BorderRadius.circular(
-            SettingsSemanticConstants.blockBorderRadius,
-          ),
-          child: Container(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(
-                SettingsSemanticConstants.blockBorderRadius,
-              ),
-              border: Border.all(
-                color: active ? AppColors.primaryColor : Colors.transparent,
-                width: AppSpacing.toolPanelItemBorderWidthSelected,
-              ),
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: () => setState(() => _personality = id),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.primaryColor.withValues(alpha: 0.1)
+                : (isDark
+                      ? AppColors.white.withValues(alpha: 0.05)
+                      : AppColors.black.withValues(alpha: 0.03)),
+            borderRadius: BorderRadius.circular(
+              SettingsSemanticConstants.blockBorderRadius,
             ),
-            child: Column(
+            border: Border.all(
+              color: active
+                  ? AppColors.primaryColor
+                  : AppColors.transparent,
+              width: AppSpacing.toolPanelItemBorderWidthSelected,
+            ),
+          ),
+          child: Column(
               children: [
                 Icon(
                   icon,
@@ -319,7 +310,6 @@ class _AssistantManagementPageState
             ),
           ),
         ),
-      ),
     );
   }
 

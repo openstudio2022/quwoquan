@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class ImageEditorTopBar extends StatelessWidget {
@@ -43,16 +43,14 @@ class ImageEditorTopBar extends StatelessWidget {
                   SizedBox(
                     width: AppSpacing.iconButtonMinSizeSm,
                     height: topBarHeight,
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.arrow_back_ios_new,
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                      onPressed: onBack,
+                      child: Icon(
+                        CupertinoIcons.back,
                         color: foregroundColor,
                         size: AppSpacing.iconMedium,
-                      ),
-                      onPressed: onBack,
-                      style: IconButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                       ),
                     ),
                   ),
@@ -74,16 +72,14 @@ class ImageEditorTopBar extends StatelessWidget {
             child: SizedBox(
               width: AppSpacing.iconButtonMinSizeSm,
               height: topBarHeight,
-              child: IconButton(
-                icon: Icon(
-                  Icons.history,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                onPressed: historyEnabled ? onHistory : null,
+                child: Icon(
+                  CupertinoIcons.clock,
                   color: foregroundColor,
                   size: AppSpacing.iconMedium,
-                ),
-                onPressed: historyEnabled ? onHistory : null,
-                style: IconButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                 ),
               ),
             ),

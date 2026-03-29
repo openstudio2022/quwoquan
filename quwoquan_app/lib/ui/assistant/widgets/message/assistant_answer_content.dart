@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -44,13 +45,27 @@ class AssistantAnswerContent extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final textStyle = TextStyle(
-      fontSize:
-          Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppTypography.base,
+      fontSize: AppTypography.base,
       color: textColor,
       height: AppTypography.lineHeightRelaxed,
     );
     final linkColor = textColor.withValues(alpha: 0.86);
-    final mdStyle = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    // `MarkdownStyleSheet.fromTheme` requires `textTheme.bodyMedium?.fontSize != null`;
+    // on current Flutter/M3 builds that can still be null. Use the package's
+    // Cupertino path (asserts `textTheme.textStyle.fontSize`) — aligned with iOS UI.
+    final cupertino = CupertinoTheme.of(context);
+    final CupertinoThemeData markdownCupertinoTheme =
+        cupertino.textTheme.textStyle.fontSize != null
+            ? cupertino
+            : cupertino.copyWith(
+                textTheme: cupertino.textTheme.copyWith(
+                  textStyle: cupertino.textTheme.textStyle.copyWith(
+                    fontSize: AppTypography.iosBody,
+                  ),
+                ),
+              );
+    final mdStyle =
+        MarkdownStyleSheet.fromCupertinoTheme(markdownCupertinoTheme).copyWith(
       p: textStyle,
       pPadding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
       h1: textStyle.copyWith(
@@ -117,6 +132,7 @@ class AssistantAnswerContent extends StatelessWidget {
         ? _buildTypedBlocks(
             context: context,
             blocks: visibleBlocks,
+            markdownHostTheme: markdownCupertinoTheme,
             mdStyle: mdStyle,
             textStyle: textStyle,
             linkColor: linkColor,
@@ -125,6 +141,7 @@ class AssistantAnswerContent extends StatelessWidget {
         : _buildMarkdownSegments(
             context: context,
             cleaned: cleaned,
+            markdownHostTheme: markdownCupertinoTheme,
             mdStyle: mdStyle,
             textStyle: textStyle,
             linkColor: linkColor,
@@ -136,6 +153,7 @@ class AssistantAnswerContent extends StatelessWidget {
   List<Widget> _buildTypedBlocks({
     required BuildContext context,
     required List<AssistantAnswerDisplayBlock> blocks,
+    required CupertinoThemeData markdownHostTheme,
     required MarkdownStyleSheet mdStyle,
     required TextStyle textStyle,
     required Color linkColor,
@@ -146,6 +164,7 @@ class AssistantAnswerContent extends StatelessWidget {
         case DisplayBlockKind.markdown:
           return _safeMarkdownBody(
             markdownText: block.body.trim(),
+            markdownHostTheme: markdownHostTheme,
             styleSheet: mdStyle,
             textStyle: textStyle,
             references: references,
@@ -175,6 +194,7 @@ class AssistantAnswerContent extends StatelessWidget {
   List<Widget> _buildMarkdownSegments({
     required BuildContext context,
     required String cleaned,
+    required CupertinoThemeData markdownHostTheme,
     required MarkdownStyleSheet mdStyle,
     required TextStyle textStyle,
     required Color linkColor,
@@ -186,6 +206,7 @@ class AssistantAnswerContent extends StatelessWidget {
           if (!segment.isCard) {
             return _safeMarkdownBody(
               markdownText: segment.content,
+              markdownHostTheme: markdownHostTheme,
               styleSheet: mdStyle,
               textStyle: textStyle,
               references: references,
@@ -204,6 +225,7 @@ class AssistantAnswerContent extends StatelessWidget {
             ),
             child: _safeMarkdownBody(
               markdownText: segment.toCardMarkdown(),
+              markdownHostTheme: markdownHostTheme,
               styleSheet: mdStyle,
               textStyle: textStyle,
               references: references,
@@ -338,6 +360,7 @@ class AssistantAnswerContent extends StatelessWidget {
 
   Widget _safeMarkdownBody({
     required String markdownText,
+    required CupertinoThemeData markdownHostTheme,
     required MarkdownStyleSheet styleSheet,
     required TextStyle textStyle,
     required List<_AssistantReferenceItem> references,
@@ -346,18 +369,25 @@ class AssistantAnswerContent extends StatelessWidget {
     try {
       final tableMatches = _gfmTableBlockRe.allMatches(markdownText).toList();
       if (tableMatches.isEmpty) {
-        return MarkdownBody(
-          data: markdownText,
-          selectable: true,
-          styleSheet: styleSheet,
-          builders: <String, MarkdownElementBuilder>{
-            'a': _AssistantLinkBuilder(
-              references: references,
-              linkColor: linkColor,
-              onReferenceTap: onReferenceTap,
-            ),
-          },
-          onTapLink: _handleMarkdownLinkTap,
+        return CupertinoTheme(
+          data: markdownHostTheme,
+          child: MarkdownBody(
+            data: markdownText,
+            selectable: true,
+            // Library always merges with kFallbackStyle; default null uses
+            // Material.fromTheme and asserts when bodyMedium.fontSize is null
+            // (common under CupertinoPageScaffold + transparent Material).
+            styleSheetTheme: MarkdownStyleSheetBaseTheme.cupertino,
+            styleSheet: styleSheet,
+            builders: <String, MarkdownElementBuilder>{
+              'a': _AssistantLinkBuilder(
+                references: references,
+                linkColor: linkColor,
+                onReferenceTap: onReferenceTap,
+              ),
+            },
+            onTapLink: _handleMarkdownLinkTap,
+          ),
         );
       }
 
@@ -368,9 +398,36 @@ class AssistantAnswerContent extends StatelessWidget {
           final before = markdownText.substring(cursor, match.start).trim();
           if (before.isNotEmpty) {
             children.add(
-              MarkdownBody(
-                data: before,
+              CupertinoTheme(
+                data: markdownHostTheme,
+                child: MarkdownBody(
+                  data: before,
+                  selectable: true,
+                  styleSheetTheme: MarkdownStyleSheetBaseTheme.cupertino,
+                  styleSheet: styleSheet,
+                  builders: <String, MarkdownElementBuilder>{
+                    'a': _AssistantLinkBuilder(
+                      references: references,
+                      linkColor: linkColor,
+                      onReferenceTap: onReferenceTap,
+                    ),
+                  },
+                  onTapLink: _handleMarkdownLinkTap,
+                ),
+              ),
+            );
+          }
+        }
+        final tableText = match.group(0)!.trim();
+        children.add(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: CupertinoTheme(
+              data: markdownHostTheme,
+              child: MarkdownBody(
+                data: tableText,
                 selectable: true,
+                styleSheetTheme: MarkdownStyleSheetBaseTheme.cupertino,
                 styleSheet: styleSheet,
                 builders: <String, MarkdownElementBuilder>{
                   'a': _AssistantLinkBuilder(
@@ -381,25 +438,6 @@ class AssistantAnswerContent extends StatelessWidget {
                 },
                 onTapLink: _handleMarkdownLinkTap,
               ),
-            );
-          }
-        }
-        final tableText = match.group(0)!.trim();
-        children.add(
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: MarkdownBody(
-              data: tableText,
-              selectable: true,
-              styleSheet: styleSheet,
-              builders: <String, MarkdownElementBuilder>{
-                'a': _AssistantLinkBuilder(
-                  references: references,
-                  linkColor: linkColor,
-                  onReferenceTap: onReferenceTap,
-                ),
-              },
-              onTapLink: _handleMarkdownLinkTap,
             ),
           ),
         );
@@ -409,18 +447,22 @@ class AssistantAnswerContent extends StatelessWidget {
         final after = markdownText.substring(cursor).trim();
         if (after.isNotEmpty) {
           children.add(
-            MarkdownBody(
-              data: after,
-              selectable: true,
-              styleSheet: styleSheet,
-              builders: <String, MarkdownElementBuilder>{
-                'a': _AssistantLinkBuilder(
-                  references: references,
-                  linkColor: linkColor,
-                  onReferenceTap: onReferenceTap,
-                ),
-              },
-              onTapLink: _handleMarkdownLinkTap,
+            CupertinoTheme(
+              data: markdownHostTheme,
+              child: MarkdownBody(
+                data: after,
+                selectable: true,
+                styleSheetTheme: MarkdownStyleSheetBaseTheme.cupertino,
+                styleSheet: styleSheet,
+                builders: <String, MarkdownElementBuilder>{
+                  'a': _AssistantLinkBuilder(
+                    references: references,
+                    linkColor: linkColor,
+                    onReferenceTap: onReferenceTap,
+                  ),
+                },
+                onTapLink: _handleMarkdownLinkTap,
+              ),
             ),
           );
         }
@@ -628,9 +670,9 @@ class _AssistantCitationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor =
-        Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.56) ??
-        Colors.black.withValues(alpha: 0.56);
+    final textColor = AppColors.iosSecondaryLabel(context).withValues(
+      alpha: 0.56,
+    );
     return Transform.translate(
       offset: const Offset(0, -3),
       child: GestureDetector(

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
@@ -652,13 +651,13 @@ class _CircleEditSettingsPageState
                   height: AppSpacing.buttonHeight,
                   alignment: Alignment.center,
                   child: _isSaving
-                      ? const CupertinoActivityIndicator(color: Colors.white)
+                      ? const CupertinoActivityIndicator(color: AppColors.white)
                       : Text(
                           _isCreateMode
                               ? UITextConstants.createCircle
                               : UITextConstants.circleSaveChanges,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.white,
                             fontSize: AppTypography.base,
                             fontWeight: AppTypography.semiBold,
                           ),
@@ -681,7 +680,7 @@ class _CircleEditSettingsPageState
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: AppColors.black.withValues(alpha: 0.08),
             blurRadius: AppSpacing.lg,
             offset: const Offset(0, 8),
           ),
@@ -715,9 +714,9 @@ class _CircleEditSettingsPageState
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.12),
-                      Colors.black.withValues(alpha: 0.04),
-                      Colors.black.withValues(alpha: 0.42),
+                      AppColors.black.withValues(alpha: 0.12),
+                      AppColors.black.withValues(alpha: 0.04),
+                      AppColors.black.withValues(alpha: 0.42),
                     ],
                   ),
                 ),
@@ -734,9 +733,9 @@ class _CircleEditSettingsPageState
                     height: AppSpacing.avatarCircleLg,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.22),
+                      color: AppColors.white.withValues(alpha: 0.22),
                       border: Border.all(
-                        color: Colors.white,
+                        color: AppColors.white,
                         width: AppSpacing.two,
                       ),
                     ),
@@ -746,11 +745,11 @@ class _CircleEditSettingsPageState
                               imageSource: avatarUrl,
                               fit: BoxFit.cover,
                               errorWidget: const ColoredBox(
-                                color: Colors.transparent,
+                                color: AppColors.transparent,
                                 child: Center(
                                   child: Icon(
                                     CupertinoIcons.person_3_fill,
-                                    color: Colors.white,
+                                    color: AppColors.white,
                                   ),
                                 ),
                               ),
@@ -758,7 +757,7 @@ class _CircleEditSettingsPageState
                           )
                         : const Icon(
                             CupertinoIcons.person_3_fill,
-                            color: Colors.white,
+                            color: AppColors.white,
                           ),
                   ),
                   SizedBox(width: AppSpacing.sm),
@@ -775,7 +774,7 @@ class _CircleEditSettingsPageState
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.white,
                             fontSize: AppTypography.xl,
                             fontWeight: AppTypography.bold,
                           ),
@@ -790,7 +789,7 @@ class _CircleEditSettingsPageState
                                     ? UITextConstants.editCircle
                                     : UITextConstants.manageCenter),
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.86),
+                            color: AppColors.white.withValues(alpha: 0.86),
                             fontSize: AppTypography.sm,
                           ),
                         ),
@@ -1028,7 +1027,7 @@ class _CircleEditSettingsPageState
                   shape: BoxShape.circle,
                   color: fgSecondary.withValues(alpha: 0.14),
                   border: Border.all(
-                    color: Colors.white,
+                    color: AppColors.white,
                     width: AppSpacing.two,
                   ),
                 ),
@@ -1193,7 +1192,7 @@ class _CircleEditSettingsPageState
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: AppColors.black.withValues(alpha: 0.04),
             blurRadius: AppSpacing.md,
             offset: const Offset(0, 6),
           ),

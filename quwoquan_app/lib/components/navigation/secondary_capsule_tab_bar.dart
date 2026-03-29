@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -79,16 +78,16 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
     final barColor =
         backgroundColor ??
         switch (variant) {
-          SecondaryCapsuleTabBarVariant.inlineMuted => Colors.transparent,
-          SecondaryCapsuleTabBarVariant.iosProfile => Colors.transparent,
+          SecondaryCapsuleTabBarVariant.inlineMuted => AppColors.transparent,
+          SecondaryCapsuleTabBarVariant.iosProfile => AppColors.transparent,
           SecondaryCapsuleTabBarVariant.defaultSurface =>
             isDark
-                ? Colors.white.withValues(alpha: 0.04)
-                : Colors.black.withValues(alpha: 0.03),
+                ? AppColors.white.withValues(alpha: 0.04)
+                : AppColors.black.withValues(alpha: 0.03),
         };
     final outerBackground = switch (variant) {
-      SecondaryCapsuleTabBarVariant.inlineMuted => Colors.transparent,
-      SecondaryCapsuleTabBarVariant.iosProfile => Colors.transparent,
+      SecondaryCapsuleTabBarVariant.inlineMuted => AppColors.transparent,
+      SecondaryCapsuleTabBarVariant.iosProfile => AppColors.transparent,
       _ => bgPrimary,
     };
     final contentHorizontal =
@@ -198,7 +197,7 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: selected
                                     ? selectedBackground
-                                    : Colors.transparent,
+                                    : AppColors.transparent,
                                 borderRadius: BorderRadius.circular(
                                   AppSpacing.circularBorderRadius,
                                 ),
@@ -248,7 +247,7 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                     badgeText,
                                     style: const TextStyle(
                                       fontSize: AppTypography.xs,
-                                      color: Colors.white,
+                                      color: AppColors.white,
                                       fontWeight: FontWeight.w600,
                                       height: AppTypography.lineHeightTight,
                                     ),

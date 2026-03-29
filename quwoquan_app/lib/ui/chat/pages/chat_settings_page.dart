@@ -572,7 +572,7 @@ class _MemberAvatar extends StatelessWidget {
                         roleLabel,
                         style: TextStyle(
                           fontSize: AppTypography.xxs,
-                          color: Colors.white,
+                          color: AppColors.white,
                           fontWeight: FontWeight.w500,
                         ),
                       ),

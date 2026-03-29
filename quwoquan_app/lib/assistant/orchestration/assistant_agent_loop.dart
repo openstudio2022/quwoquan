@@ -72,10 +72,7 @@ class AssistantAgentLoop {
           skillRouter: skillRouter,
         ),
         ExecutionPhase(owner),
-        EvidenceDigestPhase(
-          runtime: runtime,
-          templateCatalogRuntime: templateCatalogRuntime,
-        ),
+        const EvidenceDigestPhase(),
         SynthesisPhase(owner),
         FinalizePhase(owner),
       ],

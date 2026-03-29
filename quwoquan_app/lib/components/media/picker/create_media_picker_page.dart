@@ -259,7 +259,8 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final bg = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
@@ -468,7 +469,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                       vertical: AppSpacing.intraGroupXs / 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black54,
+                      color: AppColors.black.withValues(alpha: 0.54),
                       borderRadius: BorderRadius.circular(
                         AppSpacing.smallBorderRadius,
                       ),
@@ -476,7 +477,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                     child: Text(
                       _formatVideoDuration(entity.duration),
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.white,
                         fontSize: AppTypography.sm,
                       ),
                     ),
@@ -540,9 +541,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: selected ? AppColors.primaryColor : Colors.black26,
+        color: selected
+            ? AppColors.primaryColor
+            : AppColors.black.withValues(alpha: 0.26),
         border: Border.all(
-          color: Colors.white,
+          color: AppColors.white,
           width: AppSpacing.intraGroupXs / 2,
         ),
       ),
@@ -550,7 +553,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           ? Text(
               '${index + 1}',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.white,
                 fontWeight: FontWeight.w700,
                 fontSize: AppTypography.sm,
               ),
@@ -631,10 +634,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           clipBehavior: Clip.antiAlias,
           child: item.isVideo
               ? Container(
-                  color: Colors.black87,
+                  color: AppColors.black.withValues(alpha: 0.87),
                   child: Icon(
                     Icons.videocam_outlined,
-                    color: Colors.white,
+                    color: AppColors.white,
                     size: AppSpacing.iconMedium,
                   ),
                 )
@@ -658,13 +661,13 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
               child: Container(
                 width: AppSpacing.iconSmall + AppSpacing.intraGroupSm,
                 height: AppSpacing.iconSmall + AppSpacing.intraGroupSm,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.black87,
+                  color: AppColors.black.withValues(alpha: 0.87),
                 ),
                 child: Icon(
                   Icons.close,
-                  color: Colors.white,
+                  color: AppColors.white,
                   size: AppSpacing.iconSmall,
                 ),
               ),
@@ -738,7 +741,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.white,
                   ),
                 ),
               ),

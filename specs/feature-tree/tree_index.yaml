@@ -1842,7 +1842,7 @@ features:
               level: L3_story
               path: runtime/runtime-client-foundation/ios-native-page-enforcement
               domain: ""
-              status: in_progress
+              status: completed
               tags: []
         - id: runtime-codegen
           name: runtime-codegen

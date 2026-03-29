@@ -30,7 +30,7 @@ class ProcessTimelineEmitter {
     final type = _startedSteps.add(stepId)
         ? UserEventType.processReplace
         : UserEventType.processAppend;
-    _onTraceEvent!(
+    _onTraceEvent(
       buildSyntheticProcessTrace(
         type: type,
         scope: scope,
@@ -58,7 +58,7 @@ class ProcessTimelineEmitter {
   }) {
     if (_onTraceEvent == null) return;
     _startedSteps.add(stepId);
-    _onTraceEvent!(
+    _onTraceEvent(
       buildSyntheticProcessTrace(
         type: UserEventType.processReplace,
         scope: scope,
@@ -90,7 +90,7 @@ class ProcessTimelineEmitter {
   }) {
     if (_onTraceEvent == null) return;
     _startedSteps.add(stepId);
-    _onTraceEvent!(
+    _onTraceEvent(
       buildSyntheticProcessTrace(
         type: UserEventType.processCommit,
         scope: scope,

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -290,7 +289,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       onTap: () {
         showCupertinoModalPopup<void>(
           context: context,
-          barrierColor: Colors.transparent,
+          barrierColor: AppColors.transparent,
           builder: (_) => ParticipantListSheet(
             maxParticipants: session.session?.maxParticipants ?? 32,
             onInviteMore: () {

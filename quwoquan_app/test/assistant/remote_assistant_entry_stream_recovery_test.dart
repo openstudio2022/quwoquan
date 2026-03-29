@@ -88,7 +88,7 @@ void main() {
       (runArtifacts!['displayMarkdown'] as String?) ?? '',
       equals('这是远端流式回答。'),
     );
-    final journey = (runArtifacts!['journey'] as Map?)?.cast<String, dynamic>();
+    final journey = (runArtifacts['journey'] as Map?)?.cast<String, dynamic>();
     expect(journey, isNotNull);
     expect((journey!['stages'] as List?) ?? const <dynamic>[], isNotEmpty);
   });

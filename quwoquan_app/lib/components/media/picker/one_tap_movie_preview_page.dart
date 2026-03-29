@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
@@ -93,9 +94,10 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = Colors.black;
-    final fg = Colors.white;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final bg = AppColors.black;
+    final fg = AppColors.white;
     final progress = _totalDuration.inMilliseconds == 0
         ? 0.0
         : (_position.inMilliseconds / _totalDuration.inMilliseconds)
@@ -124,7 +126,9 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     child: Text(
                       UITextConstants.mediaPickerNextStep,
                       style: TextStyle(
-                        color: _images.isEmpty ? Colors.white54 : Colors.white,
+                        color: _images.isEmpty
+                            ? AppColors.white.withValues(alpha: 0.54)
+                            : AppColors.white,
                         fontSize: AppTypography.base,
                         fontWeight: FontWeight.w700,
                       ),
@@ -139,7 +143,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                 child: Container(
                   margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
                   decoration: BoxDecoration(
-                    color: Colors.black,
+                    color: AppColors.black,
                     borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -150,7 +154,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                             child: Text(
                               UITextConstants.mediaPickerImageOnly,
                               style: TextStyle(
-                                color: Colors.white70,
+                                color: AppColors.white.withValues(alpha: 0.7),
                                 fontSize: AppTypography.base,
                               ),
                             ),
@@ -161,7 +165,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                             errorBuilder: (context, error, stackTrace) => Center(
                               child: Icon(
                                 Icons.broken_image_outlined,
-                                color: Colors.white70,
+                                color: AppColors.white.withValues(alpha: 0.7),
                                 size: AppSpacing.iconLarge,
                               ),
                             ),
@@ -183,7 +187,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     onTap: _togglePlay,
                     child: Icon(
                       _playing ? CupertinoIcons.pause : CupertinoIcons.play_arrow,
-                      color: Colors.white,
+                      color: AppColors.white,
                       size: AppSpacing.iconMedium,
                     ),
                   ),
@@ -191,7 +195,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                   Text(
                     _formatDuration(_position),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontSize: AppTypography.base,
                     ),
                   ),
@@ -199,14 +203,14 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     child: CupertinoSlider(
                       value: progress,
                       onChanged: (value) => _seek(value),
-                      activeColor: Colors.white,
-                      thumbColor: Colors.white,
+                      activeColor: AppColors.white,
+                      thumbColor: AppColors.white,
                     ),
                   ),
                   Text(
                     _formatDuration(_totalDuration),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontSize: AppTypography.base,
                     ),
                   ),

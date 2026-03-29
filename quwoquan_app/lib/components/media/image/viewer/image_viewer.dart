@@ -172,10 +172,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: AppColors.transparent,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarColor: AppColors.transparent,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
       );
@@ -185,10 +185,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -198,10 +198,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -213,7 +213,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
 
     final isDark = ref.watch(isDarkProvider);
 
-    return Material(
+    return ColoredBox(
       color: AppColors.black,
       child: Stack(
         children: [
@@ -457,7 +457,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [AppColors.overlayStrong, Colors.transparent],
+                colors: [AppColors.overlayStrong, AppColors.transparent],
               ),
             ),
             child: SafeArea(
@@ -579,7 +579,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [AppColors.overlayStrong, Colors.transparent],
+                colors: [AppColors.overlayStrong, AppColors.transparent],
               ),
             ),
             child: SafeArea(

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
@@ -359,18 +358,18 @@ class _AssistantScheduleView extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+        color: isDark ? AppColors.white.withValues(alpha: 0.05) : AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
           color: isDark
-              ? Colors.transparent
-              : Colors.black.withValues(alpha: 0.05),
+              ? AppColors.transparent
+              : AppColors.black.withValues(alpha: 0.05),
         ),
         boxShadow: isDark
             ? []
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppColors.black.withValues(alpha: 0.03),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -433,7 +432,7 @@ class _AssistantScheduleView extends ConsumerWidget {
                 height: AppSpacing.smallButtonSize,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isToday ? AppColors.primaryColor : Colors.transparent,
+                  color: isToday ? AppColors.primaryColor : AppColors.transparent,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
@@ -441,7 +440,7 @@ class _AssistantScheduleView extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isToday ? Colors.white : fg,
+                    color: isToday ? AppColors.white : fg,
                   ),
                 ),
               );
@@ -464,18 +463,18 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+        color: isDark ? AppColors.white.withValues(alpha: 0.05) : AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
           color: isDark
-              ? Colors.transparent
-              : Colors.black.withValues(alpha: 0.05),
+              ? AppColors.transparent
+              : AppColors.black.withValues(alpha: 0.05),
         ),
         boxShadow: isDark
             ? []
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppColors.black.withValues(alpha: 0.03),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

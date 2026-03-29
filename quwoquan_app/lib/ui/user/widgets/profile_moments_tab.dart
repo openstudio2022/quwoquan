@@ -374,7 +374,7 @@ class _MomentImageGrid extends StatelessWidget {
                       aspectRatio: 1,
                       child: idx < urls.length
                           ? _img(urls[idx])
-                          : Container(color: Colors.grey.shade200),
+                          : Container(color: AppColors.gridImagePlaceholderLight),
                     ),
                   ),
                 ),
@@ -387,13 +387,16 @@ class _MomentImageGrid extends StatelessWidget {
   }
 
   Widget _img(String url) {
-    if (url.isEmpty) return Container(color: Colors.grey.shade200);
+    if (url.isEmpty) {
+      return Container(color: AppColors.gridImagePlaceholderLight);
+    }
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      placeholder: (context, url) => Container(color: Colors.grey.shade200),
+      placeholder: (context, url) =>
+          Container(color: AppColors.gridImagePlaceholderLight),
       errorWidget: (context, url, err) =>
-          Container(color: Colors.grey.shade200),
+          Container(color: AppColors.gridImagePlaceholderLight),
     );
   }
 }
@@ -415,22 +418,22 @@ class _MomentVideoCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Container(color: Colors.grey.shade900),
+            Container(color: AppColors.momentVideoCardBackdrop),
             Center(
               child: Container(
                 width: AppSpacing.videoPlayOverlaySize,
                 height: AppSpacing.videoPlayOverlaySize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: AppColors.black.withValues(alpha: 0.5),
                   border: Border.all(
-                    color: Colors.white,
+                    color: AppColors.white,
                     width: AppSpacing.toolPanelItemBorderWidthSelected,
                   ),
                 ),
                 child: Icon(
                   CupertinoIcons.play_fill,
-                  color: Colors.white,
+                  color: AppColors.white,
                   size: AppSpacing.videoPlayOverlayIconSize,
                 ),
               ),
@@ -445,7 +448,7 @@ class _MomentVideoCard extends StatelessWidget {
                     vertical: AppSpacing.xs / 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
+                    color: AppColors.black.withValues(alpha: 0.6),
                     borderRadius:
                         BorderRadius.circular(AppSpacing.smallBorderRadius),
                   ),
@@ -453,7 +456,7 @@ class _MomentVideoCard extends StatelessWidget {
                       _formatDuration(dto.durationMs!),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontWeight: AppTypography.semiBold,
                     ),
                   ),

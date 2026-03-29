@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 组件库中的 Post 预览卡片骨架。
@@ -70,7 +69,7 @@ class PostPreviewCard extends StatelessWidget {
           border: Border.all(color: borderColor),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+              color: AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05),
               blurRadius: AppSpacing.containerMd,
               offset: const Offset(0, 10),
             ),
@@ -111,7 +110,7 @@ class PostPreviewCard extends StatelessWidget {
                             right: AppSpacing.postPreviewCardPadding,
                             child: Icon(
                               CupertinoIcons.play_circle_fill,
-                              color: Colors.white,
+                              color: AppColors.white,
                               size: AppSpacing.iconLarge - AppSpacing.xs,
                             ),
                           ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -22,30 +22,28 @@ class AssistantFloatingBall extends ConsumerWidget {
     return Positioned(
       right: right,
       bottom: bottom + MediaQuery.of(context).padding.bottom,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap ?? () {},
-          borderRadius: BorderRadius.circular(AppSpacing.avatarUserLg / 2),
-          child: Container(
-            width: AppSpacing.avatarUserLg,
-            height: AppSpacing.avatarUserLg,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primaryColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.auto_awesome,
-              size: AppSpacing.iconLarge,
-              color: Colors.white,
-            ),
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.square(AppSpacing.avatarUserLg),
+        onPressed: onTap ?? () {},
+        child: Container(
+          width: AppSpacing.avatarUserLg,
+          height: AppSpacing.avatarUserLg,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.primaryColor,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.black.withValues(alpha: 0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(
+            CupertinoIcons.sparkles,
+            size: AppSpacing.iconLarge,
+            color: AppColors.white,
           ),
         ),
       ),

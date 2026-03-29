@@ -468,13 +468,13 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         vertical: AppSpacing.intraGroupXs,
       ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.38),
+        color: AppColors.black.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.white,
           fontSize: AppTypography.sm,
           fontWeight: AppTypography.medium,
         ),
@@ -520,8 +520,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: <Color>[
-                      Colors.black.withValues(alpha: 0.08),
-                      Colors.black.withValues(alpha: 0.44),
+                      AppColors.black.withValues(alpha: 0.08),
+                      AppColors.black.withValues(alpha: 0.44),
                     ],
                   ),
                 ),
@@ -534,10 +534,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     width: AppSpacing.buttonHeight + 8,
                     height: AppSpacing.buttonHeight + 8,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.28),
+                      color: AppColors.black.withValues(alpha: 0.28),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
+                        color: AppColors.white.withValues(alpha: 0.12),
                         width: AppSpacing.hairline,
                       ),
                     ),
@@ -545,7 +545,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                       _controller.value.isPlaying
                           ? CupertinoIcons.pause_fill
                           : CupertinoIcons.play_fill,
-                      color: Colors.white,
+                      color: AppColors.white,
                       size: AppSpacing.iconLarge,
                     ),
                   ),
@@ -929,7 +929,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                   bottom: AppSpacing.intraGroupXs,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.44),
+                                      color: AppColors.black.withValues(alpha: 0.44),
                                       borderRadius: BorderRadius.circular(
                                         AppSpacing.radiusTwenty,
                                       ),
@@ -943,7 +943,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                         _formatMs(frame.timeMs),
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
-                                          color: Colors.white,
+                                          color: AppColors.white,
                                           fontSize: AppTypography.xsPlus,
                                           fontWeight: AppTypography.medium,
                                         ),
@@ -969,7 +969,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     final background = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       backgroundColor: background,
       navigationBar: AppNavigationBar(

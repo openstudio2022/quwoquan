@@ -323,8 +323,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }) {
     final sectionBorder = border.withValues(alpha: isDark ? 0.22 : 0.08);
     final sectionShadow = isDark
-        ? Colors.black.withValues(alpha: 0.12)
-        : Colors.black.withValues(alpha: 0.03);
+        ? AppColors.black.withValues(alpha: 0.12)
+        : AppColors.black.withValues(alpha: 0.03);
     return Container(
       decoration: BoxDecoration(
         color: bg,
@@ -497,7 +497,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: statusIconsDark
             ? (isDark ? Brightness.light : Brightness.dark)
             : Brightness.light,
@@ -647,8 +647,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       context,
     ).withValues(alpha: isDark ? 0.24 : 0.08);
     final summaryShadow = isDark
-        ? Colors.black.withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.05);
+        ? AppColors.black.withValues(alpha: 0.18)
+        : AppColors.black.withValues(alpha: 0.05);
     return Container(
       key: _summarySectionKey,
       child: Container(
@@ -751,8 +751,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
-                  Colors.black.withValues(alpha: 0.04),
+                  AppColors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.04),
                   backgroundColor.withValues(alpha: 0.12),
                 ],
                 stops: const [0.0, 0.56, 1.0],
@@ -781,13 +781,13 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         ? fg
         : CupertinoColors.white;
     final toolbarChrome = Color.lerp(
-      Colors.transparent,
+      AppColors.transparent,
       AppColors.iosSystemBackground(context),
       resolvedOpacity,
     )!;
     final tintFill = resolvedOpacity > 0.14
         ? AppColors.iosSecondaryFill(context)
-        : Colors.black.withValues(alpha: 0.24);
+        : AppColors.black.withValues(alpha: 0.24);
     return Positioned(
       top: 0,
       left: 0,

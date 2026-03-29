@@ -488,7 +488,7 @@ class _ContactRow extends StatelessWidget {
               height: AppSpacing.iconMedium,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? AppColors.primaryColor : Colors.transparent,
+                color: isSelected ? AppColors.primaryColor : AppColors.transparent,
                 border: Border.all(
                   color: isSelected
                       ? AppColors.primaryColor

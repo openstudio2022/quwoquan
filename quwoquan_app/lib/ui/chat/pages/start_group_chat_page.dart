@@ -360,7 +360,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   void _openSelectGroupChatSheet() {
     showCupertinoModalPopup<void>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (context) => _SelectGroupChatSheet(
         groups: _groupConversations,
         onSelectGroup: (group) async {
@@ -397,7 +397,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   void _openSelectCircleSheet() {
     showCupertinoModalPopup<void>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (context) => _SelectCircleSheet(
         circles: _circles
             .map(
@@ -448,7 +448,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }) {
     showCupertinoModalPopup<void>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: AppColors.transparent,
       builder: (context) => _MemberSelectSheet(
         title: title,
         members: members,
@@ -1136,10 +1136,10 @@ class _LetterIndex extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final fgSecondary = isDark
-        ? Colors.white.withValues(alpha: 0.45)
-        : Colors.black87.withValues(alpha: 0.45);
+        ? AppColors.white.withValues(alpha: 0.45)
+        : AppColors.black.withValues(alpha: 0.45);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(letters.length, (i) {
@@ -1317,7 +1317,7 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
       isDark,
@@ -1534,7 +1534,7 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
       isDark,
@@ -1705,7 +1705,7 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
       isDark,

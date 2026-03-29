@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_pro_tool_entries.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart';
@@ -53,37 +53,35 @@ class ImageEditorProCategoryTabs extends StatelessWidget {
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary =
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap ?? () {},
-        borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      minimumSize: Size.zero,
+      onPressed: onTap ?? () {},
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? fg : fgSecondary.withValues(alpha: 0.75),
+              fontSize: AppTypography.sm,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? fg : fgSecondary.withValues(alpha: 0.75),
-                  fontSize: AppTypography.sm,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-              Container(
-                margin: EdgeInsets.only(top: AppSpacing.xs / 2),
-                height: AppSpacing.xs / 2,
-                width: AppSpacing.iconSmall,
-                color: selected ? fg : Colors.transparent,
-              ),
-            ],
+          Container(
+            margin: EdgeInsets.only(top: AppSpacing.xs / 2),
+            height: AppSpacing.xs / 2,
+            width: AppSpacing.iconSmall,
+            decoration: BoxDecoration(
+              color: selected ? fg : AppColors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.xs / 4),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -26,7 +26,6 @@ import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/aggregation_gate.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
@@ -58,7 +57,6 @@ import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.da
 import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/phase_one_direct_answer_gate.dart';
-import 'package:quwoquan_app/assistant/orchestration/process_trace_event.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
 import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
@@ -5346,96 +5344,12 @@ class LocalPhaseExecutionOwner {
     return best;
   }
 
-  String _applyInlineEvidenceLinks(
-    String markdown,
-    List<Map<String, dynamic>> evidenceLinks,
-  ) {
-    final trimmed = markdown.trimRight();
-    if (trimmed.isEmpty || evidenceLinks.isEmpty) return trimmed;
-    final lines = trimmed.split('\n');
-    final candidateIndices = <int>[];
-    for (var i = 0; i < lines.length; i++) {
-      if (_isEvidenceCandidateLine(lines[i])) {
-        candidateIndices.add(i);
-      }
-    }
-    if (candidateIndices.isEmpty) return trimmed;
-    final usedIndices = <int>{};
-    for (final link in evidenceLinks) {
-      final targetIndex = _pickEvidenceTargetLine(
-        lines: lines,
-        candidates: candidateIndices,
-        usedIndices: usedIndices,
-        link: link,
-      );
-      if (targetIndex < 0) continue;
-      final url = (link['url'] as String?)?.trim() ?? '';
-      final label = (link['label'] as String?)?.trim() ?? '来源';
-      if (url.isEmpty || lines[targetIndex].contains('($url)')) continue;
-      lines[targetIndex] = '${lines[targetIndex].trimRight()} [$label]($url)';
-      usedIndices.add(targetIndex);
-    }
-    return lines.join('\n');
-  }
-
-  int _pickEvidenceTargetLine({
-    required List<String> lines,
-    required List<int> candidates,
-    required Set<int> usedIndices,
-    required Map<String, dynamic> link,
-  }) {
-    var bestIndex = -1;
-    var bestScore = -1;
-    for (final index in candidates) {
-      if (usedIndices.contains(index)) continue;
-      final score = _scoreLineForEvidence(lines[index], link);
-      if (score > bestScore) {
-        bestScore = score;
-        bestIndex = index;
-      }
-    }
-    if (bestIndex >= 0 && bestScore > 0) return bestIndex;
-    for (final index in candidates) {
-      if (!usedIndices.contains(index)) return index;
-    }
-    return -1;
-  }
-
-  int _scoreLineForEvidence(String line, Map<String, dynamic> link) {
-    final haystack = line.toLowerCase();
-    var score = 0;
-    final claim = ((link['claim'] as String?)?.trim() ?? '').toLowerCase();
-    if (claim.isNotEmpty && haystack.contains(claim)) {
-      score += claim.length + 4;
-    }
-    final title = ((link['title'] as String?)?.trim() ?? '').toLowerCase();
-    if (title.isNotEmpty && haystack.contains(title)) {
-      score += title.length + 2;
-    }
-    for (final token in _evidenceScoreTokens('$claim $title')) {
-      if (haystack.contains(token)) score += token.length;
-    }
-    return score;
-  }
-
   Iterable<String> _evidenceScoreTokens(String raw) {
     return RegExp(r'[\u4e00-\u9fa5A-Za-z0-9]{2,}')
         .allMatches(raw)
         .map((m) => m.group(0)!.toLowerCase())
         .where((token) => token.length >= 2)
         .take(8);
-  }
-
-  bool _isEvidenceCandidateLine(String line) {
-    final trimmed = line.trim();
-    if (trimmed.isEmpty) return false;
-    if (trimmed.startsWith('#') ||
-        trimmed.startsWith('```') ||
-        trimmed.startsWith('|') ||
-        trimmed.startsWith('>')) {
-      return false;
-    }
-    return true;
   }
 
   bool _isStrictRealtimeReference({
@@ -5697,67 +5611,6 @@ class LocalPhaseExecutionOwner {
           ),
         )
         .toList(growable: false);
-  }
-
-  String _buildUserFacingQueryDesignSummary(List<QueryTask> queryTasks) {
-    return buildUnderstandingQueryDesignSummary(queryTasks: queryTasks);
-  }
-
-  String _queryTaskDisplayLine(QueryTask task) {
-    final query = task.query.trim();
-    if (query.isEmpty) {
-      return '';
-    }
-    final objectLabel = _queryTaskObjectLabel(task, query: query);
-    final displayLabel = _queryTaskDisplayLabel(task, query: query);
-    final prefixParts = <String>[
-      if (objectLabel.isNotEmpty) objectLabel,
-      if (displayLabel.isNotEmpty) displayLabel,
-    ];
-    final prefix = prefixParts.join(' · ');
-    if (prefix.isNotEmpty) {
-      return '- $prefix';
-    }
-    return '- $query';
-  }
-
-  String _queryTaskObjectLabel(QueryTask task, {required String query}) {
-    final anchors = task.entityAnchors
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    if (anchors.isEmpty) {
-      return '';
-    }
-    final joined = anchors.join(' / ');
-    return _normalizedCompactQueryToken(joined) ==
-            _normalizedCompactQueryToken(query)
-        ? ''
-        : joined;
-  }
-
-  String _queryTaskDisplayLabel(QueryTask task, {required String query}) {
-    final label = task.label.trim();
-    if (label.isNotEmpty &&
-        _normalizedCompactQueryToken(label) !=
-            _normalizedCompactQueryToken(query)) {
-      return label;
-    }
-    final dimension = task.dimensionLabel.trim();
-    if (dimension.isNotEmpty &&
-        _normalizedCompactQueryToken(dimension) !=
-            _normalizedCompactQueryToken(query)) {
-      return dimension;
-    }
-    return '';
-  }
-
-  String _normalizedCompactQueryToken(String raw) {
-    return raw.trim().toLowerCase().replaceAll(
-      RegExp(r'[\s:：|｜/、,，。！？!?._-]+'),
-      '',
-    );
   }
 
   RetrievalProcessingSnapshot _licensedRetrievalProcessingForSynthesis(

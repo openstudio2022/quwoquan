@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -979,7 +978,7 @@ class _AssistantConversationPageState
                   decoration: BoxDecoration(
                     color: isDark
                         ? bgColor.withValues(alpha: 0.92)
-                        : Colors.white.withValues(alpha: 0.94),
+                        : AppColors.white.withValues(alpha: 0.94),
                     borderRadius: BorderRadius.circular(
                       AppSpacing.fullBorderRadius,
                     ),
@@ -988,7 +987,7 @@ class _AssistantConversationPageState
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: AppColors.black.withValues(alpha: 0.04),
                         blurRadius: AppSpacing.sm,
                       ),
                     ],
@@ -1053,10 +1052,8 @@ class _AssistantConversationPageState
           )
         : null;
 
-    final bodyContent = Material(
-      color: Colors.transparent,
-      child: Column(
-        children: [
+    final bodyContent = Column(
+      children: [
           Expanded(
             child: ConversationTimeline(
               controller: _scrollController,
@@ -1092,11 +1089,7 @@ class _AssistantConversationPageState
                           child: Text(
                             timeStr,
                             style: TextStyle(
-                              fontSize:
-                                  Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.fontSize ??
-                                  AppSpacing.containerSm,
+                              fontSize: AppTypography.sm,
                               color: fgPrimary.withValues(alpha: 0.5),
                             ),
                           ),
@@ -1109,7 +1102,7 @@ class _AssistantConversationPageState
                           ? bubbleSelf
                           : bubbleOther,
                       textColor: msg['isSelf'] == true
-                          ? Colors.white
+                          ? AppColors.white
                           : fgPrimary,
                       isSelectionMode: _isSelectionMode,
                       isSelected: _selectedIds.contains(msg['id']),
@@ -1342,7 +1335,6 @@ class _AssistantConversationPageState
             ),
           ),
         ],
-      ),
     );
 
     return ConversationPageScaffold(

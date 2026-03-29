@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -359,7 +358,7 @@ class _CenteredScrollableTabBarState
         (widget.isDark ?? ref.watch(effectiveIsDarkProvider))!;
     final isVideoImmersion = widget.transparentBackground;
     final bg = isVideoImmersion
-        ? Colors.transparent
+        ? AppColors.transparent
         : AppColorsFunctional.getColor(currentIsDark, ColorType.pageBackground);
     final fg = AppColorsFunctional.getColor(
       currentIsDark,
@@ -616,7 +615,7 @@ class _CenteredScrollableTabBarState
     final showBlueUnderline = selected && !isExcluded;
     final underlineColor = showBlueUnderline
         ? (isDark ? AppColors.iosAccentDark : AppColors.primaryColor)
-        : Colors.transparent;
+        : AppColors.transparent;
 
     final textStyle = TextStyle(
       fontSize: chipFontSize,
@@ -668,7 +667,7 @@ class _CenteredScrollableTabBarState
                         ? AppSpacing.primaryTabUnderlineHeight
                         : 0,
                     decoration: BoxDecoration(
-                      color: isExcluded ? Colors.transparent : underlineColor,
+                      color: isExcluded ? AppColors.transparent : underlineColor,
                       borderRadius: BorderRadius.circular(
                         AppSpacing.primaryTabUnderlineHeight / 2,
                       ),

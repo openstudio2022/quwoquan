@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -31,7 +32,8 @@ class AssistantHalfSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final bgColor =
         AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final fgPrimary =
@@ -63,7 +65,7 @@ class AssistantHalfSheet extends StatelessWidget {
               height: AppSpacing.createEntrySheetHandleHeight,
               decoration: BoxDecoration(
                 color: fgSecondary.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
               ),
             ),
             SizedBox(height: containerMd),
@@ -82,13 +84,15 @@ class AssistantHalfSheet extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.close, color: fgSecondary, size: AppSpacing.iconMedium),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                   onPressed: () => Navigator.of(context).pop(),
-                  style: IconButton.styleFrom(
-                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  child: Icon(
+                    CupertinoIcons.xmark,
+                    color: fgSecondary,
+                    size: AppSpacing.iconMedium,
                   ),
-                  tooltip: UITextConstants.cancel,
                 ),
                 SizedBox(width: AppSpacing.intraGroupXs),
               ],
@@ -172,7 +176,11 @@ class AssistantHalfSheet extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: intraSm),
-                  FilledButton(
+                  CupertinoButton.filled(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                      vertical: AppSpacing.sm,
+                    ),
                     onPressed: () {
                       Navigator.of(context).pop();
                       context.push(
@@ -206,29 +214,30 @@ class ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final fgPrimary =
         AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final surface =
         AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
 
-    return Material(
-      color: surface,
-      borderRadius: BorderRadius.circular(AppSpacing.borderRadius * 2),
-      child: InkWell(
-        onTap: onPressed,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius * 2),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm + AppSpacing.xs,
-            vertical: AppSpacing.xs,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.sm,
-              color: fgPrimary,
-            ),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm + AppSpacing.xs,
+          vertical: AppSpacing.xs,
+        ),
+        minimumSize: Size.zero,
+        onPressed: onPressed,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.sm,
+            color: fgPrimary,
           ),
         ),
       ),

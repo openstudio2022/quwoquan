@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -984,7 +983,7 @@ class _HomeCircleRailCard extends StatelessWidget {
             border: Border.all(color: borderColor.withValues(alpha: 0.12)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
+                color: AppColors.black.withValues(alpha: isDark ? 0.16 : 0.05),
                 blurRadius: AppSpacing.md,
                 offset: const Offset(0, 8),
               ),
@@ -1078,7 +1077,7 @@ class _HomeCircleViewAllCard extends StatelessWidget {
             border: Border.all(color: borderColor.withValues(alpha: 0.12)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
+                color: AppColors.black.withValues(alpha: isDark ? 0.16 : 0.05),
                 blurRadius: AppSpacing.md,
                 offset: const Offset(0, 8),
               ),
@@ -1367,8 +1366,8 @@ class _HomeCirclesChannelGrid extends StatelessWidget {
                         data: id,
                         onDragStarted: () => onDragStarted(id),
                         onDragEnd: (_) => onDragEnded(),
-                        feedback: Material(
-                          color: Colors.transparent,
+                        feedback: ColoredBox(
+                          color: AppColors.transparent,
                           child: _HomeCirclesChannelTile(
                             isDark: isDark,
                             width: tileWidth,
@@ -1418,7 +1417,7 @@ class _HomeCirclesChannelTile extends StatelessWidget {
         ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
         : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final borderColor = canRemove
-        ? Colors.transparent
+        ? AppColors.transparent
         : AppColorsFunctional.getColor(
             isDark,
             ColorType.borderPrimary,
@@ -1493,14 +1492,10 @@ class _HomeCirclesChannelTile extends StatelessWidget {
               )
             else
               Positioned.fill(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.borderRadius,
-                    ),
-                    onTap: onIconTap,
-                  ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onIconTap,
+                  child: const SizedBox.expand(),
                 ),
               ),
           ],

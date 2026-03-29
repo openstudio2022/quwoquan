@@ -768,11 +768,3 @@ String _sanitizeProcessSingleLine(String raw, {required ProcessStepId stepId}) {
   }
   return normalized;
 }
-
-String _bulletList(List<String> items, {required ProcessStepId stepId}) {
-  return items
-      .map((item) => _sanitizeProcessText(item, stepId: stepId))
-      .where((item) => item.isNotEmpty)
-      .map((item) => '- $item')
-      .join('\n');
-}

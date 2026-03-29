@@ -21,6 +21,42 @@ class AppColors {
   static const Color white = Colors.white;
   static const Color black = Colors.black;
 
+  /// 全透明（沉浸式顶栏、barrier、渐变端点等）
+  static const Color transparent = Color(0x00000000);
+
+  /// 分享海报主标题/深链区等高对比黑字（Canvas 绘制，非主题色）
+  static const Color sharePosterInkHighContrast = Color(0xDE000000);
+
+  /// 分享海报深链块浅灰底
+  static const Color sharePosterDeeplinkSurface = Color(0xFFF5F5F5);
+
+  /// 九宫格/动态图片占位浅灰
+  static const Color gridImagePlaceholderLight = Color(0xFFEEEEEE);
+
+  /// 动态视频卡片底层深色底
+  static const Color momentVideoCardBackdrop = Color(0xFF212121);
+
+  /// 发现页作品宫格卡片内层占位（浅灰）
+  static const Color discoveryPostGridInnerFallback = Color(0xFFE0E0E0);
+
+  /// 发现页宫格占位图标色
+  static const Color discoveryPostGridIconMuted = Color(0xFF757575);
+
+  /// iOS 工具栏次要图标色（深/浅外观）
+  static const Color iosToolbarSecondaryIconDark = Color(0xFF98989F);
+  static const Color iosToolbarSecondaryIconLight = Color(0xFF8E8E93);
+
+  /// iOS 系统青强调（深色模式下链接/高亮）
+  static const Color iosSystemCyanAccent = Color(0xFF64D2FF);
+
+  /// 小型弹出层主文字（再生选项等）
+  static const Color iosPopupPrimaryLabelOnDark = Color(0xFFEBEBF5);
+  static const Color iosPopupPrimaryLabelOnLight = Color(0xFF1C1C1E);
+
+  /// 弹出层细分隔线
+  static const Color iosPopupHairlineSeparatorDark = Color(0xFF38383A);
+  static const Color iosPopupHairlineSeparatorLight = Color(0xFFE5E5EA);
+
   static const Color overlayMedium = Color(0x80000000);
   static const Color overlayStrong = Color(0xB3000000);
   static const Color overlayDark = Color(0xCC000000);

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -225,7 +224,7 @@ class ArticlePreviewPage extends ConsumerWidget {
                                   preset.label,
                                   style: TextStyle(
                                     color: selected
-                                        ? Colors.white
+                                        ? AppColors.white
                                         : CupertinoColors.label.resolveFrom(
                                             context,
                                           ),
@@ -261,7 +260,7 @@ class ArticlePreviewPage extends ConsumerWidget {
                       child: const Text(
                         '下一步',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.white,
                           fontSize: AppTypography.xl,
                           fontWeight: AppTypography.medium,
                         ),
@@ -323,7 +322,7 @@ class _PreviewHeader extends StatelessWidget {
               child: const Text(
                 '下一步',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.white,
                   fontSize: AppTypography.base,
                   fontWeight: AppTypography.semiBold,
                 ),

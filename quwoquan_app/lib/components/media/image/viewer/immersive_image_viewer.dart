@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'dart:math' as math;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -315,10 +316,10 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: AppColors.transparent,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarColor: AppColors.transparent,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
       );
@@ -328,10 +329,10 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -341,10 +342,10 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
@@ -779,7 +780,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   Widget build(BuildContext context) {
     if (!widget.isOpen) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final currentPost = _currentPost;
     final currentEntry = _currentEntry;
     final currentPostImages =
@@ -796,7 +798,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         ? (widget.posts.length > 1 || currentPostImages.length > 1)
         : (_mediaEntries.length > 1);
 
-    return Material(
+    return ColoredBox(
       color: AppColors.black,
       child: Stack(
         children: [

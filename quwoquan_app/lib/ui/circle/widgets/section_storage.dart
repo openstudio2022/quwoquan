@@ -330,14 +330,14 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
           children: [
             Icon(
               CupertinoIcons.cloud_upload,
-              color: Colors.white,
+              color: AppColors.white,
               size: AppSpacing.iconMedium,
             ),
             SizedBox(width: AppSpacing.sm),
             Text(
               UITextConstants.circleUploadFile,
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.white,
                 fontSize: AppTypography.base,
                 fontWeight: AppTypography.semiBold,
               ),

@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
@@ -276,9 +275,9 @@ class ArticleFrontispieceView extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: <Color>[
-                            Colors.black.withValues(alpha: 0.04),
-                            Colors.black.withValues(alpha: 0.18),
-                            Colors.black.withValues(alpha: 0.74),
+                            AppColors.black.withValues(alpha: 0.04),
+                            AppColors.black.withValues(alpha: 0.18),
+                            AppColors.black.withValues(alpha: 0.74),
                           ],
                           stops: const <double>[0.0, 0.48, 1.0],
                         ),
@@ -295,7 +294,7 @@ class ArticleFrontispieceView extends StatelessWidget {
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: typography.titleStyle.copyWith(
-                          color: Colors.white,
+                          color: AppColors.white,
                           height: coverTitleLineHeight,
                           shadows: const <Shadow>[
                             Shadow(
@@ -978,7 +977,7 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
         badgeTextColor: isDark
             ? ArticleTemplateColors.ritualBadgeTextDark
             : ArticleTemplateColors.ritualBadgeTextLight,
-        shadowColor: Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.36 : 0.12),
         overlayColor: isDark
             ? ArticleTemplateColors.ritualOverlayDark
             : ArticleTemplateColors.ritualOverlayLight,
@@ -1009,7 +1008,7 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
         badgeTextColor: isDark
             ? ArticleTemplateColors.diffuseBadgeTextDark
             : ArticleTemplateColors.diffuseBadgeTextLight,
-        shadowColor: Colors.black.withValues(alpha: isDark ? 0.34 : 0.11),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.34 : 0.11),
         overlayColor: isDark
             ? ArticleTemplateColors.diffuseOverlayDark
             : ArticleTemplateColors.diffuseOverlayLight,
@@ -1040,7 +1039,7 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
         badgeTextColor: isDark
             ? ArticleTemplateColors.journalBadgeTextDark
             : ArticleTemplateColors.journalBadgeTextLight,
-        shadowColor: Colors.black.withValues(alpha: isDark ? 0.28 : 0.14),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.14),
         overlayColor: isDark
             ? ArticleTemplateColors.journalOverlayDark
             : ArticleTemplateColors.journalOverlayLight,
@@ -1055,7 +1054,7 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
         accentColor: ArticleTemplateColors.techAccent,
         badgeBackground: ArticleTemplateColors.techBadgeBackground,
         badgeTextColor: ArticleTemplateColors.techBadgeText,
-        shadowColor: Colors.black.withValues(alpha: 0.42),
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
         overlayColor: ArticleTemplateColors.techOverlay,
       );
     case ArticleTemplatePreset.gentle:
@@ -1084,7 +1083,7 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
         badgeTextColor: isDark
             ? ArticleTemplateColors.gentleBadgeTextDark
             : ArticleTemplateColors.gentleBadgeTextLight,
-        shadowColor: Colors.black.withValues(alpha: isDark ? 0.28 : 0.09),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.09),
         overlayColor: isDark
             ? ArticleTemplateColors.gentleOverlayDark
             : ArticleTemplateColors.gentleOverlayLight,
@@ -1387,9 +1386,9 @@ class _ArticleBookChromePainter extends CustomPainter {
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: <Color>[
-          Colors.black.withValues(alpha: 0.18),
+          AppColors.black.withValues(alpha: 0.18),
           palette.paperBorderColor.withValues(alpha: 0.16),
-          Colors.white.withValues(alpha: 0.08),
+          AppColors.white.withValues(alpha: 0.08),
         ],
       ).createShader(spineRect);
     canvas.drawRRect(
@@ -1408,7 +1407,7 @@ class _ArticleBookChromePainter extends CustomPainter {
         colors: <Color>[
           palette.paperBorderColor.withValues(alpha: 0.04),
           palette.paperBorderColor.withValues(alpha: 0.2),
-          Colors.white.withValues(alpha: 0.22),
+          AppColors.white.withValues(alpha: 0.22),
         ],
       ).createShader(foreEdgeRect);
     canvas.drawRRect(
@@ -1552,9 +1551,9 @@ class _ArticlePageCurlPainter extends CustomPainter {
         center: Alignment(isRight ? 1 : -1, isBottom ? 1 : -1),
         radius: 0.9,
         colors: <Color>[
-          Colors.black.withValues(alpha: 0.22 * progress),
-          Colors.black.withValues(alpha: 0.05 * progress),
-          Colors.transparent,
+          AppColors.black.withValues(alpha: 0.22 * progress),
+          AppColors.black.withValues(alpha: 0.05 * progress),
+          AppColors.transparent,
         ],
       ).createShader(foldRect.inflate(48));
     canvas.drawPath(shadowPath, shadowPaint);
@@ -1573,7 +1572,7 @@ class _ArticlePageCurlPainter extends CustomPainter {
             ? (isBottom ? Alignment.topLeft : Alignment.bottomLeft)
             : (isBottom ? Alignment.topRight : Alignment.bottomRight),
         colors: <Color>[
-          Colors.white.withValues(alpha: 0.86),
+          AppColors.white.withValues(alpha: 0.86),
           palette.paperColor.withValues(alpha: 0.98),
           palette.paperBorderColor.withValues(alpha: 0.72),
         ],
@@ -1613,7 +1612,7 @@ class _ArticleBookStylePagerHintPainter extends CustomPainter {
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
             colors: <Color>[
-              Colors.white.withValues(alpha: 0.42),
+              AppColors.white.withValues(alpha: 0.42),
               palette.paperBorderColor.withValues(alpha: 0.28),
             ],
           ).createShader(
@@ -1829,12 +1828,12 @@ class _JournalTapeDecoration extends StatelessWidget {
           color: color,
           borderRadius: BorderRadius.circular(height / 2),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.28),
+            color: AppColors.white.withValues(alpha: 0.28),
             width: AppSpacing.hairline,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: AppColors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1872,12 +1871,12 @@ class _JournalStickerDecoration extends StatelessWidget {
           color: background,
           borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.44),
+            color: AppColors.white.withValues(alpha: 0.44),
             width: AppSpacing.hairline,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: AppColors.black.withValues(alpha: 0.08),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),

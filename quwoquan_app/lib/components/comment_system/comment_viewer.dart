@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -65,7 +66,8 @@ class _CommentInputState extends ConsumerState<CommentInput> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     
     return Container(
       key: TestKeys.commentInputBar,
@@ -171,21 +173,19 @@ class _CommentInputState extends ConsumerState<CommentInput> {
         
         // 输入框
         Expanded(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              height: CommentResponsive.getInputHeight(context),
-              decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                border: Border.all(
-                  color: _focusNode.hasFocus 
-                    ? AppColors.primaryColor 
-                    : AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-                  width: _focusNode.hasFocus ? AppSpacing.two : AppSpacing.one,
-                ),
+          child: Container(
+            height: CommentResponsive.getInputHeight(context),
+            decoration: BoxDecoration(
+              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              border: Border.all(
+                color: _focusNode.hasFocus 
+                  ? AppColors.primaryColor 
+                  : AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+                width: _focusNode.hasFocus ? AppSpacing.two : AppSpacing.one,
               ),
-              child: TextField(
+            ),
+            child: TextField(
               key: TestKeys.commentTextField,
               controller: _controller,
               focusNode: _focusNode,
@@ -210,7 +210,6 @@ class _CommentInputState extends ConsumerState<CommentInput> {
               style: TextStyle(
                 fontSize: CommentResponsive.getFontSize(context, 14.0),
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-              ),
               ),
             ),
           ),

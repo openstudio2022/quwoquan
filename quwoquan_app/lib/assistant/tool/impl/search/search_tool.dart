@@ -647,8 +647,8 @@ class SearchTool implements AssistantTool {
     score += referenceCount > 0 ? 0.25 : 0.0;
     score += includesWeb && referenceCount > 0 ? 0.1 : 0.0;
     score += includesInternal && hitCount > 0 ? 0.15 : 0.0;
-    score += (hitCount.clamp(0, 6) as int) * 0.04;
-    score += (referenceCount.clamp(0, 6) as int) * 0.04;
+    score += (hitCount.clamp(0, 6)) * 0.04;
+    score += (referenceCount.clamp(0, 6)) * 0.04;
     score += queryCount > 1 ? 0.1 : 0.05;
     if (score > 0.95) {
       return 0.95;

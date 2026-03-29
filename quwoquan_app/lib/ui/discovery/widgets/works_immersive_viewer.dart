@@ -690,12 +690,12 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   vertical: AppSpacing.intraGroupXs / 2,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.24),
+                  color: AppColors.black.withValues(alpha: 0.24),
                   borderRadius: BorderRadius.circular(
                     AppSpacing.circularBorderRadius,
                   ),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: AppColors.white.withValues(alpha: 0.16),
                   ),
                 ),
                 child: Text(
@@ -1467,17 +1467,16 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                 child: SizedBox(
                   key: const ValueKey<String>('works-top-back'),
                   width: AppSpacing.iconButtonMinSizeSm,
-                  child: IconButton(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                     onPressed: onTapClose,
-                    icon: Icon(
+                    child: Icon(
                       CupertinoIcons.back,
                       color: onTapClose == null
                           ? AppColors.worksBodyText.withValues(alpha: 0)
                           : AppColors.worksBodyText,
                       size: AppSpacing.iconMedium,
-                    ),
-                    style: IconButton.styleFrom(
-                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                     ),
                   ),
                 ),
@@ -1502,15 +1501,14 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               child: Center(
                 child: SizedBox(
                   width: AppSpacing.iconButtonMinSizeSm,
-                  child: IconButton(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                     onPressed: onTapMore,
-                    icon: Icon(
-                      Icons.more_horiz_rounded,
+                    child: Icon(
+                      CupertinoIcons.ellipsis,
                       color: AppColors.worksBodyText,
                       size: AppSpacing.iconMedium,
-                    ),
-                    style: IconButton.styleFrom(
-                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                     ),
                   ),
                 ),
@@ -1537,12 +1535,12 @@ class _WorksTopProgressLabel extends StatelessWidget {
         child: DecoratedBox(
           key: const ValueKey<String>('works-top-progress-label'),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: AppColors.black.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(
               AppSpacing.circularBorderRadius,
             ),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: AppColors.white.withValues(alpha: 0.12),
               width: AppSpacing.hairline,
             ),
           ),
@@ -1642,7 +1640,7 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? AppColors.worksTitle.withValues(alpha: 0.14)
-              : Colors.transparent,
+              : AppColors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
           border: Border.all(
             color: selected
@@ -1882,8 +1880,8 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.06),
-                      Colors.black.withValues(alpha: 0.58),
+                      AppColors.black.withValues(alpha: 0.06),
+                      AppColors.black.withValues(alpha: 0.58),
                     ],
                   ),
                 ),
@@ -1995,8 +1993,8 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
-                  Colors.black.withValues(alpha: 0.62),
+                  AppColors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.62),
                 ],
               ),
             ),
@@ -2076,7 +2074,7 @@ class _WorksArticleCanvas extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.08),
                   AppColors.worksBackground.withValues(alpha: 0.92),
                 ],
               ),
@@ -2256,7 +2254,7 @@ class _WorksLegacyArticleCanvasState extends State<_WorksLegacyArticleCanvas> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.08),
                   AppColors.worksBackground.withValues(alpha: 0.92),
                 ],
               ),
@@ -2377,7 +2375,7 @@ class _WorksTextCanvas extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.08),
                   AppColors.worksBackground.withValues(alpha: 0.92),
                 ],
               ),
@@ -2477,7 +2475,7 @@ class _WorksPageIndicator extends StatelessWidget {
           height: AppSpacing.xs + AppSpacing.hairline,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: alpha),
+            color: AppColors.white.withValues(alpha: alpha),
           ),
         );
       }),
@@ -2490,12 +2488,12 @@ class _WorksPageIndicator extends StatelessWidget {
           child: DecoratedBox(
             key: const ValueKey<String>('works-page-indicator'),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: AppColors.black.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(
                 AppSpacing.circularBorderRadius,
               ),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: AppColors.white.withValues(alpha: 0.06),
                 width: AppSpacing.hairline,
               ),
             ),
@@ -2856,8 +2854,8 @@ class _WorksBottomToolbar extends StatelessWidget {
                                     end: Alignment.centerRight,
                                     stops: [start, 1.0],
                                     colors: const [
-                                      Colors.white,
-                                      Colors.transparent,
+                                      AppColors.white,
+                                      AppColors.transparent,
                                     ],
                                   ).createShader(bounds);
                                 },

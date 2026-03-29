@@ -93,9 +93,7 @@ class ChatMessageBubble extends StatelessWidget {
             Text(
               '今日待办提醒',
               style: TextStyle(
-                fontSize:
-                    Theme.of(context).textTheme.bodySmall?.fontSize ??
-                    AppSpacing.containerSm,
+                fontSize: AppTypography.sm,
                 fontWeight: FontWeight.w600,
                 color: textColor,
               ),
@@ -124,9 +122,7 @@ class ChatMessageBubble extends StatelessWidget {
                       child: Text(
                         '$title · $time',
                         style: TextStyle(
-                          fontSize:
-                              Theme.of(context).textTheme.bodySmall?.fontSize ??
-                              AppSpacing.containerSm,
+                          fontSize: AppTypography.sm,
                           color: textColor,
                         ),
                       ),
@@ -198,10 +194,8 @@ class ChatMessageBubble extends StatelessWidget {
             content,
             textAlign: TextAlign.left,
             style: TextStyle(
-              fontSize:
-                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                  AppSpacing.md,
-              color: Colors.white,
+              fontSize: AppTypography.lg,
+              color: AppColors.white,
               height: AppTypography.bodyLineHeight,
             ),
           ),
@@ -222,9 +216,7 @@ class ChatMessageBubble extends StatelessWidget {
           child: SelectableText(
             content,
             style: TextStyle(
-              fontSize:
-                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                  AppSpacing.md,
+              fontSize: AppTypography.lg,
               color: textColor,
             ),
           ),
@@ -429,7 +421,7 @@ class _BubbleTailPainter extends CustomPainter {
     final path = _BubbleWithTail._path(w, h, isRight);
     if (!isRight) canvas.translate(tailExtent, 0);
     final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.06)
+      ..color = AppColors.black.withValues(alpha: 0.06)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.save();
     canvas.translate(0, 2);

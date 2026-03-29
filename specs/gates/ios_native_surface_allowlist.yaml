@@ -3,7 +3,4 @@
 #
 # 规则说明：见 specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/design.md
 
-allow_scaffold_return:
-  - quwoquan_app/lib/ui/rtc/pages/incoming_call_page.dart
-  - quwoquan_app/lib/ui/rtc/pages/outgoing_call_page.dart
-  - quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+allow_scaffold_return: []

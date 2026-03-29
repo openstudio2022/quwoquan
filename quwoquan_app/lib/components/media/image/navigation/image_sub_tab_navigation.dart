@@ -65,7 +65,7 @@ class ImageSubTabNavigation extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: isActive 
                       ? AppColorsFunctional.getColor(isDark, ColorType.selectionBackground)
-                      : Colors.transparent,
+                      : AppColors.transparent,
                   borderRadius: BorderRadius.circular(12.r), // 比fullBorderRadius小一号
                   border: isActive 
                       ? Border.all(

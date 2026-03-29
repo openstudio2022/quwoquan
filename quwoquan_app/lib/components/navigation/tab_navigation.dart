@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -240,54 +240,49 @@ class TabNavigationWidget extends ConsumerWidget {
       expanded: AppTypography.xl,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onTabChange(tab.id),
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.intraGroupMd,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: AppSpacing.minInteractiveSize,
-              minHeight: AppSpacing.minInteractiveSize,
-            ),
-            child: Center(
-              child: IntrinsicWidth(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      tab.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: chipFontSize,
-                        fontWeight: selected
-                            ? AppTypography.bold
-                            : AppTypography.medium,
-                        color: selected ? fg : fgSecondary,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      height: AppSpacing.intraGroupXs / 2,
-                      decoration: BoxDecoration(
-                        color: selected ? fg : Colors.transparent,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.intraGroupXs / 4,
-                        ),
-                      ),
-                    ),
-                  ],
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupMd,
+      ),
+      minimumSize: Size.zero,
+      onPressed: () => onTabChange(tab.id),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: AppSpacing.minInteractiveSize,
+          minHeight: AppSpacing.minInteractiveSize,
+        ),
+        child: Center(
+          child: IntrinsicWidth(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  tab.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: chipFontSize,
+                    fontWeight: selected
+                        ? AppTypography.bold
+                        : AppTypography.medium,
+                    color: selected ? fg : fgSecondary,
+                  ),
                 ),
-              ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: AppSpacing.intraGroupXs / 2,
+                  decoration: BoxDecoration(
+                    color: selected ? fg : AppColors.transparent,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.intraGroupXs / 4,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

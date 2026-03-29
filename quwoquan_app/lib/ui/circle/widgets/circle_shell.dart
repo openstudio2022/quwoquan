@@ -463,7 +463,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: AppColors.transparent,
         statusBarIconBrightness: toolbarOpacity > 0.12
             ? (isDark ? Brightness.light : Brightness.dark)
             : Brightness.light,
@@ -606,8 +606,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       context,
     ).withValues(alpha: isDark ? 0.24 : 0.08);
     final summaryShadow = isDark
-        ? Colors.black.withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.05);
+        ? AppColors.black.withValues(alpha: 0.18)
+        : AppColors.black.withValues(alpha: 0.05);
 
     return Container(
       key: _summaryKey,
@@ -762,8 +762,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.08),
-                  Colors.black.withValues(alpha: 0.04),
+                  AppColors.black.withValues(alpha: 0.08),
+                  AppColors.black.withValues(alpha: 0.04),
                   bg.withValues(alpha: 0.12),
                 ],
                 stops: const [0.0, 0.56, 1.0],
@@ -787,7 +787,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final topPadding = MediaQuery.paddingOf(context).top;
     final slotWidth = AppSpacing.minInteractiveSize + AppSpacing.containerXs;
     final chrome = Color.lerp(
-      Colors.transparent,
+      AppColors.transparent,
       AppColors.iosSystemBackground(context),
       backgroundOpacity.clamp(0.0, 1.0),
     )!;
@@ -796,7 +796,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         : CupertinoColors.white;
     final tintFill = backgroundOpacity > 0.14
         ? AppColors.iosSecondaryFill(context)
-        : Colors.black.withValues(alpha: 0.24);
+        : AppColors.black.withValues(alpha: 0.24);
 
     return Positioned(
       top: 0,
@@ -912,8 +912,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     required double inlineTabOpacity,
   }) {
     final shadow = isDark
-        ? Colors.black.withValues(alpha: 0.12)
-        : Colors.black.withValues(alpha: 0.03);
+        ? AppColors.black.withValues(alpha: 0.12)
+        : AppColors.black.withValues(alpha: 0.03);
     return Container(
       decoration: BoxDecoration(
         color: bg,
@@ -1283,7 +1283,7 @@ class _SectionSurface extends StatelessWidget {
         border: Border.all(color: border.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+            color: AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05),
             blurRadius: AppSpacing.md,
             offset: const Offset(0, 6),
           ),

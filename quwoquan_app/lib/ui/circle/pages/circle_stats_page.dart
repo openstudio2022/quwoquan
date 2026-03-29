@@ -375,7 +375,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(
             borderColor: borderColor,
-            backgroundColor: Colors.transparent,
+            backgroundColor: AppColors.transparent,
             child: CupertinoButton(
               padding: EdgeInsets.all(AppSpacing.containerSm),
               onPressed: () {},
@@ -575,7 +575,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         border: Border.all(color: borderColor.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.black.withValues(alpha: 0.05),
             blurRadius: AppSpacing.md,
             offset: const Offset(0, 8),
           ),

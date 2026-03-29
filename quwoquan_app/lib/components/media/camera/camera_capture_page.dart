@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 @immutable
@@ -154,46 +154,41 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
     final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final subtle = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final controller = _controller;
     final canPreview = controller != null && controller.value.isInitialized;
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
+      navigationBar: AppNavigationBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: bg,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.xmark,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        middle: Text(
+          _mode == MediaPickerEntryMode.image
+              ? UITextConstants.cameraPhotoMode
+              : UITextConstants.cameraVideoMode,
+          style: TextStyle(
+            color: fg,
+            fontSize: AppTypography.lg,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ),
+        trailing: AppNavigationBarIconButton(
+          icon: CupertinoIcons.camera_rotate_fill,
+          onPressed: _toggleCamera,
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
-            SizedBox(
-              height: AppSpacing.toolbarHeight,
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close, color: fg),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        _mode == MediaPickerEntryMode.image
-                            ? UITextConstants.cameraPhotoMode
-                            : UITextConstants.cameraVideoMode,
-                        style: TextStyle(
-                          color: fg,
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _toggleCamera,
-                    icon: Icon(Icons.cameraswitch_outlined, color: fg),
-                  ),
-                ],
-              ),
-            ),
             Expanded(
               child: Container(
                 margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
@@ -244,16 +239,21 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
                     height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: AppSpacing.intraGroupXs / 2),
+                      border: Border.all(
+                        color: AppColors.white,
+                        width: AppSpacing.intraGroupXs / 2,
+                      ),
                       color: _mode == MediaPickerEntryMode.video && _isRecording
                           ? AppColors.error
                           : AppColors.primaryColor,
                     ),
                     child: Icon(
                       _mode == MediaPickerEntryMode.image
-                          ? Icons.camera_alt_outlined
-                          : (_isRecording ? Icons.stop : Icons.videocam_outlined),
-                      color: Colors.white,
+                          ? CupertinoIcons.camera_fill
+                          : (_isRecording
+                              ? CupertinoIcons.stop_circle_fill
+                              : CupertinoIcons.videocam_fill),
+                      color: AppColors.white,
                       size: AppSpacing.iconMedium,
                     ),
                   ),
@@ -277,7 +277,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
         ? AppColors.primaryColor
         : AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
     final fg = active
-        ? Colors.white
+        ? AppColors.white
         : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return GestureDetector(
       onTap: onTap,

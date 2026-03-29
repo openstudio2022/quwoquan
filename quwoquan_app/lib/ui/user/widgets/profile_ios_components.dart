@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -75,8 +74,8 @@ class ProfileIosSectionCard extends StatelessWidget {
     final separator =
         borderColor ?? AppColors.iosSeparator(context).withValues(alpha: 0.16);
     final shadow = CupertinoTheme.of(context).brightness == Brightness.dark
-        ? Colors.black.withValues(alpha: 0.22)
-        : Colors.black.withValues(alpha: 0.05);
+        ? AppColors.black.withValues(alpha: 0.22)
+        : AppColors.black.withValues(alpha: 0.05);
     return Container(
       padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(
@@ -146,7 +145,7 @@ class ProfileIosGroupedSection extends StatelessWidget {
           if (header != null && header!.trim().isNotEmpty)
             ProfileIosSectionHeader(title: header!),
           ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
             child: Container(
               color: AppColors.iosGroupedSurface(context),
               child: Column(
@@ -303,7 +302,7 @@ class ProfileIosIconButton extends StatelessWidget {
         switch (style) {
       ProfileIosIconButtonStyle.filled => accent,
       ProfileIosIconButtonStyle.tinted => AppColors.iosFill(context),
-      ProfileIosIconButtonStyle.plain => Colors.transparent,
+      ProfileIosIconButtonStyle.plain => AppColors.transparent,
     };
     final iconColor = foregroundColor ??
         switch (style) {
@@ -380,7 +379,7 @@ class ProfileIosActionButton extends StatelessWidget {
           alpha: isDark ? 0.24 : 0.12,
         ),
       ProfileIosActionStyle.outlined => AppColors.iosSystemBackground(context),
-      ProfileIosActionStyle.plain => Colors.transparent,
+      ProfileIosActionStyle.plain => AppColors.transparent,
     };
     final resolvedBorderColor =
         borderColor ??
@@ -388,7 +387,7 @@ class ProfileIosActionButton extends StatelessWidget {
       ProfileIosActionStyle.outlined => AppColors.iosSeparator(
           context,
         ).withValues(alpha: 0.24),
-      _ => Colors.transparent,
+      _ => AppColors.transparent,
     };
 
     Widget child = Container(
