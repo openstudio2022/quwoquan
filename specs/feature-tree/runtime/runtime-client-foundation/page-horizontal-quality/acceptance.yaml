@@ -40,7 +40,7 @@ level_acceptance:
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
 execution:
-  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py"
+  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py"
   full_gate: make gate
 
 journey_acceptance:
@@ -73,6 +73,8 @@ evidence_matrix:
   T2:
     - type: script
       artifact: scripts/verify_page_horizontal_quality_matrix.py
+    - type: script
+      artifact: scripts/verify_page_matrix_scan_complete.py
     - type: doc
       artifact: specs/gates/page_horizontal_quality_pr_checklist.md
   T3:

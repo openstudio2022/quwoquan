@@ -2,6 +2,7 @@
 # 说明：status = compliant | partial | legacy_map | exempt
 # 扫描基线对齐：specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
+# 双向校验：scripts/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
 updated: "2026-03-29"
 policy:
