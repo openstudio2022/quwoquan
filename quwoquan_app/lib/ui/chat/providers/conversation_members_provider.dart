@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 会话成员及设置的共享状态
 class ConversationMembersState {
-  final List<Map<String, dynamic>> members;
+  final List<ChatConversationMemberDto> members;
   final Map<String, dynamic> settings;
   final bool isLoading;
   final String? error;
@@ -18,15 +19,12 @@ class ConversationMembersState {
 
   /// 当前登录用户的角色（'owner' | 'admin' | 'member'）
   String get currentUserRole {
-    try {
-      final m = members.firstWhere(
-        (m) => m['isCurrentUser'] == true,
-        orElse: () => const {},
-      );
-      return m['role'] as String? ?? 'member';
-    } catch (_) {
-      return 'member';
+    for (final m in members) {
+      if (m.isCurrentUser) {
+        return m.role;
+      }
     }
+    return 'member';
   }
 
   bool get isAdminOrOwner =>
@@ -35,7 +33,7 @@ class ConversationMembersState {
   bool get isOwner => currentUserRole == 'owner';
 
   ConversationMembersState copyWith({
-    List<Map<String, dynamic>>? members,
+    List<ChatConversationMemberDto>? members,
     Map<String, dynamic>? settings,
     bool? isLoading,
     String? error,
@@ -77,14 +75,13 @@ class ConversationMembersNotifier
         ),
         _repo.getGroupSettings(_conversationId),
       ]);
-      final members = (results[0] as List<Map<String, dynamic>>)
-          .map((member) {
-            final next = Map<String, dynamic>.from(member);
-            final userId = (next['userId'] ?? next['profileSubjectId'] ?? '')
-                .toString();
-            next['isCurrentUser'] = userId == _currentUserId;
-            return next;
-          })
+      final raw = results[0] as List<ChatConversationMemberDto>;
+      final members = raw
+          .map(
+            (member) => member.copyWith(
+              isCurrentUser: member.userId == _currentUserId,
+            ),
+          )
           .toList(growable: false);
       state = state.copyWith(
         members: members,
@@ -134,27 +131,30 @@ class ConversationMembersNotifier
     }
   }
 
-  static List<Map<String, dynamic>> _applyAdminChange(
-    List<Map<String, dynamic>> members,
+  static List<ChatConversationMemberDto> _applyAdminChange(
+    List<ChatConversationMemberDto> members,
     List<String> adminIds,
   ) {
     return members.map((m) {
-      if (m['role'] == 'owner') return Map<String, dynamic>.from(m);
-      final updated = Map<String, dynamic>.from(m);
-      updated['role'] = adminIds.contains(m['userId']) ? 'admin' : 'member';
-      return updated;
+      if (m.role == 'owner') return m;
+      return m.copyWith(
+        role: adminIds.contains(m.userId) ? 'admin' : 'member',
+      );
     }).toList();
   }
 
-  static List<Map<String, dynamic>> _applyOwnerTransfer(
-    List<Map<String, dynamic>> members,
+  static List<ChatConversationMemberDto> _applyOwnerTransfer(
+    List<ChatConversationMemberDto> members,
     String newOwnerId,
   ) {
     return members.map((m) {
-      final updated = Map<String, dynamic>.from(m);
-      if (m['isCurrentUser'] == true) updated['role'] = 'member';
-      if (m['userId'] == newOwnerId) updated['role'] = 'owner';
-      return updated;
+      if (m.isCurrentUser) {
+        return m.copyWith(role: 'member');
+      }
+      if (m.userId == newOwnerId) {
+        return m.copyWith(role: 'owner');
+      }
+      return m;
     }).toList();
   }
 }

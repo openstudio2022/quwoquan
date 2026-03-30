@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -79,23 +80,22 @@ class _CallParticipantPickerPageState
   }
 
   Future<List<Map<String, dynamic>>> _loadAvailableGroups(
-    dynamic chatRepo,
+    ChatRepository chatRepo,
   ) async {
-    final conversations = await chatRepo.listConversations(limit: 100);
+    final inbox = await chatRepo.listInbox(limit: 100);
     final currentConversationId = widget.conversationId;
-    return (conversations as List<Map<String, dynamic>>)
+    return inbox
         .where((item) {
-          final type = item['type'] as String? ?? '';
-          final id = item['id']?.toString() ?? item['_id']?.toString() ?? '';
-          return type == 'group' &&
-              id.isNotEmpty &&
-              id != currentConversationId;
+          return item.type == 'group' &&
+              item.id.isNotEmpty &&
+              item.id != currentConversationId;
         })
+        .map((e) => e.toMap())
         .toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> _loadContactsForSource(
-    dynamic chatRepo,
+    ChatRepository chatRepo,
     _ParticipantSource source,
   ) async {
     final currentUserId = ref.read(userDataProvider)?.id ?? '';
@@ -103,19 +103,22 @@ class _CallParticipantPickerPageState
       case _ParticipantSource.currentConversation:
         final convId = widget.conversationId;
         if (convId == null || convId.isEmpty) {
-          return chatRepo.listContacts();
+          final rows = await chatRepo.listContacts(limit: 200);
+          return rows.map((c) => c.toMap()).toList(growable: false);
         }
         final rawMembers = await chatRepo.listMembers(
           conversationId: convId,
           limit: 200,
         );
-        return (rawMembers as List<Map<String, dynamic>>)
-            .where((m) => (m['userId'] as String? ?? '') != currentUserId)
+        return rawMembers
+            .where((m) => m.userId != currentUserId)
+            .map((m) => m.toMap())
             .toList(growable: false);
       case _ParticipantSource.sameInterest:
         final contacts = await chatRepo.listContacts(limit: 200);
-        return (contacts as List<Map<String, dynamic>>)
-            .where((c) => (c['userId'] as String? ?? '') != currentUserId)
+        return contacts
+            .where((c) => c.userId != currentUserId)
+            .map((c) => c.toMap())
             .toList(growable: false);
       case _ParticipantSource.otherGroups:
         final groupId = _selectedGroupId;
@@ -126,8 +129,9 @@ class _CallParticipantPickerPageState
           conversationId: groupId,
           limit: 200,
         );
-        return (rawMembers as List<Map<String, dynamic>>)
-            .where((m) => (m['userId'] as String? ?? '') != currentUserId)
+        return rawMembers
+            .where((m) => m.userId != currentUserId)
+            .map((m) => m.toMap())
             .toList(growable: false);
     }
   }

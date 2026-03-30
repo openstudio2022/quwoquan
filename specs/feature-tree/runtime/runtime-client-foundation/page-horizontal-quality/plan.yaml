@@ -1,0 +1,26 @@
+# plan：page-horizontal-quality（索引 + 矩阵门禁；无独立 codegen）
+
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+order_note: 真相源在父目录 spec/matrix 与 scripts；本 L3 仅索引与门禁对齐
+
+slices:
+  - id: slice-1-docs-and-gate-traceability
+    title: spec/design/acceptance/plan 与 verify_page_horizontal_quality_matrix 可对齐 tree_index
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+    tests:
+      - make gate（feature-tree refactor 校验通过）
+
+  - id: slice-2-baseline-cr-and-evidence-matrix
+    title: /baseline 冻结 CR-005 + acceptance T3/T4 证据矩阵 + spec 商用/NFR 段落
+    outputs:
+      - specs/changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+    tests:
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+    dev_status: implemented

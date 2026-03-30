@@ -44,8 +44,11 @@ class LocalChatSearchSyncService {
     _syncing = true;
     try {
       await _store.ensureReady();
-      final contacts = await _chatRepository.listContacts(limit: 200);
-      await _store.upsertContacts(namespace: namespace, contacts: contacts);
+      final contactDtos = await _chatRepository.listContacts(limit: 200);
+      await _store.upsertContacts(
+        namespace: namespace,
+        contacts: contactDtos.map((c) => c.toMap()).toList(growable: false),
+      );
 
       final timestamps = await _chatRepository.getConversationTimestamps();
       final cloudIds = <String>{};

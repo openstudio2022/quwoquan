@@ -1844,6 +1844,28 @@ features:
               domain: ""
               status: completed
               tags: []
+            - id: metadata-driven-client-data-contract
+              name: metadata-driven-client-data-contract
+              level: L3_story
+              path: runtime/runtime-client-foundation/metadata-driven-client-data-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: dual-theme-page-coverage
+              name: dual-theme-page-coverage
+              level: L3_story
+              path: runtime/runtime-client-foundation/dual-theme-page-coverage
+              domain: ""
+              status: specified
+              tags:
+                - S6
+            - id: page-horizontal-quality
+              name: page-horizontal-quality
+              level: L3_story
+              path: runtime/runtime-client-foundation/page-horizontal-quality
+              domain: ""
+              status: specified
+              tags: []
         - id: runtime-codegen
           name: runtime-codegen
           level: L2_feature

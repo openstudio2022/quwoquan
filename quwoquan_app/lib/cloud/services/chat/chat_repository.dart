@@ -4,6 +4,8 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
@@ -12,35 +14,29 @@ import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 /// 与云侧 ListMembers `sort` 枚举对齐；非法值回退 `joined_asc`。
-List<Map<String, dynamic>> sortChatMemberRows(
-  List<Map<String, dynamic>> members,
+List<ChatConversationMemberDto> sortChatMemberDtos(
+  List<ChatConversationMemberDto> members,
   String? sort,
 ) {
   final normalized = switch (sort?.trim()) {
     'display_name_asc' => 'display_name_asc',
     _ => 'joined_asc',
   };
-  final copy = members.map((m) => Map<String, dynamic>.from(m)).toList();
+  final copy = List<ChatConversationMemberDto>.from(members);
   if (normalized == 'display_name_asc') {
     copy.sort((a, b) {
-      final da = (a['displayName'] ?? a['userId'] ?? '').toString();
-      final db = (b['displayName'] ?? b['userId'] ?? '').toString();
+      final da = a.displayName.isNotEmpty ? a.displayName : a.userId;
+      final db = b.displayName.isNotEmpty ? b.displayName : b.userId;
       final c = da.compareTo(db);
       if (c != 0) return c;
-      return (a['userId'] ?? '').toString().compareTo(
-            (b['userId'] ?? '').toString(),
-          );
+      return a.userId.compareTo(b.userId);
     });
   } else {
     copy.sort((a, b) {
-      final ja = DateTime.tryParse((a['joinedAt'] ?? '').toString());
-      final jb = DateTime.tryParse((b['joinedAt'] ?? '').toString());
-      final ta = ja?.millisecondsSinceEpoch ?? 0;
-      final tb = jb?.millisecondsSinceEpoch ?? 0;
+      final ta = a.joinedAt?.millisecondsSinceEpoch ?? 0;
+      final tb = b.joinedAt?.millisecondsSinceEpoch ?? 0;
       if (ta != tb) return ta.compareTo(tb);
-      return (a['userId'] ?? '').toString().compareTo(
-            (b['userId'] ?? '').toString(),
-          );
+      return a.userId.compareTo(b.userId);
     });
   }
   return copy;
@@ -126,7 +122,7 @@ abstract class ChatRepository {
   });
 
   // ── 成员管理 ──────────────────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -161,7 +157,7 @@ abstract class ChatRepository {
   });
 
   // ── 联系人 ──────────────────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> listContacts({
+  Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -506,7 +502,7 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -514,11 +510,11 @@ class MockChatRepository implements ChatRepository {
     String? sort,
   }) async {
     var rows = _ensureMembersCache(conversationId)
-        .map((m) => Map<String, dynamic>.from(m))
+        .map((m) => ChatConversationMemberDto.fromMap(m))
         .toList();
-    rows = sortChatMemberRows(rows, sort);
+    rows = sortChatMemberDtos(rows, sort);
     if (role != null && role.isNotEmpty) {
-      rows = rows.where((m) => m['role'] == role).toList();
+      rows = rows.where((m) => m.role == role).toList();
     }
     if (limit > 0 && rows.length > limit) {
       rows = rows.take(limit).toList();
@@ -593,11 +589,14 @@ class MockChatRepository implements ChatRepository {
   }) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listContacts({
+  Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return ChatMockData.contacts;
+    return ChatMockData.contacts
+        .map(ChatContactRowDto.fromMap)
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override
@@ -688,11 +687,12 @@ class MockChatRepository implements ChatRepository {
     String newOwnerId,
   ) async {
     final members = await listMembers(conversationId: conversationId);
-    for (final m in members) {
+    final asMaps = members.map((m) => m.toMap()).toList();
+    for (final m in asMaps) {
       if (m['isCurrentUser'] == true) m['role'] = 'member';
       if (m['userId'] == newOwnerId) m['role'] = 'owner';
     }
-    _membersCache[conversationId] = members;
+    _membersCache[conversationId] = asMaps;
   }
 
   @override
@@ -701,11 +701,12 @@ class MockChatRepository implements ChatRepository {
     List<String> adminIds,
   ) async {
     final members = await listMembers(conversationId: conversationId);
-    for (final m in members) {
+    final asMaps = members.map((m) => m.toMap()).toList();
+    for (final m in asMaps) {
       if (m['role'] == 'owner') continue;
       m['role'] = adminIds.contains(m['userId']) ? 'admin' : 'member';
     }
-    _membersCache[conversationId] = members;
+    _membersCache[conversationId] = asMaps;
   }
 
   @override
@@ -1099,7 +1100,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 成员管理 ──────────────────────────────────────────────────────────────
 
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1124,10 +1125,13 @@ class RemoteChatRepository implements ChatRepository {
       ),
     );
     final items = decoded['items'];
-    if (items is List) {
-      return items.cast<Map<String, dynamic>>();
+    if (items is! List) {
+      return [];
     }
-    return [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ChatConversationMemberDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
@@ -1233,7 +1237,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
 
   @override
-  Future<List<Map<String, dynamic>>> listContacts({
+  Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -1253,10 +1257,13 @@ class RemoteChatRepository implements ChatRepository {
       ),
     );
     final items = decoded['items'];
-    if (items is List) {
-      return items.cast<Map<String, dynamic>>();
+    if (items is! List) {
+      return [];
     }
-    return [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ChatContactRowDto.fromMap)
+        .toList(growable: false);
   }
 
   @override

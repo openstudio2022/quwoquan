@@ -1,0 +1,21 @@
+version: 1
+feature_path: runtime/runtime-client-foundation/dual-theme-page-coverage
+summary: S6 全页面深色/浅色模式覆盖 — 矩阵 → 分批修复 → 验收
+
+phases:
+  - id: P0
+    name: baseline
+    steps:
+      - 冻结 spec.md / acceptance.yaml / design.md
+      - 生成首版 page-dual-theme-matrix（全量枚举）
+  - id: P1
+    name: remediate-by-domain
+    steps:
+      - 按领域（discovery/content/chat/user/…）关闭「不支持」项
+      - 每批 PR 更新矩阵状态
+  - id: P2
+    name: gate-optional
+    steps:
+      - 评估 verify 脚本或 Golden 扩展
+
+ordering_notes: 依赖 app-theme-infrastructure 全局主题可用；可与 ios-native-page-enforcement 并行推进

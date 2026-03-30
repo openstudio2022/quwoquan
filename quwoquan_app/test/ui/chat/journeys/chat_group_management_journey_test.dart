@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
@@ -342,8 +343,7 @@ void main() {
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(state.currentUserRole, equals('member'));
       expect(
-        state.members
-            .firstWhere((m) => m['userId'] == 'user_002')['role'],
+        state.members.firstWhere((m) => m.userId == 'user_002').role,
         equals('owner'),
       );
     });
@@ -473,19 +473,16 @@ void main() {
 
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(
-        state.members
-            .firstWhere((m) => m['userId'] == 'user_003')['role'],
+        state.members.firstWhere((m) => m.userId == 'user_003').role,
         equals('admin'),
       );
       expect(
-        state.members
-            .firstWhere((m) => m['userId'] == 'user_002')['role'],
+        state.members.firstWhere((m) => m.userId == 'user_002').role,
         equals('member'),
       );
       // 群主角色不变
       expect(
-        state.members
-            .firstWhere((m) => m['userId'] == 'user_001')['role'],
+        state.members.firstWhere((m) => m.userId == 'user_001').role,
         equals('owner'),
       );
     });
@@ -564,8 +561,8 @@ void main() {
       final stateBefore =
           container.read(conversationMembersProvider(_testConvId));
       final adminsBefore = stateBefore.members
-          .where((m) => m['role'] == 'admin')
-          .map((m) => m['userId'] as String)
+          .where((m) => m.role == 'admin')
+          .map((m) => m.userId)
           .toList();
 
       try {
@@ -575,8 +572,8 @@ void main() {
       final stateAfter =
           container.read(conversationMembersProvider(_testConvId));
       final adminsAfter = stateAfter.members
-          .where((m) => m['role'] == 'admin')
-          .map((m) => m['userId'] as String)
+          .where((m) => m.role == 'admin')
+          .map((m) => m.userId)
           .toList();
 
       expect(adminsAfter, equals(adminsBefore));
@@ -632,27 +629,32 @@ class _TrackingChatRepository extends MockChatRepository {
 /// 当前用户为普通成员（验证权限隔离）
 class _MemberRoleMockRepo extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    return [
-      {
-        'userId': 'user_001',
-        'role': 'member',
-        'isCurrentUser': true,
-        'displayName': '我',
-        'avatarUrl': '',
-      },
-      {
-        'userId': 'user_002',
-        'role': 'member',
-        'displayName': '李明',
-        'avatarUrl': '',
-      },
+    return const [
+      ChatConversationMemberDto(
+        userId: 'user_001',
+        displayName: '我',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      ChatConversationMemberDto(
+        userId: 'user_002',
+        displayName: '李明',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
     ];
   }
 }
@@ -660,7 +662,7 @@ class _MemberRoleMockRepo extends MockChatRepository {
 /// listMembers 抛异常
 class _ErrorMembersRepo extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -696,7 +698,7 @@ class _FailAdminsRepo extends MockChatRepository {
 /// 返回空成员列表
 class _EmptyMembersRepo extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,

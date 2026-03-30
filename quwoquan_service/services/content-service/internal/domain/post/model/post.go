@@ -11,123 +11,6 @@ type GeoPoint struct {
 
 var _ = time.Now
 
-// Comment domain model.
-type Comment struct {
-	ID                        string    `json:"_id" bson:"_id"`
-	PostId                    string    `json:"postId" bson:"postId"`
-	AuthorId                  string    `json:"authorId" bson:"authorId"`
-	PersonaId                 string    `json:"personaId" bson:"personaId"`
-	ProfileSubjectId          string    `json:"profileSubjectId" bson:"profileSubjectId"`
-	AuthorDisplayNameSnapshot string    `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
-	AuthorAvatarUrlSnapshot   string    `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
-	PersonaContextVersion     int64     `json:"personaContextVersion" bson:"personaContextVersion"`
-	Content                   string    `json:"content" bson:"content"`
-	ReplyToCommentId          string    `json:"replyToCommentId" bson:"replyToCommentId"`
-	ReplyToUserId             string    `json:"replyToUserId" bson:"replyToUserId"`
-	ReplyCount                int64     `json:"replyCount" bson:"replyCount"`
-	LikeCount                 int64     `json:"likeCount" bson:"likeCount"`
-	Status                    string    `json:"status" bson:"status"`
-	CreatedAt                 time.Time `json:"createdAt" bson:"createdAt"`
-}
-
-// MediaAsset domain model.
-type MediaAsset struct {
-	ID                 string    `json:"_id" bson:"_id"`
-	PostId             string    `json:"postId" bson:"postId"`
-	Type               string    `json:"type" bson:"type"`
-	OriginUrl          string    `json:"originUrl" bson:"originUrl"`
-	CdnUrl             string    `json:"cdnUrl" bson:"cdnUrl"`
-	ThumbnailUrl       string    `json:"thumbnailUrl" bson:"thumbnailUrl"`
-	Width              int64     `json:"width" bson:"width"`
-	Height             int64     `json:"height" bson:"height"`
-	DurationMs         int64     `json:"durationMs" bson:"durationMs"`
-	FileSizeBytes      int64     `json:"fileSizeBytes" bson:"fileSizeBytes"`
-	MimeType           string    `json:"mimeType" bson:"mimeType"`
-	Status             string    `json:"status" bson:"status"`
-	ModerationStatus   string    `json:"moderationStatus" bson:"moderationStatus"`
-	Derivatives        any       `json:"derivatives" bson:"derivatives"`
-	CoverStrategy      string    `json:"coverStrategy" bson:"coverStrategy"`
-	ManualCoverAssetId string    `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
-	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// ContentReaction domain model.
-type ContentReaction struct {
-	ID          string    `json:"_id" bson:"_id"`
-	PostId      string    `json:"postId" bson:"postId"`
-	UserId      string    `json:"userId" bson:"userId"`
-	Liked       bool      `json:"liked" bson:"liked"`
-	Favorited   bool      `json:"favorited" bson:"favorited"`
-	Shared      bool      `json:"shared" bson:"shared"`
-	Reported    bool      `json:"reported" bson:"reported"`
-	LikedAt     time.Time `json:"likedAt" bson:"likedAt"`
-	FavoritedAt time.Time `json:"favoritedAt" bson:"favoritedAt"`
-	UpdatedAt   time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleDistribution domain model.
-type PostCircleDistribution struct {
-	ID            string    `json:"_id" bson:"_id"`
-	PostId        string    `json:"postId" bson:"postId"`
-	OwnerAuthorId string    `json:"ownerAuthorId" bson:"ownerAuthorId"`
-	CircleId      string    `json:"circleId" bson:"circleId"`
-	GroupId       string    `json:"groupId" bson:"groupId"`
-	NodeId        string    `json:"nodeId" bson:"nodeId"`
-	State         string    `json:"state" bson:"state"`
-	Pinned        bool      `json:"pinned" bson:"pinned"`
-	PinnedAt      time.Time `json:"pinnedAt" bson:"pinnedAt"`
-	Featured      bool      `json:"featured" bson:"featured"`
-	FeaturedAt    time.Time `json:"featuredAt" bson:"featuredAt"`
-	LastActiveAt  time.Time `json:"lastActiveAt" bson:"lastActiveAt"`
-	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleReshare domain model.
-type PostCircleReshare struct {
-	ID             string    `json:"_id" bson:"_id"`
-	PostId         string    `json:"postId" bson:"postId"`
-	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
-	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
-	CircleId       string    `json:"circleId" bson:"circleId"`
-	QuoteText      string    `json:"quoteText" bson:"quoteText"`
-	State          string    `json:"state" bson:"state"`
-	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// DeletedPostTombstone domain model.
-type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
-	PostId    string    `json:"postId" bson:"postId"`
-	AuthorId  string    `json:"authorId" bson:"authorId"`
-	Reason    string    `json:"reason" bson:"reason"`
-	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
-	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
-}
-
-// PostSearchItemView domain model.
-type PostSearchItemView struct {
-	PostId                 string    `json:"postId" bson:"postId"`
-	ContentType            string    `json:"contentType" bson:"contentType"`
-	ContentIdentity        string    `json:"contentIdentity" bson:"contentIdentity"`
-	Title                  string    `json:"title" bson:"title"`
-	Summary                string    `json:"summary" bson:"summary"`
-	CoverUrl               string    `json:"coverUrl" bson:"coverUrl"`
-	AuthorProfileSubjectId string    `json:"authorProfileSubjectId" bson:"authorProfileSubjectId"`
-	AuthorDisplayName      string    `json:"authorDisplayName" bson:"authorDisplayName"`
-	AuthorAvatarUrl        string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
-	CircleId               string    `json:"circleId" bson:"circleId"`
-	CircleName             string    `json:"circleName" bson:"circleName"`
-	CategoryId             string    `json:"categoryId" bson:"categoryId"`
-	SubCategory            string    `json:"subCategory" bson:"subCategory"`
-	LikeCount              int64     `json:"likeCount" bson:"likeCount"`
-	HighlightText          string    `json:"highlightText" bson:"highlightText"`
-	MatchedField           string    `json:"matchedField" bson:"matchedField"`
-	PublishedAt            time.Time `json:"publishedAt" bson:"publishedAt"`
-}
-
 // Post domain model.
 type Post struct {
 	ID                         string         `json:"_id" bson:"_id"`
@@ -180,6 +63,123 @@ type Post struct {
 	PublishedAt                time.Time      `json:"publishedAt" bson:"publishedAt"`
 	LastActiveAt               time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
 	DeletedAt                  time.Time      `json:"deletedAt" bson:"deletedAt"`
+}
+
+// ContentReaction domain model.
+type ContentReaction struct {
+	ID          string    `json:"_id" bson:"_id"`
+	PostId      string    `json:"postId" bson:"postId"`
+	UserId      string    `json:"userId" bson:"userId"`
+	Liked       bool      `json:"liked" bson:"liked"`
+	Favorited   bool      `json:"favorited" bson:"favorited"`
+	Shared      bool      `json:"shared" bson:"shared"`
+	Reported    bool      `json:"reported" bson:"reported"`
+	LikedAt     time.Time `json:"likedAt" bson:"likedAt"`
+	FavoritedAt time.Time `json:"favoritedAt" bson:"favoritedAt"`
+	UpdatedAt   time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// PostCircleDistribution domain model.
+type PostCircleDistribution struct {
+	ID            string    `json:"_id" bson:"_id"`
+	PostId        string    `json:"postId" bson:"postId"`
+	OwnerAuthorId string    `json:"ownerAuthorId" bson:"ownerAuthorId"`
+	CircleId      string    `json:"circleId" bson:"circleId"`
+	GroupId       string    `json:"groupId" bson:"groupId"`
+	NodeId        string    `json:"nodeId" bson:"nodeId"`
+	State         string    `json:"state" bson:"state"`
+	Pinned        bool      `json:"pinned" bson:"pinned"`
+	PinnedAt      time.Time `json:"pinnedAt" bson:"pinnedAt"`
+	Featured      bool      `json:"featured" bson:"featured"`
+	FeaturedAt    time.Time `json:"featuredAt" bson:"featuredAt"`
+	LastActiveAt  time.Time `json:"lastActiveAt" bson:"lastActiveAt"`
+	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// PostSearchItemView domain model.
+type PostSearchItemView struct {
+	PostId                 string    `json:"postId" bson:"postId"`
+	ContentType            string    `json:"contentType" bson:"contentType"`
+	ContentIdentity        string    `json:"contentIdentity" bson:"contentIdentity"`
+	Title                  string    `json:"title" bson:"title"`
+	Summary                string    `json:"summary" bson:"summary"`
+	CoverUrl               string    `json:"coverUrl" bson:"coverUrl"`
+	AuthorProfileSubjectId string    `json:"authorProfileSubjectId" bson:"authorProfileSubjectId"`
+	AuthorDisplayName      string    `json:"authorDisplayName" bson:"authorDisplayName"`
+	AuthorAvatarUrl        string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
+	CircleId               string    `json:"circleId" bson:"circleId"`
+	CircleName             string    `json:"circleName" bson:"circleName"`
+	CategoryId             string    `json:"categoryId" bson:"categoryId"`
+	SubCategory            string    `json:"subCategory" bson:"subCategory"`
+	LikeCount              int64     `json:"likeCount" bson:"likeCount"`
+	HighlightText          string    `json:"highlightText" bson:"highlightText"`
+	MatchedField           string    `json:"matchedField" bson:"matchedField"`
+	PublishedAt            time.Time `json:"publishedAt" bson:"publishedAt"`
+}
+
+// Comment domain model.
+type Comment struct {
+	ID                        string    `json:"_id" bson:"_id"`
+	PostId                    string    `json:"postId" bson:"postId"`
+	AuthorId                  string    `json:"authorId" bson:"authorId"`
+	PersonaId                 string    `json:"personaId" bson:"personaId"`
+	ProfileSubjectId          string    `json:"profileSubjectId" bson:"profileSubjectId"`
+	AuthorDisplayNameSnapshot string    `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarUrlSnapshot   string    `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	PersonaContextVersion     int64     `json:"personaContextVersion" bson:"personaContextVersion"`
+	Content                   string    `json:"content" bson:"content"`
+	ReplyToCommentId          string    `json:"replyToCommentId" bson:"replyToCommentId"`
+	ReplyToUserId             string    `json:"replyToUserId" bson:"replyToUserId"`
+	ReplyCount                int64     `json:"replyCount" bson:"replyCount"`
+	LikeCount                 int64     `json:"likeCount" bson:"likeCount"`
+	Status                    string    `json:"status" bson:"status"`
+	CreatedAt                 time.Time `json:"createdAt" bson:"createdAt"`
+}
+
+// MediaAsset domain model.
+type MediaAsset struct {
+	ID                 string    `json:"_id" bson:"_id"`
+	PostId             string    `json:"postId" bson:"postId"`
+	Type               string    `json:"type" bson:"type"`
+	OriginUrl          string    `json:"originUrl" bson:"originUrl"`
+	CdnUrl             string    `json:"cdnUrl" bson:"cdnUrl"`
+	ThumbnailUrl       string    `json:"thumbnailUrl" bson:"thumbnailUrl"`
+	Width              int64     `json:"width" bson:"width"`
+	Height             int64     `json:"height" bson:"height"`
+	DurationMs         int64     `json:"durationMs" bson:"durationMs"`
+	FileSizeBytes      int64     `json:"fileSizeBytes" bson:"fileSizeBytes"`
+	MimeType           string    `json:"mimeType" bson:"mimeType"`
+	Status             string    `json:"status" bson:"status"`
+	ModerationStatus   string    `json:"moderationStatus" bson:"moderationStatus"`
+	Derivatives        any       `json:"derivatives" bson:"derivatives"`
+	CoverStrategy      string    `json:"coverStrategy" bson:"coverStrategy"`
+	ManualCoverAssetId string    `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
+	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// PostCircleReshare domain model.
+type PostCircleReshare struct {
+	ID             string    `json:"_id" bson:"_id"`
+	PostId         string    `json:"postId" bson:"postId"`
+	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
+	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
+	CircleId       string    `json:"circleId" bson:"circleId"`
+	QuoteText      string    `json:"quoteText" bson:"quoteText"`
+	State          string    `json:"state" bson:"state"`
+	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// DeletedPostTombstone domain model.
+type DeletedPostTombstone struct {
+	ID        string    `json:"_id" bson:"_id"`
+	PostId    string    `json:"postId" bson:"postId"`
+	AuthorId  string    `json:"authorId" bson:"authorId"`
+	Reason    string    `json:"reason" bson:"reason"`
+	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
+	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }
 
 // ProfileInteractionActivityView domain model.

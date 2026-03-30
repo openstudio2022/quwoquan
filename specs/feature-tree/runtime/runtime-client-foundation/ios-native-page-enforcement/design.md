@@ -17,11 +17,15 @@
 
 采用 **方案 B**：`verify_ios_native_surface_gate.py` 扫描约定 glob，检测 **`return Scaffold(`**（Material 根壳典型写法）。与 `AppScaffold`（内部 `CupertinoPageScaffold`）不冲突。
 
+**v1 正则漏报边界（已知，不阻塞 S1 baseline）**：`return const Scaffold(`、`return` 与 `Scaffold` 跨行、根节点写作 `=> Scaffold(` 等 **当前不命中**；依赖 Code Review 与后续 v2（AST/analyzer）。S1 验收仅保证 **典型违规** `return Scaffold(` 被阻断。
+
 ### 扫描范围（v1）
 
-1. `quwoquan_app/lib/ui/**/pages/**/*.dart`
+1. `quwoquan_app/lib/ui/**/pages/**/*.dart`（**含**非 `*_page` 后缀文件，如 `welcome_screen.dart`、仅 `export` 的 `chat_display_fallbacks.dart`——后者虽通常无 `return`，仍属扫描文件集）
 2. `quwoquan_app/lib/components/**/*_page.dart`
 3. `quwoquan_app/lib/components/media/camera/camera_capture_page.dart`（命名例外，显式列入 glob 列表于脚本内）
+
+**与横向矩阵的差异（已知 gap）**：`page-horizontal-quality-matrix.md` 另含 **`lib/app/shell/*.dart`** 等主壳行；**本门禁当前不扫描 `app/shell`**。若产品要求「主壳层同样阻断 `return Scaffold(`」，需 **slice 扩展扫描路径**（与 `verify_ios_native_surface_gate.py` 同步），并在 design 中更新本节。
 
 ### 豁免机制
 

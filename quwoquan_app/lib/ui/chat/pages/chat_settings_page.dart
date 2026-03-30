@@ -215,29 +215,19 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           }
                           final m = members[index];
                           final username =
-                              m['userId'] as String? ?? 'user_$index';
+                              m.userId.isNotEmpty ? m.userId : 'user_$index';
                           return _MemberAvatar(
-                            name:
-                                m['displayName'] as String? ??
-                                m['name'] as String? ??
-                                '',
-                            avatarUrl:
-                                m['avatarUrl'] as String? ??
-                                m['avatar'] as String? ??
-                                '',
+                            name: m.displayName,
+                            avatarUrl: m.avatarUrl,
                             textColor: fgPrimary,
                             username: username,
-                            role: m['role'] as String?,
+                            role: m.role,
                             onTap: () => context.push(
                               AppRoutePaths.userProfile(username: username),
                               extra: UserProfileRouteExtra(
                                 profileSubjectId: username,
-                                avatar:
-                                    (m['avatarUrl'] as String?) ??
-                                    (m['avatar'] as String?),
-                                displayName:
-                                    (m['displayName'] as String?) ??
-                                    (m['name'] as String?),
+                                avatar: m.avatarUrl,
+                                displayName: m.displayName,
                               ),
                             ),
                           );

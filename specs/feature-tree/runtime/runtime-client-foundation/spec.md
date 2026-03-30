@@ -11,6 +11,8 @@
 | `error-permission-display-semantics` | 云端/网络错误与权限类统一展示语义：内联 vs SnackBar、权限卡片、token 约束（规范见 `specs/ux/error-and-permission-semantics.md`） |
 | `page-layout-semantics` | 页面布局统一语义：Modal/Stack leading、选择器模式、设置页结构（规范见 `specs/ux/page-layout-semantics.md`；不含用户/作者/圈子主页） |
 | `dart-semantic-gate` | Dart 编码规范自动化守门：verify_dart_semantic 脚本 + gate 集成 + 规则增强 + FF 前置 |
+| `ios-native-page-enforcement` | iOS 原生页面根壳与静态门禁（Material 根 `Scaffold` 阻断） |
+| `metadata-driven-client-data-contract` | 客户端 **消费侧** 与 `contracts/metadata` codegen 对齐：UI/Mock/Remote 同源类型与缺口清单 |
 
 ## 职责边界
 
@@ -21,12 +23,13 @@
 ## 与父/子节点关系
 
 - 父节点：`runtime` L1（基础设施与运行时层）
-- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）
+- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）、`ios-native-page-enforcement`（L3）、`metadata-driven-client-data-contract`（L3）
 
 ## 约束
 
 - 所有客户端横切能力必须经此 L2 统一定义，禁止在业务域 L2（如 `discovery-content`）下新建客户端基础设施节点
-- 本 L2 变更不涉及 `contracts/metadata/` YAML，无 Go codegen，Gate 适配为纯客户端检查
+- **元数据 YAML 的唯一编辑仍归属 `contracts/metadata` + codegen 主线**；本 L2 的 `metadata-driven-client-data-contract` 仅约束 **Flutter 侧类型消费与 Mock/Remote 同源**，不替代云侧 metadata 评审流程
+- 纯客户端 Gate（如 iOS 壳、dart semantic）不涉及 Go codegen；**可选** 元数据驱动 UI 门禁见该 L3 的 `plan.yaml`
 
 ## 验收标准概要
 

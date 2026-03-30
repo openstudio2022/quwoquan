@@ -8,10 +8,12 @@
 /// mock.yaml dart_func: testVideoCardDurationFormat
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/video_post_dto.g.dart';
 import 'package:quwoquan_app/components/content/video_post_card.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
@@ -22,14 +24,11 @@ const _videoFixture = <String, dynamic>{
   'contentType': 'video',
   'authorId': 'user_2',
   'displayName': '视频创作者',
-  'authorAvatarUrl': 'https://example.com/avatar2.jpg',
+  'authorAvatarUrl': '',
   'authorBackgroundUrl': '',
-  'coverUrl': 'https://example.com/video_cover.jpg',
-  'thumbnailUrl': 'https://example.com/video_thumb.jpg',
+  'coverUrl': '',
+  'thumbnailUrl': '',
   'videoUrl': 'https://example.com/video.mp4',
-  // VideoPostCard reads 'duration' in seconds
-  'duration': 93,
-  // durationMs for mock data compatibility
   'durationMs': 93000,
   'width': 1080,
   'height': 1920,
@@ -52,6 +51,19 @@ const _minimalVideoFixture = <String, dynamic>{
 
 // ─── helper ───────────────────────────────────────────────────────────────────
 
+void _suppressImageErrors() {
+  final original = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final msg = details.exception.toString();
+    if (msg.contains('HTTP request failed') ||
+        msg.contains('NetworkImageLoadException') ||
+        msg.contains('precache')) {
+      return;
+    }
+    original?.call(details);
+  };
+}
+
 Widget _wrapCard(Widget child) {
   return ProviderScope(
     child: ScreenUtilInit(
@@ -73,9 +85,10 @@ Widget _wrapCard(Widget child) {
 /// 当 VideoPostCard 添加时长格式化显示（"1:33" for 93s）时，
 /// 此测试应扩展为断言 find.text("1:33") findsOneWidget。
 Future<void> testVideoCardDurationFormat(WidgetTester tester) async {
+  _suppressImageErrors();
   await tester.pumpWidget(_wrapCard(
     VideoPostCard(
-      post: _videoFixture,
+      post: VideoPostDto.fromMap(_videoFixture),
       onPostTap: (post, _) {},
       onUserTap: (_) {},
     ),
@@ -100,6 +113,8 @@ Future<void> testVideoCardDurationFormat(WidgetTester tester) async {
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 void main() {
+  setUp(_suppressImageErrors);
+
   // ──────────────────────────────────────────────────────────────────
   // 渲染契约
   // ──────────────────────────────────────────────────────────────────
@@ -107,7 +122,7 @@ void main() {
     testWidgets('renders VideoPostCard widget tree without error', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: _videoFixture,
+          post: VideoPostDto.fromMap(_videoFixture),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),
@@ -124,7 +139,7 @@ void main() {
     testWidgets('duration badge shows correct MM:SS format', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: {..._videoFixture, 'duration': 125, 'durationMs': 125000},
+          post: VideoPostDto.fromMap({..._videoFixture, 'durationMs': 125000}),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),
@@ -137,7 +152,7 @@ void main() {
     testWidgets('duration badge shows H:MM:SS for long video', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: {..._videoFixture, 'duration': 3723},
+          post: VideoPostDto.fromMap({..._videoFixture, 'durationMs': 3723000}),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),
@@ -150,7 +165,7 @@ void main() {
     testWidgets('duration badge absent when duration is zero', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: {..._videoFixture, 'duration': 0},
+          post: VideoPostDto.fromMap({..._videoFixture, 'durationMs': 0}),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),
@@ -162,11 +177,10 @@ void main() {
 
     testWidgets('durationMs fallback when duration absent', (tester) async {
       final postWithoutDuration = Map<String, dynamic>.from(_videoFixture)
-        ..remove('duration');
-      postWithoutDuration['durationMs'] = 90000;
+        ..['durationMs'] = 90000;
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: postWithoutDuration,
+          post: VideoPostDto.fromMap(postWithoutDuration),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),
@@ -179,7 +193,7 @@ void main() {
     testWidgets('renders all optional callbacks', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: _videoFixture,
+          post: VideoPostDto.fromMap(_videoFixture),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
           onLike: (_) {},
@@ -201,7 +215,7 @@ void main() {
       expect(() async {
         await tester.pumpWidget(_wrapCard(
           VideoPostCard(
-            post: _minimalVideoFixture,
+            post: VideoPostDto.fromMap(_minimalVideoFixture),
             onPostTap: (post, _) {},
             onUserTap: (_) {},
           ),
@@ -213,7 +227,7 @@ void main() {
     testWidgets('no optional callbacks → renders without crash', (tester) async {
       await tester.pumpWidget(_wrapCard(
         VideoPostCard(
-          post: _videoFixture,
+          post: VideoPostDto.fromMap(_videoFixture),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
         ),

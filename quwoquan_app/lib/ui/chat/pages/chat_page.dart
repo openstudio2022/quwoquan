@@ -46,19 +46,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
   final ScrollController _scrollController = ScrollController();
   double _lastScrollY = 0;
 
-  List<Map<String, dynamic>>? _conversations;
-  bool _isLoading = true;
-
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    if (!ref.read(chatInboxListEnabledProvider)) {
-      _loadConversationsWithCache();
-    }
-  }
 
   @override
   void dispose() {
@@ -154,53 +143,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
     return true;
   }
 
-  /// 本地缓存优先 → 异步云端同步 → 增量刷新
-  Future<void> _loadConversationsWithCache() async {
-    final cache = ref.read(conversationCacheProvider);
-    final cached = cache.getAll();
-    if (cached.isNotEmpty && mounted) {
-      setState(() {
-        _conversations = cached;
-        _isLoading = false;
-      });
-    }
-
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final remote = await repo.listConversations(limit: 100);
-      cache.putAll(remote);
-      if (mounted) {
-        setState(() {
-          _conversations = remote;
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (_conversations == null || _conversations!.isEmpty) {
-        final fallback = ref
-            .read(appContentRepositoryProvider)
-            .chatMockConversations;
-        if (mounted) {
-          setState(() {
-            _conversations = fallback;
-            _isLoading = false;
-          });
-        }
-      } else if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-
-    try {
-      final sync = ref.read(conversationSyncProvider);
-      await sync.sync();
-      final updated = cache.getAll();
-      if (updated.isNotEmpty && mounted) {
-        setState(() => _conversations = updated);
-      }
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -284,10 +226,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
         borderColor,
       );
     }
-    if (ref.watch(chatInboxListEnabledProvider)) {
-      return _buildInboxMessagesContent(context, fgPrimary, fgSecondary);
-    }
-    return _buildMessagesContent(context, fgPrimary, fgSecondary, borderColor);
+    return _buildInboxMessagesContent(context, fgPrimary, fgSecondary);
   }
 
   Widget _buildMainTabs(
@@ -354,7 +293,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   Widget _buildSubTabs(BuildContext context, Color borderColor) {
     final subTabs = _mainTabIndex == 0 ? _messageSubTabs : _contactsSubTabs;
-    final useInboxList = ref.watch(chatInboxListEnabledProvider);
 
     Map<int, int>? numberBadges;
     Map<int, bool>? dotBadges;
@@ -364,36 +302,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
       int unreadCount = 0;
       bool hasSecretUnread = false;
 
-      if (useInboxList) {
-        final inboxItems = ref.watch(chatInboxListProvider).items;
-        for (final item in inboxItems) {
-          final isSecret = item.type == 'encrypted';
-          if (isSecret) {
-            if (item.hasUnread || item.hasMention) {
-              hasSecretUnread = true;
-            }
-            continue;
+      final inboxItems = ref.watch(chatInboxListProvider).items;
+      for (final item in inboxItems) {
+        final isSecret = item.type == 'encrypted';
+        if (isSecret) {
+          if (item.hasUnread || item.hasMention) {
+            hasSecretUnread = true;
           }
-          atMeCount += item.mentionUnreadCount;
-          unreadCount += item.unreadCount;
+          continue;
         }
-      } else if (_conversations != null) {
-        for (final c in _conversations!) {
-          final isSecret = c['type'] == 'encrypted';
-          final unread = c['unreadCount'] as int? ?? 0;
-          final hasMention = c['hasMention'] == true;
-
-          if (isSecret) {
-            if (unread > 0 || hasMention) {
-              hasSecretUnread = true;
-            }
-          } else {
-            if (hasMention) {
-              atMeCount += unread > 0 ? unread : 1;
-            }
-            unreadCount += unread;
-          }
-        }
+        atMeCount += item.mentionUnreadCount;
+        unreadCount += item.unreadCount;
       }
 
       numberBadges = {};
@@ -747,68 +666,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
     if (sub == UITextConstants.unread) {
       return list.where((item) => item.hasUnread).toList(growable: false);
-    }
-    return list;
-  }
-
-  Widget _buildMessagesContent(
-    BuildContext context,
-    Color fgPrimary,
-    Color fgSecondary,
-    Color borderColor,
-  ) {
-    final rawList = _conversations ?? const <Map<String, dynamic>>[];
-    final convs = _filterConversationListForSubTab(rawList);
-
-    if (_isLoading && rawList.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: CupertinoActivityIndicator(),
-        ),
-      );
-    }
-
-    if (convs.isEmpty) {
-      return _buildConversationEmptyState(
-        fgSecondary: fgSecondary,
-        subTab: _messageSubTabs[_subTabIndex],
-      );
-    }
-
-    {
-      return ListView(
-        controller: _scrollController,
-        children: [
-          ...convs.map(
-            (c) => _ConversationTile(
-              conversation: c,
-              onTap: () =>
-                  context.push(AppRoutePaths.chatDetail(id: '${c['id']}')),
-              fgPrimary: fgPrimary,
-              fgSecondary: fgSecondary,
-              borderColor: borderColor,
-            ),
-          ),
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
-        ],
-      );
-    }
-  }
-
-  List<Map<String, dynamic>> _filterConversationListForSubTab(
-    List<Map<String, dynamic>> list,
-  ) {
-    if (_mainTabIndex != 0) return list;
-    final sub = _messageSubTabs[_subTabIndex];
-    if (sub == UITextConstants.atMe) {
-      return list.where((c) => c['hasMention'] == true).toList();
-    }
-    if (sub == UITextConstants.unread) {
-      return list.where((c) => (c['unreadCount'] as int? ?? 0) > 0).toList();
-    }
-    if (sub == UITextConstants.secretMessage) {
-      return const <Map<String, dynamic>>[];
     }
     return list;
   }

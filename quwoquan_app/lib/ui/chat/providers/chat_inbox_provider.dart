@@ -1,17 +1,9 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart' show Provider;
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
-
-final chatInboxListEnabledProvider = Provider<bool>((ref) {
-  return const bool.fromEnvironment(
-    'CHAT_INBOX_LIST_ENABLED',
-    defaultValue: true,
-  );
-});
 
 class ChatInboxListState {
   const ChatInboxListState({

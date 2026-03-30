@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -89,7 +90,7 @@ void main() {
       expect(state.isOwner, isTrue,
           reason: 'conv_002 当前用户（user_001）应为群主');
       expect(state.isAdminOrOwner, isTrue);
-      expect(state.members.any((m) => m['isCurrentUser'] == true), isTrue);
+      expect(state.members.any((m) => m.isCurrentUser), isTrue);
     });
 
     testWidgets('普通成员角色时不显示群管理入口', (tester) async {
@@ -158,7 +159,7 @@ void main() {
 
 class _ErrorChatRepository extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -172,27 +173,32 @@ class _ErrorChatRepository extends MockChatRepository {
 /// 当前用户为普通成员
 class _MemberRoleChatRepository extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    return [
-      {
-        'userId': 'user_001',
-        'role': 'member',
-        'isCurrentUser': true,
-        'displayName': '我',
-        'avatarUrl': '',
-      },
-      {
-        'userId': 'user_002',
-        'role': 'member',
-        'displayName': '李明',
-        'avatarUrl': '',
-      },
+    return const [
+      ChatConversationMemberDto(
+        userId: 'user_001',
+        displayName: '我',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      ChatConversationMemberDto(
+        userId: 'user_002',
+        displayName: '李明',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
     ];
   }
 }

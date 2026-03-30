@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
@@ -31,9 +32,8 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
     super.dispose();
   }
 
-  void _onMemberSelected(Map<String, dynamic> member) {
-    final name =
-        member['displayName'] as String? ?? member['name'] as String? ?? '';
+  void _onMemberSelected(ChatConversationMemberDto member) {
+    final name = member.displayName;
 
     showCupertinoDialog<void>(
       context: context,
@@ -59,7 +59,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                         widget.conversationId,
                       ).notifier,
                     )
-                    .transferOwnership(member['userId'] as String? ?? '');
+                    .transferOwnership(member.userId);
                 if (mounted) context.pop();
               } catch (_) {}
             },
@@ -80,10 +80,18 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
 
     // 排除群主（当前用户）自身
     final candidates = membersState.members
-        .where((m) => m['role'] != 'owner' && m['isCurrentUser'] != true)
+        .where((m) => m.role != 'owner' && !m.isCurrentUser)
         .toList();
 
-    final filtered = filterMemberMapsByQuery(candidates, _searchQuery);
+    final filteredMaps =
+        filterMemberMapsByQuery(candidates.map((e) => e.toMap()).toList(), _searchQuery);
+    final filtered = candidates
+        .where(
+          (c) => filteredMaps.any(
+            (m) => (m['userId'] ?? '').toString() == c.userId,
+          ),
+        )
+        .toList();
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
@@ -116,8 +124,8 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                             for (final m in filtered)
                               MemberListNavigateTile(
                                 isDark: isDark,
-                                member: m,
-                                subtitleText: (m['nickname'] as String?)?.trim(),
+                                member: m.toMap(),
+                                subtitleText: null,
                                 onTap: () => _onMemberSelected(m),
                               ),
                           ],

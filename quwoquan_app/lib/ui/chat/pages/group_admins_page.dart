@@ -7,6 +7,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群管理员设置页 — 多选最多 3 人
@@ -35,12 +36,12 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   }
 
   /// 从 Provider state 初始化选中集合（只初始化一次）
-  void _initSelectedIds(List<Map<String, dynamic>> members) {
+  void _initSelectedIds(List<ChatConversationMemberDto> members) {
     if (_initialized) return;
     _initialized = true;
     for (final m in members) {
-      if (m['role'] == 'admin') {
-        _selectedIds.add(m['userId'] as String? ?? '');
+      if (m.role == 'admin') {
+        _selectedIds.add(m.userId);
       }
     }
   }
@@ -89,7 +90,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
 
     // 排除群主和当前用户自己
     final allMembers = membersState.members
-        .where((m) => m['role'] != 'owner' && m['isCurrentUser'] != true)
+        .where((m) => m.role != 'owner' && !m.isCurrentUser)
         .toList();
 
     // 首次加载完成后初始化选中集合
@@ -97,10 +98,21 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       _initSelectedIds(membersState.members);
     }
 
-    final filtered = filterMemberMapsByQuery(allMembers, _searchQuery);
+    final filteredMaps = filterMemberMapsByQuery(
+      allMembers.map((e) => e.toMap()).toList(),
+      _searchQuery,
+    );
+    final filtered = allMembers
+        .where(
+          (c) => filteredMaps.any(
+            (m) => (m['userId'] ?? '').toString() == c.userId,
+          ),
+        )
+        .toList();
 
     final selectedMembers = allMembers
-        .where((m) => _selectedIds.contains(m['userId'] as String? ?? ''))
+        .where((m) => _selectedIds.contains(m.userId))
+        .map((e) => e.toMap())
         .toList();
 
     return SettingsInsetMemberPickerPageScaffold(
@@ -149,13 +161,9 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
                             for (final m in filtered)
                               MemberListMultiSelectTile(
                                 isDark: isDark,
-                                member: m,
-                                isSelected: _selectedIds.contains(
-                                  m['userId'] as String? ?? '',
-                                ),
-                                onTap: () => _toggleMember(
-                                  m['userId'] as String? ?? '',
-                                ),
+                                member: m.toMap(),
+                                isSelected: _selectedIds.contains(m.userId),
+                                onTap: () => _toggleMember(m.userId),
                               ),
                           ],
                         ),

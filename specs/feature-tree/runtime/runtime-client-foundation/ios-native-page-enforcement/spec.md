@@ -36,6 +36,8 @@
 |------------|------|
 | `page-layout-semantics` | 本 L3 补齐 **根壳** 与 **CI**；其负责 leading/选择器/设置块结构 |
 | `dart-semantic-gate` | 互补：语义 token / 相对路径；本门禁专盯 **Material 根 Scaffold** |
+| `dual-theme-page-coverage`（**S6**） | 同一套 iOS 壳在 **浅色/深色** 下材质与对比达标；见兄弟 L3 `dual-theme-page-coverage/spec.md` |
+| `page-horizontal-quality` | **P1** 与本门禁对齐；全页清单与 **P1–P8** 矩阵见 `page-horizontal-quality-spec.md` / `page-horizontal-quality-matrix.md` |
 
 ## 数据生命周期 / 权限
 
@@ -45,6 +47,11 @@
 
 - **迁移**：将 allowlist 中文件逐一切换为 `AppScaffold`/`CupertinoPageScaffold` 后从 allowlist 删除。
 - **回滚**：若门禁误伤，可短期扩大 allowlist 并开 issue；**禁止**在无 CR 说明下永久扩大豁免列表。
+
+## 场景验收 S1（本会话可独立 baseline 的边界）
+
+> **`acceptance.yaml` 中 `scenario_acceptance.id: S1`**：开发者在**约定扫描路径**内的 Dart 文件写入 **`return Scaffold(`**（Material 根壳典型写法）时，本地 **`make gate` 非零退出**，且 stderr **引用** `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`（Native First / No Android Leakage）。  
+> **S1 不等价于**：全量满足 `02` 全文（Token、断点、深色、无 ripple 等）；后者由 **`page-horizontal-quality` P1**、`dart-semantic-gate`、`dual-theme-page-coverage`（S6）等分担，**不得**在仅交付 S1 的会话中要求「逐条 02 审计完毕」。
 
 ## 验收重点摘要
 

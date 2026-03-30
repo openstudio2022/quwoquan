@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -17,14 +18,14 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart' as c
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
 abstract class MediaPostCard extends ConsumerStatefulWidget {
-  final dynamic post;
-  final Function(dynamic, int) onPostTap;
-  final Function(String) onUserTap;
-  final Function(dynamic)? onLike;
-  final Function(dynamic)? onComment;
-  final Function(dynamic)? onShare;
-  final Function(dynamic)? onBookmark;
-  final Function(dynamic)? onMore;
+  final PostBaseDto post;
+  final void Function(PostBaseDto, int) onPostTap;
+  final void Function(String) onUserTap;
+  final void Function(PostBaseDto)? onLike;
+  final void Function(PostBaseDto)? onComment;
+  final void Function(PostBaseDto)? onShare;
+  final void Function(PostBaseDto)? onBookmark;
+  final void Function(PostBaseDto)? onMore;
   final bool isFirstPost;
 
   const MediaPostCard({
@@ -57,11 +58,23 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   @override
   void initState() {
     super.initState();
-    _isLiked = widget.post['isLiked'] ?? false;
-    _isBookmarked = widget.post['isBookmarked'] ?? false;
-    _likesCount = widget.post['likesCount'] ?? 0;
-    _commentsCount = widget.post['commentsCount'] ?? 0;
-    _savesCount = widget.post['savesCount'] ?? 0;
+    _syncInteractionFromPost(widget.post);
+  }
+
+  @override
+  void didUpdateWidget(MediaPostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id) {
+      _syncInteractionFromPost(widget.post);
+    }
+  }
+
+  void _syncInteractionFromPost(PostBaseDto p) {
+    _isLiked = false;
+    _isBookmarked = false;
+    _likesCount = p.likeCount;
+    _commentsCount = p.commentCount;
+    _savesCount = p.favoriteCount;
   }
 
   @override
@@ -275,16 +288,13 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   void _showCommentViewer() {
     CommentViewer.showModal(
       context: context,
-      postId: (widget.post['id'] ?? widget.post['postId'] ?? 'mock_post_id').toString(),
+      postId: widget.post.id.isNotEmpty ? widget.post.id : 'mock_post_id',
     );
   }
 
 
   /// 构建用户信息头部 - 基于原型代码增强，支持发布者类型和关注功能
   Widget _buildPostHeader(BuildContext context, bool isDark) {
-    final publisherType = widget.post['publisherType'] ?? 'author';
-    final isVerified = widget.post['isVerified'] ?? false;
-
     return Padding(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.contentSpacingMd.w,  // 使用更小的内容间距
@@ -296,7 +306,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
         children: [
           // 用户头像 - 基于原型代码增强，支持发布者类型
           GestureDetector(
-            onTap: () => widget.onUserTap(widget.post['username']),
+            onTap: () => widget.onUserTap(widget.post.authorProfileSubjectId),
             child: Container(
               width: AppSpacing.avatarSize.w,
               height: AppSpacing.avatarSize.w,
@@ -307,11 +317,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               child: CircleAvatar(
                 radius: (AppSpacing.avatarSize / 2).r,
                 backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-                backgroundImage:
-                    widget.post['publisher']?['avatar']?.isNotEmpty == true
-                        ? NetworkImage(widget.post['publisher']['avatar'])
-                        : null,
-                child: widget.post['publisher']?['avatar']?.isEmpty != false
+                backgroundImage: widget.post.avatarUrl.isNotEmpty
+                    ? NetworkImage(widget.post.avatarUrl)
+                    : null,
+                child: widget.post.avatarUrl.isEmpty
                     ? Icon(Icons.person,
                         size: AppSpacing.iconMedium, // 使用语义标签
                         color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary))
@@ -333,14 +342,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () => widget.onUserTap(widget.post['username']),
+                      onTap: () => widget.onUserTap(widget.post.authorProfileSubjectId),
                       child: Text(
-                        publisherType == 'circle'
-                            ? (widget.post['displayName'] ??
-                                widget.post['username'] ??
-                                UITextConstants.unknownUser)
-                            : (widget.post['username'] ??
-                                UITextConstants.unknownUser),
+                        widget.post.displayName.isNotEmpty
+                            ? widget.post.displayName
+                            : UITextConstants.unknownUser,
                         style: TextStyle(
                           fontWeight: AppTypography.medium,
                           fontSize: AppTypography.base, // 使用语义标签
@@ -350,23 +356,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                         ),
                       ),
                     ),
-                    // 认证标识 - 基于原型代码
-                    if (isVerified) ...[
-                      SizedBox(width: AppSpacing.smallBorderRadius.w),
-                      Container(
-                        width: AppSpacing.iconSmall.w,
-                        height: AppSpacing.iconSmall.w,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryColor,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.check,
-                          size: AppTypography.xs, // 使用语义标签
-                          color: AppColors.white,
-                        ),
-                      ),
-                    ],
                     SizedBox(width: AppSpacing.smallBorderRadius.w),
                     Text(
                       '•',
@@ -379,7 +368,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     ),
                     SizedBox(width: AppSpacing.smallBorderRadius.w),
                     Text(
-                      _formatTimeAgo(widget.post['createdAt']),
+                      _formatTimeAgo(widget.post.createdAt),
                       style: TextStyle(
                         fontSize: AppTypography.sm, // 使用语义标签
                         color: isDark
@@ -392,7 +381,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
                 // IP地址标签 - 显示作品发布时的IP地址
                 Text(
-                  _getLocationFromIP(widget.post['publishIP'] ?? '192.168.1.1'),
+                  _getLocationFromIP('192.168.1.1'),
                   style: TextStyle(
                     fontSize: AppTypography.sm, // 使用语义标签
                     color: isDark
@@ -674,7 +663,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 构建帖子标题
   Widget _buildPostCaption(BuildContext context, bool isDark) {
-    final caption = widget.post['caption'] ?? '';
+    final caption = widget.post.normalizedBody;
     if (caption.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -686,7 +675,9 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
         text: TextSpan(
           children: [
             TextSpan(
-              text: widget.post['username'] ?? 'Unknown User',
+              text: widget.post.displayName.isNotEmpty
+                  ? widget.post.displayName
+                  : 'Unknown User',
               style: TextStyle(
                 fontWeight: AppTypography.medium,
                 fontSize: AppTypography.base, // 使用语义标签
@@ -711,12 +702,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   }
 
   /// 格式化时间
-  String _formatTimeAgo(dynamic createdAt) {
-    if (createdAt == null) return AppStrings.justNow;
-
+  String _formatTimeAgo(DateTime createdAt) {
     try {
       final now = DateTime.now();
-      final created = DateTime.parse(createdAt.toString());
+      final created = createdAt;
       final difference = now.difference(created);
 
       if (difference.inMinutes < 1) {

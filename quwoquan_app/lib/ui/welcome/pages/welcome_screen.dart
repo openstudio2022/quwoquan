@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -115,18 +115,25 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    // 与 AppScaffold 一致：CupertinoPageScaffold + 透明 Material，避免无 Material 祖先时的调试下划线。
+    // P1：CupertinoPageScaffold + 透明 Material（AppScaffold）+ 显式 DefaultTextStyle，
+    // 避免 MaterialApp.home 场景下调试模式对 Text 的误强调/黄下划线。
     return AppScaffold(
       backgroundColor: AppColors.welcomeBackground,
       resizeToAvoidBottomInset: false,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _buildBackground(),
-          _buildMainContent(),
-          _buildFooter(),
-          _buildCountdownBadge(),
-        ],
+      body: DefaultTextStyle.merge(
+        style: const TextStyle(
+          decoration: TextDecoration.none,
+          decorationThickness: 0,
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildBackground(),
+            _buildMainContent(),
+            _buildFooter(),
+            _buildCountdownBadge(),
+          ],
+        ),
       ),
     );
   }
@@ -387,7 +394,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
               SizedBox(width: AppSpacing.intraGroupXs),
               Icon(
-                Icons.auto_awesome,
+                CupertinoIcons.sparkles,
                 size: AppSpacing.iconSmall,
                 color: AppColors.welcomeForeground.withValues(alpha: 0.9),
               ),

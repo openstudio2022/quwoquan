@@ -2,7 +2,7 @@ id: CR-20260329-003
 title: settings canonical Inset shell + manifest gate
 slug: settings-canonical-shell-gate
 revision: 1
-status: active
+status: baseline_complete
 
 affected_nodes:
   - specs/ux/page-layout-semantics.md
@@ -43,3 +43,25 @@ entries:
     rollback: >
       Revert verify_settings_canonical 与 gate 调用；恢复 manifest 与页面壳改动；
       保留 CR 记录以便审计。
+
+  - timestamp: "2026-03-29T23:59:00+08:00"
+    summary: >
+      本会话归档：CR-20260329-003 与同日「元数据驱动」CR 解耦（后者重编号为 CR-20260329-004）；
+      settings manifest 门禁与 Inset 壳基线视为 baseline_complete。
+    reason: 前序会话中断，由本会话完成变更请求收尾与编号澄清。
+    change_type:
+      - baseline
+    changed_documents:
+      - path: specs/changelog/CR-20260329-003-settings-canonical-shell-gate.yaml
+        sections:
+          - status / entries
+      - path: specs/changelog/CR-20260329-004-metadata-driven-client-data-contract.yaml
+        sections:
+          - id（自 003-metadata 迁出，避免同号冲突）
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+      cloud_contract_change: false
+    rollback: 将 status 回退为 active；若误删旧 metadata CR 文件名，从 git 恢复 CR-20260329-003-metadata 文件并撤销 004 引用。

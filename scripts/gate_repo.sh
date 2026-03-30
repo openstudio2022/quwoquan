@@ -55,8 +55,10 @@ run_app() {
     #   - acceptance.yaml 引用的测试文件必须存在
     python3 scripts/verify_degraded_response_contract.py || exit 1
     python3 scripts/verify_ios_native_surface_gate.py || exit 1
+    python3 scripts/verify_page_horizontal_quality_matrix.py || exit 1
+    python3 scripts/verify_metadata_driven_ui_gate.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_metadata_driven_ui_gate"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)

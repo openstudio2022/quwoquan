@@ -1,0 +1,59 @@
+version: 2
+read_model: ConversationMemberListRow
+description: |
+  ListMembers API 单行 wire 形状（对齐 ConversationMember 可读字段 + 客户端辅助字段）。
+  用于会话设置、群管理、选人、RTC 等成员列表 UI。
+
+client_projection:
+  dart_class: ChatConversationMemberDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart
+  fields:
+    - name: userId
+      dart_type: String
+      nullable: false
+      source: userId
+      aliases: [userId]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, name]
+      default: "''"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl, avatar]
+      default: "''"
+    - name: role
+      dart_type: String
+      nullable: false
+      source: role
+      aliases: [role]
+      default: "'member'"
+    - name: memberType
+      dart_type: String
+      nullable: false
+      source: memberType
+      aliases: [memberType]
+      default: "'user'"
+    - name: assistantSkillId
+      dart_type: String
+      nullable: true
+      source: assistantSkillId
+      aliases: [assistantSkillId]
+      default: "null"
+    - name: joinedAt
+      dart_type: DateTime
+      nullable: true
+      source: joinedAt
+      aliases: [joinedAt]
+      default: "null"
+    - name: isCurrentUser
+      dart_type: bool
+      nullable: false
+      source: isCurrentUser
+      aliases: [isCurrentUser]
+      default: "false"

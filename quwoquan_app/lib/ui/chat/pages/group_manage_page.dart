@@ -66,11 +66,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
       await ref.read(chatRepositoryProvider).dissolveConversation(
             widget.conversationId,
           );
-      if (ref.read(chatInboxListEnabledProvider)) {
-        await ref.read(chatInboxListProvider.notifier).refresh();
-      } else {
-        await ref.read(conversationSyncProvider).sync(force: true);
-      }
+      await ref.read(chatInboxListProvider.notifier).refresh();
       if (!mounted) {
         return;
       }

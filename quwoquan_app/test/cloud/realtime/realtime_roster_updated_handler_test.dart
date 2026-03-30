@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
@@ -10,7 +11,7 @@ class _CountingMembersRepo extends MockChatRepository {
   int listMembersCallCount = 0;
 
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,

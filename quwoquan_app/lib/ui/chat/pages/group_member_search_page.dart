@@ -55,8 +55,9 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
       conversationMembersProvider(widget.conversationId),
     );
     final members = membersState.members;
-    final filtered = filterMemberMapsByQuery(members, _searchQuery);
-    final sections = buildGroupedMemberSections(filtered);
+    final memberMaps = members.map((e) => e.toMap()).toList();
+    final filteredMaps = filterMemberMapsByQuery(memberMaps, _searchQuery);
+    final sections = buildGroupedMemberSections(filteredMaps);
 
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
@@ -66,7 +67,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     Widget listContent;
     if (membersState.isLoading) {
       listContent = const Center(child: CupertinoActivityIndicator());
-    } else if (filtered.isEmpty) {
+    } else if (filteredMaps.isEmpty) {
       listContent = Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xl),

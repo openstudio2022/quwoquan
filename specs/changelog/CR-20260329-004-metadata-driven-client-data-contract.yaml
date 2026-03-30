@@ -1,0 +1,61 @@
+id: CR-20260329-004-metadata-driven-client-data-contract
+title: 客户端元数据驱动数据契约与 UI 缺口清单 baseline
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/metadata-driven-client-data-contract
+summary: |
+  冻结 L3「元数据驱动」规格：UI 经 codegen DTO 消费云契约；Mock/Remote 同一 Repository 抽象、同一返回类型。
+  缺口清单已与横向质量矩阵扫描基线对齐（含 welcome、app/shell、components 全屏页登记 exempt/partial）。
+  ChatRepository listMembers/listContacts DTO 化；MediaPostCard 系组件以 PostBaseDto 为行模型；gate 接入 verify_metadata_driven_ui_gate.py。
+  横向矩阵 P2 列与清单 status 对齐；Explore 归档见 metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md。
+  （编号 CR-20260329-004：与同日期 CR-20260329-003 settings-canonical 解耦。）
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md
+  - specs/gates/metadata_driven_ui_gap_inventory.yaml
+  - specs/feature-tree/tree_index.yaml
+  - scripts/verify_metadata_driven_ui_gate.py
+  - scripts/gate_repo.sh
+  - quwoquan_app/lib/cloud/services/chat/chat_repository.dart
+  - quwoquan_app/lib/components/content/media_post_card.dart
+dev_log:
+  - slice: slice-2-chat-domain-typed-ui
+    date: "2026-03-29"
+    change: |
+      chat_page 移除 listConversations + Map 会话列表与 CHAT_INBOX_LIST_ENABLED；
+      主列表仅 chatInboxListProvider（ChatInboxDto）。建群/加人/解散后统一 inbox refresh。
+    verify:
+      - flutter analyze lib/ui/chat/
+  - slice: slice-2-followup
+    date: "2026-03-29"
+    change: |
+      ChatConversationMemberDto / ChatContactRowDto 投影；Repository listMembers、listContacts 强类型；
+      设置页/转让/管理员/选人/本地搜索同步等测试与 Mock 对齐；start_group_chat 组合 DTO 加载。
+    verify:
+      - flutter test test/ui/chat/ test/cloud/realtime/realtime_roster_updated_handler_test.dart
+  - slice: slice-3
+    date: "2026-03-29"
+    change: |
+      MediaPostCard / ImagePostCard / VideoPostCard 使用 PostBaseDto；视频时长以 durationMs（毫秒）为准。
+    verify:
+      - flutter test test/components/content/post/
+  - slice: slice-4-inventory
+    date: "2026-03-29"
+    change: metadata_driven_ui_gap_inventory.yaml 扩展至矩阵基线全路径登记。
+    verify:
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+  - slice: slice-5-gate
+    date: "2026-03-29"
+    change: gate_repo.sh 调用 verify_metadata_driven_ui_gate.py。
+    verify:
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+  - slice: slice-6-explore-archive
+    date: "2026-03-29"
+    change: |
+      explore-baseline-readiness-20260329.md；spec 覆盖矩阵交叉引用 page-horizontal-quality；
+      page-horizontal-quality-spec P2 与清单映射；矩阵 P2 列按 inventory 回写。
+    verify:
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 scripts/verify_page_horizontal_quality_matrix.py

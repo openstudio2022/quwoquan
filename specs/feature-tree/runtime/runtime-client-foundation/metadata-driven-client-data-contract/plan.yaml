@@ -1,0 +1,67 @@
+# plan：metadata-driven-client-data-contract
+# 顺序：缺口清单基线 → 分域 UI 类型化 → Mock/Remote 对齐审计 → 可选门禁
+
+feature_path: runtime/runtime-client-foundation/metadata-driven-client-data-contract
+order_note: slice-1 基线；slice-2 趣聊列表/成员/联系人 DTO；slice-3 media_post_card PostBaseDto；slice-4 清单对齐矩阵全路径；slice-5 门禁脚本（2026-03-29）
+
+slices:
+  - id: slice-1-baseline-docs-inventory-cr
+    title: spec/design/acceptance/plan + 缺口清单 + tree_index + CR（本会话）
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/plan.yaml
+      - specs/gates/metadata_driven_ui_gap_inventory.yaml
+      - specs/changelog/CR-20260329-004-metadata-driven-client-data-contract.yaml
+      - specs/feature-tree/tree_index.yaml
+    tests:
+      - python3 -c "import yaml; yaml.safe_load(open('specs/gates/metadata_driven_ui_gap_inventory.yaml'))"
+
+  - id: slice-2-chat-domain-typed-ui
+    title: 趣聊：Inbox / 成员 / 联系人 / 建群选择 DTO 化
+    outputs:
+      - quwoquan_app/lib/ui/chat/pages/chat_page.dart
+      - quwoquan_app/lib/ui/chat/providers/chat_inbox_provider.dart
+      - quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
+      - quwoquan_app/lib/cloud/services/chat/chat_repository.dart
+      - quwoquan_app/lib/ui/chat/providers/conversation_members_provider.dart
+    tests:
+      - flutter analyze quwoquan_app/lib/ui/chat/
+      - flutter test test/ui/chat/ test/cloud/realtime/realtime_roster_updated_handler_test.dart
+      - 更新 metadata_driven_ui_gap_inventory.yaml chat 域状态
+    dev_status: partial
+    dev_note: listMembers/listContacts 已 DTO；会话消息等仍待 metadata 对齐
+
+  - id: slice-3-content-feed-typed-ui
+    title: 发现/Feed：MediaPostCard/Image/Video 卡片 PostBaseDto；discovery 主路径已 PostBaseDto
+    outputs:
+      - quwoquan_app/lib/ui/discovery/
+      - quwoquan_app/lib/components/content/media_post_card.dart
+      - quwoquan_app/lib/components/content/image_post_card.dart
+      - quwoquan_app/lib/components/content/video_post_card.dart
+    tests:
+      - flutter analyze lib/components/content/
+      - flutter test test/components/content/post/
+      - verify_dart_semantic / 多态门禁
+    dev_status: partial
+    dev_note: 更多操作弹窗 config.post 仍为 dynamic；沉浸 raw Map 旁路仍存
+
+  - id: slice-4-circle-user-entity-search
+    title: 圈子/用户/实体/搜索/assistant/rtc/welcome/shell/components 页 — 缺口清单与矩阵路径对齐（登记状态）
+    outputs:
+      - specs/gates/metadata_driven_ui_gap_inventory.yaml
+    tests:
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+    dev_status: partial
+    dev_note: 本切片完成「全页面路径 ⊆ 清单」登记；各页 DTO 化仍分域迭代
+
+  - id: slice-5-optional-static-gate
+    title: verify_metadata_driven_ui_gate.py — 清单路径存在性 + 可选 STRICT legacy_map
+    outputs:
+      - scripts/verify_metadata_driven_ui_gate.py
+      - scripts/gate_repo.sh
+    tests:
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - make gate
+    dev_status: implemented

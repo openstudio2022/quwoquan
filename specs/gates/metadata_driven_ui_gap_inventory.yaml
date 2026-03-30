@@ -1,0 +1,313 @@
+# 元数据驱动 UI 缺口清单（客户端）
+# 说明：status = compliant | partial | legacy_map | exempt
+# 扫描基线对齐：specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+#   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
+version: 1
+updated: "2026-03-29"
+policy:
+  mock_remote_same_return_types: true
+  ui_domain_rows_should_be_codegen_dto: true
+  allow_temporary_map_only_inside_repository_parse: true
+
+domains:
+  - id: chat
+    metadata_hint: contracts/metadata/messages/conversation
+    repository: ChatRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/chat/chat_inbox_dto.g.dart
+      - lib/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart
+      - lib/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/chat/pages/chat_page.dart
+        status: partial
+        note: 主列表 ChatInboxDto；密信/联系人 Tab 等仍有 Map 或旁路
+        target_dto: ChatInboxDto
+      - path: quwoquan_app/lib/ui/chat/pages/chat_detail_page.dart
+        status: partial
+        note: 委托 ChatConversationPage；契约随子页
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
+        status: partial
+        note: 消息气泡动态结构；长期与 conversation metadata 对齐
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
+        status: partial
+        note: 成员列表 ChatConversationMemberDto；会话元数据等可继续收口
+        target_dto: ChatConversationMemberDto
+      - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
+        status: partial
+        note: listInbox/Contacts/Members/Circle 已 DTO；消息等仍 Map
+        target_dto: ChatInboxDto
+      - path: quwoquan_app/lib/ui/chat/pages/transfer_ownership_page.dart
+        status: partial
+        target_dto: ChatConversationMemberDto
+      - path: quwoquan_app/lib/ui/chat/pages/group_member_search_page.dart
+        status: partial
+        target_dto: ChatConversationMemberDto
+      - path: quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/chat/pages/group_admins_page.dart
+        status: partial
+        target_dto: ChatConversationMemberDto
+
+  - id: content
+    metadata_hint: contracts/metadata/messages/content
+    repository: ContentRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/content/post_base_dto.dart
+      - lib/cloud/runtime/generated/content/*_post_dto.g.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/discovery/pages/discovery_page.dart
+        status: partial
+        note: Feed 行以 PostBaseDto 为主；少量 raw 映射用于分享/埋点兼容
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/discovery/pages/home_page.dart
+        status: partial
+        note: Tab 根；沉浸/作品流消费 PostBaseDto
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/components/content/media_post_card.dart
+        status: partial
+        note: 卡片基类已 PostBaseDto；更多操作配置仍为 dynamic
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/content/pages/article_detail_page.dart
+        status: partial
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
+        status: partial
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/content/pages/video_detail_page.dart
+        status: partial
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
+        status: partial
+        target_dto: PostBaseDto
+      - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/content/entry/pages/article_preview_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/content/entry/pages/publish_circle_select_page.dart
+        status: partial
+        target_dto: TBD
+
+  - id: circle
+    metadata_hint: contracts/metadata/messages/circle
+    repository: CircleRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/circle/circle_dto.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/circle/pages/circle_edit_settings_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/circle/pages/circles_hub_page.dart
+        status: exempt
+        note: 仅 export，无独立云契约
+
+  - id: user
+    metadata_hint: contracts/metadata/messages/user
+    repository: UserRepository / UserProfileRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/user/user_profile_dto.g.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/user/pages/other_profile_page.dart
+        status: partial
+        target_dto: UserProfileDto
+      - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
+        status: partial
+        target_dto: UserProfileDto
+      - path: quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
+        status: partial
+        target_dto: UserProfileDto
+      - path: quwoquan_app/lib/ui/user/pages/persona_management_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/user/pages/sub_account_management_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/user/pages/resonance_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/user/pages/profile_comments_page.dart
+        status: partial
+        target_dto: TBD
+
+  - id: entity
+    metadata_hint: contracts/metadata/messages/entity
+    repository: EntityRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/entity/
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/entity/pages/suggest_homepage_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_picker_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_claim_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_maintenance_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_status_report_page.dart
+        status: partial
+        target_dto: TBD
+
+  - id: search
+    metadata_hint: contracts/metadata / search registry
+    repository: SearchCoordinator / SearchRepository（见 core/services）
+    codegen_examples:
+      - lib/cloud/runtime/generated/search/search_contract.g.dart
+    mock_remote_shared_types: partial
+    ui_pages:
+      - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+        status: partial
+        target_dto: TBD
+
+  - id: settings
+    metadata_hint: N/A（多数本地偏好）；appearance 等见 user metadata
+    repository: AppearanceSettingsRepository 等
+    codegen_examples:
+      - lib/cloud/runtime/generated/user/user_setting_dto.g.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
+        status: compliant
+        note: 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径
+        target_dto: N/A
+      - path: quwoquan_app/lib/ui/settings/pages/developer_settings_page.dart
+        status: exempt
+        note: 开发者工具；无产品云契约
+
+  - id: rtc
+    metadata_hint: contracts/metadata/messages/rtc
+    repository: RtcRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/rtc/
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/rtc/pages/voice_call_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/rtc/pages/incoming_call_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/rtc/pages/outgoing_call_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/rtc/pages/video_call_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/rtc/pages/call_participant_picker_page.dart
+        status: partial
+        note: ChatInboxDto / ChatConversationMemberDto / ChatContactRowDto
+        target_dto: ChatInboxDto
+
+  - id: assistant
+    metadata_hint: assistant + 云 assistant metadata
+    repository: AssistantRepository
+    codegen_examples:
+      - lib/cloud/runtime/generated/assistant/
+    mock_remote_shared_types: partial
+    ui_pages:
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
+        status: partial
+        note: 引擎契约与云 API 分层；云调用须 codegen
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_tab_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_reference_webview_page.dart
+        status: exempt
+        note: WebView；云契约 —
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_dev_replay_page.dart
+        status: exempt
+        note: 开发工具
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart
+        status: partial
+        target_dto: TBD
+      - path: quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart
+        status: partial
+        target_dto: TBD
+
+  - id: welcome
+    metadata_hint: N/A
+    repository: N/A
+    codegen_examples: []
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart
+        status: exempt
+        note: 欢迎流以本地为主；无业务云 DTO 行模型
+
+  - id: app_shell
+    metadata_hint: N/A
+    repository: N/A
+    codegen_examples: []
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/app/shell/main_app_shell.dart
+        status: exempt
+        note: 壳层导航；无云行模型
+      - path: quwoquan_app/lib/app/shell/bottom_navigation.dart
+        status: exempt
+        note: 底栏；无云行模型
+
+  - id: components_shell
+    metadata_hint: N/A
+    repository: N/A
+    codegen_examples: []
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/components/settings_form/settings_inset_form_page.dart
+        status: exempt
+        note: 复用壳；无云契约
+      - path: quwoquan_app/lib/components/media/image/editor/image_editor_page.dart
+        status: exempt
+        note: 本地编辑为主
+      - path: quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+        status: exempt
+        note: 本地相机；无云行模型
+      - path: quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+        status: exempt
+        note: 本地选择器
+      - path: quwoquan_app/lib/components/media/picker/one_tap_movie_preview_page.dart
+        status: exempt
+        note: 本地预览

@@ -36,7 +36,7 @@ class ImagePostCard extends MediaPostCard {
 
   @override
   Widget buildMediaContent(BuildContext context, bool isDark) {
-    final images = post['images'] as List<dynamic>? ?? [];
+    final images = post.mediaImageUrls;
     
     if (images.isEmpty) {
       return const SizedBox.shrink(); // 不显示任何内容
@@ -50,8 +50,8 @@ class ImagePostCard extends MediaPostCard {
 
   /// 构建图片的标题和配文
   Widget _buildImageCaption(BuildContext context, bool isDark) {
-    final title = post['title'] ?? '';
-    final content = post['content'] ?? '';
+    final title = post.normalizedTitle;
+    final content = post.normalizedBody;
     
     // 如果标题和配文都为空，不显示
     if (title.isEmpty && content.isEmpty) {
@@ -92,7 +92,7 @@ class ImagePostCard extends MediaPostCard {
 
   /// 构建可展开的配文内容
   Widget _buildExpandableContent(BuildContext context, bool isDark, String content) {
-    final postId = post['id'] as String? ?? '';
+    final postId = post.id;
     
     return StatefulBuilder(
       builder: (context, setState) {
@@ -178,7 +178,8 @@ class ImagePostCard extends MediaPostCard {
 
 
   /// 构建单张图片内容
-  Widget _buildSingleImageContent(BuildContext context, bool isDark, List<dynamic> images) {
+  Widget _buildSingleImageContent(
+      BuildContext context, bool isDark, List<String> images) {
     return GestureDetector(
       onTap: () => _showMediaViewer(context),
       child: AspectRatio(
@@ -211,7 +212,8 @@ class ImagePostCard extends MediaPostCard {
   }
 
   /// 构建多张图片内容
-  Widget _buildMultiImageContent(BuildContext context, bool isDark, List<dynamic> images) {
+  Widget _buildMultiImageContent(
+      BuildContext context, bool isDark, List<String> images) {
     return _MultiImageContent(
       images: images,
       isDark: isDark,
@@ -232,7 +234,7 @@ class ImagePostCard extends MediaPostCard {
 
   /// 显示媒体浏览器
   void _showMediaViewer(BuildContext context, {int initialIndex = 0}) {
-    final images = post['images'] as List<dynamic>? ?? [];
+    final images = post.mediaImageUrls;
     if (images.isEmpty) return;
 
     // 调用父组件传递的onPostTap回调，传递post和索引
@@ -242,7 +244,7 @@ class ImagePostCard extends MediaPostCard {
 
 /// 多图内容组件（支持轮播和指示器）
 class _MultiImageContent extends StatefulWidget {
-  final List<dynamic> images;
+  final List<String> images;
   final bool isDark;
   final VoidCallback onTap;
   final ValueChanged<int> onPageChanged;

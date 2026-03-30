@@ -131,7 +131,8 @@ void main() {
         sort: 'display_name_asc',
       );
       final names = members
-          .map((m) => (m['displayName'] ?? m['userId']).toString())
+          .map((m) =>
+              m.displayName.isNotEmpty ? m.displayName : m.userId)
           .toList();
       final sorted = [...names]..sort();
       expect(names, orderedEquals(sorted));
@@ -238,8 +239,8 @@ void main() {
       final members = await repo.listMembers(conversationId: 'conv_002');
       expect(members, isNotEmpty);
       final first = members.first;
-      expect(first.containsKey('displayName'), isTrue);
-      expect(first.containsKey('avatarUrl'), isTrue);
+      expect(first.displayName, isNotEmpty);
+      expect(first.avatarUrl, isNotNull);
     });
   });
 

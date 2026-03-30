@@ -1,0 +1,28 @@
+version: 2
+read_model: ChatContactListRow
+description: |
+  ListContacts / SearchContacts 等 API 返回的联系人行（wire），用于发起群聊、选人。
+
+client_projection:
+  dart_class: ChatContactRowDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_contact_row_dto.g.dart
+  fields:
+    - name: userId
+      dart_type: String
+      nullable: false
+      source: userId
+      aliases: [userId, contactId]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, name]
+      default: "''"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl, avatar]
+      default: "''"

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
@@ -170,7 +171,7 @@ void main() {
 
 class _ErrorMembersRepo extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -183,7 +184,7 @@ class _ErrorMembersRepo extends MockChatRepository {
 
 class _EmptyMembersRepo extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMembers({
+  Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,

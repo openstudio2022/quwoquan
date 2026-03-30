@@ -1,0 +1,87 @@
+version: 1
+feature: metadata-driven-client-data-contract
+level: "L3_story"
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.metadata-driven-client-data-contract
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: 元数据驱动客户端数据契约 + Mock/Remote 同源实体；baseline 以文档与缺口清单为主，全量改码按 plan 切片
+  A1:
+    criteria: spec/design/acceptance/plan 已落地且与仓库 metadata-first 规则一致
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md
+  A2:
+    criteria: specs/gates/metadata_driven_ui_gap_inventory.yaml 存在且含至少 chat/content/circle/user/search 域的登记项
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/gates/metadata_driven_ui_gap_inventory.yaml
+  A3:
+    criteria: CR 已登记本 L3 产物路径
+    status: implemented
+    linked_tasks:
+      - M2
+    tests:
+      - file: specs/changelog/CR-20260329-004-metadata-driven-client-data-contract.yaml
+  A4:
+    criteria: tree_index.yaml 已挂载 metadata-driven-client-data-contract 子节点
+    status: implemented
+    linked_tasks:
+      - M2
+    tests:
+      - file: specs/feature-tree/tree_index.yaml
+  A7:
+    criteria: design 明确 Mock/Remote 返回同一 codegen 类型；禁止长期双套 Map 键名
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
+execution:
+  local_gate: "python3 scripts/verify_metadata_driven_ui_gate.py"
+  full_gate: make gate
+  note: 清单路径存在性 + YAML；QWQ_METADATA_UI_GATE_STRICT=1 时禁止 legacy_map 行
+
+journey_acceptance:
+  - id: A1
+    statement: 规格与缺口清单定义「元数据驱动 + 同源实体」验收口径
+    t_layers: [T1]
+  - id: A2
+    statement: 各主要域在缺口清单中有明确状态与目标 DTO 指向
+    t_layers: [T1, T2]
+  - id: A3
+    statement: 新增云能力必须先 metadata 再 codegen 再 UI（流程在 spec 中冻结）
+    t_layers: [T2, T3]
+
+scenario_acceptance:
+  - id: S1
+    statement: 评审可通过缺口清单定位下一批 legacy_map 页面
+    t_layers: [T2]
+  - id: S2
+    statement: 独立 /dev 会话按 plan 将某域标为 compliant 后更新清单
+    t_layers: [T3, T4]
+
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md
+    - type: config
+      artifact: specs/gates/metadata_driven_ui_gap_inventory.yaml
+  T2:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/plan.yaml
+  T3:
+    - type: partial
+      note: slice-2 成员/联系人 DTO；slice-3 PostBaseDto 卡片；slice-5 门禁脚本已接 gate_repo
+      artifact: quwoquan_app/lib/cloud/services/chat/chat_repository.dart
+  T4:
+    - type: deferred
+      note: 契约测试 / e2e 与 remote 对齐

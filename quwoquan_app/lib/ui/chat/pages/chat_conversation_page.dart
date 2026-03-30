@@ -144,11 +144,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         conversationId: widget.conversationId,
         limit: 10,
       );
-      final other = (members as List<Map<String, dynamic>>).firstWhere(
-        (member) => (member['userId'] as String? ?? '') != currentUserId,
-        orElse: () => <String, dynamic>{},
-      );
-      final otherId = other['userId'] as String?;
+      final others = members.where((m) => m.userId != currentUserId).toList();
+      final otherId =
+          others.isEmpty ? null : others.first.userId;
       if (mounted && otherId != null && otherId.isNotEmpty) {
         setState(() => _otherParticipantId = otherId);
         await _loadRelationshipCapability(otherId);

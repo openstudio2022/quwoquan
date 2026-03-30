@@ -25,7 +25,7 @@ level_acceptance:
     tests:
       - file: scripts/gate_repo.sh
   A3:
-    criteria: lib/ui/**/pages/*.dart 与 design 约定 glob 内禁止未豁免的 return Scaffold(
+    criteria: lib/ui/**/pages/**/*.dart、components 约定路径与 design 一致；其内禁止未豁免的 return Scaffold(
     status: implemented
     linked_tasks:
       - M3
@@ -58,7 +58,7 @@ journey_acceptance:
     statement: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py 失败时退出非零
     t_layers: [T1]
   - id: A3
-    statement: lib/ui/**/pages/*.dart 中禁止出现未豁免的 return Scaffold(
+    statement: lib/ui/**/pages/**/*.dart（及 design 所列 components 路径）中禁止出现未豁免的 return Scaffold(
     t_layers: [T1, T2]
   - id: A4
     statement: 约定的 components 全屏页路径与同规则一致（见 design 中 glob）

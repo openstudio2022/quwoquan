@@ -1,0 +1,20 @@
+id: CR-20260329-005-page-horizontal-quality-baseline
+title: 页面横向质量矩阵（P1–Pn）规格与设计基线冻结
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结 L3「page-horizontal-quality」：可扩展横向维度 P1–P8（P7 断点 / P8 语义 token 分列）、
+  全页路径矩阵、verify_page_horizontal_quality_matrix.py、PR 清单 page_horizontal_quality_pr_checklist.md；
+  parent spec 增补商用/NFR（治理型 N/A）声明；design 增补方案对比与 T1–T4 证据矩阵收口。
+  不涉及 metadata/codegen 变更；与 ios-native、S6、metadata 缺口清单等兄弟 L3 交叉引用。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+  - specs/gates/page_horizontal_quality_pr_checklist.md
+  - scripts/verify_page_horizontal_quality_matrix.py
+  - scripts/gate_repo.sh
+  - specs/feature-tree/tree_index.yaml

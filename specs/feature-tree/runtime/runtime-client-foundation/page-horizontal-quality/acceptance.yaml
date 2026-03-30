@@ -1,0 +1,83 @@
+version: 1
+feature: page-horizontal-quality
+level: "L3_story"
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.page-horizontal-quality
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: 索引型 L3；矩阵与脚本为真相源，见 spec.md
+  A1:
+    criteria: spec/design/acceptance 与本目录并列存在且指向父级横向质量规格与矩阵
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+  A2:
+    criteria: 矩阵校验脚本可执行且被仓库门禁引用
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: scripts/verify_page_horizontal_quality_matrix.py
+  A3:
+    criteria: CR 已登记本 L3 与矩阵、清单、脚本产物
+    status: implemented
+    linked_tasks:
+      - M1
+      - slice-2-baseline-cr-and-evidence-matrix
+    tests:
+      - file: specs/changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml
+  A7:
+    criteria: 与 page-horizontal-quality-spec.md、page-horizontal-quality-matrix.md 语义一致
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+execution:
+  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py"
+  full_gate: make gate
+
+journey_acceptance:
+  - id: A1
+    statement: 横向质量索引与矩阵可追溯
+    t_layers: [T1]
+  - id: A2
+    statement: 变更请求 CR 登记本 L3 与矩阵/脚本产物
+    t_layers: [T1]
+
+scenario_acceptance:
+  - id: S1
+    statement: PR 使用 page_horizontal_quality_pr_checklist 自检
+    t_layers: [T2]
+  - id: S2
+    statement: 涉及页面的 PR 更新矩阵对应行且 reviewer 核对 P1–P8
+    t_layers: [T3]
+  - id: S3
+    statement: 发布前矩阵 ○ 按各域切片收敛为 ✓ 或 —（由各业务 L3 承载，本 L3 登记目标态）
+    t_layers: [T4]
+
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+    - type: doc
+      artifact: specs/changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml
+  T2:
+    - type: script
+      artifact: scripts/verify_page_horizontal_quality_matrix.py
+    - type: doc
+      artifact: specs/gates/page_horizontal_quality_pr_checklist.md
+  T3:
+    - type: process
+      note: PR diff 含 page-horizontal-quality-matrix.md 行级更新或与豁免备注一致
+  T4:
+    - type: deferred
+      note: 全量 ○→✓/— 随各域 dev 切片与 gate-full；本 L3 提供登记面与门禁入口

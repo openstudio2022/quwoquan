@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
@@ -249,7 +250,7 @@ class _CountingChatRepository extends MockChatRepository {
   int listContactsCalls = 0;
 
   @override
-  Future<List<Map<String, dynamic>>> listContacts({
+  Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -263,7 +264,7 @@ class _FlakyChatRepository extends MockChatRepository {
   bool _shouldFail = true;
 
   @override
-  Future<List<Map<String, dynamic>>> listContacts({
+  Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {

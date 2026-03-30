@@ -17,6 +17,10 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
@@ -44,9 +48,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final Map<String, Map<String, String>> _selectedMembers = {};
   final Set<String> _existingMemberIds = <String>{};
 
-  List<Map<String, dynamic>> _groupConversations = [];
-  List<Map<String, dynamic>> _contacts = [];
-  List<Map<String, dynamic>> _circles = [];
+  List<ChatInboxDto> _groupInboxRows = [];
+  List<ChatContactRowDto> _contacts = [];
+  List<CircleDto> _circles = [];
   bool _selectedExpanded = false;
   bool _submitting = false;
   String _query = '';
@@ -62,46 +66,30 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       final chatRepo = ref.read(chatRepositoryProvider);
       final userRepo = ref.read(userProfileRepositoryProvider);
       final currentUserId = ref.read(currentUserIdProvider);
-      final results = await Future.wait<dynamic>([
-        chatRepo.listConversations(limit: 50),
-        chatRepo.listContacts(limit: 200),
-        userRepo.listUserCircles(currentUserId, limit: 50),
-        if (!widget.isCreateMode && widget.conversationId != null)
-          chatRepo.listMembers(
-            conversationId: widget.conversationId!,
-            limit: 500,
-          ),
-      ]);
-      final convs = results[0] as List<Map<String, dynamic>>;
-      final contacts = results[1] as List<Map<String, dynamic>>;
-      final circles = results[2] as List<Map<String, dynamic>>;
-      final existingMembers = results.length > 3
-          ? results[3] as List<Map<String, dynamic>>
-          : const <Map<String, dynamic>>[];
+      final inbox = await chatRepo.listInbox(limit: 50);
+      final convMaps = await chatRepo.listConversations(limit: 50);
+      final contacts = await chatRepo.listContacts(limit: 200);
+      final circleMaps = await userRepo.listUserCircles(
+        currentUserId,
+        limit: 50,
+      );
+      final List<ChatConversationMemberDto> existingMembers =
+          !widget.isCreateMode && widget.conversationId != null
+          ? await chatRepo.listMembers(
+              conversationId: widget.conversationId!,
+              limit: 500,
+            )
+          : const <ChatConversationMemberDto>[];
       if (mounted) {
         setState(() {
-          _groupConversations = convs
+          final convId = widget.conversationId ?? '';
+          _groupInboxRows = inbox
               .where(
-                (c) =>
-                    c['type'] == 'group' &&
-                    _readString(c, const ['_id', 'id', 'conversationId']) !=
-                        widget.conversationId,
+                (row) => row.type == 'group' && row.id.isNotEmpty && row.id != convId,
               )
-              .map(
-                (c) => {
-                  'id': _readString(c, const ['_id', 'id', 'conversationId']),
-                  'name': _readString(c, const ['title', 'name']),
-                  'count': '${c['memberCount'] ?? 0}',
-                  'avatar': _readString(c, const ['avatarUrl', 'avatar']),
-                  'memberAvatars': _readStringList(c, const [
-                    'memberAvatars',
-                    'avatarCompositeUrls',
-                  ]),
-                },
-              )
-              .toList();
+              .toList(growable: false);
           _contacts = contacts;
-          final activeCircleIds = convs
+          final activeCircleIds = convMaps
               .where((conversation) => conversation['type'] == 'circle')
               .map(
                 (conversation) =>
@@ -109,28 +97,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               )
               .where((circleId) => circleId.isNotEmpty)
               .toSet();
-          _circles = circles
-              .where((circle) {
-                final circleId = _readString(circle, const [
-                  'id',
-                  '_id',
-                  'circleId',
-                ]);
-                return circleId.isNotEmpty &&
-                    activeCircleIds.contains(circleId);
-              })
+          _circles = circleMaps
+              .map(CircleDto.fromMap)
+              .where((circle) => activeCircleIds.contains(circle.id))
               .toList(growable: false);
           _existingMemberIds
             ..clear()
             ..addAll(
               existingMembers
-                  .map(
-                    (member) => _readString(member, const [
-                      'userId',
-                      'profileSubjectId',
-                      'contactId',
-                    ]),
-                  )
+                  .map((m) => m.userId)
                   .where((id) => id.isNotEmpty),
             );
         });
@@ -161,34 +136,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     return '';
   }
 
-  static List<String> _readStringList(
-    Map<String, dynamic> source,
-    List<String> keys,
-  ) {
-    for (final key in keys) {
-      final value = source[key];
-      if (value is Iterable) {
-        final normalized = value
-            .map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-        if (normalized.isNotEmpty) {
-          return normalized;
-        }
-      }
-    }
-    return const <String>[];
-  }
-
   Set<String> get _mutualContactIds {
     return _contacts
-        .map(
-          (contact) => _readString(contact, const [
-            'userId',
-            'contactId',
-            'profileSubjectId',
-          ]),
-        )
+        .map((contact) => contact.userId)
         .where((id) => id.isNotEmpty && !_existingMemberIds.contains(id))
         .toSet();
   }
@@ -321,11 +271,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         if (!context.mounted) {
           return;
         }
-        if (ref.read(chatInboxListEnabledProvider)) {
-          await ref.read(chatInboxListProvider.notifier).refresh();
-        } else {
-          await ref.read(conversationSyncProvider).sync(force: true);
-        }
+        await ref.read(chatInboxListProvider.notifier).refresh();
         if (!context.mounted) {
           return;
         }
@@ -335,11 +281,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           conversationId: widget.conversationId!,
           userIds: selectedIds,
         );
-        if (ref.read(chatInboxListEnabledProvider)) {
-          await ref.read(chatInboxListProvider.notifier).refresh();
-        } else {
-          await ref.read(conversationSyncProvider).sync(force: true);
-        }
+        await ref.read(chatInboxListProvider.notifier).refresh();
         if (!context.mounted) {
           return;
         }
@@ -362,7 +304,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       context: context,
       barrierColor: AppColors.transparent,
       builder: (context) => _SelectGroupChatSheet(
-        groups: _groupConversations,
+        groups: _groupInboxRows
+            .map(
+              (g) => <String, dynamic>{
+                'id': g.id,
+                'name': g.title,
+                'count': '',
+                'avatar': g.avatarUrl,
+                'memberAvatars': g.avatarCompositeUrls,
+              },
+            )
+            .toList(growable: false),
         onSelectGroup: (group) async {
           Navigator.of(context).pop();
           final members = await ref
@@ -372,7 +324,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 limit: 500,
               );
           final selectableMembers = _normalizeSelectableMembers(
-            members,
+            members.map((m) => m.toMap()).toList(growable: false),
             mutualOnly: true,
           );
           if (!context.mounted) {
@@ -384,7 +336,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           }
           _openMemberSelectSheet(
             title:
-                '${group['name']} (${group['count']}${UITextConstants.friendsCount})',
+                '${group['name']}${(group['count'] as String).isEmpty ? '' : ' (${group['count']}${UITextConstants.friendsCount})'}',
             members: selectableMembers,
             onConfirm: _mergeSelectedMembers,
           );
@@ -402,14 +354,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         circles: _circles
             .map(
               (circle) => <String, dynamic>{
-                'id': _readString(circle, const ['id', '_id', 'circleId']),
-                'name': _readString(circle, const ['name', 'title']),
-                'count': '${circle['memberCount'] ?? 0}',
-                'avatar': _readString(circle, const [
-                  'avatarUrl',
-                  'avatar',
-                  'coverUrl',
-                ]),
+                'id': circle.id,
+                'name': circle.name,
+                'count': '${circle.memberCount}',
+                'avatar': circle.coverUrl ?? '',
               },
             )
             .toList(),
@@ -504,20 +452,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         : (selectedMembers.length > 12 ? 12 : selectedMembers.length);
     final friendsWithLetter = _contacts
         .where((contact) {
-          final userId = _readString(contact, const [
-            'userId',
-            'contactId',
-            'profileSubjectId',
-          ]);
+          final userId = contact.userId;
           if (userId.isEmpty || _existingMemberIds.contains(userId)) {
             return false;
           }
-          final displayName = _readString(contact, const [
-            'displayName',
-            'nickname',
-            'username',
-            'name',
-          ]);
+          final displayName = contact.displayName;
           final normalizedQuery = _query.trim().toLowerCase();
           if (normalizedQuery.isEmpty) {
             return true;
@@ -526,33 +465,16 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               userId.toLowerCase().contains(normalizedQuery);
         })
         .map(
-          (c) => <String, dynamic>{
-            'name': _readString(c, const [
-              'displayName',
-              'nickname',
-              'username',
-              'name',
-            ]),
-            'username': _readString(c, const [
-              'userId',
-              'contactId',
-              'profileSubjectId',
-            ]),
-            'avatar': _readString(c, const ['avatarUrl', 'avatar']),
-            'letter':
-                ((_readString(c, const [
-                  'displayName',
-                  'nickname',
-                  'username',
-                  'name',
-                ]).isNotEmpty)
-                ? _readString(c, const [
-                    'displayName',
-                    'nickname',
-                    'username',
-                    'name',
-                  ]).substring(0, 1).toUpperCase()
-                : '#'),
+          (c) {
+            final displayName = c.displayName;
+            return <String, dynamic>{
+              'name': displayName,
+              'username': c.userId,
+              'avatar': c.avatarUrl,
+              'letter': displayName.isNotEmpty
+                  ? displayName.substring(0, 1).toUpperCase()
+                  : '#',
+            };
           },
         )
         .toList();

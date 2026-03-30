@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 import 'package:quwoquan_app/components/content/media_post_card.dart';
@@ -24,14 +25,16 @@ class VideoPostCard extends MediaPostCard {
 
   @override
   Widget buildMediaContent(BuildContext context, bool isDark) {
-    final videoUrl = post['videoUrl'] as String?;
-    final thumbnailUrl = post['thumbnailUrl'] as String?;
+    final videoUrl = post.mediaVideoUrl;
+    final thumbnailUrl = post.mediaThumbnailUrl.isNotEmpty
+        ? post.mediaThumbnailUrl
+        : null;
 
-    // Support both `duration` (seconds, int) and `durationMs` (milliseconds, int).
-    final rawDuration = post['duration'] ?? (post['durationMs'] != null ? ((post['durationMs'] as num) / 1000).round() : null);
-    final durationSecs = rawDuration is num ? rawDuration.toInt() : null;
+    final dm = post.durationMs;
+    final durationSecs =
+        dm != null && dm > 0 ? (dm / 1000).round() : null;
 
-    if (videoUrl == null || videoUrl.isEmpty) {
+    if (videoUrl.isEmpty) {
       return const SizedBox.shrink(); // 不显示任何内容
     }
 
@@ -168,18 +171,12 @@ class VideoPostCard extends MediaPostCard {
   }
 
   /// 获取视频长宽比（模拟实现，实际应该从视频元数据获取）
-  double _getVideoAspectRatio(dynamic post) {
-    // 模拟不同的视频长宽比
-    final videoType = post['videoType'] ?? ContentTypeConstants.vertical;
-    switch (videoType) {
-      case ContentTypeConstants.horizontal:
-        return DesignSemanticConstants.horizontalAspectRatio; // 横屏视频
-      case ContentTypeConstants.square:
-        return DesignSemanticConstants.squareAspectRatio; // 正方形视频
-      case ContentTypeConstants.vertical:
-      default:
-        return DesignSemanticConstants.verticalAspectRatio; // 竖屏视频
+  double _getVideoAspectRatio(PostBaseDto post) {
+    final ar = post.aspectRatio;
+    if (ar != null && ar > 0) {
+      return ar;
     }
+    return DesignSemanticConstants.verticalAspectRatio;
   }
 
 

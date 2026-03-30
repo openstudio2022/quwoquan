@@ -1,0 +1,54 @@
+version: 1
+feature: dual-theme-page-coverage
+level: "L3_story"
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.dual-theme-page-coverage
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: S6 双色模式全页面覆盖；详见 spec.md
+  A1:
+    criteria: 存在全页面矩阵，且每个 ui 页面/全屏组件行均有 支持|部分|不支持|豁免 结论
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md
+  A2:
+    criteria: 矩阵中「不支持/部分」项均有修复 PR 或带截止的技术债链接（豁免除外且已填 exemption_reason）
+    status: implemented
+    linked_tasks:
+      - M2
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md
+  A3:
+    criteria: 新增/大改页面 PR 须更新矩阵或等效清单（门禁或模板勾选；模板缺失时以 CR/任务说明为准）
+    status: implemented
+    linked_tasks:
+      - M3
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/tasks.md
+  A4:
+    criteria: flutter analyze quwoquan_app/lib 无新增与主题相关的硬编码色违规（与 verify_dart_semantic 策略一致）
+    status: implemented
+    linked_tasks:
+      - M2
+    tests:
+      - file: scripts/verify_dart_semantic.py
+  A7:
+    criteria: 与 02_IOS_NATIVE_FRONTEND_UX_SPEC §2.5、app-theme-infrastructure 无冲突
+    status: implemented
+    linked_tasks:
+      - M1
+    tests:
+      - file: specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md
+execution:
+  local_gate: flutter analyze quwoquan_app/lib/
+  full_gate: make gate
+linked_stories:
+  - app-theme-infrastructure
+  - dart-semantic-gate
+  - ios-native-page-enforcement
