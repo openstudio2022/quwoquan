@@ -7,6 +7,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 
 /// 欢迎页
 ///
@@ -34,17 +35,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _textController;
   int _countdownRemaining = 0;
   Timer? _countdownTimer;
-
-  static const List<Color> _petalColors = [
-    AppColors.welcomePetalOrange,
-    AppColors.welcomePetalYellow,
-    AppColors.welcomePetalLime,
-    AppColors.welcomePetalEmerald,
-    AppColors.welcomePetalCyan,
-    AppColors.welcomePetalSky,
-    AppColors.welcomePetalPurple,
-    AppColors.welcomePetalRose,
-  ];
 
   static const List<double> _petalRotations = [
     0, 45, 90, 135, 180, 225, 270, 315,
@@ -115,10 +105,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final appearance = WelcomeAppearance.of(context);
     // P1：CupertinoPageScaffold + 透明 Material（AppScaffold）+ 显式 DefaultTextStyle，
     // 避免 MaterialApp.home 场景下调试模式对 Text 的误强调/黄下划线。
     return AppScaffold(
-      backgroundColor: AppColors.welcomeBackground,
+      backgroundColor: appearance.background,
       resizeToAvoidBottomInset: false,
       body: DefaultTextStyle.merge(
         style: const TextStyle(
@@ -128,17 +119,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _buildBackground(),
-            _buildMainContent(),
-            _buildFooter(),
-            _buildCountdownBadge(),
+            _buildBackground(appearance),
+            _buildMainContent(appearance),
+            _buildFooter(appearance),
+            _buildCountdownBadge(appearance),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBackground() {
+  Widget _buildBackground(WelcomeAppearance appearance) {
     return Positioned.fill(
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -146,9 +137,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.welcomeGradientStart,
-              AppColors.welcomeBackground,
-              AppColors.welcomeGradientEnd,
+              appearance.gradientStart,
+              appearance.background,
+              appearance.gradientEnd,
             ],
           ),
         ),
@@ -162,10 +153,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 height: MediaQuery.of(context).size.width * 0.8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.white.withValues(alpha:0.05),
+                  color: appearance.decorSoftBlobFill,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.black.withValues(alpha:0.1),
+                      color: appearance.decorSoftBlobShadow,
                       blurRadius: 120,
                       spreadRadius: 0,
                     ),
@@ -180,14 +171,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   /// 右上角倒计时角标：仅在进入 3 秒等待阶段显示
-  Widget _buildCountdownBadge() {
+  Widget _buildCountdownBadge(WelcomeAppearance appearance) {
     if (_countdownRemaining <= 0) return const SizedBox.shrink();
     return Positioned(
       top: MediaQuery.of(context).padding.top + AppSpacing.lg,
       right: AppSpacing.lg,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.welcomeButtonBg,
+          color: appearance.buttonBackground,
           borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
         ),
         padding: EdgeInsets.symmetric(
@@ -199,7 +190,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           style: TextStyle(
             fontSize: AppTypography.lg,
             fontWeight: AppTypography.semiBold,
-            color: AppColors.welcomeForeground.withValues(alpha: 0.9),
+            color: appearance.countdownDigit,
             decoration: TextDecoration.none,
           ),
         ),
@@ -207,7 +198,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildMainContent() {
+  Widget _buildMainContent(WelcomeAppearance appearance) {
     final topOffset = MediaQuery.of(context).size.height * 0.02;
     return Center(
       child: Transform.translate(
@@ -220,9 +211,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildGraphicArea(),
+              _buildGraphicArea(appearance),
               SizedBox(height: AppSpacing.xl * 2.5),
-              _buildTypography(),
+              _buildTypography(appearance),
             ],
           ),
         ),
@@ -230,7 +221,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildGraphicArea() {
+  Widget _buildGraphicArea(WelcomeAppearance appearance) {
     const size = 256.0;
     return SizedBox(
       width: size,
@@ -238,14 +229,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          for (var i = 0; i < 8; i++) _buildPetal(i, size),
-          _buildWaterDrop(size),
+          for (var i = 0; i < 8; i++) _buildPetal(appearance, i, size),
+          _buildWaterDrop(appearance, size),
         ],
       ),
     );
   }
 
-  Widget _buildPetal(int index, double parentSize) {
+  Widget _buildPetal(WelcomeAppearance appearance, int index, double parentSize) {
     return AnimatedBuilder(
       animation: _petalControllers[index],
       builder: (context, child) {
@@ -274,12 +265,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               width: AppSpacing.welcomePetalWidth,
               height: AppSpacing.welcomePetalHeight,
               decoration: BoxDecoration(
-                color: _petalColors[index],
+                color: WelcomeAppearance.petalColors[index],
                 borderRadius:
                     BorderRadius.circular(AppSpacing.welcomePetalCornerRadius),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.black.withValues(alpha:0.2),
+                    color: appearance.petalShadow,
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -292,7 +283,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildWaterDrop(double parentSize) {
+  Widget _buildWaterDrop(WelcomeAppearance appearance, double parentSize) {
     return AnimatedBuilder(
       animation: _dropController,
       builder: (context, child) {
@@ -312,25 +303,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           shape: BoxShape.circle,
           gradient: RadialGradient(
             center: const Alignment(0.5, 0.4),
-            colors: [
-              AppColors.white.withValues(alpha:0.4),
-              AppColors.white.withValues(alpha:0.1),
-              AppColors.white.withValues(alpha:0.02),
-            ],
+            colors: appearance.dropRadialColors,
             stops: const [0.0, 0.5, 1.0],
           ),
           border: Border.all(
-            color: AppColors.white.withValues(alpha:0.1),
+            color: appearance.dropBorder,
             width: AppSpacing.welcomeDropBorderWidth,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.white.withValues(alpha:0.2),
+              color: appearance.dropHighlightGlow,
               blurRadius: 20,
               spreadRadius: 0,
             ),
             BoxShadow(
-              color: AppColors.black.withValues(alpha:0.1),
+              color: appearance.dropDepthShadow,
               blurRadius: 40,
               offset: const Offset(0, 10),
             ),
@@ -340,7 +327,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildTypography() {
+  Widget _buildTypography(WelcomeAppearance appearance) {
     return AnimatedBuilder(
       animation: _textController,
       builder: (context, child) {
@@ -385,7 +372,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   style: TextStyle(
                     fontSize: AppTypography.xl,
                     fontWeight: AppTypography.medium,
-                    color: AppColors.welcomeForegroundMuted,
+                    color: appearance.foregroundMuted,
                     letterSpacing: 1.0,
                     decoration: TextDecoration.none,
                   ),
@@ -406,7 +393,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   /// 欢迎页底部署名：居中、小字号、弱对比，与主按钮分离
-  Widget _buildFooter() {
+  Widget _buildFooter(WelcomeAppearance appearance) {
     return Positioned(
       left: 0,
       right: 0,
@@ -431,7 +418,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   fontWeight: AppTypography.medium,
-                  color: AppColors.welcomeForegroundMuted.withValues(alpha: 0.8),
+                  color: appearance.foregroundMuted.withValues(alpha: 0.8),
                   letterSpacing: 0.5,
                   decoration: TextDecoration.none,
                 ),

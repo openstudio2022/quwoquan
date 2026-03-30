@@ -4,7 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
 
@@ -67,7 +68,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       final shellFuture = repository.getHomepageShell(widget.homepageId);
       final activeContextFuture = ref
           .read(activePersonaContextProvider.future)
-          .then<Object?>((value) => value)
+          .then<ActivePersonaContextViewData?>((value) => value)
           .catchError((_) => null);
       final results = await Future.wait<Object?>(<Future<Object?>>[
         detailFuture,
@@ -77,13 +78,12 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       if (!mounted) {
         return;
       }
-      final activeContext = results[2];
+      final activeContext = results[2] as ActivePersonaContextViewData?;
+      final ownerId = activeContext?.ownerUserId.trim() ?? '';
       setState(() {
         _detail = results[0] as HomepageDetail;
         _shell = results[1] as HomepageShellData;
-        _viewerOwnerUserId = activeContext == null
-            ? null
-            : (activeContext as dynamic).ownerUserId?.toString();
+        _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId;
         _isLoading = false;
       });
     } catch (_) {

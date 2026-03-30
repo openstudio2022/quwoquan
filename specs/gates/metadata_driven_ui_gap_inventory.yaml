@@ -1,14 +1,28 @@
 # 元数据驱动 UI 缺口清单（客户端）
 # 说明：status = compliant | partial | legacy_map | exempt
+#   partial：含已用 DTO 但尚未满足 policy.post_projection_spec 中「完成定义」的页面（矩阵 P2 记 ○）
 # 扫描基线对齐：specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
 # 双向校验：scripts/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
-updated: "2026-03-29"
+updated: "2026-03-30"
 policy:
   mock_remote_same_return_types: true
   ui_domain_rows_should_be_codegen_dto: true
   allow_temporary_map_only_inside_repository_parse: true
+  p2_open_work_item_id: PHQ-P2-TBD
+  # 帖子/内容全链路 P2：在 ReadPresentation（按 Surface）+ 编辑 Draft→Payload + 显式 Wire/存储 映射完成前，相关行 status=partial（矩阵 P2=○）
+  post_projection_spec: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/post-projection-pipeline-inventory.md
+  p2_rolling_convergence_order:
+    - chat
+    - content
+    - discovery
+    - user
+    - circle
+    - entity
+    - search
+    - rtc
+    - assistant
 
 domains:
   - id: chat
@@ -21,36 +35,40 @@ domains:
     mock_remote_shared_types: true
     ui_pages:
       - path: quwoquan_app/lib/ui/chat/pages/chat_page.dart
-        status: partial
-        note: 主列表 ChatInboxDto；密信/联系人 Tab 等仍有 Map 或旁路
+        status: compliant
+        note: 趣聊 ChatInboxDto；联系人 Tab FutureProvider + ChatContactsRow；listContacts 用 Prototype 对齐 ChatContactRowDto
         target_dto: ChatInboxDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_detail_page.dart
-        status: partial
-        note: 委托 ChatConversationPage；契约随子页
-        target_dto: TBD
+        status: compliant
+        note: 委托 ChatConversationPage；消息链路与子页一致，ListMessages 已为 ChatMessageDto
+        target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
-        status: partial
-        note: 消息气泡动态结构；长期与 conversation metadata 对齐
-        target_dto: TBD
+        status: compliant
+        note: Provider 状态 List<ChatMessageDto>；Repository.listMessages 强类型；气泡经 toDisplayMap
+        target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
-        status: partial
-        note: 成员列表 ChatConversationMemberDto；会话元数据等可继续收口
+        status: compliant
+        note: 成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto；群名 updateConversationTitle
         target_dto: ChatConversationMemberDto
       - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
-        status: partial
-        note: listInbox/Contacts/Members/Circle 已 DTO；消息等仍 Map
+        status: compliant
+        note: 收件箱 circleId + ChatConversationCreatedDto；群/圈选择 ChatInboxDto/CircleDto；成员 ChatConversationMemberDto + 页面 ViewModel；圈成员 wire 仅在 Repository 边界 parse
         target_dto: ChatInboxDto
       - path: quwoquan_app/lib/ui/chat/pages/transfer_ownership_page.dart
-        status: partial
+        status: compliant
+        note: filterMemberDtosByQuery + MemberListNavigateTile(ChatConversationMemberDto)
         target_dto: ChatConversationMemberDto
       - path: quwoquan_app/lib/ui/chat/pages/group_member_search_page.dart
-        status: partial
+        status: compliant
+        note: buildGroupedMemberDtoSections；无 Map 成员态
         target_dto: ChatConversationMemberDto
       - path: quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: ChatGroupSettingsDto projection + conversationMembersProvider；开关乐观更新
+        target_dto: ChatGroupSettingsDto
       - path: quwoquan_app/lib/ui/chat/pages/group_admins_page.dart
-        status: partial
+        status: compliant
+        note: MemberListMultiSelectTile(ChatConversationMemberDto)；检索 filterMemberDtosByQuery
         target_dto: ChatConversationMemberDto
 
   - id: content
@@ -63,43 +81,76 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/discovery/pages/discovery_page.dart
         status: partial
-        note: Feed 行以 PostBaseDto 为主；少量 raw 映射用于分享/埋点兼容
+        note: P2 帖子投影待收口：需 ReadPresentation+SurfaceSpec（沉浸/微趣）；当前 PostBaseDto 直驱；见 post_projection_spec
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/discovery/pages/home_page.dart
         status: partial
-        note: Tab 根；沉浸/作品流消费 PostBaseDto
+        note: P2 同上（关注 Feed 面）；Wire 补全仍经 Repository；见 post_projection_spec
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/components/content/media_post_card.dart
         status: partial
-        note: 卡片基类已 PostBaseDto；更多操作配置仍为 dynamic
+        note: P2 待收口为 ReadPresentation(feed_card)+SurfaceSpec；入口仍为 PostBaseDto
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/article_detail_page.dart
         status: partial
+        note: P2 详情面 ReadPresentation(detail_article)；getPost/projectArticleDetailView 待并入统一管道
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
         status: partial
+        note: P2 详情面 ReadPresentation(detail_photo)；PostSummaryView 单形待表面化
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/video_detail_page.dart
         status: partial
+        note: P2 同 photo_detail（视频）
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
         status: partial
+        note: P2 沉浸面 ReadPresentation(immersive)+WorksImmersiveViewer 共用；dtoPosts/wire 边界待收敛
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 编辑态：Draft→预览 ReadPresentation 与 Draft→CreatePayload 需与只读管道对齐；当前 ContentPublishDraftComposite
+        target_dto: ContentPublishDraftComposite
+        target_read_projection: PostReadPresentation
+        target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/article_preview_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 预览应等同 ReadPresentation(detail|feed) 自 Draft；当前仅 provider 快照
+        target_dto: ContentPublishDraftComposite
+        target_read_projection: PostReadPresentation
+        target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 创作子链；与主 Draft/发布 payload 管道对齐验收
+        target_dto: LocationPoiDto
+        target_read_projection: N/A
+        target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 本地剪辑结果写入 Draft；预览/提交走统一 Draft 管道
+        target_dto: ContentPublishDraftComposite
+        target_read_projection: PostReadPresentation
+        target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/publish_circle_select_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 创作子链；CircleDto 选择与 Post 发布 payload 显式映射
+        target_dto: CircleDto
+        target_read_projection: N/A
+        target_edit_draft: ContentPublishDraftComposite
 
   - id: circle
     metadata_hint: contracts/metadata/messages/circle
@@ -110,19 +161,28 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 圈子本体已 DTO；作品区 section_creations 仍 Map→PostBaseDto；待 ReadPresentation(circle_works)；见 post_projection_spec
+        target_dto: CircleDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/circle/pages/circle_edit_settings_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: CircleEditSubmitPayload.toWire；create/update 边界 Map
+        target_dto: CircleDto
       - path: quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 CircleHubFeedPostEntry.raw 与 MediaViewer 写回待收口；Feed 面 ReadPresentation(circle_hub)；见 post_projection_spec
+        target_dto: CircleDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: listCircles → List<CircleDto>；分类用 category
+        target_dto: CircleDto
       - path: quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: CircleStats*RowViewData 列表行
+        target_dto: CircleDto
       - path: quwoquan_app/lib/ui/circle/pages/circles_hub_page.dart
         status: exempt
         note: 仅 export，无独立云契约
@@ -136,68 +196,94 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/user/pages/other_profile_page.dart
         status: partial
+        note: P2 资料壳已 DTO；作品/微趣 Tab 仍 PostBaseDto+PostSummaryView 单形；待 ReadPresentation(profile_works|profile_moments)；见 post_projection_spec
         target_dto: UserProfileDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: partial
+        note: P2 同 other_profile_page（本人态）
         target_dto: UserProfileDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
-        status: partial
+        status: compliant
+        note: ProfileEditUpdatePayload → updateProfile（Map 仅 Repository 边界）
         target_dto: UserProfileDto
       - path: quwoquan_app/lib/ui/user/pages/persona_management_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: UserRepository.getPersonaManagementSummary；PersonaDtoSurface = PersonaManagementItemViewData
+        target_dto: PersonaDto
       - path: quwoquan_app/lib/ui/user/pages/sub_account_management_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 同 Repository 强类型 summary/items（清单 UserFullSnapshotDto 投影）
+        target_dto: UserFullSnapshotDto
       - path: quwoquan_app/lib/ui/user/pages/resonance_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 推荐趣友 ResonanceBuddyViewData 原型；非 Map
+        target_dto: UserWorkDto
       - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: listProfileCircles + ProfileSocialRelationRowViewData（关注/粉丝）
+        target_dto: UserProfileDto
       - path: quwoquan_app/lib/ui/user/pages/profile_comments_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: CommentDto 列表（ContentRepository）
+        target_dto: UserProfileDto
 
   - id: entity
-    metadata_hint: contracts/metadata/messages/entity
-    repository: EntityRepository
+    metadata_hint: quwoquan_service/contracts/metadata/entity/homepage
+    repository: HomepageRepository
     codegen_examples:
-      - lib/cloud/runtime/generated/entity/
+      - lib/cloud/runtime/generated/entity/entity_api_metadata.g.dart
+      - lib/cloud/runtime/generated/entity/homepage_models.dart
     mock_remote_shared_types: true
     ui_pages:
       - path: quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageDetail/HomepageShellData；ActivePersonaContextViewData 无 dynamic
+        target_dto: HomepageDetail
       - path: quwoquan_app/lib/ui/entity/pages/suggest_homepage_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageSuggestionDraft + HomepageRepository
+        target_dto: HomepageSuggestionDraft
       - path: quwoquan_app/lib/ui/entity/pages/homepage_picker_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageSummary 列表；HomepageRepository.searchHomepages
+        target_dto: HomepageSummary
       - path: quwoquan_app/lib/ui/entity/pages/homepage_claim_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageClaimRequestDraft/Record
+        target_dto: HomepageClaimRequestDraft
       - path: quwoquan_app/lib/ui/entity/pages/homepage_maintenance_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageBasicDraft
+        target_dto: HomepageBasicDraft
       - path: quwoquan_app/lib/ui/entity/pages/homepage_status_report_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: HomepageStatusReportDraft/Record
+        target_dto: HomepageStatusReportDraft
 
   - id: search
-    metadata_hint: contracts/metadata / search registry
-    repository: SearchCoordinator / SearchRepository（见 core/services）
+    metadata_hint: quwoquan_service/contracts/metadata/_shared/search_contract.yaml + search_registry
+    repository: SearchCoordinator（ui/search/providers）+ SearchRepository（core/services/search_repository.dart）
     codegen_examples:
       - lib/cloud/runtime/generated/search/search_contract.g.dart
-    mock_remote_shared_types: partial
+      - lib/cloud/runtime/generated/search/search_registry.g.dart
+    mock_remote_shared_types: true
     ui_pages:
       - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 混合命中；内容/帖子分支待 SearchHit→ReadPresentation(search_card)；联系人等已 DTO；见 post_projection_spec
+        target_dto: SearchHit
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
         status: partial
-        target_dto: TBD
+        note: P2 网络结果含帖子/圈子等；帖子分支待 ReadPresentation；fromMap 仅限 payload 解析边界
+        target_dto: SearchHit
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
 
   - id: settings
     metadata_hint: N/A（多数本地偏好）；appearance 等见 user metadata
@@ -222,20 +308,22 @@ domains:
     mock_remote_shared_types: true
     ui_pages:
       - path: quwoquan_app/lib/ui/rtc/pages/voice_call_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: CallSessionDto + RtcRepository；选人路由 extra 为 CallParticipantPickerRouteExtra
+        target_dto: CallSessionDto
       - path: quwoquan_app/lib/ui/rtc/pages/incoming_call_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        target_dto: CallSessionDto
       - path: quwoquan_app/lib/ui/rtc/pages/outgoing_call_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        target_dto: CallSessionDto
       - path: quwoquan_app/lib/ui/rtc/pages/video_call_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 同 voice_call_page
+        target_dto: CallSessionDto
       - path: quwoquan_app/lib/ui/rtc/pages/call_participant_picker_page.dart
-        status: partial
-        note: ChatInboxDto / ChatConversationMemberDto / ChatContactRowDto
+        status: compliant
+        note: ChatInboxDto / ChatConversationMemberDto / ChatContactRowDto + CallPickerParticipantRow
         target_dto: ChatInboxDto
 
   - id: assistant
@@ -246,15 +334,17 @@ domains:
     mock_remote_shared_types: partial
     ui_pages:
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
-        status: partial
-        note: 引擎契约与云 API 分层；云调用须 codegen
-        target_dto: TBD
+        status: compliant
+        note: 时间轴 `AssistantTranscriptTimelineRow` + C4 `PersistedAssistantTimelinePayload`（`PersistedTimelineTurnCodec`）；云 API 仍须 assistant metadata + Repository
+        target_dto: AssistantTranscriptTimelineRow
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_tab_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: Tab 壳；无页内云行 Map
+        target_dto: N/A
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 设置壳；无页内云行 Map
+        target_dto: N/A
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_reference_webview_page.dart
         status: exempt
         note: WebView；云契约 —
@@ -262,11 +352,13 @@ domains:
         status: exempt
         note: 开发工具
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 近期会话列表经 AssistantLocalSessionSummaryView；技能市场仍经 Provider
+        target_dto: AssistantLocalSessionSummaryView
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart
-        status: partial
-        target_dto: TBD
+        status: compliant
+        note: 历史与会话偏好经 AssistantLocalSessionSummaryView / AssistantSessionDetailView
+        target_dto: AssistantSessionDetailView
 
   - id: welcome
     metadata_hint: N/A
@@ -290,6 +382,9 @@ domains:
       - path: quwoquan_app/lib/app/shell/bottom_navigation.dart
         status: exempt
         note: 底栏；无云行模型
+      - path: quwoquan_app/lib/core/links/app_public_content_links.dart
+        status: compliant
+        note: 公网 origin 薄层；路径由 _shared/link_templates.yaml → lib/cloud/runtime/generated/link_templates.g.dart（AppLinkTemplates）；门禁 scripts/verify_link_templates_route_ids.py
 
   - id: components_shell
     metadata_hint: N/A

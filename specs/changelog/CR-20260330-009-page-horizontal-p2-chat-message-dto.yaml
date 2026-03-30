@@ -1,0 +1,12 @@
+id: CR-20260330-009-page-horizontal-p2-chat-message-dto
+title: P2 滚动 — ChatMessageDto 投影与会话消息 Repository 强类型
+status: implemented
+date: "2026-03-30"
+summary: |
+  新增 conversation metadata 投影 `chat_message_client.yaml` → `ChatMessageDto`；
+  `ChatRepository.listMessages` 返回 `List<ChatMessageDto>`；`MessageDto` 为 typedef + 展示扩展；
+  清单 `chat_detail`/`chat_conversation` → compliant；矩阵对应行 P2 ✓；清单内原 TBD 目标类名已全书登记（design.md §7）。
+links:
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
+  - specs/gates/metadata_driven_ui_gap_inventory.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md

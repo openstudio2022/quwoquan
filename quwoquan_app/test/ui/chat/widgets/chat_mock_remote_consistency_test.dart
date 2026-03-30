@@ -114,6 +114,7 @@ class _CustomMockChatRepository extends MockChatRepository {
         mentionUnreadCount: 0,
         muted: false,
         pinned: false,
+        circleId: '',
       ),
     ];
   }

@@ -1,0 +1,13 @@
+{
+  "id": "assistant_err_fixture",
+  "conversationId": "assistant_main",
+  "type": "text",
+  "content": "助手出现异常，请重试。",
+  "senderId": "assistant",
+  "senderName": "小趣",
+  "senderAvatar": "",
+  "timestamp": "",
+  "isRead": true,
+  "isSelf": false,
+  "isError": true
+}

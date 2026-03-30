@@ -1,0 +1,62 @@
+# plan：entity-link-templates-metadata
+# 顺序：metadata 真相源 → verify → codegen-app → 运行时 origin 薄层 → 替换调用点 → 门禁
+
+feature_path: runtime/runtime-client-foundation/entity-link-templates-metadata
+order_note: |
+  baseline（本会话）完成 spec/design/acceptance/plan/CR/tree + link_templates.yaml；
+  slice-1 起在 /dev 执行。
+
+slices:
+  - id: slice-0-baseline-docs-metadata
+    title: 规格、设计、验收、plan、CR、tree_index + link_templates.yaml
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/plan.yaml
+      - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+      - specs/changelog/CR-20260330-015-entity-link-templates-metadata-baseline.yaml
+      - specs/feature-tree/tree_index.yaml
+    tests:
+      - make -C quwoquan_service verify-metadata
+      - python3 -c "import yaml; yaml.safe_load(open('quwoquan_service/contracts/metadata/_shared/link_templates.yaml'))"
+    dev_status: implemented
+
+  - id: slice-1-codegen-app-link-templates
+    title: codegen_app_metadata 消费 link_templates.yaml，生成 Dart 链接 API + route_id 校验
+    outputs:
+      - tools/codegen_app_metadata（或等价入口）
+      - quwoquan_app/lib/cloud/runtime/generated/**/link_templates.g.dart
+    tests:
+      - make codegen-app
+      - flutter analyze quwoquan_app/lib/cloud/runtime/generated/
+    dev_status: implemented
+
+  - id: slice-2-runtime-origin-and-adapter
+    title: AppPublicContentLinks 仅保留 origin 读取；Web/Scheme 路径由生成 API 提供
+    outputs:
+      - quwoquan_app/lib/core/links/app_public_content_links.dart
+    tests:
+      - flutter analyze lib/core/links/
+    dev_status: implemented
+
+  - id: slice-3-replace-call-sites
+    title: 替换 ContentShareTemplateBuilder、沉浸式 viewer、助理 Referer 等手写拼接
+    outputs:
+      - quwoquan_app/lib/ui/content/share/content_share_template.dart
+      - quwoquan_app/lib/components/media/image/viewer/immersive_image_viewer.dart
+      - quwoquan_app/lib/components/media/video/viewer/immersive_video_viewer.dart
+      - quwoquan_app/lib/assistant/tool/impl/web/websearch_tool.dart
+    tests:
+      - flutter test test/ui/content/share/（若有）
+      - flutter analyze lib/
+    dev_status: implemented
+
+  - id: slice-4-gate-and-inventory
+    title: 可选 verify_link_templates_route_ids.py；登记 metadata_driven 缺口清单「链接单源」
+    outputs:
+      - scripts/verify_link_templates_route_ids.py
+      - specs/gates/metadata_driven_ui_gap_inventory.yaml
+    tests:
+      - make gate
+    dev_status: implemented

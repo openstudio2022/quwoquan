@@ -11,16 +11,19 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 
 Widget _bubbleHarness(
   Map<String, dynamic> message, {
-  void Function(Map<String, dynamic>)? onReferenceTap,
+  void Function(AssistantCitation)? onReferenceTap,
   AssistantJourneyViewModel? journeyViewModel,
   bool answerGateOpen = true,
   bool isAssistantRunning = false,
   String? runningStatusLabel,
 }) {
+  final transcriptRow = PersistedTimelineTurnCodec.decode(message);
   return ScreenUtilInit(
     designSize: const Size(390, 844),
     builder: (_, _) => MaterialApp(
@@ -28,7 +31,7 @@ Widget _bubbleHarness(
       home: Scaffold(
         body: SingleChildScrollView(
           child: AssistantMessageBubble(
-            message: message,
+            transcriptRow: transcriptRow,
             isRight: message['isSelf'] == true,
             bubbleColor: Colors.grey.shade200,
             textColor: Colors.black,
@@ -190,7 +193,7 @@ void main() {
   });
 
   testWidgets('助理过程抽屉可从 runArtifacts.journey 恢复来源摘要', (tester) async {
-    Map<String, dynamic>? tappedRef;
+    AssistantCitation? tappedRef;
     final references = <Map<String, dynamic>>[
       <String, dynamic>{
         'title': '中国气象局',
@@ -262,7 +265,7 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!['url'], equals('https://weather.cma.cn/shenzhen'));
+    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
   });
 
   testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (tester) async {
@@ -575,7 +578,7 @@ void main() {
   });
 
   testWidgets('completed displayMarkdown 会优先渲染自然最终成答并保留引用', (tester) async {
-    Map<String, dynamic>? tappedRef;
+    AssistantCitation? tappedRef;
     const structuredMarkdown =
         '深圳今天有雨，外出建议带伞。[来源1](https://weather.cma.cn/shenzhen)\n\n'
         '如果你会晚点出门，带把折叠伞更稳妥。';
@@ -623,11 +626,11 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!['url'], equals('https://weather.cma.cn/shenzhen'));
+    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
   });
 
   testWidgets('answerEvidenceBindings 会渲染为可点击递增角标', (tester) async {
-    Map<String, dynamic>? tappedRef;
+    AssistantCitation? tappedRef;
     final message = _assistantMessage(
       id: 'assistant_msg_citations',
       content:
@@ -684,7 +687,7 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!['url'], equals('https://developer.mozilla.org/zh-CN/'));
-    expect(tappedRef!['source'], equals('developer.mozilla.org'));
+    expect(tappedRef!.url, equals('https://developer.mozilla.org/zh-CN/'));
+    expect(tappedRef!.source, equals('developer.mozilla.org'));
   });
 }

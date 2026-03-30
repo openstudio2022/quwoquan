@@ -1,0 +1,94 @@
+# 实体级可复制链接与应用内导航对齐（唯一结构真相源）
+#
+# - 公网 HTTPS 的 **主机/origin** 不写入本文件，由部署或 Remote Config 提供，
+#   客户端用 dart-define（过渡期）或 Remote Config SDK 读取，再与本文件 path_template 组合。
+# - **scheme 深链** 结构由本文件定义；scheme 不随环境变化。
+# - navigation.route_id 必须对应 contracts/metadata/_shared/app_routes.yaml 中已有 id，
+#   param_bindings 表示：链接占位符名 → GoRouter path 参数名。
+#
+# codegen（plan）：由 tools/codegen_app_metadata 生成 Dart `AppLinkTemplates` / `EntityLinkSpec`，
+# 并可选校验 route_id 存在于 app_routes codegen 常量集。
+#
+version: 1
+
+runtime_origin_binding:
+  description: |
+    公网可复制链接的 origin 仅来自运行时：
+    - 过渡期：`--dart-define=PUBLIC_WEB_BASE_URL=https://…`（与现有 AppPublicContentLinks 对齐）
+    - 目标态：Remote Config 键（如 `public_web_base_url`），由产品/运维按 env 下发
+  dart_define_key: PUBLIC_WEB_BASE_URL
+  remote_config_key: public_web_base_url
+
+entities:
+  post:
+    description: 内容帖（点滴/作品等），与 Post 聚合 id 对齐
+    primary_params: [postId]
+    app_deep_link:
+      scheme: quwoquan
+      host: content
+      path_template: post/{postId}
+      query_rules:
+        - when: visibility_is_circle_visible
+          append_query: scope=circle
+    web:
+      path_template: post/{postId}
+    navigation:
+      route_id: articleDetail
+      param_bindings:
+        postId: id
+
+  circle:
+    description: 圈子主页
+    primary_params: [circleId]
+    app_deep_link:
+      scheme: quwoquan
+      host: circle
+      path_template: "{circleId}"
+    web:
+      path_template: circle/{circleId}
+    navigation:
+      route_id: circleDetail
+      param_bindings:
+        circleId: id
+
+  user:
+    description: 用户公开主页（路由键为 username）
+    primary_params: [username]
+    app_deep_link:
+      scheme: quwoquan
+      host: user
+      path_template: "{username}"
+    web:
+      path_template: u/{username}
+    navigation:
+      route_id: userProfile
+      param_bindings:
+        username: username
+
+  chat:
+    description: 单聊/群聊会话
+    primary_params: [conversationId]
+    app_deep_link:
+      scheme: quwoquan
+      host: chat
+      path_template: "{conversationId}"
+    web:
+      path_template: chat/{conversationId}
+    navigation:
+      route_id: chatDetail
+      param_bindings:
+        conversationId: id
+
+  entity_homepage:
+    description: 主页实体（共享主页网络）
+    primary_params: [homepageId]
+    app_deep_link:
+      scheme: quwoquan
+      host: homepages
+      path_template: "{homepageId}"
+    web:
+      path_template: homepages/{homepageId}
+    navigation:
+      route_id: homepageDetail
+      param_bindings:
+        homepageId: id

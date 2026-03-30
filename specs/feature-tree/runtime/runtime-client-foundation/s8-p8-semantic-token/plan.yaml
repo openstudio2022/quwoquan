@@ -1,0 +1,49 @@
+# plan：S8 — P8 语义 token（无 codegen）
+
+feature_path: runtime/runtime-client-foundation/s8-p8-semantic-token
+order_note: 顺序为 设计常量（W0）→ 12 页（W1）→ 域波次（W2–W5）；与 S7（P7）PR 隔离
+
+slices:
+  - id: slice-s8-baseline-freeze
+    title: /baseline 冻结 spec/design/plan/acceptance + CR-012
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/plan.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/acceptance.yaml
+      - specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+      - specs/feature-tree/tree_index.yaml
+    tests:
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 scripts/verify_page_matrix_scan_complete.py
+      - python3 scripts/verify_dart_semantic.py
+    dev_status: implemented
+
+  - id: slice-s8-w0-tokens
+    title: W0 AppSpacing/域 layout 常量补缺（无业务行为变更）
+    outputs:
+      - quwoquan_app/lib/core/design_system/spacing/app_spacing.dart
+      - quwoquan_app/lib/core/design_system/colors/app_colors.dart
+    tests:
+      - python3 scripts/verify_dart_semantic.py
+    dev_status: implemented
+
+  - id: slice-s8-w1-twelve-pages
+    title: W1 清零 12 个 baseline 页文件 + 更新矩阵 P8
+    outputs:
+      - scripts/.verify_dart_semantic_baseline.txt
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+    tests:
+      - python3 scripts/verify_dart_semantic.py
+      - bash scripts/gate_repo.sh --scope app
+    dev_status: implemented
+
+  - id: slice-s8-w2-w5-waves
+    title: W2–W5 创作/助手/媒体/抽检波次（可拆多 PR）
+    outputs:
+      - scripts/.verify_dart_semantic_baseline.txt
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+    tests:
+      - python3 scripts/verify_dart_semantic.py
+      - bash scripts/gate_repo.sh --scope app
+    dev_status: implemented

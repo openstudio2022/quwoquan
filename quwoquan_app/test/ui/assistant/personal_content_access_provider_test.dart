@@ -45,6 +45,25 @@ class _FakeAssistantRepository implements AssistantRepository {
       searchIntensity: searchIntensity,
     );
   }
+
+  @override
+  Future<List<AssistantUserTaskView>> listAssistantTasks({
+    int limit = 32,
+    String? status,
+  }) async =>
+      const <AssistantUserTaskView>[];
+
+  @override
+  Future<List<AssistantUserMemoryView>> listAssistantMemories({
+    int limit = 32,
+  }) async =>
+      const <AssistantUserMemoryView>[];
+
+  @override
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+    int limit = 64,
+  }) async =>
+      const <AssistantSkillCatalogItemView>[];
 }
 
 void main() {

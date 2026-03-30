@@ -30,8 +30,11 @@ slices:
       - flutter analyze quwoquan_app/lib/ui/chat/
       - flutter test test/ui/chat/ test/cloud/realtime/realtime_roster_updated_handler_test.dart
       - 更新 metadata_driven_ui_gap_inventory.yaml chat 域状态
-    dev_status: partial
-    dev_note: listMembers/listContacts 已 DTO；会话消息等仍待 metadata 对齐
+    dev_status: implemented
+    dev_note: |
+      listMembers/listContacts/searchContacts/getGroupSettings 已强类型；ChatGroupSettingsDto/ChatContactSearchItemDto/扩展 ChatContactRowDto；
+      联系人 Tab ChatContactsRow；群管理/设置/成员检索 DTO；updateConversationTitle 拆出群名。
+      start_group_chat_page：chat_inbox.circleId、ChatConversationCreatedDto、向导 ChatInboxDto/CircleDto/ViewModel（2026-03-30）。
 
   - id: slice-3-content-feed-typed-ui
     title: 发现/Feed：MediaPostCard/Image/Video 卡片 PostBaseDto；discovery 主路径已 PostBaseDto
@@ -44,8 +47,10 @@ slices:
       - flutter analyze lib/components/content/
       - flutter test test/components/content/post/
       - verify_dart_semantic / 多态门禁
-    dev_status: partial
-    dev_note: 更多操作弹窗 config.post 仍为 dynamic；沉浸 raw Map 旁路仍存
+    dev_status: compliant
+    dev_note: |
+      2026-03-30：content 清单全 compliant（发现/Feed/详情/沉浸/entry 五页）。
+      `PublishSettings.locationPoi`、`CreateCircleOption.fromCircleDto`、`ContentPublishDraftComposite` typedef；发布 API 仍 Map payload（Repository 边界内）。
 
   - id: slice-4-circle-user-entity-search
     title: 圈子/用户/实体/搜索/assistant/rtc/welcome/shell/components 页 — 缺口清单与矩阵路径对齐（登记状态）

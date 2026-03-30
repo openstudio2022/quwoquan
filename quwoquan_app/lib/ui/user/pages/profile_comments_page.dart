@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
 
+/// 评论收发列表；数据为 ContentRepository 返回的 CommentDto（非页内 Map）。
 class ProfileCommentsPage extends ConsumerStatefulWidget {
   const ProfileCommentsPage({super.key});
 

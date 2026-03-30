@@ -83,15 +83,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
         .where((m) => m.role != 'owner' && !m.isCurrentUser)
         .toList();
 
-    final filteredMaps =
-        filterMemberMapsByQuery(candidates.map((e) => e.toMap()).toList(), _searchQuery);
-    final filtered = candidates
-        .where(
-          (c) => filteredMaps.any(
-            (m) => (m['userId'] ?? '').toString() == c.userId,
-          ),
-        )
-        .toList();
+    final filtered = filterMemberDtosByQuery(candidates, _searchQuery);
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
@@ -124,7 +116,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                             for (final m in filtered)
                               MemberListNavigateTile(
                                 isDark: isDark,
-                                member: m.toMap(),
+                                member: m,
                                 subtitleText: null,
                                 onTap: () => _onMemberSelected(m),
                               ),

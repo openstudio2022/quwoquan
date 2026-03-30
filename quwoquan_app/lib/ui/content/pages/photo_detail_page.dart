@@ -9,7 +9,6 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
@@ -18,13 +17,11 @@ class PhotoDetailPage extends ConsumerStatefulWidget {
     super.key,
     required this.category,
     required this.initialIndex,
-    required this.dataService,
     this.initialExtra,
   });
 
   final String category;
   final int initialIndex;
-  final dynamic dataService;
   final MediaViewerExtra? initialExtra;
 
   @override
@@ -53,15 +50,13 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
 
   Future<void> _loadData() async {
     try {
-      final posts = await widget.dataService.getDataList(
-        endpoint: '/posts',
-        params: {'category': widget.category == 'images' ? 'images' : widget.category},
-        limit: 100,
-      );
-      _posts = (posts as List)
-          .whereType<Map<String, dynamic>>()
-          .map(projectPostMap)
-          .toList(growable: false);
+      final category =
+          widget.category == 'images' ? 'images' : widget.category;
+      final dtos = await ref.read(contentRepositoryProvider).listDiscoveryFeed(
+            category: category,
+            limit: 100,
+          );
+      _posts = dtos.map(PostSummaryView.fromDto).toList(growable: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

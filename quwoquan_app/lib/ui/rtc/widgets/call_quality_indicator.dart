@@ -12,7 +12,7 @@ enum NetworkQuality {
   Color get color => switch (this) {
         NetworkQuality.good => AppColors.success,
         NetworkQuality.slight => AppColors.warning,
-        NetworkQuality.weak => const Color(0xFFFF6B35),
+        NetworkQuality.weak => AppColors.networkCallQualityWeak,
         NetworkQuality.poor => AppColors.error,
       };
 

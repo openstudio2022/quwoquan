@@ -4,6 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
+import 'package:quwoquan_app/assistant/application/transcript/assistant_feedback_target.dart';
+import 'package:quwoquan_app/assistant/application/transcript/assistant_replay_record_factory.dart';
+import 'package:quwoquan_app/assistant/application/transcript/assistant_transcript_assembler.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
@@ -16,6 +19,10 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projecti
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/assistant_transcript_row_patch.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/replay/assistant_replay_record.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
@@ -25,6 +32,7 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_display_fallbacks.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 
@@ -39,14 +47,15 @@ class AssistantConversationController extends ChangeNotifier {
   final AssistantStreamingAnswerDecoder _streamingAnswerDecoder =
       AssistantStreamingAnswerDecoder();
 
-  final Map<String, Map<String, dynamic>> _assistantReplayByMessageId =
-      <String, Map<String, dynamic>>{};
-  final List<Map<String, dynamic>> _assistantReplayRecords =
-      <Map<String, dynamic>>[];
+  final Map<String, AssistantReplayRecord> _assistantReplayByMessageId =
+      <String, AssistantReplayRecord>{};
+  final List<AssistantReplayRecord> _assistantReplayRecords =
+      <AssistantReplayRecord>[];
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
 
-  List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
+  List<AssistantTranscriptTimelineRow> _transcriptRows =
+      <AssistantTranscriptTimelineRow>[];
   AssistantJourney _currentJourney = const AssistantJourney();
   List<ProcessTimelineFrame> _currentCanonicalProcessTimeline =
       const <ProcessTimelineFrame>[];
@@ -69,10 +78,11 @@ class AssistantConversationController extends ChangeNotifier {
   AssistantBackend _assistantBackend = AssistantBackend.remote;
   String _assistantRuntimeSessionId = '';
   String _assistantTopicTitle = UITextConstants.assistantHistoryAll;
-  List<Map<String, dynamic>> _assistantHiddenHistory = <Map<String, dynamic>>[];
+  List<AssistantTranscriptTimelineRow> _assistantHiddenHistory =
+      <AssistantTranscriptTimelineRow>[];
   bool _disposed = false;
 
-  List<Map<String, dynamic>> get messages => _messages;
+  List<AssistantTranscriptTimelineRow> get transcriptRows => _transcriptRows;
   AssistantJourney get currentJourney => _currentJourney;
   List<ProcessTimelineFrame> get currentProcessTimeline =>
       _currentProcessTimeline;
@@ -89,11 +99,51 @@ class AssistantConversationController extends ChangeNotifier {
   AssistantBackend get assistantBackend => _assistantBackend;
   String get assistantRuntimeSessionId => _assistantRuntimeSessionId;
   String get assistantTopicTitle => _assistantTopicTitle;
-  List<Map<String, dynamic>> get assistantHiddenHistory =>
+  List<AssistantTranscriptTimelineRow> get assistantHiddenHistory =>
       _assistantHiddenHistory;
   Map<String, String> get feedbackStatusByMessageId =>
       _assistantFeedbackStatusByMessageId;
-  List<Map<String, dynamic>> get replayRecords => _assistantReplayRecords;
+  List<AssistantReplayRecord> get replayRecords => _assistantReplayRecords;
+
+  Map<String, dynamic> _rowToMap(AssistantTranscriptTimelineRow row) =>
+      PersistedTimelineTurnCodec.encode(row);
+
+  AssistantTranscriptTimelineRow _mapToRow(Map<String, dynamic> m) =>
+      PersistedTimelineTurnCodec.decode(m);
+
+  AssistantTranscriptTimelineRow _patchRow(
+    AssistantTranscriptTimelineRow row,
+    Map<String, dynamic> patch,
+  ) =>
+      patchTranscriptRowWithMapMerge(row, patch);
+
+  bool _rowEligibleForAssistantRun(AssistantTranscriptTimelineRow r) {
+    final m = _rowToMap(r);
+    if ((m['type'] as String? ?? 'text') != 'text') return false;
+    if (m['streaming'] == true) return false;
+    if (m['isError'] == true) return false;
+    if (m['isSelf'] == true) {
+      return ((m['content'] as String?)?.trim().isNotEmpty ?? false);
+    }
+    return _assistantHistoryContentForModel(m).trim().isNotEmpty;
+  }
+
+  AssistantRunMessage? _rowAsRunMessage(AssistantTranscriptTimelineRow r) {
+    final m = _rowToMap(r);
+    final isUser = m['isSelf'] == true;
+    final content = isUser
+        ? ((m['content'] as String?) ?? '')
+        : _assistantHistoryContentForModel(m);
+    if (content.trim().isEmpty) return null;
+    return AssistantRunMessage(
+      role: isUser ? 'user' : 'assistant',
+      content: content,
+    );
+  }
+
+  void _ensureTranscriptRowsGrowable() {
+    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(_transcriptRows);
+  }
 
   String get effectiveAssistantSessionId {
     _assistantBackend = _resolveAvailableAssistantBackend(_assistantBackend);
@@ -127,10 +177,10 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantBackend = backend;
     _assistantRuntimeSessionId = freshSessionId;
     _assistantTopicTitle = UITextConstants.assistantHistoryAll;
-    _assistantHiddenHistory = <Map<String, dynamic>>[];
+    _assistantHiddenHistory = <AssistantTranscriptTimelineRow>[];
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = false;
-    _messages = <Map<String, dynamic>>[];
+    _transcriptRows = <AssistantTranscriptTimelineRow>[];
     _notify();
   }
 
@@ -159,8 +209,8 @@ class AssistantConversationController extends ChangeNotifier {
           };
         })
         .toList(growable: false);
-    _ensureMessagesGrowable();
-    _messages.addAll(attachmentMessages);
+    _ensureTranscriptRowsGrowable();
+    _transcriptRows.addAll(attachmentMessages.map(_mapToRow));
     _notify();
   }
 
@@ -176,11 +226,12 @@ class AssistantConversationController extends ChangeNotifier {
     );
     final olderChunk = _assistantHiddenHistory.sublist(splitIndex);
     final remainingHidden = _assistantHiddenHistory.sublist(0, splitIndex);
-    _messages = List<Map<String, dynamic>>.from(<Map<String, dynamic>>[
+    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(<AssistantTranscriptTimelineRow>[
       ...olderChunk,
-      ..._messages,
+      ..._transcriptRows,
     ]);
-    _assistantHiddenHistory = List<Map<String, dynamic>>.from(remainingHidden);
+    _assistantHiddenHistory =
+        List<AssistantTranscriptTimelineRow>.from(remainingHidden);
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = remainingHidden.isNotEmpty;
     _notify();
@@ -271,10 +322,13 @@ class AssistantConversationController extends ChangeNotifier {
     final splitIndex = math.max(0, mapped.length - _assistantHistoryPageSize);
     final hiddenHistory = mapped.sublist(0, splitIndex);
     final visibleMessages = mapped.sublist(splitIndex);
-    _assistantHiddenHistory = List<Map<String, dynamic>>.from(hiddenHistory);
+    _assistantHiddenHistory = hiddenHistory
+        .map(_mapToRow)
+        .toList(growable: false);
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = hiddenHistory.isNotEmpty;
-    _messages = List<Map<String, dynamic>>.from(visibleMessages);
+    _transcriptRows =
+        visibleMessages.map(_mapToRow).toList(growable: false);
     final topic = (detail['topicTitle'] as String?)?.trim();
     if (topic != null && topic.isNotEmpty) {
       _assistantTopicTitle = topic;
@@ -299,10 +353,10 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantRuntimeSessionId = resolvedSessionId;
     if (backend == AssistantBackend.remote) {
       _assistantTopicTitle = UITextConstants.assistantHistoryAll;
-      _assistantHiddenHistory = <Map<String, dynamic>>[];
+      _assistantHiddenHistory = <AssistantTranscriptTimelineRow>[];
       _assistantLoadingOlderHistory = false;
       _showAssistantHistoryPeek = false;
-      _messages = <Map<String, dynamic>>[];
+      _transcriptRows = <AssistantTranscriptTimelineRow>[];
       _notify();
       return;
     }
@@ -322,10 +376,10 @@ class AssistantConversationController extends ChangeNotifier {
     _assistantBackend = resolvedBackend;
     _assistantRuntimeSessionId = newAssistantSessionId(resolvedBackend);
     _assistantTopicTitle = UITextConstants.assistantHistoryAll;
-    _assistantHiddenHistory = <Map<String, dynamic>>[];
+    _assistantHiddenHistory = <AssistantTranscriptTimelineRow>[];
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = false;
-    _messages = <Map<String, dynamic>>[];
+    _transcriptRows = <AssistantTranscriptTimelineRow>[];
     _notify();
     if (resolvedBackend == AssistantBackend.local) {
       final synced = await syncSessionInfo();
@@ -342,29 +396,22 @@ class AssistantConversationController extends ChangeNotifier {
     if (trimmed.isEmpty) return;
     final activeContext = await _resolveActivePersonaContext();
     final userMessageId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
-    _ensureMessagesGrowable();
-    _messages.add({
-      'id': userMessageId,
-      'conversationId': AppConceptConstants.assistantConversationId,
-      'type': 'text',
-      'content': trimmed,
-      'senderId': activeContext.profileSubjectId,
-      'senderName': activeContext.displayName.isNotEmpty
-          ? activeContext.displayName
-          : '我',
-      'senderAvatar': activeContext.avatarUrl,
-      if (activeContext.subAccountId.isNotEmpty)
-        'senderPersonaId': activeContext.subAccountId,
-      'timestamp': '',
-      'status': 'sending',
-      'isRead': true,
-      'isSelf': true,
-    });
+    _ensureTranscriptRowsGrowable();
+    _transcriptRows.add(
+      AssistantTranscriptAssembler.userTextMessage(
+        id: userMessageId,
+        trimmedText: trimmed,
+        profileSubjectId: activeContext.profileSubjectId,
+        displayName: activeContext.displayName,
+        avatarUrl: activeContext.avatarUrl,
+        subAccountId: activeContext.subAccountId,
+      ),
+    );
     final streamNow = DateTime.now();
     final streamTs =
         '${streamNow.hour}:${streamNow.minute.toString().padLeft(2, '0')}';
     _resetStreamingAnswerDecoder();
-    _ensureMessagesGrowable();
+    _ensureTranscriptRowsGrowable();
     final streamingAssistantMessageId =
         'assistant_stream_${DateTime.now().millisecondsSinceEpoch}';
     _activeAssistantStreamingMessageId = streamingAssistantMessageId;
@@ -377,29 +424,12 @@ class AssistantConversationController extends ChangeNotifier {
     _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
     _currentUnderstandingSnapshot = const RunArtifactsUnderstandingSnapshot();
     _currentJourneyElapsedMs = 0;
-    _messages.add(<String, dynamic>{
-      'id': streamingAssistantMessageId,
-      'conversationId': AppConceptConstants.assistantConversationId,
-      'type': 'text',
-      'content': '',
-      'senderId': AppConceptConstants.assistantSenderId,
-      'senderName': AppConceptConstants.assistantLabel,
-      'senderAvatar': '',
-      'timestamp': streamTs,
-      'isRead': true,
-      'isSelf': false,
-      'streaming': true,
-      'streamFinalAnswer': '',
-      assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
-      assistantDisplayMarkdownField: '',
-      assistantDisplayPlainTextField: '',
-      'runArtifacts': const <String, dynamic>{},
-      assistantJourneyField: const <String, dynamic>{},
-      assistantUiProcessTimelineField: const <String, dynamic>{},
-      assistantFollowupPromptField: '',
-      assistantActionHintsField: const <String>[],
-      'assistantElapsedMs': 0,
-    });
+    _transcriptRows.add(
+      AssistantTranscriptAssembler.assistantStreamingPlaceholder(
+        id: streamingAssistantMessageId,
+        streamTimestamp: streamTs,
+      ),
+    );
     _startAssistantProgress();
     _notify();
     try {
@@ -414,27 +444,10 @@ class AssistantConversationController extends ChangeNotifier {
         }
       }
       final runStartedAt = DateTime.now();
-      final assistantMessages = _messages
-          .where((m) {
-            if ((m['type'] as String? ?? 'text') != 'text') return false;
-            if (m['streaming'] == true) return false;
-            if (m['isError'] == true) return false;
-            if (m['isSelf'] == true) {
-              return ((m['content'] as String?)?.trim().isNotEmpty ?? false);
-            }
-            return _assistantHistoryContentForModel(m).trim().isNotEmpty;
-          })
-          .map((m) {
-            final isUser = m['isSelf'] == true;
-            final content = isUser
-                ? ((m['content'] as String?) ?? '')
-                : _assistantHistoryContentForModel(m);
-            return AssistantRunMessage(
-              role: isUser ? 'user' : 'assistant',
-              content: content,
-            );
-          })
-          .where((message) => message.content.trim().isNotEmpty)
+      final assistantMessages = _transcriptRows
+          .where(_rowEligibleForAssistantRun)
+          .map(_rowAsRunMessage)
+          .whereType<AssistantRunMessage>()
           .toList(growable: false);
       final contextScope = _withActivePersonaContextScope(
         buildContextScope(),
@@ -619,13 +632,13 @@ class AssistantConversationController extends ChangeNotifier {
         displayPlainText: displayPlainText,
         elapsedMs: elapsedMs,
       );
-      _ensureMessagesGrowable();
+      _ensureTranscriptRowsGrowable();
       final existingIndex = _findStreamingAssistantMessageIndex(
         streamingAssistantMessageId,
       );
       if (existingIndex >= 0) {
-        final existingMessage = _clearStreamingAnswerState(
-          _messages[existingIndex],
+        final clearedRow = _clearStreamingAnswerState(
+          _transcriptRows[existingIndex],
         );
         final completedDisplayState =
             resolveAssistantDisplayStateFromRunResponse(runResponse);
@@ -643,11 +656,11 @@ class AssistantConversationController extends ChangeNotifier {
           answer: _resolvedCompletedAnswerState(
             completedDisplayState: completedDisplayState,
             displayMarkdown: displayMarkdown,
-            existingMessage: existingMessage,
+            existingRow: clearedRow,
           ),
         );
-        _messages[existingIndex] = <String, dynamic>{
-          ...existingMessage,
+        _transcriptRows[existingIndex] = _mapToRow({
+          ..._rowToMap(clearedRow),
           'content': displayMarkdown,
           'timestamp': replyTime,
           'runId': runResponse.runId ?? '',
@@ -688,7 +701,7 @@ class AssistantConversationController extends ChangeNotifier {
           assistantDisplayStateField: responseDisplayState.toJson(),
           'streamFinalAnswer': '',
           'streaming': false,
-        };
+        });
       } else {
         final completedDisplayState =
             resolveAssistantDisplayStateFromRunResponse(runResponse);
@@ -708,54 +721,56 @@ class AssistantConversationController extends ChangeNotifier {
             displayMarkdown: displayMarkdown,
           ),
         );
-        _messages.add({
-          'id': assistantMessageId,
-          'conversationId': AppConceptConstants.assistantConversationId,
-          'type': 'text',
-          'content': displayMarkdown,
-          'senderId': AppConceptConstants.assistantSenderId,
-          'senderName': AppConceptConstants.assistantLabel,
-          'senderAvatar': '',
-          'timestamp': replyTime,
-          'isRead': true,
-          'isSelf': false,
-          'runId': runResponse.runId ?? '',
-          'traceId': runResponse.traceId ?? '',
-          'sourceQuery': trimmed,
-          'templateVersionUsed':
-              (runResponse.structuredResponse['templateVersionUsed']
-                  as String?) ??
-              '',
-          'phaseOneRoutingDiagnostics':
-              (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
-                      as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          'degraded': runResponse.degraded,
-          'qualityMetrics':
-              (runResponse.structuredResponse['qualityMetrics'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          'heuristicFallbackUsed':
-              (((runResponse.structuredResponse['qualityMetrics'] as Map?)
-                  ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
-              true,
-          'runArtifacts': _withDisplayOverrides(
-            _responseRunArtifactsMap(runResponse),
-            displayMarkdown: displayMarkdown,
-            displayPlainText: displayPlainText,
-            displayState: responseDisplayState,
-          ),
-          'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
-          'dialogueState': dialogueRuntime,
-          'uiReferences': uiReferences,
-          'uiActions': uiActions,
-          'uiUsageStats': uiUsageStats,
-          ...persistedTurnFields,
-          assistantDisplayMarkdownField: displayMarkdown,
-          assistantDisplayPlainTextField: displayPlainText,
-          assistantDisplayStateField: responseDisplayState.toJson(),
-        });
+        _transcriptRows.add(
+          _mapToRow({
+            'id': assistantMessageId,
+            'conversationId': AppConceptConstants.assistantConversationId,
+            'type': 'text',
+            'content': displayMarkdown,
+            'senderId': AppConceptConstants.assistantSenderId,
+            'senderName': AppConceptConstants.assistantLabel,
+            'senderAvatar': '',
+            'timestamp': replyTime,
+            'isRead': true,
+            'isSelf': false,
+            'runId': runResponse.runId ?? '',
+            'traceId': runResponse.traceId ?? '',
+            'sourceQuery': trimmed,
+            'templateVersionUsed':
+                (runResponse.structuredResponse['templateVersionUsed']
+                    as String?) ??
+                '',
+            'phaseOneRoutingDiagnostics':
+                (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
+                        as Map?)
+                    ?.cast<String, dynamic>() ??
+                const <String, dynamic>{},
+            'degraded': runResponse.degraded,
+            'qualityMetrics':
+                (runResponse.structuredResponse['qualityMetrics'] as Map?)
+                    ?.cast<String, dynamic>() ??
+                const <String, dynamic>{},
+            'heuristicFallbackUsed':
+                (((runResponse.structuredResponse['qualityMetrics'] as Map?)
+                    ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
+                true,
+            'runArtifacts': _withDisplayOverrides(
+              _responseRunArtifactsMap(runResponse),
+              displayMarkdown: displayMarkdown,
+              displayPlainText: displayPlainText,
+              displayState: responseDisplayState,
+            ),
+            'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
+            'dialogueState': dialogueRuntime,
+            'uiReferences': uiReferences,
+            'uiActions': uiActions,
+            'uiUsageStats': uiUsageStats,
+            ...persistedTurnFields,
+            assistantDisplayMarkdownField: displayMarkdown,
+            assistantDisplayPlainTextField: displayPlainText,
+            assistantDisplayStateField: responseDisplayState.toJson(),
+          }),
+        );
       }
       _assistantResponding = false;
       _assistantPhaseLabel = '';
@@ -804,27 +819,20 @@ class AssistantConversationController extends ChangeNotifier {
         debugPrint('$st');
       }
       _resetStreamingAnswerDecoder();
-      _ensureMessagesGrowable();
+      _ensureTranscriptRowsGrowable();
       _assistantResponding = false;
       _assistantPhaseLabel = '';
       _activeAssistantStreamingMessageId = null;
-      _messages.removeWhere(
-        (item) => (item['id'] as String?) == streamingAssistantMessageId,
+      _transcriptRows.removeWhere(
+        (item) => item.id == streamingAssistantMessageId,
       );
       final errorHint = kDebugMode ? '助手异常: ${e.runtimeType}' : '助手出现异常，请重试。';
-      _messages.add({
-        'id': 'assistant_err_${DateTime.now().millisecondsSinceEpoch}',
-        'conversationId': AppConceptConstants.assistantConversationId,
-        'type': 'text',
-        'content': errorHint,
-        'senderId': AppConceptConstants.assistantSenderId,
-        'senderName': AppConceptConstants.assistantLabel,
-        'senderAvatar': '',
-        'timestamp': '',
-        'isRead': true,
-        'isSelf': false,
-        'isError': true,
-      });
+      _transcriptRows.add(
+        AssistantTranscriptAssembler.assistantErrorMessage(
+          id: 'assistant_err_${DateTime.now().millisecondsSinceEpoch}',
+          errorHint: errorHint,
+        ),
+      );
       _stopAssistantProgress();
       _notify();
     }
@@ -838,18 +846,16 @@ class AssistantConversationController extends ChangeNotifier {
     final activeContext = await _resolveActivePersonaContext();
     final now = DateTime.now();
     final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-    _ensureMessagesGrowable();
-    _messages.add(<String, dynamic>{
-      'id': 'user_rewrite_${now.millisecondsSinceEpoch}',
-      'conversationId': AppConceptConstants.assistantConversationId,
-      'type': 'text',
-      'content': _rewriteUserLabel(rewrite.mode),
-      'senderId': activeContext.profileSubjectId,
-      'senderName': activeContext.displayName,
-      'timestamp': ts,
-      'isRead': true,
-      'isSelf': true,
-    });
+    _ensureTranscriptRowsGrowable();
+    _transcriptRows.add(
+      AssistantTranscriptAssembler.userRewriteLabel(
+        id: 'user_rewrite_${now.millisecondsSinceEpoch}',
+        label: _rewriteUserLabel(rewrite.mode),
+        profileSubjectId: activeContext.profileSubjectId,
+        displayName: activeContext.displayName,
+        timestamp: ts,
+      ),
+    );
     final contextScope = _withActivePersonaContextScope(
       buildContextScope(),
       activeContext: activeContext,
@@ -870,7 +876,7 @@ class AssistantConversationController extends ChangeNotifier {
     );
     String? streamingAssistantMessageId;
     _resetStreamingAnswerDecoder();
-    _ensureMessagesGrowable();
+    _ensureTranscriptRowsGrowable();
     streamingAssistantMessageId =
         'assistant_rewrite_${now.millisecondsSinceEpoch}';
     _activeAssistantStreamingMessageId = streamingAssistantMessageId;
@@ -883,30 +889,13 @@ class AssistantConversationController extends ChangeNotifier {
     _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
     _currentUnderstandingSnapshot = const RunArtifactsUnderstandingSnapshot();
     _currentJourneyElapsedMs = 0;
-    _messages.add(<String, dynamic>{
-      'id': streamingAssistantMessageId,
-      'conversationId': AppConceptConstants.assistantConversationId,
-      'type': 'text',
-      'content': '',
-      'streamFinalAnswer': '',
-      'senderId': AppConceptConstants.assistantSenderId,
-      'senderName': AppConceptConstants.assistantLabel,
-      'senderAvatar': '',
-      'timestamp': ts,
-      'isRead': true,
-      'isSelf': false,
-      'streaming': true,
-      'sourceQuery': query,
-      assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
-      assistantDisplayMarkdownField: '',
-      assistantDisplayPlainTextField: '',
-      'runArtifacts': const <String, dynamic>{},
-      assistantJourneyField: const <String, dynamic>{},
-      assistantUiProcessTimelineField: const <String, dynamic>{},
-      assistantFollowupPromptField: '',
-      assistantActionHintsField: const <String>[],
-      'assistantElapsedMs': 0,
-    });
+    _transcriptRows.add(
+      AssistantTranscriptAssembler.assistantStreamingPlaceholderWithSourceQuery(
+        id: streamingAssistantMessageId,
+        streamTimestamp: ts,
+        sourceQuery: query,
+      ),
+    );
     _startAssistantProgress();
     _notify();
     try {
@@ -1010,12 +999,12 @@ class AssistantConversationController extends ChangeNotifier {
               displayPlainText: displayPlainText,
               elapsedMs: _currentJourneyElapsedMs,
             );
-        _ensureMessagesGrowable();
+        _ensureTranscriptRowsGrowable();
         final idx = _findStreamingAssistantMessageIndex(
           streamingAssistantMessageId,
         );
         if (idx >= 0) {
-          final existingMessage = _clearStreamingAnswerState(_messages[idx]);
+          final clearedRow = _clearStreamingAnswerState(_transcriptRows[idx]);
           final completedDisplayState =
               resolveAssistantDisplayStateFromRunResponse(finalResponse);
           final responseDisplayState = AssistantDisplayState(
@@ -1032,11 +1021,11 @@ class AssistantConversationController extends ChangeNotifier {
             answer: _resolvedCompletedAnswerState(
               completedDisplayState: completedDisplayState,
               displayMarkdown: displayMarkdown,
-              existingMessage: existingMessage,
+              existingRow: clearedRow,
             ),
           );
-          _messages[idx] = <String, dynamic>{
-            ...existingMessage,
+          _transcriptRows[idx] = _mapToRow({
+            ..._rowToMap(clearedRow),
             'content': displayMarkdown,
             'streamFinalAnswer': '',
             'streaming': false,
@@ -1070,7 +1059,7 @@ class AssistantConversationController extends ChangeNotifier {
             assistantDisplayMarkdownField: displayMarkdown,
             assistantDisplayPlainTextField: displayPlainText,
             assistantDisplayStateField: responseDisplayState.toJson(),
-          };
+          });
         }
       }
     } catch (_) {
@@ -1086,22 +1075,22 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Future<void> submitFeedback({
-    required Map<String, dynamic> message,
+    required AssistantFeedbackTarget target,
     required String explicitThumb,
     required List<String> reasonCodes,
     String correctionText = '',
   }) async {
-    final messageId = (message['id'] as String?) ?? '';
-    final replay =
-        _assistantReplayByMessageId[messageId] ?? const <String, dynamic>{};
-    final query =
-        (message['sourceQuery'] as String?) ??
-        (replay['query'] as String?) ??
-        '';
-    final runId =
-        (message['runId'] as String?) ?? (replay['runId'] as String?) ?? '';
-    final traceId =
-        (message['traceId'] as String?) ?? (replay['traceId'] as String?) ?? '';
+    final messageId = target.messageId;
+    final replay = _assistantReplayByMessageId[messageId];
+    final query = target.sourceQuery.isNotEmpty
+        ? target.sourceQuery
+        : (replay?.query ?? '');
+    final runId = target.runId.isNotEmpty
+        ? target.runId
+        : (replay?.runId ?? '');
+    final traceId = target.traceId.isNotEmpty
+        ? target.traceId
+        : (replay?.traceId ?? '');
     final contextScope = buildContextScope();
     final userTags =
         (contextScope['userTags'] as List?)
@@ -1123,7 +1112,7 @@ class AssistantConversationController extends ChangeNotifier {
           sessionId: effectiveAssistantSessionId,
           pageType: (contextScope['pageType'] as String?) ?? 'chat',
           queryText: query,
-          answerText: (message['content'] as String?) ?? '',
+          answerText: target.answerText,
           userTags: userTags,
           explicitThumb: explicitThumb,
           explicitReasonCodes: reasonCodes,
@@ -1138,7 +1127,7 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Future<void> recordImplicitFeedback({
-    required Map<String, dynamic> message,
+    required AssistantFeedbackTarget target,
     bool copiedAnswer = false,
     bool sharedAnswer = false,
     bool favoritedAnswer = false,
@@ -1160,22 +1149,19 @@ class AssistantConversationController extends ChangeNotifier {
     await _ref
         .read(assistantLearningServiceProvider)
         .recordInteraction(
-          runId: (message['runId'] as String?)?.trim().isNotEmpty == true
-              ? (message['runId'] as String).trim()
+          runId: target.runId.trim().isNotEmpty
+              ? target.runId.trim()
               : 'run_${DateTime.now().millisecondsSinceEpoch}',
-          traceId: (message['traceId'] as String?)?.trim().isNotEmpty == true
-              ? (message['traceId'] as String).trim()
+          traceId: target.traceId.trim().isNotEmpty
+              ? target.traceId.trim()
               : 'trace_${DateTime.now().millisecondsSinceEpoch}',
           userId: _currentProfileSubjectId(),
           sessionId: effectiveAssistantSessionId,
           pageType: (contextScope['pageType'] as String?) ?? 'chat',
-          queryText: (message['sourceQuery'] as String?) ?? '',
-          answerText:
-              ((message['displayPlainText'] as String?)?.trim().isNotEmpty ==
-                      true
-                  ? (message['displayPlainText'] as String)
-                  : (message['content'] as String?)) ??
-              '',
+          queryText: target.sourceQuery,
+          answerText: target.displayPlainText.trim().isNotEmpty
+              ? target.displayPlainText
+              : target.answerText,
           userTags: tags,
           durationMs: 0,
           copiedAnswer: copiedAnswer,
@@ -1185,7 +1171,7 @@ class AssistantConversationController extends ChangeNotifier {
           styleAdjusted: styleAdjusted,
           modelSwitched: modelSwitched,
           referenceOpened: referenceOpened,
-          feedbackTargetMessageId: (message['id'] as String?) ?? '',
+          feedbackTargetMessageId: target.messageId,
         );
   }
 
@@ -1220,12 +1206,13 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Map<String, dynamic> replayForMessage(String messageId) {
-    return _assistantReplayByMessageId[messageId] ?? const <String, dynamic>{};
+    return _assistantReplayByMessageId[messageId]?.toJson() ??
+        const <String, dynamic>{};
   }
 
   void removeMessageById(String id) {
-    _messages = List<Map<String, dynamic>>.from(_messages)
-      ..removeWhere((item) => (item['id'] as String?) == id);
+    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(_transcriptRows)
+      ..removeWhere((item) => item.id == id);
     _notify();
   }
 
@@ -1381,7 +1368,8 @@ class AssistantConversationController extends ChangeNotifier {
     required AssistantJourney journey,
     List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
     required bool isRunning,
-    Map<String, dynamic> usageStats = const <String, dynamic>{},
+    AssistantUiUsageStatsViewData usageStats =
+        AssistantUiUsageStatsViewData.empty,
     int? elapsedMs,
     AssistantDisplayState displayState = const AssistantDisplayState(),
     RetrievalProcessingSnapshot retrievalProcessing =
@@ -1438,10 +1426,6 @@ class AssistantConversationController extends ChangeNotifier {
     _currentJourneyElapsedMs = DateTime.now()
         .difference(startedAt)
         .inMilliseconds;
-  }
-
-  void _ensureMessagesGrowable() {
-    _messages = List<Map<String, dynamic>>.from(_messages);
   }
 
   AssistantBackend _preferredAssistantBackendOnOpen() {
@@ -1525,8 +1509,7 @@ class AssistantConversationController extends ChangeNotifier {
               _currentCanonicalProcessTimeline,
               fallbackJourney: journey,
             );
-        _messages[index] = <String, dynamic>{
-          ..._messages[index],
+        _transcriptRows[index] = _patchRow(_transcriptRows[index], {
           assistantJourneyField: journey.toJson(),
           assistantUiProcessTimelineField: uiProcessTimeline.toJson(),
           if (_currentCanonicalProcessTimeline.isNotEmpty)
@@ -1534,7 +1517,7 @@ class AssistantConversationController extends ChangeNotifier {
                 .map((item) => item.toJson())
                 .toList(growable: false),
           'assistantElapsedMs': _currentJourneyElapsedMs,
-        };
+        });
       }
     }
     _notify();
@@ -1576,13 +1559,12 @@ class AssistantConversationController extends ChangeNotifier {
               _currentCanonicalProcessTimeline,
               fallbackJourney: _currentJourney,
             );
-        final existingMessage = _messages[index];
+        final existingRow = _transcriptRows[index];
         final mergedDisplayState = _mergeStreamingDisplayState(
-          message: existingMessage,
+          row: existingRow,
           understandingSnapshot: _currentUnderstandingSnapshot,
         );
-        _messages[index] = <String, dynamic>{
-          ...existingMessage,
+        _transcriptRows[index] = _patchRow(existingRow, {
           if (_currentCanonicalProcessTimeline.isNotEmpty)
             assistantProcessTimelineField: _currentCanonicalProcessTimeline
                 .map((item) => item.toJson())
@@ -1595,7 +1577,7 @@ class AssistantConversationController extends ChangeNotifier {
           if (hasAssistantDisplayState(mergedDisplayState))
             assistantDisplayStateField: mergedDisplayState.toJson(),
           'assistantElapsedMs': _currentJourneyElapsedMs,
-        };
+        });
       }
     }
     _notify();
@@ -1666,15 +1648,13 @@ class AssistantConversationController extends ChangeNotifier {
 
   int _findStreamingAssistantMessageIndex(String messageId) {
     if (messageId.isEmpty) return -1;
-    final exactIndex = _messages.indexWhere(
-      (item) => (item['id'] as String?) == messageId,
-    );
+    final exactIndex = _transcriptRows.indexWhere((item) => item.id == messageId);
     if (exactIndex >= 0) return exactIndex;
-    for (var index = _messages.length - 1; index >= 0; index--) {
-      final message = _messages[index];
-      if ((message['senderId'] as String?) ==
-              AppConceptConstants.assistantSenderId &&
-          message['streaming'] == true) {
+    for (var index = _transcriptRows.length - 1; index >= 0; index--) {
+      final row = _transcriptRows[index];
+      if (row is AssistantAnswerTranscriptRow &&
+          row.senderId == AppConceptConstants.assistantSenderId &&
+          row.streaming) {
         return index;
       }
     }
@@ -1712,16 +1692,18 @@ class AssistantConversationController extends ChangeNotifier {
     }
     final now = DateTime.now();
     final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-    _ensureMessagesGrowable();
+    _ensureTranscriptRowsGrowable();
     final existingIndex = _findStreamingAssistantMessageIndex(messageId);
     if (existingIndex >= 0) {
-      final existingMessage = _messages[existingIndex];
+      final existingRow = _transcriptRows[existingIndex];
       final mergedDisplayState = _mergeStreamingDisplayState(
-        message: existingMessage,
+        row: existingRow,
         streamedAnswerDelta: value,
       );
       final prevMarkdown = renderAnswerBlocksToMarkdown(
-        resolvePersistedAssistantDisplayState(existingMessage).answer.blocks,
+        resolvePersistedAssistantDisplayState(_rowToMap(existingRow))
+            .answer
+            .blocks,
       );
       final nextMarkdown = renderAnswerBlocksToMarkdown(
         mergedDisplayState.answer.blocks,
@@ -1729,28 +1711,30 @@ class AssistantConversationController extends ChangeNotifier {
       if (nextMarkdown == prevMarkdown) {
         return;
       }
-      _messages[existingIndex] = <String, dynamic>{
-        ...existingMessage,
-        assistantDisplayStateField: mergedDisplayState.toJson(),
-      };
+      _transcriptRows[existingIndex] = _patchRow(
+        existingRow,
+        {assistantDisplayStateField: mergedDisplayState.toJson()},
+      );
     } else {
       final initialDisplayState = _streamingAnswerDisplayState(value);
-      _messages.add(<String, dynamic>{
-        'id': messageId,
-        'conversationId': AppConceptConstants.assistantConversationId,
-        'type': 'text',
-        'content': '',
-        'streamFinalAnswer': '',
-        'senderId': AppConceptConstants.assistantSenderId,
-        'senderName': AppConceptConstants.assistantLabel,
-        'senderAvatar': '',
-        'timestamp': ts,
-        'isRead': true,
-        'isSelf': false,
-        'streaming': true,
-        if (hasAssistantDisplayState(initialDisplayState))
-          assistantDisplayStateField: initialDisplayState.toJson(),
-      });
+      _transcriptRows.add(
+        _mapToRow({
+          'id': messageId,
+          'conversationId': AppConceptConstants.assistantConversationId,
+          'type': 'text',
+          'content': '',
+          'streamFinalAnswer': '',
+          'senderId': AppConceptConstants.assistantSenderId,
+          'senderName': AppConceptConstants.assistantLabel,
+          'senderAvatar': '',
+          'timestamp': ts,
+          'isRead': true,
+          'isSelf': false,
+          'streaming': true,
+          if (hasAssistantDisplayState(initialDisplayState))
+            assistantDisplayStateField: initialDisplayState.toJson(),
+        }),
+      );
     }
     if (value.trim().isNotEmpty ||
         _shouldOpenAnswerGateForJourney(_currentJourney)) {
@@ -1781,10 +1765,11 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   AssistantDisplayState _mergeStreamingDisplayState({
-    required Map<String, dynamic> message,
+    required AssistantTranscriptTimelineRow row,
     String streamedAnswerDelta = '',
     RunArtifactsUnderstandingSnapshot? understandingSnapshot,
   }) {
+    final message = _rowToMap(row);
     final current = resolvePersistedAssistantDisplayState(message);
     final currentMarkdown = renderAnswerBlocksToMarkdown(current.answer.blocks);
     final mergedMarkdown = streamedAnswerDelta.trim().isEmpty
@@ -1815,14 +1800,14 @@ class AssistantConversationController extends ChangeNotifier {
   AssistantAnswerDisplayState _resolvedCompletedAnswerState({
     required AssistantDisplayState completedDisplayState,
     required String displayMarkdown,
-    Map<String, dynamic>? existingMessage,
+    AssistantTranscriptTimelineRow? existingRow,
   }) {
     if (completedDisplayState.answer.blocks.isNotEmpty) {
       return completedDisplayState.answer;
     }
-    final carriedAnswer = existingMessage == null
+    final carriedAnswer = existingRow == null
         ? const AssistantAnswerDisplayState()
-        : resolvePersistedAssistantDisplayState(existingMessage).answer;
+        : resolvePersistedAssistantDisplayState(_rowToMap(existingRow)).answer;
     if (carriedAnswer.blocks.isNotEmpty) {
       return AssistantAnswerDisplayState(
         summary: completedDisplayState.answer.summary,
@@ -1836,11 +1821,10 @@ class AssistantConversationController extends ChangeNotifier {
     );
   }
 
-  Map<String, dynamic> _clearStreamingAnswerState(
-    Map<String, dynamic> message,
-  ) {
-    return <String, dynamic>{...message, 'streamFinalAnswer': ''};
-  }
+  AssistantTranscriptTimelineRow _clearStreamingAnswerState(
+    AssistantTranscriptTimelineRow row,
+  ) =>
+      _patchRow(row, {'streamFinalAnswer': ''});
 
   Map<String, dynamic> _withDisplayOverrides(
     Map<String, dynamic> runArtifacts, {
@@ -1938,18 +1922,12 @@ class AssistantConversationController extends ChangeNotifier {
     var prevTokens = 0;
     var prevMaxTokens = 0;
     final cumulativeLedger = <Map<String, dynamic>>[];
-    for (final message in _messages) {
-      if ((message['senderId'] as String?) !=
-          AppConceptConstants.assistantSenderId) {
-        continue;
-      }
-      if (excludeMessageId != null &&
-          (message['id'] as String?) == excludeMessageId) {
-        continue;
-      }
-      final usageStats = (message['uiUsageStats'] as Map?)
-          ?.cast<String, dynamic>();
-      if (usageStats == null || usageStats.isEmpty) continue;
+    for (final row in _transcriptRows) {
+      if (row is! AssistantAnswerTranscriptRow) continue;
+      if (row.senderId != AppConceptConstants.assistantSenderId) continue;
+      if (excludeMessageId != null && row.id == excludeMessageId) continue;
+      final usageStats = row.uiUsageStats;
+      if (usageStats.isEmpty) continue;
       prevCalls += _usageInt(
         usageStats['runModelCallCount'] ?? usageStats['modelCallCount'],
       );
@@ -2049,27 +2027,22 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _latestAssistantDialogueState() {
-    for (var i = _messages.length - 1; i >= 0; i--) {
-      final message = _messages[i];
-      if ((message['senderId'] as String?) !=
-          AppConceptConstants.assistantSenderId) {
-        continue;
-      }
-      final state = (message['dialogueState'] as Map?)?.cast<String, dynamic>();
-      if (state != null && state.isNotEmpty) return state;
+    for (var i = _transcriptRows.length - 1; i >= 0; i--) {
+      final row = _transcriptRows[i];
+      if (row is! AssistantAnswerTranscriptRow) continue;
+      if (row.senderId != AppConceptConstants.assistantSenderId) continue;
+      if (row.dialogueState.isNotEmpty) return row.dialogueState;
     }
     return const <String, dynamic>{};
   }
 
   RunArtifacts? _latestAssistantRunArtifacts() {
-    for (var i = _messages.length - 1; i >= 0; i--) {
-      final message = _messages[i];
-      if ((message['senderId'] as String?) !=
-          AppConceptConstants.assistantSenderId) {
-        continue;
-      }
-      final raw = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
-      if (raw == null || raw.isEmpty) continue;
+    for (var i = _transcriptRows.length - 1; i >= 0; i--) {
+      final row = _transcriptRows[i];
+      if (row is! AssistantAnswerTranscriptRow) continue;
+      if (row.senderId != AppConceptConstants.assistantSenderId) continue;
+      final raw = row.runArtifacts;
+      if (raw.isEmpty) continue;
       try {
         return parseRunArtifacts(raw);
       } catch (_) {
@@ -2415,28 +2388,15 @@ class AssistantConversationController extends ChangeNotifier {
     required AssistantRunResponse response,
   }) {
     final replayPayload = _extractReplayPayload(response.traces);
-    final structured = response.structuredResponse.isEmpty
-        ? const <String, dynamic>{}
-        : response.structuredResponse;
-    final record = <String, dynamic>{
-      'messageId': messageId,
-      'runId': response.runId ?? '',
-      'traceId': response.traceId ?? '',
-      'query': query,
-      'answer': _resolveAssistantDisplayText(response),
-      'displayPlainText': _resolveAssistantDisplayPlainText(response),
-      'runArtifacts': _responseRunArtifactsMap(response),
-      'createdAt': DateTime.now().toIso8601String(),
-      'uiReferences':
-          (structured['uiReferences'] as List?)?.whereType<Map>().toList(
-            growable: false,
-          ) ??
-          const <Map>[],
-      'uiUsageStats':
-          (structured['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      ...replayPayload,
-    };
+    final record = AssistantReplayRecordFactory.build(
+      messageId: messageId,
+      query: query,
+      response: response,
+      replayPayload: replayPayload,
+      runArtifactsMap: _responseRunArtifactsMap(response),
+      answerText: _resolveAssistantDisplayText(response),
+      displayPlainText: _resolveAssistantDisplayPlainText(response),
+    );
     _assistantReplayByMessageId[messageId] = record;
     _assistantReplayRecords.insert(0, record);
     if (_assistantReplayRecords.length > 40) {

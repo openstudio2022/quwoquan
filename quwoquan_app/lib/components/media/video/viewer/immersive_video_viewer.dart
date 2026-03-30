@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -371,12 +372,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
-        post: currentPost,
         onReward: () => debugPrint('Reward post: ${currentPost.id}'),
         onSave: () => _handleSaveClick(),
         onMessage: () => debugPrint('Message user: ${currentPost.authorId}'),
         onCopyLink: () {
-          final link = 'https://quwoquan.app/post/${currentPost.id}';
+          final link = AppPublicContentLinks.postWebUrl(currentPost.id);
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
             AppToast.show(context, UITextConstants.copyLink);
@@ -745,9 +745,15 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         ? widget.posts[_currentPostIndex]
         : null;
 
-    return ColoredBox(
-      color: AppColors.black,
-      child: Stack(
+    // 阻断 MaterialApp DefaultTextStyle 合并导致的误装饰（黄下划线），与全屏作品流一致。
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationThickness: 0,
+      ),
+      child: ColoredBox(
+        color: AppColors.black,
+        child: Stack(
         children: [
           PageView.builder(
             controller: _pageController,
@@ -825,6 +831,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           ),
         ],
       ),
+    ),
     );
   }
 }

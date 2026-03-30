@@ -8,12 +8,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
-import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -89,19 +88,50 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   String? _draggingChannelId;
   List<String>? _selectedCategoryIds;
   final GlobalKey _categoryBarKey = GlobalKey();
-  late List<Map<String, dynamic>> _circleFeedItems;
+  late List<CircleHubFeedPostEntry> _circleFeedItems;
+  Map<String, Map<String, dynamic>> _categoryConfig = const {
+    'all': {'label': '推荐'},
+  };
+  List<CircleDto> _hubCircleDtos = [];
 
   @override
   void initState() {
     super.initState();
-    _circleFeedItems = CircleMockData.circleFeedItems
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: true);
+    _circleFeedItems = [];
+    unawaited(_bootstrapHubData());
     unawaited(_restoreChannelSelection());
   }
 
+  Future<void> _bootstrapHubData() async {
+    final repo = ref.read(circleRepositoryProvider);
+    try {
+      final feed = await repo.listHomeCircleDiscoveryFeed(limit: 200);
+      final cfg = await repo.getCircleCategoryConfig();
+      final circlesMaps = await repo.listCircles(limit: 500);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _categoryConfig = cfg;
+        _circleFeedItems =
+            feed.map(CircleHubFeedPostEntry.fromMap).toList(growable: true);
+        _hubCircleDtos =
+            circlesMaps.map(_circleDtoFromMockMap).toList(growable: true);
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _categoryConfig = const {'all': {'label': '推荐'}};
+        _circleFeedItems = [];
+        _hubCircleDtos = [];
+      });
+    }
+  }
+
   List<Map<String, String>> get _allCategories {
-    final config = CircleMockData.categoryConfig;
+    final config = _categoryConfig;
     final list = <Map<String, String>>[];
     final seen = <String>{};
 
@@ -178,7 +208,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   }
 
   List<MapEntry<String, Map<String, dynamic>>> get _visibleCategories {
-    final config = CircleMockData.categoryConfig;
+    final config = _categoryConfig;
     return _visibleCategoryIds
         .where(config.containsKey)
         .map((id) => MapEntry(id, config[id]!))
@@ -298,50 +328,41 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
 
   bool _isMyCircleId(String circleId) => _myCircleIds.contains(circleId);
 
+  static CircleDto _circleDtoFromMockMap(Map<String, dynamic> circle) {
+    return CircleDto.fromMap({
+      ...circle,
+      'description': circle['description'] ?? circle['desc'],
+    });
+  }
+
   List<CircleDto> _moduleCirclesFor(
     _HomeCirclesModuleTab tab,
     String categoryId,
   ) {
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final source =
-        CircleMockData.circles
+        _hubCircleDtos
             .where((circle) {
               if (!isMineMode) {
                 return true;
               }
-              return _isMyCircleId(circle['id']?.toString() ?? '');
+              return _isMyCircleId(circle.id);
             })
             .toList(growable: true)
           ..sort((left, right) {
-            final rightCount = (right['memberCount'] as num?)?.toInt() ?? 0;
-            final leftCount = (left['memberCount'] as num?)?.toInt() ?? 0;
-            return rightCount.compareTo(leftCount);
+            return right.memberCount.compareTo(left.memberCount);
           });
     if (categoryId == 'all') {
-      return source
-          .take(_maxHomeCircleRailItems - 1)
-          .map(
-            (circle) => CircleDto.fromMap({
-              ...circle,
-              'description': circle['description'] ?? circle['desc'],
-            }),
-          )
-          .toList(growable: false);
+      return source.take(_maxHomeCircleRailItems - 1).toList(growable: false);
     }
     final categoryFiltered = source
-        .where((circle) => circle['categoryId'] == categoryId)
+        .where((circle) => circle.category == categoryId)
         .toList(growable: false);
     final fallbackPool = categoryFiltered.isNotEmpty
         ? categoryFiltered
         : source;
     return fallbackPool
         .take(_maxHomeCircleRailItems - 1)
-        .map(
-          (circle) => CircleDto.fromMap({
-            ...circle,
-            'description': circle['description'] ?? circle['desc'],
-          }),
-        )
         .toList(growable: false);
   }
 
@@ -349,20 +370,21 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     _HomeCirclesModuleTab tab,
     String categoryId,
   ) {
-    final circleById = <String, Map<String, dynamic>>{
-      for (final circle in CircleMockData.circles)
-        circle['id']?.toString() ?? '': circle,
+    final circleById = <String, CircleDto>{
+      for (final circle in _hubCircleDtos) circle.id: circle,
     };
     final pool =
         _filteredLevelOnePosts(tab, categoryId, fallbackToAllWhenEmpty: true)
-            .map((item) {
+            .map((entry) {
+              final item = entry.raw;
               final circleId = item['circleId']?.toString() ?? '';
               final sourceCircle = circleById[circleId];
-              final circleName = sourceCircle?['name']?.toString() ?? '';
+              final circleName = sourceCircle?.name ?? '';
               final mergedRaw = <String, dynamic>{
                 ...item,
                 if (!item.containsKey('circleName')) 'circleName': circleName,
               };
+              final feedEntry = CircleHubFeedPostEntry.fromMap(mergedRaw);
               final title =
                   item['title']?.toString() ??
                   item['body']?.toString() ??
@@ -377,15 +399,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                 imageUrl:
                     item['coverUrl']?.toString() ??
                     item['thumbnailUrl']?.toString() ??
-                    sourceCircle?['coverUrl']?.toString() ??
-                    sourceCircle?['cover']?.toString() ??
-                    sourceCircle?['avatar']?.toString() ??
+                    sourceCircle?.coverUrl ??
                     '',
                 circleId: circleId,
-                categoryId: sourceCircle?['categoryId']?.toString() ?? 'all',
+                categoryId: sourceCircle?.category ?? 'all',
                 typeLabel: _storyTypeLabel(mergedRaw),
                 isMine: _isMyCircleId(circleId),
-                rawPost: mergedRaw,
+                feedEntry: feedEntry,
               );
             })
             .toList(growable: false);
@@ -406,19 +426,18 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     return fallbackPool.take(3).toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _filteredLevelOnePosts(
+  List<CircleHubFeedPostEntry> _filteredLevelOnePosts(
     _HomeCirclesModuleTab tab,
     String categoryId, {
     bool fallbackToAllWhenEmpty = false,
   }) {
-    final circleById = <String, Map<String, dynamic>>{
-      for (final circle in CircleMockData.circles)
-        circle['id']?.toString() ?? '': circle,
+    final circleById = <String, CircleDto>{
+      for (final circle in _hubCircleDtos) circle.id: circle,
     };
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final modeFiltered = _circleFeedItems
-        .where((item) {
-          final circleId = item['circleId']?.toString() ?? '';
+        .where((entry) {
+          final circleId = entry.raw['circleId']?.toString() ?? '';
           return isMineMode
               ? _isMyCircleId(circleId)
               : !_isMyCircleId(circleId);
@@ -428,10 +447,10 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       return modeFiltered;
     }
     final categoryFiltered = modeFiltered
-        .where((item) {
-          final circleId = item['circleId']?.toString() ?? '';
+        .where((entry) {
+          final circleId = entry.raw['circleId']?.toString() ?? '';
           final circle = circleById[circleId];
-          return circle?['categoryId']?.toString() == categoryId;
+          return circle?.category == categoryId;
         })
         .toList(growable: false);
     if (categoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty) {
@@ -481,15 +500,18 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
 
   Future<void> _openCircleFeedViewer(
     BuildContext context,
-    Map<String, dynamic> tapped,
-    List<Map<String, dynamic>> sourceItems,
+    CircleHubFeedPostEntry tapped,
+    List<CircleHubFeedPostEntry> sourceItems,
   ) async {
     final viewerEntries = sourceItems
-        .map((item) => (raw: item, dto: _tryParsePost(item)))
+        .map((item) {
+          final dto = item.dto ?? _tryParsePost(item.raw);
+          return (raw: item.raw, dto: dto);
+        })
         .where((entry) => entry.dto != null && _supportsViewer(entry.dto!))
         .toList(growable: false);
     if (viewerEntries.isEmpty) return;
-    final tappedDto = _tryParsePost(tapped);
+    final tappedDto = tapped.dto ?? _tryParsePost(tapped.raw);
     if (tappedDto == null || !_supportsViewer(tappedDto)) return;
     final viewerDtos = viewerEntries
         .map((entry) => entry.dto!)
@@ -512,7 +534,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         initialIndex: initialIndex,
         category: 'circle',
         source: 'circle',
-        circleId: tapped['circleId']?.toString(),
+        circleId: tapped.raw['circleId']?.toString(),
         rawPostsById: <String, Map<String, dynamic>>{
           for (final entry in viewerEntries) entry.dto!.id: entry.raw,
         },
@@ -559,10 +581,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           .applyViewerResult(result);
       ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
       setState(() {
-        _circleFeedItems = applyMediaViewerResultToFeedItems(
-          _circleFeedItems,
-          result,
-        );
+        CircleHubFeedPostEntry.applyResultToList(_circleFeedItems, result);
       });
     }
   }
@@ -636,8 +655,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                   stories: stories,
                   onStoryTap: (item, items) => _openCircleFeedViewer(
                     context,
-                    item.rawPost,
-                    items.map((entry) => entry.rawPost).toList(growable: false),
+                    item.feedEntry,
+                    items.map((entry) => entry.feedEntry).toList(growable: false),
                   ),
                   onModuleTabChanged: (nextTab) {
                     if (nextTab == _activeModuleTab) return;
@@ -1135,7 +1154,7 @@ class _HomeCircleStoryItem {
     required this.categoryId,
     required this.typeLabel,
     required this.isMine,
-    required this.rawPost,
+    required this.feedEntry,
   });
 
   final String id;
@@ -1146,7 +1165,7 @@ class _HomeCircleStoryItem {
   final String categoryId;
   final String typeLabel;
   final bool isMine;
-  final Map<String, dynamic> rawPost;
+  final CircleHubFeedPostEntry feedEntry;
 }
 
 class _HomeCirclesChannelPanel extends StatelessWidget {

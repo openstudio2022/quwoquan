@@ -17,6 +17,8 @@ class AppColors {
   static const Color error = Color(0xFFFF3B30);
   static const Color success = Color(0xFF34C759);
   static const Color warning = Color(0xFFFF9F0A);
+  /// 通话/RTC 弱网指示（橙红，与系统 [warning] 区分）
+  static const Color networkCallQualityWeak = Color(0xFFFF6B35);
   static const Color info = primaryColor;
   static const Color white = Colors.white;
   static const Color black = Colors.black;
@@ -29,6 +31,16 @@ class AppColors {
 
   /// 分享海报深链块浅灰底
   static const Color sharePosterDeeplinkSurface = Color(0xFFF5F5F5);
+
+  /// 图片编辑器 Pro — HSL 色环通道色标（固定色相参考）
+  static const Color imageEditorHslRed = Color(0xFFE85656);
+  static const Color imageEditorHslOrange = Color(0xFFE79A4B);
+  static const Color imageEditorHslYellow = Color(0xFFDED95A);
+  static const Color imageEditorHslGreen = Color(0xFF70D85C);
+  static const Color imageEditorHslCyan = Color(0xFF4DCFD2);
+  static const Color imageEditorHslBlue = Color(0xFF4D73DE);
+  static const Color imageEditorHslPurple = Color(0xFF9B57D8);
+  static const Color imageEditorHslMagenta = Color(0xFFD84FC7);
 
   /// 九宫格/动态图片占位浅灰
   static const Color gridImagePlaceholderLight = Color(0xFFEEEEEE);
@@ -98,6 +110,13 @@ class AppColors {
   static const Color welcomePetalRose = Color(0xFFFB7185);
   static const Color welcomeTitleGradientMid = Color(0xFF67E8F9); // cyan-300
   static const Color welcomeTitleGradientEnd = Color(0xFFC084FC); // purple-400
+
+  /// 欢迎页 — 系统深色外观（与浅色同源色相，压低亮度，S6 对称深色）
+  static const Color welcomeBackgroundDark = Color(0xFF0F172A);
+  static const Color welcomeGradientStartDark = Color(0xFF1E3A8A);
+  static const Color welcomeGradientEndDark = Color(0xFF020617);
+  static const Color welcomeForegroundMutedDark = Color(0xFFBFDBFE);
+  static const Color welcomeButtonBgDark = Color(0x33FFFFFF);
 
   // ==================== 作品频道专用色 ====================
   /// 墨浆蓝 #0A0E14 — 作品频道背景（强制深色）
@@ -422,6 +441,52 @@ class AppColorsFunctional {
             .withValues(alpha: isDark ? 0.34 : 0.22);
       case ColorType.selectionForeground:
         return isDark ? AppColors.iosAccentDark : AppColors.primaryColor;
+      // S6: RTC 来电/去电舞台渐变 — 深色下略压暗，避免与浅色壳「同图」
+      case ColorType.callStageGradientStart:
+        return isDark ? const Color(0xFF1D4ED8) : AppColors.welcomeGradientStart;
+      case ColorType.callStageGradientEnd:
+        return isDark ? const Color(0xFF1E1B4B) : AppColors.welcomeGradientEnd;
+      // WebView / 壳层信息卡：替代裸 white + black(alpha) 边框
+      case ColorType.chromeInfoCardBackground:
+        return getColor(isDark, ColorType.surfaceElevated);
+      case ColorType.chromeInfoCardBorder:
+        return isDark
+            ? const Color(0xFF3A3A3C)
+            : const Color(0x1A000000);
+      case ColorType.webViewPlaceholderBackground:
+        return getColor(isDark, ColorType.pageBackground);
+      case ColorType.dropShadow:
+        return AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05);
+      /// 全屏竖滑视频/视频模式底：固定黑场（与浅色系统栏对比由 AnnotatedRegion 处理）
+      case ColorType.fullBleedMediaBackdrop:
+        return AppColors.black;
+      case ColorType.secondaryCapsuleTrack:
+        return isDark
+            ? AppColors.white.withValues(alpha: 0.04)
+            : AppColors.black.withValues(alpha: 0.03);
+      /// 缩略图/视频封面上的角标与控件（叠在任意内容上，固定深底浅字）
+      case ColorType.mediaThumbnailOverlayScrim:
+        return AppColors.black.withValues(alpha: 0.25);
+      case ColorType.mediaThumbnailOverlayBorder:
+        return AppColors.white.withValues(alpha: 0.1);
+      case ColorType.mediaThumbnailOverlayForegroundMuted:
+        return AppColors.white.withValues(alpha: 0.9);
+      case ColorType.mediaThumbnailOverlayForeground:
+        return AppColors.white;
+      /// 发现页竖滑全屏视频轨道 UI（叠在内容上，与系统深浅无关）
+      case ColorType.videoImmersionBottomGradientEnd:
+        return AppColors.black.withValues(alpha: 0.8);
+      case ColorType.videoImmersionOverlayForeground:
+        return AppColors.white;
+      case ColorType.videoImmersionOverlaySecondary:
+        return AppColors.white.withValues(alpha: 0.9);
+      case ColorType.videoImmersionOverlayTertiary:
+        return AppColors.white.withValues(alpha: 0.8);
+      case ColorType.videoImmersionOverlayQuaternary:
+        return AppColors.white.withValues(alpha: 0.78);
+      /// 创作页媒体格按压/遮罩基色（深色模式白、浅色模式黑，再叠 alpha）
+      case ColorType.createMediaOverlayBase:
+        return isDark ? AppColors.white : AppColors.black;
     }
   }
 
@@ -461,4 +526,51 @@ enum ColorType {
   selectionBackground,
   selectionBorder,
   selectionForeground,
+
+  /// RTC incoming/outgoing 全屏渐变起点（随 isDark 变体）
+  callStageGradientStart,
+
+  /// RTC incoming/outgoing 全屏渐变终点
+  callStageGradientEnd,
+
+  /// WebView 页顶信息卡表面（原固定白底）
+  chromeInfoCardBackground,
+
+  /// WebView 页信息卡描边（原 black 0.06）
+  chromeInfoCardBorder,
+
+  /// WebView 宿主底层色（setBackgroundColor）
+  webViewPlaceholderBackground,
+
+  /// 卡片浮层阴影（浅/深不同透明度）
+  dropShadow,
+
+  /// 全屏媒体沉浸底（发现视频轨道等）
+  fullBleedMediaBackdrop,
+
+  /// 二级胶囊 Tab 轨道浅填充（原 white/black 透明度）
+  secondaryCapsuleTrack,
+
+  /// 媒体缩略图角标底（黑半透明）
+  mediaThumbnailOverlayScrim,
+
+  /// 媒体缩略图角标描边
+  mediaThumbnailOverlayBorder,
+
+  /// 媒体缩略图角标字/图标（浅、略透明）
+  mediaThumbnailOverlayForegroundMuted,
+
+  /// 媒体缩略图角标字/图标（浅、不透明）
+  mediaThumbnailOverlayForeground,
+
+  /// 竖滑视频底渐变末端
+  videoImmersionBottomGradientEnd,
+
+  videoImmersionOverlayForeground,
+  videoImmersionOverlaySecondary,
+  videoImmersionOverlayTertiary,
+  videoImmersionOverlayQuaternary,
+
+  /// 创作流媒体 tile 遮罩基色
+  createMediaOverlayBase,
 }

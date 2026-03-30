@@ -1851,6 +1851,16 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: entity-link-templates-metadata
+              name: entity-link-templates-metadata
+              level: L3_story
+              path: runtime/runtime-client-foundation/entity-link-templates-metadata
+              domain: ""
+              status: completed
+              tags:
+                - P2
+                - P3
+                - metadata-first
             - id: dual-theme-page-coverage
               name: dual-theme-page-coverage
               level: L3_story
@@ -1866,6 +1876,22 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: unified-app-page-access
+              name: unified-app-page-access
+              level: L3_story
+              path: runtime/runtime-client-foundation/unified-app-page-access
+              domain: ""
+              status: in_progress
+              tags:
+                - P4
+            - id: s8-p8-semantic-token
+              name: s8-p8-semantic-token
+              level: L3_story
+              path: runtime/runtime-client-foundation/s8-p8-semantic-token
+              domain: ""
+              status: specified
+              tags:
+                - S8
         - id: runtime-codegen
           name: runtime-codegen
           level: L2_feature

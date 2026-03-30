@@ -4,15 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
+_chatTestOverrides(ChatRepository repo) => [
+      chatRepositoryProvider.overrideWithValue(repo),
+      currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
+    ];
+
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+    overrides: _chatTestOverrides(repo),
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/conv_002/settings',
@@ -76,9 +82,7 @@ void main() {
     testWidgets('conv_002 群主 Provider state 正确（isOwner=true）', (tester) async {
       // 用 ProviderContainer 直接验证 Provider state（避免 widget 时序问题）
       final container = ProviderContainer(
-        overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-        ],
+        overrides: _chatTestOverrides(MockChatRepository()),
       );
       addTearDown(container.dispose);
 

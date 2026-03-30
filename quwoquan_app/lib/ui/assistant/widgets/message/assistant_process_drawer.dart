@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
@@ -14,7 +15,7 @@ class AssistantProcessDrawer extends StatefulWidget {
 
   final AssistantJourneyViewModel viewModel;
   final bool initiallyExpanded;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
+  final void Function(AssistantCitation reference)? onReferenceTap;
 
   @override
   State<AssistantProcessDrawer> createState() => _AssistantProcessDrawerState();
@@ -395,11 +396,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                     : '';
                 return GestureDetector(
                   onTap: reference.url.isNotEmpty
-                      ? () => widget.onReferenceTap?.call(<String, dynamic>{
-                          'title': reference.title,
-                          'url': reference.url,
-                          'source': reference.source,
-                        })
+                      ? () => widget.onReferenceTap?.call(
+                            AssistantCitation(
+                              url: reference.url,
+                              title: reference.title,
+                              source: reference.source,
+                            ),
+                          )
                       : null,
                   behavior: HitTestBehavior.opaque,
                   child: Padding(

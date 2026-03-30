@@ -293,6 +293,7 @@ class ChatMockData {
       'id': 'conv_003',
       'type': 'circle',
       'title': '摄影爱好者圈子',
+      'circleId': 'circle_001',
       'avatarUrl': avatarFor('photo'),
       'avatarCompositeUrls': const <String>[],
       'lastMessagePreview': '分享一组新疆风景照',
@@ -1075,6 +1076,38 @@ class ChatMockData {
       'userId': 'user_009',
       'displayName': '李泽',
       'avatarUrl': avatarFor('user_009'),
+    },
+  ];
+
+  /// 联系人 Tab「圈子」占位（与历史 UI prototypeCircles 对齐）。
+  static List<Map<String, dynamic>> get contactTabCircles => [
+    {
+      'circleId': 'circle_1',
+      'id': 'circle_1',
+      'displayName': '风光摄影圈',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+      'subtitle': '1.2k',
+    },
+    {
+      'circleId': 'circle_2',
+      'id': 'circle_2',
+      'displayName': '人像摄影圈',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400',
+      'subtitle': '890',
+    },
+  ];
+
+  /// 联系人 Tab「趣群」占位（与历史 UI prototypeGroups 对齐）。
+  static List<Map<String, dynamic>> get contactTabFunGroups => [
+    {
+      'conversationId': 'conv_group_photo',
+      'id': 'conv_group_photo',
+      'displayName': '摄影交流群',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1452457807411-4979b707c5be?w=400',
+      'subtitle': '128',
     },
   ];
 }

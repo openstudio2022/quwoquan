@@ -1,0 +1,18 @@
+id: CR-20260329-007-mock-data-isolation-gate
+title: Mock 数据隔离策略 + UI/Core 直连 mock 门禁 + 正式包约束登记
+status: specified
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结端云一体化与 Mock 隔离总策略（mock_data_cloud_integration_policy.md）；
+  新增 verify_ui_mock_isolation.py + ui_mock_isolation_allowlist.yaml（过渡期仅收录存量债，禁止为新文件扩容）；
+  gate_repo app 段串联；Makefile verify-app-mock-isolation；Cursor 规则 08-mock-data-isolation.mdc；
+  PR 清单增补 Mock 隔离节。后续 Dev 会话按策略 P0–P4 清 allowlist 与伪 Remote。
+  2026-03-30：策略 §5.1 增补「发布态 R1–R6 / 开发测试态 D1–D4 / 测试代码用语边界」功能规格表；主线 /verify、/commit、explore 与 08 规则对齐该验收口径。
+artifacts:
+  - specs/gates/mock_data_cloud_integration_policy.md
+  - specs/gates/ui_mock_isolation_allowlist.yaml
+  - scripts/verify_ui_mock_isolation.py
+  - scripts/gate_repo.sh
+  - Makefile
+  - .cursor/rules/08-mock-data-isolation.mdc
+  - specs/gates/page_horizontal_quality_pr_checklist.md

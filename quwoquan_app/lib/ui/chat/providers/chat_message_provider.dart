@@ -61,8 +61,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
   Future<void> loadMessages({int? maxSeq}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final rawList = await _repo.listMessages(conversationId: conversationId);
-      final loaded = rawList.map(MessageDto.fromMap).toList();
+      final loaded = await _repo.listMessages(conversationId: conversationId);
       final merged = _mergeMessages(state.messages, loaded);
       state = state.copyWith(messages: _sorted(merged), isLoading: false);
       if (maxSeq != null && maxSeq > 0) {

@@ -65,7 +65,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     );
     final isAdminOrOwner = membersState.isAdminOrOwner;
     final nameEditableByAdminOnly =
-        membersState.settings['nameEditableByAdminOnly'] as bool? ?? false;
+        membersState.groupSettings.nameEditableByAdminOnly;
 
     if (nameEditableByAdminOnly && !isAdminOrOwner) {
       showCupertinoDialog<void>(
@@ -115,7 +115,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           widget.conversationId,
                         ).notifier,
                       )
-                      .updateSettings({'title': newName});
+                      .updateGroupDisplayTitle(newName);
                   if (mounted) {
                     setState(() => _groupName = newName);
                     AppToast.show(context, UITextConstants.groupNameUpdated);
@@ -138,7 +138,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final members = membersState.members;
     final isAdminOrOwner = membersState.isAdminOrOwner;
     final privacyShield =
-        membersState.settings['privacyShieldAdminOnly'] as bool? ?? false;
+        membersState.groupSettings.privacyShieldAdminOnly;
 
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final borderColor = AppColorsFunctional.getColor(
@@ -399,15 +399,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       value: privacyShield,
                       onChanged: isAdminOrOwner
                           ? (v) {
+                              final cur = ref.read(
+                                conversationMembersProvider(
+                                  widget.conversationId,
+                                ),
+                              );
                               ref
                                   .read(
                                     conversationMembersProvider(
                                       widget.conversationId,
                                     ).notifier,
                                   )
-                                  .updateSettings({
-                                    'privacyShieldAdminOnly': v,
-                                  });
+                                  .updateGroupSettings(
+                                    cur.groupSettings.copyWith(
+                                      privacyShieldAdminOnly: v,
+                                    ),
+                                  );
                             }
                           : null,
                     ),

@@ -430,7 +430,7 @@ _AssistantBubbleSnapshot? _latestAssistantSnapshot(WidgetTester tester) {
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is AssistantMessageBubble &&
-                (widget.message['senderId'] as String?) ==
+                (widget.asTimelineProtocolMap['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId,
             description: 'assistant bubble in assistant dialog',
           ),
@@ -438,7 +438,7 @@ _AssistantBubbleSnapshot? _latestAssistantSnapshot(WidgetTester tester) {
       : find.byWidgetPredicate(
           (widget) =>
               widget is AssistantMessageBubble &&
-              (widget.message['senderId'] as String?) ==
+              (widget.asTimelineProtocolMap['senderId'] as String?) ==
                   AppConceptConstants.assistantSenderId,
           description: 'assistant bubble',
         );
@@ -447,7 +447,7 @@ _AssistantBubbleSnapshot? _latestAssistantSnapshot(WidgetTester tester) {
   final bubble = tester.widget<AssistantMessageBubble>(latestBubbleFinder);
   final bubbleText = _collectVisibleText(tester, scope: latestBubbleFinder);
   return _AssistantBubbleSnapshot(
-    message: bubble.message,
+    message: bubble.asTimelineProtocolMap,
     bubbleText: bubbleText,
   );
 }
@@ -460,7 +460,7 @@ Future<String> _latestAssistantProcessHeaderText(WidgetTester tester) async {
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is AssistantMessageBubble &&
-                (widget.message['senderId'] as String?) ==
+                (widget.asTimelineProtocolMap['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId,
             description: 'assistant bubble in assistant dialog',
           ),
@@ -468,7 +468,7 @@ Future<String> _latestAssistantProcessHeaderText(WidgetTester tester) async {
       : find.byWidgetPredicate(
           (widget) =>
               widget is AssistantMessageBubble &&
-              (widget.message['senderId'] as String?) ==
+              (widget.asTimelineProtocolMap['senderId'] as String?) ==
                   AppConceptConstants.assistantSenderId,
           description: 'assistant bubble',
         );

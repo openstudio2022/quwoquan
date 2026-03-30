@@ -24,3 +24,96 @@ slices:
     tests:
       - python3 scripts/verify_page_horizontal_quality_matrix.py
     dev_status: implemented
+
+  - id: slice-3-nine-session-rollout
+    title: 九会话横向落实规划（S1–P1 … S8–P8 + S9 收口）冻结
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+      - specs/changelog/CR-20260329-006-page-horizontal-quality-nine-session-rollout.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+    tests:
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 scripts/verify_page_matrix_scan_complete.py
+    dev_status: implemented
+
+  - id: slice-4-s2-p2-metadata-inventory-baseline
+    title: S2（P2）矩阵列与 metadata_driven_ui_gap_inventory 全页对齐 + 基线文冻结
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md
+      - specs/gates/metadata_driven_ui_gap_inventory.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+      - specs/changelog/CR-20260330-007-page-horizontal-quality-s2-p2-baseline.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+    tests:
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 scripts/verify_page_matrix_scan_complete.py
+    dev_status: implemented
+
+  - id: slice-5-s3-s9-rollout-dev
+    title: S3–S9 合卷（P4 NavigatorObserver + Welcome 埋点 + 矩阵登记；P2→PHQ-P2-TBD）
+    outputs:
+      - specs/changelog/CR-20260330-008-page-horizontal-quality-s3-s9-rollout.yaml
+      - quwoquan_app/lib/app/navigation/page_access_log_util.dart
+      - quwoquan_app/lib/app/navigation/app_page_access_navigator_observer.dart
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+    tests:
+      - bash scripts/gate_repo.sh --scope app
+    dev_status: implemented
+
+  - id: slice-6-mock-release-functional-spec-baseline
+    title: 实施波次 B — §5.1 发布态/开发测试态功能规格与流程基线冻结（无 metadata/codegen）
+    outputs:
+      - specs/gates/mock_data_cloud_integration_policy.md
+      - .cursor/rules/08-mock-data-isolation.mdc
+      - .cursor/commands/verify.md
+      - .cursor/commands/explore.md
+      - .cursor/commands/commit.md
+      - specs/00_MASTER_DEVELOPMENT_FLOW.md
+      - specs/gates/page_horizontal_quality_pr_checklist.md
+      - specs/changelog/CR-20260329-007-mock-data-isolation-gate.yaml
+      - specs/changelog/CR-20260330-011-mock-release-functional-spec-baseline.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+    tests:
+      - python3 scripts/verify_ui_mock_isolation.py
+      - make verify-app-mock-isolation
+    dev_status: implemented
+
+  - id: slice-7-s8-p8-semantic-token-baseline
+    title: S8（P8）语义 token 子 L3 /baseline 冻结（CR-012 + W0–W5 切片）
+    outputs:
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/plan.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/acceptance.yaml
+      - specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+      - specs/feature-tree/tree_index.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+    tests:
+      - python3 scripts/verify_dart_semantic.py
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 scripts/verify_page_matrix_scan_complete.py
+    dev_status: implemented
+
+  - id: slice-8-s9-governance-closure
+    title: S9 治理收口 — Cursor 规则 09、Makefile verify-app-page-horizontal-quality、架构表、PR 清单 §S9、CR-014
+    outputs:
+      - .cursor/rules/09-page-horizontal-quality.mdc
+      - specs/changelog/CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml
+      - Makefile
+      - specs/gates/page_horizontal_quality_pr_checklist.md
+    tests:
+      - make verify-app-page-horizontal-quality
+      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 scripts/verify_ui_mock_isolation.py
+    dev_status: implemented

@@ -1,5 +1,7 @@
 // ignore_for_file: unnecessary_underscores, deprecated_member_use
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）
 /// 路由：/circle/:id/stats?type=members|groups|fans|likes
@@ -58,94 +61,107 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   String get _type => widget.type;
   String _searchQuery = '';
 
-  late List<Map<String, dynamic>> _users;
-  late List<Map<String, dynamic>> _groups;
-  static List<Map<String, dynamic>> get _mockLikes => [
-    {
-      'id': 'i1',
-      'userName': '陈一发',
-      'userAvatar':
-          'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-      'content': '赞了圈内作品',
-      'targetTitle': '《川西秘境摄影集》',
-      'time': '14:20',
-    },
-    {
-      'id': 'i2',
-      'userName': '王小明',
-      'userAvatar':
-          'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
-      'content': '赞了圈内评论',
-      'targetTitle': '摄影器材交流区',
-      'time': '10:05',
-    },
-  ];
+  List<CircleStatsMemberRowViewData> _users = [];
+  List<CircleStatsGroupRowViewData> _groups = [];
+  List<CircleStatsLikeRowViewData> _likes = [];
 
   @override
   void initState() {
     super.initState();
-    _users = [
-      {
-        'id': 'u1',
-        'name': '陈一发',
-        'avatar':
-            'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-        'worksCount': '0',
-        'fansCount': '230',
-        'likesCount': '1.2k',
-        'isFollowed': false,
-      },
-      {
-        'id': 'u2',
-        'name': '周杰伦',
-        'avatar':
-            'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=100',
-        'worksCount': '0',
-        'fansCount': '15.8M',
-        'likesCount': '99M',
-        'isFollowed': true,
-      },
-      {
-        'id': 'u3',
-        'name': '李青云',
-        'avatar':
-            'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
-        'worksCount': '128',
-        'fansCount': '45k',
-        'likesCount': '128k',
-        'isFollowed': true,
-      },
-    ];
-    _groups = [
-      {'id': 'g1', 'name': '摄影日常交流群', 'memberCount': '128'},
-      {'id': 'g2', 'name': '器材二手交易', 'memberCount': '56'},
-      {'id': 'g3', 'name': '线下活动报名', 'memberCount': '89'},
-    ];
+    unawaited(_loadFromRepository());
   }
 
-  List<Map<String, dynamic>> get _filteredUsers {
+  Future<void> _loadFromRepository() async {
+    final repo = ref.read(circleRepositoryProvider);
+    try {
+      switch (_type) {
+        case 'groups':
+          final raw = await repo.listCircleGroups(widget.circleId, limit: 200);
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _groups = raw.map(_groupRowFromMap).toList(growable: false);
+          });
+          break;
+        case 'likes':
+          if (!mounted) {
+            return;
+          }
+          setState(() => _likes = const []);
+          break;
+        case 'members':
+        case 'fans':
+        default:
+          final raw = await repo.listMembers(widget.circleId, limit: 200);
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _users = raw.map(_memberRowFromMap).toList(growable: false);
+          });
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _users = [];
+        _groups = [];
+        _likes = [];
+      });
+    }
+  }
+
+  static CircleStatsMemberRowViewData _memberRowFromMap(Map<String, dynamic> m) {
+    final id = (m['userId'] ?? m['id'] ?? '').toString();
+    return CircleStatsMemberRowViewData(
+      id: id.isNotEmpty ? id : 'unknown',
+      name: (m['displayName'] ?? m['name'] ?? id).toString(),
+      avatarUrl: (m['avatarUrl'] ?? m['avatar'] ?? '').toString(),
+      worksCountLabel:
+          (m['worksCountLabel'] ?? m['worksCount'] ?? '—').toString(),
+      fansCountLabel: (m['fansCountLabel'] ?? m['fansCount'] ?? '—').toString(),
+      likesCountLabel:
+          (m['likesCountLabel'] ?? m['likesCount'] ?? '—').toString(),
+      isFollowed: m['isFollowed'] as bool? ?? false,
+    );
+  }
+
+  static CircleStatsGroupRowViewData _groupRowFromMap(Map<String, dynamic> m) {
+    final id = (m['_id'] ?? m['id'] ?? '').toString();
+    final mc = m['memberCount'];
+    final label = mc is num
+        ? mc.toString()
+        : (m['memberCountLabel'] ?? '—').toString();
+    return CircleStatsGroupRowViewData(
+      id: id.isNotEmpty ? id : 'g_unknown',
+      name: (m['name'] ?? '').toString(),
+      memberCountLabel: label,
+    );
+  }
+
+  List<CircleStatsMemberRowViewData> get _filteredUsers {
     if (_searchQuery.isEmpty) return _users;
     final q = _searchQuery.toLowerCase();
     return _users
-        .where((u) => (u['name'] as String?)?.toLowerCase().contains(q) == true)
+        .where((u) => u.name.toLowerCase().contains(q))
         .toList();
   }
 
-  List<Map<String, dynamic>> get _filteredGroups {
+  List<CircleStatsGroupRowViewData> get _filteredGroups {
     if (_searchQuery.isEmpty) return _groups;
     final q = _searchQuery.toLowerCase();
     return _groups
-        .where((u) => (u['name'] as String?)?.toLowerCase().contains(q) == true)
+        .where((u) => u.name.toLowerCase().contains(q))
         .toList();
   }
 
-  List<Map<String, dynamic>> get _filteredLikes {
-    if (_searchQuery.isEmpty) return _mockLikes;
+  List<CircleStatsLikeRowViewData> get _filteredLikes {
+    if (_searchQuery.isEmpty) return _likes;
     final q = _searchQuery.toLowerCase();
-    return _mockLikes
-        .where(
-          (i) => (i['userName'] as String?)?.toLowerCase().contains(q) == true,
-        )
+    return _likes
+        .where((i) => i.userName.toLowerCase().contains(q))
         .toList();
   }
 
@@ -242,12 +258,12 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       itemCount: list.length,
       itemBuilder: (context, i) {
         final u = list[i];
-        final name = u['name'] as String? ?? '';
-        final avatar = u['avatar'] as String? ?? '';
-        final worksCount = u['worksCount'] as String? ?? '0';
-        final fansCount = u['fansCount'] as String? ?? '0';
-        final likesCount = u['likesCount'] as String? ?? '0';
-        final isFollowed = u['isFollowed'] as bool? ?? false;
+        final name = u.name;
+        final avatar = u.avatarUrl;
+        final worksCount = u.worksCountLabel;
+        final fansCount = u.fansCountLabel;
+        final likesCount = u.likesCountLabel;
+        final isFollowed = u.isFollowed;
         return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(
@@ -315,15 +331,10 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     ),
                     onPressed: () {
                       setState(() {
-                        final idx = _users.indexWhere(
-                          (e) => e['id'] == u['id'],
-                        );
+                        final idx = _users.indexWhere((e) => e.id == u.id);
                         if (idx >= 0) {
-                          final prev = _users[idx];
-                          final cur = prev['isFollowed'] as bool? ?? false;
-                          final updated = Map<String, dynamic>.from(prev);
-                          updated['isFollowed'] = !cur;
-                          _users[idx] = updated;
+                          final row = _users[idx];
+                          row.isFollowed = !row.isFollowed;
                         }
                       });
                     },
@@ -369,8 +380,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       itemCount: list.length,
       itemBuilder: (context, i) {
         final g = list[i];
-        final name = g['name'] as String? ?? '';
-        final count = g['memberCount'] as String? ?? '0';
+        final name = g.name;
+        final count = g.memberCountLabel;
         return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(
@@ -462,11 +473,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       itemCount: list.length,
       itemBuilder: (context, i) {
         final item = list[i];
-        final userName = item['userName'] as String? ?? '';
-        final userAvatar = item['userAvatar'] as String? ?? '';
-        final content = item['content'] as String? ?? '';
-        final targetTitle = item['targetTitle'] as String? ?? '';
-        final time = item['time'] as String? ?? '';
+        final userName = item.userName;
+        final userAvatar = item.userAvatarUrl;
+        final content = item.content;
+        final targetTitle = item.targetTitle;
+        final time = item.time;
         return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(

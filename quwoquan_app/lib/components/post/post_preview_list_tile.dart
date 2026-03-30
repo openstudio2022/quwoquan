@@ -79,7 +79,7 @@ class PostPreviewListTile extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+            color: AppColorsFunctional.getColor(isDark, ColorType.dropShadow),
             blurRadius: AppSpacing.containerMd,
             offset: const Offset(0, 10),
           ),

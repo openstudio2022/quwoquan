@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
 class HomepagePickerPageRouteExtra {
   const HomepagePickerPageRouteExtra({this.initialSelection});

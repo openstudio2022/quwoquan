@@ -42,6 +42,7 @@ fields:
   - { name: mentionUnreadCount, type: int, description: "@我且未读的消息数" }
   - { name: muted, type: bool }
   - { name: pinned, type: bool }
+  - { name: circleId, type: string, description: "type=circle 时关联圈子 id；其他类型可为空" }
 
 indexes:
   - { name: idx_ci_user_pinned_time, keys: { userId: 1, pinned: -1, lastMessageTime: -1 } }
@@ -155,3 +156,10 @@ client_projection:
       source: pinned
       aliases: [pinned]
       default: "false"
+
+    - name: circleId
+      dart_type: String
+      nullable: false
+      source: circleId
+      aliases: [circleId]
+      default: "''"

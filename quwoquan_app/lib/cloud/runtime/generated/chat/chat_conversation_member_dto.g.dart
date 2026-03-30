@@ -78,8 +78,3 @@ DateTime? _parseDateTime(dynamic v) {
   return null;
 }
 
-List<String>? _parseStringList(dynamic v) {
-  if (v == null) return null;
-  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
-  return null;
-}

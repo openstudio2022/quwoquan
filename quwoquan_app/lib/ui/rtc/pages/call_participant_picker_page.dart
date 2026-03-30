@@ -6,11 +6,13 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_picker_participant_row.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 enum _ParticipantSource { currentConversation, sameInterest, otherGroups }
@@ -42,8 +44,8 @@ class _CallParticipantPickerPageState
     extends ConsumerState<CallParticipantPickerPage> {
   final Set<String> _selectedIds = {};
   String _searchQuery = '';
-  List<Map<String, dynamic>> _contacts = [];
-  List<Map<String, dynamic>> _availableGroups = [];
+  List<CallPickerParticipantRow> _contacts = [];
+  List<ChatInboxDto> _availableGroups = [];
   bool _isLoading = true;
   _ParticipantSource _source = _ParticipantSource.currentConversation;
   String? _selectedGroupId;
@@ -64,9 +66,7 @@ class _CallParticipantPickerPageState
           _contacts = contacts;
           _availableGroups = groups;
           if (_selectedGroupId == null && groups.isNotEmpty) {
-            _selectedGroupId =
-                groups.first['id']?.toString() ??
-                groups.first['_id']?.toString();
+            _selectedGroupId = groups.first.id;
           }
           _isLoading = false;
           _applyDefaultSelectionIfNeeded(contacts);
@@ -79,7 +79,7 @@ class _CallParticipantPickerPageState
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadAvailableGroups(
+  Future<List<ChatInboxDto>> _loadAvailableGroups(
     ChatRepository chatRepo,
   ) async {
     final inbox = await chatRepo.listInbox(limit: 100);
@@ -90,11 +90,10 @@ class _CallParticipantPickerPageState
               item.id.isNotEmpty &&
               item.id != currentConversationId;
         })
-        .map((e) => e.toMap())
         .toList(growable: false);
   }
 
-  Future<List<Map<String, dynamic>>> _loadContactsForSource(
+  Future<List<CallPickerParticipantRow>> _loadContactsForSource(
     ChatRepository chatRepo,
     _ParticipantSource source,
   ) async {
@@ -104,7 +103,9 @@ class _CallParticipantPickerPageState
         final convId = widget.conversationId;
         if (convId == null || convId.isEmpty) {
           final rows = await chatRepo.listContacts(limit: 200);
-          return rows.map((c) => c.toMap()).toList(growable: false);
+          return rows
+              .map(CallPickerParticipantRow.fromContact)
+              .toList(growable: false);
         }
         final rawMembers = await chatRepo.listMembers(
           conversationId: convId,
@@ -112,18 +113,18 @@ class _CallParticipantPickerPageState
         );
         return rawMembers
             .where((m) => m.userId != currentUserId)
-            .map((m) => m.toMap())
+            .map(CallPickerParticipantRow.fromMember)
             .toList(growable: false);
       case _ParticipantSource.sameInterest:
         final contacts = await chatRepo.listContacts(limit: 200);
         return contacts
             .where((c) => c.userId != currentUserId)
-            .map((c) => c.toMap())
+            .map(CallPickerParticipantRow.fromContact)
             .toList(growable: false);
       case _ParticipantSource.otherGroups:
         final groupId = _selectedGroupId;
         if (groupId == null || groupId.isEmpty) {
-          return const <Map<String, dynamic>>[];
+          return const <CallPickerParticipantRow>[];
         }
         final rawMembers = await chatRepo.listMembers(
           conversationId: groupId,
@@ -131,21 +132,19 @@ class _CallParticipantPickerPageState
         );
         return rawMembers
             .where((m) => m.userId != currentUserId)
-            .map((m) => m.toMap())
+            .map(CallPickerParticipantRow.fromMember)
             .toList(growable: false);
     }
   }
 
-  void _applyDefaultSelectionIfNeeded(List<Map<String, dynamic>> contacts) {
+  void _applyDefaultSelectionIfNeeded(List<CallPickerParticipantRow> contacts) {
     final shouldSelectDefault =
         _source == _ParticipantSource.currentConversation &&
         widget.defaultSelectAll &&
         _selectedIds.isEmpty;
     if (!shouldSelectDefault) return;
     _selectedIds.addAll(
-      contacts
-          .map((c) => c['userId'] as String? ?? '')
-          .where((id) => id.isNotEmpty),
+      contacts.map((c) => c.userId).where((id) => id.isNotEmpty),
     );
   }
 
@@ -184,12 +183,11 @@ class _CallParticipantPickerPageState
     });
   }
 
-  List<Map<String, dynamic>> get _filteredContacts {
+  List<CallPickerParticipantRow> get _filteredContacts {
     if (_searchQuery.isEmpty) return _contacts;
     final query = _searchQuery.toLowerCase();
     return _contacts.where((c) {
-      final name = (c['displayName'] as String? ?? '').toLowerCase();
-      return name.contains(query);
+      return c.displayName.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -329,14 +327,10 @@ class _CallParticipantPickerPageState
                           final contact = filtered[index];
                           return _ContactRow(
                             contact: contact,
-                            isSelected: _selectedIds.contains(
-                              contact['userId'] as String? ?? '',
-                            ),
+                            isSelected: _selectedIds.contains(contact.userId),
                             isDisabled:
                                 _selectedIds.length >= widget.maxParticipants &&
-                                !_selectedIds.contains(
-                                  contact['userId'] as String? ?? '',
-                                ),
+                                !_selectedIds.contains(contact.userId),
                             onToggle: (userId) {
                               setState(() {
                                 if (_selectedIds.contains(userId)) {
@@ -413,9 +407,8 @@ class _CallParticipantPickerPageState
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) {
           final group = _availableGroups[index];
-          final groupId =
-              group['id']?.toString() ?? group['_id']?.toString() ?? '';
-          final title = group['title']?.toString() ?? groupId;
+          final groupId = group.id;
+          final title = group.title.isNotEmpty ? group.title : groupId;
           final selected = groupId == _selectedGroupId;
           return GestureDetector(
             onTap: () => _switchOtherGroup(groupId),
@@ -467,16 +460,17 @@ class _ContactRow extends StatelessWidget {
     required this.onToggle,
   });
 
-  final Map<String, dynamic> contact;
+  final CallPickerParticipantRow contact;
   final bool isSelected;
   final bool isDisabled;
   final ValueChanged<String> onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final userId = contact['userId'] as String? ?? '';
-    final displayName = contact['displayName'] as String? ?? userId;
-    final avatarUrl = contact['avatarUrl'] as String?;
+    final userId = contact.userId;
+    final displayName =
+        contact.displayName.isNotEmpty ? contact.displayName : userId;
+    final avatarUrl = contact.avatarUrl;
 
     return GestureDetector(
       onTap: isDisabled && !isSelected ? null : () => onToggle(userId),

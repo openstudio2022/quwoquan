@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
@@ -108,9 +107,7 @@ class ChatInboxListNotifier extends StateNotifier<ChatInboxListState> {
   }
 
   List<ChatInboxDto> _fallbackItems() {
-    return _sortItems(
-      ChatMockData.inboxItems.map(ChatInboxDto.fromMap).toList(growable: false),
-    );
+    return const <ChatInboxDto>[];
   }
 
   List<ChatInboxDto> _sortItems(List<ChatInboxDto> items) {

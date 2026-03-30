@@ -30,6 +30,7 @@ class _AssistantReferenceWebViewPageState
   late final Uri _uri;
   bool _isLoading = true;
   bool _hasError = false;
+  bool? _webViewSurfaceIsDark;
 
   @override
   void initState() {
@@ -37,7 +38,6 @@ class _AssistantReferenceWebViewPageState
     _uri = Uri.parse(widget.initialUrl);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(AppColors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
@@ -67,6 +67,22 @@ class _AssistantReferenceWebViewPageState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    if (_webViewSurfaceIsDark != isDark) {
+      _webViewSurfaceIsDark = isDark;
+      _controller.setBackgroundColor(
+        AppColorsFunctional.getColor(
+          isDark,
+          ColorType.webViewPlaceholderBackground,
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark =
         CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -75,6 +91,14 @@ class _AssistantReferenceWebViewPageState
         : widget.title.trim().isNotEmpty
         ? widget.title.trim()
         : UITextConstants.assistantReferenceSectionTitle;
+    final cardSurface =
+        AppColorsFunctional.getColor(isDark, ColorType.chromeInfoCardBackground);
+    final cardBorder =
+        AppColorsFunctional.getColor(isDark, ColorType.chromeInfoCardBorder);
+    final primaryFg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final secondaryFg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return AppScaffold(
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: AppNavigationBar(
@@ -109,9 +133,9 @@ class _AssistantReferenceWebViewPageState
               ),
               padding: EdgeInsets.all(AppSpacing.containerSm),
               decoration: BoxDecoration(
-                color: AppColors.white,
+                color: cardSurface,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                border: Border.all(color: AppColors.black.withValues(alpha: 0.06)),
+                border: Border.all(color: cardBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,7 +148,7 @@ class _AssistantReferenceWebViewPageState
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.black.withValues(alpha: 0.86),
+                        color: primaryFg,
                         height: AppTypography.bodyLineHeight,
                       ),
                     ),
@@ -136,7 +160,7 @@ class _AssistantReferenceWebViewPageState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: AppTypography.sm,
-                      color: AppColors.black.withValues(alpha: 0.52),
+                      color: secondaryFg,
                     ),
                   ),
                 ],
@@ -151,13 +175,11 @@ class _AssistantReferenceWebViewPageState
                   AppSpacing.containerMd,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: cardSurface,
                   borderRadius: BorderRadius.circular(
                     AppSpacing.largeBorderRadius,
                   ),
-                  border: Border.all(
-                    color: AppColors.black.withValues(alpha: 0.06),
-                  ),
+                  border: Border.all(color: cardBorder),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -208,6 +230,12 @@ class _ReferenceLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
@@ -217,7 +245,7 @@ class _ReferenceLoadError extends StatelessWidget {
             Icon(
               CupertinoIcons.exclamationmark_triangle,
               size: AppSpacing.iconLarge + AppSpacing.sm,
-              color: AppColors.black.withValues(alpha: 0.3),
+              color: muted.withValues(alpha: 0.85),
             ),
             SizedBox(height: AppSpacing.sm),
             Text(
@@ -225,7 +253,7 @@ class _ReferenceLoadError extends StatelessWidget {
               style: TextStyle(
                 fontSize: AppTypography.lg,
                 fontWeight: FontWeight.w600,
-                color: AppColors.black.withValues(alpha: 0.82),
+                color: fg,
               ),
             ),
             SizedBox(height: AppSpacing.xs),
@@ -236,7 +264,7 @@ class _ReferenceLoadError extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.sm,
-                color: AppColors.black.withValues(alpha: 0.56),
+                color: muted,
               ),
             ),
             SizedBox(height: AppSpacing.md),

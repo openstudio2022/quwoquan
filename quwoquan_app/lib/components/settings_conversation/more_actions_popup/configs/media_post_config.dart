@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// 媒体帖子更多操作配置
+/// 媒体帖子更多操作配置（回调闭包捕获帖子上下文；本配置不持有业务对象以避免 dynamic）。
 class MediaPostMoreActionConfig {
-  final dynamic post;
   final bool showShareAction;
   final bool showViewOriginalAction;
   final VoidCallback? onReward;
@@ -20,7 +19,6 @@ class MediaPostMoreActionConfig {
   final VoidCallback? onShare;
 
   const MediaPostMoreActionConfig({
-    required this.post,
     this.showShareAction = false,
     this.showViewOriginalAction = false,
     this.onReward,

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
+/// 文章预览：消费 [createEditorProvider] 的 [CreateEditorStateV2] 快照。
 class ArticlePreviewPage extends ConsumerWidget {
   const ArticlePreviewPage({super.key});
 

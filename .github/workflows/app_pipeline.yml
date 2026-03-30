@@ -106,7 +106,7 @@ jobs:
 
       - name: Flutter Build macOS
         working-directory: quwoquan_app
-        run: flutter build macos
+        run: flutter build macos -t lib/main_prod.dart --dart-define=APP_DATA_SOURCE=remote
 
       - name: 上传 macOS 构建产物
         uses: actions/upload-artifact@v4

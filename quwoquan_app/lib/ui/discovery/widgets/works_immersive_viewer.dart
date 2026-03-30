@@ -275,7 +275,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     MoreActionPopup.show(
       context: context,
       config: MediaPostMoreActionConfig(
-        post: post,
         onSave: () => _onFavorite(post),
         onCopyLink: () => _copyLink(
           context,
@@ -547,19 +546,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   Map<String, dynamic>? _rawPostById(String postId) {
     final external = widget.rawPostsById[postId];
     if (external != null) return external;
-    final repo = ref.watch(appContentRepositoryProvider);
-    final all = <Map<String, dynamic>>[
-      ...repo.discoveryPhotoData,
-      ...repo.discoveryVideoData,
-      ...repo.discoveryArticleData,
-      ...repo.discoveryMomentData,
-    ];
-    return all.cast<Map<String, dynamic>?>().firstWhere(
-      (item) =>
-          item?['postId']?.toString() == postId ||
-          item?['id']?.toString() == postId,
-      orElse: () => null,
-    );
+    return ref.watch(appContentRepositoryProvider).discoveryFeedWireRowByPostId(
+          postId,
+        );
   }
 
   PostSummaryView? _summaryForPost(String postId) {
@@ -1061,12 +1050,18 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         ? null
         : _overlayFooterForPost(context, currentPost);
     final isSelfPost = currentPost != null && _isSelfPost(currentPost);
-    return GestureDetector(
-      behavior: HitTestBehavior.deferToChild,
-      onTap: () {
-        if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
-      },
-      child: Stack(
+    // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationThickness: 0,
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
+        onTap: () {
+          if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
+        },
+        child: Stack(
         fit: StackFit.expand,
         children: [
           Positioned(
@@ -1225,6 +1220,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             ),
         ],
       ),
+    ),
     );
   }
 

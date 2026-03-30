@@ -11,9 +11,11 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_duration_badge.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
@@ -80,6 +82,9 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     });
 
     final participants = session.session?.participants ?? [];
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final stageGradient = CallStageChrome.backgroundGradient(isDark);
 
     return PopScope(
       canPop: false,
@@ -103,7 +108,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [AppColors.overlayDark, AppColors.overlayStrong],
+                colors: stageGradient,
               ),
             ),
             child: SafeArea(
@@ -141,12 +146,12 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                                   Navigator.of(context).pop();
                                   context.push(
                                     AppRoutePaths.rtcPickParticipants,
-                                    extra: <String, dynamic>{
-                                      'callId': widget.callId,
-                                      'maxParticipants':
+                                    extra: CallParticipantPickerRouteExtra(
+                                      callId: widget.callId,
+                                      maxParticipants:
                                           session.session?.maxParticipants ??
                                           32,
-                                    },
+                                    ),
                                   );
                                 },
                               ),
@@ -177,11 +182,11 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                           onInvite: () {
                             context.push(
                               AppRoutePaths.rtcPickParticipants,
-                              extra: {
-                                'callId': widget.callId,
-                                'maxParticipants':
+                              extra: CallParticipantPickerRouteExtra(
+                                callId: widget.callId,
+                                maxParticipants:
                                     session.session?.maxParticipants ?? 32,
-                              },
+                              ),
                             );
                           },
                         ),
@@ -198,10 +203,20 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
   }
 
   Widget _buildParticipantAvatars(List<CallParticipantDto> participants) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final mutedFg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
+            .withValues(alpha: 0.35);
+    final nameFg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final onAccent =
+        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
+
     if (participants.isEmpty) {
       return Icon(
         CupertinoIcons.phone,
-        color: AppColors.white.withValues(alpha: 0.3),
+        color: mutedFg,
         size: AppSpacing.oneHundred,
       );
     }
@@ -213,7 +228,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     if (remoteParticipants.isEmpty) {
       return Icon(
         CupertinoIcons.phone,
-        color: AppColors.white.withValues(alpha: 0.3),
+        color: mutedFg,
         size: AppSpacing.oneHundred,
       );
     }
@@ -229,7 +244,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
             child: Text(
               userId.isNotEmpty ? userId[0].toUpperCase() : '?',
               style: TextStyle(
-                color: AppColors.white,
+                color: onAccent,
                 fontSize: AppTypography.xxxl,
                 fontWeight: AppTypography.semiBold,
               ),
@@ -239,7 +254,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
           Text(
             userId,
             style: TextStyle(
-              color: AppColors.white,
+              color: nameFg,
               fontSize: AppTypography.lg,
               fontWeight: AppTypography.medium,
             ),
@@ -259,7 +274,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
           child: Text(
             p.userId.isNotEmpty ? p.userId[0].toUpperCase() : '?',
             style: TextStyle(
-              color: AppColors.white,
+              color: onAccent,
               fontSize: AppTypography.lg,
               fontWeight: AppTypography.semiBold,
             ),
@@ -278,16 +293,22 @@ class _TopActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final glass =
+        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: AppSpacing.minInteractiveSize,
         height: AppSpacing.minInteractiveSize,
         decoration: BoxDecoration(
-          color: AppColors.overlayMedium,
+          color: glass.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(AppSpacing.sm),
         ),
-        child: Icon(icon, color: AppColors.white, size: AppSpacing.iconMedium),
+        child: Icon(icon, color: fg, size: AppSpacing.iconMedium),
       ),
     );
   }

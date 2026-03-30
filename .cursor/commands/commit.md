@@ -26,6 +26,8 @@ make gate
 必要时按变更范围补充：
 
 - Flutter tests
+- `make verify-app-mock-isolation`（`quwoquan_app` 内 Mock/Remote、UI/Core import、`main_prod` 或构建脚本变更时）
+- `make verify-app-lib-test-only-symbols`（`lib/**` 新增 `createForTest` / 测试工厂时）
 - service gate
 
 ## 提交行为

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -10,6 +11,7 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
+/// 发布选点；列表项 [CreateLocationOption] ← 云 [LocationPoiDto]。
 class PublishLocationSelectorPage extends StatefulWidget {
   const PublishLocationSelectorPage({super.key, required this.locationService});
 
@@ -112,6 +114,9 @@ class _PublishLocationSelectorPageState
             final result = await Navigator.of(context)
                 .push<CreateLocationOption>(
                   CupertinoPageRoute<CreateLocationOption>(
+                    settings: const RouteSettings(
+                      name: PageAccessInternalRoutes.publishLocationSearch,
+                    ),
                     builder: (_) => PublishLocationSearchPage(
                       locationService: widget.locationService,
                       lat: _lastLat,

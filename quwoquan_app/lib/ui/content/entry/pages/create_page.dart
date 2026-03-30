@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
@@ -32,8 +33,9 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.d
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
-import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
+/// 创作入口主面；草稿 [CreateEditorStateV2]（清单 ContentPublishDraftComposite）+ [PublishSettings]（强类型 POI）。
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({
     super.key,
@@ -576,6 +578,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .toList(growable: false);
     return Navigator.of(context).push<CreateMediaPickerResult>(
       MaterialPageRoute<CreateMediaPickerResult>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createMediaPicker,
+        ),
         fullscreenDialog: true,
         builder: (_) => CreateMediaPickerPage(
           entryMode: mode,
@@ -685,6 +690,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             : MediaPickerEntryMode.image);
     final result = await Navigator.of(context).push<CameraCaptureResult>(
       MaterialPageRoute<CameraCaptureResult>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageCamera,
+        ),
         fullscreenDialog: true,
         builder: (_) => CameraCapturePage(initialMode: initialMode),
       ),
@@ -804,6 +812,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     final result = await Navigator.of(context).push<VideoEditorResult>(
       MaterialPageRoute<VideoEditorResult>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageVideoEditor,
+        ),
         fullscreenDialog: true,
         builder: (_) => VideoEditorPage(
           sourceVideoPath: state.originalVideoPath.trim().isEmpty
@@ -924,6 +935,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     final result = await Navigator.of(context).push<Object?>(
       MaterialPageRoute<Object?>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageImagePreview,
+        ),
         fullscreenDialog: true,
         builder: (_) => ImageEditorPage(
           initialPath: state.imagePaths[index],
@@ -974,6 +988,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
     return Navigator.of(context).push<PublishSettings>(
       CupertinoPageRoute<PublishSettings>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPagePublishConfirm,
+        ),
         fullscreenDialog: true,
         builder: (_) => _CreatePublishConfirmSheet(
           initialSettings: state.settings,
@@ -984,7 +1001,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           hasVideo: state.hasVideo,
           locationService: _locationService,
           joinedCircles: joinedCircles,
-          recommendedCircles: mockRecommendedCircles,
+          recommendedCircles:
+              ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock
+                  ? mockRecommendedCircles
+                  : const <CreateCircleOption>[],
         ),
       ),
     );
@@ -1135,6 +1155,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     if (_useImmersiveArticleExperience(state)) {
       final proceed = await Navigator.of(context).push<bool>(
         CupertinoPageRoute<bool>(
+          settings: const RouteSettings(
+            name: PageAccessInternalRoutes.createPageArticlePreview,
+          ),
           fullscreenDialog: true,
           builder: (_) => const ArticlePreviewPage(),
         ),
@@ -1212,43 +1235,49 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       },
       child: CupertinoPageScaffold(
         backgroundColor: background,
-        child: KeyedSubtree(
-          key: TestKeys.createPage,
-          child: ColoredBox(
-            color: background,
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: <Widget>[
-                  _buildHeader(
-                    foreground: foreground,
-                    secondary: secondary,
-                    state: state,
-                    collapseProgress: _heroCollapseProgress,
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.containerMd,
-                        AppSpacing.containerSm,
-                        AppSpacing.containerMd,
-                        MediaQuery.of(context).padding.bottom +
-                            AppSpacing.containerLg,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          if (!_editorV2Enabled) _buildRollbackBanner(secondary),
-                          if (state.editorKind == CreateEditorKind.media)
-                            _buildMediaEditor(state)
-                          else
-                            _buildTextEditor(state),
-                        ],
+        // Match [AppScaffold]: transparent Material gives Text a Material ancestor
+        // so debug / fallback styling does not draw yellow underlines under labels.
+        child: Material(
+          type: MaterialType.transparency,
+          child: KeyedSubtree(
+            key: TestKeys.createPage,
+            child: ColoredBox(
+              color: background,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  children: <Widget>[
+                    _buildHeader(
+                      foreground: foreground,
+                      secondary: secondary,
+                      state: state,
+                      collapseProgress: _heroCollapseProgress,
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.containerMd,
+                          AppSpacing.containerSm,
+                          AppSpacing.containerMd,
+                          MediaQuery.of(context).padding.bottom +
+                              AppSpacing.containerLg,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            if (!_editorV2Enabled)
+                              _buildRollbackBanner(secondary),
+                            if (state.editorKind == CreateEditorKind.media)
+                              _buildMediaEditor(state)
+                            else
+                              _buildTextEditor(state),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1273,31 +1302,34 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       },
       child: CupertinoPageScaffold(
         backgroundColor: background,
-        child: KeyedSubtree(
-          key: TestKeys.createPage,
-          child: ColoredBox(
-            color: background,
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: <Widget>[
-                  Container(
-                    height: AppSpacing.toolbarHeight,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerSm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: background.withValues(alpha: 0.98),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: divider.withValues(alpha: 0.45),
-                          width: AppSpacing.hairline,
+        // Same transparent Material host as main create route (see [AppScaffold]).
+        child: Material(
+          type: MaterialType.transparency,
+          child: KeyedSubtree(
+            key: TestKeys.createPage,
+            child: ColoredBox(
+              color: background,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  children: <Widget>[
+                    Container(
+                      height: AppSpacing.toolbarHeight,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.containerSm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: background.withValues(alpha: 0.98),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: divider.withValues(alpha: 0.45),
+                            width: AppSpacing.hairline,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: <Widget>[
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: <Widget>[
                       Align(
                         alignment: Alignment.centerLeft,
                         child: CupertinoButton(
@@ -1396,6 +1428,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             ),
           ),
         ),
+        ),
       ),
     ),
     );
@@ -1422,6 +1455,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required CreateEditorStateV2 state,
     required double collapseProgress,
   }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onAccentLabel =
+        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
     final title = _pageTitleForState(state);
     final divider = CupertinoColors.separator.resolveFrom(context);
     final chrome = CupertinoColors.systemBackground
@@ -1522,11 +1558,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                     ),
                     onPressed: _isPublishing ? null : _publish,
                     child: _isPublishing
-                        ? const CupertinoActivityIndicator(color: AppColors.white)
-                        : const Text(
+                        ? CupertinoActivityIndicator(color: onAccentLabel)
+                        : Text(
                             '下一步',
                             style: TextStyle(
-                              color: AppColors.white,
+                              color: onAccentLabel,
                               fontSize: AppTypography.base,
                               fontWeight: AppTypography.semiBold,
                             ),
@@ -1739,6 +1775,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildSurfacePanel({required Widget child, EdgeInsets? padding}) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final panelBackground = CupertinoColors.secondarySystemGroupedBackground
         .resolveFrom(context);
     final separator = CupertinoColors.separator.resolveFrom(context);
@@ -1753,7 +1790,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.04),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundPrimary,
+            ).withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: AppSpacing.twenty,
             offset: const Offset(0, 8),
           ),
@@ -2043,6 +2083,17 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     bool showRemoveButton = true,
     bool showFloatingShadow = false,
   }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final mediaScrim = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.createMediaOverlayBase,
+    );
+    final onLightContent =
+        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
+    final glassBorder = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundInverse,
+    );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
@@ -2145,8 +2196,12 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: <Color>[
-                                  AppColors.black.withValues(alpha: 0.08),
-                                  AppColors.black.withValues(alpha: 0.34),
+                                  mediaScrim.withValues(
+                                    alpha: isDark ? 0.14 : 0.08,
+                                  ),
+                                  mediaScrim.withValues(
+                                    alpha: isDark ? 0.38 : 0.34,
+                                  ),
                                 ],
                               ),
                             ),
@@ -2156,16 +2211,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                               width: AppSpacing.buttonHeight,
                               height: AppSpacing.buttonHeight,
                               decoration: BoxDecoration(
-                                color: AppColors.black.withValues(alpha: 0.28),
+                                color: mediaScrim.withValues(
+                                  alpha: isDark ? 0.22 : 0.28,
+                                ),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AppColors.white.withValues(alpha: 0.14),
+                                  color: glassBorder.withValues(
+                                    alpha: isDark ? 0.2 : 0.14,
+                                  ),
                                   width: AppSpacing.hairline,
                                 ),
                               ),
                               child: Icon(
                                 CupertinoIcons.play_fill,
-                                color: AppColors.white.withValues(alpha: 0.96),
+                                color: onLightContent.withValues(alpha: 0.96),
                                 size: AppSpacing.iconLarge,
                               ),
                             ),
@@ -2178,7 +2237,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
                             Container(
-                                color: AppColors.black.withValues(alpha: 0.12)),
+                              color: mediaScrim.withValues(
+                                alpha: isDark ? 0.16 : 0.12,
+                              ),
+                            ),
                       ),
                     if (isVideo)
                       Positioned(
@@ -2186,7 +2248,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         bottom: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
                           label: '编辑视频',
-                          backgroundColor: AppColors.black.withValues(alpha: 0.48),
+                          backgroundColor: mediaScrim.withValues(
+                            alpha: isDark ? 0.42 : 0.48,
+                          ),
                         ),
                       ),
                     if (isVideo)
@@ -2195,7 +2259,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         top: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
                           label: '视频',
-                          backgroundColor: AppColors.black.withValues(alpha: 0.48),
+                          backgroundColor: mediaScrim.withValues(
+                            alpha: isDark ? 0.42 : 0.48,
+                          ),
                         ),
                       ),
                     if (!isVideo)
@@ -2217,13 +2283,17 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                     width: AppSpacing.buttonHeight,
                                     height: AppSpacing.buttonHeight,
                                     decoration: BoxDecoration(
-                                      color: AppColors.black.withValues(
-                                        alpha: isPressed ? 0.2 : 0.08,
+                                      color: mediaScrim.withValues(
+                                        alpha: isPressed
+                                            ? (isDark ? 0.26 : 0.2)
+                                            : (isDark ? 0.12 : 0.08),
                                       ),
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: AppColors.white.withValues(
-                                          alpha: isPressed ? 0.18 : 0.06,
+                                        color: glassBorder.withValues(
+                                          alpha: isPressed
+                                              ? (isDark ? 0.26 : 0.18)
+                                              : (isDark ? 0.12 : 0.06),
                                         ),
                                         width: AppSpacing.hairline,
                                       ),
@@ -2231,7 +2301,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                     child: Icon(
                                       Icons.edit_square,
                                       size: AppSpacing.iconSmall + 2,
-                                      color: AppColors.white.withValues(
+                                      color: onLightContent.withValues(
                                         alpha: isPressed ? 0.96 : 0.88,
                                       ),
                                     ),
@@ -2252,15 +2322,17 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                             vertical: AppSpacing.intraGroupXs / 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.black.withValues(alpha: 0.18),
+                            color: mediaScrim.withValues(
+                              alpha: isDark ? 0.26 : 0.18,
+                            ),
                             borderRadius: BorderRadius.circular(
                               AppSpacing.radiusTwenty,
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             CupertinoIcons.line_horizontal_3,
                             size: AppTypography.base,
-                            color: AppColors.white,
+                            color: onLightContent,
                           ),
                         ),
                       ),
@@ -2286,17 +2358,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                           height:
                               AppSpacing.iconMedium + AppSpacing.intraGroupSm,
                           decoration: BoxDecoration(
-                            color: AppColors.white.withValues(alpha: 0.1),
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.glassSurface,
+                            ).withValues(alpha: 0.88),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.white.withValues(alpha: 0.06),
+                              color: glassBorder.withValues(alpha: 0.12),
                               width: AppSpacing.hairline,
                             ),
                           ),
                           child: Icon(
                             CupertinoIcons.xmark,
                             size: AppTypography.xsPlus,
-                            color: AppColors.white.withValues(alpha: 0.92),
+                            color: onLightContent.withValues(alpha: 0.92),
                           ),
                         ),
                       ),
@@ -2405,25 +2480,33 @@ class _PreviewBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final bg = backgroundColor ??
+        mediaScrimBackdrop(isDark).withValues(alpha: isDark ? 0.42 : 0.45);
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
         vertical: AppSpacing.intraGroupXs,
       ),
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.black.withValues(alpha: 0.45),
+        color: bg,
         borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.white,
+        style: TextStyle(
+          color: fg,
           fontSize: AppTypography.sm,
           fontWeight: AppTypography.medium,
         ),
       ),
     );
   }
+
+  static Color mediaScrimBackdrop(bool isDark) =>
+      AppColorsFunctional.getColor(isDark, ColorType.createMediaOverlayBase);
 }
 
 class _VideoEditContext {
@@ -2460,6 +2543,7 @@ class _AddThumbnailButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final accent = enabled
         ? AppColors.iosAccentLight
         : CupertinoColors.tertiaryLabel.resolveFrom(context);
@@ -2496,7 +2580,10 @@ class _AddThumbnailButton extends StatelessWidget {
                     ? AppColors.iosAccentLight.withValues(
                         alpha: isHighlighted ? 0.12 : 0.06,
                       )
-                    : AppColors.black.withValues(alpha: 0.02),
+                    : AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundPrimary,
+                      ).withValues(alpha: 0.045),
                 blurRadius: isHighlighted ? 12 : AppSpacing.ten,
                 offset: const Offset(0, 4),
               ),
@@ -2841,6 +2928,7 @@ class _CreatePublishConfirmSheetState
   }
 
   Widget _buildPreviewCard(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final metaLabel = widget.hasVideo
         ? '视频内容'
         : widget.imageCount > 0
@@ -2868,7 +2956,10 @@ class _CreatePublishConfirmSheetState
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.035),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundPrimary,
+            ).withValues(alpha: isDark ? 0.12 : 0.035),
             blurRadius: AppSpacing.twenty,
             offset: const Offset(0, 10),
           ),
@@ -3037,6 +3128,9 @@ class _CreatePublishConfirmSheetState
   Future<void> _pickLocation() async {
     final option = await Navigator.of(context).push<CreateLocationOption>(
       CupertinoPageRoute<CreateLocationOption>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageLocationPicker,
+        ),
         builder: (_) => PublishLocationSelectorPage(
           locationService: widget.locationService,
         ),
@@ -3048,9 +3142,10 @@ class _CreatePublishConfirmSheetState
     setState(() {
       _settings = _settings.copyWith(
         locationName: option.name,
-        location: option == CreateLocationOption.hidden
-            ? const <String, dynamic>{}
-            : option.toLocationMap(),
+        clearLocationPoi: option == CreateLocationOption.hidden,
+        locationPoi: option == CreateLocationOption.hidden
+            ? null
+            : option.toLocationPoiDto(),
       );
     });
   }
@@ -3058,6 +3153,9 @@ class _CreatePublishConfirmSheetState
   Future<void> _pickCircles() async {
     final selected = await Navigator.of(context).push<Map<String, String>>(
       CupertinoPageRoute<Map<String, String>>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPagePublishCircleSelect,
+        ),
         builder: (_) => PublishCircleSelectPage(
           joinedCircles: widget.joinedCircles,
           recommendedCircles: widget.recommendedCircles,

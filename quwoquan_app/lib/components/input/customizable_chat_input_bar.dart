@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -523,6 +524,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     final shouldRefocus = _focusNode.hasFocus;
     final draft = await Navigator.of(context).push<_ExpandedInputDraft>(
       CupertinoPageRoute<_ExpandedInputDraft>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.chatInputExpandedDraft,
+        ),
         fullscreenDialog: true,
         builder: (context) => _ExpandedChatInputPage(
           initialText: _controller.text,

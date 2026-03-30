@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_layout_mode.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
@@ -101,7 +102,10 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
         }
       },
       child: AppScaffold(
-        backgroundColor: AppColors.black,
+        backgroundColor: AppColorsFunctional.getColor(
+          CupertinoTheme.of(context).brightness == Brightness.dark,
+          ColorType.fullBleedMediaBackdrop,
+        ),
         child: GestureDetector(
           onTap: _toggleControls,
           behavior: HitTestBehavior.opaque,
@@ -147,6 +151,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildOverlayControls(CallSessionState session) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final topFadeBase = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.createMediaOverlayBase,
+    );
     return AnimatedOpacity(
       opacity: _controlsVisible ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 250),
@@ -170,8 +180,8 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.overlayStrong,
-                      AppColors.overlayStrong.withValues(alpha: 0.0),
+                      topFadeBase.withValues(alpha: isDark ? 0.48 : 0.62),
+                      topFadeBase.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -196,7 +206,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                               width: AppSpacing.sm,
                               height: AppSpacing.sm,
                               decoration: const BoxDecoration(
-                                color: AppColors.white,
+                                color: AppColors.welcomeForeground,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -204,7 +214,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                             Text(
                               'REC',
                               style: TextStyle(
-                                color: AppColors.white,
+                                color: AppColors.welcomeForeground,
                                 fontSize: AppTypography.xs,
                                 fontWeight: AppTypography.semiBold,
                               ),
@@ -261,6 +271,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildLayoutToggle() {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final glass =
+        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: () {
         setState(() => _layoutMode = _layoutMode.toggle());
@@ -270,14 +286,14 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
         width: AppSpacing.minInteractiveSize,
         height: AppSpacing.minInteractiveSize,
         decoration: BoxDecoration(
-          color: AppColors.overlayMedium,
+          color: glass.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(AppSpacing.sm),
         ),
         child: Icon(
           _layoutMode.isGrid
               ? CupertinoIcons.person_2
               : CupertinoIcons.square_grid_2x2,
-          color: AppColors.white,
+          color: fg,
           size: AppSpacing.iconMedium,
         ),
       ),
@@ -285,6 +301,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildParticipantListButton(CallSessionState session) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final glass =
+        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: () {
         showCupertinoModalPopup<void>(
@@ -296,10 +318,10 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
               Navigator.of(context).pop();
               context.push(
                 AppRoutePaths.rtcPickParticipants,
-                extra: <String, dynamic>{
-                  'callId': widget.callId,
-                  'maxParticipants': session.session?.maxParticipants ?? 32,
-                },
+                extra: CallParticipantPickerRouteExtra(
+                  callId: widget.callId,
+                  maxParticipants: session.session?.maxParticipants ?? 32,
+                ),
               );
             },
           ),
@@ -309,12 +331,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
         width: AppSpacing.minInteractiveSize,
         height: AppSpacing.minInteractiveSize,
         decoration: BoxDecoration(
-          color: AppColors.overlayMedium,
+          color: glass.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(AppSpacing.sm),
         ),
         child: Icon(
           CupertinoIcons.person_2,
-          color: AppColors.white,
+          color: fg,
           size: AppSpacing.iconMedium,
         ),
       ),

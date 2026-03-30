@@ -1,5 +1,6 @@
 # 设置类全屏页壳登记：新增/移动页面须同步更新本清单，否则 verify_settings_canonical 失败。
-# shell: inset_form | inset_member_picker | webview_shell | prototype_exception | wizard_deferred | deferred_inset
+# shell: inset_form | inset_member_picker | search_embedded |
+#       webview_shell | prototype_exception | wizard_deferred | deferred_inset
 pages:
   - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
     shell: inset_form
@@ -13,6 +14,8 @@ pages:
     shell: inset_member_picker
   - path: quwoquan_app/lib/ui/chat/pages/group_admins_page.dart
     shell: inset_member_picker
+  - path: quwoquan_app/lib/ui/chat/pages/group_member_search_page.dart
+    shell: search_embedded
   - path: quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart

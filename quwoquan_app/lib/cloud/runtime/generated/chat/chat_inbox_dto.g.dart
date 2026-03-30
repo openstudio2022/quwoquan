@@ -15,6 +15,7 @@ class ChatInboxDto {
   final int mentionUnreadCount;
   final bool muted;
   final bool pinned;
+  final String circleId;
 
   const ChatInboxDto({
     required this.id,
@@ -30,6 +31,7 @@ class ChatInboxDto {
     required this.mentionUnreadCount,
     required this.muted,
     required this.pinned,
+    required this.circleId,
   });
 
   factory ChatInboxDto.fromMap(Map<String, dynamic> m) {
@@ -47,6 +49,7 @@ class ChatInboxDto {
       mentionUnreadCount: (m['mentionUnreadCount'] as num?)?.toInt() ?? (m['mentionCount'] as num?)?.toInt() ?? 0,
       muted: m['muted'] as bool? ?? false,
       pinned: m['pinned'] as bool? ?? false,
+      circleId: m['circleId']?.toString() ?? '',
     );
   }
 
@@ -65,6 +68,7 @@ class ChatInboxDto {
       'mentionUnreadCount': mentionUnreadCount,
       'muted': muted,
       'pinned': pinned,
+      'circleId': circleId,
     };
   }
 
@@ -82,6 +86,7 @@ class ChatInboxDto {
     int? mentionUnreadCount,
     bool? muted,
     bool? pinned,
+    String? circleId,
   }) {
     return ChatInboxDto(
       id: id ?? this.id,
@@ -97,6 +102,7 @@ class ChatInboxDto {
       mentionUnreadCount: mentionUnreadCount ?? this.mentionUnreadCount,
       muted: muted ?? this.muted,
       pinned: pinned ?? this.pinned,
+      circleId: circleId ?? this.circleId,
     );
   }
 

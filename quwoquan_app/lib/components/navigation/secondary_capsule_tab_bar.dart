@@ -81,9 +81,10 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
           SecondaryCapsuleTabBarVariant.inlineMuted => AppColors.transparent,
           SecondaryCapsuleTabBarVariant.iosProfile => AppColors.transparent,
           SecondaryCapsuleTabBarVariant.defaultSurface =>
-            isDark
-                ? AppColors.white.withValues(alpha: 0.04)
-                : AppColors.black.withValues(alpha: 0.03),
+            AppColorsFunctional.getColor(
+              isDark,
+              ColorType.secondaryCapsuleTrack,
+            ),
         };
     final outerBackground = switch (variant) {
       SecondaryCapsuleTabBarVariant.inlineMuted => AppColors.transparent,
@@ -245,9 +246,12 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                   ),
                                   child: Text(
                                     badgeText,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: AppTypography.xs,
-                                      color: AppColors.white,
+                                      color: AppColorsFunctional.getColor(
+                                        isDark,
+                                        ColorType.badgeForeground,
+                                      ),
                                       fontWeight: FontWeight.w600,
                                       height: AppTypography.lineHeightTight,
                                     ),

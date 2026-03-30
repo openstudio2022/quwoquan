@@ -28,7 +28,6 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -222,14 +221,13 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
   return UserDataNotifier();
 });
 
-/// 当前用户 ID — Mock/Remote 过渡期均使用 ChatMockData.currentUserProfileId；
-/// auth 就绪后可改为 ref.watch(authRepositoryProvider).currentUserId。
+/// 当前用户 ID — 以 User 快照为准；未登录为空串（勿再回退 mock）。
 final currentUserIdProvider = Provider<String>((ref) {
   final profileUserId = ref.watch(userDataProvider)?.id;
   if (profileUserId != null && profileUserId.isNotEmpty) {
     return profileUserId;
   }
-  return ChatMockData.currentUserProfileId;
+  return '';
 });
 
 /// 响应式Provider

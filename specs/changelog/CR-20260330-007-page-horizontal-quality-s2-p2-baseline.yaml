@@ -1,0 +1,20 @@
+id: CR-20260330-007-page-horizontal-quality-s2-p2-baseline
+title: 页面横向质量 S2（P2 元数据契约）登记基线冻结
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结 S2 会话产出：全矩阵 64 行 P2 列与 metadata_driven_ui_gap_inventory.yaml 的 status
+  （compliant/partial/exempt → ✓/○/—）逐格一致；逐页对照表与基线锁定声明见
+  s2-metadata-driven-contract-baseline-20260330.md；tasks.md S2 勾选完成。
+  不修改 contracts/metadata；不承诺将 partial 全量改为 compliant（后续域级 /dev + S9）。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+  - specs/gates/metadata_driven_ui_gap_inventory.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md

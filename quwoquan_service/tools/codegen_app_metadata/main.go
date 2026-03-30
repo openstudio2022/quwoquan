@@ -401,6 +401,10 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
 	}
+	linkTemplates, err := readLinkTemplates(filepath.Join(metadataDir, "_shared", "link_templates.yaml"))
+	if err != nil && !os.IsNotExist(err) {
+		exitErr(fmt.Errorf("read link_templates.yaml: %w", err))
+	}
 	uiSurfaces, err := readUISurfaces(filepath.Join(metadataDir, "_shared", "ui_surfaces.yaml"))
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
@@ -667,6 +671,18 @@ func main() {
 		writeFile(
 			filepath.Join(appDir, "lib", "app", "navigation", "generated", "app_route_paths.g.dart"),
 			renderAppRoutePathsDart(appRoutes.Routes),
+		)
+	}
+	if linkTemplates != nil {
+		if appRoutes == nil {
+			exitErr(fmt.Errorf("link_templates.yaml requires app_routes.yaml"))
+		}
+		if err := validateLinkTemplates(appRoutes, linkTemplates); err != nil {
+			exitErr(err)
+		}
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "link_templates.g.dart"),
+			renderLinkTemplatesDart(linkTemplates),
 		)
 	}
 	if uiSurfaces != nil {
@@ -1578,17 +1594,47 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	}
 
 	b.WriteString("}\n\n")
-	b.WriteString("DateTime? _parseDateTime(dynamic v) {\n")
-	b.WriteString("  if (v == null) return null;\n")
-	b.WriteString("  if (v is DateTime) return v;\n")
-	b.WriteString("  if (v is String) return DateTime.tryParse(v);\n")
-	b.WriteString("  return null;\n")
-	b.WriteString("}\n\n")
-	b.WriteString("List<String>? _parseStringList(dynamic v) {\n")
-	b.WriteString("  if (v == null) return null;\n")
-	b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
-	b.WriteString("  return null;\n")
-	b.WriteString("}\n")
+	needsStringKeyMap := false
+	needsDateTime := false
+	needsStringList := false
+	for _, f := range proj.Fields {
+		dt := normalizeDartType(f.DartType)
+		switch dt {
+		case "Map<String, dynamic>":
+			needsStringKeyMap = true
+		case "DateTime":
+			needsDateTime = true
+		case "List<String>":
+			needsStringList = true
+		}
+	}
+	if needsDateTime {
+		b.WriteString("DateTime? _parseDateTime(dynamic v) {\n")
+		b.WriteString("  if (v == null) return null;\n")
+		b.WriteString("  if (v is DateTime) return v;\n")
+		b.WriteString("  if (v is String) return DateTime.tryParse(v);\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n\n")
+	}
+	if needsStringList {
+		b.WriteString("List<String>? _parseStringList(dynamic v) {\n")
+		b.WriteString("  if (v == null) return null;\n")
+		b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n")
+	}
+	if needsStringKeyMap {
+		b.WriteString("\nMap<String, dynamic>? _parseStringKeyMap(dynamic v) {\n")
+		b.WriteString("  if (v == null) return null;\n")
+		b.WriteString("  if (v is Map<String, dynamic>) return v;\n")
+		b.WriteString("  if (v is Map) {\n")
+		b.WriteString("    return Map<String, dynamic>.from(\n")
+		b.WriteString("      v.map((k, val) => MapEntry(k.toString(), val)),\n")
+		b.WriteString("    );\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n")
+	}
 	return b.String()
 }
 
@@ -1931,6 +1977,16 @@ func buildAliasResolver(f projectionFieldDef) string {
 		parts := make([]string, len(deduped))
 		for i, k := range deduped {
 			parts[i] = fmt.Sprintf("_parseStringList(m['%s'])", k)
+		}
+		return strings.Join(parts, " ?? ") + fmt.Sprintf(" ?? %s", defaultVal)
+
+	case "Map<String, dynamic>":
+		if len(deduped) == 0 {
+			return defaultVal
+		}
+		parts := make([]string, len(deduped))
+		for i, k := range deduped {
+			parts[i] = fmt.Sprintf("_parseStringKeyMap(m['%s'])", k)
 		}
 		return strings.Join(parts, " ?? ") + fmt.Sprintf(" ?? %s", defaultVal)
 

@@ -5,6 +5,8 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 /// 根据设计规则文档 (03_DESIGN_RULES.md) 定义
 class AppSpacing {
   // ==================== 扩展语义尺寸（用于历史页面去字面量） ====================
+  /// 占位/未测量维度（如媒体元数据占位）
+  static const double zero = 0.0;
   static const double one = 1.0;
   static const double hairline = 0.5;
   static const double two = 2.0;
@@ -87,6 +89,9 @@ class AppSpacing {
   static const double minInteractiveSize = 44.0;
 
   // ==================== 文本行高语义 ====================
+  /// 单行紧凑标题/标签（line height 倍数 1.0）
+  static const double textLineHeightSingle = 1.0;
+
   /// 紧凑文案行高，适用于 badge / 紧凑标签
   static const double textLineHeightCompact = 1.2;
 

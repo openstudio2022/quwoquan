@@ -171,7 +171,7 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                             child: Text(
                               effectiveLabels[i],
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: AppTypography.iosFootnote,
                                 fontWeight: FontWeight.normal,
                                 color: selected
                                     ? fgColor
@@ -233,10 +233,10 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                             child: Text(
                               effectiveLabels[sectionIndex],
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: AppTypography.iosCaption2,
                                 fontWeight: FontWeight.w600,
                                 color: fgSecondary,
-                                height: 1.0,
+                                height: AppSpacing.textLineHeightSingle,
                               ),
                             ),
                           ),

@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 class AppCachedNetworkImage extends StatelessWidget {
   final String imageUrl;
@@ -47,7 +48,7 @@ class AppCachedNetworkImage extends StatelessWidget {
         child: Icon(
           Icons.image_not_supported_outlined,
           color: Colors.grey,
-          size: 20,
+          size: AppSpacing.twenty,
         ),
       ),
     );

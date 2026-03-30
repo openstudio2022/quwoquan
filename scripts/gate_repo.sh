@@ -58,14 +58,16 @@ run_app() {
     python3 scripts/verify_page_horizontal_quality_matrix.py || exit 1
     python3 scripts/verify_page_matrix_scan_complete.py || exit 1
     python3 scripts/verify_metadata_driven_ui_gate.py || exit 1
+    python3 scripts/verify_ui_mock_isolation.py || exit 1
+    python3 scripts/verify_lib_no_test_only_symbols.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_metadata_driven_ui_gate"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_metadata_driven_ui_gate, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
   local flutter_l1_output=""
   if ! flutter_l1_output="$(
-    cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ 2>&1
+    cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ test/smoke/ 2>&1
   )"; then
     echo "$flutter_l1_output"
     if [[ "$flutter_l1_output" == *"Connection closed before full header was received"* ]]; then

@@ -3,17 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 const _testConvId = 'conv_002';
 
+_chatTestOverrides(ChatRepository repo) => [
+      chatRepositoryProvider.overrideWithValue(repo),
+      currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
+    ];
+
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+    overrides: _chatTestOverrides(repo),
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/$_testConvId/manage',
@@ -186,7 +193,7 @@ void main() {
 
 class _ErrorSettingsRepo extends MockChatRepository {
   @override
-  Future<Map<String, dynamic>> getGroupSettings(
+  Future<ChatGroupSettingsDto> getGroupSettings(
     String conversationId,
   ) async {
     throw Exception('settings error');

@@ -3,57 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 
-class _FakeDataService implements DataService {
-  _FakeDataService(this.item);
+class _ArticleGetPostRepo extends MockContentRepository {
+  _ArticleGetPostRepo(this._item);
 
-  final Map<String, dynamic> item;
-
-  @override
-  Future<Map<String, dynamic>> createDataItem({
-    required String endpoint,
-    required Map<String, dynamic> data,
-  }) async {
-    return data;
-  }
+  final Map<String, dynamic> _item;
 
   @override
-  Future<void> deleteDataItem({
-    required String endpoint,
-    required String id,
-  }) async {}
-
-  @override
-  Future<Map<String, dynamic>> getDataItem({
-    required String endpoint,
-    required String id,
-    Map<String, dynamic>? params,
-  }) async {
-    return item;
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> getDataList({
-    required String endpoint,
-    Map<String, dynamic>? params,
-    int? limit,
-    int? offset,
-  }) async {
-    return <Map<String, dynamic>>[item];
-  }
-
-  @override
-  Future<Map<String, dynamic>> updateDataItem({
-    required String endpoint,
-    required String id,
-    required Map<String, dynamic> data,
-  }) async {
-    return <String, dynamic>{...item, ...data};
-  }
+  Future<Map<String, dynamic>> getPost({required String postId}) async =>
+      _item;
 }
 
 void main() {
@@ -87,7 +49,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          dataServiceProvider.overrideWithValue(_FakeDataService(article)),
+          contentRepositoryProvider.overrideWithValue(
+            _ArticleGetPostRepo(article),
+          ),
           behaviorRepositoryProvider.overrideWithValue(
             MockBehaviorRepository(),
           ),

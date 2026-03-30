@@ -1,3 +1,7 @@
+// 手写维护：非机器 codegen。字段与契约对齐见：
+// quwoquan_service/contracts/metadata/entity/homepage/fields.yaml
+// 路由与 operation 常量：entity_api_metadata.g.dart、entity_request_page_ids.g.dart
+
 class HomepageCanonicalReference {
   const HomepageCanonicalReference({
     required this.id,

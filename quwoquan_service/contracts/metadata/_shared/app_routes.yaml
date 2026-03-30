@@ -1,6 +1,9 @@
 version: 1
 
 routes:
+  # 欢迎流：与 GoRouter + AppPageAccessNavigatorObserver 同源打 pageAccess（见 unified-app-page-access L3）
+  - id: welcome
+    path: /welcome
   - id: home
     path: /
   - id: circles

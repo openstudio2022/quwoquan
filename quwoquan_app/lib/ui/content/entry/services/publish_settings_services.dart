@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -151,99 +152,26 @@ class CreateCircleService {
     try {
       final result = await circleRepository.listCircles(limit: 20);
       if (result.isNotEmpty) {
-        return result
-            .map(
-              (item) => CreateCircleOption(
-                id: (item['id'] ?? '').toString(),
-                name: (item['name'] ?? item['title'] ?? '').toString(),
-                memberCount: _readCircleCount(
-                  item['memberCount'] ?? item['member_count'],
-                ),
-                postCount: _readCircleCount(
-                  item['postCount'] ?? item['post_count'],
-                ),
-                coverUrl: _readCircleCover(
-                  item['coverUrl'] ?? item['cover'] ?? item['avatar'],
-                ),
-              ),
-            )
-            .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
-            .toList();
+        final out = <CreateCircleOption>[];
+        for (final item in result) {
+          try {
+            final dto = CircleDto.fromMap(item);
+            if (dto.id.isEmpty || dto.name.isEmpty) continue;
+            out.add(CreateCircleOption.fromCircleDto(dto));
+          } catch (_) {
+            continue;
+          }
+        }
+        if (out.isNotEmpty) return out;
       }
     } catch (_) {
       // ignore and fallback
     }
-    return _mockCircles;
+    return const <CreateCircleOption>[];
   }
 }
 
-int? _readCircleCount(dynamic raw) {
-  if (raw is int) {
-    return raw;
-  }
-  if (raw is num) {
-    return raw.toInt();
-  }
-  return int.tryParse((raw ?? '').toString());
-}
-
-String? _readCircleCover(dynamic raw) {
-  final value = (raw ?? '').toString().trim();
-  return value.isEmpty ? null : value;
-}
-
-const List<CreateCircleOption> _mockCircles = <CreateCircleOption>[
-  CreateCircleOption(
-    id: 'circle-photo',
-    name: '摄影圈',
-    memberCount: 123,
-    postCount: 48,
-    coverUrl:
-        'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
-  ),
-  CreateCircleOption(
-    id: 'circle-travel',
-    name: '旅行圈',
-    memberCount: 56,
-    postCount: 31,
-    coverUrl:
-        'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
-  ),
-  CreateCircleOption(
-    id: 'circle-food',
-    name: '美食圈',
-    memberCount: 89,
-    postCount: 27,
-    coverUrl:
-        'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
-  ),
-  CreateCircleOption(
-    id: 'circle-citywalk',
-    name: 'CityWalk圈',
-    memberCount: 234,
-    postCount: 63,
-    coverUrl:
-        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400',
-  ),
-  CreateCircleOption(
-    id: 'circle-video',
-    name: '短视频创作圈',
-    memberCount: 156,
-    postCount: 72,
-    coverUrl:
-        'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=400',
-  ),
-  CreateCircleOption(
-    id: 'circle-article',
-    name: '图文写作圈',
-    memberCount: 78,
-    postCount: 45,
-    coverUrl:
-        'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=400',
-  ),
-];
-
-/// Mock 推荐圈子，用于选择页「推荐加入」区（design §3.7）
+/// 仅 `AppDataSourceMode.mock` 下由发布确认页展示；Remote/Release 默认不传（见 [CreatePage]）。
 const List<CreateCircleOption> mockRecommendedCircles = <CreateCircleOption>[
   CreateCircleOption(
     id: 'rec-city',

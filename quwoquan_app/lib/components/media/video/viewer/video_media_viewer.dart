@@ -160,7 +160,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                       children: List.generate(widget.mediaItems.length, (index) {
                         return Container(
                           width: (MediaQuery.of(context).size.width - AppSpacing.avatarSize * 2 - AppSpacing.md * 2) / widget.mediaItems.length,
-                          height: 2.h,
+                          height: AppSpacing.two.h,
                           margin: EdgeInsets.only(right: index < widget.mediaItems.length - 1 ? 2.w : 0),
                           decoration: BoxDecoration(
                             color: index == _currentIndex 
@@ -220,7 +220,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: AppColors.primaryColor,
-                            width: 2,
+                            width: AppSpacing.two,
                           ),
                         ),
                         child: CircleAvatar(
@@ -255,7 +255,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(height: 2.h),
+                          SizedBox(height: AppSpacing.two.h),
                           Text(
                             '@${currentPost['username']}',
                             style: TextStyle(
@@ -377,7 +377,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
             size: AppSpacing.iconLarge.sp,
           ),
           if (count > 0) ...[
-            SizedBox(height: 2.h),
+            SizedBox(height: AppSpacing.two.h),
             Text(
               count > 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : count.toString(),
               style: TextStyle(
@@ -404,7 +404,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
         children: [
           iconWidget,
           if (count > 0) ...[
-            SizedBox(height: 2.h),
+            SizedBox(height: AppSpacing.two.h),
             Text(
               count > 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : count.toString(),
               style: TextStyle(

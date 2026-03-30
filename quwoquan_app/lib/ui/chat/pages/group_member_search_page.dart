@@ -1,3 +1,4 @@
+// settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml、specs/ux/page-layout-semantics.md §4.3。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
@@ -33,15 +35,15 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     super.dispose();
   }
 
-  void _openProfile(Map<String, dynamic> m) {
-    final username = m['userId'] as String? ?? '';
+  void _openProfile(ChatConversationMemberDto m) {
+    final username = m.userId;
     if (username.isEmpty) return;
     context.push(
       AppRoutePaths.userProfile(username: username),
       extra: UserProfileRouteExtra(
         profileSubjectId: username,
-        avatar: (m['avatarUrl'] as String?) ?? (m['avatar'] as String?),
-        displayName: (m['displayName'] as String?) ?? (m['name'] as String?),
+        avatar: m.avatarUrl,
+        displayName: m.displayName,
       ),
     );
   }
@@ -55,9 +57,8 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
       conversationMembersProvider(widget.conversationId),
     );
     final members = membersState.members;
-    final memberMaps = members.map((e) => e.toMap()).toList();
-    final filteredMaps = filterMemberMapsByQuery(memberMaps, _searchQuery);
-    final sections = buildGroupedMemberSections(filteredMaps);
+    final filteredMembers = filterMemberDtosByQuery(members, _searchQuery);
+    final sections = buildGroupedMemberDtoSections(filteredMembers);
 
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
@@ -67,7 +68,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     Widget listContent;
     if (membersState.isLoading) {
       listContent = const Center(child: CupertinoActivityIndicator());
-    } else if (filteredMaps.isEmpty) {
+    } else if (filteredMembers.isEmpty) {
       listContent = Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xl),
@@ -108,7 +109,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
                       MemberListNavigateTile(
                         isDark: isDark,
                         member: m,
-                        subtitleText: (m['nickname'] as String?)?.trim(),
+                        subtitleText: null,
                         onTap: () => _openProfile(m),
                       ),
                   ],

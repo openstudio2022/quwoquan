@@ -1,21 +1,130 @@
-version: 1
+# plan：dual-theme-page-coverage（S6）— /dev 切片（v3：L1→L2→L3，减少散弹式改 page）
+# 仅双色（S6）；S7/S8 在其它会话；勿与本表混 PR。
+
+version: 3
 feature_path: runtime/runtime-client-foundation/dual-theme-page-coverage
-summary: S6 全页面深色/浅色模式覆盖 — 矩阵 → 分批修复 → 验收
+summary: |
+  先单入口颜色 API（L1），再高扇出组件（L2），最后品牌/RTC/WebView 模块（L3）；
+  *_page.dart 仅薄装配或 residual；禁止「按页扫街」为主路径。详见 design.md「减少散弹式修改」。
+
+ordering_notes: |
+  依赖 app-theme-infrastructure。执行顺序：**l1 → l2-discovery → l2-chat → l2-create → l3-welcome → l3-rtc → l3-webview → matrix-sync**。
+  横向矩阵 P6 与 page-dual-theme-matrix 须同行一致。
 
 phases:
   - id: P0
-    name: baseline
+    name: baseline-frozen
     steps:
-      - 冻结 spec.md / acceptance.yaml / design.md
-      - 生成首版 page-dual-theme-matrix（全量枚举）
+      - spec / acceptance / design / plan / CR-012 冻结
+      - page-dual-theme-matrix v1 全量枚举
+
   - id: P1
-    name: remediate-by-domain
+    name: remediate-layered
     steps:
-      - 按领域（discovery/content/chat/user/…）关闭「不支持」项
-      - 每批 PR 更新矩阵状态
+      - 按 slices L1→L2→L3 合入；每 PR 更新双矩阵
+
   - id: P2
     name: gate-optional
     steps:
-      - 评估 verify 脚本或 Golden 扩展
+      - Golden 或 verify 脚本扩展
 
-ordering_notes: 依赖 app-theme-infrastructure 全局主题可用；可与 ios-native-page-enforcement 并行推进
+slices:
+  - id: s6-slice-l1-shared-color-api
+    title: S6-L1 扩展 AppColorsFunctional/ColorType（可选 ThemeExtension）— 列表/蒙层/会话表面等单入口
+    order: 10
+    strategy: |
+      新增或复用 ColorType，使 L2 组件 **禁止** 直接写 AppColors.white/black 作主面。
+      可选：ThemeExtension 减少 StatelessWidget 对 isDarkProvider 的依赖。
+    scope_primary:
+      - lib/core/design_system/colors/app_colors.dart
+      - lib/core/design_system/theme/app_theme.dart
+    scope_secondary_note: 仅当 L1 API 被引用时，才在 consumer 中替换调用点（优先 L2 文件）。
+    out_of_scope_parallel: P7 断点、P8 非色类重命名
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - verify_dart_semantic（gate）
+
+  - id: s6-slice-l2-discovery-feed
+    title: S6-L2 discovery 高扇出子树 — 卡片/Feed/宫格先于 discovery_page
+    order: 20
+    strategy: |
+      对 discovery_page 子树做「查找引用」：先改 components 与 ui/discovery/widgets；
+      discovery_page.dart 仅装配层补丁。
+    scope_dual_theme_hint:
+      - lib/ui/discovery/pages/discovery_page.dart
+      - lib/components/content/
+      - lib/ui/discovery/widgets/
+    out_of_scope_parallel: P7 网格列数
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 深浅色抽检发现 Tab
+
+  - id: s6-slice-l2-chat-tab
+    title: S6-L2 消息 Tab — 列表/胶囊/空态组件先于 chat_page
+    order: 30
+    strategy: 优先 lib/ui/chat/widgets、lib/components 下聊天相关；chat_page.dart 薄层。
+    scope_dual_theme_hint:
+      - lib/ui/chat/pages/chat_page.dart
+      - lib/ui/chat/widgets/
+    out_of_scope_parallel: P7 列表布局重构
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 深浅色抽检消息 Tab
+
+  - id: s6-slice-l2-create-flow
+    title: S6-L2 创作流 — 共用 overlay/步骤 UI 先于 create_page
+    order: 40
+    strategy: 若有内联 Stack/蒙层，抽到可复用 widget 再上色；create_page 保持组合。
+    scope_dual_theme_hint:
+      - lib/ui/content/entry/pages/create_page.dart
+      - lib/ui/content/entry/widgets/
+      - lib/components/
+    out_of_scope_parallel: P7 宽屏分栏
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 深浅色抽检创作模态
+
+  - id: s6-slice-l3-welcome-brand
+    title: S6-L3 Welcome — WelcomeAppearance/ThemeExtension 单模块 + 薄 welcome_screen
+    order: 50
+    strategy: 品牌渐变与花瓣色在 **单模块** 分叉；页面只组合。
+    scope_dual_theme:
+      - lib/ui/welcome/pages/welcome_screen.dart
+    scope_primary_note: 新增 welcome 外观模块可置于 core/design_system 或 ui/welcome/
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 深浅色抽检首启
+
+  - id: s6-slice-l3-rtc-call-chrome
+    title: S6-L3 RTC — 共享 Call 舞台/渐变 token，四路由页复用
+    order: 55
+    strategy: 禁止四文件各维护一套渐变；统一模块或 L1 ColorType.call*。
+    scope_dual_theme:
+      - lib/ui/rtc/pages/incoming_call_page.dart
+      - lib/ui/rtc/pages/outgoing_call_page.dart
+      - lib/ui/rtc/pages/voice_call_page.dart
+      - lib/ui/rtc/pages/video_call_page.dart
+    out_of_scope_parallel: P7 PiP
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 产品确认浅色行为后抽检
+
+  - id: s6-slice-l3-assistant-webview-chrome
+    title: S6-L3 Assistant WebView — 壳层包装组件统一导航栏/背景
+    order: 58
+    scope_dual_theme:
+      - lib/ui/assistant/pages/assistant_reference_webview_page.dart
+    strategy: 可选 AssistantReferenceWebChrome；WebView 文档内容不控。
+    tests:
+      - flutter analyze quwoquan_app/lib
+      - 深浅色抽检壳层
+
+  - id: s6-slice-matrix-sync
+    title: S6-MS 双矩阵一致性巡检
+    order: 60
+    steps:
+      - 核对 page-dual-theme-matrix 与 page-horizontal-quality-matrix P6
+      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 scripts/verify_page_matrix_scan_complete.py
+    tests:
+      - 上列脚本

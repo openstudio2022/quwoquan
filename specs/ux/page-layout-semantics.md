@@ -99,12 +99,13 @@
 
 ### 4.3 设置类 Inset 同源（强制）
 
-**唯一允许的两种全屏壳**（实现：`lib/components/settings_form/settings_inset_form_page.dart`）：
+**登记制全屏壳**（实现与清单：`scripts/settings_canonical_manifest.yaml` + `verify_settings_canonical.py`；Inset 表单实现见 `lib/components/settings_form/settings_inset_form_page.dart`）：
 
-| 类型 | 壳组件 | 顶栏与底色 | 内容区 |
-|------|--------|------------|--------|
-| **A 类** | `SettingsInsetFormPageScaffold` | 与 `insetFormPageBackground` / `insetFormNavigationBarBackground` 一致；返回为 `AppNavigationBarIconButton` + `CupertinoIcons.back` | 灰底上 `SettingsInsetGroupedSection` + `SettingsInsetFormRow` / 行内分割线 `SettingsInsetFormSectionDivider` |
-| **B 类** | `SettingsInsetMemberPickerPageScaffold` | **与 A 同源顶栏**（禁止再组合 `pageBackground` + `selectionToolbarBackground` 作为第三套）；可选别名 token `memberPickerNavigationBarBackground` | 内嵌搜索 + 列表（如群成员选择） |
+| 类型 | `shell` | 壳组件 / 形态 | 顶栏与底色 | 内容区 |
+|------|---------|----------------|------------|--------|
+| **A 类** | `inset_form` | `SettingsInsetFormPageScaffold` | 与 `insetFormPageBackground` / `insetFormNavigationBarBackground` 一致；返回为 `AppNavigationBarIconButton` + `CupertinoIcons.back` | 灰底上 `SettingsInsetGroupedSection` + `SettingsInsetFormRow` / 行内分割线 `SettingsInsetFormSectionDivider` |
+| **B 类** | `inset_member_picker` | `SettingsInsetMemberPickerPageScaffold` | **与 A 同源顶栏**（禁止再组合 `pageBackground` + `selectionToolbarBackground` 作为第三套）；可选别名 token `memberPickerNavigationBarBackground` | 内嵌搜索 + 列表（如群成员选择） |
+| **C 类** | `search_embedded` | `EmbeddedMemberSearchPageShell`（`lib/components/search/embedded/embedded_member_search_page_shell.dart`） | 搜索语义 `SearchSemanticConstants.embeddedMemberSearch*`（灰带搜索条 + 取消） | 列表区与 **§4.3 A/B 不同形**，但必须走 **已登记搜索语义**；典型页：`GroupMemberSearchPage` |
 
 **禁止**：
 

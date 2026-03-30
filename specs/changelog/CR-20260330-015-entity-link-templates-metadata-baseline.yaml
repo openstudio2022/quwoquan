@@ -1,0 +1,33 @@
+id: CR-20260330-015-entity-link-templates-metadata-baseline
+title: 实体链接模板 metadata 基线（scheme/web 与 app_routes 显式绑定）
+status: implemented
+feature_path: runtime/runtime-client-foundation/entity-link-templates-metadata
+summary: |
+  冻结 L3：以 contracts/metadata/_shared/link_templates.yaml 为链接结构唯一真相源；
+  覆盖 post、circle、user、chat、entity_homepage；HTTPS origin 仅 Remote Config / dart-define，
+  与 path_template 组合；navigation.route_id 对齐 app_routes.yaml。
+  baseline 交付文档与元数据文件；codegen 与调用点替换按 entity-link-templates-metadata/plan.yaml 在 /dev 执行。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/tasks.md
+  - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+  - quwoquan_service/tools/codegen_app_metadata/link_templates_codegen.go
+  - quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart
+  - scripts/verify_link_templates_route_ids.py
+  - specs/feature-tree/tree_index.yaml
+related_cr:
+  - CR-20260329-004-metadata-driven-client-data-contract
+dev_log:
+  - date: "2026-03-29"
+    change: /dev 闭环 codegen（link_templates.g.dart）、origin 薄层、分享深链改 AppLinkTemplates、verify_link_templates_route_ids.py 挂 contract metadata 校验。
+    verify:
+      - python3 scripts/verify_link_templates_route_ids.py
+      - make -C quwoquan_service codegen-app
+      - flutter test quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
+  - date: "2026-03-30"
+    change: baseline 冻结；新增 link_templates.yaml 与 L3 文档包。
+    verify:
+      - make -C quwoquan_service verify-metadata

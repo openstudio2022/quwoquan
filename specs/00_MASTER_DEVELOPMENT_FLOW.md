@@ -209,7 +209,8 @@ make -C quwoquan_service test-contract
 若涉及 Flutter 变更，追加：
 
 ```bash
-cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
+cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ test/smoke/
+make verify-app-mock-isolation
 ```
 
 禁止：
@@ -232,10 +233,12 @@ cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 - 提交前必须执行端侧 `T1/T2` 与仓库 `make gate`
 
 ```bash
-cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
+cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ test/smoke/
+make verify-app-mock-isolation
 make gate
 ```
 
+- 若改动 **正式构建**（`app_pipeline`、上架脚本、`main_prod`、`APP_DATA_SOURCE`）：须审阅 **与 [`specs/gates/mock_data_cloud_integration_policy.md`](gates/mock_data_cloud_integration_policy.md) §5.1 R5 一致**（`--dart-define=APP_DATA_SOURCE=remote` 或等价约定）。
 - 门禁、验收、证据、CR 更新状态全部闭环后才可提交
 
 ### 3.8 `/deploy`（G5）

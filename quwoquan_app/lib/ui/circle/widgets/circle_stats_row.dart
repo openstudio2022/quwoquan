@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 
 class CircleStatsRow extends StatelessWidget {
   const CircleStatsRow({
@@ -11,21 +12,11 @@ class CircleStatsRow extends StatelessWidget {
   });
 
   final bool isDark;
-  final Map<String, dynamic> stats;
+  final CircleStatsViewData stats;
   final void Function(String type)? onStatTap;
 
-  String _formatCount(dynamic count) {
-    if (count == null) return '0';
-    if (count is String) {
-      final raw = count.trim();
-      final parsed = int.tryParse(raw);
-      if (parsed == null) {
-        return raw.isEmpty ? '0' : raw;
-      }
-      return formatCompactActionCount(parsed);
-    }
-    final n = count is int ? count : int.tryParse(count.toString()) ?? 0;
-    return formatCompactActionCount(n);
+  String _formatCount(int count) {
+    return formatCompactActionCount(count);
   }
 
   @override
@@ -35,22 +26,22 @@ class CircleStatsRow extends StatelessWidget {
 
     final items = [
       _StatItem(
-        value: _formatCount(stats['members'] ?? stats['totalMembers']),
+        value: _formatCount(stats.members),
         label: UITextConstants.circleMembers,
         type: 'members',
       ),
       _StatItem(
-        value: _formatCount(stats['posts'] ?? stats['totalPosts']),
+        value: _formatCount(stats.posts),
         label: UITextConstants.circlePosts,
         type: 'posts',
       ),
       _StatItem(
-        value: _formatCount(stats['weeklyActive'] ?? stats['active']),
+        value: _formatCount(stats.weeklyActive),
         label: UITextConstants.circleWeeklyActive,
         type: 'weeklyActive',
       ),
       _StatItem(
-        value: _formatCount(stats['likes'] ?? stats['totalLikes']),
+        value: _formatCount(stats.likes),
         label: UITextConstants.circleLikes,
         type: 'likes',
       ),

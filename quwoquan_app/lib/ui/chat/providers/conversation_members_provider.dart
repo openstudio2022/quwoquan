@@ -1,18 +1,25 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 会话成员及设置的共享状态
 class ConversationMembersState {
   final List<ChatConversationMemberDto> members;
-  final Map<String, dynamic> settings;
+  final ChatGroupSettingsDto groupSettings;
   final bool isLoading;
   final String? error;
 
   const ConversationMembersState({
     this.members = const [],
-    this.settings = const {},
+    this.groupSettings = const ChatGroupSettingsDto(
+      qrCodeJoinEnabled: true,
+      joinRequiresApproval: false,
+      nameEditableByAdminOnly: false,
+      privacyShieldAdminOnly: false,
+      conversationType: 'group',
+    ),
     this.isLoading = false,
     this.error,
   });
@@ -34,13 +41,13 @@ class ConversationMembersState {
 
   ConversationMembersState copyWith({
     List<ChatConversationMemberDto>? members,
-    Map<String, dynamic>? settings,
+    ChatGroupSettingsDto? groupSettings,
     bool? isLoading,
     String? error,
   }) {
     return ConversationMembersState(
       members: members ?? this.members,
-      settings: settings ?? this.settings,
+      groupSettings: groupSettings ?? this.groupSettings,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -85,7 +92,7 @@ class ConversationMembersNotifier
           .toList(growable: false);
       state = state.copyWith(
         members: members,
-        settings: results[1] as Map<String, dynamic>,
+        groupSettings: results[1] as ChatGroupSettingsDto,
         isLoading: false,
       );
     } catch (e) {
@@ -119,12 +126,17 @@ class ConversationMembersNotifier
     }
   }
 
+  /// 更新群会话展示名（与会话资源对齐，不经群开关 PATCH）。
+  Future<void> updateGroupDisplayTitle(String newTitle) async {
+    await _repo.updateConversationTitle(_conversationId, newTitle);
+  }
+
   /// 乐观更新群组设置；失败时回滚
-  Future<void> updateSettings(Map<String, dynamic> settings) async {
+  Future<void> updateGroupSettings(ChatGroupSettingsDto next) async {
     final previous = state;
-    state = state.copyWith(settings: {...state.settings, ...settings});
+    state = state.copyWith(groupSettings: next);
     try {
-      await _repo.updateGroupSettings(_conversationId, settings);
+      await _repo.updateGroupSettings(_conversationId, next);
     } catch (e) {
       state = previous;
       rethrow;

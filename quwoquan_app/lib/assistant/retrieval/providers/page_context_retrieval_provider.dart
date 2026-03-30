@@ -1,13 +1,25 @@
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/privacy_policy.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_provider.dart';
 
 class PageContextRetrievalProvider implements AssistantRetrievalProvider {
-  const PageContextRetrievalProvider(this._repository);
+  const PageContextRetrievalProvider({
+    required ContentRepository contentRepository,
+    required ChatRepository chatRepository,
+    required CircleRepository circleRepository,
+  }) : _contentRepository = contentRepository,
+       _chatRepository = chatRepository,
+       _circleRepository = circleRepository;
 
-  final AppContentRepository _repository;
+  final ContentRepository _contentRepository;
+  final ChatRepository _chatRepository;
+  final CircleRepository _circleRepository;
 
   @override
   String get providerId => 'page_context';
@@ -61,7 +73,7 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
         errorCode: 'privacy_page_blocked',
       );
     }
-    final items = _buildPageItems(
+    final items = await _buildPageItems(
       pageType: pageType,
       scope: scope,
       query: request.query,
@@ -85,23 +97,31 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
     );
   }
 
-  List<AssistantRetrievalItem> _buildPageItems({
+  Future<List<AssistantRetrievalItem>> _buildPageItems({
     required String pageType,
     required Map<String, dynamic> scope,
     required String query,
     required bool identityIndexEnabled,
-  }) {
+  }) async {
     final results = <AssistantRetrievalItem>[];
     switch (pageType) {
       case 'discovery':
-        final cards = <Map<String, dynamic>>[
-          ..._repository.discoveryMomentData.take(2),
-          ..._repository.discoveryArticleData.take(1),
-          ..._repository.discoveryVideoData.take(1),
-        ];
-        for (final item in cards) {
-          final routed = _buildDiscoveryItem(
-            item,
+        final moment = await _contentRepository.listDiscoveryFeed(
+          category: 'moment',
+          limit: 2,
+        );
+        final article = await _contentRepository.listDiscoveryFeed(
+          category: 'article',
+          limit: 1,
+        );
+        final video = await _contentRepository.listDiscoveryFeed(
+          category: 'video',
+          limit: 1,
+        );
+        final cards = <PostBaseDto>[...moment, ...article, ...video];
+        for (final post in cards) {
+          final routed = _buildDiscoveryItemFromPost(
+            post,
             query,
             identityIndexEnabled: identityIndexEnabled,
           );
@@ -110,7 +130,8 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
         }
         break;
       case 'circles':
-        for (final circle in _repository.circlesMockCircles.take(3)) {
+        final circles = await _circleRepository.listCircles(limit: 3);
+        for (final circle in circles) {
           final name = circle['name']?.toString() ?? '';
           final desc = circle['description']?.toString() ?? '';
           final text = _firstNonEmpty('$name $desc', name);
@@ -164,17 +185,18 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
       case 'chat':
       default:
         final conversationId = scope['sessionId']?.toString() ?? 'assistant';
-        final chatMessages = _repository
-            .chatMessagesFor(conversationId)
-            .take(4);
+        final chatMessages = await _chatRepository.listMessages(
+          conversationId: conversationId,
+          limit: 4,
+        );
         for (final message in chatMessages) {
-          final text = (message['content'] as String?)?.trim() ?? '';
+          final text = (message.content ?? '').trim();
           if (text.isEmpty) continue;
           results.add(
             AssistantRetrievalItem(
               content: text,
               sourceType: 'page.chat',
-              sourceId: message['id']?.toString() ?? 'chat_message',
+              sourceId: message.id.isNotEmpty ? message.id : 'chat_message',
               relevance: _relevance(text, query),
             ),
           );
@@ -218,25 +240,24 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
     return 0.6;
   }
 
-  AssistantRetrievalItem? _buildDiscoveryItem(
-    Map<String, dynamic> item,
+  AssistantRetrievalItem? _buildDiscoveryItemFromPost(
+    PostBaseDto post,
     String query, {
     required bool identityIndexEnabled,
   }) {
-    if (_assistantUsePolicyForItem(item) == 'exclude') {
+    if (_assistantUsePolicyForPost(post) == 'exclude') {
       return null;
     }
     final text = _firstNonEmpty(
-      item['content']?.toString(),
-      item['body']?.toString(),
-      item['title']?.toString(),
+      post.normalizedBody,
+      post.normalizedTitle,
     );
     if (text.isEmpty) return null;
-    final identity = _contentIdentityForItem(item);
+    final identity = _contentIdentityForPost(post);
     final route = !identityIndexEnabled
         ? 'legacy_context'
         : (identity == 'moment' ? 'context_memory' : 'knowledge_index');
-    final tier = _derivedContentTier(item);
+    final tier = _derivedContentTierFromPost(post);
     return AssistantRetrievalItem(
       content: text,
       sourceType: !identityIndexEnabled
@@ -244,32 +265,24 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
           : (identity == 'moment'
                 ? 'page.discovery.moment_context'
                 : 'page.discovery.work_knowledge'),
-      sourceId:
-          item['id']?.toString() ??
-          item['postId']?.toString() ??
-          'discovery_item',
+      sourceId: post.id.isNotEmpty ? post.id : 'discovery_item',
       relevance: _relevance(text, query),
       metadata: <String, dynamic>{
         if (identityIndexEnabled) 'contentIdentity': identity,
         'assistantRoute': route,
-        'assistantUsePolicy': _assistantUsePolicyForItem(item),
+        'assistantUsePolicy': _assistantUsePolicyForPost(post),
         'assistantEligible': true,
         if (identityIndexEnabled) 'contentTier': tier,
         'identityIndexEnabled': identityIndexEnabled,
-        if ((item['title']?.toString() ?? '').trim().isNotEmpty)
-          'title': item['title']?.toString() ?? '',
+        if (post.normalizedTitle.isNotEmpty) 'title': post.normalizedTitle,
       },
     );
   }
 
-  String _contentIdentityForItem(Map<String, dynamic> item) {
-    final explicit = (item['contentIdentity'] ?? item['identity'] ?? '')
-        .toString()
-        .trim();
-    if (explicit.isNotEmpty) return explicit;
-    final contentType = (item['contentType'] ?? item['type'] ?? '')
-        .toString()
-        .trim();
+  String _contentIdentityForPost(PostBaseDto post) {
+    final id = post.identity.trim().toLowerCase();
+    if (id.isNotEmpty) return id;
+    final contentType = post.type.trim().toLowerCase();
     switch (contentType) {
       case 'micro':
       case 'moment':
@@ -279,29 +292,21 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
     }
   }
 
-  String _assistantUsePolicyForItem(Map<String, dynamic> item) {
-    final policy = (item['assistantUsePolicy'] ?? 'inherit').toString().trim();
+  String _assistantUsePolicyForPost(PostBaseDto post) {
+    final policy = post.assistantUsePolicy.trim();
     return policy.isEmpty ? 'inherit' : policy;
   }
 
-  String _derivedContentTier(Map<String, dynamic> item) {
-    final tags =
-        (item['tags'] as List?)
-            ?.map((tag) => tag.toString().trim().toLowerCase())
-            .where((tag) => tag.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final title = (item['title'] ?? '').toString();
-    final summary = (item['summary'] ?? '').toString();
-    final joined = '$title $summary'.toLowerCase();
-    if (tags.contains('checklist') || joined.contains('清单')) {
+  String _derivedContentTierFromPost(PostBaseDto post) {
+    final title = post.normalizedTitle.toLowerCase();
+    final body = post.normalizedBody.toLowerCase();
+    final summary = post is ArticlePostDto ? post.summary.toLowerCase() : '';
+    final joined = '$title $body $summary';
+    if (joined.contains('清单')) {
       return 'checklist';
     }
-    if (tags.contains('guide') || joined.contains('攻略')) {
+    if (joined.contains('攻略')) {
       return 'guide';
-    }
-    if (tags.contains('featured')) {
-      return 'featured';
     }
     return 'normal';
   }

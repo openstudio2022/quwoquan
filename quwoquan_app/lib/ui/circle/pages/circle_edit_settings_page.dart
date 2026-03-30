@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
@@ -70,6 +72,7 @@ class _CircleEditSettingsPageState
   late bool _autoSyncChat;
   late List<CircleSectionConfigDto> _sections;
   bool _isSaving = false;
+  Map<String, Map<String, dynamic>> _categoryLabelsFromRepo = {};
 
   bool get _isCreateMode => widget.isCreateMode;
 
@@ -116,6 +119,18 @@ class _CircleEditSettingsPageState
               order: 3,
             ),
           ].toList(growable: true);
+    unawaited(_loadCategoryLabelsFromRepo());
+  }
+
+  Future<void> _loadCategoryLabelsFromRepo() async {
+    try {
+      final cfg =
+          await ref.read(circleRepositoryProvider).getCircleCategoryConfig();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _categoryLabelsFromRepo = cfg);
+    } catch (_) {}
   }
 
   @override
@@ -182,28 +197,24 @@ class _CircleEditSettingsPageState
     }
   }
 
-  Map<String, dynamic> _submitPayload(String name) {
-    return <String, dynamic>{
-      'name': name,
-      'description': _descriptionController.text.trim(),
-      'tags': _normalizedTags(),
-      'visibility': _visibility,
-      'joinPolicy': _joinPolicy,
-      'autoSyncChat': _autoSyncChat,
-      'coverUrl': _resolvedCoverSource,
-      'cover': _resolvedCoverSource,
-      'avatarUrl': _resolvedAvatarSource,
-      'avatar': _resolvedAvatarSource,
-      if (_categoryId != null && _categoryId!.isNotEmpty)
-        'categoryId': _categoryId,
-      if (_categoryId != null && _categoryId!.isNotEmpty)
-        'category': _categoryId,
-      'sectionConfig': _sections
-          .asMap()
-          .entries
-          .map((entry) => entry.value.copyWith(order: entry.key).toMap())
-          .toList(growable: false),
-    };
+  CircleEditSubmitPayload _submitPayload(String name) {
+    final orderedSections = _sections
+        .asMap()
+        .entries
+        .map((e) => e.value.copyWith(order: e.key))
+        .toList(growable: false);
+    return CircleEditSubmitPayload(
+      name: name,
+      description: _descriptionController.text.trim(),
+      tags: _normalizedTags(),
+      visibility: _visibility,
+      joinPolicy: _joinPolicy,
+      autoSyncChat: _autoSyncChat,
+      coverUrl: _resolvedCoverSource,
+      avatarUrl: _resolvedAvatarSource,
+      categoryId: _categoryId,
+      sectionConfig: orderedSections,
+    );
   }
 
   List<String> _normalizedTags() {
@@ -318,14 +329,15 @@ class _CircleEditSettingsPageState
 
     setState(() => _isSaving = true);
     final payload = _submitPayload(name);
+    final wire = payload.toWire();
     bool success = false;
     String? createdCircleId;
     if (_isCreateMode) {
       try {
         final repo = ref.read(circleRepositoryProvider);
-        final created = await repo.createCircle(payload);
+        final created = await repo.createCircle(wire);
         final merged = <String, dynamic>{
-          ...payload,
+          ...wire,
           ...created,
           'role': created['role'] ?? 'owner',
           'joinStatus': created['joinStatus'] ?? 'joined',
@@ -349,7 +361,7 @@ class _CircleEditSettingsPageState
       }
     } else {
       final notifier = ref.read(circleStateProvider(widget.circleId!));
-      success = await notifier.updateCircleDetails(payload);
+      success = await notifier.updateCircleDetails(wire);
     }
     if (!mounted) {
       return;
@@ -1110,12 +1122,12 @@ class _CircleEditSettingsPageState
     required Color fgSecondary,
     required Color border,
   }) {
+    final labels = _categoryLabelsFromRepo;
     final categories = _categoryIds
-        .where(CircleMockData.categoryConfig.containsKey)
         .map(
           (id) => MapEntry(
             id,
-            CircleMockData.categoryConfig[id]?['label']?.toString() ?? id,
+            labels[id]?['label']?.toString() ?? id,
           ),
         )
         .toList(growable: false);

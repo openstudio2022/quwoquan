@@ -778,6 +778,17 @@ class _ArticleEditorState extends State<ArticleEditor> {
                 contentPadding: metrics.contentPadding,
                 child: LayoutBuilder(
                   builder: (context, contentConstraints) {
+                    final isDark =
+                        CupertinoTheme.of(context).brightness ==
+                            Brightness.dark;
+                    final coverTitleOnPhoto = AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.mediaThumbnailOverlayForeground,
+                    );
+                    final coverScrimBlack = AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.black,
+                    );
                     const coverTitleLineHeight = 1.15;
                     final coverHeight =
                         index == 0 &&
@@ -788,11 +799,11 @@ class _ArticleEditorState extends State<ArticleEditor> {
                           )
                         : 0.0;
                     final coverTitleStyle = titleStyle.copyWith(
-                      color: AppColors.white,
+                      color: coverTitleOnPhoto,
                       height: coverTitleLineHeight,
                       shadows: <Shadow>[
                         Shadow(
-                          color: AppColors.black.withValues(alpha: 0.4),
+                          color: coverScrimBlack.withValues(alpha: 0.4),
                           blurRadius: 18,
                           offset: const Offset(0, 4),
                         ),
@@ -826,13 +837,13 @@ class _ArticleEditorState extends State<ArticleEditor> {
                                           begin: Alignment.topCenter,
                                           end: Alignment.bottomCenter,
                                           colors: <Color>[
-                                            AppColors.black.withValues(
+                                            coverScrimBlack.withValues(
                                               alpha: 0.04,
                                             ),
-                                            AppColors.black.withValues(
+                                            coverScrimBlack.withValues(
                                               alpha: 0.18,
                                             ),
-                                            AppColors.black.withValues(
+                                            coverScrimBlack.withValues(
                                               alpha: 0.74,
                                             ),
                                           ],
@@ -854,9 +865,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
                                       style: coverTitleStyle,
                                       placeholderStyle: coverTitleStyle
                                           .copyWith(
-                                            color: AppColors.white.withValues(
-                                              alpha: 0.72,
-                                            ),
+                                            color: coverTitleOnPhoto
+                                                .withValues(alpha: 0.72),
                                           ),
                                       maxLines: 3,
                                       onChanged: widget.onTitleChanged,

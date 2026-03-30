@@ -51,17 +51,23 @@ class VoiceMessageBubble extends ConsumerWidget {
     final isPlaying = isActive && playback.isPlaying;
     final progress = isActive ? playback.progress : 0.0;
 
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final incomingSurface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
     final bubbleColor = isOutgoing
         ? AppColors.chatBubbleOutgoing
-        : AppColors.chatBubbleIncoming;
+        : incomingSurface;
 
     final textColor = isOutgoing
-        ? AppColors.white
-        : AppColors.dark.foregroundPrimary;
+        ? AppColorsFunctional.getColor(isDark, ColorType.foregroundInverse)
+        : AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
 
     final waveColor = isOutgoing
         ? AppColors.white.withValues(alpha: 0.6)
-        : AppColors.dark.foregroundTertiary;
+        : AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary);
 
     final waveActiveColor = isOutgoing
         ? AppColors.white

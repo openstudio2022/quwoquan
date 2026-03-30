@@ -1,0 +1,111 @@
+version: 1
+feature: entity-link-templates-metadata
+level: L3_story
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.entity-link-templates-metadata
+  parent_path: capability.runtime.feature.runtime-client-foundation
+
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: |
+    baseline 冻结 spec/design/acceptance/plan/CR/tree + link_templates.yaml；
+    codegen 与调用点替换按 plan 在 /dev 闭环。
+
+  A1:
+    criteria: |
+      spec/design/plan/acceptance 已落地；商用基线（权威方、环境、路由映射、实体范围）
+      与 explore 结论一致。
+    status: implemented
+    linked_tasks:
+      - B1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md
+
+  A2:
+    criteria: |
+      contracts/metadata/_shared/link_templates.yaml 存在且包含 post、circle、user、chat、entity_homepage
+      五类实体；navigation.route_id 均可在 app_routes.yaml 中找到。
+    status: implemented
+    linked_tasks:
+      - B2
+    tests:
+      - command: rg "route_id:" quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+      - command: make -C quwoquan_service verify-metadata
+      - command: python3 scripts/verify_link_templates_route_ids.py
+
+  A3:
+    criteria: CR 已登记本 L3 产物路径与 metadata 路径。
+    status: implemented
+    linked_tasks:
+      - B3
+    tests:
+      - file: specs/changelog/CR-20260330-015-entity-link-templates-metadata-baseline.yaml
+
+  A4:
+    criteria: tree_index.yaml 已挂载 entity-link-templates-metadata 子节点。
+    status: implemented
+    linked_tasks:
+      - B3
+    tests:
+      - file: specs/feature-tree/tree_index.yaml
+
+  A7:
+    criteria: |
+      design 明确 HTTPS origin 仅来自 Remote Config / dart-define，metadata 仅 path_template；
+      禁止在 metadata 中硬编码生产域名。
+    status: implemented
+    linked_tasks:
+      - B1
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/design.md
+
+execution:
+  local_gate: |
+    make -C quwoquan_service verify-metadata && \
+    python3 -c "import yaml; yaml.safe_load(open('quwoquan_service/contracts/metadata/_shared/link_templates.yaml'))"
+  full_gate: make gate-full
+  note: |
+    codegen 产物 quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart；
+    scripts/verify_link_templates_route_ids.py 已挂 verify_contract_metadata.sh。
+
+journey_acceptance:
+  - id: A1
+    statement: 链接结构单源、与路由显式绑定
+    t_layers: [T1, T2]
+  - id: A2
+    statement: 五类实体同一元模型可扩展
+    t_layers: [T1]
+  - id: A3
+    statement: 运行时 origin 与模板组合规则冻结
+    t_layers: [T2, T3]
+
+scenario_acceptance:
+  - id: S1
+    statement: 评审可通过 link_templates 与 app_routes 对照表发现漂移
+    t_layers: [T2]
+  - id: S2
+    statement: codegen 后业务侧无手写 https:// 域名与重复 path 段
+    t_layers: [T3, T4]
+
+evidence_matrix:
+  T1:
+    - type: config
+      artifact: quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    - type: config
+      artifact: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+  T2:
+    - type: codegen
+      artifact: quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart
+    - type: script
+      artifact: scripts/verify_link_templates_route_ids.py
+  T3:
+    - type: test
+      artifact: quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
+  T4:
+    - type: deferred
+      note: Universal Link / 云重定向（可选）
+
+archived: true

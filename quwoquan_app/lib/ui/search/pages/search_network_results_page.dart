@@ -9,8 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
@@ -38,7 +37,7 @@ class _SearchNetworkResultsPageState
   late final FocusNode _focusNode;
   late String _query;
   late String _activeTabId;
-  late final List<_SearchNetworkTab> _tabs;
+  List<_SearchNetworkTab> _tabs = const [];
   Timer? _debounceTimer;
   int _requestToken = 0;
   bool _isLoading = false;
@@ -55,11 +54,12 @@ class _SearchNetworkResultsPageState
     _query = widget.launchContext.prefilledQuery.trim();
     _controller = TextEditingController(text: _query);
     _focusNode = FocusNode();
-    _tabs = _buildTabs();
+    _tabs = _buildBaseTabs();
     final initialTabId = widget.launchContext.initialNetworkTabId;
     _activeTabId = _tabs.any((tab) => tab.id == initialTabId)
         ? initialTabId!
         : _tabs.first.id;
+    unawaited(_appendCategoryTabsFromRepo());
     _scheduleRefresh(immediate: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -157,8 +157,8 @@ class _SearchNetworkResultsPageState
     );
   }
 
-  List<_SearchNetworkTab> _buildTabs() {
-    final tabs = <_SearchNetworkTab>[
+  List<_SearchNetworkTab> _buildBaseTabs() {
+    return <_SearchNetworkTab>[
       const _SearchNetworkTab(
         id: 'xiaoqu',
         label: '小趣搜',
@@ -180,17 +180,42 @@ class _SearchNetworkResultsPageState
         description: '搜索站内可挂载的位置结果',
       ),
     ];
-    for (final entry in CircleMockData.categoryConfig.entries) {
-      final value = entry.value;
-      tabs.add(
-        _SearchNetworkTab(
-          id: entry.key,
-          label: value['label']?.toString() ?? entry.key,
-          description: value['desc']?.toString() ?? '',
-        ),
-      );
-    }
-    return tabs;
+  }
+
+  Future<void> _appendCategoryTabsFromRepo() async {
+    try {
+      final cfg = await ref.read(circleRepositoryProvider).getCircleCategoryConfig();
+      if (!mounted) {
+        return;
+      }
+      final extra = <_SearchNetworkTab>[];
+      for (final entry in cfg.entries) {
+        final value = entry.value;
+        extra.add(
+          _SearchNetworkTab(
+            id: entry.key,
+            label: value['label']?.toString() ?? entry.key,
+            description: value['desc']?.toString() ?? '',
+          ),
+        );
+      }
+      final merged = [..._buildBaseTabs(), ...extra];
+      final prevActive = _activeTabId;
+      final want = widget.launchContext.initialNetworkTabId;
+      var nextActive = prevActive;
+      if (want != null && merged.any((t) => t.id == want)) {
+        nextActive = want;
+      } else if (!merged.any((t) => t.id == prevActive)) {
+        nextActive = merged.first.id;
+      }
+      setState(() {
+        _tabs = merged;
+        _activeTabId = nextActive;
+      });
+      if (nextActive != prevActive) {
+        _scheduleRefresh(immediate: true);
+      }
+    } catch (_) {}
   }
 
   List<Widget> _buildResultChildren({
@@ -1002,15 +1027,15 @@ class _GroupResultCardModel {
 
   factory _GroupResultCardModel.fromHit(SearchHit hit) {
     final isCircle = hit.objectType == SearchObjectType.circleCircle;
-    final payload = hit.payload;
+    final view = CircleSearchItemView.fromMap(hit.payload);
     final circleId = isCircle
         ? hit.objectId
-        : (payload['circleId']?.toString() ?? hit.objectId);
-    final memberCount = (payload['memberCount'] as num?)?.toInt() ?? 0;
-    final postCount = (payload['postCount'] as num?)?.toInt() ?? 0;
+        : (view.circleId.isNotEmpty ? view.circleId : hit.objectId);
+    final memberCount = view.memberCount;
+    final postCount = view.postCount;
+    final circleNameLabel = view.circleName?.trim() ?? '';
     final footerSegments = <String>[
-      if ((payload['circleName'] ?? '').toString().trim().isNotEmpty)
-        payload['circleName'].toString().trim(),
+      if (circleNameLabel.isNotEmpty) circleNameLabel,
       if (memberCount > 0) '$memberCount 人',
       if (postCount > 0) '$postCount 篇内容',
       if (hit.resolvedFrom == SearchResolvedFrom.localFallback) '本地回退',
@@ -1023,7 +1048,7 @@ class _GroupResultCardModel {
           : (hit.subtitle?.trim().isNotEmpty == true
                 ? hit.subtitle!.trim()
                 : '打开相关圈子'),
-      coverUrl: (payload['coverUrl'] ?? payload['cover'])?.toString() ?? '',
+      coverUrl: view.coverUrl ?? '',
       footerLabel: footerSegments.isEmpty ? '群组结果' : footerSegments.join(' · '),
       eyebrowText: isCircle ? '圈子' : '群组',
     );

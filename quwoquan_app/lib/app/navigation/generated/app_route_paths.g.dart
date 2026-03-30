@@ -4,6 +4,9 @@
 class AppRoutePaths {
   const AppRoutePaths._();
 
+  static const String welcome = '/welcome';
+  static const String welcomeSegment = 'welcome';
+
   static const String home = '/';
 
   static const String circles = '/circles';

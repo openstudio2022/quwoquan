@@ -5,23 +5,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class AssistantAnswerContent extends StatelessWidget {
   const AssistantAnswerContent({
     super.key,
-    required this.message,
+    required this.transcriptRow,
     required this.content,
     required this.textColor,
     this.answerBlocks = const <AssistantAnswerDisplayBlock>[],
     this.onReferenceTap,
   });
 
-  final Map<String, dynamic> message;
+  final AssistantTranscriptTimelineRow transcriptRow;
   final String content;
   final Color textColor;
   final List<AssistantAnswerDisplayBlock> answerBlocks;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
+  final void Function(AssistantCitation reference)? onReferenceTap;
 
   static final RegExp _referenceBlockPattern = RegExp(
     r'\n---\n📚\s*\*{0,2}参考资料\*{0,2}[\s\S]*$',
@@ -34,6 +37,7 @@ class AssistantAnswerContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final message = PersistedTimelineTurnCodec.encode(transcriptRow);
     final references = _resolveReferenceItems(message);
     final cleaned = content
         .replaceFirst(_referenceBlockPattern, '')
@@ -366,6 +370,18 @@ class AssistantAnswerContent extends StatelessWidget {
     required List<_AssistantReferenceItem> references,
     required Color linkColor,
   }) {
+    void onMarkdownLinkTap(String text, String? href, String title) {
+      final url = (href ?? '').trim();
+      if (url.isEmpty) return;
+      final citation = _citationForTap(
+        references: references,
+        text: text,
+        href: url,
+        fallbackTitle: title,
+      );
+      onReferenceTap?.call(citation);
+    }
+
     try {
       final tableMatches = _gfmTableBlockRe.allMatches(markdownText).toList();
       if (tableMatches.isEmpty) {
@@ -386,7 +402,7 @@ class AssistantAnswerContent extends StatelessWidget {
                 onReferenceTap: onReferenceTap,
               ),
             },
-            onTapLink: _handleMarkdownLinkTap,
+            onTapLink: onMarkdownLinkTap,
           ),
         );
       }
@@ -412,7 +428,7 @@ class AssistantAnswerContent extends StatelessWidget {
                       onReferenceTap: onReferenceTap,
                     ),
                   },
-                  onTapLink: _handleMarkdownLinkTap,
+                  onTapLink: onMarkdownLinkTap,
                 ),
               ),
             );
@@ -436,7 +452,7 @@ class AssistantAnswerContent extends StatelessWidget {
                     onReferenceTap: onReferenceTap,
                   ),
                 },
-                onTapLink: _handleMarkdownLinkTap,
+                onTapLink: onMarkdownLinkTap,
               ),
             ),
           ),
@@ -461,7 +477,7 @@ class AssistantAnswerContent extends StatelessWidget {
                     onReferenceTap: onReferenceTap,
                   ),
                 },
-                onTapLink: _handleMarkdownLinkTap,
+                onTapLink: onMarkdownLinkTap,
               ),
             ),
           );
@@ -541,19 +557,7 @@ class AssistantAnswerContent extends StatelessWidget {
     }
   }
 
-  void _handleMarkdownLinkTap(String text, String? href, String title) {
-    final url = (href ?? '').trim();
-    if (url.isEmpty) return;
-    final reference = _referenceForTap(
-      references: _resolveReferenceItems(message),
-      text: text,
-      href: url,
-      fallbackTitle: title,
-    );
-    onReferenceTap?.call(reference);
-  }
-
-  static Map<String, dynamic> _referenceForTap({
+  static AssistantCitation _citationForTap({
     required List<_AssistantReferenceItem> references,
     required String text,
     required String href,
@@ -565,14 +569,10 @@ class AssistantAnswerContent extends StatelessWidget {
       href: href,
     );
     if (matched != null) {
-      return matched.toJson();
+      return matched.toCitation();
     }
-    return <String, dynamic>{
-      'title': text.trim().isNotEmpty ? text.trim() : fallbackTitle,
-      'url': href,
-      'source': '',
-      'snippet': '',
-    };
+    final title = text.trim().isNotEmpty ? text.trim() : fallbackTitle;
+    return AssistantCitation(url: href, title: title);
   }
 
   static _AssistantReferenceItem? _matchReference({
@@ -610,7 +610,7 @@ class _AssistantLinkBuilder extends MarkdownElementBuilder {
 
   final List<_AssistantReferenceItem> references;
   final Color linkColor;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
+  final void Function(AssistantCitation reference)? onReferenceTap;
 
   @override
   Widget? visitElementAfterWithContext(
@@ -635,14 +635,14 @@ class _AssistantLinkBuilder extends MarkdownElementBuilder {
         reference: matched,
         onTap: onReferenceTap == null
             ? null
-            : () => onReferenceTap!(matched.toJson()),
+            : () => onReferenceTap!(matched.toCitation()),
       );
     }
     return GestureDetector(
       onTap: onReferenceTap == null
           ? null
           : () => onReferenceTap!(
-              AssistantAnswerContent._referenceForTap(
+              AssistantAnswerContent._citationForTap(
                 references: references,
                 text: text,
                 href: href,
@@ -722,6 +722,15 @@ class _AssistantReferenceItem {
       'snippet': snippet,
       'label': label,
     };
+  }
+
+  AssistantCitation toCitation() {
+    return AssistantCitation(
+      url: url,
+      title: title,
+      source: source,
+      snippet: snippet,
+    );
   }
 }
 

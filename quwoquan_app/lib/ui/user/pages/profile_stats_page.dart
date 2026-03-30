@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -40,8 +41,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   String get _userId => widget.userId;
   String _searchQuery = '';
 
-  List<Map<String, dynamic>>? _circles;
-  List<Map<String, dynamic>>? _users;
+  List<ProfileCircleViewData>? _circles;
+  List<ProfileSocialRelationRowViewData>? _users;
   bool _loading = true;
   Object? _error;
 
@@ -72,23 +73,28 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     final repo = ref.read(userProfileRepositoryProvider);
     try {
       if (_type == 'circles') {
-        final list = await repo.listUserCircles(_userId);
-        if (mounted)
+        final list = await repo.listProfileCircles(_userId);
+        if (mounted) {
           setState(() {
             _circles = list;
             _loading = false;
             _error = null;
           });
+        }
       } else {
-        final list = _type == 'following'
+        final raw = _type == 'following'
             ? await repo.listFollowing(_userId)
             : await repo.listFollowers(_userId);
-        if (mounted)
+        final list = raw
+            .map(ProfileSocialRelationRowViewData.fromMap)
+            .toList(growable: false);
+        if (mounted) {
           setState(() {
             _users = list;
             _loading = false;
             _error = null;
           });
+        }
       }
     } catch (e) {
       if (mounted)
@@ -101,28 +107,22 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredCircles {
+  List<ProfileCircleViewData> get _filteredCircles {
     final list = _circles ?? [];
     if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
     return list
-        .where((c) => (c['name'] as String?)?.toLowerCase().contains(q) == true)
-        .toList();
+        .where((c) => c.name.toLowerCase().contains(q))
+        .toList(growable: false);
   }
 
-  List<Map<String, dynamic>> get _filteredUsers {
+  List<ProfileSocialRelationRowViewData> get _filteredUsers {
     final list = _users ?? [];
     if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
     return list
-        .where(
-          (u) =>
-              ((u['displayName'] ?? u['nickname']) as String?)
-                  ?.toLowerCase()
-                  .contains(q) ==
-              true,
-        )
-        .toList();
+        .where((u) => u.displayName.toLowerCase().contains(q))
+        .toList(growable: false);
   }
 
   @override
@@ -231,10 +231,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ),
       itemBuilder: (context, i) {
         final c = list[i];
-        final id = c['id'] as String? ?? '';
-        final name = c['name'] as String? ?? '';
-        final coverUrl = c['coverUrl'] as String? ?? '';
-        final postCount = c['postCount'] as int? ?? 0;
+        final id = c.id;
+        final name = c.name;
+        final coverUrl = c.coverUrl;
+        final postCount = c.postCount;
         return CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () {
@@ -317,10 +317,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ),
       itemBuilder: (context, i) {
         final u = list[i];
-        final userId = (u['profileSubjectId'] ?? u['userId']) as String? ?? '';
-        final nickname = (u['displayName'] ?? u['nickname']) as String? ?? '';
-        final avatarUrl = u['avatarUrl'] as String? ?? '';
-        final isFollowing = u['isFollowing'] as bool? ?? false;
+        final userId = u.profileSubjectId;
+        final nickname = u.displayName;
+        final avatarUrl = u.avatarUrl;
+        final isFollowing = u.isFollowing;
         return CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () {

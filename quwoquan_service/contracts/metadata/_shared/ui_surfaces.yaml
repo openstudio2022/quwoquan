@@ -114,6 +114,8 @@ surfaces:
       - GetSuggestedActions
       - GetPolicy
       - ListSkills
+      - ListAssistantTasks
+      - ListAssistantMemories
       - ListConsents
       - GrantSkillConsent
       - RevokeSkillConsent
@@ -135,6 +137,8 @@ surfaces:
     operation_ids:
       - GetPolicy
       - ListSkills
+      - ListAssistantTasks
+      - ListAssistantMemories
       - ListConsents
       - GrantSkillConsent
       - RevokeSkillConsent

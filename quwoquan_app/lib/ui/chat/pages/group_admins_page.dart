@@ -98,17 +98,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       _initSelectedIds(membersState.members);
     }
 
-    final filteredMaps = filterMemberMapsByQuery(
-      allMembers.map((e) => e.toMap()).toList(),
-      _searchQuery,
-    );
-    final filtered = allMembers
-        .where(
-          (c) => filteredMaps.any(
-            (m) => (m['userId'] ?? '').toString() == c.userId,
-          ),
-        )
-        .toList();
+    final filtered = filterMemberDtosByQuery(allMembers, _searchQuery);
 
     final selectedMembers = allMembers
         .where((m) => _selectedIds.contains(m.userId))
@@ -161,7 +151,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
                             for (final m in filtered)
                               MemberListMultiSelectTile(
                                 isDark: isDark,
-                                member: m.toMap(),
+                                member: m,
                                 isSelected: _selectedIds.contains(m.userId),
                                 onTap: () => _toggleMember(m.userId),
                               ),

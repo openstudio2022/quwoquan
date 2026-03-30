@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
@@ -32,6 +33,7 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 String formatChatTime(String? raw) {
@@ -385,10 +387,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     if (_isGroupChat) {
       final result = await context.push<List<String>>(
         AppRoutePaths.rtcPickParticipants,
-        extra: <String, dynamic>{
-          'conversationId': widget.conversationId,
-          'defaultSelectAll': _memberCount <= 8,
-        },
+        extra: CallParticipantPickerRouteExtra(
+          conversationId: widget.conversationId,
+          defaultSelectAll: _memberCount <= 8,
+        ),
       );
       if (result == null || result.isEmpty || !mounted) return;
       targetIds = result;

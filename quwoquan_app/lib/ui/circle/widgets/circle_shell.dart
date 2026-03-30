@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
@@ -255,13 +256,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
 
   String _metaLine(CircleState state) {
     final circle = state.circleData;
+    final cs = state.circleStats;
     final members = _formatCount(
-      state.stats['members'] ??
-          state.stats['totalMembers'] ??
-          circle?.memberCount,
+      cs.members != 0 ? cs.members : circle?.memberCount,
     );
     final posts = _formatCount(
-      state.stats['posts'] ?? state.stats['totalPosts'] ?? circle?.postCount,
+      cs.posts != 0 ? cs.posts : circle?.postCount,
     );
     return <String>[
       '$members ${UITextConstants.circleMembers}',
@@ -352,6 +352,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     }
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.circleShellEditSettings,
+        ),
         builder: (_) => CircleEditSettingsPage(
           circleId: widget.circleId,
           initialCircle: circle,
@@ -659,12 +662,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
             SizedBox(height: AppSpacing.sm),
             CircleStatsRow(
               isDark: isDark,
-              stats: {
-                ...state.stats,
-                if (circle != null) 'posts': circle.postCount,
-                if (circle != null) 'weeklyActive': circle.weeklyActiveCount,
-                if (circle != null) 'members': circle.memberCount,
-              },
+              stats: state.circleStats.forDetailRow(circle),
             ),
             SizedBox(height: AppSpacing.sm),
             CircleActionBar(

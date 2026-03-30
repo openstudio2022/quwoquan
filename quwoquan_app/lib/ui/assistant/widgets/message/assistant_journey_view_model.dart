@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
@@ -84,7 +85,7 @@ class AssistantJourneyViewModel {
     this.acceptedDocumentCount = 0,
     this.referenceCount = 0,
     this.isRunning = false,
-    this.usageStats = const <String, dynamic>{},
+    this.usageStats = AssistantUiUsageStatsViewData.empty,
     this.elapsedMs = 0,
     this.finalAnswerReady = false,
     this.clarificationNeeded = false,
@@ -104,7 +105,7 @@ class AssistantJourneyViewModel {
   final int acceptedDocumentCount;
   final int referenceCount;
   final bool isRunning;
-  final Map<String, dynamic> usageStats;
+  final AssistantUiUsageStatsViewData usageStats;
   final int elapsedMs;
   final bool finalAnswerReady;
   final bool clarificationNeeded;
@@ -125,7 +126,8 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
   required List<ProcessTimelineFrame> processTimeline,
   required bool isRunning,
   bool allowAnswerStage = true,
-  Map<String, dynamic> usageStats = const <String, dynamic>{},
+  AssistantUiUsageStatsViewData usageStats =
+      AssistantUiUsageStatsViewData.empty,
   int elapsedMs = 0,
   AssistantDisplayState displayState = const AssistantDisplayState(),
   RetrievalProcessingSnapshot retrievalProcessing =

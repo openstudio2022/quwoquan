@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 class ContentShareAction {
@@ -46,6 +47,17 @@ class ContentShareTemplate {
 class ContentShareTemplateBuilder {
   const ContentShareTemplateBuilder._();
 
+  /// 应用内 scheme 链接（`quwoquan://…`），与发现/作品流 [DefaultContentShareActionHandler] 复制逻辑一致。
+  ///
+  /// 站外 HTTPS 请使用 [AppPublicContentLinks.postWebUrl]。
+  static String appSchemePostUrl(String postId, {String visibility = 'public'}) {
+    final permission = _normalizeVisibility(visibility);
+    return AppLinkTemplates.postAppDeepLink(
+      postId,
+      visibilityIsCircleVisible: permission == 'circle_visible',
+    );
+  }
+
   static ContentShareTemplate build({
     required PostBaseDto post,
     required bool enableIdentityTemplate,
@@ -78,7 +90,10 @@ class ContentShareTemplateBuilder {
 
     final profile = _profileForIdentity(post.identity);
     final shareSeed = _shareSeedForPost(post);
-    final deeplink = _deeplinkForPermission(post.id, permission);
+    final deeplink = AppLinkTemplates.postAppDeepLink(
+      post.id,
+      visibilityIsCircleVisible: permission == 'circle_visible',
+    );
     final summary = _decorateSummary(
       base: shareSeed.summary,
       includeCircleContext: profile.includeCircleContext,
@@ -133,7 +148,10 @@ class ContentShareTemplateBuilder {
       permission: permission,
       deeplink: permission == 'private'
           ? ''
-          : _deeplinkForPermission(post.id, permission),
+          : AppLinkTemplates.postAppDeepLink(
+              post.id,
+              visibilityIsCircleVisible: permission == 'circle_visible',
+            ),
       landingPage: 'legacy_content',
       title: UITextConstants.shareTo,
       subtitle: UITextConstants.shareLegacyFallbackNotice,
@@ -175,11 +193,6 @@ class ContentShareTemplateBuilder {
       default:
         return 'public';
     }
-  }
-
-  static String _deeplinkForPermission(String postId, String permission) {
-    final scopeSuffix = permission == 'circle_visible' ? '?scope=circle' : '';
-    return 'quwoquan://content/post/$postId$scopeSuffix';
   }
 
   static _ShareSeed _shareSeedForPost(PostBaseDto post) {

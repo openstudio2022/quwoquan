@@ -1,0 +1,23 @@
+{
+  "id": "assistant_stream_fixture",
+  "conversationId": "assistant_main",
+  "type": "text",
+  "content": "",
+  "senderId": "assistant",
+  "senderName": "小趣",
+  "senderAvatar": "",
+  "timestamp": "12:00",
+  "isRead": true,
+  "isSelf": false,
+  "streaming": true,
+  "streamFinalAnswer": "",
+  "assistantTurnSchemaVersion": "assistant_turn_v1",
+  "displayMarkdown": "",
+  "displayPlainText": "",
+  "runArtifacts": {},
+  "journey": {},
+  "uiProcessTimeline": {},
+  "followupPrompt": "",
+  "actionHints": [],
+  "assistantElapsedMs": 0
+}

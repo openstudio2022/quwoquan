@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
@@ -22,7 +23,6 @@ class CircleState {
   const CircleState({
     required this.circleId,
     this.circleData,
-    this.rawCircleData,
     this.role = CircleRole.visitor,
     this.joinStatus = 'none',
     this.isFollowed = false,
@@ -33,12 +33,11 @@ class CircleState {
     this.viewMode = CreationViewMode.grid,
     this.isLoading = false,
     this.error,
-    this.stats = const {},
+    this.circleStats = CircleStatsViewData.empty,
   });
 
   final String circleId;
   final CircleDto? circleData;
-  final Map<String, dynamic>? rawCircleData;
   final CircleRole role;
   final String joinStatus;
   final bool isFollowed;
@@ -49,11 +48,10 @@ class CircleState {
   final CreationViewMode viewMode;
   final bool isLoading;
   final String? error;
-  final Map<String, dynamic> stats;
+  final CircleStatsViewData circleStats;
 
   CircleState copyWith({
     CircleDto? circleData,
-    Map<String, dynamic>? rawCircleData,
     CircleRole? role,
     String? joinStatus,
     bool? isFollowed,
@@ -64,12 +62,11 @@ class CircleState {
     CreationViewMode? viewMode,
     bool? isLoading,
     String? error,
-    Map<String, dynamic>? stats,
+    CircleStatsViewData? circleStats,
   }) {
     return CircleState(
       circleId: circleId,
       circleData: circleData ?? this.circleData,
-      rawCircleData: rawCircleData ?? this.rawCircleData,
       role: role ?? this.role,
       joinStatus: joinStatus ?? this.joinStatus,
       isFollowed: isFollowed ?? this.isFollowed,
@@ -80,7 +77,7 @@ class CircleState {
       viewMode: viewMode ?? this.viewMode,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      stats: stats ?? this.stats,
+      circleStats: circleStats ?? this.circleStats,
     );
   }
 }
@@ -102,14 +99,17 @@ class CircleStateNotifier extends ChangeNotifier {
     try {
       final repo = _ref.read(circleRepositoryProvider);
       final data = await repo.getCircle(_circleId);
-      final stats = await repo.getCircleStats(_circleId);
+      final statsWire = await repo.getCircleStats(_circleId);
+      final dto = CircleDto.fromMap(data);
       _state = _state.copyWith(
-        circleData: CircleDto.fromMap(data),
-        rawCircleData: Map<String, dynamic>.from(data),
+        circleData: dto,
         role: _circleRoleFromRaw(data['role']),
         joinStatus: (data['joinStatus'] ?? _state.joinStatus).toString(),
         isFollowed: data['isFollowed'] as bool? ?? _state.isFollowed,
-        stats: stats,
+        circleStats: CircleStatsViewData.fromWire(
+          statsWire,
+          circleFallback: dto,
+        ),
         isLoading: false,
       );
     } catch (e) {
@@ -205,14 +205,12 @@ class CircleStateNotifier extends ChangeNotifier {
     try {
       final repo = _ref.read(circleRepositoryProvider);
       final updated = await repo.updateCircle(_circleId, data);
-      final merged = {
-        ...?_state.rawCircleData,
+      final merged = <String, dynamic>{
         ...?_state.circleData?.toMap(),
         ...updated,
       };
       _state = _state.copyWith(
         circleData: CircleDto.fromMap(merged),
-        rawCircleData: Map<String, dynamic>.from(merged),
         role: _circleRoleFromRaw(updated['role'] ?? merged['role']),
         joinStatus: (updated['joinStatus'] ?? merged['joinStatus'] ?? _state.joinStatus)
             .toString(),

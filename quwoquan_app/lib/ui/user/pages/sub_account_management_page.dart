@@ -10,7 +10,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
-/// 子账号管理页面 - 对应 /profile/sub-accounts 路由
+/// 子账号管理页面（清单 UserFullSnapshotDto 投影：PersonaManagementSummary / Item ViewData）。
+/// 对应 /profile/sub-accounts 路由
 ///
 /// 展示当前 OwnerAccount 下的所有 SubAccount，支持：
 /// - 查看与激活切换

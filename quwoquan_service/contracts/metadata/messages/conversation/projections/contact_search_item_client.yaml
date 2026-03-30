@@ -1,0 +1,65 @@
+version: 2
+read_model: ContactSearchItem
+description: |
+  SearchContacts API 单项（与 fields.yaml ContactSearchItemView 对齐）。
+
+client_projection:
+  dart_class: ChatContactSearchItemDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart
+  fields:
+    - name: contactId
+      dart_type: String
+      nullable: false
+      source: contactId
+      aliases: [contactId, userId]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, name]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: true
+      source: avatarUrl
+      aliases: [avatarUrl, avatar]
+      default: "null"
+
+    - name: conversationId
+      dart_type: String
+      nullable: true
+      source: conversationId
+      aliases: [conversationId]
+      default: "null"
+
+    - name: conversationType
+      dart_type: String
+      nullable: true
+      source: conversationType
+      aliases: [conversationType]
+      default: "null"
+
+    - name: subtitle
+      dart_type: String
+      nullable: true
+      source: subtitle
+      aliases: [subtitle]
+      default: "null"
+
+    - name: highlightText
+      dart_type: String
+      nullable: true
+      source: highlightText
+      aliases: [highlightText]
+      default: "null"
+
+    - name: matchedField
+      dart_type: String
+      nullable: true
+      source: matchedField
+      aliases: [matchedField]
+      default: "null"

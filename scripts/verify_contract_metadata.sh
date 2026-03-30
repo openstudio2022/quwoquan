@@ -81,4 +81,8 @@ for sub in _projections _vectors; do
   done
 done
 
+if command -v python3 >/dev/null 2>&1; then
+  python3 "${ROOT}/scripts/verify_link_templates_route_ids.py" || exit 1
+fi
+
 echo "[verify] OK: metadata contracts (v3) validated"

@@ -23,44 +23,6 @@ class GroupManagePage extends ConsumerStatefulWidget {
 }
 
 class _GroupManagePageState extends ConsumerState<GroupManagePage> {
-  bool _qrCodeJoinEnabled = true;
-  bool _joinRequiresApproval = false;
-  bool _nameEditableByAdminOnly = false;
-  String _conversationType = 'group';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final settings = await repo.getGroupSettings(widget.conversationId);
-      if (mounted) {
-        setState(() {
-          _qrCodeJoinEnabled = settings['qrCodeJoinEnabled'] as bool? ?? true;
-          _joinRequiresApproval =
-              settings['joinRequiresApproval'] as bool? ?? false;
-          _nameEditableByAdminOnly =
-              settings['nameEditableByAdminOnly'] as bool? ?? false;
-          _conversationType =
-              (settings['type'] as String?) ??
-              (settings['conversationType'] as String?) ??
-              _conversationType;
-        });
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _updateSetting(String key, bool value) async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      await repo.updateGroupSettings(widget.conversationId, {key: value});
-    } catch (_) {}
-  }
-
   Future<void> _onConfirmDissolve() async {
     try {
       await ref.read(chatRepositoryProvider).dissolveConversation(
@@ -113,7 +75,11 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
     final membersState = ref.watch(
       conversationMembersProvider(widget.conversationId),
     );
+    final groupSettings = membersState.groupSettings;
     final isOwner = membersState.isOwner;
+    final notifier = ref.read(
+      conversationMembersProvider(widget.conversationId).notifier,
+    );
     final chevronColor =
         SettingsSemanticConstants.selectionChevronColor(isDark);
 
@@ -140,11 +106,16 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                     isDark: isDark,
                     label: UITextConstants.qrCodeJoin,
                     trailing: CupertinoSwitch(
-                      value: _qrCodeJoinEnabled,
-                      onChanged: (v) {
-                        setState(() => _qrCodeJoinEnabled = v);
-                        _updateSetting('qrCodeJoinEnabled', v);
-                      },
+                      value: groupSettings.qrCodeJoinEnabled,
+                      onChanged: membersState.isLoading
+                          ? null
+                          : (v) {
+                              notifier.updateGroupSettings(
+                                groupSettings.copyWith(
+                                  qrCodeJoinEnabled: v,
+                                ),
+                              );
+                            },
                       activeTrackColor:
                           SettingsSemanticConstants.switchActiveTrackColor,
                       inactiveTrackColor:
@@ -158,11 +129,16 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                     isDark: isDark,
                     label: UITextConstants.joinRequiresApproval,
                     trailing: CupertinoSwitch(
-                      value: _joinRequiresApproval,
-                      onChanged: (v) {
-                        setState(() => _joinRequiresApproval = v);
-                        _updateSetting('joinRequiresApproval', v);
-                      },
+                      value: groupSettings.joinRequiresApproval,
+                      onChanged: membersState.isLoading
+                          ? null
+                          : (v) {
+                              notifier.updateGroupSettings(
+                                groupSettings.copyWith(
+                                  joinRequiresApproval: v,
+                                ),
+                              );
+                            },
                       activeTrackColor:
                           SettingsSemanticConstants.switchActiveTrackColor,
                       inactiveTrackColor:
@@ -176,11 +152,16 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                     isDark: isDark,
                     label: UITextConstants.nameEditableByAdminOnly,
                     trailing: CupertinoSwitch(
-                      value: _nameEditableByAdminOnly,
-                      onChanged: (v) {
-                        setState(() => _nameEditableByAdminOnly = v);
-                        _updateSetting('nameEditableByAdminOnly', v);
-                      },
+                      value: groupSettings.nameEditableByAdminOnly,
+                      onChanged: membersState.isLoading
+                          ? null
+                          : (v) {
+                              notifier.updateGroupSettings(
+                                groupSettings.copyWith(
+                                  nameEditableByAdminOnly: v,
+                                ),
+                              );
+                            },
                       activeTrackColor:
                           SettingsSemanticConstants.switchActiveTrackColor,
                       inactiveTrackColor:
@@ -231,7 +212,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                   ],
                 ),
               ),
-              if (_conversationType != 'circle') ...[
+              if (groupSettings.conversationType != 'circle') ...[
                 SizedBox(
                   height:
                       SettingsSemanticConstants.insetFormSectionVerticalGap,

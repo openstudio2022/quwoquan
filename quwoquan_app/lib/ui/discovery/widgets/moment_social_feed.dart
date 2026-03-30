@@ -71,7 +71,7 @@ class MomentSocialFeed extends ConsumerWidget {
     List<PostBaseDto>? feedPosts,
   })?
   onPostTap;
-  final void Function(dynamic post)? onMoreTap;
+  final void Function(PostBaseDto post)? onMoreTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -306,7 +306,6 @@ class MomentSocialFeed extends ConsumerWidget {
     MoreActionPopup.show(
       context: context,
       config: MediaPostMoreActionConfig(
-        post: post,
         showShareAction: false,
         showViewOriginalAction: false,
         onCopyLink: () => _copyLink(
@@ -413,19 +412,9 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   Map<String, dynamic>? _rawDiscoveryItem(WidgetRef ref, String postId) {
-    final repo = ref.read(appContentRepositoryProvider);
-    final allItems = <Map<String, dynamic>>[
-      ...repo.discoveryMomentData,
-      ...repo.discoveryArticleData,
-      ...repo.discoveryPhotoData,
-      ...repo.discoveryVideoData,
-    ];
-    return allItems.cast<Map<String, dynamic>?>().firstWhere(
-      (item) =>
-          item?['postId']?.toString() == postId ||
-          item?['id']?.toString() == postId,
-      orElse: () => null,
-    );
+    return ref
+        .read(appContentRepositoryProvider)
+        .discoveryFeedWireRowByPostId(postId);
   }
 
   String _extractKeyword(String text) {
@@ -1008,11 +997,14 @@ class _MomentVideoCard extends StatelessWidget {
                 height: AppSpacing.videoPlayOverlaySize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.black.withValues(alpha: 0.42),
+                  color: AppColors.overlayMedium,
                 ),
                 child: Icon(
                   CupertinoIcons.play_fill,
-                  color: AppColors.white,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.mediaThumbnailOverlayForeground,
+                  ),
                   size: AppSpacing.videoPlayOverlayIconSize,
                 ),
               ),
@@ -1037,7 +1029,10 @@ class _MomentVideoCard extends StatelessWidget {
                     _formatDuration(dto.durationMs!),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
-                      color: AppColors.white,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.mediaThumbnailOverlayForeground,
+                      ),
                       fontWeight: AppTypography.semiBold,
                     ),
                   ),

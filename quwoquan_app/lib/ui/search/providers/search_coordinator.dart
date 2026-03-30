@@ -4,9 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -343,7 +344,7 @@ class SearchCoordinator extends ChangeNotifier {
 
     final contacts = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
-        .map((hit) => hit.payload)
+        .map((hit) => ChatContactSearchItemDto.fromMap(hit.payload))
         .toList(growable: false);
     final conversationHits = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)
@@ -372,9 +373,11 @@ class SearchCoordinator extends ChangeNotifier {
       for (final item in allConversations) item.conversationId: item,
       for (final item in conversationHits) item.conversationId: item,
     }.values.toList(growable: false);
-    final contactSuggestions = _buildContactSuggestions(
+    final chatRepo = _ref.read(chatRepositoryProvider);
+    final contactSuggestions = await _buildContactSuggestions(
       contacts: contacts,
       allConversations: seededConversations,
+      chatRepo: chatRepo,
     );
     final chatRecordSuggestions = _buildChatRecordSuggestions(
       conversationHits: conversationHits,
@@ -544,46 +547,45 @@ class SearchCoordinator extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  List<ContactSearchSuggestion> _buildContactSuggestions({
-    required List<Map<String, dynamic>> contacts,
+  Future<List<ContactSearchSuggestion>> _buildContactSuggestions({
+    required List<ChatContactSearchItemDto> contacts,
     required List<ConversationSearchItemView> allConversations,
-  }) {
+    required ChatRepository chatRepo,
+  }) async {
     final suggestions = <ContactSearchSuggestion>[];
     for (final contact in contacts) {
-      final userId = (contact['contactId'] ?? contact['userId'] ?? '')
-          .toString()
-          .trim();
-      final displayName = (contact['displayName'] ?? '').toString().trim();
+      final userId = contact.contactId.trim();
+      final displayName = contact.displayName.trim();
       if (userId.isEmpty || displayName.isEmpty) {
         continue;
       }
-      final directConversationId = (contact['conversationId'] ?? '')
-          .toString()
-          .trim();
+      final directConversationId = contact.conversationId?.trim() ?? '';
       suggestions.add(
         ContactSearchSuggestion(
           contactId: userId,
           displayName: displayName,
           conversationId: directConversationId.isNotEmpty
               ? directConversationId
-              : _resolveContactConversationId(
+              : await _resolveContactConversationId(
                   displayName: displayName,
                   userId: userId,
                   allConversations: allConversations,
+                  chatRepo: chatRepo,
                 ),
-          avatarUrl: contact['avatarUrl']?.toString(),
-          subtitle: (contact['subtitle'] ?? '联系人').toString(),
+          avatarUrl: contact.avatarUrl,
+          subtitle: contact.subtitle ?? '联系人',
         ),
       );
     }
     return suggestions;
   }
 
-  String _resolveContactConversationId({
+  Future<String> _resolveContactConversationId({
     required String displayName,
     required String userId,
     required List<ConversationSearchItemView> allConversations,
-  }) {
+    required ChatRepository chatRepo,
+  }) async {
     final normalizedName = displayName.trim().toLowerCase();
     for (final conversation in allConversations) {
       final normalizedTitle = conversation.title.trim().toLowerCase();
@@ -599,10 +601,10 @@ class SearchCoordinator extends ChangeNotifier {
       }
     }
     for (final conversation in allConversations) {
-      final members = ChatMockData.membersFor(conversation.conversationId);
-      final containsUser = members.any(
-        (member) => member['userId']?.toString() == userId,
+      final members = await chatRepo.listMemberUserIds(
+        conversation.conversationId,
       );
+      final containsUser = members.contains(userId);
       if (!containsUser) {
         continue;
       }
@@ -613,14 +615,16 @@ class SearchCoordinator extends ChangeNotifier {
       }
     }
     for (final conversation in allConversations) {
-      final members = ChatMockData.membersFor(conversation.conversationId);
-      if (members.any((member) => member['userId']?.toString() == userId)) {
+      final members = await chatRepo.listMemberUserIds(
+        conversation.conversationId,
+      );
+      if (members.contains(userId)) {
         return conversation.conversationId;
       }
     }
     return allConversations.isNotEmpty
         ? allConversations.first.conversationId
-        : ChatMockData.assistantConversationId;
+        : '';
   }
 
   List<ChatRecordSearchSuggestion> _buildChatRecordSuggestions({
@@ -905,17 +909,7 @@ class SearchRecentHistoryStore {
     await prefs.setString(
       _storageKey,
       jsonEncode(
-        entries
-            .map(
-              (entry) => <String, dynamic>{
-                'entryId': entry.entryId,
-                'query': entry.query,
-                'scope': entry.scope.wireValue,
-                'facet': entry.facet,
-                'updatedAt': entry.updatedAt.toIso8601String(),
-              },
-            )
-            .toList(growable: false),
+        entries.map((entry) => entry.toMap()).toList(growable: false),
       ),
     );
   }

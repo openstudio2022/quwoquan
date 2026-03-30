@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -17,7 +18,7 @@ class MemberListNavigateTile extends StatelessWidget {
   });
 
   final bool isDark;
-  final Map<String, dynamic> member;
+  final ChatConversationMemberDto member;
   final VoidCallback onTap;
   final String? subtitleText;
 
@@ -27,12 +28,8 @@ class MemberListNavigateTile extends StatelessWidget {
       isDark,
       ColorType.foregroundPrimary,
     );
-    final name =
-        member['displayName'] as String? ??
-        member['name'] as String? ??
-        '';
-    final avatar =
-        member['avatarUrl'] as String? ?? member['avatar'] as String? ?? '';
+    final name = member.displayName;
+    final avatar = member.avatarUrl;
     final subtitle = subtitleText?.trim() ?? '';
     return CupertinoListTile(
       backgroundColor: AppColors.transparent,
@@ -90,7 +87,7 @@ class MemberListMultiSelectTile extends StatelessWidget {
   });
 
   final bool isDark;
-  final Map<String, dynamic> member;
+  final ChatConversationMemberDto member;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -104,14 +101,10 @@ class MemberListMultiSelectTile extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final name =
-        member['displayName'] as String? ??
-        member['name'] as String? ??
-        '';
-    final avatar =
-        member['avatarUrl'] as String? ?? member['avatar'] as String? ?? '';
-    final nickname = (member['nickname'] as String?)?.trim() ?? '';
-    final isAdmin = member['role'] == 'admin';
+    final name = member.displayName;
+    final avatar = member.avatarUrl;
+    const nickname = '';
+    final isAdmin = member.role == 'admin';
 
     return CupertinoButton(
       padding: EdgeInsets.zero,

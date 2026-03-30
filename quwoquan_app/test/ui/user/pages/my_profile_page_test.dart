@@ -132,6 +132,7 @@ void main() {
             .overrideWithValue(const MockUserProfileRepository()),
         relationshipCapabilityRepositoryProvider
             .overrideWithValue(_ThrowingCapabilityRepository()),
+        currentUserIdProvider.overrideWithValue('user_001'),
       ],
       child: const MaterialApp(
         home: MyProfilePage(),

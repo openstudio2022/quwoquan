@@ -1,4 +1,6 @@
 .PHONY: gate
+.PHONY: verify-app-mock-isolation
+.PHONY: verify-app-page-horizontal-quality
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -10,6 +12,18 @@
 .PHONY: config-gray-rollout
 .PHONY: config-rollback
 .PHONY: config-slo-gate
+
+# 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 specs/gates/ui_mock_isolation_allowlist.yaml）
+verify-app-mock-isolation:
+	@python3 scripts/verify_ui_mock_isolation.py
+
+verify-app-lib-test-only-symbols:
+	@python3 scripts/verify_lib_no_test_only_symbols.py
+
+# 页面横向质量：矩阵列合法 + 磁盘路径与矩阵一致 + P2 清单 ⊆（与 gate app 段同向子集）
+verify-app-page-horizontal-quality:
+	@python3 scripts/verify_page_horizontal_quality_matrix.py
+	@python3 scripts/verify_page_matrix_scan_complete.py
 
 gate:
 	@bash scripts/verify_deployment_domain_mapping.sh

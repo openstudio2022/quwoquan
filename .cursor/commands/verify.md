@@ -28,6 +28,14 @@ description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 - `CR` 的 `affected_nodes`、`changed_documents`、`impact` 是否更新
 - 是否仍残留旧层级
 
+## 端侧 Mock / Remote 与发布态（Flutter）
+
+若本次变更涉及 `quwoquan_app/lib/` 数据源、Repository、`appDataSourceModeProvider`、或 `main_prod`/构建脚本，还须对照 [`specs/gates/mock_data_cloud_integration_policy.md`](../../specs/gates/mock_data_cloud_integration_policy.md) **§5.1**：
+
+- **发布态（R1–R6）**：Release 默认 Remote、无「切 Mock」用户入口、`Remote*` 不整表委托 `Mock*`、正式构建显式 `APP_DATA_SOURCE=remote`。
+- **开发测试态（D1–D4）**：单一 Provider 一键切换；切换 UI 仅非 Release；Mock 数据仅在 `Mock*Repository` / `cloud/services/*/mock/` / `test/**`。
+- **自动化**：`make verify-app-mock-isolation` 或 `python3 scripts/verify_ui_mock_isolation.py` 无 BLOCKING。
+
 ## 助手专项核查
 
 若本次交付涉及助手链路，还必须核查：

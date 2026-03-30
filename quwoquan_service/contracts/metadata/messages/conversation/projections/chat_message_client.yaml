@@ -1,0 +1,143 @@
+version: 2
+read_model: ChatMessageClient
+description: |
+  Message 实体在 ListMessages / Sync 等 API 上的 wire 投影，对齐 fields.yaml → Message。
+  客户端列表与气泡展示的统一类型（codegen）；UI 派生展示 Map 见 chat_message_dto_extensions.dart。
+
+client_projection:
+  dart_class: ChatMessageDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_message_dto.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: _id
+      aliases: [_id, id, messageId]
+      default: "''"
+
+    - name: conversationId
+      dart_type: String
+      nullable: false
+      source: conversationId
+      aliases: [conversationId]
+      default: "''"
+
+    - name: seq
+      dart_type: int
+      nullable: false
+      source: seq
+      aliases: [seq]
+      default: "0"
+
+    - name: clientMsgId
+      dart_type: String
+      nullable: false
+      source: clientMsgId
+      aliases: [clientMsgId]
+      default: "''"
+
+    - name: senderId
+      dart_type: String
+      nullable: false
+      source: senderProfileSubjectId
+      aliases: [senderProfileSubjectId, senderId]
+      default: "''"
+
+    - name: senderName
+      dart_type: String
+      nullable: true
+      source: senderDisplayNameSnapshot
+      aliases: [senderDisplayNameSnapshot, senderName]
+      default: "null"
+
+    - name: senderAvatar
+      dart_type: String
+      nullable: true
+      source: senderAvatarUrlSnapshot
+      aliases: [senderAvatarUrlSnapshot, senderAvatar]
+      default: "null"
+
+    - name: senderPersonaId
+      dart_type: String
+      nullable: true
+      source: senderPersonaId
+      aliases: [senderPersonaId, senderSubAccountId]
+      default: "null"
+
+    - name: type
+      dart_type: String
+      nullable: false
+      source: type
+      aliases: [type]
+      default: "'text'"
+
+    - name: content
+      dart_type: String
+      nullable: true
+      source: content
+      aliases: [content]
+      default: "null"
+
+    - name: mediaUrl
+      dart_type: String
+      nullable: true
+      source: mediaUrl
+      aliases: [mediaUrl]
+      default: "null"
+
+    - name: media
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: media
+      aliases: [media]
+      default: "null"
+
+    - name: cardPayload
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: cardPayload
+      aliases: [cardPayload]
+      default: "null"
+
+    - name: replyToMessageId
+      dart_type: String
+      nullable: true
+      source: replyToMessageId
+      aliases: [replyToMessageId]
+      default: "null"
+
+    - name: mentions
+      dart_type: List<String>
+      nullable: true
+      source: mentions
+      aliases: [mentions]
+      default: "null"
+
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status, messageStatus]
+      default: "'sent'"
+
+    - name: recalledAt
+      dart_type: DateTime
+      nullable: true
+      source: recalledAt
+      aliases: [recalledAt]
+      default: "null"
+
+    - name: metadata
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: metadata
+      aliases: [metadata]
+      default: "null"
+
+    - name: timestamp
+      dart_type: DateTime
+      nullable: true
+      source: timestamp
+      aliases: [timestamp, createdAt, sentAt]
+      default: "null"

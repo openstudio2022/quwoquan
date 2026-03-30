@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/caller_avatar_pulse.dart';
 
 class IncomingCallPage extends ConsumerStatefulWidget {
@@ -60,6 +61,9 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
 
     final initiatorId = session.session?.initiatorId ?? '';
     final isVideo = session.callType.isVideo;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onGradientFg = CallStageChrome.primaryOnGradient(isDark);
 
     return AppScaffold(
       backgroundColor: AppColors.transparent,
@@ -68,10 +72,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.welcomeGradientStart,
-              AppColors.welcomeGradientEnd,
-            ],
+            colors: CallStageChrome.backgroundGradient(isDark),
           ),
         ),
         child: SafeArea(
@@ -81,7 +82,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
               Text(
                 '$initiatorId ${isVideo ? UITextConstants.callIncomingVideo : UITextConstants.callIncomingVoice}',
                 style: TextStyle(
-                  color: AppColors.white.withValues(alpha: 0.8),
+                  color: onGradientFg.withValues(alpha: 0.8),
                   fontSize: AppTypography.md,
                   fontWeight: AppTypography.normal,
                 ),
@@ -91,7 +92,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
               Text(
                 initiatorId,
                 style: TextStyle(
-                  color: AppColors.white,
+                  color: onGradientFg,
                   fontSize: AppTypography.xxl,
                   fontWeight: AppTypography.semiBold,
                 ),
@@ -171,7 +172,7 @@ class _CallActionButton extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              color: AppColors.white,
+              color: AppColors.welcomeForeground,
               size: AppSpacing.xl,
             ),
           ),
@@ -179,7 +180,7 @@ class _CallActionButton extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: AppColors.white,
+              color: AppColors.welcomeForeground,
               fontSize: AppTypography.sm,
               fontWeight: AppTypography.normal,
             ),

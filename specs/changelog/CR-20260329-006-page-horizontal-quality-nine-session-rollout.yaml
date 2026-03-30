@@ -1,0 +1,13 @@
+id: CR-20260329-006-page-horizontal-quality-nine-session-rollout
+title: 页面横向质量九会话落实规划（P1–P8 + 收口）
+status: specified
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结「九会话」执行顺序：S1–S8 各对应单一横向维度（P1–P8），S9 为全矩阵收口与 gate 验证；
+  P7/P8 会话强制分离；每会话标准工作流含双脚本 verify_page_horizontal_quality_matrix +
+  verify_page_matrix_scan_complete；规划正文见 nine-session-rollout-plan.md。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md

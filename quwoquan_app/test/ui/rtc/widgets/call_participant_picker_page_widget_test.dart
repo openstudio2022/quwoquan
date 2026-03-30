@@ -29,6 +29,7 @@ class _PickerChatRepository extends MockChatRepository {
     mentionUnreadCount: 0,
     muted: false,
     pinned: false,
+    circleId: '',
   );
   static const ChatInboxDto _inbox003 = ChatInboxDto(
     id: 'conv_003',
@@ -43,6 +44,7 @@ class _PickerChatRepository extends MockChatRepository {
     mentionUnreadCount: 0,
     muted: false,
     pinned: false,
+    circleId: '',
   );
 
   @override
@@ -141,11 +143,21 @@ class _PickerChatRepository extends MockChatRepository {
         userId: 'user_006',
         displayName: '同好小雨',
         avatarUrl: '',
+        bio: '',
+        metFrom: '',
+        lastInteraction: '',
+        isFriend: true,
+        isStarred: false,
       ),
       ChatContactRowDto(
         userId: 'user_007',
         displayName: '同好阿青',
         avatarUrl: '',
+        bio: '',
+        metFrom: '',
+        lastInteraction: '',
+        isFriend: true,
+        isStarred: false,
       ),
     ];
   }

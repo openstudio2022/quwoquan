@@ -7,6 +7,7 @@ Ensures settings-family pages stay on the canonical shells (see specs/ux/page-la
 Reads scripts/settings_canonical_manifest.yaml and:
 - For inset_form: file must contain SettingsInsetFormPageScaffold
 - For inset_member_picker: file must contain SettingsInsetMemberPickerPageScaffold
+- For search_embedded: file must contain EmbeddedMemberSearchPageShell
 - For webview_shell | prototype_exception | wizard_deferred | deferred_inset:
   first 160 lines must include a comment with "settings-canonical-exception:"
 
@@ -136,6 +137,14 @@ def main() -> int:
                 print(
                     f"verify_settings_canonical: FAIL {rel} shell=inset_member_picker but "
                     f"SettingsInsetMemberPickerPageScaffold not found",
+                    file=sys.stderr,
+                )
+                return 1
+        elif shell == "search_embedded":
+            if "EmbeddedMemberSearchPageShell" not in text:
+                print(
+                    f"verify_settings_canonical: FAIL {rel} shell=search_embedded but "
+                    f"EmbeddedMemberSearchPageShell not found",
                     file=sys.stderr,
                 )
                 return 1

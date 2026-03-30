@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -19,6 +20,51 @@ String memberDisplayName(Map<String, dynamic> m) =>
     (m['displayName'] as String?)?.trim().isNotEmpty == true
         ? (m['displayName'] as String).trim()
         : (m['name'] as String?)?.trim() ?? '';
+
+/// 群成员 DTO 分组（群主一节 + 按展示名首字母分桶）。
+class MemberDtoListSectionData {
+  const MemberDtoListSectionData({
+    required this.header,
+    required this.members,
+  });
+
+  final String header;
+  final List<ChatConversationMemberDto> members;
+}
+
+String memberDtoDisplayName(ChatConversationMemberDto m) =>
+    m.displayName.trim().isNotEmpty ? m.displayName.trim() : '';
+
+List<MemberDtoListSectionData> buildGroupedMemberDtoSections(
+  List<ChatConversationMemberDto> members,
+) {
+  final owners = members.where((m) => m.role == 'owner').toList();
+  final rest = members.where((m) => m.role != 'owner').toList();
+  rest.sort(
+    (a, b) => memberDtoDisplayName(a).compareTo(memberDtoDisplayName(b)),
+  );
+
+  final buckets = <String, List<ChatConversationMemberDto>>{};
+  for (final m in rest) {
+    final key = _bucketKeyForName(memberDtoDisplayName(m));
+    buckets.putIfAbsent(key, () => <ChatConversationMemberDto>[]).add(m);
+  }
+
+  final keys = buckets.keys.toList()..sort(_compareBucketKeys);
+  final out = <MemberDtoListSectionData>[];
+  if (owners.isNotEmpty) {
+    out.add(
+      MemberDtoListSectionData(header: UITextConstants.owner, members: owners),
+    );
+  }
+  for (final k in keys) {
+    final list = buckets[k];
+    if (list != null && list.isNotEmpty) {
+      out.add(MemberDtoListSectionData(header: k, members: list));
+    }
+  }
+  return out;
+}
 
 /// 群主一节 + 按展示名首字母分桶（A–Z，其它为 `#`）。
 List<MemberListSectionData> buildGroupedMemberSections(

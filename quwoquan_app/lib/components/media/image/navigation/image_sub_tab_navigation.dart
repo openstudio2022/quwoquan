@@ -41,7 +41,7 @@ class ImageSubTabNavigation extends ConsumerWidget {
         border: Border(
           bottom: BorderSide(
             color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.3),
-            width: 0.5,
+            width: AppSpacing.hairline,
           ),
         ),
       ),
@@ -70,7 +70,7 @@ class ImageSubTabNavigation extends ConsumerWidget {
                   border: isActive 
                       ? Border.all(
                           color: AppColorsFunctional.getColor(isDark, ColorType.selectionBorder),
-                          width: 1.0,
+                          width: AppSpacing.one,
                         )
                       : null,
                 ),
@@ -78,7 +78,7 @@ class ImageSubTabNavigation extends ConsumerWidget {
                   child: Text(
                     category['label']!,
                     style: TextStyle(
-                      fontSize: 16.sp, // 与一级tab保持一致
+                      fontSize: AppTypography.primaryTabLabel.sp, // 与一级tab保持一致
                       fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
                       color: isActive 
                           ? AppColorsFunctional.getColor(isDark, ColorType.selectionForeground)

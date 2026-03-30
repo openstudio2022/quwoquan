@@ -10,6 +10,8 @@ class AssistantRequestPageIds {
     'GetPolicy': 'assistant.policy.get',
     'GetSuggestedActions': 'assistant.suggested_actions.get',
     'GrantSkillConsent': 'assistant.skills.consent.grant',
+    'ListAssistantMemories': 'assistant.list.assistant.memories',
+    'ListAssistantTasks': 'assistant.list.assistant.tasks',
     'ListConsents': 'assistant.list.consents',
     'ListSkills': 'assistant.skills.list',
     'ReportInteractionEvent': 'assistant.learning.events.report',
@@ -24,6 +26,8 @@ class AssistantRequestPageIds {
   static const String getPolicy = 'assistant.policy.get';
   static const String getSuggestedActions = 'assistant.suggested_actions.get';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';
+  static const String listAssistantMemories = 'assistant.list.assistant.memories';
+  static const String listAssistantTasks = 'assistant.list.assistant.tasks';
   static const String listConsents = 'assistant.list.consents';
   static const String listSkills = 'assistant.skills.list';
   static const String reportInteractionEvent = 'assistant.learning.events.report';

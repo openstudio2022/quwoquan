@@ -1,0 +1,13 @@
+{
+  "id": "msg_fixture_user_1",
+  "conversationId": "assistant_main",
+  "type": "text",
+  "content": "hello fixture",
+  "senderId": "user_fixture",
+  "senderName": "我",
+  "senderAvatar": "",
+  "timestamp": "",
+  "status": "sending",
+  "isRead": true,
+  "isSelf": true
+}

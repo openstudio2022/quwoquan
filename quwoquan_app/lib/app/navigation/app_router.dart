@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/app_page_access_navigator_observer.dart';
+import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
@@ -31,7 +33,7 @@ import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
-import 'package:quwoquan_app/cloud/services/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
@@ -51,12 +53,45 @@ import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
+import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final refreshListenable = ValueNotifier<int>(0);
+  ref.listen<bool>(welcomeCompletedProvider, (Object? previous, bool next) {
+    refreshListenable.value++;
+  });
+
   return GoRouter(
-    initialLocation: AppRoutePaths.home,
+    refreshListenable: refreshListenable,
+    observers: <NavigatorObserver>[AppPageAccessNavigatorObserver.instance],
+    initialLocation: ref.read(welcomeCompletedProvider)
+        ? AppRoutePaths.home
+        : AppRoutePaths.welcome,
+    redirect: (BuildContext context, GoRouterState state) {
+      final done = ref.read(welcomeCompletedProvider);
+      final loc = state.matchedLocation;
+      if (!done && loc != AppRoutePaths.welcome) {
+        return AppRoutePaths.welcome;
+      }
+      if (done && loc == AppRoutePaths.welcome) {
+        return AppRoutePaths.home;
+      }
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: AppRoutePaths.welcome,
+        pageBuilder: (context, state) => NoTransitionPage<void>(
+          key: state.pageKey,
+          child: WelcomeScreen(
+            onFinish: () {
+              ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+            },
+          ),
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) {
           return MainAppShell(currentLocation: state.uri.path, child: child);
@@ -475,7 +510,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra is MediaViewerExtra
               ? state.extra! as MediaViewerExtra
               : null;
-          final dataService = ref.read(dataServiceProvider);
 
           if (extra != null && extra.dtoPosts.isNotEmpty) {
             return UnifiedMediaViewerPage(extra: extra);
@@ -484,7 +518,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return PhotoDetailPage(
             category: category,
             initialIndex: index,
-            dataService: dataService,
             initialExtra: extra,
           );
         },
@@ -500,7 +533,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra is MediaViewerExtra
               ? state.extra! as MediaViewerExtra
               : null;
-          final dataService = ref.read(dataServiceProvider);
 
           if (extra != null && extra.dtoPosts.isNotEmpty) {
             return UnifiedMediaViewerPage(extra: extra);
@@ -508,7 +540,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
           return VideoDetailPage(
             initialIndex: index,
-            dataService: dataService,
             initialExtra: extra,
           );
         },
@@ -722,12 +753,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutePaths.rtcPickParticipants,
         builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>?;
+          final extra = CallParticipantPickerRouteExtra.fromRouter(state.extra);
           return CallParticipantPickerPage(
-            callId: extra?['callId'] as String?,
-            maxParticipants: extra?['maxParticipants'] as int? ?? 32,
-            conversationId: extra?['conversationId'] as String?,
-            defaultSelectAll: extra?['defaultSelectAll'] as bool? ?? false,
+            callId: extra.callId,
+            maxParticipants: extra.maxParticipants,
+            conversationId: extra.conversationId,
+            defaultSelectAll: extra.defaultSelectAll,
           );
         },
       ),

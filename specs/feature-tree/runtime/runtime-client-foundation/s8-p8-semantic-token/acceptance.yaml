@@ -1,0 +1,66 @@
+version: 1
+feature: s8-p8-semantic-token
+level: "L3_story"
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.s8-p8-semantic-token
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+  notes: 客户端治理 L3；无云契约；与 page-horizontal-quality 矩阵 P8 列联动
+  A1:
+    criteria: spec/design/plan/acceptance 与 CR-012 已落盘；范围与 12 页清单与 spec 一致
+    status: implemented
+    linked_tasks:
+      - slice-s8-baseline-freeze
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+      - file: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+  A2:
+    criteria: /dev 各波次后 verify_dart_semantic 通过且 baseline 不无故扩容
+    status: implemented
+    linked_tasks:
+      - slice-s8-w0-tokens
+      - slice-s8-w1-twelve-pages
+      - slice-s8-w2-w5-waves
+    tests:
+      - file: scripts/verify_dart_semantic.py
+      - file: scripts/.verify_dart_semantic_baseline.txt
+
+execution:
+  local_gate: "python3 scripts/verify_dart_semantic.py && python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py"
+  full_gate: make gate
+
+journey_acceptance:
+  - id: A1
+    statement: S8 P8 基线文档与 CR 可追溯
+    t_layers: [T1]
+
+scenario_acceptance:
+  - id: S8-dev-w1
+    statement: W1 完成 12 页 baseline 清零或合法 ignore，矩阵 P8 更新
+    t_layers: [T3]
+  - id: S8-dev-close
+    statement: W5 后 baseline 仅余豁免或清零，矩阵 P8 与代码一致
+    t_layers: [T4]
+
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
+    - type: doc
+      artifact: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+  T2:
+    - type: script
+      artifact: scripts/verify_dart_semantic.py
+    - type: file
+      artifact: scripts/.verify_dart_semantic_baseline.txt
+  T3:
+    - type: process
+      note: PR 含 baseline 行删除 + page-horizontal-quality-matrix.md P8 列
+  T4:
+    - type: deferred
+      note: W5 收口或登记剩余技术债至矩阵备注

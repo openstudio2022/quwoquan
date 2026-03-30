@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_content.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
@@ -65,7 +69,7 @@ const double assistantBubbleImageSize = 200.0;
 class AssistantMessageBubble extends StatelessWidget {
   const AssistantMessageBubble({
     super.key,
-    required this.message,
+    required this.transcriptRow,
     required this.isRight,
     required this.bubbleColor,
     required this.textColor,
@@ -100,7 +104,7 @@ class AssistantMessageBubble extends StatelessWidget {
     this.onRegenerateOptionSelected,
   });
 
-  final Map<String, dynamic> message;
+  final AssistantTranscriptTimelineRow transcriptRow;
   final bool isRight;
   final Color bubbleColor;
   final Color textColor;
@@ -132,10 +136,15 @@ class AssistantMessageBubble extends StatelessWidget {
   final VoidCallback? onDetailedAnswer;
   final VoidCallback? onSwitchModelAnswer;
   final Future<void> Function(String hint)? onActionHintTap;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
+  final void Function(AssistantCitation reference)? onReferenceTap;
+
+  /// 单测与协议断言用 Map 视图（与 [PersistedTimelineTurnCodec.encode] 一致）。
+  Map<String, dynamic> get asTimelineProtocolMap =>
+      PersistedTimelineTurnCodec.encode(transcriptRow);
 
   @override
   Widget build(BuildContext context) {
+    final message = PersistedTimelineTurnCodec.encode(transcriptRow);
     final viewportWidth = MediaQuery.of(context).size.width;
     const horizontalPadding = 24.0;
     final effectiveMaxWidth = useFullWidth
@@ -209,10 +218,10 @@ class AssistantMessageBubble extends StatelessWidget {
                 isRunning: isAssistantRunning,
                 displayState: resolvedDisplayState,
                 retrievalProcessing: resolvedRetrievalProcessing,
-                usageStats:
-                    (message['uiUsageStats'] as Map?)
-                        ?.cast<String, dynamic>() ??
-                    const <String, dynamic>{},
+                usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
+                  (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
+                      const <String, dynamic>{},
+                ),
                 elapsedMs:
                     ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
               ))
@@ -328,7 +337,7 @@ class AssistantMessageBubble extends StatelessWidget {
           vertical: AppSpacing.intraGroupLg,
         ),
         child: AssistantAnswerContent(
-          message: message,
+          transcriptRow: transcriptRow,
           content: answerText,
           answerBlocks: resolvedDisplayState.answer.blocks,
           textColor: textColor,

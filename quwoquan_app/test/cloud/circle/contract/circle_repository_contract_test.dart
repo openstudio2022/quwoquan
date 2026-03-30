@@ -48,6 +48,16 @@ void main() {
       expect(members.first.containsKey('name'), isTrue);
     });
 
+    test('listHomeCircleDiscoveryFeed Mock 非空', () async {
+      final feed = await repo.listHomeCircleDiscoveryFeed(limit: 50);
+      expect(feed, isNotEmpty);
+    });
+
+    test('getCircleCategoryConfig Mock 含 all', () async {
+      final cfg = await repo.getCircleCategoryConfig();
+      expect(cfg.containsKey('all'), isTrue);
+    });
+
     test('getCircleStats 返回统计数据', () async {
       final stats = await repo.getCircleStats('circle_photo_01');
       expect(stats.containsKey('totalMembers'), isTrue);

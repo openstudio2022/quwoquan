@@ -1,0 +1,18 @@
+id: CR-20260330-012-s8-p8-semantic-token-baseline
+title: S8（P8）设计系统语义 token 全页落实 — 规格与设计基线冻结
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/s8-p8-semantic-token
+parent_feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结 L3「s8-p8-semantic-token」：P8 范围面、与 P7 分离、12 个 baseline 页优先清单、W0–W5 波次、
+  verify_dart_semantic 与 baseline 单调减策略；无 metadata/codegen。
+  产出 spec/design/plan/acceptance + tree_index 注册；/dev 从 slice-s8-w0-tokens 起执行。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/acceptance.yaml
+  - specs/feature-tree/tree_index.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml

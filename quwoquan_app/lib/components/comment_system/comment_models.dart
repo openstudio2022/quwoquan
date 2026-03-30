@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/spacing_extensions.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 class CommentModel {
   final String id;
@@ -33,36 +35,39 @@ extension CommentConfigExtension on CommentConfig {
 }
 
 class CommentResponsive {
-  static double getCommentItemSize(BuildContext context) => 32.0;
-  static double getCommentItemIconSize(BuildContext context) => 20.0;
-  static double getAvatarSize(BuildContext context) => 32.0;
+  static double getCommentItemSize(BuildContext context) =>
+      AppSpacing.smallAvatarSize;
+  static double getCommentItemIconSize(BuildContext context) =>
+      AppSpacing.twenty;
+  static double getAvatarSize(BuildContext context) =>
+      AppSpacing.smallAvatarSize;
   static double getIntraGroupSpacing(BuildContext context, SpacingSize size) {
     switch (size) {
       case SpacingSize.xs:
-        return 4.0;
+        return AppSpacing.xs;
       case SpacingSize.sm:
-        return 8.0;
+        return AppSpacing.sm;
       case SpacingSize.md:
-        return 16.0;
+        return AppSpacing.md;
       case SpacingSize.lg:
-        return 24.0;
+        return AppSpacing.lg;
       case SpacingSize.xl:
-        return 32.0;
+        return AppSpacing.xl;
     }
   }
-  static double getInputHeight(BuildContext context) => 44.0;
+  static double getInputHeight(BuildContext context) => AppSpacing.buttonSize;
   static double getFontSize(BuildContext context, [dynamic size]) {
     if (size is double) return size;
     // Handle CommentFontSize enum if needed
-    return 14.0; // Default
+    return AppTypography.base;
   }
   static double getContainerSpacing(BuildContext context, [SpacingSize? size]) {
     if (size != null) return getIntraGroupSpacing(context, size);
-    return 16.0; // Default
+    return AppSpacing.md;
   }
   
   static EdgeInsets getModalPadding(BuildContext context) {
-    return EdgeInsets.all(16.0);
+    return EdgeInsets.all(AppSpacing.md);
   }
 }
 

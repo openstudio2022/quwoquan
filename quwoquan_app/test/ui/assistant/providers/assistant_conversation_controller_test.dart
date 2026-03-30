@@ -15,6 +15,7 @@ import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
@@ -26,6 +27,12 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_conversation_controller.dart';
+
+List<Map<String, dynamic>> _messageMaps(AssistantConversationController c) {
+  return c.transcriptRows
+      .map((r) => PersistedTimelineTurnCodec.encode(r))
+      .toList(growable: false);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -76,19 +83,19 @@ void main() {
 
       expect(controller.assistantBackend, AssistantBackend.local);
       expect(controller.assistantTopicTitle, '川西路线');
-      expect(controller.messages, hasLength(18));
+      expect(controller.transcriptRows, hasLength(18));
       expect(controller.assistantHiddenHistory, hasLength(2));
       expect(controller.showAssistantHistoryPeek, isTrue);
-      expect(controller.messages.first['content'], '用户2');
+      expect(_messageMaps(controller).first['content'], '用户2');
 
       await controller.loadOlderHistory();
       await tester.pump();
 
-      expect(controller.messages, hasLength(20));
+      expect(controller.transcriptRows, hasLength(20));
       expect(controller.assistantHiddenHistory, isEmpty);
       expect(controller.showAssistantHistoryPeek, isFalse);
-      expect(controller.messages.first['content'], '用户0');
-      expect(controller.messages[1]['content'], '助理1');
+      expect(_messageMaps(controller).first['content'], '用户0');
+      expect(_messageMaps(controller)[1]['content'], '助理1');
     });
 
     testWidgets('initialize 会保留 canonical persisted assistant turn 并过滤空白脏消息', (
@@ -126,9 +133,9 @@ void main() {
       await controller.initialize();
       await tester.pump();
 
-      expect(controller.messages, hasLength(2));
-      expect(controller.messages.last['senderId'], AppConceptConstants.assistantSenderId);
-      expect(controller.messages.last['content'], '可以优先看川西短线。');
+      expect(controller.transcriptRows, hasLength(2));
+      expect(_messageMaps(controller).last['senderId'], AppConceptConstants.assistantSenderId);
+      expect(_messageMaps(controller).last['content'], '可以优先看川西短线。');
       expect(controller.assistantHiddenHistory, isEmpty);
       expect(controller.showAssistantHistoryPeek, isFalse);
     });
@@ -163,8 +170,8 @@ void main() {
       while (DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 50));
         if (!controller.assistantResponding &&
-            controller.messages.isNotEmpty &&
-            controller.messages.last['senderId'] ==
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
                 AppConceptConstants.assistantSenderId) {
           break;
         }
@@ -194,7 +201,7 @@ void main() {
         contains('关注点：天气现状、出门体感'),
       );
 
-      final finalAssistantMessage = controller.messages.last;
+      final finalAssistantMessage = _messageMaps(controller).last;
       final visibleTimeline = resolveAssistantProcessTimelineFromMessage(
         finalAssistantMessage,
       );
@@ -258,14 +265,14 @@ void main() {
       while (DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 50));
         if (!controller.assistantResponding &&
-            controller.messages.isNotEmpty &&
-            controller.messages.last['senderId'] ==
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
                 AppConceptConstants.assistantSenderId) {
           break;
         }
       }
 
-      final finalAssistantMessage = controller.messages.last;
+      final finalAssistantMessage = _messageMaps(controller).last;
       final persistedTimeline = resolvePersistedAssistantProcessTimeline(
         finalAssistantMessage,
       );
@@ -318,14 +325,14 @@ void main() {
       while (DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 50));
         if (!controller.assistantResponding &&
-            controller.messages.isNotEmpty &&
-            controller.messages.last['senderId'] ==
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
                 AppConceptConstants.assistantSenderId) {
           break;
         }
       }
 
-      final finalAssistantMessage = controller.messages.last;
+      final finalAssistantMessage = _messageMaps(controller).last;
       expect(
         finalAssistantMessage['content'],
         equals('目前体感舒适，适合外出活动。'),
@@ -383,14 +390,14 @@ void main() {
       while (DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 50));
         if (!controller.assistantResponding &&
-            controller.messages.isNotEmpty &&
-            controller.messages.last['senderId'] ==
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
                 AppConceptConstants.assistantSenderId) {
           break;
         }
       }
 
-      final finalAssistantMessage = controller.messages.last;
+      final finalAssistantMessage = _messageMaps(controller).last;
       expect(
         finalAssistantMessage['content'],
         contains('第一次走经典主线'),

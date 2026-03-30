@@ -1,0 +1,15 @@
+# lib/** 内「仅测试入口」符号 — 过渡期豁免（与 mock_data_cloud_integration_policy §4.1 / P0b 对齐）
+# 规则：verify_lib_no_test_only_symbols.py 在 lib 中扫描 createForTest / createTestAssistantRuntime；
+#      命中时仅当 path 在本表 allowed 中才通过。清债时删除行，禁止为新文件追加豁免。
+version: 1
+
+allowed:
+  - path: assistant/runtime/assistant_runtime.dart
+    symbol: createForTest
+    note: 测试与 tool/ 入口；后续可改为 test/support 仅 re-export 或拆 dev 包
+  - path: assistant/application/assistant_edge_service.dart
+    symbol: createForTest
+    note: 同上
+  - path: assistant/runtime/default_assistant_runtime_factory.dart
+    symbol: createTestAssistantRuntime
+    note: 工厂实现；与 createForTest 成对

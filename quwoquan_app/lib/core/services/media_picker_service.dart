@@ -58,8 +58,8 @@ class MediaPickerService {
       path: filePath,
       type: type,
       source: source,
-      width: 0,
-      height: 0,
+      width: 0, // ignore: verify_dart_semantic — int placeholder until asset probe; not a visual dp
+      height: 0, // ignore: verify_dart_semantic — int placeholder until asset probe; not a visual dp
       durationMs: 0,
       createdAtMs: DateTime.now().millisecondsSinceEpoch,
     );

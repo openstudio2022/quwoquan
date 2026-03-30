@@ -66,10 +66,9 @@ void main() {
       final containers = tester.widgetList<AnimatedContainer>(
         find.byType(AnimatedContainer),
       );
-      final weakColor = const Color(0xFFFF6B35);
       final activeContainers = containers.where((c) {
         final dec = c.decoration as BoxDecoration?;
-        return dec?.color == weakColor;
+        return dec?.color == AppColors.networkCallQualityWeak;
       }).toList();
       expect(activeContainers.length, equals(2));
     });

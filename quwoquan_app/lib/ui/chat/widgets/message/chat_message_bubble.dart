@@ -75,6 +75,7 @@ class ChatMessageBubble extends StatelessWidget {
     final isRead = message['isRead'] == true;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble && isRight && type == 'text';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget contentWidget;
     if (type == 'task_card') {
@@ -195,7 +196,10 @@ class ChatMessageBubble extends StatelessWidget {
             textAlign: TextAlign.left,
             style: TextStyle(
               fontSize: AppTypography.lg,
-              color: AppColors.white,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundInverse,
+              ),
               height: AppTypography.bodyLineHeight,
             ),
           ),
@@ -205,6 +209,10 @@ class ChatMessageBubble extends StatelessWidget {
       contentWidget = _BubbleWithTail(
         isRight: isRight,
         color: bubbleColor,
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
         child: Container(
           constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
           padding: EdgeInsets.fromLTRB(
@@ -295,11 +303,13 @@ class _BubbleWithTail extends StatelessWidget {
   const _BubbleWithTail({
     required this.isRight,
     required this.color,
+    required this.tailShadowColor,
     required this.child,
   });
 
   final bool isRight;
   final Color color;
+  final Color tailShadowColor;
   final Widget child;
 
   static const double _radius = 12;
@@ -388,6 +398,7 @@ class _BubbleWithTail extends StatelessWidget {
               color: color,
               isRight: isRight,
               tailExtent: _tailExtent,
+              shadowColor: tailShadowColor,
             ),
           ),
         ),
@@ -408,11 +419,13 @@ class _BubbleTailPainter extends CustomPainter {
     required this.color,
     required this.isRight,
     required this.tailExtent,
+    required this.shadowColor,
   });
 
   final Color color;
   final bool isRight;
   final double tailExtent;
+  final Color shadowColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -421,7 +434,7 @@ class _BubbleTailPainter extends CustomPainter {
     final path = _BubbleWithTail._path(w, h, isRight);
     if (!isRight) canvas.translate(tailExtent, 0);
     final shadowPaint = Paint()
-      ..color = AppColors.black.withValues(alpha: 0.06)
+      ..color = shadowColor
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.save();
     canvas.translate(0, 2);
@@ -432,7 +445,11 @@ class _BubbleTailPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BubbleTailPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.shadowColor != shadowColor ||
+      oldDelegate.isRight != isRight ||
+      oldDelegate.tailExtent != tailExtent;
 }
 
 /// 消息回执状态指示器：根据 receiptEnabled / memberCount / messageStatus 显示不同状态。

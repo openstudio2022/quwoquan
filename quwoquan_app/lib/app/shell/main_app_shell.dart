@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
+import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
@@ -45,7 +46,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _logPageOpen(
+      writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
       );
@@ -57,7 +58,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
       _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
-      _logPageReturn(
+      writeAppPageAccessReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
         enterAt: _currentPageEnterAt,
@@ -65,7 +66,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       _currentLocation = widget.currentLocation;
       _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
       _currentPageEnterAt = DateTime.now();
-      _logPageOpen(
+      writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
       );
@@ -74,7 +75,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   @override
   void dispose() {
-    _logPageReturn(
+    writeAppPageAccessReturn(
       location: _currentLocation,
       pageVisitId: _currentPageVisitId,
       enterAt: _currentPageEnterAt,
@@ -199,101 +200,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     return HomePage(routeLocation: _currentLocation);
   }
 
-  String _routeNameFromLocation(String location) {
-    if (location == AppRoutePaths.home ||
-        location == AppRoutePaths.circles ||
-        location == AppRoutePaths.assistant ||
-        location == AppRoutePaths.profile ||
-        location.startsWith(AppRoutePaths.chat)) {
-      return mainTabFromLocation(location).routeName;
-    }
-    return 'route_unknown';
-  }
-
-  Future<void> _logPageOpen({
-    required String location,
-    required String pageVisitId,
-  }) async {
-    final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
-        pageVisitId: pageVisitId,
-      ),
-      payload: <String, dynamic>{
-        'event': 'open',
-        'route': location,
-        'pageName': _routeNameFromLocation(location),
-      },
-      summaryPayload: <String, dynamic>{'event': 'open', 'route': location},
-    );
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.perf,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
-        pageVisitId: pageVisitId,
-      ),
-      payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
-      summaryPayload: <String, dynamic>{
-        'event': 'page_open',
-        'route': location,
-      },
-    );
-  }
-
-  Future<void> _logPageReturn({
-    required String location,
-    required String pageVisitId,
-    required DateTime enterAt,
-  }) async {
-    final trace = AppTraceContextStore.instance;
-    final durationMs = DateTime.now().difference(enterAt).inMilliseconds;
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
-        pageVisitId: pageVisitId,
-      ),
-      payload: <String, dynamic>{
-        'event': 'return',
-        'route': location,
-        'pageName': _routeNameFromLocation(location),
-        'durationMs': durationMs,
-      },
-      summaryPayload: <String, dynamic>{
-        'event': 'return',
-        'route': location,
-        'durationMs': durationMs,
-      },
-    );
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.perf,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
-        pageVisitId: pageVisitId,
-      ),
-      payload: AppPerfProbe.snapshot(
-        event: 'page_return',
-        route: location,
-        latencyMs: durationMs,
-      ),
-      summaryPayload: <String, dynamic>{
-        'event': 'page_return',
-        'route': location,
-        'latencyMs': durationMs,
-      },
-    );
-  }
-
   Future<void> _logBrowseEvent({
     required String action,
     required Map<String, dynamic> meta,
@@ -310,7 +216,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       payload: <String, dynamic>{
         'event': 'browse',
         'route': _currentLocation,
-        'pageName': _routeNameFromLocation(_currentLocation),
+        'pageName': pageNameFromRouteLocation(_currentLocation),
         'action': action,
         'actionMeta': meta,
       },

@@ -12,7 +12,7 @@ client_projection:
       dart_type: String
       nullable: false
       source: userId
-      aliases: [userId, contactId]
+      aliases: [userId, contactId, id]
       default: "''"
     - name: displayName
       dart_type: String
@@ -26,3 +26,38 @@ client_projection:
       source: avatarUrl
       aliases: [avatarUrl, avatar]
       default: "''"
+
+    - name: bio
+      dart_type: String
+      nullable: false
+      source: bio
+      aliases: [bio]
+      default: "''"
+
+    - name: metFrom
+      dart_type: String
+      nullable: false
+      source: metFrom
+      aliases: [metFrom]
+      default: "''"
+
+    - name: lastInteraction
+      dart_type: String
+      nullable: false
+      source: lastInteraction
+      aliases: [lastInteraction]
+      default: "''"
+
+    - name: isFriend
+      dart_type: bool
+      nullable: false
+      source: isFriend
+      aliases: [isFriend]
+      default: "false"
+
+    - name: isStarred
+      dart_type: bool
+      nullable: false
+      source: isStarred
+      aliases: [isStarred]
+      default: "false"

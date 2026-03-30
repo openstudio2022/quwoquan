@@ -615,6 +615,7 @@ class CircleSearchItemView {
     required this.postCount,
     this.highlightText,
     this.matchedField,
+    this.circleName,
   });
 
   final String circleId;
@@ -630,6 +631,8 @@ class CircleSearchItemView {
   final int postCount;
   final String? highlightText;
   final String? matchedField;
+  /// 群组结果场景下父圈子展示名（wire：`circleName` / `circle_name`）。
+  final String? circleName;
 
   factory CircleSearchItemView.fromMap(Map<String, dynamic> map) {
     return CircleSearchItemView(
@@ -648,6 +651,8 @@ class CircleSearchItemView {
       postCount: (map['postCount'] as num?)?.toInt() ?? 0,
       highlightText: map['highlightText']?.toString(),
       matchedField: map['matchedField']?.toString(),
+      circleName:
+          map['circleName']?.toString() ?? map['circle_name']?.toString(),
     );
   }
 }

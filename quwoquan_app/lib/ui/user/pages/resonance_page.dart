@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/user/models/resonance_buddy_view_data.dart';
 
 /// 我的交集页（1:1 对应 ResonanceDashboard.tsx）
 /// 路由：/profile/resonance
@@ -21,34 +22,6 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
   late PageController _pageController;
   int _currentIndex = 0;
 
-  /// 1:1 ResonanceDashboard 推荐趣友
-  static const List<Map<String, dynamic>> _resonantFriends = [
-    {
-      'id': 'u1',
-      'name': '陈摄影师',
-      'avatar':
-          'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=150',
-      'points': 12,
-      'bio': '徕卡玩家 / 极简主义者',
-    },
-    {
-      'id': 'u2',
-      'name': '阿强',
-      'avatar':
-          'https://images.unsplash.com/photo-1755519024555-a660fefc8dc3?q=80&w=150',
-      'points': 9,
-      'bio': '阿那亚常客 / 自由撰稿人',
-    },
-    {
-      'id': 'u3',
-      'name': 'Sarah',
-      'avatar':
-          'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=150',
-      'points': 8,
-      'bio': '胶片摄影爱好者',
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -61,7 +34,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
     super.dispose();
   }
 
-  Widget _buildFriendBadge(Map<String, dynamic> user) {
+  Widget _buildFriendBadge(ResonanceBuddyViewData user) {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
@@ -72,7 +45,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: Text(
-        '${user['points']} 个交集',
+        '${user.resonancePoints} 个交集',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -107,7 +80,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
 
   Widget _buildResonantFriendItem(
     BuildContext context,
-    Map<String, dynamic> user,
+    ResonanceBuddyViewData user,
     Color fg,
     Color fgSecondary,
   ) {
@@ -116,7 +89,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            user['name'] as String,
+            user.displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -127,7 +100,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
           Text(
-            user['bio'] as String,
+            user.bio,
             style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -157,7 +130,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
                   children: [
                     CircleAvatar(
                       radius: 28,
-                      backgroundImage: NetworkImage(user['avatar'] as String),
+                      backgroundImage: NetworkImage(user.avatarUrl),
                       onBackgroundImageError: (_, __) {},
                     ),
                     SizedBox(width: AppSpacing.intraGroupLg),
@@ -174,7 +147,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
             children: [
               CircleAvatar(
                 radius: 28,
-                backgroundImage: NetworkImage(user['avatar'] as String),
+                backgroundImage: NetworkImage(user.avatarUrl),
                 onBackgroundImageError: (_, __) {},
               ),
               SizedBox(width: AppSpacing.intraGroupLg),
@@ -272,6 +245,10 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
   }
 
   Widget _buildRecommendTab(Color fg, Color fgSecondary) {
+    final demoBuddies =
+        ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock
+            ? ResonanceBuddyViewData.prototype
+            : const <ResonanceBuddyViewData>[];
     return ListView(
       padding: EdgeInsets.all(
         AppSpacing.semantic[DesignSemanticConstants
@@ -288,9 +265,16 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
           ),
         ),
         SizedBox(height: AppSpacing.intraGroupLg),
-        ..._resonantFriends.map(
-          (user) => _buildResonantFriendItem(context, user, fg, fgSecondary),
-        ),
+        if (demoBuddies.isEmpty)
+          Text(
+            '云侧数据接入前，此列表仅在本地 Mock 数据源下展示演示趣友。',
+            style: TextStyle(color: fgSecondary, fontSize: AppTypography.sm),
+          )
+        else
+          ...demoBuddies.map(
+            (user) =>
+                _buildResonantFriendItem(context, user, fg, fgSecondary),
+          ),
       ],
     );
   }

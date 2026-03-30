@@ -16,6 +16,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/caller_avatar_pulse.dart';
 
 class OutgoingCallPage extends ConsumerStatefulWidget {
@@ -101,6 +102,9 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
             .map((p) => p.userId)
             .join(', ')
         : UITextConstants.user;
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onGradientFg = AppColors.welcomeForeground;
 
     return AppScaffold(
       backgroundColor: AppColors.transparent,
@@ -110,8 +114,12 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.welcomeGradientStart,
-              AppColors.welcomeGradientEnd,
+              isDark
+                  ? AppColors.welcomeGradientStartDark
+                  : AppColors.welcomeGradientStart,
+              isDark
+                  ? AppColors.welcomeGradientEndDark
+                  : AppColors.welcomeGradientEnd,
             ],
           ),
         ),
@@ -126,7 +134,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                     Text(
                       UITextConstants.callOutgoingCalling,
                       style: TextStyle(
-                        color: AppColors.white.withValues(alpha: 0.7),
+                        color: CallStageChrome.secondaryOnGradient(isDark),
                         fontSize: AppTypography.md,
                         fontWeight: AppTypography.normal,
                       ),
@@ -135,7 +143,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                     Text(
                       remoteName,
                       style: TextStyle(
-                        color: AppColors.white,
+                        color: onGradientFg,
                         fontSize: AppTypography.xxl,
                         fontWeight: AppTypography.semiBold,
                       ),
@@ -146,7 +154,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                     Text(
                       timer.formattedTime,
                       style: TextStyle(
-                        color: AppColors.white.withValues(alpha: 0.5),
+                        color: CallStageChrome.timerOnGradient(isDark),
                         fontSize: AppTypography.sm,
                         fontWeight: AppTypography.normal,
                         fontFeatures: const [FontFeature.tabularFigures()],
@@ -189,7 +197,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
             ),
             child: Icon(
               CupertinoIcons.phone_down_fill,
-              color: AppColors.white,
+              color: AppColors.welcomeForeground,
               size: AppSpacing.xl,
             ),
           ),
@@ -197,7 +205,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
           Text(
             UITextConstants.cancel,
             style: TextStyle(
-              color: AppColors.white,
+              color: AppColors.welcomeForeground,
               fontSize: AppTypography.sm,
               fontWeight: AppTypography.normal,
             ),
@@ -208,6 +216,10 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
   }
 
   Widget _buildDebugPanel() {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final glass = AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
+    final sep = AppColorsFunctional.getColor(isDark, ColorType.separatorSubtle);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: ClipRRect(
@@ -218,10 +230,10 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
             width: double.infinity,
             padding: EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.14),
+              color: glass.withValues(alpha: 0.82),
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.18),
+                color: sep.withValues(alpha: 0.65),
               ),
             ),
             child: Column(
@@ -233,7 +245,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                       child: Text(
                         UITextConstants.callDebugAutoConnectInFiveSeconds,
                         style: TextStyle(
-                          color: AppColors.white,
+                          color: AppColors.welcomeForeground,
                           fontSize: AppTypography.md,
                           fontWeight: AppTypography.semiBold,
                         ),
@@ -245,7 +257,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                 Text(
                   UITextConstants.callDebugOnlyHint,
                   style: TextStyle(
-                    color: AppColors.white.withValues(alpha: 0.72),
+                    color: AppColors.welcomeForeground.withValues(alpha: 0.72),
                     fontSize: AppTypography.sm,
                   ),
                 ),
@@ -309,17 +321,20 @@ class _DebugActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final glass = AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return SizedBox(
       height: AppSpacing.minInteractiveSize,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        color: AppColors.white.withValues(alpha: 0.14),
+        color: glass.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         onPressed: onTap,
         child: Text(
           label,
           style: TextStyle(
-            color: AppColors.white,
+            color: AppColors.welcomeForeground,
             fontSize: AppTypography.sm,
             fontWeight: AppTypography.medium,
           ),

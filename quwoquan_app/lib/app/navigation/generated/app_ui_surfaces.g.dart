@@ -163,6 +163,8 @@ class AppUiSurfaces {
       'GetSuggestedActions',
       'GetPolicy',
       'ListSkills',
+      'ListAssistantTasks',
+      'ListAssistantMemories',
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',
@@ -190,6 +192,8 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetPolicy',
       'ListSkills',
+      'ListAssistantTasks',
+      'ListAssistantMemories',
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',

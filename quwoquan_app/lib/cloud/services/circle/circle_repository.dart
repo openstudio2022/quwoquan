@@ -9,6 +9,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
+/// 首页圈子发现流单次拉取上限（产品约定，非 [CloudApiDefaults.pageLimit]）。
+const int _kHomeCircleDiscoveryFeedDefaultLimit = 200;
+
 String? _normalizeCircleFeedType(String? type) {
   final normalized = (type ?? '').trim().toLowerCase();
   switch (normalized) {
@@ -175,6 +178,14 @@ abstract class CircleRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
+
+  /// 首页圈子发现流（Mock：`CircleMockData.circleFeedItems`；Remote：空列表）。
+  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+    int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
+  });
+
+  /// 圈子分类 Tab 配置（Mock：`categoryConfig`；Remote：仅 `all`）。
+  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig();
 }
 
 // ---------------------------------------------------------------------------
@@ -946,6 +957,25 @@ class MockCircleRepository implements CircleRepository {
   }) async {
     return _copyCircles().take(limit).toList(growable: false);
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+    int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
+  }) async {
+    return CircleMockData.circleFeedItems
+        .take(limit)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig() async {
+    return Map<String, Map<String, dynamic>>.fromEntries(
+      CircleMockData.categoryConfig.entries.map(
+        (e) => MapEntry(e.key, Map<String, dynamic>.from(e.value)),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1571,6 +1601,20 @@ class RemoteCircleRepository implements CircleRepository {
       body: json.encode(report),
     );
     _ensureSuccess(resp);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+    int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig() async {
+    return const {
+      'all': {'label': '推荐'},
+    };
   }
 
   // -- User Circles ----------------------------------------------------------

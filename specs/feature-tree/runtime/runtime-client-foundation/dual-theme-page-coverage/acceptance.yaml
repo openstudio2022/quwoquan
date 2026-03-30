@@ -1,4 +1,4 @@
-version: 1
+version: 2
 feature: dual-theme-page-coverage
 level: "L3_story"
 template: A1-A5
@@ -9,35 +9,52 @@ level_acceptance:
   focus_groups:
     - A1_functional
     - A7_contract_metadata_consistency
-  notes: S6 双色模式全页面覆盖；详见 spec.md
+  notes: |
+    S6 双色全页面覆盖；与横向 page-horizontal-quality **P6** 对齐。
+    **Baseline（本 CR）**：冻结 partial 关闭路径（plan slices）与 S7/S8 正交边界。
+    **/dev 完成态**：partial→full 或 exempt，且 A2 技术债清零。
   A1:
-    criteria: 存在全页面矩阵，且每个 ui 页面/全屏组件行均有 支持|部分|不支持|豁免 结论
+    criteria: 存在全页面矩阵，且每个 ui 页面/全屏组件/shell 行均有 full|partial|no|exempt 结论
     status: implemented
     linked_tasks:
       - M1
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md
   A2:
-    criteria: 矩阵中「不支持/部分」项均有修复 PR 或带截止的技术债链接（豁免除外且已填 exemption_reason）
-    status: implemented
+    criteria: |
+      矩阵中「partial/no」行均有 **关闭路径**：修复 PR **或** 带截止/issue 的技术债 **或** exempt+exemption_reason。
+      Baseline 出口：partial 行已 **列入 plan.yaml v3 slices（L1→L2→L3 + MS）**；逐项关闭在后续 /dev PR。
+      实施须遵循 design.md **减少散弹式修改**：优先 L1 API 与高扇出组件，**禁止**以逐页扫 `*_page.dart` 为主路径。
+    status: specified
     linked_tasks:
       - M2
+      - s6-slice-l1-through-l3-and-ms
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md
+      - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/plan.yaml
   A3:
-    criteria: 新增/大改页面 PR 须更新矩阵或等效清单（门禁或模板勾选；模板缺失时以 CR/任务说明为准）
+    criteria: 新增/大改页面 PR 须更新 page-dual-theme-matrix 与横向矩阵 P6（或等效清单）
     status: implemented
     linked_tasks:
       - M3
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/tasks.md
   A4:
-    criteria: flutter analyze quwoquan_app/lib 无新增与主题相关的硬编码色违规（与 verify_dart_semantic 策略一致）
+    criteria: flutter analyze + verify_dart_semantic 策略下无新增主题相关硬编码色违规（与同向门禁一致）
     status: implemented
     linked_tasks:
       - M2
     tests:
       - file: scripts/verify_dart_semantic.py
+  A5:
+    criteria: |
+      S6 baseline 冻结：spec/design/plan/acceptance 含 **S7/S8 正交** 声明；CR-012 登记；
+      plan.yaml 含 s6-slice-w1…w5 + matrix-sync。
+    status: implemented
+    linked_tasks:
+      - M-baseline-s6
+    tests:
+      - file: specs/changelog/CR-20260330-012-s6-dual-theme-baseline.yaml
   A7:
     criteria: 与 02_IOS_NATIVE_FRONTEND_UX_SPEC §2.5、app-theme-infrastructure 无冲突
     status: implemented
@@ -52,3 +69,50 @@ linked_stories:
   - app-theme-infrastructure
   - dart-semantic-gate
   - ios-native-page-enforcement
+  - page-horizontal-quality
+
+journey_acceptance:
+  - id: J1
+    statement: 用户可在浅色与深色下使用主导航与核心业务页且可读可点（partial 行按 slice 收敛中）
+    t_layers: [T1, T2, T3]
+  - id: J2
+    statement: 豁免页行为与矩阵 exemption_reason 一致
+    t_layers: [T1]
+
+scenario_acceptance:
+  - id: S6-PR-matrix
+    statement: 涉及 S6 视觉改的 PR 同步更新双矩阵同行结论
+    t_layers: [T2, T3]
+  - id: S6-parallel
+    statement: S6 /dev 不捆绑 S7 断点或 S8 非双色类 token 大改（见 spec Out of Scope）
+    t_layers: [T1]
+
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/spec.md
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/design.md
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/acceptance.yaml
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/plan.yaml
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md
+    - type: doc
+      artifact: specs/changelog/CR-20260330-012-s6-dual-theme-baseline.yaml
+  T2:
+    - type: command
+      note: flutter analyze quwoquan_app/lib/
+    - type: script
+      artifact: scripts/verify_dart_semantic.py
+    - type: script
+      artifact: scripts/verify_page_horizontal_quality_matrix.py
+    - type: script
+      artifact: scripts/verify_page_matrix_scan_complete.py
+  T3:
+    - type: manual
+      note: 各 plan slice 合并前深浅色抽检（模拟器/真机）
+  T4:
+    - type: deferred
+      note: Golden 或截图脚本 — plan P2

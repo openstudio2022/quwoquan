@@ -135,6 +135,45 @@ class ProfileCircleViewData {
   }
 }
 
+/// 关注/粉丝列表行（`listFollowing` / `listFollowers` wire → 强类型，供 UI 使用）。
+@immutable
+class ProfileSocialRelationRowViewData {
+  const ProfileSocialRelationRowViewData({
+    required this.profileSubjectId,
+    required this.displayName,
+    required this.avatarUrl,
+    this.isFollowing = false,
+  });
+
+  final String profileSubjectId;
+  final String displayName;
+  final String avatarUrl;
+  final bool isFollowing;
+
+  factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
+    final id =
+        _string(map['profileSubjectId']) ??
+        _string(map['userId']) ??
+        '';
+    final String name =
+        _string(map['displayName']) ??
+        _string(map['nickname']) ??
+        (id.isEmpty ? '' : id);
+    return ProfileSocialRelationRowViewData(
+      profileSubjectId: id,
+      displayName: name,
+      avatarUrl: _string(map['avatarUrl']) ?? '',
+      isFollowing: _bool(map['isFollowing']),
+    );
+  }
+}
+
+/// 清单用户档案展示面别名：端侧统一 [ProfileSubjectViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
+typedef UserProfileViewData = ProfileSubjectViewData;
+
+/// 清单 PersonaDto：端侧管理行统一 [PersonaManagementItemViewData]。
+typedef PersonaDtoSurface = PersonaManagementItemViewData;
+
 @immutable
 class ProfileInteractionActivityViewData {
   const ProfileInteractionActivityViewData({
@@ -488,4 +527,48 @@ DateTime? _dateTime(Object? value) {
   final raw = value?.toString();
   if (raw == null || raw.isEmpty) return null;
   return DateTime.tryParse(raw);
+}
+
+// ─── 主页 Tab 行模型（与 mock 数据字段对齐；待 service.yaml codegen 收敛）────────
+
+/// 作品集条目。
+@immutable
+class UserWorkItem {
+  const UserWorkItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.coverUrl,
+    required this.likeCount,
+    required this.date,
+    required this.desc,
+  });
+
+  final String id;
+  final String type;
+  final String title;
+  final String coverUrl;
+  final int likeCount;
+  final String date;
+  final String desc;
+}
+
+/// 生活记录条目。
+@immutable
+class UserLifeItem {
+  const UserLifeItem({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.categoryKey,
+    required this.coverUrl,
+    required this.desc,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final String categoryKey;
+  final String coverUrl;
+  final String desc;
 }

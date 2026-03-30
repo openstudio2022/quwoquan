@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 
@@ -45,11 +46,13 @@ void main() {
       expect(first.containsKey('status'), isTrue);
     });
 
-    test('createConversation 返回包含 _id 的会话', () async {
+    test('createConversation 返回强类型会话 id', () async {
       final conv = await repo.createConversation(type: 'group', title: '测试群聊');
-      expect(conv['_id'], isNotNull);
-      expect(conv['type'], 'group');
-      expect(conv['status'], 'active');
+      expect(conv, isA<ChatConversationCreatedDto>());
+      expect(conv.conversationId, isNotEmpty);
+      final full = await repo.getConversation(conv.conversationId);
+      expect(full['type'], 'group');
+      expect(full['status'], 'active');
     });
 
     test('getConversation 返回指定会话', () async {
@@ -143,8 +146,8 @@ void main() {
         type: 'group',
         title: 'rev test',
       );
-      final id = (created['_id'] ?? created['id']).toString();
-      expect(created['membersRosterRevision'], 1);
+      final id = created.conversationId;
+      expect(id, isNotEmpty);
       await repo.addMembers(conversationId: id, userIds: ['user_099']);
       final after = await repo.getConversation(id);
       expect(after['membersRosterRevision'], 2);
@@ -204,6 +207,23 @@ void main() {
     test('searchContacts 返回匹配结果', () async {
       final contacts = await repo.searchContacts(query: '李');
       expect(contacts, isList);
+    });
+
+    test('listContactTabCircles Mock 返回圈子占位行', () async {
+      final rows = await repo.listContactTabCircles();
+      expect(rows, isNotEmpty);
+      expect(rows.first['circleId'], isNotNull);
+    });
+
+    test('listContactTabFunGroups Mock 返回趣群占位行', () async {
+      final rows = await repo.listContactTabFunGroups();
+      expect(rows, isNotEmpty);
+    });
+
+    test('listMemberUserIds 解析 conv_001 成员', () async {
+      final ids = await repo.listMemberUserIds('conv_001');
+      expect(ids, isNotEmpty);
+      expect(ids, contains('user_001'));
     });
   });
 
@@ -268,12 +288,13 @@ void main() {
       expect(contacts, isList);
     });
 
-    test('接口包含全部 18 个 API 方法', () {
+    test('接口包含全部 19 个 API 方法', () {
       final methods = <String>[
         'listInbox',
         'listConversations',
         'createConversation',
         'getConversation',
+        'updateConversationTitle',
         'listMessages',
         'sendMessage',
         'recallMessage',
@@ -289,7 +310,7 @@ void main() {
         'listContacts',
         'searchContacts',
       ];
-      expect(methods.length, 18);
+      expect(methods.length, 19);
     });
   });
 }

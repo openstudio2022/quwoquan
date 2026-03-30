@@ -18,9 +18,11 @@ import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
@@ -45,7 +47,7 @@ class StartGroupChatPage extends ConsumerStatefulWidget {
 class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
-  final Map<String, Map<String, String>> _selectedMembers = {};
+  final Map<String, StartGroupPickableMember> _selectedMembers = {};
   final Set<String> _existingMemberIds = <String>{};
 
   List<ChatInboxDto> _groupInboxRows = [];
@@ -67,7 +69,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       final userRepo = ref.read(userProfileRepositoryProvider);
       final currentUserId = ref.read(currentUserIdProvider);
       final inbox = await chatRepo.listInbox(limit: 50);
-      final convMaps = await chatRepo.listConversations(limit: 50);
       final contacts = await chatRepo.listContacts(limit: 200);
       final circleMaps = await userRepo.listUserCircles(
         currentUserId,
@@ -89,13 +90,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               )
               .toList(growable: false);
           _contacts = contacts;
-          final activeCircleIds = convMaps
-              .where((conversation) => conversation['type'] == 'circle')
-              .map(
-                (conversation) =>
-                    _readString(conversation, const ['circleId', 'id']),
-              )
-              .where((circleId) => circleId.isNotEmpty)
+          final activeCircleIds = inbox
+              .where((row) => row.type == 'circle' && row.circleId.isNotEmpty)
+              .map((row) => row.circleId)
               .toSet();
           _circles = circleMaps
               .map(CircleDto.fromMap)
@@ -122,7 +119,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     super.dispose();
   }
 
-  static String _readString(Map<String, dynamic> source, List<String> keys) {
+  static String _readWireString(Map<String, dynamic> source, List<String> keys) {
     for (final key in keys) {
       final value = source[key];
       if (value == null) {
@@ -143,15 +140,46 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         .toSet();
   }
 
-  List<Map<String, String>> _normalizeSelectableMembers(
+  List<StartGroupPickableMember> _selectableFromChatMembers(
+    List<ChatConversationMemberDto> members, {
+    bool mutualOnly = false,
+  }) {
+    final allowedIds = _mutualContactIds;
+    final normalized = <StartGroupPickableMember>[];
+    final seen = <String>{};
+    for (final m in members) {
+      final userId = m.userId;
+      if (userId.isEmpty ||
+          _existingMemberIds.contains(userId) ||
+          seen.contains(userId)) {
+        continue;
+      }
+      if (mutualOnly && !allowedIds.contains(userId)) {
+        continue;
+      }
+      seen.add(userId);
+      final displayName =
+          m.displayName.isNotEmpty ? m.displayName : userId;
+      normalized.add(
+        StartGroupPickableMember(
+          userId: userId,
+          displayName: displayName,
+          avatarUrl: m.avatarUrl,
+        ),
+      );
+    }
+    return normalized;
+  }
+
+  List<StartGroupPickableMember> _selectableFromCircleWireMaps(
     List<Map<String, dynamic>> members, {
     bool mutualOnly = false,
   }) {
     final allowedIds = _mutualContactIds;
-    final normalized = <Map<String, String>>[];
+    final normalized = <StartGroupPickableMember>[];
     final seen = <String>{};
     for (final member in members) {
-      final userId = _readString(member, const [
+      final userId = _readWireString(member, const [
         'userId',
         'profileSubjectId',
         'contactId',
@@ -165,38 +193,35 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         continue;
       }
       seen.add(userId);
-      normalized.add(<String, String>{
-        'userId': userId,
-        'name': _readString(member, const [
-          'displayName',
-          'nickname',
-          'name',
-          'username',
-        ]),
-        'username': userId,
-        'avatar': _readString(member, const [
-          'avatarUrl',
-          'avatar',
-          'coverUrl',
-        ]),
-      });
+      final displayName = _readWireString(member, const [
+        'displayName',
+        'nickname',
+        'name',
+        'username',
+      ]);
+      normalized.add(
+        StartGroupPickableMember(
+          userId: userId,
+          displayName: displayName.isNotEmpty ? displayName : userId,
+          avatarUrl: _readWireString(member, const [
+            'avatarUrl',
+            'avatar',
+            'coverUrl',
+          ]),
+        ),
+      );
     }
     return normalized;
   }
 
-  void _mergeSelectedMembers(List<Map<String, String>> members) {
+  void _mergeSelectedMembers(List<StartGroupPickableMember> members) {
     setState(() {
       for (final member in members) {
-        final userId = member['userId'] ?? member['username'] ?? '';
+        final userId = member.userId;
         if (userId.isEmpty || _existingMemberIds.contains(userId)) {
           continue;
         }
-        _selectedMembers[userId] = <String, String>{
-          'userId': userId,
-          'name': member['name'] ?? userId,
-          'username': member['username'] ?? userId,
-          'avatar': member['avatar'] ?? '',
-        };
+        _selectedMembers[userId] = member;
       }
     });
   }
@@ -226,8 +251,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     AppToast.show(context, message);
   }
 
-  void _toggleSelectedMember(Map<String, String> member) {
-    final userId = member['userId'] ?? member['username'] ?? '';
+  void _toggleSelectedMember(StartGroupPickableMember member) {
+    final userId = member.userId;
     if (userId.isEmpty) {
       return;
     }
@@ -253,21 +278,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     try {
       final repo = ref.read(chatRepositoryProvider);
       if (widget.isCreateMode) {
-        final created = await repo.createConversation(
+        final ChatConversationCreatedDto created = await repo.createConversation(
           type: 'group',
           title: _selectedMembers.values
-              .map((member) => member['name'] ?? '')
+              .map((member) => member.displayName)
               .where((name) => name.isNotEmpty)
               .take(3)
               .join('、'),
           maxGroupSize: 500,
           initialMemberIds: selectedIds,
         );
-        final conversationId = _readString(created, const [
-          '_id',
-          'id',
-          'conversationId',
-        ]);
+        final conversationId = created.conversationId;
         if (!context.mounted) {
           return;
         }
@@ -304,27 +325,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       context: context,
       barrierColor: AppColors.transparent,
       builder: (context) => _SelectGroupChatSheet(
-        groups: _groupInboxRows
-            .map(
-              (g) => <String, dynamic>{
-                'id': g.id,
-                'name': g.title,
-                'count': '',
-                'avatar': g.avatarUrl,
-                'memberAvatars': g.avatarCompositeUrls,
-              },
-            )
-            .toList(growable: false),
+        groups: _groupInboxRows,
         onSelectGroup: (group) async {
           Navigator.of(context).pop();
           final members = await ref
               .read(chatRepositoryProvider)
               .listMembers(
-                conversationId: (group['id'] ?? '').toString(),
+                conversationId: group.id,
                 limit: 500,
               );
-          final selectableMembers = _normalizeSelectableMembers(
-            members.map((m) => m.toMap()).toList(growable: false),
+          final selectableMembers = _selectableFromChatMembers(
+            members,
             mutualOnly: true,
           );
           if (!context.mounted) {
@@ -335,8 +346,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             return;
           }
           _openMemberSelectSheet(
-            title:
-                '${group['name']}${(group['count'] as String).isEmpty ? '' : ' (${group['count']}${UITextConstants.friendsCount})'}',
+            title: group.title,
             members: selectableMembers,
             onConfirm: _mergeSelectedMembers,
           );
@@ -351,22 +361,13 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       context: context,
       barrierColor: AppColors.transparent,
       builder: (context) => _SelectCircleSheet(
-        circles: _circles
-            .map(
-              (circle) => <String, dynamic>{
-                'id': circle.id,
-                'name': circle.name,
-                'count': '${circle.memberCount}',
-                'avatar': circle.coverUrl ?? '',
-              },
-            )
-            .toList(),
+        circles: _circles,
         onSelectCircle: (circle) async {
           Navigator.of(context).pop();
           final members = await ref
               .read(circleRepositoryProvider)
-              .listMembers((circle['id'] ?? '').toString(), limit: 500);
-          final selectableMembers = _normalizeSelectableMembers(
+              .listMembers(circle.id, limit: 500);
+          final selectableMembers = _selectableFromCircleWireMaps(
             members,
             mutualOnly: true,
           );
@@ -379,7 +380,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           }
           _openMemberSelectSheet(
             title:
-                '${circle['name']} (${circle['count']}${UITextConstants.friendsCount})',
+                '${circle.name} (${circle.memberCount}${UITextConstants.friendsCount})',
             members: selectableMembers,
             onConfirm: _mergeSelectedMembers,
           );
@@ -391,8 +392,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
 
   void _openMemberSelectSheet({
     required String title,
-    required List<Map<String, String>> members,
-    required void Function(List<Map<String, String>>) onConfirm,
+    required List<StartGroupPickableMember> members,
+    required void Function(List<StartGroupPickableMember>) onConfirm,
   }) {
     showCupertinoModalPopup<void>(
       context: context,
@@ -407,14 +408,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   /// 按首字母分组：A-Z, #，返回有序 keys 与 map
-  static ({List<String> keys, Map<String, List<Map<String, dynamic>>> map})
-  _groupByLetter(List<Map<String, dynamic>> list) {
-    final map = <String, List<Map<String, dynamic>>>{};
+  static ({
+    List<String> keys,
+    Map<String, List<StartGroupFriendLetterRow>> map,
+  })
+  _groupByLetter(List<StartGroupFriendLetterRow> list) {
+    final map = <String, List<StartGroupFriendLetterRow>>{};
     for (final m in list) {
-      final name = m['name'] as String? ?? '';
-      final letter =
-          m['letter'] as String? ??
-          (name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '#');
+      final name = m.displayName;
+      final letter = m.letter.isNotEmpty
+          ? m.letter
+          : (name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '#');
       final key = RegExp(r'[A-Za-z]').hasMatch(letter)
           ? letter.toUpperCase()
           : '#';
@@ -422,7 +426,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     }
     for (final key in map.keys) {
       map[key]!.sort(
-        (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+        (a, b) => a.displayName.compareTo(b.displayName),
       );
     }
     final keys = map.keys.toList()..sort();
@@ -467,14 +471,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         .map(
           (c) {
             final displayName = c.displayName;
-            return <String, dynamic>{
-              'name': displayName,
-              'username': c.userId,
-              'avatar': c.avatarUrl,
-              'letter': displayName.isNotEmpty
+            return StartGroupFriendLetterRow(
+              displayName: displayName,
+              userId: c.userId,
+              avatarUrl: c.avatarUrl,
+              letter: displayName.isNotEmpty
                   ? displayName.substring(0, 1).toUpperCase()
                   : '#',
-            };
+            );
           },
         )
         .toList();
@@ -537,26 +541,30 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                     Builder(
                       builder: (context) {
                         final m = membersForLetter[index];
-                        final username = m['username'] as String? ?? '';
+                        final username = m.userId;
                         final selected = _selectedMembers.containsKey(username);
+                        final pickable = StartGroupPickableMember(
+                          userId: username,
+                          displayName: m.displayName.isNotEmpty
+                              ? m.displayName
+                              : username,
+                          avatarUrl: m.avatarUrl,
+                        );
                         return _RelatedFriendRow(
-                          name: m['name'] as String,
+                          name: m.displayName,
                           username: username,
-                          avatarUrl: m['avatar'] as String? ?? '',
+                          avatarUrl: m.avatarUrl,
                           selected: selected,
                           fgPrimary: fgPrimary,
-                          onTap: () => _toggleSelectedMember(<String, String>{
-                            'userId': username,
-                            'name': m['name'] as String? ?? username,
-                            'username': username,
-                            'avatar': m['avatar'] as String? ?? '',
-                          }),
+                          onTap: () => _toggleSelectedMember(pickable),
                           onAvatarTap: () => context.push(
                             AppRoutePaths.userProfile(username: username),
                             extra: UserProfileRouteExtra(
                               profileSubjectId: username,
-                              avatar: m['avatar'] as String?,
-                              displayName: m['name'] as String?,
+                              avatar: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
+                              displayName: m.displayName.isNotEmpty
+                                  ? m.displayName
+                                  : null,
                             ),
                           ),
                           isDark: isDark,
@@ -667,10 +675,12 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                       runSpacing: AppSpacing.sm,
                       children: List.generate(visibleSelectedCount, (index) {
                         final member = selectedMembers[index];
-                        final userId = member['userId'] ?? '';
+                        final userId = member.userId;
                         return _SelectedMemberAvatar(
-                          name: member['name'] ?? userId,
-                          avatarUrl: member['avatar'] ?? '',
+                          name: member.displayName.isNotEmpty
+                              ? member.displayName
+                              : userId,
+                          avatarUrl: member.avatarUrl,
                           isDark: isDark,
                           onRemove: () =>
                               setState(() => _selectedMembers.remove(userId)),
@@ -1118,8 +1128,8 @@ class _SelectGroupChatSheet extends StatefulWidget {
     required this.onClose,
   });
 
-  final List<Map<String, dynamic>> groups;
-  final void Function(Map<String, dynamic> group) onSelectGroup;
+  final List<ChatInboxDto> groups;
+  final void Function(ChatInboxDto group) onSelectGroup;
   final VoidCallback onClose;
 
   @override
@@ -1136,22 +1146,20 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
     super.dispose();
   }
 
-  bool _matches(Map<String, dynamic> group) {
+  bool _matches(ChatInboxDto group) {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) {
       return true;
     }
-    final name = (group['name'] ?? '').toString().toLowerCase();
-    final count = (group['count'] ?? '').toString().toLowerCase();
-    return name.contains(query) || count.contains(query);
+    final name = group.title.toLowerCase();
+    return name.contains(query);
   }
 
-  Widget _buildLeading(Map<String, dynamic> group, bool isDark) {
-    final memberAvatars =
-        (group['memberAvatars'] as List<dynamic>? ?? const <dynamic>[])
-            .map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
+  Widget _buildLeading(ChatInboxDto group, bool isDark) {
+    final memberAvatars = group.avatarCompositeUrls
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
     if (memberAvatars.isNotEmpty) {
       return GroupAvatarGrid(
         size: AppSpacing.avatarSize,
@@ -1159,12 +1167,12 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
       );
     }
 
-    final avatarUrl = (group['avatar'] ?? '').toString();
+    final avatarUrl = group.avatarUrl;
     if (avatarUrl.isNotEmpty) {
       return RoundedSquareAvatar(
         size: AppSpacing.avatarSize,
         imageUrl: avatarUrl,
-        name: (group['name'] ?? '').toString(),
+        name: group.title,
         backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
       );
     }
@@ -1178,10 +1186,9 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
 
   Widget _buildRow(
     BuildContext context,
-    Map<String, dynamic> group,
+    ChatInboxDto group,
     bool isDark,
     Color fgPrimary,
-    Color fgSecondary,
   ) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -1205,21 +1212,13 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      (group['name'] ?? '').toString(),
+                      group.title,
                       style: TextStyle(
                         fontSize: AppTypography.lg,
                         color: fgPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: AppSpacing.two),
-                    Text(
-                      '${group['count']}${UITextConstants.friendsCount}',
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: fgSecondary,
-                      ),
                     ),
                   ],
                 ),
@@ -1319,7 +1318,6 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
                                 filtered[index],
                                 isDark,
                                 fgPrimary,
-                                fgSecondary,
                               ),
                               if (index < filtered.length - 1)
                                 _SelectionListDivider(
@@ -1348,8 +1346,8 @@ class _SelectCircleSheet extends StatefulWidget {
     required this.onClose,
   });
 
-  final List<Map<String, dynamic>> circles;
-  final void Function(Map<String, dynamic> circle) onSelectCircle;
+  final List<CircleDto> circles;
+  final void Function(CircleDto circle) onSelectCircle;
   final VoidCallback onClose;
 
   @override
@@ -1366,23 +1364,23 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
     super.dispose();
   }
 
-  bool _matches(Map<String, dynamic> circle) {
+  bool _matches(CircleDto circle) {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) {
       return true;
     }
-    final name = (circle['name'] ?? '').toString().toLowerCase();
-    final count = (circle['count'] ?? '').toString().toLowerCase();
+    final name = circle.name.toLowerCase();
+    final count = '${circle.memberCount}'.toLowerCase();
     return name.contains(query) || count.contains(query);
   }
 
-  Widget _buildLeading(Map<String, dynamic> circle, bool isDark) {
-    final avatarUrl = (circle['avatar'] ?? '').toString();
+  Widget _buildLeading(CircleDto circle, bool isDark) {
+    final avatarUrl = circle.coverUrl ?? '';
     if (avatarUrl.isNotEmpty) {
       return RoundedSquareAvatar(
         size: AppSpacing.avatarSize,
         imageUrl: avatarUrl,
-        name: (circle['name'] ?? '').toString(),
+        name: circle.name,
         backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
       );
     }
@@ -1395,7 +1393,7 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
   }
 
   Widget _buildRow(
-    Map<String, dynamic> circle,
+    CircleDto circle,
     bool isDark,
     Color fgPrimary,
     Color fgSecondary,
@@ -1422,7 +1420,7 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      (circle['name'] ?? '').toString(),
+                      circle.name,
                       style: TextStyle(
                         fontSize: AppTypography.lg,
                         color: fgPrimary,
@@ -1432,7 +1430,7 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
                     ),
                     SizedBox(height: AppSpacing.two),
                     Text(
-                      '${circle['count']}${UITextConstants.friendsCount}',
+                      '${circle.memberCount}${UITextConstants.friendsCount}',
                       style: TextStyle(
                         fontSize: AppTypography.sm,
                         color: fgSecondary,
@@ -1566,8 +1564,8 @@ class _MemberSelectSheet extends StatefulWidget {
   });
 
   final String title;
-  final List<Map<String, String>> members;
-  final void Function(List<Map<String, String>> selected) onConfirm;
+  final List<StartGroupPickableMember> members;
+  final void Function(List<StartGroupPickableMember> selected) onConfirm;
   final VoidCallback onBack;
 
   @override
@@ -1579,16 +1577,12 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
-  String _memberId(Map<String, String> member) {
-    final userId = (member['userId'] ?? '').trim();
+  String _memberId(StartGroupPickableMember member) {
+    final userId = member.userId.trim();
     if (userId.isNotEmpty) {
       return userId;
     }
-    final username = (member['username'] ?? '').trim();
-    if (username.isNotEmpty) {
-      return username;
-    }
-    return (member['name'] ?? '').trim();
+    return member.displayName.trim();
   }
 
   bool get _allSelected => _selectedIds.length == widget.members.length;
@@ -1599,7 +1593,7 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
     super.dispose();
   }
 
-  void _toggleMember(Map<String, String> member) {
+  void _toggleMember(StartGroupPickableMember member) {
     final id = _memberId(member);
     if (id.isEmpty) {
       return;
@@ -1643,7 +1637,7 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
           if (query.isEmpty) {
             return true;
           }
-          final name = (member['name'] ?? '').toLowerCase();
+          final name = member.displayName.toLowerCase();
           final userId = _memberId(member).toLowerCase();
           return name.contains(query) || userId.contains(query);
         })
@@ -1741,8 +1735,8 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                                             ),
                                             RoundedSquareAvatar(
                                               size: AppSpacing.avatarSize,
-                                              imageUrl: member['avatar'] ?? '',
-                                              name: member['name'] ?? '',
+                                              imageUrl: member.avatarUrl,
+                                              name: member.displayName,
                                               backgroundColor:
                                                   SettingsSemanticConstants.blockBackground(
                                                     isDark,
@@ -1751,7 +1745,7 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                                             SizedBox(width: AppSpacing.sm),
                                             Expanded(
                                               child: Text(
-                                                member['name'] ?? '',
+                                                member.displayName,
                                                 style: TextStyle(
                                                   fontSize: AppTypography.lg,
                                                   color: fgPrimary,

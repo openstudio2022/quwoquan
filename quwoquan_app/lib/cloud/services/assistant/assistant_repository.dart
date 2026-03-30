@@ -7,9 +7,16 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
+import 'package:quwoquan_app/core/mock/prototype_mock_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
+
+/// Assistant 任务/记忆等列表接口单次拉取条数（与网关约定一致，非 [CloudApiDefaults.pageLimit]）。
+const int _kAssistantListPageDefaultLimit = 32;
+
+/// Assistant 技能目录单次拉取条数。
+const int _kAssistantSkillCatalogDefaultLimit = 64;
 
 class AssistantSkillConsent {
   const AssistantSkillConsent({
@@ -127,6 +134,125 @@ class AssistantSearchResultView {
   }
 }
 
+/// 助手日程/待办项（对齐 metadata `AssistantUserTaskView`）。
+class AssistantUserTaskView {
+  const AssistantUserTaskView({
+    required this.taskId,
+    required this.title,
+    this.description,
+    required this.status,
+    this.dueAt,
+    this.priority,
+    this.sourceSkillId,
+    this.updatedAt,
+  });
+
+  final String taskId;
+  final String title;
+  final String? description;
+  final String status;
+  final String? dueAt;
+  final String? priority;
+  final String? sourceSkillId;
+  final String? updatedAt;
+
+  /// 兼容旧 UI 使用的 `title` / `desc` Map。
+  Map<String, dynamic> toScheduleRowMap() => <String, dynamic>{
+    'title': title,
+    'desc': description ?? '',
+  };
+
+  factory AssistantUserTaskView.fromJson(Map<String, dynamic> json) {
+    return AssistantUserTaskView(
+      taskId:
+          (json['taskId'] ?? json['task_id'] ?? json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      description: json['description']?.toString(),
+      status: (json['status'] ?? 'pending').toString(),
+      dueAt: json['dueAt']?.toString() ?? json['due_at']?.toString(),
+      priority: json['priority']?.toString(),
+      sourceSkillId:
+          json['sourceSkillId']?.toString() ??
+          json['source_skill_id']?.toString(),
+      updatedAt:
+          json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
+    );
+  }
+}
+
+/// 助手记忆摘要项（对齐 metadata `AssistantUserMemoryView`）。
+class AssistantUserMemoryView {
+  const AssistantUserMemoryView({
+    required this.memoryId,
+    required this.title,
+    this.snippet,
+    this.sourceType,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String memoryId;
+  final String title;
+  final String? snippet;
+  final String? sourceType;
+  final String? createdAt;
+  final String? updatedAt;
+
+  factory AssistantUserMemoryView.fromJson(Map<String, dynamic> json) {
+    return AssistantUserMemoryView(
+      memoryId:
+          (json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '')
+              .toString(),
+      title: (json['title'] ?? '').toString(),
+      snippet: json['snippet']?.toString(),
+      sourceType:
+          json['sourceType']?.toString() ?? json['source_type']?.toString(),
+      createdAt:
+          json['createdAt']?.toString() ?? json['created_at']?.toString(),
+      updatedAt:
+          json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
+    );
+  }
+}
+
+/// 技能目录项（对齐 metadata `AssistantSkillCatalogItemView`）。
+class AssistantSkillCatalogItemView {
+  const AssistantSkillCatalogItemView({
+    required this.skillId,
+    required this.displayName,
+    this.description,
+    this.category,
+    this.requiresConsent = false,
+    this.iconHint,
+  });
+
+  final String skillId;
+  final String displayName;
+  final String? description;
+  final String? category;
+  final bool requiresConsent;
+  final String? iconHint;
+
+  factory AssistantSkillCatalogItemView.fromJson(Map<String, dynamic> json) {
+    return AssistantSkillCatalogItemView(
+      skillId:
+          (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString(),
+      displayName:
+          (json['displayName'] ??
+                  json['display_name'] ??
+                  json['name'] ??
+                  '')
+              .toString(),
+      description: json['description']?.toString() ?? json['desc']?.toString(),
+      category: json['category']?.toString(),
+      requiresConsent:
+          json['requiresConsent'] == true || json['requires_consent'] == true,
+      iconHint:
+          json['iconHint']?.toString() ?? json['icon_hint']?.toString(),
+    );
+  }
+}
+
 AssistantSearchResultView _buildFallbackSearchResult({
   required String query,
   required String searchIntensity,
@@ -156,6 +282,22 @@ abstract class AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+  });
+
+  /// GET /v1/assistant/tasks
+  Future<List<AssistantUserTaskView>> listAssistantTasks({
+    int limit = _kAssistantListPageDefaultLimit,
+    String? status,
+  });
+
+  /// GET /v1/assistant/memories
+  Future<List<AssistantUserMemoryView>> listAssistantMemories({
+    int limit = _kAssistantListPageDefaultLimit,
+  });
+
+  /// GET /v1/assistant/skills
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+    int limit = _kAssistantSkillCatalogDefaultLimit,
   });
 }
 
@@ -200,6 +342,71 @@ class MockAssistantRepository implements AssistantRepository {
       searchIntensity: searchIntensity,
     );
   }
+
+  @override
+  Future<List<AssistantUserTaskView>> listAssistantTasks({
+    int limit = _kAssistantListPageDefaultLimit,
+    String? status,
+  }) async {
+    final raw = PrototypeMockData.assistantTasksData;
+    Iterable<Map<String, dynamic>> rows = raw;
+    if (status != null && status.trim().isNotEmpty) {
+      rows = raw.where(
+        (row) => (row['status']?.toString() ?? '') == status.trim(),
+      );
+    }
+    return rows
+        .map((row) {
+          final time = row['time']?.toString() ?? '';
+          final category = row['category']?.toString() ?? '';
+          final desc = <String>[
+            if (time.isNotEmpty) time,
+            if (category.isNotEmpty) category,
+          ].join(' · ');
+          return AssistantUserTaskView(
+            taskId: row['id']?.toString() ?? '',
+            title: row['title']?.toString() ?? '',
+            description: desc.isEmpty ? null : desc,
+            status: row['status']?.toString() ?? 'pending',
+          );
+        })
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<AssistantUserMemoryView>> listAssistantMemories({
+    int limit = _kAssistantListPageDefaultLimit,
+  }) async {
+    return PrototypeMockData.assistantMemoryData
+        .map(
+          (row) => AssistantUserMemoryView(
+            memoryId: row['id']?.toString() ?? '',
+            title: row['title']?.toString() ?? '',
+            snippet: row['type']?.toString(),
+            sourceType: row['type']?.toString(),
+          ),
+        )
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+    int limit = _kAssistantSkillCatalogDefaultLimit,
+  }) async {
+    return PrototypeMockData.assistantSkillsData
+        .map(
+          (row) => AssistantSkillCatalogItemView(
+            skillId: row['id']?.toString() ?? '',
+            displayName: row['name']?.toString() ?? '',
+            description: row['desc']?.toString(),
+            requiresConsent: false,
+          ),
+        )
+        .take(limit)
+        .toList(growable: false);
+  }
 }
 
 class RemoteAssistantRepository implements AssistantRepository {
@@ -243,6 +450,58 @@ class RemoteAssistantRepository implements AssistantRepository {
       surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
       operationId: operationId,
     );
+  }
+
+  Map<String, String> _headersForAssistantDialog({
+    required String operationId,
+    required String legacyPageId,
+  }) {
+    return CloudRequestHeaders.forSurfaceOperation(
+      surfaceId: AppUiSurfaces.assistantDialog.id,
+      routeId: AppUiSurfaces.assistantDialog.routeId,
+      operationId: operationId,
+      legacyPageId: legacyPageId,
+    );
+  }
+
+  String _assistantDialogContext({required String operationId}) {
+    return CloudRequestHeaders.contextForSurfaceOperation(
+      surfaceId: AppUiSurfaces.assistantDialog.id,
+      operationId: operationId,
+    );
+  }
+
+  Uri _assistantGetUri(String path, Map<String, String> query) {
+    final base = Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path');
+    if (query.isEmpty) {
+      return base;
+    }
+    return base.replace(
+      queryParameters: <String, String>{
+        for (final e in query.entries)
+          if (e.value.isNotEmpty) e.key: e.value,
+      },
+    );
+  }
+
+  List<Map<String, dynamic>> _decodeItemsMap(
+    Object? decoded, {
+    required String context,
+  }) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((row) => row.cast<String, dynamic>())
+          .toList(growable: false);
+    }
+    final object = CloudResponseDecoder.asObject(decoded, context: context);
+    final raw =
+        (object['items'] as List?)
+            ?.whereType<Map>()
+            .map((row) => row.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return raw;
   }
 
   @override
@@ -401,6 +660,120 @@ class RemoteAssistantRepository implements AssistantRepository {
       query: trimmedQuery,
       searchIntensity: searchIntensity,
     );
+  }
+
+  @override
+  Future<List<AssistantUserTaskView>> listAssistantTasks({
+    int limit = _kAssistantListPageDefaultLimit,
+    String? status,
+  }) async {
+    try {
+      final uri = _assistantGetUri(AssistantApiMetadata.listAssistantTasksPath, {
+        'limit': '$limit',
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      });
+      final response = await _client.get(
+        uri,
+        headers: _headersForAssistantDialog(
+          operationId: AssistantApiMetadata.listAssistantTasksOperation,
+          legacyPageId: AssistantRequestPageIds.listAssistantTasks,
+        ),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const <AssistantUserTaskView>[];
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      final rows = _decodeItemsMap(
+        decoded,
+        context: _assistantDialogContext(
+          operationId: AssistantApiMetadata.listAssistantTasksOperation,
+        ),
+      );
+      return rows
+          .map(AssistantUserTaskView.fromJson)
+          .where((row) => row.taskId.isNotEmpty)
+          .take(limit)
+          .toList(growable: false);
+    } catch (_) {
+      return const <AssistantUserTaskView>[];
+    }
+  }
+
+  @override
+  Future<List<AssistantUserMemoryView>> listAssistantMemories({
+    int limit = _kAssistantListPageDefaultLimit,
+  }) async {
+    try {
+      final uri = _assistantGetUri(
+        AssistantApiMetadata.listAssistantMemoriesPath,
+        {'limit': '$limit'},
+      );
+      final response = await _client.get(
+        uri,
+        headers: _headersForAssistantDialog(
+          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
+          legacyPageId: AssistantRequestPageIds.listAssistantMemories,
+        ),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const <AssistantUserMemoryView>[];
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      final rows = _decodeItemsMap(
+        decoded,
+        context: _assistantDialogContext(
+          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
+        ),
+      );
+      return rows
+          .map(AssistantUserMemoryView.fromJson)
+          .where((row) => row.memoryId.isNotEmpty)
+          .take(limit)
+          .toList(growable: false);
+    } catch (_) {
+      return const <AssistantUserMemoryView>[];
+    }
+  }
+
+  @override
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+    int limit = _kAssistantSkillCatalogDefaultLimit,
+  }) async {
+    try {
+      final uri = _assistantGetUri(AssistantApiMetadata.listSkillsPath, {
+        'limit': '$limit',
+      });
+      final response = await _client.get(
+        uri,
+        headers: _headersForAssistantDialog(
+          operationId: AssistantApiMetadata.listSkillsOperation,
+          legacyPageId: AssistantRequestPageIds.listSkills,
+        ),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const <AssistantSkillCatalogItemView>[];
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      final rows = _decodeItemsMap(
+        decoded,
+        context: _assistantDialogContext(
+          operationId: AssistantApiMetadata.listSkillsOperation,
+        ),
+      );
+      return rows
+          .map(AssistantSkillCatalogItemView.fromJson)
+          .where((row) => row.skillId.isNotEmpty)
+          .take(limit)
+          .toList(growable: false);
+    } catch (_) {
+      return const <AssistantSkillCatalogItemView>[];
+    }
   }
 
   Uri _assistantUri(String path) {

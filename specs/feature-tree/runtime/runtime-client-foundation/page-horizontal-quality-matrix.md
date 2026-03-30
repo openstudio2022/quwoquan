@@ -8,6 +8,7 @@
 
 **扫描基线**：`quwoquan_app/lib/ui/**/pages/*_page.dart`、`lib/components/**/*_page.dart`、`lib/ui/welcome/pages/welcome_screen.dart`（无 `_page` 后缀的入口屏）、**`lib/app/shell/*.dart`**（主壳 / 底栏，P1+P6 强相关）。  
 **门禁**：`scripts/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集，且矩阵路径 **⊆** `metadata_driven_ui_gap_inventory.yaml` 的 `ui_pages`（防漏页、漏清单）。  
+**帖子全链路 P2**：`post-projection-pipeline-inventory.md`；清单 `partial` + 矩阵 **P2=○** 直至 ReadPresentation(Surface)+编辑 Draft 管道与 Wire 显式映射收口。  
 **排除**：`lib/ui/chat/pages/chat_display_fallbacks.dart` 仅为 `export`，不占行（见 `dual-theme-page-coverage/page-dual-theme-matrix.md`）。  
 **P6 口径**：与 `page-dual-theme-matrix.md` 一致 — `✓`=full，`○`=partial（待按 S6 收敛），`—`=exempt。
 
@@ -19,8 +20,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ○ | ✓ | `IndexedStack`+状态栏；`isDarkProvider` / `AppColorsFunctional` |
-| `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ○ | — | ✓ | ○ | ✓ | 底栏玻璃 / `forceDark` 与壳一致 |
+| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | `IndexedStack`+状态栏；`isDarkProvider` / `AppColorsFunctional` |
+| `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 底栏玻璃 / `forceDark` 与壳一致 |
 
 ---
 
@@ -28,7 +29,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/welcome/pages/welcome_screen.dart` | T2 | ✓ | — | — | ○ | — | ○ | ✓ | ✓ | **P1**：`MaterialApp.home` 下 `AppScaffold` + `DefaultTextStyle.merge` 收口调试黄下划线；标语旁 `CupertinoIcons.sparkles`。P6 品牌渐变未接 system dark（S6 partial） |
+| `lib/ui/welcome/pages/welcome_screen.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **P1**：`MaterialApp.home` 下 `AppScaffold` + `DefaultTextStyle.merge` 收口调试黄下划线；标语旁 `CupertinoIcons.sparkles`。P6 与双色矩阵 `welcome_screen` full 对齐 |
 
 ---
 
@@ -36,8 +37,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/discovery/pages/home_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | Tab 根；频道内容在壳内；P4 经 MainAppShell pageAccess；P1 内嵌 Scroll 无独立 CupertinoPageScaffold |
-| `lib/ui/discovery/pages/discovery_page.dart` | T7 | ✓ | ○ | ✓ | ✓ | — | ○ | ○ | ✓ | 壳内子视图；P6 Feed 内多固定黑白（S6 partial） |
+| `lib/ui/discovery/pages/home_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：帖子 ReadPresentation+Surface 管线待收口（见 `post-projection-pipeline-inventory.md`）；当前 `PostBaseDto`；Tab 根；P4 MainAppShell |
+| `lib/ui/discovery/pages/discovery_page.dart` | T7 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：同上（微趣/沉浸）；P6 与双色矩阵 `discovery_page` full 对齐 |
 
 ---
 
@@ -45,13 +46,13 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/assistant/pages/assistant_tab_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | Tab 根；P4 MainAppShell |
-| `lib/ui/assistant/pages/assistant_management_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `SettingsInsetFormPageScaffold` |
-| `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | T2 | ✓ | — | — | ○ | — | ○ | ○ | ✓ | WebView 内容域 P2/P3 —；P6 壳层固定浅色 chrome |
-| `lib/ui/assistant/pages/assistant_conversation_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `ConversationPageScaffold`/`AppScaffold`；P5 对话态标准壳 |
-| `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | T2 | ✓ | — | — | ○ | — | ✓ | ○ | ✓ | 开发工具 |
-| `lib/ui/assistant/pages/assistant_skill_center_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | 含 AppLog 类埋点 |
-| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `AppScaffold`；P5 对话设置向标准壳对齐 |
+| `lib/ui/assistant/pages/assistant_tab_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | Tab 根；P4 MainAppShell；P2 无页内云行 Map |
+| `lib/ui/assistant/pages/assistant_management_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P2 同左 |
+| `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | WebView 内容域 P2/P3 —；P6 壳层与双色矩阵 `assistant_reference_webview` full 对齐 |
+| `lib/ui/assistant/pages/assistant_conversation_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`/`AppScaffold`；P2 `AssistantTranscriptTimelineRow` + C4 协议载荷（Codec）；P5 对话态标准壳 |
+| `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 开发工具 |
+| `lib/ui/assistant/pages/assistant_skill_center_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AssistantLocalSessionSummaryView`；含 AppLog 类埋点 |
+| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `AssistantLocalSessionSummaryView`/`AssistantSessionDetailView`；`AppScaffold` |
 
 ---
 
@@ -59,15 +60,15 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | ✓ | ○ | ○ | ✓ | Tab 根；P6 列表/胶囊等仍多 `AppColors.white` |
-| `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | 委托 `ChatConversationPage`，P1/P5 以会话页为准 |
-| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `ConversationPageScaffold` |
-| `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | 聊天信息；`AppScaffold` |
-| `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | 模态建群 |
-| `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `SettingsInsetMemberPickerPageScaffold`（P5 设置表单系） |
-| `lib/ui/chat/pages/group_member_search_page.dart` | T3 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `EmbeddedMemberSearchPageShell` |
-| `lib/ui/chat/pages/group_manage_page.dart` | T3 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `SettingsInsetFormPageScaffold` |
-| `lib/ui/chat/pages/group_admins_page.dart` | T3 | ✓ | ○ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `SettingsInsetMemberPickerPageScaffold` |
+| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground` |
+| `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
+| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 codegen DTO |
+| `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；聊天信息；`AppScaffold` |
+| `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群 |
+| `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 成员 DTO 过滤/展示；`SettingsInsetMemberPickerPageScaffold` |
+| `lib/ui/chat/pages/group_member_search_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatConversationMemberDto`；**P5** `shell=search_embedded`（`settings_canonical_manifest`）；**P7** 按默认 B 验收 |
+| `lib/ui/chat/pages/group_manage_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；`SettingsInsetFormPageScaffold` |
+| `lib/ui/chat/pages/group_admins_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 多选行 `ChatConversationMemberDto` |
 
 ---
 
@@ -75,11 +76,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/circle/pages/home_circles_hub_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | Tab 内嵌 Scroll+Stack；无根 Scaffold；P4 MainAppShell |
-| `lib/ui/circle/pages/circles_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | `AppScaffold`；P4 MainAppShell |
-| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/circle/pages/circle_edit_settings_page.dart` | T5 | ✓ | ○ | ✓ | ○ | ○ | ✓ | ○ | ✓ | |
-| `lib/ui/circle/pages/circle_stats_page.dart` | T3 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
+| `lib/ui/circle/pages/home_circles_hub_page.dart` | T1 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：圈子流帖子 `raw` 写回待收口；ReadPresentation(circle_hub)；挂靠 `post-projection-pipeline-inventory.md` |
+| `lib/ui/circle/pages/circles_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `List<CircleDto>`；`AppScaffold`；P4 MainAppShell |
+| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：`section_creations` 作品链 Map→Post；ReadPresentation(circle_works)；壳上 `CircleDto` 已合规 |
+| `lib/ui/circle/pages/circle_edit_settings_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `CircleEditSubmitPayload` |
+| `lib/ui/circle/pages/circle_stats_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `CircleStats*RowViewData`；`AppScaffold` |
 | `lib/ui/circle/pages/circles_hub_page.dart` | T0 | — | — | — | — | — | — | — | — | 仅 `export` `home_circles_hub_page`，不单独验收 |
 
 ---
@@ -88,10 +89,10 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/pages/article_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/content/pages/photo_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/content/pages/video_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/content/pages/unified_media_viewer_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | — | ○ | ✓ | 作品沉浸强制暗场；P6 exempt（S6-2） |
+| `lib/ui/content/pages/article_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：详情面 ReadPresentation(detail_article)；当前 getPost+projectArticleDetailView |
+| `lib/ui/content/pages/photo_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：ReadPresentation(detail_photo)；`PostSummaryView` 待表面化 |
+| `lib/ui/content/pages/video_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：同 photo（视频） |
+| `lib/ui/content/pages/unified_media_viewer_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | — | ✓ | ✓ | **P2 ○**：沉浸面+`WorksImmersiveViewer`；P6 exempt（S6-2） |
 
 ---
 
@@ -99,11 +100,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ○ | ✓ | ○ | — | ○ | ○ | ✓ | 创作模态；P6 叠加层多固定色 |
-| `lib/ui/content/entry/pages/article_preview_page.dart` | T5 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | 子面 `PublishLocationSearchPage` 同结论 |
-| `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/content/entry/pages/publish_circle_select_page.dart` | T5 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
+| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：Draft→预览 ReadPresentation + Draft→Payload 与只读管道对齐；P6 与双色矩阵 `create_page` full 对齐 |
+| `lib/ui/content/entry/pages/article_preview_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：预览=ReadPresentation 自 Draft |
+| `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：创作子链与主 Draft/发布映射对齐 |
+| `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：剪辑→Draft→预览/提交统一管道 |
+| `lib/ui/content/entry/pages/publish_circle_select_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：圈选择与发布 payload 显式映射 |
 
 ---
 
@@ -111,12 +112,12 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/entity/pages/suggest_homepage_page.dart` | T4 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/entity/pages/homepage_picker_page.dart` | T4 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/entity/pages/homepage_claim_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
+| `lib/ui/entity/pages/suggest_homepage_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageSuggestionDraft` / `HomepageRepository` |
+| `lib/ui/entity/pages/homepage_picker_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageSummary` |
+| `lib/ui/entity/pages/homepage_claim_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageClaimRequestDraft` |
+| `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageBasicDraft` |
+| `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageStatusReportDraft` |
+| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`；`ActivePersonaContextViewData` |
 
 ---
 
@@ -124,11 +125,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/rtc/pages/incoming_call_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ○ | ○ | ✓ | 固定欢迎渐变；P6 partial |
-| `lib/ui/rtc/pages/outgoing_call_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ○ | ○ | ✓ | 同上 |
-| `lib/ui/rtc/pages/voice_call_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ○ | ○ | ✓ | 通话 UI 未完整对称材质 |
-| `lib/ui/rtc/pages/video_call_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ○ | ○ | ✓ | 黑底+渐变；P6 partial |
-| `lib/ui/rtc/pages/call_participant_picker_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
+| `lib/ui/rtc/pages/incoming_call_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `CallSessionDto`+Rtc；P6 `CallStageChrome` + `callStageGradient*`（与双色矩阵 full 一致） |
+| `lib/ui/rtc/pages/outgoing_call_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 同 incoming；P6 full |
+| `lib/ui/rtc/pages/voice_call_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 选人 `CallParticipantPickerRouteExtra`；P6 主舞台渐变与来去电对齐 + 顶栏玻璃 |
+| `lib/ui/rtc/pages/video_call_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P6 `fullBleedMediaBackdrop` + 顶栏渐变 `createMediaOverlayBase` |
+| `lib/ui/rtc/pages/call_participant_picker_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `CallPickerParticipantRow`+Chat DTO；`AppScaffold` |
 
 ---
 
@@ -136,8 +137,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/search/pages/global_search_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppFullscreenModalSurface`+Cupertino 控件；无根 Scaffold |
-| `lib/ui/search/pages/search_network_results_page.dart` | T3 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
+| `lib/ui/search/pages/global_search_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：帖子/内容命中 SearchHit→ReadPresentation(search_card)；联系人等已 DTO |
+| `lib/ui/search/pages/search_network_results_page.dart` | T3 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：网络结果帖子分支 ReadPresentation；payload fromMap 仅解析边界 |
 
 ---
 
@@ -145,8 +146,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ○ | ✓ | ✓ | ○ | ✓ | `AppScaffold`；P5 设置列表模板 |
-| `lib/ui/settings/pages/developer_settings_page.dart` | T2 | ✓ | — | — | ○ | ✓ | ✓ | ○ | ✓ | 开发者页 P2/P3 — |
+| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 设置列表模板 |
+| `lib/ui/settings/pages/developer_settings_page.dart` | T2 | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 开发者页 P2/P3 — |
 
 ---
 
@@ -154,14 +155,14 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ○ | ✓ | `ProfileShell`→`AppScaffold`；Tab 场景 P4 MainAppShell |
-| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `ProfileShell` |
-| `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ○ | ✓ | ○ | ✓ | |
-| `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ○ | ✓ | ○ | ○ | ✓ | ○ | ✓ | |
-| `lib/ui/user/pages/sub_account_management_page.dart` | T2 | ✓ | ○ | ✓ | ○ | ○ | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/user/pages/resonance_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | `AppScaffold` |
-| `lib/ui/user/pages/profile_stats_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
-| `lib/ui/user/pages/profile_comments_page.dart` | T2 | ✓ | ○ | ✓ | ○ | — | ✓ | ○ | ✓ | |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：作品/微趣 Tab 帖子 ReadPresentation(profile_*)；资料 ProfileSubjectViewData 已 DTO |
+| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：同 my_profile |
+| `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
+| `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
+| `lib/ui/user/pages/sub_account_management_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold` |
+| `lib/ui/user/pages/resonance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ResonanceBuddyViewData |
+| `lib/ui/user/pages/profile_stats_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ProfileCircleViewData / ProfileSocialRelationRowViewData |
+| `lib/ui/user/pages/profile_comments_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | CommentDto |
 
 ---
 
@@ -169,11 +170,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/components/settings_form/settings_inset_form_page.dart` | T6 | ✓ | — | — | — | ✓ | ✓ | ○ | ✓ | `SettingsInsetFormPageScaffold`；P5 复用本体 |
-| `lib/components/media/image/editor/image_editor_page.dart` | T5 | ✓ | — | — | ○ | — | ✓ | ○ | ✓ | 本地编辑为主 |
-| `lib/components/media/camera/camera_capture_page.dart` | T5 | ✓ | — | — | ○ | — | ✓ | — | ✓ | P7 取景区 —；壳控件 P1 已检 |
-| `lib/components/media/picker/create_media_picker_page.dart` | T5 | ✓ | — | — | ○ | — | ✓ | ○ | ✓ | |
-| `lib/components/media/picker/one_tap_movie_preview_page.dart` | T5 | ✓ | — | — | ○ | — | — | ○ | ✓ | 预览固定黑底白字；P6 exempt |
+| `lib/components/settings_form/settings_inset_form_page.dart` | T6 | ✓ | — | — | — | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P5 复用本体 |
+| `lib/components/media/image/editor/image_editor_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 本地编辑为主 |
+| `lib/components/media/camera/camera_capture_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | — | ✓ | P7 取景区 —；壳控件 P1 已检 |
+| `lib/components/media/picker/create_media_picker_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ |  |
+| `lib/components/media/picker/one_tap_movie_preview_page.dart` | T5 | ✓ | — | — | ✓ | — | — | ✓ | ✓ | 预览固定黑底白字；P6 exempt |
 
 ---
 
@@ -187,9 +188,11 @@
 | `app/shell/*.dart`（主壳 + 底栏） | 2 |
 | **矩阵数据行（含 T0 + shell）** | **64** |
 | **需验收的独立页面行（排除 T0）** | **62** |
-| **P6 = ✓（full）** | **52** |
-| **P6 = ○（partial，待收敛 S6）** | **9** |
+| **P6 = ✓（full）** | **53** |
+| **P6 = ○（partial，待收敛 S6）** | **8** |
 | **P6 = —（exempt 或整行 —）** | **3**（`circles_hub` T0 全列 — + `unified_media_viewer` + `one_tap_movie_preview`） |
+| **P2 = ✓（compliant）** | **35**（非帖子全链路页仍 ✓；帖子相关见下） |
+| **P2 = ○（partial，待 metadata/UI 收敛）** | **17**（帖子/创作/搜索命中：`post-projection-pipeline-inventory.md` + 清单 `partial`） |
 | **当前横向列** | **P1–P8**（可扩展至 P9…） |
 
 ---
@@ -205,3 +208,21 @@
 | 2026-03-29 | **P2 与 `metadata_driven_ui_gap_inventory.yaml` 对齐**：`partial`→○，`compliant`→✓，`exempt`/无云→—（见 `page-horizontal-quality-spec.md` P2、`metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md`） |
 | 2026-03-29 | **/baseline**：`page-horizontal-quality` L3 冻结 CR-005；`acceptance` T3/T4 证据矩阵；parent spec 商用/NFR 段落 |
 | 2026-03-29 | **/dev**：`verify_page_matrix_scan_complete.py` 接入 gate；磁盘↔矩阵↔`metadata_driven_ui_gap_inventory` 双向无漏页；挂靠面补 `_AssistantConversationHistoryPage` |
+| 2026-03-30 | **S2**：全页 P2↔清单 `status` 机器核对一致；逐页对照与基线锁定见 `page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md` |
+| 2026-03-30 | **S3–S9 合卷**：S3 代码审计无页内裸 HTTP（P3 维持 ✓/—）；S4 增加 `AppPageAccessNavigatorObserver` + `page_access_log_util` + Welcome `/welcome` 埋点，P4 列全 ✓；S5/S6/S7/S8 矩阵登记与 dual-theme/门禁同向更新；剩余 **P2 ○** 登记 **PHQ-P2-TBD**（见 `CR-20260330-008`） |
+| 2026-03-30 | **P2 滚动**：`ChatMessageDto` projection + `ChatRepository.listMessages` 强类型；`chat_detail`/`chat_conversation` P2 ✓；清单 **TBD 清零**（目标类名见 `metadata-driven-client-data-contract/design.md` §7） |
+| 2026-03-30 | **chat 域 P2 扩面**：`ChatGroupSettingsDto` / `ChatContactSearchItemDto` / 扩展 `ChatContactRowDto`；`getGroupSettings`·`searchContacts`·`updateGroupSettings` 强类型；联系人 Tab `ChatContactsRow`；群管理/设置/成员检索 DTO 化 |
+| 2026-03-30 | **`start_group_chat_page` P2 ✓**：`chat_inbox` 增 `circleId`；`ChatConversationCreatedDto` + `createConversation` 强类型；建群向导去 `listConversations`；`ChatInboxDto`/`CircleDto`/ViewModel 替代 UI Map |
+| 2026-03-30 | **Phase2 发现域切片**：`discoveryFeedWireRowByPostId`；`MediaPostMoreActionConfig` 去 `post`；`discovery_page`/`home_page`/`media_post_card` 清单 compliant + 矩阵 P2 ✓ |
+| 2026-03-30 | **Phase2 content 详情/沉浸**：`article_detail`/`photo_detail`/`video_detail` 去 `DataService`；`ContentRepository.getPost`/`listDiscoveryFeed`；`WorksImmersiveViewer` wire 用 `discoveryFeedWireRowByPostId` |
+| 2026-03-30 | **Phase2 content/entry 五页**：`PublishSettings.locationPoi`；`CreateCircleOption.fromCircleDto`；`ContentPublishDraftComposite` typedef；清单 content 域 entry 全 compliant |
+| 2026-03-30 | **帖子投影管线**：新增 `post-projection-pipeline-inventory.md`；清单帖子相关行改 `partial`（增 `target_read_projection`/`target_edit_draft`）；矩阵 **P2 ○** 17 行直至 ReadPresentation+Draft+Wire 收口后再改 ✓ |
+| 2026-03-30 | **Phase3 user 八页**：`ProfileSocialRelationRowViewData`；`listProfileCircles`；`PersonaManagementPage` 接 `UserRepository`；`ResonanceBuddyViewData`；`ProfileEditUpdatePayload`；`UserProfileViewData`/`PersonaDtoSurface` typedef |
+| 2026-03-30 | **Phase4 circle 五页**：`CircleStatsViewData`/`circleStats` 去 raw Map；`circles_page` `List<CircleDto>`；`CircleEditSubmitPayload`；`CircleHubFeedPostEntry`+`HomeCirclesCategoryTab` `PostBaseDto`；`CircleStats*RowViewData`；清单 circle 域 non-exempt 全 compliant |
+| 2026-03-30 | **Phase5 entity 六页**：`homepage_models.dart` 迁至 `runtime/generated/entity/` 并对齐 `entity/homepage/fields.yaml` 注释；`HomepageRepository` 清单；`homepage_detail` 用 `ActivePersonaContextViewData`；清单 entity 全 compliant + 矩阵 P2 ✓ |
+| 2026-03-30 | **Phase6 search 两页**：`SearchCoordinator` 联系人 `ChatContactSearchItemDto`；最近搜索 `RecentSearchEntryView.toMap`；网络结果群组 `CircleSearchItemView`+`circleName`；`SearchHit` 契约注释；清单 search 全 compliant + 矩阵 P2 ✓ |
+| 2026-03-30 | **Phase7–9**：rtc 选人 `CallPickerParticipantRow`+`ChatInboxDto`；路由 `CallParticipantPickerRouteExtra`；assistant 设置/技能中心 `AssistantLocalSessionSummaryView`/`AssistantSessionDetailView`；清单 rtc 全 compliant、assistant 非对话页 compliant；矩阵 P2 统计 51/1 |
+| 2026-03-30 | **Assistant 对话时间轴 DTO**：`AssistantTranscriptTimelineRow`/`PersistedTimelineTurnCodec`/`AssistantFeedbackTarget`；`assistant_conversation_page` 与 bubble/answer 对外 API 用 transcript row；清单 assistant 对话页 compliant；矩阵 P2 余量清零（52/0） |
+| 2026-03-29 | **P3 Mock/Remote 收口**：`ui_mock_isolation_allowlist` 清零；聊天/圈子/搜索/global_surface 数据经 `ChatRepository`/`CircleRepository`/`AppContentRepository`；`RemoteAppContentRepository` 不再委托 Mock（空态/最小 Map）；`APP_DATA_SOURCE` + Release 隐藏开发者数据源开关；`main_prod.dart` + CI `flutter build macos` 带 `dart-define` |
+| 2026-03-30 | **S7/P7 默认 B** + **`search_embedded`**：`GroupMemberSearchPage` 纳入 `settings_canonical_manifest`；`verify_settings_canonical` 校验 `EmbeddedMemberSearchPageShell`；§4.3 增 C 类；`page-horizontal-quality-spec` / `nine-session-rollout-plan` 写明 P7 默认策略 B |
+| 2026-03-30 | **S8/P8**：`verify_dart_semantic` 全仓无命中；`.verify_dart_semantic_baseline.txt` 清空（仅注释）；增补 `AppSpacing.zero`/`textLineHeightSingle`、`AppColors.networkCallQualityWeak`、HSL 八色 token；见 `s8-p8-semantic-token/plan.yaml` 各 slice 已实施 |

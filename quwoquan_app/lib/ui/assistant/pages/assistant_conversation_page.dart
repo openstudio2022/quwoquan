@@ -10,8 +10,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/application/transcript/assistant_feedback_target.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
@@ -38,6 +43,7 @@ import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_conversation_controller.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
@@ -76,7 +82,7 @@ class _AssistantConversationPageState
 
   late final AssistantConversationController _controller;
 
-  Map<String, dynamic>? _actionMenuMessage;
+  AssistantTranscriptTimelineRow? _actionMenuRow;
   Offset? _actionMenuPosition;
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = <String>{};
@@ -351,10 +357,17 @@ class _AssistantConversationPageState
     await _controller.syncSessionInfo();
   }
 
-  AssistantJourneyViewModel _journeyViewModelFromMessage(
-    Map<String, dynamic> message, {
+  AssistantJourneyViewModel _journeyViewModelFromRow(
+    AssistantTranscriptTimelineRow row, {
     bool isRunning = false,
   }) {
+    final message = PersistedTimelineTurnCodec.encode(row);
+    final usageMap = switch (row) {
+      AssistantAnswerTranscriptRow r => r.uiUsageStats,
+      _ =>
+        (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+    };
     return _controller.buildJourneyViewModel(
       journey: resolveAssistantJourneyFromMessage(message),
       processTimeline: resolveAssistantProcessTimelineFromMessage(message),
@@ -362,21 +375,19 @@ class _AssistantConversationPageState
       retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
         message,
       ),
-      usageStats:
-          (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(usageMap),
       elapsedMs: ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
     );
   }
 
   Future<void> _submitAssistantFeedback({
-    required Map<String, dynamic> message,
+    required AssistantFeedbackTarget target,
     required String explicitThumb,
     required List<String> reasonCodes,
     String correctionText = '',
   }) async {
     await _controller.submitFeedback(
-      message: message,
+      target: target,
       explicitThumb: explicitThumb,
       reasonCodes: reasonCodes,
       correctionText: correctionText,
@@ -391,7 +402,7 @@ class _AssistantConversationPageState
   }
 
   Future<void> _showAssistantNegativeFeedbackSheet(
-    Map<String, dynamic> message,
+    AssistantAnswerTranscriptRow row,
   ) async {
     final reasons = <MapEntry<String, String>>[
       MapEntry('off_topic', UITextConstants.assistantFeedbackReasonOffTopic),
@@ -557,14 +568,14 @@ class _AssistantConversationPageState
     );
     if (submitted != true) return;
     await _submitAssistantFeedback(
-      message: message,
+      target: AssistantFeedbackTarget.fromAssistantRow(row),
       explicitThumb: 'down',
       reasonCodes: selected.toList(growable: false),
     );
   }
 
   Future<void> _showAssistantCorrectionSheet(
-    Map<String, dynamic> message,
+    AssistantAnswerTranscriptRow row,
   ) async {
     final controller = TextEditingController();
     final submitted = await showCupertinoModalPopup<bool>(
@@ -663,7 +674,7 @@ class _AssistantConversationPageState
     final correction = controller.text.trim();
     if (correction.isEmpty) return;
     await _submitAssistantFeedback(
-      message: message,
+      target: AssistantFeedbackTarget.fromAssistantRow(row),
       explicitThumb: 'down',
       reasonCodes: const <String>['correction'],
       correctionText: correction,
@@ -671,7 +682,7 @@ class _AssistantConversationPageState
   }
 
   Future<void> _recordAssistantImplicitFeedback({
-    required Map<String, dynamic> message,
+    required AssistantFeedbackTarget target,
     bool copiedAnswer = false,
     bool sharedAnswer = false,
     bool favoritedAnswer = false,
@@ -682,7 +693,7 @@ class _AssistantConversationPageState
     List<String> userTags = const <String>[],
   }) async {
     await _controller.recordImplicitFeedback(
-      message: message,
+      target: target,
       copiedAnswer: copiedAnswer,
       sharedAnswer: sharedAnswer,
       favoritedAnswer: favoritedAnswer,
@@ -695,10 +706,10 @@ class _AssistantConversationPageState
   }
 
   Future<void> _requestAssistantRewrite({
-    required Map<String, dynamic> message,
+    required AssistantAnswerTranscriptRow row,
     required String mode,
   }) async {
-    final query = (message['sourceQuery'] as String?)?.trim() ?? '';
+    final query = row.anchor.sourceQuery.trim();
     if (query.isEmpty) return;
     final text = switch (mode) {
       'brief' => '请基于同样问题给我更简洁版本：$query',
@@ -706,7 +717,7 @@ class _AssistantConversationPageState
       _ => query,
     };
     await _recordAssistantImplicitFeedback(
-      message: message,
+      target: AssistantFeedbackTarget.fromAssistantRow(row),
       regeneratedAnswer: mode == 'regenerate',
       styleAdjusted: mode == 'brief' || mode == 'detailed',
       userTags: <String>[mode],
@@ -716,15 +727,16 @@ class _AssistantConversationPageState
   }
 
   Future<void> _requestAssistantRewriteV2({
-    required Map<String, dynamic> message,
+    required AssistantAnswerTranscriptRow row,
     required RegenerateOption option,
   }) async {
-    final originalQuery = (message['sourceQuery'] as String?)?.trim() ?? '';
+    final message = PersistedTimelineTurnCodec.encode(row);
+    final originalQuery = row.anchor.sourceQuery.trim();
     if (originalQuery.isEmpty) return;
     final previousAnswer = <String>[
       resolvePersistedAssistantDisplayPlainText(message),
       resolvePersistedAssistantDisplayMarkdown(message),
-      (message['content'] as String?)?.trim() ?? '',
+      row.content.trim(),
     ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
     final rewriteMode = switch (option) {
       RegenerateOption.regenerate => RewriteMode.regenerate,
@@ -734,7 +746,7 @@ class _AssistantConversationPageState
       RegenerateOption.deepThink => RewriteMode.deepThink,
     };
     await _recordAssistantImplicitFeedback(
-      message: message,
+      target: AssistantFeedbackTarget.fromAssistantRow(row),
       regeneratedAnswer: option == RegenerateOption.regenerate,
       styleAdjusted:
           option == RegenerateOption.concise ||
@@ -753,7 +765,7 @@ class _AssistantConversationPageState
   }
 
   Future<void> _switchAssistantModelAndRegenerate(
-    Map<String, dynamic> message,
+    AssistantAnswerTranscriptRow row,
   ) async {
     final models = ref.read(assistantGatewayProvider).listAvailableModels();
     if (models.isEmpty) {
@@ -783,18 +795,18 @@ class _AssistantConversationPageState
     if (selected == null || selected.trim().isEmpty) return;
     ref.read(assistantGatewayProvider).switchModel(selected);
     await _recordAssistantImplicitFeedback(
-      message: message,
+      target: AssistantFeedbackTarget.fromAssistantRow(row),
       modelSwitched: true,
       userTags: const <String>['model_switch'],
     );
-    await _requestAssistantRewrite(message: message, mode: 'regenerate');
+    await _requestAssistantRewrite(row: row, mode: 'regenerate');
   }
 
   Future<void> _onAssistantReferenceTap(
-    Map<String, dynamic> message,
-    Map<String, dynamic> reference,
+    AssistantAnswerTranscriptRow row,
+    AssistantCitation citation,
   ) async {
-    final url = (reference['url'] as String?)?.trim() ?? '';
+    final url = citation.url.trim();
     if (url.isEmpty) return;
     final uri = Uri.tryParse(url);
     final allowOpen = uri != null && _controller.isReferenceHostAllowed(uri);
@@ -803,7 +815,7 @@ class _AssistantConversationPageState
       if (!mounted) return;
       AppToast.show(context, UITextConstants.assistantReferenceHostBlocked);
       await _recordAssistantImplicitFeedback(
-        message: message,
+        target: AssistantFeedbackTarget.fromAssistantRow(row),
         referenceOpened: true,
         userTags: const <String>['reference_copy'],
       );
@@ -812,15 +824,18 @@ class _AssistantConversationPageState
     try {
       await Navigator.of(context).push(
         CupertinoPageRoute<void>(
+          settings: const RouteSettings(
+            name: PageAccessInternalRoutes.assistantConversationReferenceWeb,
+          ),
           builder: (_) => AssistantReferenceWebViewPage(
             initialUrl: url,
-            title: (reference['title'] as String?)?.trim() ?? '',
-            source: (reference['source'] as String?)?.trim() ?? '',
+            title: citation.title,
+            source: citation.source,
           ),
         ),
       );
       await _recordAssistantImplicitFeedback(
-        message: message,
+        target: AssistantFeedbackTarget.fromAssistantRow(row),
         referenceOpened: true,
         userTags: const <String>['reference_open'],
       );
@@ -829,7 +844,7 @@ class _AssistantConversationPageState
       if (!mounted) return;
       AppToast.show(context, UITextConstants.assistantReferenceOpenFailed);
       await _recordAssistantImplicitFeedback(
-        message: message,
+        target: AssistantFeedbackTarget.fromAssistantRow(row),
         referenceOpened: true,
         userTags: const <String>['reference_copy'],
       );
@@ -839,8 +854,13 @@ class _AssistantConversationPageState
   void _openAssistantDevReplayPage() {
     Navigator.of(context).push(
       CupertinoPageRoute<void>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.assistantConversationDevReplay,
+        ),
         builder: (_) => AssistantDevReplayPage(
-          records: List<Map<String, dynamic>>.from(_controller.replayRecords),
+          records: _controller.replayRecords
+              .map((r) => r.toJson())
+              .toList(growable: false),
           loadScoreSnapshot: () =>
               ref.read(assistantLearningServiceProvider).latestScoreSnapshot(),
         ),
@@ -849,30 +869,46 @@ class _AssistantConversationPageState
   }
 
   void _onLongPressMessage(
-    Map<String, dynamic> message,
+    AssistantTranscriptTimelineRow row,
     Offset globalPosition,
   ) {
     setState(() {
-      _actionMenuMessage = message;
+      _actionMenuRow = row;
       _actionMenuPosition = globalPosition;
     });
   }
 
+  String _rowPlainContent(AssistantTranscriptTimelineRow row) {
+    return switch (row) {
+      UserTranscriptTimelineRow r => r.content,
+      AssistantAnswerTranscriptRow r => r.content,
+      ErrorTranscriptTimelineRow r => r.content,
+    };
+  }
+
+  String _rowTimestamp(AssistantTranscriptTimelineRow row) {
+    return switch (row) {
+      UserTranscriptTimelineRow r => r.timestamp,
+      AssistantAnswerTranscriptRow r => r.timestamp,
+      ErrorTranscriptTimelineRow r => r.timestamp,
+    };
+  }
+
   void _onMessageAction(String action) {
-    final msg = _actionMenuMessage;
-    if (msg == null) return;
+    final row = _actionMenuRow;
+    if (row == null) return;
     switch (action) {
       case 'forward':
-        _shareMessages(<Map<String, dynamic>>[msg]);
+        _shareRows(<AssistantTranscriptTimelineRow>[row]);
         break;
       case 'select':
         setState(() {
           _isSelectionMode = true;
-          _selectedIds.add(msg['id'] as String);
+          _selectedIds.add(row.id);
         });
         break;
       case 'copy':
-        final content = msg['content'] as String? ?? '';
+        final content = _rowPlainContent(row);
         if (content.isNotEmpty) {
           Clipboard.setData(ClipboardData(text: content));
           if (mounted) {
@@ -882,19 +918,19 @@ class _AssistantConversationPageState
         break;
       case 'recall':
       case 'delete':
-        _controller.removeMessageById((msg['id'] as String?) ?? '');
+        _controller.removeMessageById(row.id);
         break;
     }
     setState(() {
-      _actionMenuMessage = null;
+      _actionMenuRow = null;
       _actionMenuPosition = null;
     });
   }
 
-  Future<void> _shareMessages(List<Map<String, dynamic>> messages) async {
-    if (messages.isEmpty) return;
-    final lines = messages
-        .map((message) => (message['content'] as String?)?.trim() ?? '')
+  Future<void> _shareRows(List<AssistantTranscriptTimelineRow> rows) async {
+    if (rows.isEmpty) return;
+    final lines = rows
+        .map((r) => _rowPlainContent(r).trim())
         .where((line) => line.isNotEmpty)
         .toList(growable: false);
     if (lines.isEmpty) return;
@@ -938,15 +974,15 @@ class _AssistantConversationPageState
       ColorType.borderPrimary,
     );
     final chatListBg = isDark ? bgColor : AppColors.chatBackground;
-    final displayMessages = _controller.messages;
-    final latestAssistantTextMessageId = displayMessages.reversed
+    final displayRows = _controller.transcriptRows;
+    final latestAssistantTextMessageId = displayRows.reversed
+        .whereType<AssistantAnswerTranscriptRow>()
         .where(
-          (item) =>
-              (item['senderId'] as String?) ==
-                  AppConceptConstants.assistantSenderId &&
-              (item['type'] as String? ?? 'text') == 'text',
+          (r) =>
+              r.type == 'text' &&
+              r.senderId == AppConceptConstants.assistantSenderId,
         )
-        .map((item) => (item['id'] as String?) ?? '')
+        .map((r) => r.id)
         .firstWhere((id) => id.isNotEmpty, orElse: () => '');
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
@@ -1040,13 +1076,13 @@ class _AssistantConversationPageState
         ),
     ];
     final actionMenuOverlay =
-        _actionMenuMessage != null && _actionMenuPosition != null
+        _actionMenuRow != null && _actionMenuPosition != null
         ? ConversationMessageActionMenuOverlay(
-            message: _actionMenuMessage!,
+            message: PersistedTimelineTurnCodec.encode(_actionMenuRow!),
             position: _actionMenuPosition!,
             onAction: _onMessageAction,
             onClose: () => setState(() {
-              _actionMenuMessage = null;
+              _actionMenuRow = null;
               _actionMenuPosition = null;
             }),
           )
@@ -1059,20 +1095,22 @@ class _AssistantConversationPageState
               controller: _scrollController,
               backgroundColor: chatListBg,
               padding: timelinePadding,
-              itemCount: displayMessages.length,
+              itemCount: displayRows.length,
               overlays: timelineOverlays,
               itemBuilder: (context, index) {
-                final msg = displayMessages[index];
-                final prevTime = index > 0
-                    ? displayMessages[index - 1]['timestamp'] as String?
-                    : null;
-                final showTime = index == 0 || msg['timestamp'] != prevTime;
-                final timeStr = _formatAssistantChatTime(
-                  msg['timestamp'] as String?,
-                );
+                final row = displayRows[index];
+                final prevTime =
+                    index > 0 ? _rowTimestamp(displayRows[index - 1]) : null;
+                final rowTs = _rowTimestamp(row);
+                final showTime = index == 0 || rowTs != prevTime;
+                final timeStr = _formatAssistantChatTime(rowTs);
+                final isUserRow = row is UserTranscriptTimelineRow;
+                final isAssistantAnswerRow = row is AssistantAnswerTranscriptRow;
+                final isErrorRow = row is ErrorTranscriptTimelineRow;
                 final isAssistantMessage =
-                    (msg['senderId'] as String?) ==
-                    AppConceptConstants.assistantSenderId;
+                    isAssistantAnswerRow || isErrorRow;
+                final answerRow =
+                    isAssistantAnswerRow ? row : null;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
@@ -1096,26 +1134,23 @@ class _AssistantConversationPageState
                         ),
                       ),
                     AssistantMessageBubble(
-                      message: msg,
-                      isRight: msg['isSelf'] == true,
-                      bubbleColor: msg['isSelf'] == true
-                          ? bubbleSelf
-                          : bubbleOther,
-                      textColor: msg['isSelf'] == true
-                          ? AppColors.white
-                          : fgPrimary,
+                      transcriptRow: row,
+                      isRight: isUserRow,
+                      bubbleColor:
+                          isUserRow ? bubbleSelf : bubbleOther,
+                      textColor: isUserRow ? AppColors.white : fgPrimary,
                       isSelectionMode: _isSelectionMode,
-                      isSelected: _selectedIds.contains(msg['id']),
+                      isSelected: _selectedIds.contains(row.id),
                       onLongPressStart: (details) =>
-                          _onLongPressMessage(msg, details.globalPosition),
+                          _onLongPressMessage(row, details.globalPosition),
                       onTap: _isSelectionMode
-                          ? () => _toggleSelect(msg['id'] as String)
+                          ? () => _toggleSelect(row.id)
                           : null,
                       hideAvatarAndName: true,
                       useFullWidth: true,
                       renderSelfTextWithoutBubble: true,
                       journeyViewModel:
-                          index == displayMessages.length - 1 &&
+                          index == displayRows.length - 1 &&
                               isAssistantMessage &&
                               _controller.assistantResponding
                           ? _controller.buildJourneyViewModel(
@@ -1128,56 +1163,54 @@ class _AssistantConversationPageState
                               elapsedMs: _controller.currentJourneyElapsedMs,
                             )
                           : (isAssistantMessage
-                                ? _journeyViewModelFromMessage(msg)
+                                ? _journeyViewModelFromRow(row)
                                 : null),
                       answerGateOpen:
                           !_controller.assistantResponding ||
-                          index != displayMessages.length - 1 ||
+                          index != displayRows.length - 1 ||
                           !isAssistantMessage ||
                           _controller.answerGateOpen,
                       isAssistantRunning:
                           _controller.assistantResponding &&
-                          index == displayMessages.length - 1 &&
+                          index == displayRows.length - 1 &&
                           isAssistantMessage,
                       expandProcessByDefault:
                           isAssistantMessage &&
-                          index == displayMessages.length - 1,
+                          index == displayRows.length - 1,
                       runningStatusLabel:
                           _controller.assistantResponding &&
-                              index == displayMessages.length - 1 &&
+                              index == displayRows.length - 1 &&
                               isAssistantMessage
                           ? (_controller.assistantPhaseLabel.isNotEmpty
                                 ? _controller.assistantPhaseLabel
                                 : UITextConstants.assistantPhaseUnderstanding)
                           : null,
                       showFeedbackActions:
-                          isAssistantMessage &&
+                          answerRow != null &&
                           !_controller.assistantResponding &&
                           !_isSelectionMode &&
-                          (msg['type'] as String? ?? 'text') == 'text' &&
-                          ((msg['id'] as String?) ?? '') ==
-                              latestAssistantTextMessageId,
+                          answerRow.type == 'text' &&
+                          answerRow.id == latestAssistantTextMessageId,
                       feedbackStatus:
-                          _controller.feedbackStatusByMessageId[msg['id']
-                                  as String? ??
-                              ''] ??
-                          '',
-                      onFeedbackHelpful: isAssistantMessage
+                          _controller.feedbackStatusByMessageId[row.id] ?? '',
+                      onFeedbackHelpful: answerRow != null
                           ? () => _submitAssistantFeedback(
-                              message: msg,
+                              target: AssistantFeedbackTarget.fromAssistantRow(
+                                answerRow,
+                              ),
                               explicitThumb: 'up',
                               reasonCodes: const <String>[],
                             )
                           : null,
-                      onFeedbackUnhelpful: isAssistantMessage
-                          ? () => _showAssistantNegativeFeedbackSheet(msg)
+                      onFeedbackUnhelpful: answerRow != null
+                          ? () => _showAssistantNegativeFeedbackSheet(answerRow)
                           : null,
-                      onFeedbackCorrect: isAssistantMessage
-                          ? () => _showAssistantCorrectionSheet(msg)
+                      onFeedbackCorrect: answerRow != null
+                          ? () => _showAssistantCorrectionSheet(answerRow)
                           : null,
-                      onCopyAnswer: isAssistantMessage
+                      onCopyAnswer: answerRow != null
                           ? () async {
-                              final content = (msg['content'] as String?) ?? '';
+                              final content = answerRow.content;
                               if (content.isEmpty) return;
                               await Clipboard.setData(
                                 ClipboardData(text: content),
@@ -1186,29 +1219,35 @@ class _AssistantConversationPageState
                                 UITextConstants.copiedToClipboard,
                               );
                               await _recordAssistantImplicitFeedback(
-                                message: msg,
+                                target: AssistantFeedbackTarget.fromAssistantRow(
+                                  answerRow,
+                                ),
                                 copiedAnswer: true,
                               );
                             }
                           : null,
-                      onShareAnswer: isAssistantMessage
+                      onShareAnswer: answerRow != null
                           ? () async {
-                              final content = (msg['content'] as String?) ?? '';
+                              final content = answerRow.content;
                               if (content.isNotEmpty) {
                                 await SharePlus.instance.share(
                                   ShareParams(text: content),
                                 );
                               }
                               await _recordAssistantImplicitFeedback(
-                                message: msg,
+                                target: AssistantFeedbackTarget.fromAssistantRow(
+                                  answerRow,
+                                ),
                                 sharedAnswer: true,
                               );
                             }
                           : null,
-                      onFavoriteAnswer: isAssistantMessage
+                      onFavoriteAnswer: answerRow != null
                           ? () async {
                               await _recordAssistantImplicitFeedback(
-                                message: msg,
+                                target: AssistantFeedbackTarget.fromAssistantRow(
+                                  answerRow,
+                                ),
                                 favoritedAnswer: true,
                               );
                               _showAssistantToast(
@@ -1216,41 +1255,42 @@ class _AssistantConversationPageState
                               );
                             }
                           : null,
-                      onRegenerateAnswer: isAssistantMessage
+                      onRegenerateAnswer: answerRow != null
                           ? () => _requestAssistantRewrite(
-                              message: msg,
+                              row: answerRow,
                               mode: 'regenerate',
                             )
                           : null,
-                      onRegenerateOptionSelected: isAssistantMessage
+                      onRegenerateOptionSelected: answerRow != null
                           ? (option) => _requestAssistantRewriteV2(
-                              message: msg,
+                              row: answerRow,
                               option: option,
                             )
                           : null,
-                      onBriefAnswer: isAssistantMessage
+                      onBriefAnswer: answerRow != null
                           ? () => _requestAssistantRewrite(
-                              message: msg,
+                              row: answerRow,
                               mode: 'brief',
                             )
                           : null,
-                      onDetailedAnswer: isAssistantMessage
+                      onDetailedAnswer: answerRow != null
                           ? () => _requestAssistantRewrite(
-                              message: msg,
+                              row: answerRow,
                               mode: 'detailed',
                             )
                           : null,
-                      onSwitchModelAnswer: isAssistantMessage
-                          ? () => _switchAssistantModelAndRegenerate(msg)
+                      onSwitchModelAnswer: answerRow != null
+                          ? () => _switchAssistantModelAndRegenerate(answerRow)
                           : null,
-                      onActionHintTap: isAssistantMessage
+                      onActionHintTap: answerRow != null
                           ? (hint) async {
                               _inputController.text = hint;
                               await _sendMessage();
                             }
                           : null,
-                      onReferenceTap: isAssistantMessage
-                          ? (refItem) => _onAssistantReferenceTap(msg, refItem)
+                      onReferenceTap: answerRow != null
+                          ? (refItem) =>
+                              _onAssistantReferenceTap(answerRow, refItem)
                           : null,
                       onAvatarTap: isAssistantMessage
                           ? () {
@@ -1266,8 +1306,12 @@ class _AssistantConversationPageState
                               AssistantHalfSheet.show(context, ctx);
                             }
                           : () {
-                              final senderId = msg['senderId'] as String? ?? '';
-                              if (msg['isSelf'] == true) {
+                              final senderId = switch (row) {
+                                UserTranscriptTimelineRow r => r.senderId,
+                                AssistantAnswerTranscriptRow r => r.senderId,
+                                ErrorTranscriptTimelineRow r => r.senderId,
+                              };
+                              if (isUserRow) {
                                 final currentUser = ref.read(userDataProvider);
                                 final userId =
                                     currentUser?.username ?? currentUser?.id;
@@ -1361,14 +1405,12 @@ class _AssistantConversationPageState
                   ? CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: () async {
-                        final selectedMessages = _controller.messages
+                        final selectedRows = _controller.transcriptRows
                             .where(
-                              (item) => _selectedIds.contains(
-                                (item['id'] as String?) ?? '',
-                              ),
+                              (item) => _selectedIds.contains(item.id),
                             )
                             .toList(growable: false);
-                        await _shareMessages(selectedMessages);
+                        await _shareRows(selectedRows);
                         _cancelSelection();
                       },
                       child: Text(

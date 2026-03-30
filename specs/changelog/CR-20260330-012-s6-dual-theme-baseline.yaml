@@ -1,0 +1,18 @@
+id: CR-20260330-012-s6-dual-theme-baseline
+title: S6 双色（dual-theme-page-coverage）规格与设计基线冻结 — 与 S7/S8 正交
+status: baseline_complete
+feature_path: runtime/runtime-client-foundation/dual-theme-page-coverage
+summary: |
+  冻结 S6 专项 /baseline：spec 增补商用/NFR、与横向 P6 对齐、T1–T4 证据分层、Out of Scope 明确
+  **S7（P7 断点/版式）与 S8（P8 语义 token）由并行会话主责**，S6 /dev 不捆绑同 PR 大范围 P7/P8。
+  design 补方案对比、T1–T4 证据矩阵、风险与回滚；plan v2 增加 slices W1–W5 + matrix-sync；
+  acceptance v2 增加 journey/scenario/evidence_matrix，A2 标明 baseline 与 /dev 完成态差异，A5 登记本 CR。
+  不涉及 metadata/codegen；下一步按 plan slices 进入 /dev。
+  2026-03-30 /baseline 再确认：仅 S6；S7/S8 并行；spec.md 增补 Baseline 段；page-dual-theme-matrix 变更记录登记。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/tasks.md
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md

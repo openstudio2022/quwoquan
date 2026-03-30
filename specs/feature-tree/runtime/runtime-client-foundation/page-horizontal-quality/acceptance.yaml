@@ -9,7 +9,8 @@ level_acceptance:
   focus_groups:
     - A1_functional
     - A7_contract_metadata_consistency
-  notes: 索引型 L3；矩阵与脚本为真相源，见 spec.md
+    - A8_mock_remote_release_spec
+  notes: 索引型 L3；矩阵与脚本为真相源；Mock/Remote §5.1 见 A8，见 spec.md
   A1:
     criteria: spec/design/acceptance 与本目录并列存在且指向父级横向质量规格与矩阵
     status: implemented
@@ -32,6 +33,25 @@ level_acceptance:
       - slice-2-baseline-cr-and-evidence-matrix
     tests:
       - file: specs/changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml
+  A4:
+    criteria: 九会话横向落实规划已冻结且可被独立会话引用（S1–S8 一维一会话 + S9 收口）
+    status: implemented
+    linked_tasks:
+      - M4
+      - slice-3-nine-session-rollout
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+      - file: specs/changelog/CR-20260329-006-page-horizontal-quality-nine-session-rollout.yaml
+  A5:
+    criteria: S2（P2）矩阵 64 行与 metadata_driven_ui_gap_inventory status 符号映射一致；基线分析文与 CR-007 已登记
+    status: implemented
+    linked_tasks:
+      - M4
+      - slice-4-s2-p2-metadata-inventory-baseline
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md
+      - file: specs/changelog/CR-20260330-007-page-horizontal-quality-s2-p2-baseline.yaml
+      - file: specs/gates/metadata_driven_ui_gap_inventory.yaml
   A7:
     criteria: 与 page-horizontal-quality-spec.md、page-horizontal-quality-matrix.md 语义一致
     status: implemented
@@ -39,8 +59,37 @@ level_acceptance:
       - M1
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+  A8:
+    criteria: Mock/Remote 发布态与开发测试态功能规格（策略 §5.1）已冻结；规则与主线命令对齐；UI/Core/App mock 隔离门禁可执行且 allowlist 不扩容新债
+    status: implemented
+    linked_tasks:
+      - M8
+      - slice-6-mock-release-functional-spec-baseline
+    tests:
+      - file: specs/gates/mock_data_cloud_integration_policy.md
+      - file: .cursor/rules/08-mock-data-isolation.mdc
+      - file: scripts/verify_ui_mock_isolation.py
+      - file: specs/gates/ui_mock_isolation_allowlist.yaml
+      - file: specs/changelog/CR-20260330-011-mock-release-functional-spec-baseline.yaml
+  A9:
+    criteria: S8（P8）语义 token 子 L3 已 /baseline 冻结；spec/design/plan/acceptance + CR-012；与九会话 S8 对齐
+    status: implemented
+    linked_tasks:
+      - slice-7-s8-p8-semantic-token-baseline
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+      - file: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+  A10:
+    criteria: S9 治理收口 — Cursor 规则 09（alwaysApply）、架构 §2.4、Makefile verify-app-page-horizontal-quality、PR 清单 §S9、CR-014；与 gate app 矩阵/P2/Mock 链同向
+    status: implemented
+    linked_tasks:
+      - M10
+      - slice-8-s9-governance-closure
+    tests:
+      - file: .cursor/rules/09-page-horizontal-quality.mdc
+      - file: specs/changelog/CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml
 execution:
-  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py"
+  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py && python3 scripts/verify_metadata_driven_ui_gate.py && python3 scripts/verify_ui_mock_isolation.py"
   full_gate: make gate
 
 journey_acceptance:
@@ -70,13 +119,41 @@ evidence_matrix:
       artifact: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
     - type: doc
       artifact: specs/changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+    - type: doc
+      artifact: specs/changelog/CR-20260329-006-page-horizontal-quality-nine-session-rollout.yaml
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md
+    - type: doc
+      artifact: specs/changelog/CR-20260330-007-page-horizontal-quality-s2-p2-baseline.yaml
+    - type: doc
+      artifact: specs/gates/metadata_driven_ui_gap_inventory.yaml
+    - type: doc
+      artifact: specs/gates/mock_data_cloud_integration_policy.md
+    - type: doc
+      artifact: specs/changelog/CR-20260330-011-mock-release-functional-spec-baseline.yaml
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
+    - type: doc
+      artifact: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
+    - type: doc
+      artifact: specs/changelog/CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml
+    - type: doc
+      artifact: .cursor/rules/09-page-horizontal-quality.mdc
   T2:
     - type: script
       artifact: scripts/verify_page_horizontal_quality_matrix.py
     - type: script
       artifact: scripts/verify_page_matrix_scan_complete.py
+    - type: script
+      artifact: scripts/verify_metadata_driven_ui_gate.py
+    - type: script
+      artifact: scripts/verify_ui_mock_isolation.py
     - type: doc
       artifact: specs/gates/page_horizontal_quality_pr_checklist.md
+    - type: doc
+      note: Makefile target verify-app-page-horizontal-quality
   T3:
     - type: process
       note: PR diff 含 page-horizontal-quality-matrix.md 行级更新或与豁免备注一致

@@ -90,3 +90,4 @@
 - **元数据驱动 L3 功能规格**（目标/范围/交付/验收）**已具备进入 baseline 的文档条件**；**实现闭环**仍按 `plan.yaml` 分切片推进。  
 - **全页面路径**在清单与矩阵层面 **无遗漏**；**P2 与清单 status** 已通过 **spec 口径 + 矩阵列回写** 对齐，避免「全 ✓」误导。  
 - **待收敛**：`target_dto: TBD`、可选矩阵↔清单 CI；**CR-004 已 baseline_complete**；合入前建议本地 `make gate`。  
+- **S2 会话（2026-03-30）**：横向九会话中 **P2 维** 的全页逐行对照、统计与「规格基线锁定」声明见 [`../page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md`](../page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md)。  

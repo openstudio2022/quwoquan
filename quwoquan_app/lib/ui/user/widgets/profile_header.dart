@@ -95,7 +95,7 @@ class ProfileHeader extends StatelessWidget {
                   style: TextStyle(
                     fontSize: AppTypography.iosSubheadline,
                     color: fgSecondary,
-                    height: 1.35,
+                    height: AppSpacing.textLineHeightBody,
                     letterSpacing: -0.16,
                   ),
                   textAlign: TextAlign.start,

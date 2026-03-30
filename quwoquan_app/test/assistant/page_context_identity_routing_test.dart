@@ -1,49 +1,89 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
-import 'package:quwoquan_app/assistant/retrieval/providers/page_context_retrieval_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
+import 'package:quwoquan_app/assistant/retrieval/providers/page_context_retrieval_provider.dart';
 
-class _AssistantSignalRepo extends MockAppContentRepository {
+class _PageContextTestContentRepo extends MockContentRepository {
   @override
-  List<Map<String, dynamic>> get discoveryMomentData => <Map<String, dynamic>>[
-    <String, dynamic>{
-      'postId': 'moment_1',
-      'contentType': 'micro',
-      'contentIdentity': 'moment',
-      'body': '今天在公园散步，看到一片晚霞。',
-      'assistantUsePolicy': 'inherit',
-    },
-  ];
+  Future<List<PostBaseDto>> listDiscoveryFeed({
+    required String category,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+  }) async {
+    final moment = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'postId': 'moment_1',
+        'contentType': 'micro',
+        'contentIdentity': 'moment',
+        'body': '今天在公园散步，看到一片晚霞。',
+        'assistantUsePolicy': 'inherit',
+        'authorId': 'u1',
+        'displayName': 'tester',
+        'avatarUrl': '',
+        'createdAt': '2020-01-01T00:00:00.000Z',
+      },
+    ];
+    final article = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'postId': 'work_1',
+        'contentType': 'article',
+        'contentIdentity': 'work',
+        'title': '东京三日清单',
+        'summary': '把行程拆成可执行的出行清单。',
+        'body': '',
+        'assistantUsePolicy': 'inherit',
+        'authorId': 'u1',
+        'displayName': 'tester',
+        'avatarUrl': '',
+        'coverUrl': '',
+        'createdAt': '2020-01-01T00:00:00.000Z',
+      },
+      <String, dynamic>{
+        'postId': 'work_excluded',
+        'contentType': 'article',
+        'contentIdentity': 'work',
+        'title': '不应进入助手的私有笔记',
+        'assistantUsePolicy': 'exclude',
+        'authorId': 'u1',
+        'displayName': 'tester',
+        'avatarUrl': '',
+        'coverUrl': '',
+        'createdAt': '2020-01-01T00:00:00.000Z',
+      },
+    ];
+    final byCategory = <String, List<Map<String, dynamic>>>{
+      'moment': moment,
+      'article': article,
+      'video': <Map<String, dynamic>>[],
+    };
+    final raw = byCategory[category] ?? const <Map<String, dynamic>>[];
+    return raw
+        .take(limit)
+        .map(postBaseDtoFromMap)
+        .toList(growable: false);
+  }
+}
 
-  @override
-  List<Map<String, dynamic>> get discoveryArticleData => <Map<String, dynamic>>[
-    <String, dynamic>{
-      'postId': 'work_1',
-      'contentType': 'article',
-      'contentIdentity': 'work',
-      'title': '东京三日清单',
-      'summary': '把行程拆成可执行的出行清单。',
-      'tags': <String>['checklist'],
-      'assistantUsePolicy': 'inherit',
-    },
-    <String, dynamic>{
-      'postId': 'work_excluded',
-      'contentType': 'article',
-      'contentIdentity': 'work',
-      'title': '不应进入助手的私有笔记',
-      'assistantUsePolicy': 'exclude',
-    },
-  ];
-
-  @override
-  List<Map<String, dynamic>> get discoveryVideoData =>
-      const <Map<String, dynamic>>[];
+PageContextRetrievalProvider _buildProvider() {
+  return PageContextRetrievalProvider(
+    contentRepository: _PageContextTestContentRepo(),
+    chatRepository: MockChatRepository(),
+    circleRepository: MockCircleRepository(),
+  );
 }
 
 void main() {
   group('PageContextRetrievalProvider content identity routing', () {
     test('点滴进入 context memory，作品进入 knowledge index', () async {
-      final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
+      final provider = _buildProvider();
       final result = await provider.retrieve(
         const AssistantRetrievalRequest(
           query: '东京',
@@ -68,7 +108,7 @@ void main() {
     });
 
     test('assistantUsePolicy=exclude 的内容不会进入检索结果', () async {
-      final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
+      final provider = _buildProvider();
       final result = await provider.retrieve(
         const AssistantRetrievalRequest(
           query: '私有',
@@ -83,7 +123,7 @@ void main() {
     });
 
     test('未授权 personal_content_access 时直接拒绝页面创作内容检索', () async {
-      final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
+      final provider = _buildProvider();
       final result = await provider.retrieve(
         const AssistantRetrievalRequest(
           query: '东京',
@@ -100,7 +140,7 @@ void main() {
     });
 
     test('identity index 关闭时回退到 legacy_context', () async {
-      final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
+      final provider = _buildProvider();
       final result = await provider.retrieve(
         const AssistantRetrievalRequest(
           query: '东京',

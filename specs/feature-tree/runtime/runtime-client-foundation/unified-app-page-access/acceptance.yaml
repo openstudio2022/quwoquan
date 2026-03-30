@@ -1,0 +1,74 @@
+version: 1
+feature: unified-app-page-access
+level: L3_story
+template: A1-A5
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.unified-app-page-access
+  parent_path: capability.runtime.feature.runtime-client-foundation
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: 欢迎流并轨 GoRouter + 全路径 pageName 映射 + 嵌套 push 有 name；对齐 P4
+  A1:
+    criteria: 未完成欢迎时仅展示 /welcome；完成后进入主壳；WelcomeScreen 无手写 writeAppPageAccess
+    status: implemented
+    linked_tasks:
+      - slice-1-metadata-codegen
+      - slice-2-root-router-redirect
+      - slice-3-welcome-remove-manual-log
+    tests:
+      - manual: 冷启动 open/return 顺序（见 coverage-surfaces.md §5）
+  A2:
+    criteria: app_routes 含 welcome；AppRoutePaths 含 welcome 常量；无手写第二套 /welcome
+    status: specified
+    linked_tasks:
+      - slice-1-metadata-codegen
+    tests:
+      - file: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+      - file: quwoquan_app/lib/app/navigation/generated/app_route_paths.g.dart
+  A3:
+    criteria: pageNameFromRouteLocation（或等价）对 app_router 已登记顶层路径不再默认 route_unknown
+    status: implemented
+    linked_tasks:
+      - slice-4-page-name-registry
+    tests:
+      - file: quwoquan_app/lib/app/navigation/page_access_log_util.dart
+  A4:
+    criteria: coverage-surfaces.md §3 所列嵌套 push 文件在 /dev 中均有 name 或 context.push 结论（PR 描述或同目录 checklist 勾选）
+    status: implemented
+    linked_tasks:
+      - slice-5-nested-push-audit
+    tests:
+      - file: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/coverage-surfaces.md
+  A7:
+    criteria: CR-20260330-013 登记产物；与 page-horizontal-quality P4 一致
+    status: implemented
+    tests:
+      - file: specs/changelog/CR-20260330-013-unified-app-page-access-baseline.yaml
+execution:
+  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py"
+  full_gate: make gate
+journey_acceptance:
+  - id: J1
+    statement: 全应用单一 MaterialApp.router 后欢迎与主壳 pageAccess 同源
+    t_layers: [T1]
+scenario_acceptance:
+  - id: S1
+    statement: 任意矩阵登记页从主路径进入均有可解析 pageName
+    t_layers: [T3]
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/design.md
+  T2:
+    - type: doc
+      artifact: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/coverage-surfaces.md
+  T3:
+    - type: manual
+      note: 抽样路由 open/return + 嵌套 push 日志含 route name
+  T4:
+    - type: deferred
+      note: 可选 CI verify_page_route_settings_name.py

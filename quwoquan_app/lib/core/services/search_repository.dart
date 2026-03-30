@@ -96,6 +96,11 @@ class SearchDegradeSignal {
   }
 }
 
+/// 统一检索命中项。枚举与默认值对齐 `_shared/search_contract.yaml`（`search_contract.g.dart`）；
+/// 分区元数据见 `search_registry.g.dart`。
+///
+/// `payload` 按 `objectType` 分发；消费侧应用 codegen / View 的 `fromMap` 解析（如联系人检索项 DTO、
+/// `CircleSearchItemView`），避免在 UI 层按键名遍历 Map。
 class SearchHit {
   const SearchHit({
     required this.objectType,
@@ -1121,6 +1126,8 @@ class AppSearchRepository implements SearchRepository {
         'postCount': item.postCount,
         'highlightText': item.highlightText,
         'matchedField': item.matchedField,
+        if (item.circleName != null && item.circleName!.trim().isNotEmpty)
+          'circleName': item.circleName,
       },
     );
   }

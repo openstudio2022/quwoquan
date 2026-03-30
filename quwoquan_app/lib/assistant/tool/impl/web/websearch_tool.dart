@@ -12,6 +12,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_run_interaction
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 
 enum AssistantSearchProvider {
   brave,
@@ -1569,7 +1570,7 @@ class WebSearchTool implements AssistantTool {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $apiKey',
             if (baseUrl.contains('openrouter.ai'))
-              'HTTP-Referer': 'https://quwoquan.app',
+              'HTTP-Referer': AppPublicContentLinks.siteOriginForHttpHeaders(),
             if (baseUrl.contains('openrouter.ai'))
               'X-Title': 'Quwoquan Assistant Web Search',
           },

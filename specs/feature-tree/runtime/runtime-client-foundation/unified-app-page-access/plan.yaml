@@ -1,0 +1,54 @@
+# plan：unified-app-page-access（/baseline 冻结 → /dev 实施）
+
+feature_path: runtime/runtime-client-foundation/unified-app-page-access
+order_note: metadata → codegen-app → 根路由 → 去手写 → pageName 表 → 嵌套 push 审计
+
+slices:
+  - id: slice-1-metadata-codegen
+    title: app_routes.yaml 登记 welcome + make codegen-app 更新 AppRoutePaths
+    outputs:
+      - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+      - quwoquan_app/lib/app/navigation/generated/app_route_paths.g.dart
+    tests:
+      - make -C quwoquan_service verify-metadata
+      - make codegen-app
+    dev_status: implemented
+
+  - id: slice-2-root-router-redirect
+    title: QuWoQuanAppRoot 单一 MaterialApp.router；GoRouter redirect + initialLocation 与 welcomeCompletedProvider 一致
+    outputs:
+      - quwoquan_app/lib/quwoquan_app_shell.dart
+      - quwoquan_app/lib/app/navigation/app_router.dart
+    tests:
+      - flutter analyze（gate app）
+    dev_status: specified
+
+  - id: slice-3-welcome-remove-manual-log
+    title: WelcomeScreen 移除 writeAppPageAccessOpen/Return 与 pageVisitId 状态
+    outputs:
+      - quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart
+    tests:
+      - 手工 欢迎 open/return 各一次
+    dev_status: specified
+
+  - id: slice-4-page-name-registry
+    title: page_access_log_util（或生成表）覆盖 AppRoutePaths 全量可解析 pageName
+    outputs:
+      - quwoquan_app/lib/app/navigation/page_access_log_util.dart
+    tests:
+      - 抽样 10+ 路径日志非 route_unknown
+    dev_status: specified
+
+  - id: slice-5-nested-push-audit
+    title: coverage-surfaces §3 文件逐项补 RouteSettings.name 或 context.push
+    outputs:
+      - quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
+      - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+      - quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart
+      - quwoquan_app/lib/ui/circle/widgets/circle_shell.dart
+      - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+      - quwoquan_app/lib/core/widgets/global_surface_actions.dart
+      - quwoquan_app/lib/ui/circle/providers/circle_media_picker_provider.dart
+    tests:
+      - rg 复核 + 手工子栈进出
+    dev_status: specified

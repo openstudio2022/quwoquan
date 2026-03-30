@@ -45,6 +45,7 @@
 
 | 既有 Story | 关系 |
 |------------|------|
+| `entity-link-templates-metadata` | **可复制链接 / 深链** 结构以 `_shared/link_templates.yaml` 为单源，与 `app_routes` 显式绑定；详见同 L2 下该 L3 的 spec/design |
 | `dart-semantic-gate` | 字面量与 import；本 L3 强调 **类型与契约来源** |
 | `error-permission-display-semantics*` | 错误展示须消费 metadata 生成错误枚举 |
 | `struct-repo-handler-migration-generation*` | 云侧生成链；本 L3 对齐 **端侧消费** |

@@ -2,12 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart';
 
 class AssistantChatSettingsPage extends ConsumerStatefulWidget {
   const AssistantChatSettingsPage({
@@ -230,6 +232,9 @@ class _AssistantChatSettingsPageState
   Future<void> _openHistoryPage() async {
     final selected = await Navigator.of(context).push<String>(
       CupertinoPageRoute<String>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.assistantChatSettingsHistory,
+        ),
         builder: (_) =>
             _AssistantConversationHistoryPage(currentSessionId: _sessionId),
       ),
@@ -262,24 +267,25 @@ class _PreferenceFactsSection extends ConsumerWidget {
     final isDark = ref.watch(isDarkProvider);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    return FutureBuilder<Map<String, dynamic>?>(
+    return FutureBuilder<AssistantSessionDetailView>(
       future: ref
           .read(assistantGatewayProvider)
-          .sessionDetail(currentSessionId),
+          .sessionDetail(currentSessionId)
+          .then(AssistantSessionDetailView.fromMap),
       builder: (context, snapshot) {
-        final detail = snapshot.data ?? const <String, dynamic>{};
-        final sessionFacts =
-            (detail['sessionPreferenceFacts'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[];
-        final longTermFacts =
-            (detail['longTermPreferenceFacts'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[];
+        if (!snapshot.hasData) {
+          return SettingsInsetGroupedSection(
+            isDark: isDark,
+            header: '偏好事实',
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CupertinoActivityIndicator()),
+            ),
+          );
+        }
+        final detail = snapshot.data!;
+        final sessionFacts = detail.sessionPreferenceFacts;
+        final longTermFacts = detail.longTermPreferenceFacts;
         return SettingsInsetGroupedSection(
           isDark: isDark,
           header: '偏好事实',
@@ -324,7 +330,7 @@ class _PreferenceFactList extends StatelessWidget {
   });
 
   final String title;
-  final List<Map<String, dynamic>> facts;
+  final List<AssistantPreferenceFactView> facts;
   final Color fgPrimary;
   final Color fgSecondary;
 
@@ -351,7 +357,7 @@ class _PreferenceFactList extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.xs),
             child: Text(
-              '• ${fact['key'] ?? ''}：${fact['value'] ?? ''}',
+              '• ${fact.keyText}：${fact.valueText}',
               style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             ),
           ),
@@ -386,23 +392,23 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
           ),
         ),
         child: SafeArea(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: ref.read(assistantGatewayProvider).listSessions(),
+          child: FutureBuilder<List<AssistantLocalSessionSummaryView>>(
+            future: ref.read(assistantGatewayProvider).listSessions().then(
+                  (raw) => raw
+                      .map(AssistantLocalSessionSummaryView.fromMap)
+                      .where(
+                        (item) => isAssistantSessionForBackend(
+                          item.sessionId,
+                          AssistantBackend.local,
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const Center(child: CupertinoActivityIndicator());
               }
-              final sessions =
-                  (snapshot.data ?? const <Map<String, dynamic>>[])
-                      .where((item) {
-                        final sessionId =
-                            (item['sessionId'] ?? '').toString();
-                        return isAssistantSessionForBackend(
-                          sessionId,
-                          AssistantBackend.local,
-                        );
-                      })
-                      .toList(growable: false);
+              final sessions = snapshot.data ?? const [];
               if (sessions.isEmpty) {
                 return Center(
                   child: Text(
@@ -431,11 +437,10 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
                     );
                   }
                   final item = sessions[index - 1];
-                  final sessionId = (item['sessionId'] ?? '').toString();
-                  final title = (item['topicTitle'] ?? '').toString().trim();
-                  final summary =
-                      (item['topicSummary'] ?? '').toString().trim();
-                  final count = (item['messageCount'] as int?) ?? 0;
+                  final sessionId = item.sessionId;
+                  final title = item.topicTitle.trim();
+                  final summary = item.topicSummary.trim();
+                  final count = item.messageCount;
                   final subtitle = summary.isNotEmpty
                       ? summary
                       : UITextConstants.assistantHistoryMessageCount

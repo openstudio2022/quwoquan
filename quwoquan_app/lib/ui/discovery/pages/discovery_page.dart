@@ -161,10 +161,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _trackBehavior(String action, dynamic post, {double? duration}) {
-    final contentId = post is PostBaseDto
-        ? post.id
-        : (post is Map ? (post['id']?.toString() ?? '') : '');
+  void _trackBehavior(String action, PostBaseDto post, {double? duration}) {
+    final contentId = post.id;
     if (contentId.isEmpty) return;
     ref
         .read(behaviorRepositoryProvider)
@@ -275,7 +273,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final targetBg = _activeType == 'work'
         ? AppColors.worksBackground
         : _isVideoMode
-        ? AppColors.black
+        ? AppColorsFunctional.getColor(
+            themeDark,
+            ColorType.fullBleedMediaBackdrop,
+          )
         : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
 
     return AppScaffold(
@@ -820,6 +821,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 // L4 Patrol tests use this key to confirm at least one card rendered.
                 key: index == 0 ? TestKeys.photoPostCard : null,
                 child: _DiscoveryItemCard(
+                  isDark: isDark,
                   post: post,
                   onTap: () => _onPostTap(
                     post,
@@ -904,10 +906,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _onMomentCommentTap(BuildContext context, dynamic post) {
-    final postId = post is PostBaseDto
-        ? post.id
-        : (post is Map ? post['id']?.toString() ?? '' : '');
+  void _onMomentCommentTap(BuildContext context, PostBaseDto post) {
+    final postId = post.id;
     CommentViewer.showModal(
       context: context,
       postId: postId,
@@ -916,29 +916,23 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  void _onMomentShareTap(BuildContext context, dynamic post) {
-    final dto = _resolveSharePost(post);
-    if (dto == null) return;
-    final template = _buildShareTemplate(dto, post);
+  void _onMomentShareTap(BuildContext context, PostBaseDto post) {
+    final template = _buildShareTemplate(post);
     ContentShareSheet.show(
       context,
       template: template,
       onActionCompleted: (result) async {
-        _trackShareAction(dto.id, result.actionId);
+        _trackShareAction(post.id, result.actionId);
       },
     );
   }
 
-  void _onMomentMoreTap(BuildContext context, dynamic post) {
-    final dto = _resolveSharePost(post);
+  void _onMomentMoreTap(BuildContext context, PostBaseDto post) {
     MoreActionPopup.show(
       context: context,
       config: MediaPostMoreActionConfig(
-        post: post,
-        onCopyLink: dto == null
-            ? null
-            : () => _copyLinkFromMore(context, dto, post),
-        onShare: dto == null ? null : () => _onMomentShareTap(context, post),
+        onCopyLink: () => _copyLinkFromMore(context, post),
+        onShare: () => _onMomentShareTap(context, post),
       ),
     );
   }
@@ -946,11 +940,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Future<void> _copyLinkFromMore(
     BuildContext context,
     PostBaseDto dto,
-    dynamic rawPost,
   ) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
-      _buildShareTemplate(dto, rawPost),
+      _buildShareTemplate(dto),
       const ContentShareAction(
         id: 'copy_link',
         label: UITextConstants.copyLink,
@@ -961,30 +954,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  PostBaseDto? _resolveSharePost(dynamic post) {
-    if (post is PostBaseDto) {
-      return post;
-    }
-    if (post is Map) {
-      return postBaseDtoFromMap(post.cast<String, dynamic>());
-    }
-    return null;
-  }
-
-  ContentShareTemplate _buildShareTemplate(PostBaseDto post, dynamic rawPost) {
-    final raw = rawPost is Map<String, dynamic>
-        ? rawPost
-        : ref
-                  .read(appContentRepositoryProvider)
-                  .discoveryMomentData
-                  .cast<Map<String, dynamic>?>()
-                  .firstWhere(
-                    (item) =>
-                        item?['postId']?.toString() == post.id ||
-                        item?['id']?.toString() == post.id,
-                    orElse: () => null,
-                  ) ??
-              post.toMap();
+  ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
+    final raw =
+        ref
+            .read(appContentRepositoryProvider)
+            .discoveryFeedWireRowByPostId(post.id) ??
+        post.toMap();
     final tags =
         (raw['tags'] as List?)
             ?.map((item) => item.toString().trim())
@@ -1007,14 +982,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   String _sourceCircleNameForPost(PostBaseDto post) {
     final raw = ref
         .read(appContentRepositoryProvider)
-        .discoveryMomentData
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (item) =>
-              item?['postId']?.toString() == post.id ||
-              item?['id']?.toString() == post.id,
-          orElse: () => null,
-        );
+        .discoveryFeedWireRowByPostId(post.id);
     return raw?['circleName']?.toString().trim() ?? '';
   }
 
@@ -1048,10 +1016,10 @@ class _MomentPostCard extends StatefulWidget {
   final String sourceCircleName;
   final void Function(String) onUserTap;
   final void Function(PostBaseDto, int) onPostTap;
-  final void Function(dynamic)? onCommentTap;
-  final void Function(dynamic)? onShareTap;
-  final void Function(dynamic)? onMoreTap;
-  final void Function(String action, dynamic post)? onBehavior;
+  final void Function(PostBaseDto)? onCommentTap;
+  final void Function(PostBaseDto)? onShareTap;
+  final void Function(PostBaseDto)? onMoreTap;
+  final void Function(String action, PostBaseDto post)? onBehavior;
 
   const _MomentPostCard({
     required this.item,
@@ -1463,14 +1431,8 @@ class _ArticleCardPlaceholder extends StatelessWidget {
 
 /// 美图/视频卡片：缩略图用 CachedNetworkImage，占位与降级；多图角标、视频 Play 角标；与详情一致的点赞/收藏状态
 class _DiscoveryItemCard extends StatelessWidget {
-  final PostBaseDto post;
-  final VoidCallback onTap;
-  final bool isLiked;
-  final bool isSaved;
-  final int? likesCount;
-  final int? bookmarksCount;
-
   const _DiscoveryItemCard({
+    required this.isDark,
     required this.post,
     required this.onTap,
     this.isLiked = false,
@@ -1479,9 +1441,46 @@ class _DiscoveryItemCard extends StatelessWidget {
     this.bookmarksCount,
   });
 
+  final bool isDark;
+  final PostBaseDto post;
+  final VoidCallback onTap;
+  final bool isLiked;
+  final bool isSaved;
+  final int? likesCount;
+  final int? bookmarksCount;
+
   @override
   Widget build(BuildContext context) {
     final thumb = post.primaryVisualUrl;
+    final cardFill = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted)
+        : AppColors.gridImagePlaceholderLight;
+    final innerFallback = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary)
+        : AppColors.discoveryPostGridInnerFallback;
+    final iconMuted = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+        : AppColors.discoveryPostGridIconMuted;
+    final thumbShadow = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    ).withValues(alpha: isDark ? 0.18 : 0.06);
+    final overlayScrim = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayScrim,
+    );
+    final overlayBorder = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayBorder,
+    );
+    final overlayFgMuted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayForegroundMuted,
+    );
+    final overlayFg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayForeground,
+    );
     final imageCount = post.mediaCount > 0 ? post.mediaCount : 1;
     final isVideo = post.isVideoLike;
 
@@ -1490,10 +1489,10 @@ class _DiscoveryItemCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          color: AppColors.gridImagePlaceholderLight,
+          color: cardFill,
           boxShadow: [
             BoxShadow(
-              color: AppColors.black.withValues(alpha: 0.06),
+              color: thumbShadow,
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -1506,18 +1505,18 @@ class _DiscoveryItemCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: thumb.isEmpty
                   ? Container(
-                      color: AppColors.discoveryPostGridInnerFallback,
+                      color: innerFallback,
                       child: Icon(
                         Icons.image_not_supported_outlined,
                         size: AppSpacing.largeButtonSize,
-                        color: AppColors.discoveryPostGridIconMuted,
+                        color: iconMuted,
                       ),
                     )
                   : CachedNetworkImage(
                       imageUrl: thumb,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
-                        color: AppColors.discoveryPostGridInnerFallback,
+                        color: innerFallback,
                         child: Center(
                           child: SizedBox(
                             width: AppSpacing.largeButtonSize,
@@ -1527,11 +1526,11 @@ class _DiscoveryItemCard extends StatelessWidget {
                         ),
                       ),
                       errorWidget: (context, url, error) => Container(
-                        color: AppColors.discoveryPostGridInnerFallback,
+                        color: innerFallback,
                         child: Icon(
                           Icons.image_not_supported_outlined,
                           size: AppSpacing.largeButtonSize,
-                          color: AppColors.discoveryPostGridIconMuted,
+                          color: iconMuted,
                         ),
                       ),
                     ),
@@ -1549,20 +1548,18 @@ class _DiscoveryItemCard extends StatelessWidget {
                         vertical: AppSpacing.xs / 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.black.withValues(alpha: 0.25),
+                        color: overlayScrim,
                         borderRadius: BorderRadius.circular(
                           AppSpacing.smallBorderRadius,
                         ),
-                        border: Border.all(
-                          color: AppColors.white.withValues(alpha: 0.1),
-                        ),
+                        border: Border.all(color: overlayBorder),
                       ),
                       child: Text(
                         '$imageCount',
                         style: TextStyle(
                           fontSize: AppTypography.xs,
                           fontWeight: AppTypography.black,
-                          color: AppColors.white.withValues(alpha: 0.9),
+                          color: overlayFgMuted,
                         ),
                       ),
                     ),
@@ -1570,16 +1567,14 @@ class _DiscoveryItemCard extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.all(AppSpacing.xs),
                       decoration: BoxDecoration(
-                        color: AppColors.black.withValues(alpha: 0.25),
+                        color: overlayScrim,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.white.withValues(alpha: 0.1),
-                        ),
+                        border: Border.all(color: overlayBorder),
                       ),
                       child: Icon(
                         Icons.play_arrow,
                         size: AppSpacing.iconSmall,
-                        color: AppColors.white,
+                        color: overlayFg,
                       ),
                     ),
                 ],
@@ -1596,7 +1591,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                     size: AppSpacing.iconSmall,
                     color: isLiked
                         ? AppColors.error
-                        : AppColors.white.withValues(alpha: 0.9),
+                        : overlayFgMuted,
                   ),
                   if (likesCount != null && likesCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1604,7 +1599,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                       '$likesCount',
                       style: TextStyle(
                         fontSize: AppTypography.xs,
-                        color: AppColors.white.withValues(alpha: 0.9),
+                        color: overlayFgMuted,
                       ),
                     ),
                   ],
@@ -1614,7 +1609,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                     size: AppSpacing.iconSmall,
                     color: isSaved
                         ? AppColors.primaryColor
-                        : AppColors.white.withValues(alpha: 0.9),
+                        : overlayFgMuted,
                   ),
                   if (bookmarksCount != null && bookmarksCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1622,7 +1617,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                       '$bookmarksCount',
                       style: TextStyle(
                         fontSize: AppTypography.xs,
-                        color: AppColors.white.withValues(alpha: 0.9),
+                        color: overlayFgMuted,
                       ),
                     ),
                   ],
@@ -1678,8 +1673,8 @@ class _VideoImmersionView extends StatefulWidget {
   })
   onUserClick;
   final VoidCallback onAssistantTap;
-  final void Function(BuildContext context, dynamic post)? onCommentTap;
-  final void Function(BuildContext context, dynamic post)? onShareTap;
+  final void Function(BuildContext context, PostBaseDto post)? onCommentTap;
+  final void Function(BuildContext context, PostBaseDto post)? onShareTap;
   final void Function(PostBaseDto post, int index)? onVideoTap;
   final Set<String>? followingUsers;
   final void Function(String authorId, bool isFollowing)? onFollowClick;
@@ -1782,8 +1777,37 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
 
   @override
   Widget build(BuildContext context) {
+    final themeDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final videoGradientEnd = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionBottomGradientEnd,
+    );
+    final videoFg = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayForeground,
+    );
+    final videoFgSecondary = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlaySecondary,
+    );
+    final videoFgTertiary = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayTertiary,
+    );
+    final videoFgQuaternary = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayQuaternary,
+    );
+    final avatarRing = AppColorsFunctional.getColor(
+      true,
+      ColorType.surfaceElevated,
+    );
     return Container(
-      color: AppColors.black,
+      color: AppColorsFunctional.getColor(
+        themeDark,
+        ColorType.fullBleedMediaBackdrop,
+      ),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1837,7 +1861,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                               end: Alignment.bottomCenter,
                               colors: [
                                 AppColors.transparent,
-                                AppColors.black.withValues(alpha: 0.8),
+                                videoGradientEnd,
                               ],
                             ),
                           ),
@@ -1870,7 +1894,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                         children: [
                                           CircleAvatar(
                                             radius: AppSpacing.buttonHeight / 2,
-                                            backgroundColor: AppColors.white,
+                                            backgroundColor: avatarRing,
                                             backgroundImage: NetworkImage(
                                               authorAvatar,
                                             ),
@@ -1927,7 +1951,12 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                                                 AppTypography
                                                                     .medium,
                                                             color:
-                                                                AppColors.white,
+                                                                AppColorsFunctional
+                                                                    .getColor(
+                                                              themeDark,
+                                                              ColorType
+                                                                  .foregroundInverse,
+                                                            ),
                                                           ),
                                                           overflow:
                                                               TextOverflow.clip,
@@ -1945,6 +1974,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                   ),
                                   SizedBox(height: AppSpacing.interGroupLg),
                                   _videoAction(
+                                    context,
                                     CupertinoIcons.heart,
                                     isLiked,
                                     '${post.likeCount + (isLiked ? 1 : 0)}',
@@ -1961,14 +1991,13 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     scaleAnimation: _likeScaleAnimation,
                                   ),
                                   _videoActionWidget(
+                                    context,
                                     AppStarIcon(
                                       size: AppSpacing.iconMedium,
                                       filled: _savedIndexes.contains(index),
                                       color: _savedIndexes.contains(index)
                                           ? AppColors.warning
-                                          : AppColors.white.withValues(
-                                              alpha: 0.78,
-                                            ),
+                                          : videoFgQuaternary,
                                     ),
                                     UITextConstants.bookmarks,
                                     () {
@@ -1986,11 +2015,10 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     scaleAnimation: _bookmarkScaleAnimation,
                                   ),
                                   _videoActionWidget(
+                                    context,
                                     AppBubbleIcon(
                                       size: AppSpacing.iconMedium,
-                                      color: AppColors.white.withValues(
-                                        alpha: 0.78,
-                                      ),
+                                      color: videoFgQuaternary,
                                     ),
                                     '${post.commentCount}',
                                     () => widget.onCommentTap?.call(
@@ -1999,12 +2027,11 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     ),
                                   ),
                                   _videoActionWidget(
+                                    context,
                                     Icon(
                                       CupertinoIcons.arrowshape_turn_up_right,
                                       size: AppSpacing.iconMedium,
-                                      color: AppColors.white.withValues(
-                                        alpha: 0.78,
-                                      ),
+                                      color: videoFgQuaternary,
                                     ),
                                     UITextConstants.share,
                                     () =>
@@ -2035,7 +2062,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     style: TextStyle(
                                       fontSize: AppTypography.lg,
                                       fontWeight: AppTypography.medium,
-                                      color: AppColors.white,
+                                      color: videoFg,
                                     ),
                                   ),
                                 ),
@@ -2044,7 +2071,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                   post.normalizedBody,
                                   style: TextStyle(
                                     fontSize: AppTypography.base,
-                                    color: AppColors.white.withValues(alpha: 0.9),
+                                    color: videoFgSecondary,
                                   ),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
@@ -2055,7 +2082,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     Icon(
                                       Icons.music_note,
                                       size: AppSpacing.iconSmall,
-                                      color: AppColors.white,
+                                      color: videoFg,
                                     ),
                                     SizedBox(width: AppSpacing.intraGroupSm),
                                     Expanded(
@@ -2063,9 +2090,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                         '${UITextConstants.discovery} • $authorName 创作的原声',
                                         style: TextStyle(
                                           fontSize: AppTypography.sm,
-                                          color: AppColors.white.withValues(
-                                            alpha: 0.8,
-                                          ),
+                                          color: videoFgTertiary,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -2130,12 +2155,23 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
   }
 
   Widget _videoAction(
+    BuildContext context,
     IconData icon,
     bool filled,
     String label,
     VoidCallback onTap, {
     Animation<double>? scaleAnimation,
   }) {
+    final themeDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final videoFg = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayForeground,
+    );
+    final videoFgQuaternary = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayQuaternary,
+    );
     final iconToken =
         AppSpacing.semantic[DesignSemanticConstants
             .intraGroup]?[DesignSemanticConstants.xs] ??
@@ -2144,7 +2180,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
       icon == CupertinoIcons.heart
           ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
           : icon,
-      color: filled ? AppColors.error : AppColors.white.withValues(alpha: 0.78),
+      color: filled ? AppColors.error : videoFgQuaternary,
       size: AppSpacing.iconMedium,
     );
     return Padding(
@@ -2164,7 +2200,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
-                color: AppColors.white,
+                color: videoFg,
               ),
             ),
           ],
@@ -2174,6 +2210,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
   }
 
   Widget _videoActionWidget(
+    BuildContext context,
     Widget iconWidget,
     String label,
     VoidCallback onTap, {
@@ -2186,6 +2223,12 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     final child = scaleAnimation != null
         ? ScaleTransition(scale: scaleAnimation, child: iconWidget)
         : iconWidget;
+    final themeDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final videoFg = AppColorsFunctional.getColor(
+      themeDark,
+      ColorType.videoImmersionOverlayForeground,
+    );
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: GestureDetector(
@@ -2201,7 +2244,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
-                color: AppColors.white,
+                color: videoFg,
               ),
             ),
           ],

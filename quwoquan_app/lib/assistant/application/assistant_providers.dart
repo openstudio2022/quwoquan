@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
 import 'package:quwoquan_app/assistant/config/assistant_configuration_center.dart';
@@ -73,6 +74,14 @@ final assistantSkillMarketProvider =
     FutureProvider<List<PersonalAssistantSkillInfo>>((ref) async {
       final gateway = ref.watch(assistantGatewayProvider);
       return gateway.listSkills();
+    });
+
+/// 助手「日程」tab 待办列表（GET /v1/assistant/tasks，Remote 不可用时 Repository fail-open 为空）。
+final assistantScheduleTasksProvider =
+    FutureProvider.autoDispose<List<AssistantUserTaskView>>((ref) async {
+      return ref.read(assistantRepositoryProvider).listAssistantTasks(
+            limit: 32,
+          );
     });
 
 final assistantProviderRegistryProvider = Provider<AssistantProviderRegistry>((

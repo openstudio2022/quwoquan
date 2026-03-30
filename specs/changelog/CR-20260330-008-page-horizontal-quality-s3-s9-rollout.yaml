@@ -1,0 +1,20 @@
+id: CR-20260330-008-page-horizontal-quality-s3-s9-rollout
+title: 页面横向质量 S3–S9 合卷（P4 埋点实现 + 矩阵登记收口）
+status: implemented
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  S3：审计 lib/ui/**/pages 无裸 HTTP，P3 矩阵维持。
+  S4：GoRouter 挂载 AppPageAccessNavigatorObserver；抽取 page_access_log_util；
+  MainAppShell 复用 util；WelcomeScreen 写入 /welcome open/return；矩阵 P4 全 ✓。
+  S5–S8：矩阵 P5/P6/P7/P8 与门禁、双色矩阵同向更新；P7 批量 ○→✓（camera 取景区仍 —）。
+  S9：剩余 P2 partial 登记技术债 PHQ-P2-TBD；metadata_driven_ui_gap_inventory policy 增补收敛顺序；
+  tasks.md 勾选 S3–S9；gate_repo.sh --scope app 通过。
+artifacts:
+  - quwoquan_app/lib/app/navigation/page_access_log_util.dart
+  - quwoquan_app/lib/app/navigation/app_page_access_navigator_observer.dart
+  - quwoquan_app/lib/app/navigation/app_router.dart
+  - quwoquan_app/lib/app/shell/main_app_shell.dart
+  - quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+  - specs/gates/metadata_driven_ui_gap_inventory.yaml

@@ -1,0 +1,50 @@
+---
+description: 页面横向质量矩阵 P1–Pn — 新增/变更页面必登记矩阵与 PR 清单；与 make gate 门禁一致
+alwaysApply: true
+---
+
+# 页面横向质量（page-horizontal-quality）
+
+## 适用范围（触发本规则即须自检）
+
+凡改动或新增下列路径之一，**同一 PR 内**须完成矩阵与清单，且本地/CI 门禁通过：
+
+- `quwoquan_app/lib/ui/**/pages/**/*.dart`（含 `*_page.dart`）
+- `quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart`
+- `quwoquan_app/lib/components/**/*_page.dart`
+- `quwoquan_app/lib/app/shell/*.dart`（与 `verify_page_matrix_scan_complete.py` 扫描基线一致）
+
+**排除**：仅占位 `export` 的 barrel（矩阵 **T0** 行）、`chat_display_fallbacks.dart`（扫描排除）。
+
+## 强制流程（与 S9 收口一致）
+
+1. **更新矩阵**：[`specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md) — 新页 **新增一行**；改行为 **P1–P8** 与「类型 T0–T7」、备注一致（`✓` / `—` / `○`，禁止空单元格）。  
+2. **P2**：若页面涉及云契约，路径须在 [`specs/gates/metadata_driven_ui_gap_inventory.yaml`](specs/gates/metadata_driven_ui_gap_inventory.yaml) 的 `ui_pages` 中登记；矩阵 **P2** 与清单 `status` **不得漂移**（先改清单再改矩阵）。  
+3. **PR 自检**：勾选 [`specs/gates/page_horizontal_quality_pr_checklist.md`](specs/gates/page_horizontal_quality_pr_checklist.md)。  
+4. **P7 / P8**：断点版式与语义 token **分列核对**，不得合并成一条描述。
+
+## 真相源与规划
+
+- 维度定义：[`page-horizontal-quality-spec.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md)  
+- L3 索引：[`page-horizontal-quality/spec.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md)  
+- 九会话执行顺序：[`nine-session-rollout-plan.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md)
+
+## 命令（本地）
+
+```bash
+make verify-app-page-horizontal-quality   # 矩阵符号 + 磁盘/清单无漏页（快）
+bash scripts/gate_repo.sh --scope app     # 全量 app 门禁（含矩阵 + P2 gate + Mock 隔离等）
+```
+
+## 门禁（已串联 `make gate` → `gate_repo.sh`）
+
+- `scripts/verify_page_horizontal_quality_matrix.py` — 路径存在、P1–P8 符号合法  
+- `scripts/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集；矩阵 **⊆** `metadata_driven_ui_gap_inventory`  
+- `scripts/verify_metadata_driven_ui_gate.py` — P2 清单与矩阵一致性（与上脚本同向）  
+- 兄弟脚本（横切同 PR 常需绿）：`verify_ios_native_surface_gate.py`、`verify_dart_semantic.py`、`verify_ui_mock_isolation.py` 等见 `scripts/gate_repo.sh` `run_app`
+
+## 与现有规则关系
+
+- **P3 / Mock**：遵守 [08-mock-data-isolation.mdc](08-mock-data-isolation.mdc)。  
+- **iOS 壳 / P1**：遵守 [07-ios-native-ux.mdc](07-ios-native-ux.mdc) 与 `ios-native-page-enforcement`。  
+- **端云目录与 Provider**：遵守 [01-arch-constraints.mdc](01-arch-constraints.mdc) §2.x。

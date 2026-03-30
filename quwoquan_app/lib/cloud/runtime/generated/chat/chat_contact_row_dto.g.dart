@@ -5,18 +5,33 @@ class ChatContactRowDto {
   final String userId;
   final String displayName;
   final String avatarUrl;
+  final String bio;
+  final String metFrom;
+  final String lastInteraction;
+  final bool isFriend;
+  final bool isStarred;
 
   const ChatContactRowDto({
     required this.userId,
     required this.displayName,
     required this.avatarUrl,
+    required this.bio,
+    required this.metFrom,
+    required this.lastInteraction,
+    required this.isFriend,
+    required this.isStarred,
   });
 
   factory ChatContactRowDto.fromMap(Map<String, dynamic> m) {
     return ChatContactRowDto(
-      userId: m['userId']?.toString() ?? m['contactId']?.toString() ?? '',
+      userId: m['userId']?.toString() ?? m['contactId']?.toString() ?? m['id']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['name']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      bio: m['bio']?.toString() ?? '',
+      metFrom: m['metFrom']?.toString() ?? '',
+      lastInteraction: m['lastInteraction']?.toString() ?? '',
+      isFriend: m['isFriend'] as bool? ?? false,
+      isStarred: m['isStarred'] as bool? ?? false,
     );
   }
 
@@ -25,6 +40,11 @@ class ChatContactRowDto {
       'userId': userId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
+      'bio': bio,
+      'metFrom': metFrom,
+      'lastInteraction': lastInteraction,
+      'isFriend': isFriend,
+      'isStarred': isStarred,
     };
   }
 
@@ -32,24 +52,22 @@ class ChatContactRowDto {
     String? userId,
     String? displayName,
     String? avatarUrl,
+    String? bio,
+    String? metFrom,
+    String? lastInteraction,
+    bool? isFriend,
+    bool? isStarred,
   }) {
     return ChatContactRowDto(
       userId: userId ?? this.userId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      bio: bio ?? this.bio,
+      metFrom: metFrom ?? this.metFrom,
+      lastInteraction: lastInteraction ?? this.lastInteraction,
+      isFriend: isFriend ?? this.isFriend,
+      isStarred: isStarred ?? this.isStarred,
     );
   }
 }
 
-DateTime? _parseDateTime(dynamic v) {
-  if (v == null) return null;
-  if (v is DateTime) return v;
-  if (v is String) return DateTime.tryParse(v);
-  return null;
-}
-
-List<String>? _parseStringList(dynamic v) {
-  if (v == null) return null;
-  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
-  return null;
-}

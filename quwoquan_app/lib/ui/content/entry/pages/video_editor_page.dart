@@ -32,6 +32,7 @@ class VideoEditorResult {
   final bool muted;
 }
 
+/// 本地视频剪辑；持久草稿在父链 `CreateEditorStateV2`（`ContentPublishDraftComposite`）。
 class VideoEditorPage extends StatefulWidget {
   const VideoEditorPage({
     super.key,
@@ -461,20 +462,28 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     return _trimStartMs + (_trimEndMs - _trimStartMs) * ratio;
   }
 
-  Widget _buildHeaderBadge(String label) {
+  Widget _buildHeaderBadge(BuildContext context, String label) {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final scrim = AppColorsFunctional.getColor(isDark, ColorType.black)
+        .withValues(alpha: 0.38);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayForeground,
+    );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
         vertical: AppSpacing.intraGroupXs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.black.withValues(alpha: 0.38),
+        color: scrim,
         borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.white,
+        style: TextStyle(
+          color: fg,
           fontSize: AppTypography.sm,
           fontWeight: AppTypography.medium,
         ),
@@ -483,6 +492,15 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   }
 
   Widget _buildPreview() {
+    final isDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final scrimBlack = AppColorsFunctional.getColor(isDark, ColorType.black);
+    final onVideoFg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayForeground,
+    );
+    final playRingBorder = AppColorsFunctional.getColor(isDark, ColorType.white)
+        .withValues(alpha: 0.12);
     final aspectRatio = _controller.value.isInitialized
         ? _controller.value.aspectRatio.clamp(0.56, 1.8).toDouble()
         : 9 / 16;
@@ -520,8 +538,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: <Color>[
-                      AppColors.black.withValues(alpha: 0.08),
-                      AppColors.black.withValues(alpha: 0.44),
+                      scrimBlack.withValues(alpha: 0.08),
+                      scrimBlack.withValues(alpha: 0.44),
                     ],
                   ),
                 ),
@@ -534,10 +552,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     width: AppSpacing.buttonHeight + 8,
                     height: AppSpacing.buttonHeight + 8,
                     decoration: BoxDecoration(
-                      color: AppColors.black.withValues(alpha: 0.28),
+                      color: scrimBlack.withValues(alpha: 0.28),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.white.withValues(alpha: 0.12),
+                        color: playRingBorder,
                         width: AppSpacing.hairline,
                       ),
                     ),
@@ -545,7 +563,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                       _controller.value.isPlaying
                           ? CupertinoIcons.pause_fill
                           : CupertinoIcons.play_fill,
-                      color: AppColors.white,
+                      color: onVideoFg,
                       size: AppSpacing.iconLarge,
                     ),
                   ),
@@ -557,11 +575,12 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                 child: Row(
                   children: <Widget>[
                     _buildHeaderBadge(
+                      context,
                       '${_formatMs(_trimStartMs.round())} - ${_formatMs(_trimEndMs.round())}',
                     ),
                     if (_muted) ...<Widget>[
                       SizedBox(width: AppSpacing.intraGroupXs),
-                      _buildHeaderBadge('已静音'),
+                      _buildHeaderBadge(context, '已静音'),
                     ],
                   ],
                 ),
@@ -573,6 +592,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: _buildHeaderBadge(
+                    context,
                     '封面 ${_formatMs(_coverTimeMs.round())}',
                   ),
                 ),
@@ -688,6 +708,12 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isDark =
+            CupertinoTheme.of(context).brightness == Brightness.dark;
+        final playheadRing = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.white,
+        );
         final width = constraints.maxWidth;
         final fraction = ((_previewTimeMs - _trimStartMs) /
                 math.max(_trimEndMs - _trimStartMs, 1))
@@ -781,7 +807,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                       color: AppColors.iosAccentLight,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.white,
+                        color: playheadRing,
                         width: AppSpacing.two,
                       ),
                     ),
@@ -875,6 +901,17 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     separatorBuilder: (_, _) =>
                         SizedBox(width: AppSpacing.intraGroupSm),
                     itemBuilder: (context, index) {
+                      final isDark =
+                          CupertinoTheme.of(context).brightness ==
+                              Brightness.dark;
+                      final scrimBlack = AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.black,
+                      );
+                      final onVideoFg = AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.mediaThumbnailOverlayForeground,
+                      );
                       final frame = _frames[index];
                       final selected =
                           frame.timeMs == _closestFrameTo(
@@ -929,7 +966,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                   bottom: AppSpacing.intraGroupXs,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: AppColors.black.withValues(alpha: 0.44),
+                                      color: scrimBlack.withValues(alpha: 0.44),
                                       borderRadius: BorderRadius.circular(
                                         AppSpacing.radiusTwenty,
                                       ),
@@ -942,8 +979,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                       child: Text(
                                         _formatMs(frame.timeMs),
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: AppColors.white,
+                                        style: TextStyle(
+                                          color: onVideoFg,
                                           fontSize: AppTypography.xsPlus,
                                           fontWeight: AppTypography.medium,
                                         ),

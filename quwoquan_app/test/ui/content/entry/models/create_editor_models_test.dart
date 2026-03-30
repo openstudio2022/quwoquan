@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
@@ -99,7 +100,12 @@ void main() {
       final payload = PublishSettings(
         isPublic: false,
         locationName: '成都',
-        location: const {'latitude': 30.6, 'longitude': 104.0},
+        locationPoi: const LocationPoiDto(
+          id: 't_poi',
+          name: '',
+          latitude: 30.6,
+          longitude: 104.0,
+        ),
       ).toPayloadFields();
 
       expect(payload['visibility'], 'private');

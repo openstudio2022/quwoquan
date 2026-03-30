@@ -59,15 +59,3 @@ class LocationPoiDto {
   }
 }
 
-DateTime? _parseDateTime(dynamic v) {
-  if (v == null) return null;
-  if (v is DateTime) return v;
-  if (v is String) return DateTime.tryParse(v);
-  return null;
-}
-
-List<String>? _parseStringList(dynamic v) {
-  if (v == null) return null;
-  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
-  return null;
-}

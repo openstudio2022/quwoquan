@@ -146,9 +146,10 @@ class _VoiceRecordOverlayState extends State<VoiceRecordOverlay> {
           (i) {
             final amp = displayAmps.isEmpty ? 0.1 : displayAmps[i];
             return Container(
-              width: 3,
-              height: (amp * AppSpacing.xl * 2).clamp(2.0, AppSpacing.xl * 2),
-              margin: const EdgeInsets.symmetric(horizontal: 1),
+              width: AppSpacing.three,
+              height: (amp * AppSpacing.xl * 2)
+                  .clamp(AppSpacing.two, AppSpacing.xl * 2),
+              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.one),
               decoration: BoxDecoration(
                 color: _isCancelling
                     ? AppColors.error

@@ -260,7 +260,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   /// 显示更多选项弹窗 - 使用通用组件
   void _showMoreOptions() {
     final config = MediaPostMoreActionConfig(
-      post: widget.post,
       onReward: _handleReward,
       onSave: _handleSave,
       onMessage: _handleMessage,

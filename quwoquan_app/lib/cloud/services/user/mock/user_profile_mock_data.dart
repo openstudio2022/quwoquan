@@ -7,6 +7,7 @@
 // 待 contracts/metadata/user/service.yaml 定义后，此文件由 make codegen-app 驱动替换。
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 
 enum MockProfileRelationState {
   self,
@@ -293,46 +294,4 @@ class UserProfileMockData {
     return map[userId] ??
         'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200';
   }
-}
-
-// ─── Value Objects ─────────────────────────────────────────────────────────
-
-/// 作品集条目（待 service.yaml 定义后由 codegen 替换）
-class UserWorkItem {
-  const UserWorkItem({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.coverUrl,
-    required this.likeCount,
-    required this.date,
-    required this.desc,
-  });
-
-  final String id;
-  final String type;
-  final String title;
-  final String coverUrl;
-  final int likeCount;
-  final String date;
-  final String desc;
-}
-
-/// 生活记录条目（待 service.yaml 定义后由 codegen 替换）
-class UserLifeItem {
-  const UserLifeItem({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.categoryKey,
-    required this.coverUrl,
-    required this.desc,
-  });
-
-  final String id;
-  final String name;
-  final String category;
-  final String categoryKey;
-  final String coverUrl;
-  final String desc;
 }

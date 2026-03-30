@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -157,7 +158,7 @@ void main() {
 
 class _ErrorChatRepository extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMessages({
+  Future<List<ChatMessageDto>> listMessages({
     required String conversationId,
     String? before,
     int limit = 20,
@@ -168,12 +169,12 @@ class _ErrorChatRepository extends MockChatRepository {
 
 class _EmptyMessagesChatRepository extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMessages({
+  Future<List<ChatMessageDto>> listMessages({
     required String conversationId,
     String? before,
     int limit = 20,
   }) async {
-    return [];
+    return const <ChatMessageDto>[];
   }
 }
 

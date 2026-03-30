@@ -62,11 +62,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   Future<void> _loadArticle() async {
     try {
-      final dataService = ref.read(dataServiceProvider);
-      final raw = await dataService.getDataItem(
-        endpoint: '/posts',
-        id: widget.articleId,
-      );
+      final raw = await ref
+          .read(contentRepositoryProvider)
+          .getPost(postId: widget.articleId);
       final article = projectArticleDetailView(
         raw,
         fallbackArticleId: widget.articleId,

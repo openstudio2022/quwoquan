@@ -10,7 +10,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
@@ -45,6 +45,9 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   String _selectedDimension = 'all';
   String _selectedExpandedMenuId = _expandedMenuAllId;
   bool _routeContextApplied = false;
+  Map<String, Map<String, dynamic>> _categoryConfig = const {
+    'all': {'label': '推荐'},
+  };
 
   @override
   bool get wantKeepAlive => true;
@@ -85,7 +88,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 
   List<Map<String, String>> get _allCategories {
-    final config = CircleMockData.categoryConfig;
+    final config = _categoryConfig;
     final list = <Map<String, String>>[];
     final seen = <String>{};
 
@@ -106,33 +109,43 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     return {for (final item in _allCategories) item['id']!: item['label']!};
   }
 
-  List<Map<String, dynamic>> _repoCircles = [];
+  List<CircleDto> _repoCircles = [];
   bool _circlesLoaded = false;
 
   Future<void> _loadCirclesFromRepo() async {
     try {
       final repo = ref.read(circleRepositoryProvider);
       final data = await repo.listCircles();
+      final cfg = await repo.getCircleCategoryConfig();
       if (mounted) {
         setState(() {
-          _repoCircles = data;
+          _categoryConfig = cfg;
+          _repoCircles = data
+              .map(
+                (c) => CircleDto.fromMap({
+                  ...c,
+                  'description': c['description'] ?? c['desc'],
+                }),
+              )
+              .toList(growable: false);
           _circlesLoaded = true;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _repoCircles = CircleMockData.circles;
+          _categoryConfig = const {'all': {'label': '推荐'}};
+          _repoCircles = [];
           _circlesLoaded = true;
         });
       }
     }
   }
 
-  List<Map<String, dynamic>> _filteredCirclesFor(String dimensionId) {
-    final circles = _circlesLoaded ? _repoCircles : CircleMockData.circles;
+  List<CircleDto> _filteredCirclesFor(String dimensionId) {
+    final circles = _circlesLoaded ? _repoCircles : <CircleDto>[];
     if (dimensionId == 'all') return circles;
-    return circles.where((c) => c['categoryId'] == dimensionId).toList();
+    return circles.where((c) => c.category == dimensionId).toList();
   }
 
   Map<String, String> get _routeQueryParameters {
@@ -167,28 +180,24 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     return items.where((item) => seen.add(item.id)).toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _expandedCirclesForSelectedMenu() {
-    final source = List<Map<String, dynamic>>.from(
+  List<CircleDto> _expandedCirclesForSelectedMenu() {
+    final source = List<CircleDto>.from(
       _filteredCirclesFor(_expandedMenuAllId),
     );
     source.sort((a, b) {
-      final right = (b['memberCount'] as num?)?.toInt() ?? 0;
-      final left = (a['memberCount'] as num?)?.toInt() ?? 0;
-      return right.compareTo(left);
+      return b.memberCount.compareTo(a.memberCount);
     });
 
     if (_selectedExpandedMenuId == _expandedMenuMineId) {
       return source
-          .where((item) => _myCircleIds.contains(item['id']?.toString() ?? ''))
+          .where((item) => _myCircleIds.contains(item.id))
           .toList(growable: false);
     }
     if (_selectedExpandedMenuId == _expandedMenuAllId) {
       return source;
     }
     return source
-        .where(
-          (item) => item['categoryId']?.toString() == _selectedExpandedMenuId,
-        )
+        .where((item) => item.category == _selectedExpandedMenuId)
         .toList(growable: false);
   }
 
@@ -207,12 +216,12 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     return '$label${UITextConstants.homeTabCircles}';
   }
 
-  bool _isMyCircle(Map<String, dynamic> circle) {
-    return _myCircleIds.contains(circle['id']?.toString() ?? '');
+  bool _isMyCircle(CircleDto circle) {
+    return _myCircleIds.contains(circle.id);
   }
 
-  String _formatCircleMetric(num? rawCount, {required String suffix}) {
-    final count = rawCount?.toInt() ?? 0;
+  String _formatCircleMetric(int rawCount, {required String suffix}) {
+    final count = rawCount;
     if (count >= 10000) {
       final scaled = count / 10000;
       final value = scaled >= 100 || scaled == scaled.roundToDouble()
@@ -363,21 +372,16 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                                   final circle = circles[index];
                                   final joined = _isMyCircle(circle);
                                   final coverUrl =
-                                      (circle['coverUrl'] ??
-                                              circle['cover'] ??
-                                              circle['avatar'] ??
-                                              '')
-                                          .toString();
-                                  final name =
-                                      (circle['name'] ??
-                                              UITextConstants.homeTabCircles)
-                                          .toString();
+                                      (circle.coverUrl ?? '').trim();
+                                  final name = circle.name.isNotEmpty
+                                      ? circle.name
+                                      : UITextConstants.homeTabCircles;
                                   final members = _formatCircleMetric(
-                                    circle['memberCount'] as num?,
+                                    circle.memberCount,
                                     suffix: '人',
                                   );
                                   final posts = _formatCircleMetric(
-                                    circle['postCount'] as num?,
+                                    circle.postCount,
                                     suffix: '件作品',
                                   );
                                   return CupertinoButton(
@@ -385,7 +389,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                                     minimumSize: Size.zero,
                                     onPressed: () => context.push(
                                       AppRoutePaths.circleDetail(
-                                        id: circle['id']?.toString() ?? '',
+                                        id: circle.id,
                                       ),
                                     ),
                                     child: Row(

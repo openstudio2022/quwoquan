@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 
 class CreateMediaPickerPage extends StatefulWidget {
   const CreateMediaPickerPage({
@@ -189,6 +190,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   Future<void> _openCamera() async {
     final result = await Navigator.of(context).push<CameraCaptureResult>(
       MaterialPageRoute<CameraCaptureResult>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageCamera,
+        ),
         builder: (_) => CameraCapturePage(initialMode: widget.entryMode),
       ),
     );
@@ -771,6 +775,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     }
     final goNext = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createMediaPickerOneTapMovie,
+        ),
         fullscreenDialog: true,
         builder: (_) => OneTapMoviePreviewPage(items: selected),
       ),

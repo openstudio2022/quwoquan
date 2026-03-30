@@ -9,6 +9,7 @@ Scans:
   - quwoquan_app/lib/ui/**/pages/**/*.dart
   - quwoquan_app/lib/components/**/*_page.dart
   - quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+  - quwoquan_app/lib/app/shell/*.dart
 """
 from __future__ import annotations
 
@@ -48,6 +49,11 @@ def _collect_files() -> list[Path]:
     cap = APP_LIB / "components/media/camera/camera_capture_page.dart"
     if cap.is_file() and cap not in files:
         files.append(cap)
+    shell_dir = APP_LIB / "app" / "shell"
+    if shell_dir.is_dir():
+        for p in sorted(shell_dir.glob("*.dart")):
+            if p not in files:
+                files.append(p)
     return files
 
 

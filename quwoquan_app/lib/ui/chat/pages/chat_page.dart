@@ -18,12 +18,13 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
 /// 趣信页
@@ -540,7 +541,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
                           child: Text(
                             UITextConstants.secretUnlockButton,
                             style: TextStyle(
-                              color: AppColors.white,
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.badgeForeground,
+                              ),
                               fontWeight: AppTypography.semiBold,
                               fontSize: AppTypography.iosSubheadline,
                             ),
@@ -677,164 +681,121 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color borderColor,
   ) {
     final sub = _contactsSubTabs[_subTabIndex];
-    final repository = ref.read(appContentRepositoryProvider);
-    List<Map<String, dynamic>> list;
-    if (sub == UITextConstants.contactsTabCircles) {
-      list = repository.chatMockContactCircles;
-    } else if (sub == UITextConstants.contactsTabSameInterest) {
-      list = repository.chatMockContacts
-          .where((c) => c['isFriend'] == true)
-          .toList();
-    } else if (sub == UITextConstants.contactsTabFunGroup) {
-      list = repository.chatMockContactGroups;
-    } else {
-      list = repository.chatMockContacts;
-    }
-    if (list.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              CupertinoIcons.person_2,
-              size: AppSpacing.iconButtonMinSizeMd,
-              color: fgSecondary,
-            ),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              UITextConstants.noData,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                color: fgSecondary,
-              ),
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              sub,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: fgSecondary.withValues(alpha: 0.8),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    // 全部、同好：带右侧字母索引（1:1 ContactsList.tsx）
-    if (sub == UITextConstants.contactsTabAll ||
-        sub == UITextConstants.contactsTabSameInterest) {
-      return _ContactsListWithIndex(
-        items: list,
-        fgPrimary: fgPrimary,
-        fgSecondary: fgSecondary,
-        borderColor: borderColor,
-      );
-    }
-    return ListView.builder(
-      itemCount: list.length,
-      itemBuilder: (context, i) {
-        final item = list[i];
-        final title = _chatContactTitle(item);
-        final avatar = item['avatar'] as String? ?? '';
-        final subtitle = _chatContactSubtitle(item);
-        return CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          onPressed: () => _openChatContactTarget(context, item),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm + AppSpacing.two,
-            ),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: borderColor,
-                  width: AppSpacing.hairline,
-                ),
-              ),
-            ),
-            child: Row(
+    final asyncRows = ref.watch(chatContactsRowsForSubTabProvider(sub));
+    return asyncRows.when(
+      data: (list) {
+        if (list.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                RoundedSquareAvatar(
-                  size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                  imageUrl: avatar,
-                  name: title,
+                Icon(
+                  CupertinoIcons.person_2,
+                  size: AppSpacing.iconButtonMinSizeMd,
+                  color: fgSecondary,
                 ),
-                SizedBox(width: AppSpacing.interGroupSm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosBody,
-                          fontWeight: AppTypography.semiBold,
-                          color: fgPrimary,
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty)
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: fgSecondary,
-                          ),
-                        ),
-                    ],
+                SizedBox(height: AppSpacing.md),
+                Text(
+                  UITextConstants.noData,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosTitle3,
+                    color: fgSecondary,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.xs),
+                Text(
+                  sub,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: fgSecondary.withValues(alpha: 0.8),
                   ),
                 ),
               ],
             ),
-          ),
+          );
+        }
+        if (sub == UITextConstants.contactsTabAll ||
+            sub == UITextConstants.contactsTabSameInterest) {
+          return _ContactsListWithIndex(
+            items: list,
+            fgPrimary: fgPrimary,
+            fgSecondary: fgSecondary,
+            borderColor: borderColor,
+          );
+        }
+        return ListView.builder(
+          itemCount: list.length,
+          itemBuilder: (context, i) {
+            final row = list[i];
+            return CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () => row.open(context),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm + AppSpacing.two,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: borderColor,
+                      width: AppSpacing.hairline,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    RoundedSquareAvatar(
+                      size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                      imageUrl: row.avatarUrl,
+                      name: row.displayName,
+                    ),
+                    SizedBox(width: AppSpacing.interGroupSm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            row.displayName,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosBody,
+                              fontWeight: AppTypography.semiBold,
+                              color: fgPrimary,
+                            ),
+                          ),
+                          if (row.subtitle.isNotEmpty)
+                            Text(
+                              row.subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.iosFootnote,
+                                color: fgSecondary,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
+      loading: () => const Center(child: CupertinoActivityIndicator()),
+      error: (_, __) => Center(
+        child: Text(
+          UITextConstants.noData,
+          style: TextStyle(
+            fontSize: AppTypography.iosTitle3,
+            color: fgSecondary,
+          ),
+        ),
+      ),
     );
   }
-}
-
-String _chatContactTitle(Map<String, dynamic> item) {
-  return (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
-      '';
-}
-
-String _chatContactSubtitle(Map<String, dynamic> item) {
-  return (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
-          as String? ??
-      '';
-}
-
-void _openChatContactTarget(BuildContext context, Map<String, dynamic> item) {
-  final type = item['type'] as String? ?? '';
-  final circleId = item['circleId']?.toString() ?? item['id']?.toString() ?? '';
-  final conversationId =
-      item['conversationId']?.toString() ?? item['id']?.toString() ?? '';
-  final userId =
-      item['userId']?.toString() ??
-      item['username']?.toString() ??
-      item['id']?.toString() ??
-      _chatContactTitle(item);
-
-  if (type == 'circle' || item['isCircle'] == true) {
-    context.push(AppRoutePaths.circleDetail(id: circleId));
-    return;
-  }
-  if (type == 'group' || item['isGroup'] == true) {
-    context.push(AppRoutePaths.chatDetail(id: conversationId));
-    return;
-  }
-  context.push(
-    AppRoutePaths.userProfile(username: userId),
-    extra: UserProfileRouteExtra(
-      profileSubjectId: userId,
-      avatar: item['avatarUrl']?.toString(),
-      displayName: item['displayName']?.toString(),
-      backgroundImage: item['backgroundImage']?.toString(),
-    ),
-  );
 }
 
 /// 同好列表带右侧字母索引（1:1 ContactsList.tsx ContactsContent）
@@ -846,7 +807,7 @@ class _ContactsListWithIndex extends StatefulWidget {
     required this.borderColor,
   });
 
-  final List<Map<String, dynamic>> items;
+  final List<ChatContactsRow> items;
   final Color fgPrimary;
   final Color fgSecondary;
   final Color borderColor;
@@ -979,32 +940,25 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.items;
-    final withInitial = <Map<String, dynamic>>[];
-    for (final item in items) {
-      final name =
-          (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
-          '';
-      withInitial.add({
-        ...item,
-        'initial': _getInitial(name),
-        'displayName': name,
-      });
-    }
-    withInitial.sort((a, b) {
-      final starA = a['isStarred'] == true ? 1 : 0;
-      final starB = b['isStarred'] == true ? 1 : 0;
-      if (starB != starA) return starB - starA;
-      final ia = a['initial'] as String;
-      final ib = b['initial'] as String;
+    final sorted = List<ChatContactsRow>.from(widget.items);
+    sorted.sort((a, b) {
+      final starA = a.isStarred ? 1 : 0;
+      final starB = b.isStarred ? 1 : 0;
+      if (starB != starA) return starB.compareTo(starA);
+      final ia = _getInitial(a.displayName);
+      final ib = _getInitial(b.displayName);
       if (ia != ib) return ia.compareTo(ib);
-      return (a['displayName'] as String).compareTo(b['displayName'] as String);
+      return a.displayName.compareTo(b.displayName);
     });
-    final initials = <String>{};
-    for (final item in withInitial) {
-      initials.add(item['initial'] as String);
+    final withInitial = <(ChatContactsRow row, String initial)>[];
+    for (final row in sorted) {
+      withInitial.add((row, _getInitial(row.displayName)));
     }
-    final hasStarred = withInitial.any((e) => e['isStarred'] == true);
+    final initials = <String>{};
+    for (final (_, ini) in withInitial) {
+      initials.add(ini);
+    }
+    final hasStarred = sorted.any((r) => r.isStarred);
     final allInitials = <String>[];
     if (hasStarred) allInitials.add('★');
     allInitials.addAll(initials.toList()..sort());
@@ -1012,14 +966,20 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
       _sectionKeys.putIfAbsent(letter, () => GlobalKey());
     }
 
+    final listIsDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onIndexLetterActiveFg = AppColorsFunctional.getColor(
+      listIsDark,
+      ColorType.badgeForeground,
+    );
+
     final listChildren = <Widget>[];
     final sectionOffsets = <String, double>{};
     double pos = 0;
     String? lastInitial;
     bool lastStarred = false;
-    for (final item in withInitial) {
-      final initial = item['initial'] as String;
-      final starred = item['isStarred'] == true;
+    for (final (row, initial) in withInitial) {
+      final starred = row.isStarred;
       final isFirstStarred = starred && !lastStarred;
       final isFirstOfInitial = initial != lastInitial;
       if (isFirstStarred) {
@@ -1075,17 +1035,14 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
       lastInitial = initial;
       lastStarred = starred;
       pos += _kContactRowHeight;
-      final title = item['displayName'] as String? ?? '';
-      final avatar = item['avatar'] as String? ?? '';
-      final subtitle =
-          (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
-              as String? ??
-          '';
+      final title = row.displayName;
+      final avatar = row.avatarUrl;
+      final subtitle = row.subtitle;
       listChildren.add(
         CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: Size.zero,
-          onPressed: () => _openChatContactTarget(context, item),
+          onPressed: () => row.open(context),
           child: Container(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
@@ -1225,7 +1182,9 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                       style: TextStyle(
                         fontSize: AppTypography.xs,
                         fontWeight: AppTypography.semiBold,
-                        color: isActive ? AppColors.white : widget.fgSecondary,
+                        color: isActive
+                            ? onIndexLetterActiveFg
+                            : widget.fgSecondary,
                       ),
                     ),
                   ),
@@ -1295,6 +1254,12 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tileIsDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onAccentFg = AppColorsFunctional.getColor(
+      tileIsDark,
+      ColorType.badgeForeground,
+    );
     final unread = conversation['unreadCount'] as int? ?? 0;
     final isEncrypted = showEncryptedBadge;
     return CupertinoButton(
@@ -1335,7 +1300,7 @@ class _ConversationTile extends StatelessWidget {
                       child: Icon(
                         CupertinoIcons.lock_fill,
                         size: AppTypography.xs,
-                        color: AppColors.white,
+                        color: onAccentFg,
                       ),
                     ),
                   ),
@@ -1362,7 +1327,7 @@ class _ConversationTile extends StatelessWidget {
                         unread > 99 ? '99+' : '$unread',
                         style: TextStyle(
                           fontSize: AppTypography.xs,
-                          color: AppColors.white,
+                          color: onAccentFg,
                           fontWeight: FontWeight.w600,
                           height: AppTypography.lineHeightTight,
                         ),
@@ -1497,6 +1462,12 @@ class _InboxConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final inboxTileIsDark =
+        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onAccentFg = AppColorsFunctional.getColor(
+      inboxTileIsDark,
+      ColorType.badgeForeground,
+    );
     final scaffoldBackground = AppColors.iosPageBackground(context);
     final dividerColor = AppColors.iosSeparator(context);
     final subtitleColor = fgSecondary.withValues(alpha: 0.9);
@@ -1554,7 +1525,7 @@ class _InboxConversationTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: AppTypography.xs,
                                 fontWeight: AppTypography.semiBold,
-                                color: AppColors.white,
+                                color: onAccentFg,
                                 height: AppTypography.lineHeightTight,
                               ),
                             ),

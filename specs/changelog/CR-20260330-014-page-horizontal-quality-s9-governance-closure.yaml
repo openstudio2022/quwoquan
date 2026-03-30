@@ -1,0 +1,18 @@
+id: CR-20260330-014-page-horizontal-quality-s9-governance-closure
+title: S9 横向治理收口 — Cursor 规则、Makefile、架构表、PR 清单与门禁对齐
+status: implemented
+feature_path: runtime/runtime-client-foundation/page-horizontal-quality
+summary: |
+  冻结「后续任意新增/变更页面」必经的治理链路：09-page-horizontal-quality.mdc（alwaysApply）定义触发路径与矩阵/P2 清单义务；
+  01-arch-constraints §2.4 表行与仓库 Makefile verify-app-page-horizontal-quality；
+  page_horizontal_quality_pr_checklist §S9 汇总规则/命令/gate_repo 串联脚本；
+  nine-session-rollout-plan / parent spec / L3 spec 索引同步；S9 验收以 gate app 段为准。
+artifacts:
+  - .cursor/rules/09-page-horizontal-quality.mdc
+  - .cursor/rules/01-arch-constraints.mdc
+  - Makefile
+  - specs/gates/page_horizontal_quality_pr_checklist.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md

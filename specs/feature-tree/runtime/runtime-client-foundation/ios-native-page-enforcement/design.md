@@ -24,8 +24,9 @@
 1. `quwoquan_app/lib/ui/**/pages/**/*.dart`（**含**非 `*_page` 后缀文件，如 `welcome_screen.dart`、仅 `export` 的 `chat_display_fallbacks.dart`——后者虽通常无 `return`，仍属扫描文件集）
 2. `quwoquan_app/lib/components/**/*_page.dart`
 3. `quwoquan_app/lib/components/media/camera/camera_capture_page.dart`（命名例外，显式列入 glob 列表于脚本内）
+4. `quwoquan_app/lib/app/shell/*.dart`（与 `page-horizontal-quality-matrix.md` 扫描基线、`verify_page_matrix_scan_complete.py` 对齐）
 
-**与横向矩阵的差异（已知 gap）**：`page-horizontal-quality-matrix.md` 另含 **`lib/app/shell/*.dart`** 等主壳行；**本门禁当前不扫描 `app/shell`**。若产品要求「主壳层同样阻断 `return Scaffold(`」，需 **slice 扩展扫描路径**（与 `verify_ios_native_surface_gate.py` 同步），并在 design 中更新本节。
+**与横向矩阵**：主壳层 **`app/shell`** 已纳入 v1 扫描；矩阵中对应行 P1 与门禁结论一致。
 
 ### 豁免机制
 

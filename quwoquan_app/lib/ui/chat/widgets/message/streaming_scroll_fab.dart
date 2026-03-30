@@ -25,7 +25,10 @@ class StreamingScrollFab extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark =
         CupertinoTheme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppColors.iosSystemSurfaceDark : AppColors.white;
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
     final accentColor = isDark
         ? AppColors.iosAccentDark
         : AppColors.iosAccentLight;
@@ -40,7 +43,7 @@ class StreamingScrollFab extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: AppColors.black.withValues(alpha: isDark ? 0.3 : 0.1),
+              color: AppColorsFunctional.getColor(isDark, ColorType.dropShadow),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

@@ -327,7 +327,9 @@ class LocalChatSearchSyncService {
         conversationId: conversationId,
         limit: 200,
       );
-      aggregatedMessages.addAll(fallbackMessages);
+      aggregatedMessages.addAll(
+        fallbackMessages.map((m) => m.toMap()).toList(growable: false),
+      );
     }
     if (aggregatedMessages.isEmpty) {
       return;

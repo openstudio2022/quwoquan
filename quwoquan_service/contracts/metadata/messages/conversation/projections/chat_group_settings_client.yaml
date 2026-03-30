@@ -1,0 +1,44 @@
+version: 2
+read_model: ChatGroupSettings
+description: |
+  群管理页开关与会话类型（从 GetConversation / 群设置合并对象解析；与 Mock _defaultSettings 键对齐）。
+
+client_projection:
+  dart_class: ChatGroupSettingsDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_group_settings_dto.g.dart
+  fields:
+    - name: qrCodeJoinEnabled
+      dart_type: bool
+      nullable: false
+      source: qrCodeJoinEnabled
+      aliases: [qrCodeJoinEnabled]
+      default: "true"
+
+    - name: joinRequiresApproval
+      dart_type: bool
+      nullable: false
+      source: joinRequiresApproval
+      aliases: [joinRequiresApproval]
+      default: "false"
+
+    - name: nameEditableByAdminOnly
+      dart_type: bool
+      nullable: false
+      source: nameEditableByAdminOnly
+      aliases: [nameEditableByAdminOnly]
+      default: "false"
+
+    - name: privacyShieldAdminOnly
+      dart_type: bool
+      nullable: false
+      source: privacyShieldAdminOnly
+      aliases: [privacyShieldAdminOnly]
+      default: "false"
+
+    - name: conversationType
+      dart_type: String
+      nullable: false
+      source: type
+      aliases: [type, conversationType]
+      default: "'group'"

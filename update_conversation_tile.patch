@@ -1,0 +1,283 @@
+--- quwoquan_app/lib/ui/chat/pages/chat_page.dart
++++ quwoquan_app/lib/ui/chat/pages/chat_page.dart
+@@ -1187,14 +1187,14 @@
+     this.showEncryptedBadge = false,
+   });
+ 
+-  static const double _avatarSize = 56;
++  static const double _avatarSize = 48;
+ 
+   String _formatConversationTime(Map<String, dynamic> conv) {
+     final isoStr =
+         conv['lastMessageAt'] as String? ??
+         conv['lastMessageTime'] as String? ??
+         conv['updatedAt'] as String?;
+     final dt = ChatTimeFormatter.tryParseServerTime(isoStr);
+     if (dt == null) return '';
+-    return ChatTimeFormatter.format(dt);
++    return ChatTimeFormatter.formatForConversationList(dt);
+   }
+ 
+@@ -1227,112 +1227,117 @@
+     final unread = conversation['unreadCount'] as int? ?? 0;
+     final isEncrypted =
+         showEncryptedBadge || conversation['type'] == 'encrypted';
+-    return Container(
+-      decoration: BoxDecoration(
+-        border: Border(
+-          bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+-        ),
+-      ),
+-      child: CupertinoListTile(
+-        backgroundColor: Colors.transparent,
+-        onTap: onTap,
+-        leading: Stack(
+-          clipBehavior: Clip.none,
+-          children: [
+-            _buildConversationAvatar(),
+-            if (isEncrypted)
+-              Positioned(
+-                right: -2,
+-                bottom: -2,
+-                child: Container(
+-                  padding: EdgeInsets.all(AppSpacing.xs),
+-                  decoration: BoxDecoration(
+-                    color: AppColors.primaryColor,
+-                    shape: BoxShape.circle,
+-                    border: Border.all(
+-                      color: Theme.of(context).scaffoldBackgroundColor,
+-                      width: AppSpacing.oneHalf,
+-                    ),
+-                  ),
+-                  child: Icon(
+-                    Icons.lock,
+-                    size: AppSpacing.fourteen,
+-                    color: Colors.white,
+-                  ),
+-                ),
+-              ),
+-          ],
+-        ),
+-        title: Row(
+-          children: [
+-            Expanded(
+-              child: Text(
+-                conversation['title'] as String? ?? '',
+-                style: TextStyle(
+-                  fontSize: AppTypography.lg,
+-                  fontWeight: FontWeight.w600,
+-                  color: fgPrimary,
+-                ),
+-                maxLines: 1,
+-                overflow: TextOverflow.ellipsis,
+-              ),
+-            ),
+-            if (isSpecial) ...[
+-              SizedBox(width: AppSpacing.intraGroupSm),
+-              Container(
+-                padding: EdgeInsets.symmetric(
+-                  horizontal: AppSpacing.intraGroupSm,
+-                  vertical: AppSpacing.xs / 2,
+-                ),
+-                decoration: BoxDecoration(
+-                  color: AppColors.warning.withValues(alpha: 0.2),
+-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+-                ),
+-                child: Text(
+-                  'AI',
+-                  style: TextStyle(
+-                    fontSize: AppTypography.xs,
+-                    fontWeight: FontWeight.w800,
+-                    color: AppColors.warning,
+-                  ),
+-                ),
+-              ),
+-            ],
+-          ],
+-        ),
+-        subtitle: Row(
+-          children: [
+-            if (isEncrypted) ...[
+-              Icon(
+-                Icons.lock,
+-                size: AppSpacing.interGroupSm,
+-                color: fgSecondary,
+-              ),
+-              SizedBox(width: AppSpacing.xs),
+-            ],
+-            Expanded(
+-              child: Text(
+-                conversation['lastMessage'] as String? ?? '',
+-                maxLines: 1,
+-                overflow: TextOverflow.ellipsis,
+-                style: TextStyle(
+-                  fontSize: AppTypography.smPlus,
+-                  color: fgSecondary,
+-                ),
+-              ),
+-            ),
+-          ],
+-        ),
+-        trailing: Column(
+-          crossAxisAlignment: CrossAxisAlignment.end,
+-          mainAxisAlignment: MainAxisAlignment.center,
+-          children: [
+-            Text(
+-              _formatConversationTime(conversation),
+-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+-            ),
+-            if (unread > 0) ...[
+-              SizedBox(height: AppSpacing.xs),
+-              Container(
+-                padding: EdgeInsets.symmetric(
+-                  horizontal: AppSpacing.intraGroupSm,
+-                  vertical: AppSpacing.xs / 2,
+-                ),
+-                decoration: BoxDecoration(
+-                  color: AppColors.error,
+-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+-                ),
+-                child: Text(
+-                  unread > 99 ? '99+' : '$unread',
+-                  style: TextStyle(
+-                    fontSize: AppTypography.xsPlus,
+-                    color: Colors.white,
+-                    fontWeight: FontWeight.w600,
+-                  ),
+-                ),
+-              ),
+-            ],
+-          ],
+-        ),
+-      ),
+-    );
++    return InkWell(
++      onTap: onTap,
++      child: Container(
++        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
++        decoration: BoxDecoration(
++          border: Border(
++            bottom: BorderSide(color: borderColor.withValues(alpha: 0.3), width: 0.5),
++          ),
++        ),
++        child: Row(
++          crossAxisAlignment: CrossAxisAlignment.center,
++          children: [
++            Stack(
++              clipBehavior: Clip.none,
++              children: [
++                _buildConversationAvatar(),
++                if (isEncrypted)
++                  Positioned(
++                    right: -2,
++                    bottom: -2,
++                    child: Container(
++                      padding: EdgeInsets.all(2),
++                      decoration: BoxDecoration(
++                        color: AppColors.primaryColor,
++                        shape: BoxShape.circle,
++                        border: Border.all(
++                          color: Theme.of(context).scaffoldBackgroundColor,
++                          width: 1.5,
++                        ),
++                      ),
++                      child: Icon(
++                        Icons.lock,
++                        size: 10,
++                        color: Colors.white,
++                      ),
++                    ),
++                  ),
++                if (unread > 0)
++                  Positioned(
++                    right: -6,
++                    top: -6,
++                    child: Container(
++                      padding: EdgeInsets.symmetric(
++                        horizontal: unread > 9 ? 5 : 4,
++                        vertical: 2,
++                      ),
++                      decoration: BoxDecoration(
++                        color: AppColors.error,
++                        borderRadius: BorderRadius.circular(10),
++                        border: Border.all(
++                          color: Theme.of(context).scaffoldBackgroundColor,
++                          width: 1.5,
++                        ),
++                      ),
++                      child: Text(
++                        unread > 99 ? '99+' : '$unread',
++                        style: TextStyle(
++                          fontSize: 10,
++                          color: Colors.white,
++                          fontWeight: FontWeight.w600,
++                          height: 1.1,
++                        ),
++                      ),
++                    ),
++                  ),
++              ],
++            ),
++            SizedBox(width: 12),
++            Expanded(
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                mainAxisAlignment: MainAxisAlignment.center,
++                children: [
++                  Row(
++                    children: [
++                      Expanded(
++                        child: Text(
++                          conversation['title'] as String? ?? '',
++                          style: TextStyle(
++                            fontSize: 16,
++                            fontWeight: FontWeight.w500,
++                            color: fgPrimary,
++                          ),
++                          maxLines: 1,
++                          overflow: TextOverflow.ellipsis,
++                        ),
++                      ),
++                      SizedBox(width: 8),
++                      Text(
++                        _formatConversationTime(conversation),
++                        style: TextStyle(
++                          fontSize: 12,
++                          color: fgSecondary.withValues(alpha: 0.8),
++                        ),
++                      ),
++                    ],
++                  ),
++                  SizedBox(height: 4),
++                  Row(
++                    children: [
++                      if (isEncrypted) ...[
++                        Icon(
++                          Icons.lock,
++                          size: 14,
++                          color: fgSecondary.withValues(alpha: 0.8),
++                        ),
++                        SizedBox(width: 4),
++                      ],
++                      Expanded(
++                        child: Text(
++                          conversation['lastMessage'] as String? ?? '',
++                          maxLines: 1,
++                          overflow: TextOverflow.ellipsis,
++                          style: TextStyle(
++                            fontSize: 14,
++                            color: fgSecondary.withValues(alpha: 0.8),
++                          ),
++                        ),
++                      ),
++                    ],
++                  ),
++                ],
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
+   }
+ }

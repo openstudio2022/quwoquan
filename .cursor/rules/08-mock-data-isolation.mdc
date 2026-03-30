@@ -1,0 +1,37 @@
+---
+description: Mock 数据与端云一体化隔离 — UI 不直连 mock、正式包不带测试入口
+alwaysApply: true
+---
+
+# Mock 数据 · 端云切换 · 与业务代码隔离
+
+## 强制
+
+- **`lib/ui/**`、`lib/app/**`、`lib/core/**`** 禁止 **`import .../cloud/services/*/mock/`**。域名假数据只存在于 **`Mock*Repository` 实现** 或 **`test/`**。
+- **禁止**在 `lib/ui/**/models/**` 使用 **`prototypeCircles` / `prototypeGroups`** 等 **域名 const 列表**（外链图、业务 id）；一律迁到 **`MockChatRepository`（或对应 Mock）**。
+- **新增页面 / Provider**：只通过 **`xxxRepositoryProvider` + `appDataSourceModeProvider`** 取数；不得为走捷径再拷一份 Mock 列表进 UI。
+- **禁止**向 [`specs/gates/ui_mock_isolation_allowlist.yaml`](specs/gates/ui_mock_isolation_allowlist.yaml) **新增** 豁免行掩盖新债；清理历史时 **删除** 对应行。
+- **Remote*Repository** 不得长期 **整类委托** `Mock*Repository` 充当线上数据（见 `RemoteAppContentRepository` 类技术债）。
+
+## 正式发行（与策略 §5.1 对齐）
+
+- **Release / 商店包**：有效数据源 **默认 Remote**；**不得**在 `kReleaseMode` 下暴露 Mock/Remote 切换或等价入口。
+- **CI 正式构建**：交付/上架用 `flutter build ...` **必须**带 `--dart-define=APP_DATA_SOURCE=remote`（或与策略等价的 `main_prod`/flavor 约定）；**不得**以 mock 为流水线默认。
+- **工程隔离**：`lib/ui`、`lib/app`、`lib/core` **禁止** `import .../cloud/services/*/mock/`；`test/`、`integration_test/` 不进应用包（Flutter 默认）。
+- **「测试代码」口径**：`TestKeys` / 语义化 `Key` **不**视为「禁止进 lib 的测试代码」；禁止的是 `test/**` 混入业务入口、以及 UI 直连 mock 目录与域名 `prototype*` 行内假数据。
+- **二进制**：在 **P4（条件 import / prod 专用入口）** 落地前，**不**承诺 AOT 可执行文件内 **零 Mock 类字节**；承诺的是 **运行时默认 Remote + 无切 Mock 入口 + 伪 Remote 不整表委托 Mock**（见策略 §5.1 **R6** 与 **说明**）。
+
+## 开发测试态
+
+- **一键切换**：全应用只经 **`appDataSourceModeProvider` / `AppDataSourceMode`** 在 Mock ↔ Remote 间切换；不得为单页另起并行开关。
+- **本地默认**：Debug 可默认 mock、`--dart-define=APP_DATA_SOURCE=mock` 仅用于开发/CI，**不得**用于商店构建。
+
+## 门禁
+
+- `python3 scripts/verify_ui_mock_isolation.py`（已串联 `make gate` → `scripts/gate_repo.sh --scope app`）。
+- `python3 scripts/verify_lib_no_test_only_symbols.py`（`lib/**` 内 `createForTest` / `createTestAssistantRuntime` 仅 allowlist 豁免）；本地：`make verify-app-lib-test-only-symbols`。
+- 本地：`make verify-app-mock-isolation`。
+
+## 与横向矩阵
+
+- **P3（端云一体化）** 与上述隔离 **同时满足** 才可标 **✓**；详见 [`specs/gates/page_horizontal_quality_pr_checklist.md`](specs/gates/page_horizontal_quality_pr_checklist.md)。

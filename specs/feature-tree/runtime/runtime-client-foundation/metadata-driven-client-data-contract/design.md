@@ -36,3 +36,53 @@
 
 - 大范围改状态类型会引发 **大范围 diff**；必须按域切片、每切片 `flutter analyze` + 契约测试。  
 - 部分页面仍依赖 `DataService` 遗留 Map：须在清单中单列 **deprecate_path**，避免与 Repository 双源。
+
+## 7. P2 全量收敛：`target_dto: TBD` 与 DDD 边界附录
+
+> 与「逐页强制」一致：每行须能回答 **限界上下文**、**聚合/一致性**、**读写 API（service.yaml）→ DTO → UI 消费点**。下列为 **登记用目标类型**；标「待 projection」的须先补 `contracts/metadata/.../projections/*.yaml` 再 `make codegen-app`。
+
+### 7.1 chat（`messages/conversation`）
+
+| 页面 / 挂靠面 | 限界上下文 | 主聚合 | 目标 wire DTO（codegen） | 主要 API / 说明 |
+|---------------|------------|--------|---------------------------|-----------------|
+| `chat_conversation_page` / `chat_detail_page` | chat | Conversation + Message | **`ChatMessageDto`**（`chat_message_client.yaml`） | `ListMessages` / `SyncMessages`；列表 State 为 `List<ChatMessageDto>`；气泡经 `toDisplayMap` |
+| `chat_page` | chat | ChatInbox + Contact | `ChatInboxDto` / `ChatContactRowDto` | `ListInbox` / `ListContacts`；联系人 Tab 待收口 Map |
+| `start_group_chat_page` | chat | Conversation + Member | `ChatInboxDto` / `ChatConversationMemberDto` / **圈子行待 Circle 投影** | 建群、选人；群组/圈子列表若属 circle 域须经 `CircleRepository` 类型 |
+| `group_manage_page` | chat | Conversation（群规则） | **待 projection：`ChatGroupSettingsDto`**（或扩展现有 `getGroupSettings` 响应投影） | `GetGroupSettings` / `UpdateGroupSettings` |
+| `chat_settings_page` | chat | ConversationMember + UserState | `ChatConversationMemberDto` + **会话元数据/设置待 DTO** | `ListMembers` / `GetConversation` 投影待对齐 |
+
+### 7.2 content / discovery（`messages/content` / post projections）
+
+| 页面 | 限界上下文 | 目标 DTO | 说明 |
+|------|------------|----------|------|
+| 详情 / 沉浸 / `media_post_card` | content | `PostBaseDto` 子类 | 分享/埋点若需 Map，仅允许 Repository 边界或一次性序列化 |
+| `create_page` 等创作链 | content | **待 `DraftDocumentDto` / 分阶段 projection**（或现有 entry 模型逐步对齐 metadata） | 与 `service.yaml` 发布 API 字段一一对应后再改 UI State |
+
+### 7.3 circle（`circle_dto.dart` 等）
+
+| 页面 | 目标 DTO |
+|------|----------|
+| `circle_detail_page` / `circles_page` / `home_circles_hub_page` / `circle_edit_settings_page` / `circle_stats_page` | `CircleDto` / `CircleMemberDto` / `CircleSectionConfigDto` 等 **已有 hand+metadata 类型**；UI State 改为上述类型组合，禁止常驻 `Map` 表示圈子实体 |
+
+### 7.4 user
+
+| 页面 | 目标 DTO |
+|------|----------|
+| `other_profile_page` / `my_profile_page` / `edit_profile_page` | `UserProfileDto` |
+| `persona_management_page` | `PersonaDto` |
+| `sub_account_management_page` | **待 projection 或 `UserFullSnapshotDto` 子集** |
+| `resonance_page` / `profile_stats_page` / `profile_comments_page` | **待读 models + metadata 增加 Search/Stats 视图投影** |
+
+### 7.5 entity / search / rtc / assistant
+
+| 域 | 页面 | 目标 DTO / 说明 |
+|----|------|-----------------|
+| entity | `homepage_*` | `lib/cloud/runtime/generated/entity/homepage_models.dart`（手写 DTO，字段对齐 `entity/homepage/fields.yaml`） |
+| search | `global_search_page` / `search_network_results_page` | `search_contract.g.dart` 中 hits/sections 类型 |
+| rtc | 通话各页 | `CallSessionDto` / rtc metadata 投影；选人页已混 chat DTO |
+| assistant | 非 exempt 页 | 调云走 `AssistantRepository` + **assistant codegen**；引擎内部契约不替代云 DTO |
+
+### 7.6 维护
+
+- 本附录与 [`metadata_driven_ui_gap_inventory.yaml`](../../../../gates/metadata_driven_ui_gap_inventory.yaml) **同步迭代**：`target_dto` 列填 **类名**；`compliant` 须在 UI 主路径验证后更新。  
+- 新增 projection 时同步更新 [`page-horizontal-quality-matrix.md`](../page-horizontal-quality-matrix.md) **P2** 列。

@@ -16,7 +16,9 @@ import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -153,9 +155,9 @@ void main() {
           .byWidgetPredicate(
             (widget) =>
                 widget is AssistantMessageBubble &&
-                (widget.message['senderId'] as String?) ==
+                (widget.asTimelineProtocolMap['senderId'] as String?) ==
                     AppConceptConstants.assistantSenderId &&
-                (((widget.message['content'] as String?) ?? '').contains(
+                (((widget.asTimelineProtocolMap['content'] as String?) ?? '').contains(
                       '深圳今天天气晴，适合出行。',
                     ) ||
                     _assistantAnswerMarkdownFromBubble(
@@ -167,7 +169,7 @@ void main() {
     );
 
     final bubble = _latestAssistantBubble(tester);
-    final content = (bubble.message['content'] as String?) ?? '';
+    final content = (bubble.asTimelineProtocolMap['content'] as String?) ?? '';
     final mergedAnswer =
         '$content${_assistantAnswerMarkdownFromBubble(bubble)}';
     expect(mergedAnswer, contains('深圳今天天气晴，适合出行。'));
@@ -295,7 +297,7 @@ void main() {
     );
 
     final streamingMessageId =
-        _latestAssistantBubble(tester).message['id'] as String? ?? '';
+        _latestAssistantBubble(tester).asTimelineProtocolMap['id'] as String? ?? '';
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('备选方案'));
     await tester.pump();
@@ -468,15 +470,15 @@ void main() {
 
     final completedBubble = _latestAssistantBubble(tester);
     final finalAnswer =
-        ((completedBubble.message['content'] as String?)?.trim().isNotEmpty ==
+        ((completedBubble.asTimelineProtocolMap['content'] as String?)?.trim().isNotEmpty ==
                 true
-            ? completedBubble.message['content']
+            ? completedBubble.asTimelineProtocolMap['content']
             : _assistantAnswerMarkdownFromBubble(completedBubble)) ??
         '';
-    expect(completedBubble.message['id'], streamingMessageId);
+    expect(completedBubble.asTimelineProtocolMap['id'], streamingMessageId);
     expect(finalAnswer, contains('九寨沟方向备选方案'));
     final persistedJourney =
-        ((completedBubble.message['journey'] as Map?)
+        ((completedBubble.asTimelineProtocolMap['journey'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{});
     final mergedJourneyEntries =
@@ -557,7 +559,7 @@ void main() {
       findsAtLeastNWidgets(1),
     );
     expect(find.textContaining('关键观点', findRichText: true), findsNothing);
-    final streamingMessageId = bubble.message['id'] as String? ?? '';
+    final streamingMessageId = bubble.asTimelineProtocolMap['id'] as String? ?? '';
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('\n\n## 关键'));
     await tester.pump();
@@ -759,8 +761,8 @@ void main() {
 
     final finalBubble = _latestAssistantBubble(tester);
     final finalAnswer =
-        ((finalBubble.message['content'] as String?)?.trim().isNotEmpty == true
-            ? finalBubble.message['content']
+        ((finalBubble.asTimelineProtocolMap['content'] as String?)?.trim().isNotEmpty == true
+            ? finalBubble.asTimelineProtocolMap['content']
             : _assistantAnswerMarkdownFromBubble(finalBubble)) ??
         '';
     expect(finalAnswer, contains('深圳今天天气晴，适合出行。'));
@@ -808,7 +810,7 @@ void main() {
           body: Builder(
             builder: (context) {
               return AssistantMessageBubble(
-                message: message,
+                transcriptRow: PersistedTimelineTurnCodec.decode(message),
                 isRight: false,
                 bubbleColor: Colors.grey.shade200,
                 textColor: Colors.black,
@@ -823,9 +825,9 @@ void main() {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => AssistantReferenceWebViewPage(
-                        initialUrl: (reference['url'] as String?) ?? '',
-                        title: (reference['title'] as String?) ?? '',
-                        source: (reference['source'] as String?) ?? '',
+                        initialUrl: reference.url,
+                        title: reference.title,
+                        source: reference.source,
                       ),
                     ),
                   );
@@ -1109,12 +1111,12 @@ class _ImmediateAssistantGateway extends AssistantGateway {
 
 class _EmptyAssistantChatRepository extends MockChatRepository {
   @override
-  Future<List<Map<String, dynamic>>> listMessages({
+  Future<List<ChatMessageDto>> listMessages({
     required String conversationId,
     String? before,
     int limit = 20,
   }) async {
-    return const <Map<String, dynamic>>[];
+    return const <ChatMessageDto>[];
   }
 }
 
@@ -1134,7 +1136,7 @@ AssistantMessageBubble _latestAssistantBubble(WidgetTester tester) {
   final finder = find.byWidgetPredicate(
     (widget) =>
         widget is AssistantMessageBubble &&
-        (widget.message['senderId'] as String?) ==
+        (widget.asTimelineProtocolMap['senderId'] as String?) ==
             AppConceptConstants.assistantSenderId,
     description: 'assistant bubble',
   );
@@ -1148,14 +1150,14 @@ AssistantMessageBubble _assistantBubbleByMessageId(
   final finder = find.byWidgetPredicate(
     (widget) =>
         widget is AssistantMessageBubble &&
-        (widget.message['id'] as String?) == messageId,
+        (widget.asTimelineProtocolMap['id'] as String?) == messageId,
     description: 'assistant bubble $messageId',
   );
   return tester.widget<AssistantMessageBubble>(finder.last);
 }
 
 String _assistantAnswerMarkdownFromBubble(AssistantMessageBubble bubble) {
-  final displayState = resolvePersistedAssistantDisplayState(bubble.message);
+  final displayState = resolvePersistedAssistantDisplayState(bubble.asTimelineProtocolMap);
   return renderAnswerBlocksToMarkdown(displayState.answer.blocks);
 }
 

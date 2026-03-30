@@ -7,6 +7,7 @@ import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart';
 
 // settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
 
@@ -44,7 +45,8 @@ class _AssistantSkillCenterPageState
     'system': true,
   };
 
-  List<Map<String, dynamic>> _recentSessions = const <Map<String, dynamic>>[];
+  List<AssistantLocalSessionSummaryView> _recentSessions =
+      const <AssistantLocalSessionSummaryView>[];
 
   @override
   void initState() {
@@ -514,9 +516,9 @@ class _AssistantSkillCenterPageState
             )
           else
             ..._recentSessions.map((item) {
-              final sessionId = (item['sessionId'] ?? '').toString();
-              final messageCount = (item['messageCount'] ?? 0) as int;
-              final lastMessage = (item['lastMessage'] ?? '').toString();
+              final sessionId = item.sessionId;
+              final messageCount = item.messageCount;
+              final lastMessage = item.lastMessage;
               return Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
                 child: Row(
@@ -750,12 +752,15 @@ class _AssistantSkillCenterPageState
       final sessions = await ref.read(assistantGatewayProvider).listSessions();
       if (!mounted) return;
       setState(() {
-        _recentSessions = sessions.take(5).toList(growable: false);
+        _recentSessions = sessions
+            .take(5)
+            .map(AssistantLocalSessionSummaryView.fromMap)
+            .toList(growable: false);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _recentSessions = const <Map<String, dynamic>>[];
+        _recentSessions = const <AssistantLocalSessionSummaryView>[];
       });
     } finally {
       if (mounted) setState(() => _loadingSessions = false);

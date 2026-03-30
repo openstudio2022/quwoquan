@@ -287,24 +287,9 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Map<String, dynamic>? _rawDiscoveryPostById(String postId) {
-    final repo = ref.read(appContentRepositoryProvider);
-    final all = <Map<String, dynamic>>[
-      ...repo.discoveryPhotoData,
-      ...repo.discoveryVideoData,
-      ...repo.discoveryArticleData,
-      ...repo.discoveryMomentData,
-    ];
-    for (final item in all) {
-      final itemId =
-          item['postId']?.toString() ??
-          item['_id']?.toString() ??
-          item['id']?.toString() ??
-          '';
-      if (itemId == postId) {
-        return item;
-      }
-    }
-    return null;
+    return ref
+        .read(appContentRepositoryProvider)
+        .discoveryFeedWireRowByPostId(postId);
   }
 
   void _openAssistantHalfSheet() {

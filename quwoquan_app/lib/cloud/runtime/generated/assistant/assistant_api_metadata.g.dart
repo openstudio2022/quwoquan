@@ -17,6 +17,8 @@ class AssistantApiMetadata {
     'GetPolicy': '/v1/assistant/policy',
     'GetSuggestedActions': '/v1/assistant/suggested-actions',
     'GrantSkillConsent': '/v1/assistant/skills/{skillId}/consent',
+    'ListAssistantMemories': '/v1/assistant/memories',
+    'ListAssistantTasks': '/v1/assistant/tasks',
     'ListConsents': '/v1/assistant/consents',
     'ListSkills': '/v1/assistant/skills',
     'ReportInteractionEvent': '/v1/assistant/learning/events',
@@ -32,6 +34,8 @@ class AssistantApiMetadata {
     'GetPolicy': 'GET',
     'GetSuggestedActions': 'GET',
     'GrantSkillConsent': 'POST',
+    'ListAssistantMemories': 'GET',
+    'ListAssistantTasks': 'GET',
     'ListConsents': 'GET',
     'ListSkills': 'GET',
     'ReportInteractionEvent': 'POST',
@@ -46,6 +50,8 @@ class AssistantApiMetadata {
   static const String getPolicyOperation = 'GetPolicy';
   static const String getSuggestedActionsOperation = 'GetSuggestedActions';
   static const String grantSkillConsentOperation = 'GrantSkillConsent';
+  static const String listAssistantMemoriesOperation = 'ListAssistantMemories';
+  static const String listAssistantTasksOperation = 'ListAssistantTasks';
   static const String listConsentsOperation = 'ListConsents';
   static const String listSkillsOperation = 'ListSkills';
   static const String reportInteractionEventOperation = 'ReportInteractionEvent';
@@ -64,6 +70,8 @@ class AssistantApiMetadata {
       'skillId': skillId,
     });
   }
+  static const String listAssistantMemoriesPath = '/v1/assistant/memories';
+  static const String listAssistantTasksPath = '/v1/assistant/tasks';
   static const String listConsentsPath = '/v1/assistant/consents';
   static const String listSkillsPath = '/v1/assistant/skills';
   static const String reportInteractionEventPath = '/v1/assistant/learning/events';

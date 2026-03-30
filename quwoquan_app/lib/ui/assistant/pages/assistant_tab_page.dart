@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -275,7 +276,13 @@ class _AssistantScheduleView extends ConsumerWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final taskItems = ref.read(appContentRepositoryProvider).assistantTasksData;
+    final tasksAsync = ref.watch(assistantScheduleTasksProvider);
+    final taskItems = tasksAsync.maybeWhen(
+      data: (tasks) =>
+          tasks.map((task) => task.toScheduleRowMap()).toList(growable: false),
+      orElse: () => const <Map<String, dynamic>>[],
+    );
+    final tasksLoading = tasksAsync.isLoading;
 
     return Container(
       color: bg,
@@ -298,6 +305,11 @@ class _AssistantScheduleView extends ConsumerWidget {
             ),
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
+          if (tasksLoading)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+              child: Center(child: CupertinoActivityIndicator(color: fg)),
+            ),
           ...taskItems.map(
             (item) => Padding(
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),

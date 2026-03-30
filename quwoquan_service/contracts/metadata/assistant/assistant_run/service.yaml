@@ -59,7 +59,23 @@ api_routes:
   - method: GET
     path: /v1/assistant/skills
     operation: ListSkills
-    description: 可用 Skill 列表
+    description: 可用 Skill 列表（技能目录）
+    query_params: [limit]
+    response_entity: AssistantSkillCatalogListView
+
+  - method: GET
+    path: /v1/assistant/tasks
+    operation: ListAssistantTasks
+    description: 用户助手任务/待办列表（日程 tab 等）
+    query_params: [limit, status]
+    response_entity: AssistantUserTaskListView
+
+  - method: GET
+    path: /v1/assistant/memories
+    operation: ListAssistantMemories
+    description: 用户助手记忆条目列表（摘要级）
+    query_params: [limit]
+    response_entity: AssistantUserMemoryListView
 
   - method: POST
     path: /v1/assistant/skills/{skillId}/consent
@@ -73,7 +89,19 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [search_xiaoqu_results, create_run, stream_run, report_page_context, get_suggested_actions, report_events, list_skills, manage_consent]
+    capabilities:
+      [
+        search_xiaoqu_results,
+        create_run,
+        stream_run,
+        report_page_context,
+        get_suggested_actions,
+        report_events,
+        list_skills,
+        list_assistant_tasks,
+        list_assistant_memories,
+        manage_consent,
+      ]
   - name: platform-ops
     capabilities: [read_runs, read_events, read_scorecards, manage_policy, manage_skills]
   - name: recommendation-engine

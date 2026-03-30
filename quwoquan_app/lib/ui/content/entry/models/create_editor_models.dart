@@ -738,6 +738,9 @@ int resolveArticlePageSplitIndex(
   return softLimit.clamp(1, normalized.length);
 }
 
+/// 创作发布草稿聚合（`metadata_driven_ui_gap_inventory`：`ContentPublishDraftComposite`）。
+typedef ContentPublishDraftComposite = CreateEditorStateV2;
+
 @immutable
 class CreateEditorStateV2 {
   const CreateEditorStateV2({

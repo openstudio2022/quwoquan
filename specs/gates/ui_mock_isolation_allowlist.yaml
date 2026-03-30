@@ -1,0 +1,10 @@
+# UI / App / Core 与 cloud/services/*/mock 隔离 — 过渡期豁免清单
+#
+# 规则：verify_ui_mock_isolation.py 扫描 lib/ui、lib/app、lib/core；
+#      命中下列违规时，仅当 (relative_path + rule) 在本表 allowed 中才通过。
+# path 可写 `lib/ui/...` 或 `ui/...`（脚本会规范化为相对于 quwoquan_app/lib 的路径）。
+# 治理：每修复一处，删除对应条目；禁止为新增文件追加豁免（应直接按规范实现）。
+#
+version: 1
+
+allowed: []

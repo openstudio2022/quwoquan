@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
@@ -24,6 +25,9 @@ class DefaultCircleMediaPickerController
       case CircleMediaPickSource.camera:
         final captured = await Navigator.of(context).push<CameraCaptureResult>(
           CupertinoPageRoute<CameraCaptureResult>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.circleMediaPickerCamera,
+            ),
             fullscreenDialog: true,
             builder: (_) => const CameraCapturePage(
               initialMode: MediaPickerEntryMode.image,
@@ -34,6 +38,9 @@ class DefaultCircleMediaPickerController
       case CircleMediaPickSource.photoLibrary:
         final picked = await Navigator.of(context).push<CreateMediaPickerResult>(
           CupertinoPageRoute<CreateMediaPickerResult>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.circleMediaPickerGallery,
+            ),
             fullscreenDialog: true,
             builder: (_) => const CreateMediaPickerPage(
               entryMode: MediaPickerEntryMode.image,

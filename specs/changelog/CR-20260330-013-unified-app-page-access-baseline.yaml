@@ -1,0 +1,22 @@
+id: CR-20260330-013-unified-app-page-access-baseline
+title: 统一应用页级埋点（欢迎并轨 GoRouter + 全路径 pageName + 嵌套 push）baseline
+status: dev_complete
+feature_path: runtime/runtime-client-foundation/unified-app-page-access
+summary: |
+  /baseline 冻结 L3 unified-app-page-access：欢迎流方案 A（/welcome 进 GoRouter，与 AppPageAccessNavigatorObserver 同源）；
+  app_routes.yaml 已登记 welcome 路径；spec/design/acceptance/plan/coverage-surfaces 定义全表面覆盖与嵌套 push 审计清单；
+  /dev 实施 QuWoQuanAppRoot 单一 MaterialApp.router、redirect、移除 WelcomeScreen 手写埋点、扩展 pageName 映射、逐项补 RouteSettings.name。
+  对齐 page-horizontal-quality P4；Analytics 与 AppLog 合并另 CR。
+dev_notes: |
+  /dev 完成：QuWoQuanAppRoot 单一 MaterialApp.router；/welcome + redirect + refreshListenable；
+  WelcomeScreen 移除手写 pageAccess；page_access_log_util 全路径 + 内部 route name 映射；
+  create_page / create_media_picker / assistant / circle / global_surface / publish_location / chat_input 等嵌套 push 均已补 RouteSettings.name；
+  coverage-surfaces §3 与 acceptance A1–A4/A7 已标 implemented；dart analyze（quwoquan_app）通过。
+artifacts:
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/coverage-surfaces.md
+  - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+  - specs/feature-tree/tree_index.yaml
