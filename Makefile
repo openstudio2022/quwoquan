@@ -1,6 +1,12 @@
 .PHONY: gate
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-page-horizontal-quality
+.PHONY: verify-app-page-abc-governance
+.PHONY: verify-app-page-abc-governance-enforce-a
+.PHONY: verify-app-page-abc-governance-enforce-b
+.PHONY: verify-app-page-abc-governance-enforce-c
+.PHONY: verify-app-page-abc-governance-enforce-all
+.PHONY: verify-app-session-b-legacy
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -24,6 +30,25 @@ verify-app-lib-test-only-symbols:
 verify-app-page-horizontal-quality:
 	@python3 scripts/verify_page_horizontal_quality_matrix.py
 	@python3 scripts/verify_page_matrix_scan_complete.py
+
+# 页面 A/B/C 专项扫描（默认仅报告、exit 0；加 --enforce-* 见 specs/gates/page_abc_governance.md）
+verify-app-page-abc-governance:
+	@python3 scripts/verify_page_abc_governance.py
+
+verify-app-page-abc-governance-enforce-a:
+	@python3 scripts/verify_page_abc_governance.py --enforce-a
+
+verify-app-page-abc-governance-enforce-b:
+	@python3 scripts/verify_page_abc_governance.py --enforce-b
+
+verify-app-page-abc-governance-enforce-c:
+	@python3 scripts/verify_page_abc_governance.py --enforce-c
+
+verify-app-page-abc-governance-enforce-all:
+	@python3 scripts/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
+
+verify-app-session-b-legacy:
+	@python3 scripts/verify_session_b_legacy_governance.py
 
 gate:
 	@bash scripts/verify_deployment_domain_mapping.sh
@@ -120,16 +145,18 @@ l2-content:
 	@bash scripts/run_l2_content_tests.sh
 
 # L3 API Contract runner (staging HTTP).
-# Requires: STAGING_BASE_URL, TEST_AUTH_TOKEN env vars.
-# staging 不可用时 skip + warn，不阻塞本地 gate。
+# Requires: STAGING_BASE_URL, STAGING_PRODUCT_OPS_BASE_URL, TEST_AUTH_TOKEN env vars.
+# 缺配置或 staging 不可用时直接失败，不能以 skip 视作通过。
 test-api-contract:
-	@if [ -z "$(STAGING_BASE_URL)" ]; then \
-		echo "[L3] WARN: STAGING_BASE_URL not set — skipping api_contract tests"; \
-		exit 0; \
+	@if [ -z "$(STAGING_BASE_URL)" ] || [ -z "$(STAGING_PRODUCT_OPS_BASE_URL)" ]; then \
+		echo "[L3] FAIL: STAGING_BASE_URL and STAGING_PRODUCT_OPS_BASE_URL are required"; \
+		exit 2; \
 	fi
 	cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
 		--dart-define=STAGING_BASE_URL=$(STAGING_BASE_URL) \
 		--dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN)
+	cd quwoquan_app && flutter test test/cloud/ops/api_contract_runner.dart \
+		--dart-define=STAGING_PRODUCT_OPS_BASE_URL=$(STAGING_PRODUCT_OPS_BASE_URL)
 
 # gate-full: L1+L2+L3（daily CI / pre-release）
 # PR 日常开发用 make gate；pre-release 用 make gate-full。

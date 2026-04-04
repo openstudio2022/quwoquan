@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/cloud/services/realtime/transport/longpoll_transport.dart';
@@ -27,19 +27,18 @@ enum TransportState {
 ///   - [onEnterChatDetail] → active (opens WebSocket, subscribes conversation topic)
 ///   - [onLeaveChatDetail] → idle (after ws_idle_timeout, closes WS → long-poll)
 ///   - [onAppBackground] → disconnected (closes everything)
-class RealtimeConnectionManager extends StateNotifier<TransportState> {
-  RealtimeConnectionManager({
-    required RealtimeConfig config,
-    required String userId,
-    required RealtimeMessageHandler messageHandler,
-  })  : _config = config,
-        _userId = userId,
-        _handler = messageHandler,
-        super(TransportState.disconnected);
+class RealtimeConnectionManager extends Notifier<TransportState> {
+  late final RealtimeConfig _config;
+  late final RealtimeMessageHandler _handler;
+  static const String _userId = 'current_user';
 
-  final RealtimeConfig _config;
-  final String _userId;
-  final RealtimeMessageHandler _handler;
+  @override
+  TransportState build() {
+    _config = RealtimeConfig.fromGateway();
+    _handler = RealtimeMessageHandler(ref.read);
+    ref.onDispose(_teardownAll);
+    return TransportState.disconnected;
+  }
 
   WebSocketTransport? _ws;
   LongPollTransport? _longPoll;
@@ -199,23 +198,11 @@ class RealtimeConnectionManager extends StateNotifier<TransportState> {
     _teardownWebSocket();
     _teardownLongPoll();
   }
-
-  @override
-  void dispose() {
-    _teardownAll();
-    super.dispose();
-  }
 }
 
 /// Riverpod provider for [RealtimeConnectionManager].
 /// Requires userId to be set before use.
 final realtimeConnectionManagerProvider =
-    StateNotifierProvider<RealtimeConnectionManager, TransportState>((ref) {
-  final config = RealtimeConfig.fromGateway();
-  final handler = RealtimeMessageHandler(ref.read);
-  return RealtimeConnectionManager(
-    config: config,
-    userId: 'current_user',
-    messageHandler: handler,
-  );
-});
+    NotifierProvider<RealtimeConnectionManager, TransportState>(
+  RealtimeConnectionManager.new,
+);

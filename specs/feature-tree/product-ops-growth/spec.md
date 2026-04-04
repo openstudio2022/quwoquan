@@ -20,6 +20,23 @@
 - 用户发展、邀请传播、通讯录发现、分群经营、恢复治理必须支持跨域审计与生命周期视图。
 - 三类面必须支持部署时任意组合，且不得依赖当前同 Pod 形态固化契约。
 
+## 与父/子节点关系
+
+- 父节点：`product-ops-growth` L1（运营横切能力边界）
+- 已冻结并可进入 `/dev` 的关键子节点：
+  - `event-ingestion-and-analytics`（L2）：统一事件、反馈应用、云侧冷热分层与运营分析基线
+  - `experiment-bucketing-and-rollout`（L2）：实验分桶与发布治理
+- `event-ingestion-and-analytics` 下的关键子节点：
+  - `analytics-metric-dictionary`（L3）：统一指标字典与下钻维度
+  - `event-schema-governance`（L3）：统一 envelope、字段分级、版本兼容、幂等与背压
+
+## 相关文档
+
+- [`event-ingestion-and-analytics/spec.md`](./event-ingestion-and-analytics/spec.md)
+- [`event-ingestion-and-analytics/design.md`](./event-ingestion-and-analytics/design.md)
+- [`event-ingestion-and-analytics/plan.yaml`](./event-ingestion-and-analytics/plan.yaml)
+- [`event-ingestion-and-analytics/acceptance.yaml`](./event-ingestion-and-analytics/acceptance.yaml)
+
 ## 验收重点
 - A4：运营事件可观测且可检索
 - A5：实验与优化闭环可执行

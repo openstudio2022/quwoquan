@@ -7,6 +7,7 @@ class AssistantRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'CreateRun': 'assistant.run.create',
     'CreateRunStream': 'assistant.run.stream',
+    'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
     'GetPolicy': 'assistant.policy.get',
     'GetSuggestedActions': 'assistant.suggested_actions.get',
     'GrantSkillConsent': 'assistant.skills.consent.grant',
@@ -23,6 +24,7 @@ class AssistantRequestPageIds {
 
   static const String createRun = 'assistant.run.create';
   static const String createRunStream = 'assistant.run.stream';
+  static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
   static const String getPolicy = 'assistant.policy.get';
   static const String getSuggestedActions = 'assistant.suggested_actions.get';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';

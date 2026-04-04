@@ -286,12 +286,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Map<String, dynamic>? _rawDiscoveryPostById(String postId) {
-    return ref
-        .read(appContentRepositoryProvider)
-        .discoveryFeedWireRowByPostId(postId);
-  }
-
   void _openAssistantHalfSheet() {
     final target = VisitTarget.page('home_$_activeTab');
     final service = ref.read(visitRecorderServiceProvider);
@@ -337,9 +331,14 @@ class _HomePageState extends ConsumerState<HomePage>
         category: 'following',
         source: 'following',
         initialImageIndex: mediaIndex,
-        rawPostsById: <String, Map<String, dynamic>>{
+        rawPostsById: <String, Map<String, Object?>>{
           for (final item in viewerPosts)
-            item.id: _rawDiscoveryPostById(item.id) ?? item.toMap(),
+            item.id: Map<String, Object?>.from(
+              ref
+                      .read(appContentRepositoryProvider)
+                      .discoveryFeedWireRowByPostId(item.id) ??
+                  item.toMap(),
+            ),
         },
         interactionSnapshot: MediaViewerInteractionSnapshot(
           followingUsers: Set<String>.from(
@@ -392,7 +391,7 @@ class _HomePageState extends ConsumerState<HomePage>
           .read(userRelationshipStateProvider.notifier)
           .applyViewerResult(result);
       ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
-      ref.read(discoveryStateProvider).applyMediaViewerResult(result);
+      ref.read(discoveryStateProvider.notifier).applyMediaViewerResult(result);
     }
   }
 

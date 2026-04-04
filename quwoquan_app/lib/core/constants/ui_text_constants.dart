@@ -91,7 +91,7 @@ class UITextConstants {
   static const String assistantTabSchedule = '日程';
   static const String assistantTabSkills = '技能';
   static const String assistantEntryFind = '找小趣';
-  static const String assistantEntryAskLegacy = '问小趣';
+  static const String assistantEntryAsk = '问小趣';
 
   /// 半弹窗：进入完整对话按钮
   static const String assistantHalfSheetEnterFullChat = '进入完整对话';
@@ -151,7 +151,6 @@ class UITextConstants {
   static const String shareActionSystemShare = '系统分享';
   static const String sharePrivateBlocked = '仅自己可见内容不可对外分享';
   static const String shareCircleVisibilityNotice = '圈内可见内容将生成受控链接';
-  static const String shareLegacyFallbackNotice = '当前已回退到通用分享面板';
   static const String shareLinkCopied = '分享链接已复制';
   static const String sharePosterSaved = '海报已保存到本地文件';
   static const String shareCancelled = '已取消分享';
@@ -664,6 +663,9 @@ class UITextConstants {
   static const String createActionGalleryHint = '先挑素材，再决定发成点滴还是作品';
   static const String createActionWrite = '写文字';
   static const String createActionWriteHint = '快速记录当下，也能随时升级成作品';
+  static const String createActionContinueFromDraft = '从草稿继续';
+  static const String createDraftPickerEmptyTitle = '暂无保存的草稿';
+  static const String createDraftPickerPreviewFallback = '继续完善这条内容';
   static const String createActionCapture = '相机';
   static const String createActionCaptureHint = '直接拍照或录视频，立刻开始创作';
   static const String createIdentityMoment = '点滴';
@@ -684,6 +686,12 @@ class UITextConstants {
   static const String publish = '发表';
   static const String publishAction = '发布';
   static const String createPageTitle = '创作';
+  /// 沉浸文章顶栏分段：纵向长文编辑态
+  static const String createArticleSurfaceLongEdit = '长文编辑';
+  /// 沉浸文章顶栏分段：横向翻页预览态
+  static const String createArticleSurfacePreview = '预览';
+  /// 创作顶栏短标签（与「草稿箱」全局面板入口区分）
+  static const String createToolbarDraftShort = '草稿';
   static const String publishSettingsTitle = '发布设置';
   static const String locationLabel = '所在位置';
   static const String locationHidden = '不显示位置';

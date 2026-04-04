@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -28,18 +28,20 @@ class ChatInboxListState {
   }
 }
 
-class ChatInboxListNotifier extends StateNotifier<ChatInboxListState> {
-  ChatInboxListNotifier({
-    required ChatRepository repo,
-    required ConversationCacheService cache,
-  }) : _repo = repo,
-       _cache = cache,
-       super(const ChatInboxListState());
-
-  final ChatRepository _repo;
-  final ConversationCacheService _cache;
-
+class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
   bool _loaded = false;
+
+  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ConversationCacheService get _cache => ref.read(conversationCacheProvider);
+
+  @override
+  ChatInboxListState build() {
+    ref.watch(chatRepositoryProvider);
+    ref.watch(conversationCacheProvider);
+    _loaded = false;
+    Future<void>.microtask(() => load());
+    return const ChatInboxListState();
+  }
 
   Future<void> load({bool force = false}) async {
     if (_loaded && !force) {
@@ -138,11 +140,6 @@ class ChatInboxListNotifier extends StateNotifier<ChatInboxListState> {
 }
 
 final chatInboxListProvider =
-    StateNotifierProvider<ChatInboxListNotifier, ChatInboxListState>((ref) {
-      final notifier = ChatInboxListNotifier(
-        repo: ref.watch(chatRepositoryProvider),
-        cache: ref.watch(conversationCacheProvider),
-      );
-      Future<void>.microtask(() => notifier.load());
-      return notifier;
-    });
+    NotifierProvider<ChatInboxListNotifier, ChatInboxListState>(
+  ChatInboxListNotifier.new,
+);

@@ -1,0 +1,40 @@
+version: 1
+read_model: AppLogSkillCenterPackageTogglePayload
+
+description: |
+  Skill Center package_toggle 的 page_access payload。
+
+source_entities: []
+
+consumers:
+  - app (assistant_skill_center_page)
+
+client_projection:
+  dart_class: AppLogSkillCenterPackageTogglePayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'skill_center_action'"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "'package_toggle'"
+    - name: enabled
+      dart_type: bool
+      nullable: false
+      source: enabled
+      aliases: [enabled]
+      default: "false"
+    - name: skillCount
+      dart_type: int
+      nullable: false
+      source: skillCount
+      aliases: [skillCount]
+      default: "0"

@@ -10,7 +10,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 /// 守护：
 /// - 五种关系状态下按钮布局的正确渲染
 /// - 回调在正确条件下触发
-/// - 空 capability 时回退到 legacy 逻辑不崩溃
+/// - 空 capability 时他人主页不渲染操作条（不崩溃）
 
 RelationshipCapabilityDto _cap(
   String tier, {
@@ -133,14 +133,14 @@ void main() {
       expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
     });
 
-    testWidgets('capability 为 null 时回退渲染 legacy 关注/私信', (tester) async {
+    testWidgets('capability 为 null 时他人主页不渲染操作按钮', (tester) async {
       await tester.pumpWidget(
         _wrap(const ProfileActionBar(mode: ProfileMode.other, isDark: false)),
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.follow), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(UITextConstants.follow), findsNothing);
+      expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
     });
   });
 
@@ -264,14 +264,14 @@ void main() {
         _wrap(const ProfileActionBar(mode: ProfileMode.other, isDark: false)),
       );
       await tester.pump();
-      expect(_actionBarText(UITextConstants.follow), findsAtLeastNWidgets(1));
+      expect(_actionBarText(UITextConstants.follow), findsNothing);
       expect(
         _actionBarText(UITextConstants.profileDirectMessage),
-        findsOneWidget,
+        findsNothing,
       );
     });
 
-    testWidgets('未知 relationTier 不崩溃（fallback 到 legacy）', (tester) async {
+    testWidgets('未知 relationTier 不崩溃（按 not_following 展示）', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(

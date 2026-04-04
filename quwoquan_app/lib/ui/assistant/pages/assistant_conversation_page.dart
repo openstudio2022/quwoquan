@@ -364,9 +364,7 @@ class _AssistantConversationPageState
     final message = PersistedTimelineTurnCodec.encode(row);
     final usageMap = switch (row) {
       AssistantAnswerTranscriptRow r => r.uiUsageStats,
-      _ =>
-        (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{},
+      _ => assistantUiUsageStatsMapFromMessageField(message['uiUsageStats']),
     };
     return _controller.buildJourneyViewModel(
       journey: resolveAssistantJourneyFromMessage(message),
@@ -705,28 +703,7 @@ class _AssistantConversationPageState
     );
   }
 
-  Future<void> _requestAssistantRewrite({
-    required AssistantAnswerTranscriptRow row,
-    required String mode,
-  }) async {
-    final query = row.anchor.sourceQuery.trim();
-    if (query.isEmpty) return;
-    final text = switch (mode) {
-      'brief' => '请基于同样问题给我更简洁版本：$query',
-      'detailed' => '请基于同样问题给我更详细版本：$query',
-      _ => query,
-    };
-    await _recordAssistantImplicitFeedback(
-      target: AssistantFeedbackTarget.fromAssistantRow(row),
-      regeneratedAnswer: mode == 'regenerate',
-      styleAdjusted: mode == 'brief' || mode == 'detailed',
-      userTags: <String>[mode],
-    );
-    _inputController.text = text;
-    await _sendMessage();
-  }
-
-  Future<void> _requestAssistantRewriteV2({
+  Future<void> _sendAssistantRewrite({
     required AssistantAnswerTranscriptRow row,
     required RegenerateOption option,
   }) async {
@@ -799,7 +776,10 @@ class _AssistantConversationPageState
       modelSwitched: true,
       userTags: const <String>['model_switch'],
     );
-    await _requestAssistantRewrite(row: row, mode: 'regenerate');
+    await _sendAssistantRewrite(
+      row: row,
+      option: RegenerateOption.regenerate,
+    );
   }
 
   Future<void> _onAssistantReferenceTap(
@@ -859,10 +839,14 @@ class _AssistantConversationPageState
         ),
         builder: (_) => AssistantDevReplayPage(
           records: _controller.replayRecords
-              .map((r) => r.toJson())
+              .map((r) => Map<String, Object?>.from(r.toJson()))
               .toList(growable: false),
-          loadScoreSnapshot: () =>
-              ref.read(assistantLearningServiceProvider).latestScoreSnapshot(),
+          loadScoreSnapshot: () async {
+            final snap = await ref
+                .read(assistantLearningServiceProvider)
+                .latestScoreSnapshot();
+            return Map<String, Object?>.from(snap);
+          },
         ),
       ),
     );
@@ -1256,27 +1240,27 @@ class _AssistantConversationPageState
                             }
                           : null,
                       onRegenerateAnswer: answerRow != null
-                          ? () => _requestAssistantRewrite(
+                          ? () => _sendAssistantRewrite(
                               row: answerRow,
-                              mode: 'regenerate',
+                              option: RegenerateOption.regenerate,
                             )
                           : null,
                       onRegenerateOptionSelected: answerRow != null
-                          ? (option) => _requestAssistantRewriteV2(
+                          ? (option) => _sendAssistantRewrite(
                               row: answerRow,
                               option: option,
                             )
                           : null,
                       onBriefAnswer: answerRow != null
-                          ? () => _requestAssistantRewrite(
+                          ? () => _sendAssistantRewrite(
                               row: answerRow,
-                              mode: 'brief',
+                              option: RegenerateOption.concise,
                             )
                           : null,
                       onDetailedAnswer: answerRow != null
-                          ? () => _requestAssistantRewrite(
+                          ? () => _sendAssistantRewrite(
                               row: answerRow,
-                              mode: 'detailed',
+                              option: RegenerateOption.detailed,
                             )
                           : null,
                       onSwitchModelAnswer: answerRow != null

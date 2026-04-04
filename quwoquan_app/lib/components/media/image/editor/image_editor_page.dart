@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step.dart';
+import 'package:quwoquan_app/components/media/image/editor/image_editor_page_params.dart';
 import 'package:quwoquan_app/components/media/image/editor/top_bar/image_editor_top_bar.dart';
 import 'package:quwoquan_app/components/media/image/editor/bottom_bar/image_editor_bottom_bar.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
@@ -631,33 +632,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           return;
         }
         if (sub == 'localAdjustments') {
-          final anchorsRaw = (step.params['anchors'] as List?) ?? const [];
-          final restored = <LocalAnchor>[];
-          for (final raw in anchorsRaw) {
-            if (raw is! Map) continue;
-            final map = raw.cast<dynamic, dynamic>();
-            final valuesRaw =
-                (map['values'] as Map?)?.cast<dynamic, dynamic>() ?? const {};
-            restored.add(
-              LocalAnchor(
-                id: (map['id'] as num?)?.toInt() ?? (_localAnchorIdSeed += 1),
-                center: Offset(
-                  ((map['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
-                  ((map['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
-                ),
-                radius: ((map['radius'] as num?)?.toDouble() ?? 0.18).clamp(
-                  0.06,
-                  0.45,
-                ),
-                values: <String, double>{
-                  for (final key in kLocalParamOrder)
-                    key: (valuesRaw[key] as num?)?.toDouble() ?? 0,
-                },
-                selectedParam:
-                    (map['selectedParam'] as String?) ?? kLocalParamBrightness,
-              ),
-            );
-          }
+          final restored = imageEditorParseLocalAnchorsFromParams(
+            step.params,
+            allocateId: () => _localAnchorIdSeed += 1,
+          );
           _selectedToolIndex = kImageEditorToolPro;
           _selectedProCategory = kImageEditorProCategoryLocal;
           _localAnchors
@@ -717,69 +695,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   int _toolIndexForType(String type) {
     final i = kImageEditorToolTypes.indexOf(type);
     return i >= 0 ? i : kImageEditorToolCrop;
-  }
-
-  static String _stepTypeLabel(String type, [Map<String, dynamic>? params]) {
-    if (type == 'proTools' && params != null) {
-      switch (params['subType'] as String?) {
-        case 'curve':
-          return UITextConstants.imageEditorProCurve;
-        case 'baseAdjustments':
-          return UITextConstants.imageEditorProTabOverall;
-        case 'localAdjustments':
-          return UITextConstants.imageEditorProTabLocal;
-        case 'hslAdjustments':
-          return UITextConstants.imageEditorProTabHsl;
-        case 'bwLevelsAdjustments':
-          return UITextConstants.imageEditorProTabBwLevels;
-        case 'whiteBalance':
-          return UITextConstants.imageEditorProWhiteBalance;
-        case 'local':
-          return UITextConstants.imageEditorProLocal;
-        case 'hsl':
-          return UITextConstants.imageEditorProHsl;
-        case 'exposure':
-          return UITextConstants.imageEditorProExposure;
-        case 'brightness':
-          return UITextConstants.imageEditorProBrightness;
-        case 'contrast':
-          return UITextConstants.imageEditorProContrast;
-        case 'saturation':
-          return UITextConstants.imageEditorProSaturation;
-        case 'highlight':
-          return UITextConstants.imageEditorProHighlight;
-        case 'shadow':
-          return UITextConstants.imageEditorProShadow;
-        case 'tone':
-          return UITextConstants.imageEditorProTone;
-        case 'denoise':
-          return UITextConstants.imageEditorProDenoise;
-        case 'sharpen':
-          return UITextConstants.imageEditorProSharpen;
-        case 'unsharpen':
-          return UITextConstants.imageEditorProUnsharpen;
-      }
-    }
-    switch (type) {
-      case 'rotate':
-        return UITextConstants.imageEditorRotate;
-      case 'crop':
-        return UITextConstants.imageEditorCrop;
-      case 'filter':
-        return UITextConstants.imageEditorFilter;
-      case 'beauty':
-        return UITextConstants.imageEditorBeauty;
-      case 'proTools':
-        return UITextConstants.imageEditorProTools;
-      case 'frame':
-        return UITextConstants.imageEditorFrame;
-      case 'text':
-        return UITextConstants.imageEditorText;
-      case 'mosaic':
-        return UITextConstants.imageEditorMosaic;
-      default:
-        return type;
-    }
   }
 
   int? _selectedToolIndex;
@@ -2490,16 +2405,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
           params: {
             'subType': 'localAdjustments',
             'anchors': _localAnchors
-                .map(
-                  (anchor) => <String, dynamic>{
-                    'id': anchor.id,
-                    'x': anchor.center.dx,
-                    'y': anchor.center.dy,
-                    'radius': anchor.radius,
-                    'selectedParam': anchor.selectedParam,
-                    'values': Map<String, double>.from(anchor.values),
-                  },
-                )
+                .map(imageEditorLocalAnchorWireMap)
                 .toList(growable: false),
             'selectedAnchorId': _selectedLocalAnchorId,
           },
@@ -2848,7 +2754,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     if (_selectedToolIndex == null) return;
     final toolIndex = _selectedToolIndex!;
     final type = kImageEditorToolTypes[toolIndex];
-    final params = <String, dynamic>{'index': toolIndex};
+    final params = imageEditorToolConfirmParamsBase(toolIndex);
     if (toolIndex == kImageEditorToolRotate) {
       if (!_isRotateEdited) {
         setState(() => _selectedToolIndex = null);
@@ -4040,7 +3946,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _filterIntensity = 100;
     final Object? result;
     if (_isMultiImage) {
-      result = <String, dynamic>{'index': _currentIndex, 'path': _currentPath};
+      result = imageEditorMultiImageDonePopPayload(
+        currentIndex: _currentIndex,
+        path: _currentPath,
+      );
     } else {
       result = _currentPath;
     }
@@ -4108,7 +4017,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                     final step = _steps[index];
                     return ListTile(
                       title: Text(
-                        _stepTypeLabel(step.type, step.params),
+                        imageEditorStepTypeLabel(step.type, step.params),
                         style: TextStyle(color: fg),
                       ),
                       trailing: Row(

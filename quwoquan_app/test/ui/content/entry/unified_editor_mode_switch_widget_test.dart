@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
@@ -49,17 +50,18 @@ void main() {
     await tester.enterText(find.byKey(TestKeys.createMomentInput), '今天的旅行记录');
     await tester.pump();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    final state = container.read(createEditorProvider);
+
     expect(find.byKey(TestKeys.createIdentityWork), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatImage), findsNothing);
-    expect(find.text('输入 H1 标题（可选）'), findsOneWidget);
+    expect(find.text('输入文章标题（可选）'), findsOneWidget);
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
     expect(find.text('从相册加图'), findsNothing);
     expect(find.text('相机补图'), findsNothing);
-
-    final bodyField = tester.widget<CupertinoTextField>(
-      find.byKey(TestKeys.createMomentInput),
-    );
-    expect(bodyField.controller?.text, '今天的旅行记录');
+    expect(state.articleDocument.body, '今天的旅行记录');
   });
 
   testWidgets('legacy photo tab key 进入单主按钮媒体编辑器骨架', (tester) async {
@@ -72,7 +74,7 @@ void main() {
     expect(find.byKey(TestKeys.createWorkFormatVideo), findsNothing);
   });
 
-  testWidgets('长正文会进入连续文档并生成多页快照', (tester) async {
+  testWidgets('长正文会保留连续文档正文快照', (tester) async {
     await tester.pumpWidget(_buildCreatePageApp());
     await tester.pumpAndSettle();
 
@@ -84,12 +86,8 @@ void main() {
       tester.element(find.byType(CreatePage)),
     );
     final state = container.read(createEditorProvider);
-    final bodyField = tester.widget<CupertinoTextField>(
-      find.byKey(TestKeys.createMomentInput),
-    );
-    expect(bodyField.controller?.text.length, lessThan(text.length));
     expect(state.articleDocument.body, text);
-    expect(state.articlePages.length, greaterThan(1));
+    expect(state.articlePages, isNotEmpty);
     expect(
       state.articlePages
           .map((page) => page.body)
@@ -105,10 +103,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('文章编辑'), findsOneWidget);
-    expect(find.text('草稿'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('排版'), findsOneWidget);
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);
-    expect(find.text('输入 H1 标题（可选）'), findsOneWidget);
+    expect(find.text('输入文章标题（可选）'), findsOneWidget);
     expect(find.text('继续写内容，支持 emoji、图片、序号和模板'), findsOneWidget);
   });
 

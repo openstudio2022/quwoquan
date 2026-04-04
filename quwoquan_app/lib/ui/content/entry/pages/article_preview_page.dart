@@ -8,7 +8,7 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.d
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
-/// 文章预览：消费 [createEditorProvider] 的 [CreateEditorStateV2] 快照。
+/// 文章预览：消费 [createEditorProvider] 的 [CreateEditorState] 快照。
 class ArticlePreviewPage extends ConsumerWidget {
   const ArticlePreviewPage({super.key});
 
@@ -26,9 +26,7 @@ class ArticlePreviewPage extends ConsumerWidget {
     ];
 
     return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
-        context,
-      ),
+      backgroundColor: AppColors.worksBackground,
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -40,6 +38,11 @@ class ArticlePreviewPage extends ConsumerWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final metrics = resolveArticleCanvasMetrics(
+                    context,
+                    constraints,
+                    variant: ArticleCanvasVariant.preview,
+                  );
                   final pages = resolvePaginatedArticlePages(
                     context: context,
                     constraints: constraints,
@@ -49,11 +52,6 @@ class ArticlePreviewPage extends ConsumerWidget {
                     fallbackPages: state.articlePages,
                     variant: ArticleCanvasVariant.preview,
                   );
-                  final metrics = resolveArticleCanvasMetrics(
-                    context,
-                    constraints,
-                    variant: ArticleCanvasVariant.preview,
-                  );
                   return ArticleReadOnlyBookDeck(
                     pages: pages,
                     template: state.articleTemplate,
@@ -61,10 +59,7 @@ class ArticlePreviewPage extends ConsumerWidget {
                     metrics: metrics,
                     coverUrl: state.articleCoverImagePath,
                     enablePageCurl: enablePageCurl,
-                    pagePadding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerMd,
-                      vertical: AppSpacing.containerSm,
-                    ),
+                    pagePadding: articleReaderStagePagePadding(),
                   );
                 },
               ),

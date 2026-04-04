@@ -24,7 +24,7 @@ class ProfileCirclesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(profileNotifierProvider(userId)).state;
+    final state = ref.watch(profileNotifierProvider(userId));
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     if (state.isLoading && state.circles.isEmpty) {
       return Padding(

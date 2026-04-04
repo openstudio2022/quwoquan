@@ -1,0 +1,91 @@
+# articleDocument 端云共用 JSON 形状（canonical）
+# 与 Post.articleDocument（fields.yaml）对应；客户端 ArticleDocumentData / 服务持久化须可无损往返。
+
+version: 1
+description: |
+  文章最终显示快照。单一根对象仅包含 nodes 序列和展示所需的模板、字体、封面、标题样式。
+  标题、正文、图片布局与 caption 均从 nodes 流中表达，不再拆分 title/body/assets/blocks/version。
+
+root:
+  type: object
+  required: [nodes]
+  properties:
+    template:
+      type: string
+      description: 文章模板（gentle/ritual/diffuse/journal/tech）
+    fontPreset:
+      type: string
+      description: 文章字体预设（clean/serif/...）
+    coverImageUrl:
+      type: string
+      description: 文章封面图；为空时由服务端从首张 figure 派生
+    titleStyle:
+      type: string
+      enum: [none, major, minor]
+      description: 文档标题显示样式；none 表示无标题
+    nodes:
+      type: array
+      items:
+        $ref: '#/definitions/node'
+
+definitions:
+  imageLayout:
+    type: string
+    enum: [fullWidth, wrapLeft, wrapRight]
+    description: 通栏 / 左环绕 / 右环绕
+
+  nodeType:
+    type: string
+    enum:
+      - documentTitle
+      - headingMajor
+      - headingMinor
+      - paragraph
+      - orderedItem
+      - bulletItem
+      - figure
+
+  inlineSpan:
+    type: object
+    properties:
+      start:
+        type: integer
+      end:
+        type: integer
+      bold:
+        type: boolean
+      italic:
+        type: boolean
+      underline:
+        type: boolean
+      strikethrough:
+        type: boolean
+
+  node:
+    type: object
+    required: [id, type]
+    properties:
+      id:
+        type: string
+      type:
+        $ref: '#/definitions/nodeType'
+      text:
+        type: string
+      assetId:
+        type: string
+      imageUrl:
+        type: string
+      imageLayout:
+        $ref: '#/definitions/imageLayout'
+      caption:
+        type: string
+      textAlign:
+        type: string
+        description: 可选；start | center | end | justify
+      listDepth:
+        type: integer
+        description: 可选；有序/无序嵌套深度，1–3
+      spans:
+        type: array
+        items:
+          $ref: '#/definitions/inlineSpan'

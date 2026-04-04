@@ -24,9 +24,6 @@ void main() {
           contentFeatureFlagProvider('enable_unified_create_editor').overrideWith(
             (ref) => false,
           ),
-          contentFeatureFlagProvider('create_editor_v2').overrideWith(
-            (ref) => false,
-          ),
         ],
         child: ScreenUtilInit(
           designSize: const Size(390, 844),

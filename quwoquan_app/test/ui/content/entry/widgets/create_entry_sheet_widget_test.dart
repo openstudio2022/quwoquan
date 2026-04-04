@@ -8,7 +8,7 @@ import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('创作入口收口为三动作入口', (tester) async {
+  testWidgets('创作入口收口为相册/相机/写文字/从草稿继续', (tester) async {
     EditorStartAction? selected;
 
     await tester.pumpWidget(
@@ -21,6 +21,7 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (action) => selected = action,
+                onContinueFromDraft: () {},
               ),
             ),
           ),
@@ -62,6 +63,7 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (_) {},
+                onContinueFromDraft: () {},
                 priority: CreateActionSheetPriority.socialPrimary,
               ),
             ),
@@ -87,6 +89,7 @@ void main() {
             home: Scaffold(
               body: CreateActionSheet(
                 onCreateAction: (_) {},
+                onContinueFromDraft: () {},
                 onStartGroupChat: () {},
                 onAddContact: () {},
                 onCreateCircle: () => createCircleTapped = true,
@@ -121,6 +124,7 @@ void main() {
                 isOpen: true,
                 onClose: () => closed = true,
                 onSelect: (_) {},
+                onContinueFromDraft: () {},
               ),
             ),
           ),

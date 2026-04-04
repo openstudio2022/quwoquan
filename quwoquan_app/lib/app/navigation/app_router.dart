@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,7 @@ import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
@@ -59,6 +62,14 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
+  AppPageAccessNavigatorObserver.instance.attachVisitRecorder(
+    ref.read(visitRecorderServiceProvider),
+  );
+  AppPageAccessNavigatorObserver.instance.attachEventReporter(
+    repository: ref.read(opsEventRepositoryProvider),
+    currentUserId: ref.read(currentUserIdProvider),
+    experimentBucket: ref.read(contentRuntimeConfigProvider).experimentBucket,
+  );
   ref.listen<bool>(welcomeCompletedProvider, (Object? previous, bool next) {
     refreshListenable.value++;
   });
@@ -373,6 +384,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final initialHomepage = state.extra is HomepageCanonicalReference
               ? state.extra! as HomepageCanonicalReference
               : null;
+          final draftIdRaw = state.uri.queryParameters['draftId']?.trim();
+          final initialDraftId =
+              draftIdRaw != null && draftIdRaw.isNotEmpty ? draftIdRaw : null;
           EditorStartAction? action;
           if (typeStr != null) {
             try {
@@ -387,6 +401,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             initialAction: action,
             initialTabKey: initialTabKey,
             initialHomepage: initialHomepage,
+            initialDraftId: initialDraftId,
           );
         },
         routes: [
@@ -538,10 +553,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             return UnifiedMediaViewerPage(extra: extra);
           }
 
-          return VideoDetailPage(
-            initialIndex: index,
-            initialExtra: extra,
-          );
+          return VideoDetailPage(initialIndex: index, initialExtra: extra);
         },
       ),
       GoRoute(
@@ -776,7 +788,18 @@ class _CreateEntryRoutePage extends ConsumerWidget {
       isOpen: true,
       onClose: () => context.pop(),
       onSelect: (EditorStartAction action) {
+        context.pop();
         context.go(AppRoutePaths.create(type: action.name));
+      },
+      onContinueFromDraft: () {
+        final router = GoRouter.of(context);
+        context.pop();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final navContext = router.routerDelegate.navigatorKey.currentContext;
+          if (navContext != null) {
+            unawaited(presentCreateDraftPickerAndGo(navContext, router));
+          }
+        });
       },
     );
   }

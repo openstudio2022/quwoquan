@@ -19,8 +19,6 @@ class ProfileActionBar extends StatelessWidget {
     required this.mode,
     required this.isDark,
     this.capability,
-    // legacy callbacks (兼容已有 caller)
-    this.isFollowing = false,
     this.onEditProfile,
     this.onManagePersonas,
     this.onFollow,
@@ -34,11 +32,9 @@ class ProfileActionBar extends StatelessWidget {
   final ProfileMode mode;
   final bool isDark;
 
-  /// 关系能力位（载入后提供，null 时回退到 isFollowing 旧逻辑）
+  /// 关系能力位（他人主页须由外层在就绪后再构建本组件）
   final RelationshipCapabilityDto? capability;
 
-  // — Legacy
-  final bool isFollowing;
   final VoidCallback? onEditProfile;
   final VoidCallback? onManagePersonas;
   final VoidCallback? onFollow;
@@ -51,6 +47,9 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (mode == ProfileMode.other && capability == null) {
+      return const SizedBox.shrink();
+    }
     final separator = AppColors.iosSeparator(
       context,
     ).withValues(alpha: isDark ? 0.22 : 0.14);
@@ -180,29 +179,7 @@ class ProfileActionBar extends StatelessWidget {
       ]);
     }
 
-    // fallback：旧版 isFollowing 逻辑（capability 未载入时）
-    return _buildButtonRow(<Widget>[
-      Expanded(
-        child: isFollowing
-            ? neutralAction(
-                label: UITextConstants.following,
-                icon: CupertinoIcons.check_mark,
-                onPressed: onFollow,
-              )
-            : primaryFollowAction(
-                label: UITextConstants.follow,
-                icon: CupertinoIcons.add,
-                onPressed: onFollow,
-              ),
-      ),
-      Expanded(
-        child: neutralAction(
-          label: UITextConstants.profileDirectMessage,
-          icon: CupertinoIcons.chat_bubble,
-          onPressed: onMessage,
-        ),
-      ),
-    ]);
+    return const SizedBox.shrink();
   }
 
   Widget _buildButtonRow(List<Widget> buttons) {

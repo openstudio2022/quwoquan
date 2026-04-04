@@ -51,7 +51,6 @@ export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.da
 export 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 // Services
-export 'services/data_service.dart';
 export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 

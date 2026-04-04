@@ -1,0 +1,34 @@
+version: 1
+read_model: AppLogPageReturnSummaryPayload
+
+description: |
+  page return 的 summaryPayload。
+
+source_entities: []
+
+consumers:
+  - app (page_access_log_util)
+
+client_projection:
+  dart_class: AppLogPageReturnSummaryPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_page_return_summary.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'return'"
+    - name: route
+      dart_type: String
+      nullable: false
+      source: route
+      aliases: [route]
+      default: "''"
+    - name: durationMs
+      dart_type: int
+      nullable: false
+      source: durationMs
+      aliases: [durationMs]
+      default: "0"

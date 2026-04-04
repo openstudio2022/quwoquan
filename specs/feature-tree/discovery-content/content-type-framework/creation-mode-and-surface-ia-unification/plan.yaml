@@ -104,8 +104,7 @@ slices:
       - T2_module_interaction
       - T4_user_journey
     done_when:
-      - 旧 `moment/photo/video/article` 草稿可稳定映射到 `v2`
-      - 新草稿统一写入 `draftVersion=v2`
+      - 本地草稿仅使用当前扁平结构读写（无 `draftVersion`、无旧嵌套 `data` 解析）
       - 自动保存、恢复、发布后清理与媒体类型切换不破坏草稿结构
     status: planned
 

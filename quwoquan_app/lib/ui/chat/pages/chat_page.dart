@@ -26,6 +26,7 @@ import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 
 /// 趣信页
 ///
@@ -392,11 +393,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
       controller: _scrollController,
       itemCount: encrypted.length,
       itemBuilder: (context, i) {
-        final c = encrypted[i];
+        final c = ChatInboxDto.fromMap(encrypted[i]);
         return _ConversationTile(
           conversation: c,
           isSpecial: false,
-          onTap: () => context.push(AppRoutePaths.chatDetail(id: '${c['id']}')),
+          onTap: () => context.push(AppRoutePaths.chatDetail(id: c.id)),
           fgPrimary: fgPrimary,
           fgSecondary: fgSecondary,
           borderColor: borderColor,
@@ -1199,7 +1200,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
 }
 
 class _ConversationTile extends StatelessWidget {
-  final Map<String, dynamic> conversation;
+  final ChatInboxDto conversation;
   final bool isSpecial;
   final VoidCallback onTap;
   final Color fgPrimary;
@@ -1219,36 +1220,27 @@ class _ConversationTile extends StatelessWidget {
 
   static const double _avatarSize = 48;
 
-  String _formatConversationTime(Map<String, dynamic> conv) {
-    final isoStr =
-        conv['lastMessageAt'] as String? ??
-        conv['lastMessageTime'] as String? ??
-        conv['updatedAt'] as String?;
-    final dt = ChatTimeFormatter.tryParseServerTime(isoStr);
-    if (dt == null) return '';
-    return ChatTimeFormatter.formatForConversationList(dt);
+  String _formatConversationTime(ChatInboxDto conv) {
+    final t = conv.lastMessageTime;
+    if (t == null) return '';
+    return ChatTimeFormatter.formatForConversationList(t);
   }
 
   Widget _buildConversationAvatar() {
-    final type = conversation['type'] as String? ?? 'direct';
+    final type = conversation.type;
     final isGroup = type == 'group';
 
     if (isGroup) {
-      final memberAvatars =
-          (conversation['memberAvatars'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          <String>[];
-      return GroupAvatarGrid(size: _avatarSize, avatarUrls: memberAvatars);
+      return GroupAvatarGrid(
+        size: _avatarSize,
+        avatarUrls: conversation.avatarCompositeUrls,
+      );
     }
 
     return RoundedSquareAvatar(
       size: _avatarSize,
-      imageUrl:
-          conversation['avatar'] as String? ??
-          conversation['avatarUrl'] as String? ??
-          '',
-      name: conversation['title'] as String? ?? '',
+      imageUrl: conversation.avatarUrl,
+      name: conversation.title,
     );
   }
 
@@ -1260,7 +1252,7 @@ class _ConversationTile extends StatelessWidget {
       tileIsDark,
       ColorType.badgeForeground,
     );
-    final unread = conversation['unreadCount'] as int? ?? 0;
+    final unread = conversation.unreadCount;
     final isEncrypted = showEncryptedBadge;
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -1349,7 +1341,7 @@ class _ConversationTile extends StatelessWidget {
                           children: [
                             Flexible(
                               child: Text(
-                                conversation['title'] as String? ?? '',
+                                conversation.title,
                                 style: TextStyle(
                                   fontSize: AppTypography.iosBody,
                                   fontWeight: AppTypography.semiBold,
@@ -1410,7 +1402,7 @@ class _ConversationTile extends StatelessWidget {
                       ],
                       Expanded(
                         child: Text(
-                          conversation['lastMessage'] as String? ?? '',
+                          conversation.lastMessagePreview,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

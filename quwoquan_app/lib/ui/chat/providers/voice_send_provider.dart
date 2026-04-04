@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -32,12 +32,18 @@ class VoiceSendState {
   }
 }
 
-class VoiceSendNotifier extends StateNotifier<VoiceSendState> {
-  VoiceSendNotifier(this._uploadManager, this._messageNotifier)
-      : super(const VoiceSendState());
+class VoiceSendNotifier extends Notifier<VoiceSendState> {
+  VoiceSendNotifier(this.conversationId);
 
-  final MediaUploadManager _uploadManager;
-  final ChatMessageNotifier _messageNotifier;
+  final String conversationId;
+
+  MediaUploadManager get _uploadManager =>
+      ref.read(mediaUploadManagerProvider);
+  ChatMessageNotifier get _messageNotifier =>
+      ref.read(chatMessageProvider(conversationId).notifier);
+
+  @override
+  VoiceSendState build() => const VoiceSendState();
 
   /// Takes a recording result, uploads to OSS, then sends a voice message.
   Future<void> sendVoice(VoiceRecordResult result) async {
@@ -107,12 +113,7 @@ class VoiceSendNotifier extends StateNotifier<VoiceSendState> {
 }
 
 /// Creates a VoiceSendNotifier for a specific conversation.
-final voiceSendProvider = StateNotifierProvider.family<
+final voiceSendProvider = NotifierProvider.family<
     VoiceSendNotifier, VoiceSendState, String>(
-  (ref, conversationId) {
-    final uploadManager = ref.watch(mediaUploadManagerProvider);
-    final messageNotifier =
-        ref.watch(chatMessageProvider(conversationId).notifier);
-    return VoiceSendNotifier(uploadManager, messageNotifier);
-  },
+  VoiceSendNotifier.new,
 );

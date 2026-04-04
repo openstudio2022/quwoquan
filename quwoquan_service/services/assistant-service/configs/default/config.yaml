@@ -1,0 +1,47 @@
+service:
+  name: assistant-service
+  http:
+    addr: ":18087"
+
+config:
+  version: "v0.0.1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+postgres:
+  dsn: ""
+  max_open_conns: 20
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 30
+
+mongodb:
+  uri: ""
+  database: quwoquan_assistant
+
+redis:
+  rec:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 0
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 100
+      write_timeout_ms: 100
+      dial_timeout_ms: 500
+  general:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 1
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 200
+      write_timeout_ms: 200
+      dial_timeout_ms: 500

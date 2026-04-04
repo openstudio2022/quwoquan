@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -179,22 +180,22 @@ void main() {
 
 class _PrivateVisitorCircleRepository extends MockCircleRepository {
   @override
-  Future<Map<String, dynamic>> getCircle(String circleId) async {
-    return <String, dynamic>{
+  Future<CircleDetailPayload> getCircle(String circleId) async {
+    return CircleDetailPayload.fromWire(<String, dynamic>{
       ...CircleMockData.circleInfo,
       'id': circleId,
       'visibility': 'private',
       'role': 'visitor',
       'joinStatus': 'none',
       'isFollowed': false,
-    };
+    });
   }
 }
 
 class _ApprovalVisitorCircleRepository extends MockCircleRepository {
   @override
-  Future<Map<String, dynamic>> getCircle(String circleId) async {
-    return <String, dynamic>{
+  Future<CircleDetailPayload> getCircle(String circleId) async {
+    return CircleDetailPayload.fromWire(<String, dynamic>{
       ...CircleMockData.circleInfo,
       'id': circleId,
       'visibility': 'public',
@@ -202,13 +203,13 @@ class _ApprovalVisitorCircleRepository extends MockCircleRepository {
       'role': 'visitor',
       'joinStatus': 'none',
       'isFollowed': false,
-    };
+    });
   }
 }
 
 class _ErrorCircleRepository extends MockCircleRepository {
   @override
-  Future<Map<String, dynamic>> getCircle(String circleId) async {
+  Future<CircleDetailPayload> getCircle(String circleId) async {
     throw Exception('Network error');
   }
 

@@ -7,14 +7,20 @@ class OpsRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'AssignBucket': 'ops.assign.bucket',
     'GetBucket': 'ops.get.bucket',
+    'GetEventDrilldown': 'ops.get.event.drilldown',
+    'GetEventSummary': 'ops.get.event.summary',
     'GetExperimentStats': 'ops.get.experiment.stats',
     'GetVisitStats': 'ops.get.visit.stats',
     'RecordVisit': 'ops.record.visit',
+    'ReportEventBatch': 'ops.report.event.batch',
   };
 
   static const String assignBucket = 'ops.assign.bucket';
   static const String getBucket = 'ops.get.bucket';
+  static const String getEventDrilldown = 'ops.get.event.drilldown';
+  static const String getEventSummary = 'ops.get.event.summary';
   static const String getExperimentStats = 'ops.get.experiment.stats';
   static const String getVisitStats = 'ops.get.visit.stats';
   static const String recordVisit = 'ops.record.visit';
+  static const String reportEventBatch = 'ops.report.event.batch';
 }

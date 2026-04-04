@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
@@ -10,7 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
-_chatTestOverrides(ChatRepository repo) => [
+List<Override> _chatTestOverrides(ChatRepository repo) => [
       chatRepositoryProvider.overrideWithValue(repo),
       currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
     ];

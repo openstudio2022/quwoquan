@@ -1,11 +1,26 @@
+import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
+import 'package:quwoquan_app/ui/content/article_flow_layout_engine.dart';
+import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
+import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
+import 'package:quwoquan_app/ui/content/pageflip/curl_light_model.dart';
+import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
+import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
+import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
+import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/ui/content/pageflip/pointer_bridge.dart';
+import 'package:quwoquan_app/ui/content/pageflip/spread_model.dart';
+import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 
@@ -17,29 +32,53 @@ List<ArticlePageData> resolvePaginatedArticlePages({
   required ArticleFontPreset fontPreset,
   List<ArticlePageData> fallbackPages = const <ArticlePageData>[],
   ArticleCanvasVariant variant = ArticleCanvasVariant.preview,
+  double? contentHeightOverride,
 }) {
-  final hasLegacyStructuredPages = fallbackPages
-      .skip(1)
-      .any((page) => page.title.trim().isNotEmpty);
-  if (hasLegacyStructuredPages) {
+  final visibleTitle = document.titleStyle == ArticleDocumentTitleStyle.none
+      ? ''
+      : document.title.trim();
+  if (visibleTitle.isEmpty &&
+      document.body.trim().isEmpty &&
+      document.assets.isEmpty &&
+      fallbackPages.isNotEmpty) {
     return fallbackPages;
   }
-  final stageWidth = constraints.maxWidth.isFinite
-      ? constraints.maxWidth
-      : MediaQuery.sizeOf(context).width;
+  final preferStructuredFallbackPages = fallbackPages
+      .skip(1)
+      .any(
+        (page) => page.title.trim().isNotEmpty || page.body.trim().isNotEmpty,
+      );
+  if (preferStructuredFallbackPages) {
+    return fallbackPages;
+  }
   final metrics = resolveArticleCanvasMetrics(
     context,
     constraints,
     variant: variant,
   );
   final typography = resolveArticleTypography(context, template, fontPreset);
-  return ArticlePaginationEngine.paginate(
+  final stagePadding = articleReaderStagePagePadding();
+  final stageWidth = resolveArticlePaperStageWidth(
+    context,
+    constraints,
+    stagePadding: stagePadding,
+    allowLandscapeSpread: variant != ArticleCanvasVariant.editor,
+  );
+  final viewportSliceHeight =
+      contentHeightOverride ??
+      metrics.contentSizeForStageWidth(stageWidth).height;
+  final pages = ArticleFlowLayoutEngine.buildPageSlicesForViewport(
     document: document,
     metrics: metrics,
     stageWidth: stageWidth,
     titleStyle: typography.titleStyle,
     bodyStyle: typography.bodyStyle,
+    viewportSliceHeight: viewportSliceHeight,
   );
+  if (pages.isNotEmpty) {
+    return pages;
+  }
+  return fallbackPages;
 }
 
 class ArticlePageShell extends StatelessWidget {
@@ -51,8 +90,14 @@ class ArticlePageShell extends StatelessWidget {
     required this.totalPages,
     required this.child,
     this.aspectRatio = 0.72,
+    this.outerPadding,
     this.contentPadding,
+    this.headerReservedHeight,
+    this.footerReservedHeight,
     this.showIndicator = true,
+    this.variant = ArticlePageShellVariant.book,
+    this.headerLabel,
+    this.footerLabel,
   });
 
   final ArticleTemplatePreset template;
@@ -61,12 +106,181 @@ class ArticlePageShell extends StatelessWidget {
   final int totalPages;
   final Widget child;
   final double aspectRatio;
+  final EdgeInsets? outerPadding;
   final EdgeInsets? contentPadding;
+  final double? headerReservedHeight;
+  final double? footerReservedHeight;
   final bool showIndicator;
+  final ArticlePageShellVariant variant;
+  final String? headerLabel;
+  final String? footerLabel;
 
   @override
   Widget build(BuildContext context) {
     final palette = resolveArticleTemplatePalette(context, template);
+    final headerText = headerLabel?.trim() ?? '';
+    final footerText = footerLabel?.trim() ?? '';
+    final resolvedOuterPadding =
+        outerPadding ?? EdgeInsets.all(AppSpacing.containerSm);
+    final resolvedContentPadding =
+        contentPadding ??
+        EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerLg,
+          AppSpacing.containerMd,
+          AppSpacing.containerMd,
+        );
+    final resolvedHeaderHeight =
+        headerReservedHeight ??
+        AppSpacing.sm + AppSpacing.hairline + AppSpacing.intraGroupSm * 2;
+    final resolvedFooterHeight =
+        footerReservedHeight ??
+        AppSpacing.sm + AppSpacing.hairline + AppSpacing.interGroupSm;
+
+    Widget buildPageContent({required bool expandBody}) {
+      final content = <Widget>[
+        if (headerText.isNotEmpty) ...<Widget>[
+          Text(
+            headerText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: palette.secondaryTextColor.withValues(alpha: 0.86),
+              fontSize: AppTypography.sm,
+              fontWeight: AppTypography.medium,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: palette.paperBorderColor.withValues(alpha: 0.5),
+                  width: AppSpacing.hairline,
+                ),
+              ),
+            ),
+            child: SizedBox(height: AppSpacing.hairline),
+          ),
+          SizedBox(height: math.max(0, resolvedHeaderHeight - AppSpacing.sm)),
+        ],
+        if (expandBody) Expanded(child: child) else child,
+        if (footerText.isNotEmpty) ...<Widget>[
+          SizedBox(height: math.max(0, resolvedFooterHeight - AppSpacing.sm)),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: palette.paperBorderColor.withValues(alpha: 0.5),
+                  width: AppSpacing.hairline,
+                ),
+              ),
+            ),
+            child: SizedBox(height: AppSpacing.hairline),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Align(
+            alignment: Alignment.center,
+            child: Text(
+              footerText,
+              style: TextStyle(
+                color: palette.secondaryTextColor.withValues(alpha: 0.86),
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.medium,
+              ),
+            ),
+          ),
+        ],
+      ];
+      return Padding(
+        padding: resolvedContentPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: expandBody ? MainAxisSize.max : MainAxisSize.min,
+          children: content,
+        ),
+      );
+    }
+
+    Widget buildFlatPaper({
+      required bool showShadow,
+      required double borderAlpha,
+    }) {
+      Widget paper = DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.paperColor,
+          border: Border(
+            top: BorderSide(
+              color: palette.paperBorderColor.withValues(alpha: borderAlpha),
+              width: AppSpacing.hairline,
+            ),
+            left: BorderSide(
+              color: palette.paperBorderColor.withValues(
+                alpha: borderAlpha * 0.72,
+              ),
+              width: AppSpacing.hairline,
+            ),
+            right: BorderSide(
+              color: palette.paperBorderColor.withValues(
+                alpha: borderAlpha * 0.72,
+              ),
+              width: AppSpacing.hairline,
+            ),
+            bottom: BorderSide(
+              color: palette.paperBorderColor.withValues(
+                alpha: borderAlpha + 0.08,
+              ),
+              width: AppSpacing.hairline,
+            ),
+          ),
+          boxShadow: showShadow
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ]
+              : null,
+        ),
+        child: buildPageContent(expandBody: true),
+      );
+      if (template == ArticleTemplatePreset.journal) {
+        paper = CustomPaint(
+          foregroundPainter: _JournalPaperTexturePainter(palette),
+          child: paper,
+        );
+      }
+      return Padding(padding: resolvedOuterPadding, child: paper);
+    }
+
+    if (variant == ArticlePageShellVariant.plainEdit ||
+        variant == ArticlePageShellVariant.readerSheet) {
+      final paper = buildFlatPaper(
+        showShadow: variant == ArticlePageShellVariant.readerSheet,
+        borderAlpha: variant == ArticlePageShellVariant.readerSheet
+            ? 0.16
+            : 0.24,
+      );
+      final sheet = AspectRatio(aspectRatio: aspectRatio, child: paper);
+      if (!showIndicator) {
+        return sheet;
+      }
+      return Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          sheet,
+          Positioned(
+            top: resolvedOuterPadding.top + AppSpacing.intraGroupXs,
+            right: resolvedOuterPadding.right + AppSpacing.intraGroupXs,
+            child: _ArticlePageIndicator(
+              label: '${pageIndex + 1}/$totalPages',
+              palette: palette,
+            ),
+          ),
+        ],
+      );
+    }
 
     Widget paper = DecoratedBox(
       decoration: BoxDecoration(
@@ -84,17 +298,7 @@ class ArticlePageShell extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding:
-            contentPadding ??
-            EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.containerLg,
-              AppSpacing.containerMd,
-              AppSpacing.containerMd,
-            ),
-        child: child,
-      ),
+      child: buildPageContent(expandBody: true),
     );
 
     if (template == ArticleTemplatePreset.journal) {
@@ -132,7 +336,7 @@ class ArticlePageShell extends StatelessWidget {
           ),
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.all(AppSpacing.containerSm),
+              padding: resolvedOuterPadding,
               child: IgnorePointer(
                 child: CustomPaint(
                   painter: _ArticleBookChromePainter(
@@ -146,10 +350,7 @@ class ArticlePageShell extends StatelessWidget {
             ),
           ),
           Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.containerSm),
-              child: paper,
-            ),
+            child: Padding(padding: resolvedOuterPadding, child: paper),
           ),
           if (showIndicator)
             Positioned(
@@ -172,63 +373,233 @@ class ArticlePageReadOnlyView extends StatelessWidget {
     required this.page,
     required this.template,
     required this.fontPreset,
+    this.metrics,
   });
 
   final ArticlePageData page;
   final ArticleTemplatePreset template;
   final ArticleFontPreset fontPreset;
+  final ArticleCanvasMetrics? metrics;
 
   @override
   Widget build(BuildContext context) {
     final typography = resolveArticleTypography(context, template, fontPreset);
-
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
+    return Align(
+      alignment: Alignment.topLeft,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (page.title.trim().isNotEmpty) ...<Widget>[
-            Text(page.title.trim(), style: typography.titleStyle),
-            SizedBox(height: AppSpacing.intraGroupSm),
-          ],
-          if (page.contentBlocks.isNotEmpty)
-            ...page.contentBlocks.map(
-              (block) => Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-                child: _ArticleSemanticBlock(
-                  block: block,
-                  typography: typography,
-                ),
-              ),
-            ),
-          if (page.imageUrl.trim().isNotEmpty &&
-              !page.usesWrappedLayout) ...<Widget>[
-            _ArticlePageImage(
-              imageUrl: page.imageUrl.trim(),
-              borderRadius: AppSpacing.radiusTwenty,
-              aspectRatio: template == ArticleTemplatePreset.journal
-                  ? 1
-                  : 4 / 3,
-            ),
-            if (page.caption.trim().isNotEmpty) ...<Widget>[
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(page.caption.trim(), style: typography.captionStyle),
-            ],
-            SizedBox(height: AppSpacing.intraGroupSm),
-          ],
-          if (page.imageUrl.trim().isNotEmpty && page.usesWrappedLayout)
-            _ArticleWrappedTextImage(
-              body: page.body.trim(),
-              imageUrl: page.imageUrl.trim(),
-              imageLayout: page.imageLayout,
-              typography: typography,
-            )
-          else if (page.body.trim().isNotEmpty)
-            Text(page.body.trim(), style: typography.bodyStyle),
-        ],
+        mainAxisSize: MainAxisSize.min,
+        children: _buildReadOnlyPageFragments(
+          context,
+          page,
+          typography,
+          template,
+          metrics ?? ArticleCanvasMetrics.snapshot(),
+        ),
       ),
     );
   }
+}
+
+List<ArticleLayoutFragment> _resolveReadOnlyFragments(ArticlePageData page) {
+  if (page.fragments.isNotEmpty) {
+    return page.fragments;
+  }
+  final fragments = <ArticleLayoutFragment>[];
+  if (page.title.trim().isNotEmpty) {
+    fragments.add(
+      ArticleLayoutFragment(
+        kind: ArticleLayoutFragmentKind.title,
+        text: page.title.trim(),
+        textStyleKey: 'title',
+      ),
+    );
+  }
+  for (final block in page.contentBlocks) {
+    if (block.type == ArticleDocumentBlockType.image &&
+        block.imageUrl.trim().isNotEmpty) {
+      fragments.add(
+        ArticleLayoutFragment(
+          kind:
+              block.imageLayout == 'wrapLeft' ||
+                  block.imageLayout == 'wrapRight'
+              ? ArticleLayoutFragmentKind.wrapContent
+              : ArticleLayoutFragmentKind.fullWidthImage,
+          text: page.body.trim(),
+          asset: ArticleDocumentAsset(
+            id: block.id,
+            offset: block.offset,
+            imageUrl: block.imageUrl,
+            imageLayout: block.imageLayout,
+            caption: block.caption,
+          ),
+        ),
+      );
+      continue;
+    }
+    fragments.add(
+      ArticleLayoutFragment(
+        kind: ArticleLayoutFragmentKind.semanticBlock,
+        block: block,
+        text: block.text.trim(),
+        textStyleKey: switch (block.type) {
+          ArticleDocumentBlockType.heading2 => 'heading2',
+          ArticleDocumentBlockType.heading3 => 'heading3',
+          ArticleDocumentBlockType.sectionTitle => 'sectionTitle',
+          ArticleDocumentBlockType.orderedItem => 'orderedItem',
+          ArticleDocumentBlockType.bulletItem => 'bulletItem',
+          _ => 'body',
+        },
+        textAlign: block.textAlign,
+      ),
+    );
+  }
+  if (page.imageUrl.trim().isNotEmpty &&
+      !fragments.any((fragment) => fragment.hasAsset)) {
+    fragments.add(
+      ArticleLayoutFragment(
+        kind: page.usesWrappedLayout
+            ? ArticleLayoutFragmentKind.wrapContent
+            : ArticleLayoutFragmentKind.fullWidthImage,
+        text: page.body.trim(),
+        asset: ArticleDocumentAsset(
+          id: '${page.id}_asset',
+          offset: 0,
+          imageUrl: page.imageUrl,
+          imageLayout: page.imageLayout,
+          caption: page.caption,
+        ),
+      ),
+    );
+    if (!page.usesWrappedLayout && page.body.trim().isNotEmpty) {
+      fragments.add(
+        ArticleLayoutFragment(
+          kind: ArticleLayoutFragmentKind.body,
+          text: page.body.trim(),
+          textStyleKey: 'body',
+        ),
+      );
+    }
+  } else if (page.body.trim().isNotEmpty &&
+      !fragments.any(
+        (fragment) =>
+            fragment.kind == ArticleLayoutFragmentKind.body ||
+            fragment.kind == ArticleLayoutFragmentKind.wrapContent,
+      )) {
+    fragments.add(
+      ArticleLayoutFragment(
+        kind: ArticleLayoutFragmentKind.body,
+        text: page.body.trim(),
+        textStyleKey: 'body',
+      ),
+    );
+  }
+  return fragments;
+}
+
+List<Widget> _buildReadOnlyPageFragments(
+  BuildContext context,
+  ArticlePageData page,
+  ArticleTypographySpec typography,
+  ArticleTemplatePreset template,
+  ArticleCanvasMetrics metrics,
+) {
+  final fragments = _resolveReadOnlyFragments(page);
+  final widgets = <Widget>[];
+  final spacing = articleSpacingResolver();
+  for (var index = 0; index < fragments.length; index += 1) {
+    final fragment = fragments[index];
+    final nextFragment = index + 1 < fragments.length
+        ? fragments[index + 1]
+        : null;
+    var appended = false;
+    switch (fragment.kind) {
+      case ArticleLayoutFragmentKind.title:
+        widgets.add(Text(fragment.text.trim(), style: typography.titleStyle));
+        appended = true;
+        break;
+      case ArticleLayoutFragmentKind.semanticBlock:
+        if (fragment.block == null) {
+          break;
+        }
+        widgets.add(
+          _ArticleSemanticBlock(block: fragment.block!, typography: typography),
+        );
+        appended = true;
+        break;
+      case ArticleLayoutFragmentKind.fullWidthImage:
+        if (!fragment.hasAsset) {
+          break;
+        }
+        widgets.add(
+          _ArticlePageImage(
+            imageUrl: fragment.asset!.imageUrl.trim(),
+            borderRadius: 0,
+            aspectRatio: fragment.asset!.imageLayout == 'journalCard'
+                ? metrics.journalImageAspectRatio
+                : metrics.fullWidthImageAspectRatio,
+          ),
+        );
+        if (fragment.asset!.caption.trim().isNotEmpty) {
+          widgets.add(
+            SizedBox(
+              height: spacing.between(
+                ArticleSpacingSemantic.figure,
+                ArticleSpacingSemantic.caption,
+              ),
+            ),
+          );
+          widgets.add(
+            Center(
+              child: Text(
+                fragment.asset!.caption.trim(),
+                textAlign: TextAlign.center,
+                style: typography.captionStyle,
+              ),
+            ),
+          );
+        }
+        appended = true;
+        break;
+      case ArticleLayoutFragmentKind.wrapContent:
+        if (!fragment.hasAsset) {
+          break;
+        }
+        widgets.add(
+          ArticleWrappedParagraph(
+            imageUrl: fragment.asset!.imageUrl.trim(),
+            body: fragment.text.trim(),
+            imageLayout: fragment.asset!.imageLayout,
+            caption: fragment.asset!.caption,
+            metrics: metrics,
+          ),
+        );
+        appended = true;
+        break;
+      case ArticleLayoutFragmentKind.body:
+        if (fragment.text.trim().isNotEmpty) {
+          widgets.add(Text(fragment.text.trim(), style: typography.bodyStyle));
+          appended = true;
+        }
+        break;
+    }
+    if (!appended || nextFragment == null) {
+      continue;
+    }
+    final prevSemantic = articleSpacingSemanticForFragment(fragment);
+    final nextSemantic = articleSpacingSemanticForFragment(nextFragment);
+    final double gap;
+    if (prevSemantic == ArticleSpacingSemantic.figure &&
+        nextSemantic == ArticleSpacingSemantic.figure) {
+      gap = spacing.betweenConsecutiveFigures();
+    } else {
+      gap = spacing.between(prevSemantic, nextSemantic);
+    }
+    if (gap > 0) {
+      widgets.add(SizedBox(height: gap));
+    }
+  }
+  return widgets;
 }
 
 class ArticleFrontispieceView extends StatelessWidget {
@@ -253,68 +624,74 @@ class ArticleFrontispieceView extends StatelessWidget {
     final typography = resolveArticleTypography(context, template, fontPreset);
     final frontispieceBody = _resolvedBodyText();
     final coverTitle = page.title.trim();
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-            child: AspectRatio(
-              aspectRatio: template == ArticleTemplatePreset.journal
-                  ? 4 / 5
-                  : 4 / 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  ArticleAdaptiveImage(key: imageKey, imageUrl: coverUrl),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: <Color>[
-                            AppColors.black.withValues(alpha: 0.04),
-                            AppColors.black.withValues(alpha: 0.18),
-                            AppColors.black.withValues(alpha: 0.74),
-                          ],
-                          stops: const <double>[0.0, 0.48, 1.0],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final coverHeight = math.min(
+          constraints.maxHeight * 0.3,
+          constraints.maxWidth /
+              (template == ArticleTemplatePreset.journal ? 0.8 : 1.1),
+        );
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                height: coverHeight,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    ArticleAdaptiveImage(key: imageKey, imageUrl: coverUrl),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              AppColors.black.withValues(alpha: 0.04),
+                              AppColors.black.withValues(alpha: 0.18),
+                              AppColors.black.withValues(alpha: 0.74),
+                            ],
+                            stops: const <double>[0.0, 0.48, 1.0],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (coverTitle.isNotEmpty)
-                    Positioned(
-                      left: AppSpacing.containerMd,
-                      right: AppSpacing.containerMd,
-                      bottom: AppSpacing.containerMd,
-                      child: Text(
-                        coverTitle,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: typography.titleStyle.copyWith(
-                          color: AppColors.white,
-                          height: coverTitleLineHeight,
-                          shadows: const <Shadow>[
-                            Shadow(
-                              color: AppColors.overlayLight,
-                              blurRadius: 18,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
+                    if (coverTitle.isNotEmpty)
+                      Positioned(
+                        left: AppSpacing.containerMd,
+                        right: AppSpacing.containerMd,
+                        bottom: AppSpacing.containerMd,
+                        child: Text(
+                          coverTitle,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: typography.titleStyle.copyWith(
+                            color: AppColors.white,
+                            height: coverTitleLineHeight,
+                            shadows: const <Shadow>[
+                              Shadow(
+                                color: AppColors.overlayLight,
+                                blurRadius: 18,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              SizedBox(height: AppSpacing.containerMd),
+              if (frontispieceBody.isNotEmpty)
+                Text(frontispieceBody, style: typography.bodyStyle),
+            ],
           ),
-          SizedBox(height: AppSpacing.containerMd),
-          if (frontispieceBody.isNotEmpty)
-            Text(frontispieceBody, style: typography.bodyStyle),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -409,16 +786,45 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
 
 class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     with SingleTickerProviderStateMixin {
+  static const bool _isFlutterTest = bool.fromEnvironment('FLUTTER_TEST');
+  static const double _overflowSwitchVelocity = 320;
+  static const double _overflowSwitchDistance = AppSpacing.buttonHeight;
+
+  bool get _disableAdvancedPageCurlForTest {
+    final bindingName = WidgetsBinding.instance.runtimeType.toString();
+    return _isFlutterTest || bindingName.contains('TestWidgetsFlutterBinding');
+  }
+
   late final PageController _pageController;
-  late final AnimationController _curlController;
-  _ArticlePageCurlCorner? _activeCurlCorner;
-  Offset? _dragOrigin;
-  double _curlProgress = 0;
+  late final AnimationController _pageFlipAnimationController;
+  late final StPageFlipPointerBridge _pointerBridge;
+  StPageFlipController? _pageFlipController;
+  StPageFlipAnimationPlan? _activePageFlipAnimation;
+  Offset? _pointerDownLocalPosition;
+  Offset? _dragStartGlobalPosition;
+  Offset? _latestDragGlobalPosition;
+  DateTime? _dragStartedAt;
+  int _lastAnimationFrameIndex = -1;
+  double _edgeOverflowDistance = 0;
+  StPageFlipDirection? _pendingOverflowDirection;
+  bool _overflowTriggered = false;
   bool _overflowLocked = false;
   late int _currentPage;
   DateTime? _pageTransitionStartedAt;
   String? _pageTransitionMechanism;
   ArticleReaderFallbackReason? _reportedFallbackReason;
+  final Map<String, Widget> _pageSurfaceCache = <String, Widget>{};
+  final Map<int, GlobalKey> _pageTextureBoundaryKeys = <int, GlobalKey>{};
+  final Map<int, ArticlePageTextureSnapshot> _pageTextureSnapshots =
+      <int, ArticlePageTextureSnapshot>{};
+  final ListQueue<int> _pendingTexturePages = ListQueue<int>();
+  final ArticlePageCurlMeshBuilder _curlMeshBuilder =
+      const ArticlePageCurlMeshBuilder();
+  ArticlePageTextureSession? _activeTextureSession;
+  Size? _cachedSurfaceSize;
+  ui.FragmentProgram? _lightingShaderProgram;
+  ui.FragmentProgram? _backfaceShaderProgram;
+  bool _snapshotCaptureScheduled = false;
 
   int get _safeInitialPage {
     if (widget.pages.isEmpty) {
@@ -459,76 +865,84 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     super.initState();
     _currentPage = _safeInitialPage;
     _pageController = PageController(initialPage: _currentPage);
-    _curlController =
+    _pointerBridge = StPageFlipPointerBridge();
+    _pageFlipAnimationController =
         AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 260),
-          lowerBound: 0,
-          upperBound: 1,
-        )..addListener(() {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _curlProgress = _curlController.value;
-          });
-        });
+            vsync: this,
+            duration: const Duration(milliseconds: 260),
+            lowerBound: 0,
+            upperBound: 1,
+          )
+          ..addListener(_handlePageFlipAnimationTick)
+          ..addStatusListener(_handlePageFlipAnimationStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onPageChanged?.call(_currentPage);
     });
     _maybeReportFallbackReason();
+    _preloadPageCurlShaders();
   }
 
   @override
   void didUpdateWidget(covariant ArticleReadOnlyBookDeck oldWidget) {
     super.didUpdateWidget(oldWidget);
     _maybeReportFallbackReason();
+    if (widget.pages != oldWidget.pages ||
+        widget.template != oldWidget.template ||
+        widget.fontPreset != oldWidget.fontPreset ||
+        widget.metrics != oldWidget.metrics ||
+        widget.coverUrl != oldWidget.coverUrl) {
+      _pageSurfaceCache.clear();
+      _resetPageTextureSnapshots();
+      _clearActiveTextureSession();
+    }
     final nextInitialPage = _safeInitialPage;
     if (widget.initialPage != oldWidget.initialPage &&
-        _pageController.hasClients &&
         nextInitialPage != _currentPage) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_pageController.hasClients) {
-          return;
-        }
-        _pageController.jumpToPage(nextInitialPage);
+      if (_useDegradedPager && _pageController.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_pageController.hasClients) {
+            return;
+          }
+          _pageController.jumpToPage(nextInitialPage);
+          setState(() {
+            _currentPage = nextInitialPage;
+          });
+        });
+      } else {
         setState(() {
           _currentPage = nextInitialPage;
+          _pageFlipController?.setCurrentPage(_currentPage);
         });
-      });
+      }
     } else if (_currentPage >= widget.pages.length && widget.pages.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_pageController.hasClients) {
-          return;
-        }
-        final lastPage = widget.pages.length - 1;
-        _pageController.jumpToPage(lastPage);
-        setState(() {
-          _currentPage = lastPage;
+      if (_useDegradedPager) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_pageController.hasClients) {
+            return;
+          }
+          final lastPage = widget.pages.length - 1;
+          _pageController.jumpToPage(lastPage);
+          setState(() {
+            _currentPage = lastPage;
+          });
         });
-      });
+      } else {
+        setState(() {
+          _currentPage = widget.pages.length - 1;
+          _pageFlipController?.setCurrentPage(_currentPage);
+        });
+      }
     }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _curlController.dispose();
+    _pageFlipAnimationController.dispose();
+    _pointerBridge.dispose();
+    _disposePageTextureSnapshots();
+    _clearActiveTextureSession();
     super.dispose();
-  }
-
-  bool _isForwardCorner(_ArticlePageCurlCorner corner) {
-    return corner == _ArticlePageCurlCorner.topRight ||
-        corner == _ArticlePageCurlCorner.bottomRight;
-  }
-
-  String _cornerName(_ArticlePageCurlCorner corner) {
-    return switch (corner) {
-      _ArticlePageCurlCorner.topLeft => 'top_left',
-      _ArticlePageCurlCorner.topRight => 'top_right',
-      _ArticlePageCurlCorner.bottomLeft => 'bottom_left',
-      _ArticlePageCurlCorner.bottomRight => 'bottom_right',
-    };
   }
 
   void _maybeReportFallbackReason() {
@@ -543,6 +957,917 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       }
       widget.onFallbackResolved?.call(reason);
     });
+  }
+
+  StPageFlipScene? get _pageFlipScene => _pageFlipController?.scene;
+
+  Size _resolvePageSizeForStage(Size stageSize) {
+    final availableWidth = math.max(
+      1.0,
+      stageSize.width - widget.pagePadding.horizontal,
+    );
+    final pageWidth = availableWidth >= 920
+        ? ((availableWidth - resolveArticleReaderStageSpec().spineShadowWidth) /
+                  2)
+              .clamp(1.0, availableWidth)
+              .toDouble()
+        : availableWidth;
+    final pageHeight = pageWidth / widget.metrics.aspectRatio;
+    return Size(pageWidth, pageHeight);
+  }
+
+  void _configurePageFlipController(Size stageSize) {
+    if (widget.pages.isEmpty) {
+      _pageFlipController = null;
+      _pageSurfaceCache.clear();
+      _cachedSurfaceSize = null;
+      _resetPageTextureSnapshots();
+      _clearActiveTextureSession();
+      return;
+    }
+    final pageSize = _resolvePageSizeForStage(stageSize);
+    if (_cachedSurfaceSize != pageSize) {
+      _cachedSurfaceSize = pageSize;
+      _pageSurfaceCache.clear();
+      _resetPageTextureSnapshots();
+      _clearActiveTextureSession();
+    }
+    final layout = computeStPageFlipLayout(
+      viewportSize: stageSize,
+      pageWidth: pageSize.width,
+      pageHeight: pageSize.height,
+      usePortrait: true,
+    );
+    final spreadModel = StPageFlipSpreadModel(
+      pageCount: widget.pages.length,
+      showCover: widget.coverUrl.trim().isNotEmpty,
+    );
+    if (_pageFlipController == null) {
+      _pageFlipController = StPageFlipController(
+        spreadModel: spreadModel,
+        layout: layout,
+        initialPage: _currentPage,
+      );
+      return;
+    }
+    _pageFlipController!.updateConfiguration(
+      spreadModel: spreadModel,
+      layout: layout,
+      currentPage: _currentPage,
+    );
+  }
+
+  Future<void> _preloadPageCurlShaders() async {
+    if (_disableAdvancedPageCurlForTest) {
+      return;
+    }
+    try {
+      final lighting = await ui.FragmentProgram.fromAsset(
+        'shaders/article_page_curl_lighting.frag',
+      );
+      final backface = await ui.FragmentProgram.fromAsset(
+        'shaders/article_page_curl_backface.frag',
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lightingShaderProgram = lighting;
+        _backfaceShaderProgram = backface;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.pages.isEmpty) {
+          return;
+        }
+        _queuePageTextureSnapshots(<int>{
+          _currentPage,
+          _currentPage - 1,
+          _currentPage + 1,
+        }, prioritize: true);
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('ArticleReadOnlyBookDeck: page curl shaders failed to load: $e');
+        debugPrintStack(stackTrace: st);
+      }
+    }
+  }
+
+  void _disposePageTextureSnapshots() {
+    for (final snapshot in _pageTextureSnapshots.values) {
+      snapshot.dispose();
+    }
+    _pageTextureSnapshots.clear();
+    _pendingTexturePages.clear();
+    _pageTextureBoundaryKeys.clear();
+  }
+
+  void _resetPageTextureSnapshots() {
+    _disposePageTextureSnapshots();
+    _snapshotCaptureScheduled = false;
+    _clearActiveTextureSession();
+  }
+
+  double _pageTexturePixelRatio(BuildContext context) {
+    final view = View.maybeOf(context);
+    final pixelRatio =
+        view?.devicePixelRatio ??
+        MediaQuery.maybeOf(context)?.devicePixelRatio ??
+        1.0;
+    return pixelRatio.clamp(1.0, 2.0).toDouble();
+  }
+
+  void _queuePageTextureSnapshots(
+    Iterable<int> pageIndices, {
+    bool prioritize = false,
+  }) {
+    if (_disableAdvancedPageCurlForTest) {
+      return;
+    }
+    var added = false;
+    final orderedIndices = pageIndices.toList(growable: false);
+    final iteration = prioritize ? orderedIndices.reversed : orderedIndices;
+    for (final index in iteration) {
+      if (index < 0 || index >= widget.pages.length) {
+        continue;
+      }
+      if (_pageTextureSnapshots.containsKey(index)) {
+        continue;
+      }
+      final alreadyPending = _pendingTexturePages.contains(index);
+      if (alreadyPending && !prioritize) {
+        continue;
+      }
+      _pendingTexturePages.remove(index);
+      if (prioritize) {
+        _pendingTexturePages.addFirst(index);
+      } else {
+        _pendingTexturePages.addLast(index);
+      }
+      added = added || !alreadyPending;
+      _pageTextureBoundaryKeys.putIfAbsent(
+        index,
+        () => GlobalKey(debugLabel: 'article_page_texture_$index'),
+      );
+    }
+    if (added) {
+      _schedulePendingTextureCapture();
+    }
+  }
+
+  bool _shouldFreezeTextureSession(StPageFlipScene scene) {
+    return _activePageFlipAnimation != null ||
+        scene.state != StPageFlipState.read;
+  }
+
+  void _schedulePendingTextureCapture() {
+    if (_snapshotCaptureScheduled || _pendingTexturePages.isEmpty || !mounted) {
+      return;
+    }
+    _snapshotCaptureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _snapshotCaptureScheduled = false;
+      await _capturePendingPageTextures();
+    });
+  }
+
+  Future<void> _capturePendingPageTextures() async {
+    if (!mounted || _pendingTexturePages.isEmpty) {
+      return;
+    }
+    final pending = _pendingTexturePages.take(3).toList(growable: false);
+    var capturedAny = false;
+    for (final index in pending) {
+      final boundaryKey = _pageTextureBoundaryKeys[index];
+      final boundaryContext = boundaryKey?.currentContext;
+      final boundary =
+          boundaryContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null ||
+          !boundary.hasSize ||
+          boundary.size.isEmpty ||
+          boundary.debugNeedsPaint) {
+        continue;
+      }
+      try {
+        final image = await boundary.toImage(
+          pixelRatio: _pageTexturePixelRatio(boundaryContext!),
+        );
+        if (!mounted) {
+          image.dispose();
+          return;
+        }
+        _pageTextureSnapshots[index]?.dispose();
+        _pageTextureSnapshots[index] = ArticlePageTextureSnapshot(
+          image: image,
+          logicalSize: boundary.size,
+          pixelRatio: _pageTexturePixelRatio(boundaryContext),
+        );
+        _pendingTexturePages.remove(index);
+        capturedAny = true;
+      } catch (_) {
+        // Texture capture failed; will retry next cycle.
+      }
+    }
+    if (capturedAny && mounted) {
+      final scene = _pageFlipScene;
+      if (scene != null) {
+        _syncActiveTextureSession(scene);
+      }
+      setState(() {});
+    }
+    if (_pendingTexturePages.isNotEmpty) {
+      _schedulePendingTextureCapture();
+    }
+  }
+
+  bool _supportsAdvancedPageCurl(StPageFlipScene scene) {
+    return !_disableAdvancedPageCurlForTest &&
+        _lightingShaderProgram != null &&
+        _backfaceShaderProgram != null;
+  }
+
+  ArticlePageTextureBinding? _textureBindingForScene(StPageFlipScene scene) {
+    return resolveArticlePageTextureBinding(
+      direction: scene.direction,
+      flippingPageIndex: scene.flippingPageIndex,
+      bottomPageIndex: scene.bottomPageIndex,
+      currentPageIndex: scene.currentPageIndex,
+    );
+  }
+
+  ArticlePageTextureBundle? _textureBundleForBinding(
+    ArticlePageTextureBinding binding, {
+    ArticlePageTextureBundle? fallback,
+  }) {
+    final recto = _pageTextureSnapshots[binding.rectoPageIndex];
+    final verso = _pageTextureSnapshots[binding.versoPageIndex];
+    final bottom = _pageTextureSnapshots[binding.bottomPageIndex];
+    if (recto == null || verso == null || bottom == null) {
+      return fallback;
+    }
+    return ArticlePageTextureBundle(recto: recto, verso: verso, bottom: bottom);
+  }
+
+  void _syncActiveTextureSession(StPageFlipScene scene) {
+    final binding = _textureBindingForScene(scene);
+    final existing = _activeTextureSession;
+    final sameBinding =
+        binding != null &&
+        existing != null &&
+        existing.binding.matches(binding);
+    final resolvedBundle = binding == null
+        ? null
+        : _textureBundleForBinding(
+            binding,
+            fallback: sameBinding ? existing.bundle : null,
+          );
+    final nextSession = resolveArticlePageTextureSession(
+      existing: existing,
+      binding: binding,
+      resolvedBundle: resolvedBundle,
+      supportsHighFidelity: _supportsAdvancedPageCurl(scene),
+      freezeBinding: _shouldFreezeTextureSession(scene),
+    );
+    if (nextSession == null) {
+      _activeTextureSession = null;
+      return;
+    }
+    _queuePageTextureSnapshots(
+      nextSession.binding.prioritizedPageIndices,
+      prioritize: true,
+    );
+    _activeTextureSession = nextSession.copyWith(
+      bundle: _textureBundleForBinding(
+        nextSession.binding,
+        fallback: nextSession.bundle,
+      ),
+    );
+  }
+
+  void _clearActiveTextureSession() {
+    _activeTextureSession = null;
+  }
+
+  ArticlePageTextureBundle? _resolveHighFidelityTextureBundle(
+    StPageFlipScene scene,
+  ) {
+    final session = _activeTextureSession;
+    final binding = _textureBindingForScene(scene);
+    if (session == null ||
+        binding == null ||
+        !session.binding.matches(binding) ||
+        !session.preferHighFidelity) {
+      return null;
+    }
+    return _textureBundleForBinding(binding, fallback: session.bundle);
+  }
+
+  Path _buildBottomClipPath(StPageFlipScene scene) {
+    final calculation = scene.calculation;
+    final direction = scene.direction;
+    final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
+    final pageRectPath = Path()..addRect(pageRect);
+    if (calculation == null || direction == null) {
+      return pageRectPath;
+    }
+    final area = calculation.getBottomClipArea();
+    if (area.length < 3) {
+      return pageRectPath;
+    }
+    final polygon = _localPolygonFromArea(
+      area: area,
+      anchor: calculation.getBottomPagePosition(),
+      angle: 0,
+      direction: direction,
+    );
+    final position = convertBookPointToViewport(
+      calculation.getBottomPagePosition(),
+      scene.layout.bounds,
+      direction: direction,
+    );
+    final path = Path()
+      ..moveTo(position.dx + polygon.first.dx, position.dy + polygon.first.dy);
+    for (final point in polygon.skip(1)) {
+      path.lineTo(position.dx + point.dx, position.dy + point.dy);
+    }
+    path.close();
+    return Path.combine(PathOperation.intersect, pageRectPath, path);
+  }
+
+  ArticlePageCurlRenderScene? _tryBuildHighFidelityRenderScene(
+    BuildContext context,
+    StPageFlipScene scene,
+    Size stageSize,
+    Size pageSize,
+  ) {
+    if (!_supportsAdvancedPageCurl(scene)) {
+      return null;
+    }
+    final calculation = scene.calculation;
+    final session = _activeTextureSession;
+    final direction = scene.direction;
+    final corner = scene.corner;
+    final binding = _textureBindingForScene(scene);
+    if (calculation == null ||
+        direction == null ||
+        corner == null ||
+        binding == null ||
+        session == null ||
+        !session.binding.matches(binding) ||
+        !session.preferHighFidelity) {
+      return null;
+    }
+    _queuePageTextureSnapshots(binding.requiredPageIndices);
+    final textures = _resolveHighFidelityTextureBundle(scene);
+    if (textures == null) {
+      return null;
+    }
+    final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
+    final progress = ((calculation.getFlippingProgress()) / 100)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final meshFrame = _curlMeshBuilder.build(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      dragPoint: calculation.getPosition(),
+      progress: progress,
+      direction: direction,
+      corner: corner,
+      bottomClipPath: _buildBottomClipPath(scene),
+      reversePose: null,
+    );
+    final palette = resolveArticleTemplatePalette(context, widget.template);
+    final lightState = resolveArticlePageCurlLightState(
+      progress: progress,
+      foldXNormalized: meshFrame.foldXNormalized,
+      curlLift: meshFrame.curlLift,
+      rollProgress: meshFrame.rollProgress,
+      cylinderProgress: meshFrame.cylinderProgress,
+      unfoldProgress: meshFrame.unfoldProgress,
+      cylinderRadiusNormalized: 0,
+      unrollWidthNormalized: 0,
+      bottomGapNormalized: 0,
+      direction: direction,
+      corner: corner,
+    );
+    final lightConfig = ArticlePageCurlLightConfig(
+      shadowColor: palette.shadowColor.withValues(alpha: 0.82),
+      highlightColor: AppColors.white.withValues(alpha: 0.22),
+      paperTintColor: Color.alphaBlend(
+        AppColors.white.withValues(alpha: 0.14),
+        palette.paperColor,
+      ).withValues(alpha: 0.24),
+      ambientOcclusionColor: AppColors.black.withValues(alpha: 0.22),
+    );
+    return ArticlePageCurlRenderScene(
+      stageSize: stageSize,
+      pageRect: pageRect,
+      textures: textures,
+      meshFrame: meshFrame,
+      lightConfig: lightConfig,
+      lightState: lightState,
+      direction: direction,
+      corner: corner,
+    );
+  }
+
+  Widget _buildPageTextureCaptureLayer(BuildContext context, Size pageSize) {
+    if (_disableAdvancedPageCurlForTest || _pendingTexturePages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final capturePages = _pendingTexturePages.take(3).toList(growable: false);
+    return _StableTextureCaptureLayer(
+      key: const ValueKey<String>('texture_capture_layer'),
+      capturePages: capturePages,
+      pageSize: pageSize,
+      boundaryKeys: _pageTextureBoundaryKeys,
+      buildPage: (index) => _buildPageSurfaceWidget(context, index, pageSize),
+    );
+  }
+
+  Widget _buildCachedPageSurface(
+    BuildContext context,
+    int pageIndex,
+    Size pageSize, {
+    required _ArticlePageSurfaceKind kind,
+  }) {
+    final cacheKey =
+        '${kind.name}:$pageIndex:${pageSize.width.toStringAsFixed(2)}:${pageSize.height.toStringAsFixed(2)}:${widget.template.name}:${widget.fontPreset.name}:${widget.coverUrl.trim().isNotEmpty ? 1 : 0}';
+    return _pageSurfaceCache.putIfAbsent(cacheKey, () {
+      switch (kind) {
+        case _ArticlePageSurfaceKind.front:
+        case _ArticlePageSurfaceKind.bottom:
+          return _buildReaderPage(context, pageIndex, pageSize);
+        case _ArticlePageSurfaceKind.back:
+          return _buildOpaqueBackPageSurface(context, pageIndex, pageSize);
+      }
+    });
+  }
+
+  Widget _buildOpaqueBackPageSurface(
+    BuildContext context,
+    int pageIndex,
+    Size pageSize,
+  ) {
+    final palette = resolveArticleTemplatePalette(context, widget.template);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Color.alphaBlend(
+              AppColors.white.withValues(alpha: 0.22),
+              palette.paperColor,
+            ),
+            palette.paperColor,
+            Color.alphaBlend(
+              palette.paperBorderColor.withValues(alpha: 0.12),
+              palette.paperColor,
+            ),
+          ],
+        ),
+        border: Border.all(
+          color: palette.paperBorderColor.withValues(alpha: 0.22),
+          width: AppSpacing.hairline,
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          ColoredBox(color: palette.paperColor),
+          IgnorePointer(
+            child: Opacity(
+              opacity: 0.72,
+              child: _buildMirroredReaderPage(context, pageIndex, pageSize),
+            ),
+          ),
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    AppColors.white.withValues(alpha: 0.14),
+                    AppColors.transparent,
+                    palette.shadowColor.withValues(alpha: 0.06),
+                  ],
+                  stops: const <double>[0.0, 0.42, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handlePageFlipAnimationTick() {
+    final controller = _pageFlipController;
+    final plan = _activePageFlipAnimation;
+    if (controller == null || plan == null || plan.frames.isEmpty || !mounted) {
+      return;
+    }
+    final maxIndex = plan.frames.length - 1;
+    final nextIndex = maxIndex == 0
+        ? 0
+        : (_pageFlipAnimationController.value * maxIndex).round().clamp(
+            0,
+            maxIndex,
+          );
+    if (nextIndex == _lastAnimationFrameIndex) {
+      return;
+    }
+    controller.applyAnimationFrame(
+      plan.frames[nextIndex],
+      reversePose: null,
+    );
+    _syncActiveTextureSession(controller.scene);
+    _lastAnimationFrameIndex = nextIndex;
+    setState(() {});
+  }
+
+  void _handlePageFlipAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) {
+      return;
+    }
+    final controller = _pageFlipController;
+    final plan = _activePageFlipAnimation;
+    if (controller == null || plan == null) {
+      return;
+    }
+    final previousPage = controller.currentPageIndex;
+    controller.completeAnimation(plan);
+    _activePageFlipAnimation = null;
+    _lastAnimationFrameIndex = -1;
+    if (plan.needReset) {
+      _clearActiveTextureSession();
+    } else {
+      _syncActiveTextureSession(controller.scene);
+    }
+    final nextPage = controller.currentPageIndex;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _currentPage = nextPage;
+    });
+    if (plan.isTurned) {
+      widget.onPageChanged?.call(_currentPage);
+      _emitPageFlipCommit(fromPage: previousPage, toPage: _currentPage);
+    }
+  }
+
+  void _runPageFlipAnimation(
+    StPageFlipAnimationPlan plan, {
+    bool reportAbort = false,
+  }) {
+    if (reportAbort) {
+      _emitPageCurlAbortForPlan(plan);
+    }
+    final scene = _pageFlipScene;
+    if (scene != null) {
+      _syncActiveTextureSession(scene);
+    }
+    _activePageFlipAnimation = plan;
+    _lastAnimationFrameIndex = -1;
+    _pageFlipAnimationController.duration = plan.duration;
+    _pageFlipAnimationController.forward(from: 0);
+  }
+
+  void _triggerOverflow(StPageFlipDirection direction) {
+    if (_overflowTriggered) {
+      return;
+    }
+    _overflowTriggered = true;
+    if (direction == StPageFlipDirection.forward) {
+      widget.onOverflowNext?.call();
+    } else {
+      widget.onOverflowPrevious?.call();
+    }
+  }
+
+  void _resetOverflowTracking() {
+    _edgeOverflowDistance = 0;
+    _pendingOverflowDirection = null;
+    _overflowTriggered = false;
+  }
+
+  void _trackEdgeOverflow(Offset delta, StPageFlipDirection direction) {
+    if (_pendingOverflowDirection != direction) {
+      _pendingOverflowDirection = direction;
+      _edgeOverflowDistance = 0;
+    }
+    _edgeOverflowDistance += delta.dx.abs();
+    if (_edgeOverflowDistance >= _overflowSwitchDistance) {
+      _triggerOverflow(direction);
+    }
+  }
+
+  bool _shouldCommitPageFlip({
+    required StPageFlipController controller,
+    required StPageFlipDirection direction,
+    required double progress,
+    required Velocity velocity,
+    Offset? dragStart,
+    Offset? dragLatest,
+    DateTime? dragStartedAt,
+  }) {
+    final directionSign = direction == StPageFlipDirection.forward ? -1.0 : 1.0;
+    final directionalVelocity = velocity.pixelsPerSecond.dx * directionSign;
+    final directionalDistance = dragStart != null && dragLatest != null
+        ? (dragLatest.dx - dragStart.dx) * directionSign
+        : 0.0;
+    final dragRatio = (directionalDistance / controller.layout.bounds.pageWidth)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final elapsedMs = dragStartedAt == null
+        ? 0
+        : DateTime.now().difference(dragStartedAt).inMilliseconds;
+    final crossedMidpoint = progress > 0.44;
+    final sustainedPull = dragRatio > 0.24;
+    final deliberateCornerLift = progress > 0.14 && dragRatio > 0.08;
+    final deliberateDrag = progress > 0.2 && dragRatio > 0.16;
+    final decisiveVelocity = directionalVelocity > 260;
+    final quickLift =
+        elapsedMs > 0 && elapsedMs < 420 && dragRatio > 0.06 && progress > 0.12;
+    final assistedSnap = deliberateCornerLift && directionalVelocity > 120;
+    return crossedMidpoint ||
+        sustainedPull ||
+        deliberateDrag ||
+        decisiveVelocity ||
+        quickLift ||
+        assistedSnap;
+  }
+
+  String _cornerNameFromPageFlip(
+    StPageFlipCorner corner,
+    StPageFlipDirection direction,
+  ) {
+    if (corner == StPageFlipCorner.top) {
+      return direction == StPageFlipDirection.forward
+          ? 'top_right'
+          : 'top_left';
+    }
+    return direction == StPageFlipDirection.forward
+        ? 'bottom_right'
+        : 'bottom_left';
+  }
+
+  void _emitPageCurlAbortForPlan(StPageFlipAnimationPlan plan) {
+    final calculation = _pageFlipScene?.calculation;
+    final progress = ((calculation?.getFlippingProgress() ?? 0) / 100)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    _clearPageTransition();
+    if (progress <= 0) {
+      return;
+    }
+    widget.onPageCurlAborted?.call(
+      ArticleReaderPageCurlAbort(
+        corner: _cornerNameFromPageFlip(plan.corner, plan.direction),
+        progress: progress,
+      ),
+    );
+  }
+
+  void _handleStageTapUp(TapUpDetails details) {
+    if (!_showsPageCurl || _activePageFlipAnimation != null) {
+      return;
+    }
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    final plan = controller.flip(details.localPosition);
+    if (plan == null) {
+      return;
+    }
+    _startPageTransition('page_curl');
+    setState(() {});
+    _runPageFlipAnimation(plan);
+  }
+
+  void _handleStagePanStart(Offset localPosition) {
+    if (!_showsPageCurl || _activePageFlipAnimation != null) {
+      return;
+    }
+    final startPosition = _pointerDownLocalPosition ?? localPosition;
+    _dragStartGlobalPosition = startPosition;
+    _latestDragGlobalPosition = localPosition;
+    _dragStartedAt = DateTime.now();
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    final direction = controller.directionForGlobalPoint(startPosition);
+    if (!controller.canFlipDirection(direction)) {
+      _pendingOverflowDirection = direction;
+      _edgeOverflowDistance = 0;
+      return;
+    }
+    _startPageTransition('page_curl');
+    controller.fold(startPosition);
+    if ((localPosition - startPosition).distance > 0) {
+      controller.fold(localPosition);
+    }
+    _syncActiveTextureSession(controller.scene);
+    setState(() {});
+  }
+
+  void _handleStagePanUpdate(Offset localPosition, Offset delta) {
+    if (!_showsPageCurl || _activePageFlipAnimation != null) {
+      return;
+    }
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    _latestDragGlobalPosition = localPosition;
+    final direction = controller.directionForGlobalPoint(localPosition);
+    if (!controller.canFlipDirection(direction)) {
+      _trackEdgeOverflow(delta, direction);
+      return;
+    }
+    controller.fold(localPosition);
+    _syncActiveTextureSession(controller.scene);
+    setState(() {});
+  }
+
+  void _handleStagePanCancel() {
+    _pointerDownLocalPosition = null;
+    _dragStartGlobalPosition = null;
+    _latestDragGlobalPosition = null;
+    _dragStartedAt = null;
+    _resetOverflowTracking();
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    controller.cancelInteraction();
+    _clearActiveTextureSession();
+    setState(() {});
+  }
+
+  void _handleStagePanEnd(Velocity velocity) {
+    final controller = _pageFlipController;
+    final dragStart = _dragStartGlobalPosition;
+    final dragLatest = _latestDragGlobalPosition;
+    final dragStartedAt = _dragStartedAt;
+    _pointerDownLocalPosition = null;
+    _dragStartGlobalPosition = null;
+    _latestDragGlobalPosition = null;
+    _dragStartedAt = null;
+    if (controller == null) {
+      _resetOverflowTracking();
+      return;
+    }
+    if (dragStart != null) {
+      final direction = controller.directionForGlobalPoint(dragStart);
+      if (!controller.canFlipDirection(direction)) {
+        final velocityX = velocity.pixelsPerSecond.dx;
+        if (!_overflowTriggered && velocityX.abs() >= _overflowSwitchVelocity) {
+          _triggerOverflow(direction);
+        }
+        _resetOverflowTracking();
+        return;
+      }
+    }
+
+    var plan = controller.stopMove();
+    _resetOverflowTracking();
+    if (plan == null) {
+      controller.cancelInteraction();
+      _clearActiveTextureSession();
+      setState(() {});
+      return;
+    }
+    if (!plan.isTurned) {
+      final direction =
+          controller.scene.direction ??
+          (dragStart != null
+              ? controller.directionForGlobalPoint(dragStart)
+              : StPageFlipDirection.forward);
+      final corner =
+          controller.scene.corner ??
+          (dragStart != null
+              ? controller.cornerForGlobalPoint(dragStart)
+              : StPageFlipCorner.bottom);
+      final progress =
+          ((controller.scene.calculation?.getFlippingProgress() ?? 0) / 100)
+              .clamp(0.0, 1.0)
+              .toDouble();
+      final shouldCommit = _shouldCommitPageFlip(
+        controller: controller,
+        direction: direction,
+        progress: progress,
+        velocity: velocity,
+        dragStart: dragStart,
+        dragLatest: dragLatest,
+        dragStartedAt: dragStartedAt,
+      );
+      if (shouldCommit) {
+        plan = direction == StPageFlipDirection.forward
+            ? controller.flipNext(corner)
+            : controller.flipPrev(corner);
+      }
+    }
+    if (plan == null) {
+      controller.cancelInteraction();
+      _clearActiveTextureSession();
+      setState(() {});
+      return;
+    }
+    if (!plan.isTurned) {
+      _runPageFlipAnimation(plan, reportAbort: true);
+    } else {
+      _runPageFlipAnimation(plan);
+    }
+  }
+
+  void _handleStageMouseHover(PointerHoverEvent event) {
+    if (!_showsPageCurl || _activePageFlipAnimation != null) {
+      return;
+    }
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    final plan = controller.showCorner(event.localPosition);
+    if (plan != null) {
+      _runPageFlipAnimation(plan);
+      return;
+    }
+    _syncActiveTextureSession(controller.scene);
+    setState(() {});
+  }
+
+  void _handleStageMouseExit(PointerExitEvent event) {
+    if (!_showsPageCurl || _activePageFlipAnimation != null) {
+      return;
+    }
+    final controller = _pageFlipController;
+    if (controller == null) {
+      return;
+    }
+    final plan = controller.showCorner(const Offset(-1, -1));
+    if (plan != null) {
+      _runPageFlipAnimation(plan);
+      return;
+    }
+    controller.cancelInteraction();
+    _clearActiveTextureSession();
+    setState(() {});
+  }
+
+  void _handleStagePointerDown(PointerDownEvent event) {
+    if (!_showsPageCurl) {
+      return;
+    }
+    _pointerDownLocalPosition = event.localPosition;
+    _pointerBridge.handleTouchStart(event.localPosition, () {});
+  }
+
+  void _handleStagePointerMove(PointerMoveEvent event) {
+    if (!_showsPageCurl || _dragStartGlobalPosition != null) {
+      return;
+    }
+    _pointerBridge.handleTouchMove(event.localPosition, () {});
+  }
+
+  void _handleStagePointerUp(PointerUpEvent event) {
+    _pointerDownLocalPosition = null;
+    if (!_showsPageCurl || _dragStartGlobalPosition != null) {
+      _pointerBridge.cancel();
+      return;
+    }
+    final controller = _pageFlipController;
+    if (controller == null) {
+      _pointerBridge.cancel();
+      return;
+    }
+    final swipe = _pointerBridge.handleTouchEnd(
+      event.localPosition,
+      pageHeight: controller.layout.bounds.height,
+    );
+    if (swipe == null || !controller.canFlipDirection(swipe.direction)) {
+      return;
+    }
+    final plan = swipe.direction == StPageFlipDirection.forward
+        ? controller.flipNext(swipe.corner)
+        : controller.flipPrev(swipe.corner);
+    if (plan == null) {
+      return;
+    }
+    _startPageTransition('page_curl');
+    _runPageFlipAnimation(plan);
+  }
+
+  void _handleStagePointerCancel(PointerCancelEvent event) {
+    _pointerDownLocalPosition = null;
+    _pointerBridge.cancel();
+    _clearActiveTextureSession();
   }
 
   void _startPageTransition(String mechanism) {
@@ -572,119 +1897,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
   }
 
-  void _emitPageCurlAbort(_ArticlePageCurlCorner corner) {
-    final progress = _curlProgress;
-    _clearPageTransition();
-    if (progress <= 0) {
-      return;
-    }
-    widget.onPageCurlAborted?.call(
-      ArticleReaderPageCurlAbort(
-        corner: _cornerName(corner),
-        progress: progress,
-      ),
-    );
-  }
-
-  bool _canFlip(_ArticlePageCurlCorner corner) {
-    if (widget.pages.length <= 1) {
-      return false;
-    }
-    if (_isForwardCorner(corner)) {
-      return _currentPage < widget.pages.length - 1;
-    }
-    return _currentPage > 0;
-  }
-
-  void _beginCurl(_ArticlePageCurlCorner corner, DragStartDetails details) {
-    if (!_showsPageCurl || !_canFlip(corner)) {
-      _activeCurlCorner = null;
-      _dragOrigin = null;
-      return;
-    }
-    _startPageTransition('page_curl');
-    _dragOrigin = details.globalPosition;
-    setState(() {
-      _activeCurlCorner = corner;
-    });
-    _curlController.value = 0;
-  }
-
-  void _updateCurl(DragUpdateDetails details) {
-    final corner = _activeCurlCorner;
-    final dragOrigin = _dragOrigin;
-    if (corner == null || dragOrigin == null) {
-      return;
-    }
-    final delta = details.globalPosition - dragOrigin;
-    final primaryDistance = _isForwardCorner(corner)
-        ? (-delta.dx + delta.dy.abs() * 0.12)
-        : (delta.dx + delta.dy.abs() * 0.12);
-    _curlController.value = (primaryDistance / 180).clamp(0.0, 1.0);
-  }
-
-  Future<void> _endCurl(DragEndDetails details) async {
-    final corner = _activeCurlCorner;
-    if (corner == null) {
-      return;
-    }
-    final velocityX = details.velocity.pixelsPerSecond.dx;
-    final shouldCommit =
-        _curlProgress > 0.38 ||
-        (_isForwardCorner(corner) ? velocityX < -620 : velocityX > 620);
-    if (!_canFlip(corner)) {
-      _clearPageTransition();
-      _resetCurl();
-      if (_isForwardCorner(corner)) {
-        widget.onOverflowNext?.call();
-      } else {
-        widget.onOverflowPrevious?.call();
-      }
-      return;
-    }
-    if (!shouldCommit) {
-      _emitPageCurlAbort(corner);
-      await _curlController.animateBack(
-        0,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-      );
-      _resetCurl();
-      return;
-    }
-    await _curlController.animateTo(
-      1,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (_isForwardCorner(corner)) {
-      await _pageController.nextPage(
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
-    } else {
-      await _pageController.previousPage(
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
-    }
-    if (!mounted) {
-      return;
-    }
-    _resetCurl();
-  }
-
-  void _resetCurl() {
-    _dragOrigin = null;
-    _curlController.value = 0;
-    setState(() {
-      _activeCurlCorner = null;
-    });
-  }
-
   bool _handleScrollNotification(ScrollNotification notification) {
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null &&
@@ -700,7 +1912,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       }
     } else if (notification is ScrollEndNotification) {
       _overflowLocked = false;
-      if (_activeCurlCorner == null) {
+      if (_pageFlipScene?.calculation == null) {
         _clearPageTransition();
       }
     }
@@ -719,16 +1931,572 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     };
   }
 
-  @override
-  Widget build(BuildContext context) {
-    const pageCurlHotzoneExtent = 76.0;
+  Rect _pageRectForStage(Size stageSize) {
+    final availableWidth = math.max(
+      1.0,
+      stageSize.width - widget.pagePadding.horizontal,
+    );
+    final availableHeight = math.max(
+      1.0,
+      stageSize.height - widget.pagePadding.vertical,
+    );
+    final pageWidth = math.min(
+      availableWidth,
+      availableHeight * widget.metrics.aspectRatio,
+    );
+    final pageHeight = pageWidth / widget.metrics.aspectRatio;
+    final left = (stageSize.width - pageWidth) / 2;
+    final minTop = widget.pagePadding.top;
+    final maxTop = math.max(
+      minTop,
+      stageSize.height - widget.pagePadding.bottom - pageHeight,
+    );
+    final preferredTop = (stageSize.height - pageHeight) / 2;
+    final top = preferredTop.clamp(minTop, maxTop).toDouble();
+    return Rect.fromLTWH(left, top, pageWidth, pageHeight);
+  }
+
+  Widget _buildPageSurfaceWidget(
+    BuildContext context,
+    int index,
+    Size pageSize,
+  ) {
+    final page = widget.pages[index];
+    return ArticlePageShell(
+      template: widget.template,
+      fontPreset: widget.fontPreset,
+      pageIndex: index,
+      totalPages: widget.pages.length,
+      aspectRatio: widget.metrics.aspectRatio,
+      outerPadding: widget.metrics.outerPadding,
+      contentPadding: widget.metrics.contentPadding,
+      headerReservedHeight: widget.metrics.headerReservedHeight,
+      footerReservedHeight: widget.metrics.footerReservedHeight,
+      variant: ArticlePageShellVariant.readerSheet,
+      showIndicator: false,
+      footerLabel: '${index + 1}/${widget.pages.length}',
+      child: index == 0 && widget.coverUrl.trim().isNotEmpty
+          ? ArticleFrontispieceView(
+              page: page,
+              template: widget.template,
+              fontPreset: widget.fontPreset,
+              coverUrl: widget.coverUrl.trim(),
+            )
+          : ArticlePageReadOnlyView(
+              page: page,
+              template: widget.template,
+              fontPreset: widget.fontPreset,
+              metrics: widget.metrics,
+            ),
+    );
+  }
+
+  Widget _buildReaderPage(BuildContext context, int index, Size pageSize) {
+    return SizedBox(
+      width: pageSize.width,
+      height: pageSize.height,
+      child: RepaintBoundary(
+        child: _buildPageSurfaceWidget(context, index, pageSize),
+      ),
+    );
+  }
+
+  Widget _buildMirroredReaderPage(
+    BuildContext context,
+    int index,
+    Size pageSize,
+  ) {
+    return Transform.flip(
+      flipX: true,
+      child: SizedBox(
+        width: pageSize.width,
+        height: pageSize.height,
+        child: _buildPageSurfaceWidget(context, index, pageSize),
+      ),
+    );
+  }
+
+  Widget _buildFlippingSurfaceOverlay({
+    required ArticleTemplatePalette palette,
+    required StPageFlipDirection direction,
+    required double progress,
+    required bool showBackside,
+  }) {
+    final settledProgress = progress.clamp(0.0, 1.0).toDouble();
+    final lift = Curves.easeOutCubic.transform(settledProgress);
+    final edgeAlignment = direction == StPageFlipDirection.forward
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
+    final oppositeEdge = direction == StPageFlipDirection.forward
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final shadowColor = palette.shadowColor.withValues(
+      alpha: (showBackside ? 0.06 : 0.12) + (lift * 0.08),
+    );
+    final tunnelAlpha = (showBackside ? 0.06 : 0.08) + (lift * 0.06);
+    final tunnelColor = AppColors.black.withValues(
+      alpha: tunnelAlpha.clamp(0.0, 1.0).toDouble(),
+    );
+    final highlightColor = AppColors.white.withValues(
+      alpha: (showBackside ? 0.08 : 0.14) + (lift * 0.08),
+    );
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  AppColors.white.withValues(alpha: showBackside ? 0.1 : 0.16),
+                  AppColors.transparent,
+                  tunnelColor,
+                ],
+                stops: const <double>[0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: edgeAlignment,
+                end: oppositeEdge,
+                colors: <Color>[
+                  shadowColor,
+                  palette.paperBorderColor.withValues(
+                    alpha: 0.08 + lift * 0.06,
+                  ),
+                  AppColors.transparent,
+                ],
+                stops: const <double>[0.0, 0.28, 0.9],
+              ),
+            ),
+          ),
+          Align(
+            alignment: edgeAlignment,
+            child: FractionallySizedBox(
+              widthFactor: (showBackside ? 0.12 : 0.08) + (lift * 0.04),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: edgeAlignment,
+                    end: oppositeEdge,
+                    colors: <Color>[highlightColor, AppColors.transparent],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoftFlippingPageSurface({
+    required BuildContext context,
+    required int pageIndex,
+    required Size pageSize,
+    required StPageFlipDirection direction,
+    required double progress,
+  }) {
+    final palette = resolveArticleTemplatePalette(context, widget.template);
+    // 前翻：翻过 8% 后显示背面（镜像内容），模拟纸张翻转后看到背面。
+    // 后翻：始终显示正面——后翻展示的是上一页的正面内容。
+    final showBackside =
+        direction == StPageFlipDirection.forward && progress > 0.08;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
+        if (showBackside)
+          _buildCachedPageSurface(
+            context,
+            pageIndex,
+            pageSize,
+            kind: _ArticlePageSurfaceKind.back,
+          ),
+        if (!showBackside)
+          _buildCachedPageSurface(
+            context,
+            pageIndex,
+            pageSize,
+            kind: _ArticlePageSurfaceKind.front,
+          ),
+        _buildFlippingSurfaceOverlay(
+          palette: palette,
+          direction: direction,
+          progress: progress,
+          showBackside: showBackside,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomProjectedPageSurface({
+    required BuildContext context,
+    required int pageIndex,
+    required Size pageSize,
+    required StPageFlipDirection direction,
+    StPageFlipShadowData? shadow,
+  }) {
+    final palette = resolveArticleTemplatePalette(context, widget.template);
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        _buildCachedPageSurface(
+          context,
+          pageIndex,
+          pageSize,
+          kind: _ArticlePageSurfaceKind.bottom,
+        ),
+        if (shadow != null)
+          _buildBottomPageProjectionOverlay(
+            shadow: shadow,
+            direction: direction,
+            pageSize: pageSize,
+            palette: palette,
+          ),
+        IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  AppColors.white.withValues(alpha: 0.05),
+                  AppColors.transparent,
+                  palette.shadowColor.withValues(alpha: 0.03),
+                ],
+                stops: const <double>[0.0, 0.36, 1.0],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomPageProjectionOverlay({
+    required StPageFlipShadowData shadow,
+    required StPageFlipDirection direction,
+    required Size pageSize,
+    required ArticleTemplatePalette palette,
+  }) {
+    final edgeAlignment = direction == StPageFlipDirection.forward
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final oppositeEdge = direction == StPageFlipDirection.forward
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
+    final widthFactor =
+        (math.max(shadow.width, pageSize.width * 0.12) / pageSize.width)
+            .clamp(0.12, 0.72)
+            .toDouble();
+    return IgnorePointer(
+      child: Transform.rotate(
+        angle: shadow.angle * 0.18,
+        alignment: edgeAlignment,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Align(
+              alignment: edgeAlignment,
+              child: FractionallySizedBox(
+                widthFactor: widthFactor,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: edgeAlignment,
+                      end: oppositeEdge,
+                      colors: <Color>[
+                        AppColors.black.withValues(
+                          alpha: shadow.opacity * 0.26,
+                        ),
+                        palette.shadowColor.withValues(
+                          alpha: shadow.opacity * 0.14,
+                        ),
+                        AppColors.transparent,
+                      ],
+                      stops: const <double>[0.0, 0.32, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    AppColors.black.withValues(alpha: shadow.opacity * 0.03),
+                    AppColors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  _ArticlePageCurlCorner? _stageCornerForScene(StPageFlipScene scene) {
+    final direction = scene.direction;
+    final corner = scene.corner;
+    if (direction == null || corner == null || scene.calculation == null) {
+      return null;
+    }
+    return switch ((direction, corner)) {
+      (StPageFlipDirection.forward, StPageFlipCorner.top) =>
+        _ArticlePageCurlCorner.topRight,
+      (StPageFlipDirection.forward, StPageFlipCorner.bottom) =>
+        _ArticlePageCurlCorner.bottomRight,
+      (StPageFlipDirection.back, StPageFlipCorner.top) =>
+        _ArticlePageCurlCorner.topLeft,
+      (StPageFlipDirection.back, StPageFlipCorner.bottom) =>
+        _ArticlePageCurlCorner.bottomLeft,
+    };
+  }
+
+  List<Offset> _localPolygonFromArea({
+    required List<Offset> area,
+    required Offset anchor,
+    required double angle,
+    required StPageFlipDirection direction,
+  }) {
+    // 前翻和后翻用同样的变换：相对于 anchor 平移 + 旋转。
+    // 坐标镜像已经在 convertViewportPointToPage / convertBookPointToViewport
+    // 层完成，这里不需要再做 X 轴镜像。
+    return area
+        .map((point) {
+          final translated =
+              Offset(point.dx - anchor.dx, point.dy - anchor.dy);
+          return rotatePoint(translated, Offset.zero, angle);
+        })
+        .toList(growable: false);
+  }
+
+  Widget _buildStaticBookPage(BuildContext context, int pageIndex, Rect rect) {
+    return Positioned.fromRect(
+      rect: rect,
+      child: _buildCachedPageSurface(
+        context,
+        pageIndex,
+        rect.size,
+        kind: _ArticlePageSurfaceKind.front,
+      ),
+    );
+  }
+
+  Widget _buildSoftPageLayer({
+    required BuildContext context,
+    required int pageIndex,
+    required Size pageSize,
+    required List<Offset> area,
+    required Offset anchor,
+    required double angle,
+    required StPageFlipDirection direction,
+    required StPageFlipBoundsRect bounds,
+    bool isFlippingPage = false,
+    double progress = 0,
+    StPageFlipShadowData? projectedShadow,
+  }) {
+    final polygon = _localPolygonFromArea(
+      area: area,
+      anchor: anchor,
+      angle: angle,
+      direction: direction,
+    );
+    final position = convertBookPointToViewport(
+      anchor,
+      bounds,
+      direction: direction,
+    );
+    return Positioned(
+      left: position.dx,
+      top: position.dy,
+      width: pageSize.width,
+      height: pageSize.height,
+      child: Transform.rotate(
+        angle: angle,
+        alignment: Alignment.topLeft,
+        child: ClipPath(
+          clipper: _ArticlePolygonClipper(polygon),
+          child: isFlippingPage
+              ? _buildSoftFlippingPageSurface(
+                  context: context,
+                  pageIndex: pageIndex,
+                  pageSize: pageSize,
+                  direction: direction,
+                  progress: progress,
+                )
+              : _buildBottomProjectedPageSurface(
+                  context: context,
+                  pageIndex: pageIndex,
+                  pageSize: pageSize,
+                  direction: direction,
+                  shadow: projectedShadow,
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHardFlippingPageLayer({
+    required BuildContext context,
+    required int pageIndex,
+    required Size pageSize,
+    required StPageFlipScene scene,
+    required StPageFlipDirection direction,
+  }) {
+    final progress = scene.calculation?.getFlippingProgress() ?? 0;
+    final hardAngle = direction == StPageFlipDirection.forward
+        ? (90 * (200 - progress * 2)) / 100
+        : (-90 * (200 - progress * 2)) / 100;
+    final isRightPage =
+        !(direction == StPageFlipDirection.forward &&
+            scene.layout.orientation != StPageFlipOrientation.portrait);
+    final pageRect = resolveBookPageRect(
+      scene.layout,
+      isRightPage: isRightPage,
+    );
+    return Positioned.fromRect(
+      rect: pageRect,
+      child: Transform(
+        alignment: isRightPage ? Alignment.topLeft : Alignment.topRight,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.002)
+          ..rotateY(hardAngle * math.pi / 180),
+        child: _buildCachedPageSurface(
+          context,
+          pageIndex,
+          pageSize,
+          kind: _ArticlePageSurfaceKind.front,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDynamicPageLayer({
+    required BuildContext context,
+    required int pageIndex,
+    required Size pageSize,
+    required List<Offset> area,
+    required Offset anchor,
+    required double angle,
+    required StPageFlipScene scene,
+    required StPageFlipDirection direction,
+    required StPageFlipDensity density,
+    required bool isFlippingPage,
+  }) {
+    // hard density 页面走硬纸翻页路径（前翻和回翻均适用）。
+    if (density == StPageFlipDensity.hard && isFlippingPage) {
+      return _buildHardFlippingPageLayer(
+        context: context,
+        pageIndex: pageIndex,
+        pageSize: pageSize,
+        scene: scene,
+        direction: direction,
+      );
+    }
+    return _buildSoftPageLayer(
+      context: context,
+      pageIndex: pageIndex,
+      pageSize: pageSize,
+      area: area,
+      anchor: anchor,
+      angle: angle,
+      direction: direction,
+      bounds: scene.layout.bounds,
+      isFlippingPage: isFlippingPage,
+      progress: ((scene.calculation?.getFlippingProgress() ?? 0) / 100)
+          .clamp(0.0, 1.0)
+          .toDouble(),
+      projectedShadow: isFlippingPage ? null : scene.shadow,
+    );
+  }
+
+  Widget _buildHotzoneMarkers(StPageFlipScene scene, Size stageSize) {
+    const hotzoneExtent = 88.0;
+    final rightPageRect = resolveBookPageRect(scene.layout, isRightPage: true);
+    final leftAnchorRect =
+        scene.layout.orientation == StPageFlipOrientation.portrait
+        ? rightPageRect
+        : resolveBookPageRect(scene.layout, isRightPage: false);
+    final markerOffsets = <_ArticlePageCurlCorner, Offset>{
+      _ArticlePageCurlCorner.topLeft: Offset(
+        leftAnchorRect.left
+            .clamp(0.0, math.max(0.0, stageSize.width - hotzoneExtent))
+            .toDouble(),
+        leftAnchorRect.top
+            .clamp(0.0, math.max(0.0, stageSize.height - hotzoneExtent))
+            .toDouble(),
+      ),
+      _ArticlePageCurlCorner.topRight: Offset(
+        (rightPageRect.right - hotzoneExtent)
+            .clamp(0.0, math.max(0.0, stageSize.width - hotzoneExtent))
+            .toDouble(),
+        rightPageRect.top
+            .clamp(0.0, math.max(0.0, stageSize.height - hotzoneExtent))
+            .toDouble(),
+      ),
+      _ArticlePageCurlCorner.bottomLeft: Offset(
+        leftAnchorRect.left
+            .clamp(0.0, math.max(0.0, stageSize.width - hotzoneExtent))
+            .toDouble(),
+        (leftAnchorRect.bottom - hotzoneExtent)
+            .clamp(0.0, math.max(0.0, stageSize.height - hotzoneExtent))
+            .toDouble(),
+      ),
+      _ArticlePageCurlCorner.bottomRight: Offset(
+        (rightPageRect.right - hotzoneExtent)
+            .clamp(0.0, math.max(0.0, stageSize.width - hotzoneExtent))
+            .toDouble(),
+        (rightPageRect.bottom - hotzoneExtent)
+            .clamp(0.0, math.max(0.0, stageSize.height - hotzoneExtent))
+            .toDouble(),
+      ),
+    };
+    return Stack(
+      children: markerOffsets.entries
+          .map((entry) {
+            final hotzoneRect = Rect.fromLTWH(
+              entry.value.dx,
+              entry.value.dy,
+              hotzoneExtent,
+              hotzoneExtent,
+            );
+            return Positioned(
+              left: hotzoneRect.left,
+              top: hotzoneRect.top,
+              width: hotzoneRect.width,
+              height: hotzoneRect.height,
+              child: IgnorePointer(
+                child: SizedBox.expand(key: _hotzoneKey(entry.key)),
+              ),
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildDegradedReaderStage(BuildContext context, Rect pageRect) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        CustomPaint(
+          painter: _ArticleReaderStagePainter(
+            palette: resolveArticleTemplatePalette(context, widget.template),
+            pageRect: pageRect,
+            pageCount: widget.pages.length,
+          ),
+        ),
         NotificationListener<ScrollNotification>(
           onNotification: _handleScrollNotification,
           child: PageView.builder(
-            key: _useDegradedPager ? TestKeys.articleBookStylePager : null,
+            key: TestKeys.articleBookStylePager,
             controller: _pageController,
             itemCount: widget.pages.length,
             onPageChanged: (index) {
@@ -740,112 +2508,208 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
               widget.onPageChanged?.call(index);
             },
             itemBuilder: (context, index) {
-              final page = widget.pages[index];
-              return Padding(
-                padding: widget.pagePadding,
-                child: ArticlePageShell(
-                  template: widget.template,
-                  fontPreset: widget.fontPreset,
-                  pageIndex: index,
-                  totalPages: widget.pages.length,
-                  aspectRatio: widget.metrics.aspectRatio,
-                  contentPadding: widget.metrics.contentPadding,
-                  showIndicator: false,
-                  child: index == 0 && widget.coverUrl.trim().isNotEmpty
-                      ? ArticleFrontispieceView(
-                          page: page,
-                          template: widget.template,
-                          fontPreset: widget.fontPreset,
-                          coverUrl: widget.coverUrl.trim(),
-                        )
-                      : ArticlePageReadOnlyView(
-                          page: page,
-                          template: widget.template,
-                          fontPreset: widget.fontPreset,
-                        ),
+              return Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: EdgeInsets.only(top: pageRect.top),
+                  child: _buildReaderPage(context, index, pageRect.size),
                 ),
               );
             },
           ),
         ),
-        if (_useDegradedPager)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _ArticleBookStylePagerHintPainter(
-                  resolveArticleTemplatePalette(context, widget.template),
-                ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _ArticleBookStylePagerHintPainter(
+                resolveArticleTemplatePalette(context, widget.template),
               ),
             ),
           ),
-        if (_showsPageCurl)
-          Positioned.fill(
-            key: TestKeys.articlePageCurlLayer,
-            child: Stack(
-              children: <Widget>[
-                for (final corner in _ArticlePageCurlCorner.values)
-                  Positioned(
-                    top:
-                        corner == _ArticlePageCurlCorner.topLeft ||
-                            corner == _ArticlePageCurlCorner.topRight
-                        ? 0
-                        : null,
-                    bottom:
-                        corner == _ArticlePageCurlCorner.bottomLeft ||
-                            corner == _ArticlePageCurlCorner.bottomRight
-                        ? 0
-                        : null,
-                    left:
-                        corner == _ArticlePageCurlCorner.topLeft ||
-                            corner == _ArticlePageCurlCorner.bottomLeft
-                        ? 0
-                        : null,
-                    right:
-                        corner == _ArticlePageCurlCorner.topRight ||
-                            corner == _ArticlePageCurlCorner.bottomRight
-                        ? 0
-                        : null,
-                    width: pageCurlHotzoneExtent,
-                    height: pageCurlHotzoneExtent,
-                    child: GestureDetector(
-                      key: _hotzoneKey(corner),
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: (details) => _beginCurl(corner, details),
-                      onPanUpdate: _updateCurl,
-                      onPanEnd: _endCurl,
-                      onPanCancel: () {
-                        final activeCorner = _activeCurlCorner;
-                        if (activeCorner != null) {
-                          _emitPageCurlAbort(activeCorner);
-                        }
-                        _resetCurl();
-                      },
-                    ),
-                  ),
-                if (_activeCurlCorner != null && _curlProgress > 0)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _ArticlePageCurlPainter(
-                          palette: resolveArticleTemplatePalette(
-                            context,
-                            widget.template,
-                          ),
-                          corner: _activeCurlCorner!,
-                          progress: _curlProgress,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildInteractiveReaderStage(BuildContext context, Size stageSize) {
+    _configurePageFlipController(stageSize);
+    final scene = _pageFlipScene;
+    if (scene == null) {
+      return const SizedBox.shrink();
+    }
+    final pageSize = Size(
+      scene.layout.bounds.pageWidth,
+      scene.layout.bounds.height,
+    );
+    final bookRect = scene.layout.bounds.rect;
+    final calculation = scene.calculation;
+    final progress = ((calculation?.getFlippingProgress() ?? 0) / 100)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    _queuePageTextureSnapshots(<int>{
+      scene.currentPageIndex,
+      scene.currentPageIndex - 1,
+      scene.currentPageIndex + 1,
+    });
+    final highFidelityScene = _tryBuildHighFidelityRenderScene(
+      context,
+      scene,
+      stageSize,
+      pageSize,
+    );
+    final activeBinding = _activeTextureSession?.binding;
+    final highFidelityRenderedPages = highFidelityScene == null
+        ? const <int>{}
+        : (activeBinding?.requiredPageIndices ?? const <int>{});
+    final layers = <Widget>[
+      RepaintBoundary(
+        child: CustomPaint(
+          painter: _ArticleReaderStagePainter(
+            palette: resolveArticleTemplatePalette(context, widget.template),
+            pageRect: bookRect,
+            pageCount: widget.pages.length,
+            activeCorner: _stageCornerForScene(scene),
+            progress: progress,
+          ),
+        ),
+      ),
+    ];
+
+    final leftPageIndex = scene.visibleSpread.leftPageIndex;
+    final rightPageIndex = scene.visibleSpread.rightPageIndex;
+    if (leftPageIndex != null &&
+        !highFidelityRenderedPages.contains(leftPageIndex)) {
+      layers.add(
+        _buildStaticBookPage(
+          context,
+          leftPageIndex,
+          resolveBookPageRect(scene.layout, isRightPage: false),
+        ),
+      );
+    }
+    if (rightPageIndex != null &&
+        !highFidelityRenderedPages.contains(rightPageIndex)) {
+      layers.add(
+        _buildStaticBookPage(
+          context,
+          rightPageIndex,
+          resolveBookPageRect(scene.layout, isRightPage: true),
+        ),
+      );
+    }
+
+    final direction = scene.direction;
+    if (highFidelityScene != null) {
+      layers.add(
+        Positioned.fill(
+          child: ArticlePageCurlRenderer(
+            scene: highFidelityScene,
+            lightingProgram: _lightingShaderProgram,
+            backfaceProgram: _backfaceShaderProgram,
+          ),
+        ),
+      );
+    } else {
+      if (calculation != null &&
+          direction != null &&
+          scene.bottomPageIndex != null) {
+        layers.add(
+          _buildDynamicPageLayer(
+            context: context,
+            pageIndex: scene.bottomPageIndex!,
+            pageSize: pageSize,
+            area: calculation.getBottomClipArea(),
+            anchor: calculation.getBottomPagePosition(),
+            angle: 0,
+            scene: scene,
+            direction: direction,
+            density:
+                scene.flippingPageDensity ??
+                scene.bottomPageDensity ??
+                StPageFlipDensity.soft,
+            isFlippingPage: false,
+          ),
+        );
+      }
+
+      if (calculation != null &&
+          direction != null &&
+          scene.flippingPageIndex != null) {
+        layers.add(
+          _buildDynamicPageLayer(
+            context: context,
+            pageIndex: scene.flippingPageIndex!,
+            pageSize: pageSize,
+            area: calculation.getFlippingClipArea(),
+            anchor: calculation.getActiveCorner(),
+            angle: calculation.getAngle(),
+            scene: scene,
+            direction: direction,
+            density: scene.flippingPageDensity ?? StPageFlipDensity.soft,
+            isFlippingPage: true,
+          ),
+        );
+      }
+    }
+
+    layers.add(
+      Positioned.fill(
+        key: TestKeys.articlePageCurlLayer,
+        child: _buildHotzoneMarkers(scene, stageSize),
+      ),
+    );
+    if (_pendingTexturePages.isNotEmpty) {
+      layers.add(
+        Positioned.fill(
+          child: _buildPageTextureCaptureLayer(context, pageSize),
+        ),
+      );
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handleStagePointerDown,
+      onPointerMove: _handleStagePointerMove,
+      onPointerUp: _handleStagePointerUp,
+      onPointerCancel: _handleStagePointerCancel,
+      child: MouseRegion(
+        onHover: _handleStageMouseHover,
+        onExit: _handleStageMouseExit,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapUp: _handleStageTapUp,
+          onPanStart: (details) => _handleStagePanStart(details.localPosition),
+          onPanUpdate: (details) =>
+              _handleStagePanUpdate(details.localPosition, details.delta),
+          onPanCancel: _handleStagePanCancel,
+          onPanEnd: (details) => _handleStagePanEnd(details.velocity),
+          child: Stack(fit: StackFit.expand, children: layers),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stageSize = Size(
+          constraints.maxWidth.isFinite ? constraints.maxWidth : 1,
+          constraints.maxHeight.isFinite ? constraints.maxHeight : 1,
+        );
+        final pageRect = _pageRectForStage(stageSize);
+        if (_useDegradedPager) {
+          return _buildDegradedReaderStage(context, pageRect);
+        }
+        return _buildInteractiveReaderStage(context, stageSize);
+      },
     );
   }
 }
 
 enum _ArticlePageCurlCorner { topLeft, topRight, bottomLeft, bottomRight }
+
+enum _ArticlePageSurfaceKind { front, back, bottom }
 
 class ArticleTemplateThumbnail extends StatelessWidget {
   const ArticleTemplateThumbnail({
@@ -891,8 +2755,11 @@ class ArticleTemplateThumbnail extends StatelessWidget {
               pageIndex: 0,
               totalPages: 1,
               aspectRatio: 72 / 104,
+              outerPadding: const EdgeInsets.all(AppSpacing.two),
               showIndicator: false,
               contentPadding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+              headerReservedHeight: 0,
+              footerReservedHeight: 0,
               child: _TemplatePreviewFiller(
                 template: template,
                 fontPreset: fontPreset,
@@ -1091,6 +2958,273 @@ ArticleTemplatePalette resolveArticleTemplatePalette(
   }
 }
 
+/// 纸张质感 → 色板映射（替代 resolveArticleTemplatePalette）。
+ArticleTemplatePalette resolveArticlePaperPalette(
+  BuildContext context,
+  ArticlePaperTexture texture,
+) {
+  final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+
+  Color paper(Color light, Color dark) => isDark ? dark : light;
+  Color text(Color light, Color dark) => isDark ? dark : light;
+
+  switch (texture) {
+    case ArticlePaperTexture.white:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.whiteStageLight,
+          ArticlePaperPaletteColors.whiteStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.whitePaperLight,
+          ArticlePaperPaletteColors.whitePaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.whitePaperBorderLight,
+          ArticlePaperPaletteColors.whitePaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.whiteTextLight,
+          ArticlePaperPaletteColors.whiteTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.whiteSecondaryTextLight,
+          ArticlePaperPaletteColors.whiteSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.whiteAccentLight,
+          ArticlePaperPaletteColors.whiteAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.whiteBadgeBackgroundLight,
+          ArticlePaperPaletteColors.whiteBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.whiteBadgeTextLight,
+          ArticlePaperPaletteColors.whiteBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.whiteOverlayLight,
+          ArticlePaperPaletteColors.whiteOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.cream:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.creamStageLight,
+          ArticlePaperPaletteColors.creamStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.creamPaperLight,
+          ArticlePaperPaletteColors.creamPaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.creamPaperBorderLight,
+          ArticlePaperPaletteColors.creamPaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.creamTextLight,
+          ArticlePaperPaletteColors.creamTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.creamSecondaryTextLight,
+          ArticlePaperPaletteColors.creamSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.creamAccentLight,
+          ArticlePaperPaletteColors.creamAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.creamBadgeBackgroundLight,
+          ArticlePaperPaletteColors.creamBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.creamBadgeTextLight,
+          ArticlePaperPaletteColors.creamBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.09),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.creamOverlayLight,
+          ArticlePaperPaletteColors.creamOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.sepia:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.sepiaStageLight,
+          ArticlePaperPaletteColors.sepiaStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.sepiaPaperLight,
+          ArticlePaperPaletteColors.sepiaPaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.sepiaPaperBorderLight,
+          ArticlePaperPaletteColors.sepiaPaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.sepiaTextLight,
+          ArticlePaperPaletteColors.sepiaTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.sepiaSecondaryTextLight,
+          ArticlePaperPaletteColors.sepiaSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.sepiaAccentLight,
+          ArticlePaperPaletteColors.sepiaAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.sepiaBadgeBackgroundLight,
+          ArticlePaperPaletteColors.sepiaBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.sepiaBadgeTextLight,
+          ArticlePaperPaletteColors.sepiaBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.10),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.sepiaOverlayLight,
+          ArticlePaperPaletteColors.sepiaOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.parchment:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.parchmentStageLight,
+          ArticlePaperPaletteColors.parchmentStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.parchmentPaperLight,
+          ArticlePaperPaletteColors.parchmentPaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.parchmentPaperBorderLight,
+          ArticlePaperPaletteColors.parchmentPaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.parchmentTextLight,
+          ArticlePaperPaletteColors.parchmentTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.parchmentSecondaryTextLight,
+          ArticlePaperPaletteColors.parchmentSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.parchmentAccentLight,
+          ArticlePaperPaletteColors.parchmentAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.parchmentBadgeBackgroundLight,
+          ArticlePaperPaletteColors.parchmentBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.parchmentBadgeTextLight,
+          ArticlePaperPaletteColors.parchmentBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.12),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.parchmentOverlayLight,
+          ArticlePaperPaletteColors.parchmentOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.eyeCare:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.eyeCareStageLight,
+          ArticlePaperPaletteColors.eyeCareStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.eyeCarePaperLight,
+          ArticlePaperPaletteColors.eyeCarePaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.eyeCarePaperBorderLight,
+          ArticlePaperPaletteColors.eyeCarePaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.eyeCareTextLight,
+          ArticlePaperPaletteColors.eyeCareTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.eyeCareSecondaryTextLight,
+          ArticlePaperPaletteColors.eyeCareSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.eyeCareAccentLight,
+          ArticlePaperPaletteColors.eyeCareAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.eyeCareBadgeBackgroundLight,
+          ArticlePaperPaletteColors.eyeCareBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.eyeCareBadgeTextLight,
+          ArticlePaperPaletteColors.eyeCareBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.eyeCareOverlayLight,
+          ArticlePaperPaletteColors.eyeCareOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.quiet:
+      return ArticleTemplatePalette(
+        stageBackground: paper(
+          ArticlePaperPaletteColors.quietStageLight,
+          ArticlePaperPaletteColors.quietStageDark,
+        ),
+        paperColor: paper(
+          ArticlePaperPaletteColors.quietPaperLight,
+          ArticlePaperPaletteColors.quietPaperDark,
+        ),
+        paperBorderColor: paper(
+          ArticlePaperPaletteColors.quietPaperBorderLight,
+          ArticlePaperPaletteColors.quietPaperBorderDark,
+        ),
+        textColor: text(
+          ArticlePaperPaletteColors.quietTextLight,
+          ArticlePaperPaletteColors.quietTextDark,
+        ),
+        secondaryTextColor: text(
+          ArticlePaperPaletteColors.quietSecondaryTextLight,
+          ArticlePaperPaletteColors.quietSecondaryTextDark,
+        ),
+        accentColor: text(
+          ArticlePaperPaletteColors.quietAccentLight,
+          ArticlePaperPaletteColors.quietAccentDark,
+        ),
+        badgeBackground: paper(
+          ArticlePaperPaletteColors.quietBadgeBackgroundLight,
+          ArticlePaperPaletteColors.quietBadgeBackgroundDark,
+        ),
+        badgeTextColor: text(
+          ArticlePaperPaletteColors.quietBadgeTextLight,
+          ArticlePaperPaletteColors.quietBadgeTextDark,
+        ),
+        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
+        overlayColor: paper(
+          ArticlePaperPaletteColors.quietOverlayLight,
+          ArticlePaperPaletteColors.quietOverlayDark,
+        ),
+      );
+    case ArticlePaperTexture.night:
+      return ArticleTemplatePalette(
+        stageBackground: ArticlePaperPaletteColors.nightStage,
+        paperColor: ArticlePaperPaletteColors.nightPaper,
+        paperBorderColor: ArticlePaperPaletteColors.nightPaperBorder,
+        textColor: ArticlePaperPaletteColors.nightText,
+        secondaryTextColor: ArticlePaperPaletteColors.nightSecondaryText,
+        accentColor: ArticlePaperPaletteColors.nightAccent,
+        badgeBackground: ArticlePaperPaletteColors.nightBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.nightBadgeText,
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
+        overlayColor: ArticlePaperPaletteColors.nightOverlay,
+      );
+  }
+}
+
 @immutable
 class ArticleTypographySpec {
   const ArticleTypographySpec({
@@ -1159,10 +3293,7 @@ ArticleTypographySpec resolveArticleTypography(
       weight: AppTypography.semiBold,
       height: AppSpacing.textLineHeightHeadline,
     ),
-    bodyStyle: base(
-      size: AppTypography.base,
-      height: AppSpacing.textLineHeightArticleBody,
-    ),
+    bodyStyle: base(size: AppTypography.base, height: articleBodyLineHeight()),
     captionStyle: base(
       size: AppTypography.xs,
       weight: AppTypography.medium,
@@ -1171,7 +3302,80 @@ ArticleTypographySpec resolveArticleTypography(
     ),
     placeholderStyle: base(
       size: AppTypography.base,
-      height: AppSpacing.textLineHeightArticleBody,
+      height: articleBodyLineHeight(),
+      color: palette.secondaryTextColor.withValues(alpha: 0.72),
+    ),
+    badgeStyle: base(
+      size: AppTypography.xs,
+      weight: AppTypography.semiBold,
+      height: AppSpacing.textLineHeightCompact,
+      color: palette.badgeTextColor,
+    ),
+  );
+}
+
+/// 基于纸张质感的排版规格（替代 resolveArticleTypography）。
+ArticleTypographySpec resolveArticleTypographyForPaper(
+  BuildContext context,
+  ArticlePaperTexture texture,
+  ArticleFontPreset fontPreset,
+) {
+  final palette = resolveArticlePaperPalette(context, texture);
+
+  TextStyle base({
+    required double size,
+    FontWeight weight = FontWeight.normal,
+    double height = 1.7,
+    Color? color,
+  }) {
+    final fallback = switch (fontPreset) {
+      ArticleFontPreset.classic => const <String>[
+        'STSong',
+        'Songti SC',
+        'Noto Serif CJK SC',
+      ],
+      ArticleFontPreset.handwritten => const <String>['STKaiti', 'Kaiti SC'],
+      ArticleFontPreset.rounded => const <String>[
+        'PingFang SC',
+        'SF Pro Rounded',
+      ],
+      ArticleFontPreset.mono => const <String>['Menlo', 'Monaco'],
+      ArticleFontPreset.clean => const <String>['PingFang SC'],
+    };
+
+    return TextStyle(
+      color: color ?? palette.textColor,
+      fontSize: size,
+      fontWeight: weight,
+      height: height,
+      letterSpacing: fontPreset == ArticleFontPreset.mono ? 0.15 : 0.05,
+      fontFamily: switch (fontPreset) {
+        ArticleFontPreset.classic => 'Songti SC',
+        ArticleFontPreset.handwritten => 'Kaiti SC',
+        ArticleFontPreset.rounded => 'SF Pro Rounded',
+        ArticleFontPreset.mono => 'Menlo',
+        ArticleFontPreset.clean => null,
+      },
+      fontFamilyFallback: fallback,
+    );
+  }
+
+  return ArticleTypographySpec(
+    titleStyle: base(
+      size: AppTypography.xl,
+      weight: AppTypography.semiBold,
+      height: AppSpacing.textLineHeightHeadline,
+    ),
+    bodyStyle: base(size: AppTypography.base, height: articleBodyLineHeight()),
+    captionStyle: base(
+      size: AppTypography.xs,
+      weight: AppTypography.medium,
+      height: AppSpacing.textLineHeightLabel,
+      color: palette.secondaryTextColor,
+    ),
+    placeholderStyle: base(
+      size: AppTypography.base,
+      height: articleBodyLineHeight(),
       color: palette.secondaryTextColor.withValues(alpha: 0.72),
     ),
     badgeStyle: base(
@@ -1497,103 +3701,284 @@ class _ArticleBookChromePainter extends CustomPainter {
   }
 }
 
-class _ArticlePageCurlPainter extends CustomPainter {
-  const _ArticlePageCurlPainter({
+class _ArticlePolygonClipper extends CustomClipper<Path> {
+  const _ArticlePolygonClipper(this.points);
+
+  final List<Offset> points;
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    if (points.isEmpty) {
+      return path;
+    }
+    path.moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _ArticlePolygonClipper oldClipper) {
+    if (identical(points, oldClipper.points)) {
+      return false;
+    }
+    if (points.length != oldClipper.points.length) {
+      return true;
+    }
+    for (var index = 0; index < points.length; index += 1) {
+      if (points[index] != oldClipper.points[index]) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/// 后翻降级路径用的水平裁剪器：从左边缘向右展开 [revealWidth] 宽度。
+/// 后翻降级路径的圆筒卷曲模拟。
+///
+/// 将 [child]（翻页内容）切成 [_sliceCount] 条垂直切片，
+/// 每条切片根据它在 [ReverseFlipPose] 圆筒模型中的位置做：
+/// - 水平压缩（透视缩放）：圆筒背面的切片更窄
+/// - 水平偏移：模拟圆筒的 sin(θ) 投影
+/// - 明暗变化：圆筒背面更暗
+///
+/// 效果：页面先以卷曲圆筒形态从左边缘出现，然后逐渐展开铺平。
+/// 独立于父级动画 tick 的纹理截图层。
+///
+/// 父级 [ArticleReadOnlyBookDeck] 每帧 `setState` 驱动翻页动画，
+/// 如果截图层在同一个 build 树里，[RepaintBoundary] 会被反复标脏，
+/// `debugNeedsPaint` 永远为 true，`toImage()` 永远失败。
+///
+/// 这个 widget 用 [didUpdateWidget] + `listEquals` 判断 [capturePages]
+/// 是否真的变了，只在变化时才 rebuild 子树，让 [RepaintBoundary] 有机会
+/// 完成 paint 并被截图。
+class _StableTextureCaptureLayer extends StatefulWidget {
+  const _StableTextureCaptureLayer({
+    super.key,
+    required this.capturePages,
+    required this.pageSize,
+    required this.boundaryKeys,
+    required this.buildPage,
+  });
+
+  final List<int> capturePages;
+  final Size pageSize;
+  final Map<int, GlobalKey> boundaryKeys;
+  final Widget Function(int index) buildPage;
+
+  @override
+  State<_StableTextureCaptureLayer> createState() =>
+      _StableTextureCaptureLayerState();
+}
+
+class _StableTextureCaptureLayerState
+    extends State<_StableTextureCaptureLayer> {
+  late List<int> _capturePages;
+  late Map<int, Widget> _cachedWidgets;
+
+  @override
+  void initState() {
+    super.initState();
+    _capturePages = List<int>.of(widget.capturePages);
+    _rebuildCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StableTextureCaptureLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(widget.capturePages, _capturePages) ||
+        widget.pageSize != oldWidget.pageSize) {
+      _capturePages = List<int>.of(widget.capturePages);
+      _rebuildCache();
+    }
+    // 不调用 setState —— 只有 capturePages 真正变化时才重建。
+    // _cachedWidgets 保证 RepaintBoundary 子树在动画 tick 期间不被重建，
+    // 让 debugNeedsPaint 有机会变为 false，纹理截图才能成功。
+  }
+
+  void _rebuildCache() {
+    _cachedWidgets = {
+      for (final index in _capturePages) index: widget.buildPage(index),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: Opacity(
+          opacity: 0.001,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: widget.pageSize.width,
+              maxWidth: widget.pageSize.width,
+              minHeight: widget.pageSize.height,
+              maxHeight: widget.pageSize.height * _capturePages.length,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _capturePages
+                    .map((index) {
+                      return RepaintBoundary(
+                        key: widget.boundaryKeys[index],
+                        child: SizedBox(
+                          width: widget.pageSize.width,
+                          height: widget.pageSize.height,
+                          child: _cachedWidgets[index] ??
+                              const SizedBox.shrink(),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArticleReaderStagePainter extends CustomPainter {
+  const _ArticleReaderStagePainter({
     required this.palette,
-    required this.corner,
-    required this.progress,
+    required this.pageRect,
+    required this.pageCount,
+    this.activeCorner,
+    this.progress = 0,
   });
 
   final ArticleTemplatePalette palette;
-  final _ArticlePageCurlCorner corner;
+  final Rect pageRect;
+  final int pageCount;
+  final _ArticlePageCurlCorner? activeCorner;
   final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final isRight =
-        corner == _ArticlePageCurlCorner.topRight ||
-        corner == _ArticlePageCurlCorner.bottomRight;
-    final isBottom =
-        corner == _ArticlePageCurlCorner.bottomLeft ||
-        corner == _ArticlePageCurlCorner.bottomRight;
-    final foldWidth = lerpDouble(
-      22,
-      size.width * 0.5,
-      progress.clamp(0.0, 1.0),
+    final stageRect = Offset.zero & size;
+    final softenedDeskBase = Color.lerp(
+      palette.paperColor,
+      AppColors.worksBackground,
+      0.82,
     )!;
-    final foldHeight = lerpDouble(
-      22,
-      size.height * 0.44,
-      progress.clamp(0.0, 1.0),
-    )!;
-    final cornerX = isRight ? size.width : 0.0;
-    final cornerY = isBottom ? size.height : 0.0;
-    final foldRect = Rect.fromLTWH(
-      isRight ? size.width - foldWidth : 0,
-      isBottom ? size.height - foldHeight : 0,
-      foldWidth,
-      foldHeight,
+    final deskTop = Color.alphaBlend(
+      palette.stageBackground.withValues(alpha: 0.64),
+      softenedDeskBase,
     );
-
-    final shadowPath = Path()
-      ..moveTo(cornerX, cornerY)
-      ..lineTo(
-        isRight ? size.width - foldWidth * 0.9 : foldWidth * 0.9,
-        cornerY,
-      )
-      ..lineTo(
-        cornerX,
-        isBottom ? size.height - foldHeight * 0.9 : foldHeight * 0.9,
-      )
-      ..close();
-    final shadowPaint = Paint()
-      ..shader = RadialGradient(
-        center: Alignment(isRight ? 1 : -1, isBottom ? 1 : -1),
-        radius: 0.9,
+    final deskBottom = Color.alphaBlend(
+      palette.stageBackground.withValues(alpha: 0.58),
+      Color.lerp(softenedDeskBase, AppColors.worksDrawerBg, 0.28)!,
+    );
+    final stagePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
         colors: <Color>[
-          AppColors.black.withValues(alpha: 0.22 * progress),
-          AppColors.black.withValues(alpha: 0.05 * progress),
+          deskTop,
+          Color.alphaBlend(
+            palette.stageBackground.withValues(alpha: 0.5),
+            AppColors.iosSystemSurfaceDark,
+          ),
+          deskBottom,
+        ],
+        stops: const <double>[0.0, 0.52, 1.0],
+      ).createShader(stageRect);
+    canvas.drawRect(stageRect, stagePaint);
+
+    final haloPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0, -0.18),
+        radius: 0.92,
+        colors: <Color>[
+          AppColors.white.withValues(alpha: 0.05),
+          palette.paperColor.withValues(alpha: 0.03),
           AppColors.transparent,
         ],
-      ).createShader(foldRect.inflate(48));
-    canvas.drawPath(shadowPath, shadowPaint);
+      ).createShader(stageRect);
+    canvas.drawRect(stageRect, haloPaint);
 
-    final foldPath = Path()
-      ..moveTo(cornerX, cornerY)
-      ..lineTo(isRight ? size.width - foldWidth : foldWidth, cornerY)
-      ..lineTo(cornerX, isBottom ? size.height - foldHeight : foldHeight)
-      ..close();
-    final foldPaint = Paint()
-      ..shader = LinearGradient(
-        begin: isRight
-            ? (isBottom ? Alignment.bottomRight : Alignment.topRight)
-            : (isBottom ? Alignment.bottomLeft : Alignment.topLeft),
-        end: isRight
-            ? (isBottom ? Alignment.topLeft : Alignment.bottomLeft)
-            : (isBottom ? Alignment.topRight : Alignment.bottomRight),
-        colors: <Color>[
-          AppColors.white.withValues(alpha: 0.86),
-          palette.paperColor.withValues(alpha: 0.98),
-          palette.paperBorderColor.withValues(alpha: 0.72),
-        ],
-      ).createShader(foldRect);
-    canvas.drawPath(foldPath, foldPaint);
-
-    final creasePaint = Paint()
-      ..color = palette.paperBorderColor.withValues(alpha: 0.54)
-      ..strokeWidth = 1.1
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(
-      Offset(isRight ? size.width - foldWidth : foldWidth, cornerY),
-      Offset(cornerX, isBottom ? size.height - foldHeight : foldHeight),
-      creasePaint,
+    final stageSpec = resolveArticleReaderStageSpec();
+    final spineRect = Rect.fromCenter(
+      center: Offset(pageRect.center.dx, pageRect.center.dy),
+      width: stageSpec.spineShadowWidth,
+      height: pageRect.height + 32,
     );
+    final spinePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: <Color>[
+          AppColors.black.withValues(alpha: 0.03),
+          AppColors.black.withValues(alpha: 0.18 + progress * 0.08),
+          AppColors.iosProfileSurfaceLight.withValues(alpha: 0.06),
+          AppColors.transparent,
+        ],
+        stops: const <double>[0.0, 0.36, 0.72, 1.0],
+      ).createShader(spineRect);
+    canvas.drawRect(spineRect, spinePaint);
+
+    final stackPaint = Paint()
+      ..color = AppColors.iosProfileSurfaceLight.withValues(alpha: 0.14)
+      ..strokeWidth = 1;
+    final stackCount = math.min(pageCount, stageSpec.pageStackCount);
+    for (var index = 0; index < stackCount; index += 1) {
+      final inset = (index + 1) * stageSpec.pageStackSpacing;
+      final alpha = 0.16 - (index * 0.022);
+      stackPaint.color = AppColors.iosProfileSurfaceLight.withValues(
+        alpha: alpha.clamp(0.04, 0.16).toDouble(),
+      );
+      final leftX = pageRect.left - inset;
+      final rightX = pageRect.right + inset;
+      canvas.drawLine(
+        Offset(leftX, pageRect.top + 12),
+        Offset(leftX, pageRect.bottom - 12),
+        stackPaint,
+      );
+      canvas.drawLine(
+        Offset(rightX, pageRect.top + 12),
+        Offset(rightX, pageRect.bottom - 12),
+        stackPaint,
+      );
+    }
+
+    if (activeCorner != null && progress > 0) {
+      final isForward =
+          activeCorner == _ArticlePageCurlCorner.topRight ||
+          activeCorner == _ArticlePageCurlCorner.bottomRight;
+      final foldShadowRect = Rect.fromLTWH(
+        isForward ? pageRect.right - (pageRect.width * 0.32) : pageRect.left,
+        pageRect.top,
+        pageRect.width * 0.32,
+        pageRect.height,
+      );
+      final foldShadowPaint = Paint()
+        ..shader = LinearGradient(
+          begin: isForward ? Alignment.centerRight : Alignment.centerLeft,
+          end: isForward ? Alignment.centerLeft : Alignment.centerRight,
+          colors: <Color>[
+            AppColors.black.withValues(alpha: 0.14 * progress),
+            AppColors.black.withValues(alpha: 0.04 * progress),
+            AppColors.iosProfileSurfaceLight.withValues(alpha: 0.02 * progress),
+            AppColors.transparent,
+          ],
+        ).createShader(foldShadowRect);
+      canvas.drawRect(foldShadowRect, foldShadowPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _ArticlePageCurlPainter oldDelegate) {
+  bool shouldRepaint(covariant _ArticleReaderStagePainter oldDelegate) {
     return oldDelegate.palette != palette ||
-        oldDelegate.corner != corner ||
+        oldDelegate.pageRect != pageRect ||
+        oldDelegate.pageCount != pageCount ||
+        oldDelegate.activeCorner != activeCorner ||
         oldDelegate.progress != progress;
   }
 }
@@ -1687,44 +4072,6 @@ class _ArticlePageImage extends StatelessWidget {
         aspectRatio: aspectRatio,
         child: ArticleAdaptiveImage(imageUrl: imageUrl),
       ),
-    );
-  }
-}
-
-class _ArticleWrappedTextImage extends StatelessWidget {
-  const _ArticleWrappedTextImage({
-    required this.body,
-    required this.imageUrl,
-    required this.imageLayout,
-    required this.typography,
-  });
-
-  final String body;
-  final String imageUrl;
-  final String imageLayout;
-  final ArticleTypographySpec typography;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final imageWidth = math.min(132.0, constraints.maxWidth * 0.42);
-        final image = SizedBox(
-          width: imageWidth,
-          child: _ArticlePageImage(
-            imageUrl: imageUrl,
-            borderRadius: AppSpacing.radiusTwenty,
-            aspectRatio: 1,
-          ),
-        );
-        final text = Expanded(child: Text(body, style: typography.bodyStyle));
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: imageLayout == 'wrapRight'
-              ? <Widget>[text, SizedBox(width: AppSpacing.containerSm), image]
-              : <Widget>[image, SizedBox(width: AppSpacing.containerSm), text],
-        );
-      },
     );
   }
 }

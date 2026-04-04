@@ -1,0 +1,26 @@
+version: 1
+entity: EventRecord
+backend: mongodb
+
+collections:
+  event_records:
+    entity: EventRecord
+    indexes:
+      - { name: idx_event_event_id, keys: { eventId: 1 }, unique: true }
+      - { name: idx_event_type_name_time, keys: { eventType: 1, eventName: 1, occurredAt: -1 } }
+      - { name: idx_event_page_time, keys: { pageName: 1, occurredAt: -1 }, sparse: true }
+      - { name: idx_event_surface_route_time, keys: { surfaceId: 1, routeId: 1, occurredAt: -1 }, sparse: true }
+      - { name: idx_event_target_time, keys: { targetType: 1, targetKey: 1, occurredAt: -1 }, sparse: true }
+      - { name: idx_event_entity_time, keys: { entityType: 1, entityId: 1, occurredAt: -1 }, sparse: true }
+      - { name: idx_event_experiment_time, keys: { experimentBucket: 1, occurredAt: -1 }, sparse: true }
+      - { name: idx_event_session_time, keys: { sessionId: 1, occurredAt: -1 }, sparse: true }
+    ttl_index:
+      field: occurredAt
+      expire_after_seconds: 7776000
+      description: 统一事件明细 90 天热存保留
+
+redis_cache:
+  - key: "ops:event:summary:{eventType}:{eventName}:{dimension}:{window}"
+    ttl_seconds: 300
+    type: hash
+    description: 统一事件聚合摘要缓存

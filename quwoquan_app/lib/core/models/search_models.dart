@@ -1,4 +1,14 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show setEquals;
+
+/// 与集合迭代顺序无关的稳定 hash（用于 [SearchObjectSelection.hashCode]）。
+int _enumIndexSetHash<T extends Enum>(Set<T> values) {
+  if (values.isEmpty) {
+    return 0;
+  }
+  final indices = values.map((e) => e.index).toList()..sort();
+  return Object.hashAll(indices);
+}
 
 enum SearchScope {
   all,
@@ -218,16 +228,11 @@ class SearchObjectSelection {
     try {
       final params = Uri.splitQueryString(trimmed);
       final rawTargets = (params['targets'] ?? '').split(',');
-      final legacyHasChatRecords = rawTargets.any(
-        (value) => value.trim() == 'chat_records',
-      );
-      final targets = legacyHasChatRecords
-          ? const <SearchObjectTarget>{}
-          : rawTargets
-                .map(SearchObjectTarget.fromWire)
-                .whereType<SearchObjectTarget>()
-                .take(1)
-                .toSet();
+      final targets = rawTargets
+          .map(SearchObjectTarget.fromWire)
+          .whereType<SearchObjectTarget>()
+          .take(1)
+          .toSet();
       final contentTypes =
           ((params['content'] ?? '')
                   .split(',')
@@ -243,7 +248,7 @@ class SearchObjectSelection {
     }
   }
 
-  static SearchObjectSelection fromLegacyScope(SearchScope scope) {
+  static SearchObjectSelection fromSearchScope(SearchScope scope) {
     switch (scope) {
       case SearchScope.content:
         return const SearchObjectSelection();
@@ -261,6 +266,23 @@ class SearchObjectSelection {
         return const SearchObjectSelection();
     }
   }
+
+  /// Riverpod `family` 等场景：内容相同即同一键，避免父组件 rebuild 时重复创建 provider。
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is SearchObjectSelection &&
+        setEquals(targets, other.targets) &&
+        setEquals(contentTypes, other.contentTypes);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        _enumIndexSetHash(targets),
+        _enumIndexSetHash(contentTypes),
+      );
 }
 
 class SearchLaunchContext {
@@ -302,6 +324,33 @@ class SearchLaunchContext {
       initialNetworkTabId: initialNetworkTabId ?? this.initialNetworkTabId,
     );
   }
+
+  /// 与 [SearchObjectSelection] 一致：值相等则 `searchCoordinatorProvider` family 复用同一实例。
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is SearchLaunchContext &&
+        entrySurfaceId == other.entrySurfaceId &&
+        initialScope == other.initialScope &&
+        searchObjectSelection == other.searchObjectSelection &&
+        prefilledQuery == other.prefilledQuery &&
+        restoreState == other.restoreState &&
+        initialFacet == other.initialFacet &&
+        initialNetworkTabId == other.initialNetworkTabId;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        entrySurfaceId,
+        initialScope,
+        searchObjectSelection,
+        prefilledQuery,
+        restoreState,
+        initialFacet,
+        initialNetworkTabId,
+      );
 }
 
 class SearchConversationAnchorContext {

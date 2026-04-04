@@ -14,6 +14,7 @@ class AssistantApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'CreateRun': '/v1/assistant/runs',
     'CreateRunStream': '/v1/assistant/runs/stream',
+    'GetLearningOpsSummary': '/v1/assistant/ops/learning-summary',
     'GetPolicy': '/v1/assistant/policy',
     'GetSuggestedActions': '/v1/assistant/suggested-actions',
     'GrantSkillConsent': '/v1/assistant/skills/{skillId}/consent',
@@ -31,6 +32,7 @@ class AssistantApiMetadata {
   static const Map<String, String> operationToMethod = <String, String>{
     'CreateRun': 'POST',
     'CreateRunStream': 'POST',
+    'GetLearningOpsSummary': 'GET',
     'GetPolicy': 'GET',
     'GetSuggestedActions': 'GET',
     'GrantSkillConsent': 'POST',
@@ -47,6 +49,7 @@ class AssistantApiMetadata {
 
   static const String createRunOperation = 'CreateRun';
   static const String createRunStreamOperation = 'CreateRunStream';
+  static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getPolicyOperation = 'GetPolicy';
   static const String getSuggestedActionsOperation = 'GetSuggestedActions';
   static const String grantSkillConsentOperation = 'GrantSkillConsent';
@@ -62,6 +65,7 @@ class AssistantApiMetadata {
 
   static const String createRunPath = '/v1/assistant/runs';
   static const String createRunStreamPath = '/v1/assistant/runs/stream';
+  static const String getLearningOpsSummaryPath = '/v1/assistant/ops/learning-summary';
   static const String getPolicyPath = '/v1/assistant/policy';
   static const String getSuggestedActionsPath = '/v1/assistant/suggested-actions';
   static const String grantSkillConsentPathTemplate = '/v1/assistant/skills/{skillId}/consent';

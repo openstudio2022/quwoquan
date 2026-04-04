@@ -419,13 +419,13 @@ class RemoteHomepageRepository implements HomepageRepository {
   Map<String, String> _headersForSurface(
     AppUiSurface surface, {
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
   }) {
     return CloudRequestHeaders.forSurfaceOperation(
       surfaceId: surface.id,
       routeId: surface.routeId,
       operationId: operationId,
-      legacyPageId: legacyPageId,
+      clientPageId: clientPageId,
     );
   }
 
@@ -462,7 +462,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepagePicker,
         operationId: EntityApiMetadata.searchHomepagesOperation,
-        legacyPageId: EntityRequestPageIds.searchHomepages,
+        clientPageId: EntityRequestPageIds.searchHomepages,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(
@@ -484,7 +484,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageDetail,
         operationId: EntityApiMetadata.getHomepageDetailOperation,
-        legacyPageId: EntityRequestPageIds.getHomepageDetail,
+        clientPageId: EntityRequestPageIds.getHomepageDetail,
       ),
     );
     return HomepageDetail.fromMap(
@@ -505,7 +505,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageDetail,
         operationId: EntityApiMetadata.getHomepageShellOperation,
-        legacyPageId: EntityRequestPageIds.getHomepageShell,
+        clientPageId: EntityRequestPageIds.getHomepageShell,
       ),
     );
     return HomepageShellData.fromMap(
@@ -530,7 +530,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageDetail,
         operationId: EntityApiMetadata.getHomepageReviewSummaryOperation,
-        legacyPageId: EntityRequestPageIds.getHomepageReviewSummary,
+        clientPageId: EntityRequestPageIds.getHomepageReviewSummary,
       ),
     );
     return HomepageReviewSummaryData.fromMap(
@@ -555,7 +555,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageDetail,
         operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
-        legacyPageId: EntityRequestPageIds.getHomepageRelatedGroups,
+        clientPageId: EntityRequestPageIds.getHomepageRelatedGroups,
       ),
     );
     final object = CloudResponseDecoder.asObject(
@@ -583,7 +583,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepagePicker,
         operationId: EntityApiMetadata.intakeHomepageCandidateOperation,
-        legacyPageId: EntityRequestPageIds.intakeHomepageCandidate,
+        clientPageId: EntityRequestPageIds.intakeHomepageCandidate,
       ),
       body: draft.toMap(),
     );
@@ -607,7 +607,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.suggestHomepage,
         operationId: EntityApiMetadata.suggestHomepageCandidateOperation,
-        legacyPageId: EntityRequestPageIds.suggestHomepageCandidate,
+        clientPageId: EntityRequestPageIds.suggestHomepageCandidate,
       ),
       body: draft.toMap(),
     );
@@ -631,7 +631,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepagePicker,
         operationId: EntityApiMetadata.publishHomepageCandidateOperation,
-        legacyPageId: EntityRequestPageIds.publishHomepageCandidate,
+        clientPageId: EntityRequestPageIds.publishHomepageCandidate,
       ),
       body: const <String, dynamic>{},
     );
@@ -660,7 +660,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageClaim,
         operationId: EntityApiMetadata.createHomepageClaimRequestOperation,
-        legacyPageId: EntityRequestPageIds.createHomepageClaimRequest,
+        clientPageId: EntityRequestPageIds.createHomepageClaimRequest,
       ),
       body: draft.toMap(),
     );
@@ -692,7 +692,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageClaim,
         operationId: EntityApiMetadata.reviewHomepageClaimRequestOperation,
-        legacyPageId: EntityRequestPageIds.reviewHomepageClaimRequest,
+        clientPageId: EntityRequestPageIds.reviewHomepageClaimRequest,
       ),
       body: <String, dynamic>{
         'status': status,
@@ -725,7 +725,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageMaintenance,
         operationId: EntityApiMetadata.updateClaimedHomepageBasicsOperation,
-        legacyPageId: EntityRequestPageIds.updateClaimedHomepageBasics,
+        clientPageId: EntityRequestPageIds.updateClaimedHomepageBasics,
       ),
       body: draft.toMap(),
     );
@@ -754,7 +754,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageStatusReport,
         operationId: EntityApiMetadata.createHomepageStatusReportOperation,
-        legacyPageId: EntityRequestPageIds.createHomepageStatusReport,
+        clientPageId: EntityRequestPageIds.createHomepageStatusReport,
       ),
       body: draft.toMap(),
     );
@@ -786,7 +786,7 @@ class RemoteHomepageRepository implements HomepageRepository {
       headers: _headersForSurface(
         AppUiSurfaces.homepageStatusReport,
         operationId: EntityApiMetadata.reviewHomepageStatusReportOperation,
-        legacyPageId: EntityRequestPageIds.reviewHomepageStatusReport,
+        clientPageId: EntityRequestPageIds.reviewHomepageStatusReport,
       ),
       body: <String, dynamic>{
         'status': status,

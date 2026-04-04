@@ -1,25 +1,29 @@
 import 'package:quwoquan_app/assistant/sync/domain/assistant_sync_adapter.dart';
 import 'package:quwoquan_app/assistant/sync/domain/assistant_sync_mode.dart';
 import 'package:quwoquan_app/assistant/sync/domain/assistant_sync_models.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
-class CloudStubSyncAdapter implements AssistantSyncAdapter {
-  const CloudStubSyncAdapter();
+class RemoteAssistantSyncAdapter implements AssistantSyncAdapter {
+  const RemoteAssistantSyncAdapter({required AssistantRepository repository})
+    : _repository = repository;
+
+  final AssistantRepository _repository;
 
   @override
   Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   }) async {
+    final payload = await _repository.getPolicySnapshot(
+      policyVersionHint: policyVersionHint,
+    );
     return AssistantSyncResult(
-      success: true,
-      mode: AssistantSyncMode.cloudStub,
+      success: payload.isNotEmpty,
+      mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.policy,
-      message: 'Cloud stub policy placeholder returned.',
+      message: 'Remote assistant policy loaded.',
       payload: <String, dynamic>{
         'policyVersionHint': policyVersionHint,
-        'snapshot': <String, dynamic>{
-          'version': 'cloud_stub_v1',
-          'values': <String, dynamic>{},
-        },
+        'snapshot': payload,
       },
     );
   }
@@ -28,12 +32,13 @@ class CloudStubSyncAdapter implements AssistantSyncAdapter {
   Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   }) async {
+    final payload = await _repository.reportInteractionEvents(events: events);
     return AssistantSyncResult(
-      success: true,
-      mode: AssistantSyncMode.cloudStub,
+      success: payload['accepted'] != false,
+      mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.interactionEvents,
-      message: 'Cloud stub accepted interaction events placeholder.',
-      payload: <String, dynamic>{'count': events.length},
+      message: 'Remote assistant interaction events synced.',
+      payload: payload,
     );
   }
 
@@ -41,12 +46,13 @@ class CloudStubSyncAdapter implements AssistantSyncAdapter {
   Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   }) async {
+    final payload = await _repository.reportScorecards(scorecards: scorecards);
     return AssistantSyncResult(
-      success: true,
-      mode: AssistantSyncMode.cloudStub,
+      success: payload['accepted'] != false,
+      mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.scorecards,
-      message: 'Cloud stub accepted scorecards placeholder.',
-      payload: <String, dynamic>{'count': scorecards.length},
+      message: 'Remote assistant scorecards synced.',
+      payload: payload,
     );
   }
 
@@ -56,9 +62,9 @@ class CloudStubSyncAdapter implements AssistantSyncAdapter {
   }) async {
     return AssistantSyncResult(
       success: true,
-      mode: AssistantSyncMode.cloudStub,
+      mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.memoryRecords,
-      message: 'Cloud stub accepted memory records placeholder.',
+      message: 'Remote assistant memory records are server-managed.',
       payload: <String, dynamic>{'count': memoryRecords.length},
     );
   }

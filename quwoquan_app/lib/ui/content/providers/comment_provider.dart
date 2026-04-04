@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -52,17 +51,19 @@ class CommentState {
   }
 }
 
-class CommentNotifier extends StateNotifier<CommentState> {
-  final Ref _ref;
-  final ContentRepository _repo;
+class CommentNotifier extends Notifier<CommentState> {
+  CommentNotifier(this.postId);
+
   final String postId;
 
-  CommentNotifier(this._ref, this._repo, this.postId)
-    : super(const CommentState());
+  ContentRepository get _repo => ref.read(contentRepositoryProvider);
+
+  @override
+  CommentState build() => const CommentState();
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
-    final activeContext = await _ref.read(activePersonaContextProvider.future);
-    final mode = _ref.read(appDataSourceModeProvider);
+    final activeContext = await ref.read(activePersonaContextProvider.future);
+    final mode = ref.read(appDataSourceModeProvider);
     if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
@@ -135,7 +136,7 @@ class CommentNotifier extends StateNotifier<CommentState> {
     final activeContext = await _resolveActivePersonaContext();
     final resolvedProfileSubjectId = activeContext.profileSubjectId.isNotEmpty
         ? activeContext.profileSubjectId
-        : _ref.read(currentUserIdProvider);
+        : ref.read(currentUserIdProvider);
     final resolvedPersonaId = personaId ?? activeContext.subAccountId;
     final optimistic = CommentDto(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
@@ -240,8 +241,7 @@ class CommentNotifier extends StateNotifier<CommentState> {
   }
 }
 
-final commentProviderFamily = StateNotifierProvider.autoDispose
-    .family<CommentNotifier, CommentState, String>((ref, postId) {
-      final repo = ref.watch(contentRepositoryProvider);
-      return CommentNotifier(ref, repo, postId);
-    });
+final commentProviderFamily =
+    NotifierProvider.autoDispose.family<CommentNotifier, CommentState, String>(
+  CommentNotifier.new,
+);

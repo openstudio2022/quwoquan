@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +15,7 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 
 class GlobalTopActions extends StatelessWidget {
   const GlobalTopActions({
@@ -147,12 +150,25 @@ class _QuickActionSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return CreateActionSheet(
       onCreateAction: (action) => _openCreateAction(context, action),
+      onContinueFromDraft: () => _openContinueFromDraft(context),
       onStartGroupChat: () => _openStartGroupChat(context),
       onAddContact: () => _openAddContact(context),
       onCreateCircle: () => _openCreateCircle(context),
       onCancel: () => Navigator.of(context).pop(),
       priority: priority,
     );
+  }
+
+  void _openContinueFromDraft(BuildContext sheetContext) {
+    Navigator.of(sheetContext).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!rootContext.mounted) {
+        return;
+      }
+      unawaited(
+        presentCreateDraftPickerAndGo(rootContext, GoRouter.of(rootContext)),
+      );
+    });
   }
 
   void _openCreateAction(BuildContext sheetContext, EditorStartAction action) {

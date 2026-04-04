@@ -13,6 +13,23 @@
 - 学习事件、评分卡、反馈统计必须进入 metadata 驱动口径。
 - 助手策略发布必须支持灰度与回滚。
 
+## 与父/子节点关系
+
+- 父节点：`assistant-run-learning` L1（助手运行与学习闭环能力边界）
+- 关键子节点：
+  - `learning-event-feedback-injection`（L2）：统一学习事件、反馈聚合、注入链路
+  - `run-stream-policy`（L2）：运行与策略模板
+  - `profile-proposal-apply-loop`（L2）：画像提案回流
+- `learning-event-feedback-injection` 下与当前 baseline 强相关的子节点：
+  - `learning-event-ingestion`（L3）：InteractionEvent / Scorecard 上报与统一事件桥接
+  - `learning-event-ingestion--interactionevent-scorecard-schema`（L3）：学习事件 schema、字段分级与幂等
+
+## 相关文档
+
+- [`learning-event-feedback-injection/spec.md`](./learning-event-feedback-injection/spec.md)
+- [`learning-event-feedback-injection/learning-event-ingestion/spec.md`](./learning-event-feedback-injection/learning-event-ingestion/spec.md)
+- [`learning-event-feedback-injection/plan.yaml`](./learning-event-feedback-injection/plan.yaml)
+
 ## 验收标准（L1 重点）
 - A1：Run/Stream、学习上报、反馈注入可用。
 - A2：助手响应时延与成功率达标。

@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,27 @@ func newTestHandler() http.Handler {
 	reportService := application.NewReportService(persistence.NewInMemoryReportStore(), nil)
 	behaviorService := application.NewBehaviorService(hotPath, store)
 	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+}
+
+func newRecommendationHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
+	redis := recinfra.NewMemoryRedis()
+	hotPath := rtrec.NewHotPath(redis)
+	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
+	source := recinfra.NewPostRepositorySource(store)
+	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
+	feedService := application.NewFeedService(engine, source)
+	postService := application.NewPostService(store)
+	reportService := application.NewReportService(persistence.NewInMemoryReportStore(), nil)
+	behaviorService := application.NewBehaviorService(hotPath, store)
+	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+}
+
+type stubFeatureProvider struct {
+	features *rtrec.UserFeatureVector
+}
+
+func (s *stubFeatureProvider) GetFeatures(_ context.Context, _ string) (*rtrec.UserFeatureVector, error) {
+	return s.features, nil
 }
 
 func TestHealthz(t *testing.T) {
@@ -77,7 +99,7 @@ func TestCreatePostBodyBindingAcceptsWritableFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"title":"t","body":"b","contentType":"article"}`),
+		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
@@ -119,6 +141,35 @@ func TestRecommendEndpoint(t *testing.T) {
 	}
 }
 
+func TestRecommendEndpoint_UsesLongTermTagFeatures(t *testing.T) {
+	handler := newRecommendationHandlerWithFeatures(&stubFeatureProvider{features: &rtrec.UserFeatureVector{
+		TagAffinities: map[string]float64{"art": 10},
+	}})
+	req := httptest.NewRequest(
+		"POST",
+		"/v1/content/recommend",
+		bytes.NewBufferString(`{"userId":"u1","limit":1}`),
+	)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected recommend status: %d", rec.Code)
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode recommend response: %v", err)
+	}
+	if len(body.Items) == 0 {
+		t.Fatalf("expected recommend items")
+	}
+	contentID, _ := body.Items[0]["contentId"].(string)
+	if contentID == "" {
+		t.Fatalf("missing contentId in first item")
+	}
+}
+
 func TestFeedWithSessionIdFromHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/v1/content/feed?type=photo&limit=1", nil)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
@@ -149,7 +200,7 @@ func TestCreatePostWithLocationField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"title":"loc test","body":"b","contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing"}`),
+		bytes.NewBufferString(`{"contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"loc test"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
@@ -185,7 +236,7 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"title":"t","body":"b","contentType":"article"}`),
+		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"t"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
 	createReq.Header.Set("X-Client-User-Id", "u1")
 	createRec := httptest.NewRecorder()
@@ -225,7 +276,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"title":"to delete","body":"b","contentType":"article"}`),
+		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"to delete"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
 	createReq.Header.Set("X-Client-User-Id", "u_delete")
 	createRec := httptest.NewRecorder()
@@ -258,7 +309,7 @@ func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","title":"private","visibility":"private"}`),
+		bytes.NewBufferString(`{"contentType":"article","visibility":"private","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"private"},{"id":"p1","type":"paragraph","text":"仅圈子分发测试"}]}}`),
 	)
 	createReq.Header.Set("X-Client-User-Id", "author1")
 	createRec := httptest.NewRecorder()

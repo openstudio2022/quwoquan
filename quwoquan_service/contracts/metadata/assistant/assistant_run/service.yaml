@@ -33,12 +33,14 @@ api_routes:
     operation: ReportPageContext
     description: 页面上下文上报
     request_fields: [pageType, businessObjects, userAction, userActions, profileSubjectId, subAccountId, personaContextVersion]
+    response_entity: PageContextAck
 
   - method: GET
     path: /v1/assistant/suggested-actions
     operation: GetSuggestedActions
     description: 获取当前页面建议操作
     query_params: [pageType, objectId]
+    response_entity: SuggestedActionListView
 
   - method: POST
     path: /v1/assistant/learning/events
@@ -50,11 +52,13 @@ api_routes:
     path: /v1/assistant/learning/scorecards
     operation: ReportScorecard
     description: 评分卡上报
+    request_entity: Scorecard
 
   - method: GET
     path: /v1/assistant/policy
     operation: GetPolicy
     description: 策略拉取
+    response_entity: AssistantPolicyView
 
   - method: GET
     path: /v1/assistant/skills
@@ -76,6 +80,12 @@ api_routes:
     description: 用户助手记忆条目列表（摘要级）
     query_params: [limit]
     response_entity: AssistantUserMemoryListView
+
+  - method: GET
+    path: /v1/assistant/ops/learning-summary
+    operation: GetLearningOpsSummary
+    description: 运营侧读取指定用户的学习画像摘要与低分指标下钻摘要
+    response_entity: AssistantLearningOpsSummaryView
 
   - method: POST
     path: /v1/assistant/skills/{skillId}/consent
@@ -103,7 +113,7 @@ consumers:
         manage_consent,
       ]
   - name: platform-ops
-    capabilities: [read_runs, read_events, read_scorecards, manage_policy, manage_skills]
+    capabilities: [read_runs, read_events, read_scorecards, read_learning_summary, manage_policy, manage_skills]
   - name: recommendation-engine
     capabilities: [read_runs, read_events]
 

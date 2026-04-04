@@ -1,0 +1,231 @@
+version: 1
+entity: EventRecord
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: eventId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: eventType
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: eventName
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: eventVersion
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: priority
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: producer
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: source
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: userIdHash
+    type: string
+    constraints: [NULLABLE]
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: sessionId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: journeyId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: pageVisitId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: surfaceId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: routeId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: operationId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: requestId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: pageName
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetType
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetKey
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: entityType
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: entityId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: experimentBucket
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: occurredAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: clientSentAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: ingestedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: eventDate
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: payload
+    type: object
+    constraints: [NULLABLE]
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: metrics
+    type: object
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+unique_constraints:
+  - columns: [eventId]
+    description: 统一事件幂等键

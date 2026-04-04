@@ -1,0 +1,34 @@
+version: 1
+read_model: AppLogAnalyticsEventSummaryPayload
+
+description: |
+  AnalyticsService 写入 AppLog 的 summaryPayload。
+
+source_entities: []
+
+consumers:
+  - app (analytics.dart)
+
+client_projection:
+  dart_class: AppLogAnalyticsEventSummaryPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_analytics_event_summary.g.dart
+  fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind]
+      default: "'analytics_event'"
+    - name: eventType
+      dart_type: String
+      nullable: false
+      source: eventType
+      aliases: [eventType]
+      default: "''"
+    - name: eventName
+      dart_type: String
+      nullable: false
+      source: eventName
+      aliases: [eventName]
+      default: "''"

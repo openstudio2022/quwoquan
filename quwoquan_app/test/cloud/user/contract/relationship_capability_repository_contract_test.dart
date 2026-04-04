@@ -94,8 +94,8 @@ void main() {
       expect(dto.isStranger, true);
     });
 
-    test('fromLegacyRelationship 互关推导为 same_interest', () {
-      final dto = RelationshipCapabilityDto.fromLegacyRelationship(
+    test('fromFollowFlags 互关推导为 same_interest', () {
+      final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,
@@ -107,8 +107,8 @@ void main() {
       expect(dto.canGreet, false);
     });
 
-    test('fromLegacyRelationship 单向关注推导为 following_only 且 canGreet=true', () {
-      final dto = RelationshipCapabilityDto.fromLegacyRelationship(
+    test('fromFollowFlags 单向关注推导为 following_only 且 canGreet=true', () {
+      final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,
@@ -119,8 +119,8 @@ void main() {
       expect(dto.canOpenConversation, false);
     });
 
-    test('fromLegacyRelationship self=true 推导为 self tier', () {
-      final dto = RelationshipCapabilityDto.fromLegacyRelationship(
+    test('fromFollowFlags self=true 推导为 self tier', () {
+      final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'same_user',
         targetId: 'same_user',
         isFollowing: false,
@@ -131,8 +131,8 @@ void main() {
       expect(dto.canGreet, false);
     });
 
-    test('fromLegacyRelationship closeFriend=true + 互关推导为 close_friend', () {
-      final dto = RelationshipCapabilityDto.fromLegacyRelationship(
+    test('fromFollowFlags closeFriend=true + 互关推导为 close_friend', () {
+      final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,

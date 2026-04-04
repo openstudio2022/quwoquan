@@ -429,8 +429,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   Widget build(BuildContext context) {
     _scheduleSummaryMeasure();
     final isDark = ref.watch(isDarkProvider);
-    final notifier = ref.watch(circleStateProvider(widget.circleId));
-    final state = notifier.state;
+    final state = ref.watch(circleStateProvider(widget.circleId));
+    final circleCtrl = ref.read(circleStateProvider(widget.circleId).notifier);
     final circle = state.circleData;
     final bg = AppColors.iosPageBackground(context);
     final surface = AppColors.iosProfileSurface(context);
@@ -508,7 +508,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                           context,
                           isDark: isDark,
                           state: state,
-                          notifier: notifier,
+                          notifier: circleCtrl,
                           circleName: circleName,
                           coverUrl: coverUrl,
                         ),

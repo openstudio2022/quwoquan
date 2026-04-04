@@ -42,13 +42,14 @@ void main() {
       await $(
         TestKeys.createActionWrite,
       ).waitUntilVisible(timeout: const Duration(seconds: 10));
-      await $(TestKeys.createActionWrite).tap();
-
       await $(
-        TestKeys.createDraftsButton,
+        TestKeys.createActionContinueFromDraft,
       ).waitUntilVisible(timeout: const Duration(seconds: 10));
-      await $(TestKeys.createDraftsButton).tap();
-      await $('点滴草稿').tap();
+      await $(TestKeys.createActionContinueFromDraft).tap();
+      await $(
+        TestKeys.createDraftPickerPanel,
+      ).waitUntilVisible(timeout: const Duration(seconds: 10));
+      await $('文字草稿').tap();
 
       await $(
         TestKeys.createMomentInput,

@@ -75,20 +75,20 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       _error = null;
     });
     try {
-      final notifier = ref.read(circleStateProvider(widget.circleId));
+      final circleState = ref.read(circleStateProvider(widget.circleId));
       final repo = ref.read(circleRepositoryProvider);
-      final query = _feedQueryForState(notifier.state);
-      final circle = await repo.getCircle(widget.circleId);
+      final query = _feedQueryForState(circleState);
+      final circleDetail = await repo.getCircle(widget.circleId);
       final items = await repo.getCircleFeed(
         widget.circleId,
         identity: query.identity,
         type: query.type,
-        sort: notifier.state.sortMode.name,
+        sort: circleState.sortMode.name,
       );
       if (mounted) {
         setState(() {
           _feedItems = items;
-          _circleCategoryId = circle['categoryId']?.toString();
+          _circleCategoryId = circleDetail.categoryId;
           _isLoading = false;
         });
       }
@@ -159,7 +159,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   @override
   Widget build(BuildContext context) {
-    final notifier = ref.watch(circleStateProvider(widget.circleId));
+    final circleState = ref.watch(circleStateProvider(widget.circleId));
+    final circleCtrl = ref.read(circleStateProvider(widget.circleId).notifier);
     final fg = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.foregroundPrimary,
@@ -185,7 +186,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       backgroundColor: bgSecondary,
       borderColor: borderColor,
       padding: EdgeInsets.zero,
-      child: _buildContent(notifier, fgSecondary),
+      child: _buildContent(circleState, fgSecondary),
     );
 
     return Padding(
@@ -202,17 +203,18 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             borderColor: borderColor,
             child: Column(
               children: [
-                _buildIdentityFilterRow(notifier, fg, fgSecondary),
-                if (_isWorkLikeSubTab(notifier.state.activeSubTab)) ...[
+                _buildIdentityFilterRow(circleState, circleCtrl, fg, fgSecondary),
+                if (_isWorkLikeSubTab(circleState.activeSubTab)) ...[
                   SizedBox(height: AppSpacing.sm),
-                  _buildWorkFormatFilterRow(notifier, fg, fgSecondary),
+                  _buildWorkFormatFilterRow(circleState, circleCtrl, fg, fgSecondary),
                 ],
                 if (_isAdminOrOwner) ...[
                   SizedBox(height: AppSpacing.sm),
-                  _buildSortControls(notifier, fg, fgSecondary),
+                  _buildSortControls(circleState, circleCtrl, fg, fgSecondary),
                   SizedBox(height: AppSpacing.xs),
                   _buildViewModeToggle(
-                    notifier,
+                    circleState,
+                    circleCtrl,
                     fgSecondary: fgSecondary,
                     borderColor: borderColor,
                     backgroundColor: bgTertiary,
@@ -271,7 +273,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildIdentityFilterRow(
-    CircleStateNotifier notifier,
+    CircleState circleState,
+    CircleStateNotifier circleCtrl,
     Color fg,
     Color fgSecondary,
   ) {
@@ -283,7 +286,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         children: _identityFilters
             .map((filter) {
               final tab = _creationSubTabForId(filter.id);
-              final selected = notifier.state.activeSubTab == tab;
+              final selected = circleState.activeSubTab == tab;
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
                 child: _CupertinoFilterChip(
@@ -292,7 +295,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                   fg: fg,
                   fgSecondary: fgSecondary,
                   onPressed: () {
-                    notifier.setSubTab(tab);
+                    circleCtrl.setSubTab(tab);
                     _loadFeed();
                   },
                 ),
@@ -304,7 +307,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildWorkFormatFilterRow(
-    CircleStateNotifier notifier,
+    CircleState circleState,
+    CircleStateNotifier circleCtrl,
     Color fg,
     Color fgSecondary,
   ) {
@@ -316,7 +320,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         children: _workFormatFilters
             .map((filter) {
               final format = _creationWorkFormatForId(filter.id);
-              final selected = notifier.state.activeWorkFormat == format;
+              final selected = circleState.activeWorkFormat == format;
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
                 child: _CupertinoFilterChip(
@@ -325,7 +329,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                   fg: fg,
                   fgSecondary: fgSecondary,
                   onPressed: () {
-                    notifier.setWorkFormat(format);
+                    circleCtrl.setWorkFormat(format);
                     _loadFeed();
                   },
                 ),
@@ -456,11 +460,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildSortControls(
-    CircleStateNotifier notifier,
+    CircleState circleState,
+    CircleStateNotifier circleCtrl,
     Color fg,
     Color fgSecondary,
   ) {
-    final activeSortMode = notifier.state.sortMode;
+    final activeSortMode = circleState.sortMode;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
@@ -470,7 +475,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             padding: EdgeInsets.only(right: AppSpacing.sm),
             child: GestureDetector(
               onTap: () {
-                notifier.setSortMode(mode);
+                circleCtrl.setSortMode(mode);
                 _loadFeed();
               },
               child: Container(
@@ -510,12 +515,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildViewModeToggle(
-    CircleStateNotifier notifier, {
+    CircleState circleState,
+    CircleStateNotifier circleCtrl, {
     required Color fgSecondary,
     required Color borderColor,
     required Color backgroundColor,
   }) {
-    final activeMode = notifier.state.viewMode;
+    final activeMode = circleState.viewMode;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
@@ -528,7 +534,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             fgSecondary: fgSecondary,
             borderColor: borderColor,
             backgroundColor: backgroundColor,
-            onPressed: () => notifier.setViewMode(CreationViewMode.grid),
+            onPressed: () => circleCtrl.setViewMode(CreationViewMode.grid),
           ),
           SizedBox(width: AppSpacing.xs),
           _ViewModeButton(
@@ -538,14 +544,14 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             fgSecondary: fgSecondary,
             borderColor: borderColor,
             backgroundColor: backgroundColor,
-            onPressed: () => notifier.setViewMode(CreationViewMode.list),
+            onPressed: () => circleCtrl.setViewMode(CreationViewMode.list),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(CircleStateNotifier notifier, Color fgSecondary) {
+  Widget _buildContent(CircleState circleState, Color fgSecondary) {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
     }
@@ -553,8 +559,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       return _buildErrorCard(fgSecondary);
     }
 
-    final activeSubTab = notifier.state.activeSubTab;
-    final activeWorkFormat = notifier.state.activeWorkFormat;
+    final activeSubTab = circleState.activeSubTab;
+    final activeWorkFormat = circleState.activeWorkFormat;
     final filtered = _feedItems
         .where((item) {
           return _matchesIdentityFilter(item, activeSubTab) &&
@@ -589,7 +595,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       return _buildEmpty(fgSecondary);
     }
 
-    if (notifier.state.viewMode == CreationViewMode.list) {
+    if (circleState.viewMode == CreationViewMode.list) {
       return ListView.separated(
         physics: widget.inlineScroll
             ? const NeverScrollableScrollPhysics()
@@ -674,8 +680,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
-    final rawPostsById = <String, Map<String, dynamic>>{
-      for (final entry in viewerEntries) entry.dto!.id: entry.raw,
+    final rawPostsById = <String, Map<String, Object?>>{
+      for (final entry in viewerEntries)
+        entry.dto!.id: Map<String, Object?>.from(entry.raw),
     };
 
     final route = _isVideoPost(tappedDto)

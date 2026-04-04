@@ -33,7 +33,7 @@
 |------|------|-----------|
 | **W0** | 盘点重复数字 → `AppSpacing` 扩展或域内 `*_layout_constants.dart` | 新代码不引入未命名字面量 |
 | **W1** | **12 个 baseline 页文件** 逐文件清零（或合法 ignore） | 这些路径从 baseline 移除 |
-| **W2** | 创作链：`create_page`、`video_editor`、`ios_article_editor`、`article_detail` 及强相关 widgets | baseline 相关行减；矩阵备注更新 |
+| **W2** | 创作链：`create_page`、`video_editor`、`article_editor`、`article_detail` 及强相关 widgets | baseline 相关行减；矩阵备注更新 |
 | **W3** | 助手消息 UI baseline 簇 | 同上 |
 | **W4** | 媒体全屏 viewer / editor 子面板 | 工具 UI 常量成组命名 |
 | **W5** | 其余 baseline + 矩阵页抽检 | baseline 仅余登记豁免 |

@@ -1,18 +1,40 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_open_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_open_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_return_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_return_summary.g.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 
 /// 页面级 open/return 写入 [AppLogService]（与 [MainAppShell] 同构，供全屏路由 Observer 复用）。
 Future<void> writeAppPageAccessOpen({
   required String location,
   required String pageVisitId,
   String? pageNameOverride,
+  VisitRecorderService? visitRecorder,
+  OpsEventRepository? eventRepository,
+  String currentUserId = '',
+  String experimentBucket = '',
 }) async {
   final trace = AppTraceContextStore.instance;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
+  final now = DateTime.now().toUtc();
+  if (pageName.trim().isNotEmpty) {
+    unawaited(
+      visitRecorder?.recordVisit(VisitTarget.page(pageName)) ??
+          Future<void>.value(),
+    );
+  }
   await AppLogService.instance.writeEvent(
     logType: AppLogType.pageAccess,
     level: AppLogLevel.info,
@@ -21,12 +43,15 @@ Future<void> writeAppPageAccessOpen({
       journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
-    payload: <String, dynamic>{
-      'event': 'open',
-      'route': location,
-      'pageName': pageName,
-    },
-    summaryPayload: <String, dynamic>{'event': 'open', 'route': location},
+    payload: AppLogPageOpenPayload(
+      event: 'open',
+      route: location,
+      pageName: pageName,
+    ).toMap(),
+    summaryPayload: AppLogPageOpenSummaryPayload(
+      event: 'open',
+      route: location,
+    ).toMap(),
   );
   await AppLogService.instance.writeEvent(
     logType: AppLogType.perf,
@@ -37,11 +62,47 @@ Future<void> writeAppPageAccessOpen({
       pageVisitId: pageVisitId,
     ),
     payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
-    summaryPayload: <String, dynamic>{
-      'event': 'page_open',
-      'route': location,
-    },
+    summaryPayload: AppLogPageOpenSummaryPayload(
+      event: 'page_open',
+      route: location,
+    ).toMap(),
   );
+  if (eventRepository != null) {
+    unawaited(
+      eventRepository.reportEventBatch(
+        events: <OpsEventRecordInput>[
+          _pageAccessEvent(
+            eventId: 'page_open:$pageVisitId',
+            eventType: 'experience',
+            eventName: 'page_open',
+            route: location,
+            pageName: pageName,
+            pageVisitId: pageVisitId,
+            occurredAt: now,
+            sessionId: trace.sessionId,
+            journeyId: trace.journeyId,
+            currentUserId: currentUserId,
+            experimentBucket: experimentBucket,
+            payload: <String, dynamic>{'event': 'open', 'route': location},
+          ),
+          _pageAccessEvent(
+            eventId: 'page_open_perf:$pageVisitId',
+            eventType: 'qoe',
+            eventName: 'page_open_perf',
+            route: location,
+            pageName: pageName,
+            pageVisitId: pageVisitId,
+            occurredAt: now,
+            sessionId: trace.sessionId,
+            journeyId: trace.journeyId,
+            currentUserId: currentUserId,
+            experimentBucket: experimentBucket,
+            payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<void> writeAppPageAccessReturn({
@@ -49,10 +110,14 @@ Future<void> writeAppPageAccessReturn({
   required String pageVisitId,
   required DateTime enterAt,
   String? pageNameOverride,
+  OpsEventRepository? eventRepository,
+  String currentUserId = '',
+  String experimentBucket = '',
 }) async {
   final trace = AppTraceContextStore.instance;
   final durationMs = DateTime.now().difference(enterAt).inMilliseconds;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
+  final now = DateTime.now().toUtc();
   await AppLogService.instance.writeEvent(
     logType: AppLogType.pageAccess,
     level: AppLogLevel.info,
@@ -61,17 +126,17 @@ Future<void> writeAppPageAccessReturn({
       journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
-    payload: <String, dynamic>{
-      'event': 'return',
-      'route': location,
-      'pageName': pageName,
-      'durationMs': durationMs,
-    },
-    summaryPayload: <String, dynamic>{
-      'event': 'return',
-      'route': location,
-      'durationMs': durationMs,
-    },
+    payload: AppLogPageReturnPayload(
+      event: 'return',
+      route: location,
+      pageName: pageName,
+      durationMs: durationMs,
+    ).toMap(),
+    summaryPayload: AppLogPageReturnSummaryPayload(
+      event: 'return',
+      route: location,
+      durationMs: durationMs,
+    ).toMap(),
   );
   await AppLogService.instance.writeEvent(
     logType: AppLogType.perf,
@@ -86,12 +151,58 @@ Future<void> writeAppPageAccessReturn({
       route: location,
       latencyMs: durationMs,
     ),
-    summaryPayload: <String, dynamic>{
-      'event': 'page_return',
-      'route': location,
-      'latencyMs': durationMs,
-    },
+    summaryPayload: AppLogPageReturnSummaryPayload(
+      event: 'page_return',
+      route: location,
+      durationMs: durationMs,
+    ).toMap(),
   );
+  if (eventRepository != null) {
+    unawaited(
+      eventRepository.reportEventBatch(
+        events: <OpsEventRecordInput>[
+          _pageAccessEvent(
+            eventId: 'page_return:$pageVisitId',
+            eventType: 'experience',
+            eventName: 'page_return',
+            route: location,
+            pageName: pageName,
+            pageVisitId: pageVisitId,
+            occurredAt: now,
+            sessionId: trace.sessionId,
+            journeyId: trace.journeyId,
+            currentUserId: currentUserId,
+            experimentBucket: experimentBucket,
+            payload: <String, dynamic>{
+              'event': 'return',
+              'route': location,
+              'durationMs': durationMs,
+            },
+            metrics: <String, dynamic>{'durationMs': durationMs},
+          ),
+          _pageAccessEvent(
+            eventId: 'page_return_perf:$pageVisitId',
+            eventType: 'qoe',
+            eventName: 'page_return_perf',
+            route: location,
+            pageName: pageName,
+            pageVisitId: pageVisitId,
+            occurredAt: now,
+            sessionId: trace.sessionId,
+            journeyId: trace.journeyId,
+            currentUserId: currentUserId,
+            experimentBucket: experimentBucket,
+            payload: AppPerfProbe.snapshot(
+              event: 'page_return',
+              route: location,
+              latencyMs: durationMs,
+            ),
+            metrics: <String, dynamic>{'latencyMs': durationMs},
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 String pageNameFromRouteLocation(String location) {
@@ -246,4 +357,53 @@ String? routeLocationFromSettings(Route<dynamic> route) {
   final name = route.settings.name;
   if (name != null && name.isNotEmpty) return name;
   return null;
+}
+
+OpsEventRecordInput _pageAccessEvent({
+  required String eventId,
+  required String eventType,
+  required String eventName,
+  required String route,
+  required String pageName,
+  required String pageVisitId,
+  required DateTime occurredAt,
+  required String sessionId,
+  required String journeyId,
+  required String currentUserId,
+  required String experimentBucket,
+  required Map<String, dynamic> payload,
+  Map<String, dynamic> metrics = const <String, dynamic>{},
+}) {
+  return OpsEventRecordInput(
+    eventId: eventId,
+    eventType: eventType,
+    eventName: eventName,
+    eventVersion: 'v1',
+    priority: 'P0',
+    producer: 'app.page_access',
+    source: 'page_access',
+    userIdHash: _hashUserId(currentUserId),
+    sessionId: sessionId,
+    journeyId: journeyId,
+    pageVisitId: pageVisitId,
+    surfaceId: pageName,
+    routeId: pageName,
+    requestId: eventId,
+    pageName: pageName,
+    targetType: 'page',
+    targetKey: 'page_$pageName',
+    experimentBucket: experimentBucket,
+    occurredAt: occurredAt.toIso8601String(),
+    clientSentAt: occurredAt.toIso8601String(),
+    payload: payload,
+    metrics: metrics,
+  );
+}
+
+String _hashUserId(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed == 'anonymous') {
+    return '';
+  }
+  return sha256.convert(utf8.encode(trimmed)).toString().substring(0, 16);
 }

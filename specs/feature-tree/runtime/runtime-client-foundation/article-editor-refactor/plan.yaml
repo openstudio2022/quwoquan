@@ -1,0 +1,95 @@
+# 文章编辑器完全重构 — 实施切片
+# 顺序：metadata -> codegen -> 业务逻辑 -> 测试
+
+version: 1
+node: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor
+derived_from:
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/design.md
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/acceptance.yaml
+
+slices:
+  - id: slice-metadata-article-editor-contract
+    goal: 在 contracts/metadata 中扩展文章块/布局/序列化所需字段与枚举，并通过 verify-metadata。
+    order: 10
+    acceptance_refs:
+      - A-metadata-single-source
+    phase: metadata
+
+  - id: slice-codegen-app-content
+    goal: 执行 codegen 与 codegen-app，端侧生成/更新 DTO 与常量；无手改 codegen 文件。
+    order: 20
+    acceptance_refs:
+      - A-metadata-single-source
+    phase: codegen
+    depends_on:
+      - slice-metadata-article-editor-contract
+
+  - id: slice-rename-create-editor-state
+    goal: 将 CreateEditorStateV2 重命名为 CreateEditorState，迁移 ContentPublishDraftComposite 与全库引用；移除 create_editor_v2 特性键使用，仅保留 enable_unified_create_editor。
+    order: 30
+    acceptance_refs:
+      - A-rename-state
+      - A-feature-flag-no-v
+    phase: business_logic
+    depends_on:
+      - slice-codegen-app-content
+
+  - id: slice-document-model-undo
+    goal: 落地文档块+span 模型与 undo/redo 栈，与 CreateEditorState 集成；单测覆盖命令/快照策略。
+    order: 40
+    acceptance_refs:
+      - A-undo-redo
+    phase: business_logic
+    depends_on:
+      - slice-rename-create-editor-state
+
+  - id: slice-accessory-toolbar-and-panels
+    goal: 实现底栏五工具+分割条+undo/redo；样式/序号/排版/emoji/图片面板与键盘同高及键盘图标切换。
+    order: 50
+    acceptance_refs:
+      - A-accessory-toolbar
+      - A-style-panel
+      - A-list-depth
+      - A-typography-panel
+    phase: business_logic
+    depends_on:
+      - slice-document-model-undo
+
+  - id: slice-wysiwyg-canvas-and-wrap
+    goal: 主视口卡片化渲染与图文环绕编辑态 WYSIWYG；caption 与图片工具栏规则统一；与阅读投影共用布局逻辑。
+    order: 60
+    acceptance_refs:
+      - A-wysiwyg-wrap
+      - A-image-content-area-half-width
+      - A-image-wrap-alignment-caption
+      - A-image-wrap-interaction
+      - A-image-toolbar-and-caption
+    phase: business_logic
+    depends_on:
+      - slice-accessory-toolbar-and-panels
+
+  - id: slice-edit-preview-chrome
+    goal: >
+      顶栏编辑/预览模式；编辑态与预览态共享同一 page slice 真相源，
+      纵向可编辑纸页与横向沉浸预览保持同页尺寸、页眉页脚页码、caption 占高规则一致；
+      预览态与 WorksImmersiveViewer 品质对齐并支持前翻/回翻动效；移除卡片/瀑布流占位。
+    order: 70
+    acceptance_refs:
+      - A-edit-preview-modes
+      - A-word-editor-chrome
+      - A-preview-immersive-parity
+      - A-book-flip-transition
+      - A-chrome-next-step-consistency
+    phase: business_logic
+    depends_on:
+      - slice-wysiwyg-canvas-and-wrap
+
+  - id: slice-tests-and-gates
+    goal: T2/T3 测试补充；page-horizontal-quality 矩阵与 P2 清单更新；gate_repo app 阶段通过。
+    order: 80
+    acceptance_refs:
+      - A-cross-cutting-gates
+    phase: test
+    depends_on:
+      - slice-edit-preview-chrome

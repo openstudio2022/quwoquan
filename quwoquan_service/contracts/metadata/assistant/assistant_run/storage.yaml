@@ -20,12 +20,41 @@ collections:
   interaction_events:
     entity: InteractionEvent
     indexes:
-      - { name: idx_ie_run, keys: { runId: 1, timestamp: -1 } }
-      - { name: idx_ie_user_type, keys: { userId: 1, eventType: 1, timestamp: -1 } }
-      - { name: idx_ie_feedback, keys: { feedbackType: 1, timestamp: -1 }, sparse: true }
+      - { name: idx_ie_run, keys: { runId: 1, createdAt: -1 } }
+      - { name: idx_ie_user_type, keys: { userId: 1, eventType: 1, createdAt: -1 } }
+      - { name: idx_ie_feedback, keys: { feedbackType: 1, createdAt: -1 }, sparse: true }
       - { name: idx_ie_trace, keys: { traceId: 1 }, sparse: true }
 
+  scorecards:
+    entity: Scorecard
+    indexes:
+      - { name: idx_score_run, keys: { runId: 1, createdAt: -1 } }
+      - { name: idx_score_event, keys: { eventId: 1, createdAt: -1 } }
+      - { name: idx_score_user_metric, keys: { userId: 1, metricId: 1, createdAt: -1 } }
+
+  rm_assistant_learning_profile:
+    entity: AssistantLearningProfile
+    indexes:
+      - { name: idx_alp_user, keys: { userId: 1 }, unique: true }
+      - { name: idx_alp_updated, keys: { updatedAt: -1 } }
+      - { name: idx_alp_last_feedback, keys: { lastFeedbackAt: -1 }, sparse: true }
+
 redis_cache:
+  - key: "assistant:learning:dedup:{kind}:{id}"
+    ttl_seconds: 604800
+    type: string
+    description: 学习事件与评分卡幂等键
+
+  - key: "assistant:learning:event:{userId}:{eventId}"
+    ttl_seconds: 86400
+    type: hash
+    description: 最近学习事件热路径摘要
+
+  - key: "rec:assistant_score:{userId}:{metricId}"
+    ttl_seconds: 86400
+    type: hash
+    description: 助手评分卡热路径聚合
+
   - key: "page_ctx:{userId}"
     ttl_seconds: 300
     type: hash

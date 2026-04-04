@@ -90,11 +90,11 @@ void _expectPageHeaders(Map<String, String> headers, {required String pageId}) {
 
 void _expectSurfaceOperationHeaders(
   Map<String, String> headers, {
-  required String legacyPageId,
+  required String clientPageId,
   required String surfaceId,
   required String operationId,
 }) {
-  expect(headers['X-Client-Page-Id'], legacyPageId);
+  expect(headers['X-Client-Page-Id'], clientPageId);
   expect(headers['X-Client-Surface-Id'], surfaceId);
   expect(headers['X-Client-Operation-Id'], operationId);
   expect(headers['X-Trace-Id'], contains(surfaceId));
@@ -712,7 +712,7 @@ void main() {
       expect(log.last.query['limit'], '7');
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        legacyPageId: EntityRequestPageIds.searchHomepages,
+        clientPageId: EntityRequestPageIds.searchHomepages,
         surfaceId: AppUiSurfaces.homepagePicker.id,
         operationId: EntityApiMetadata.searchHomepagesOperation,
       );
@@ -727,7 +727,7 @@ void main() {
       );
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        legacyPageId: EntityRequestPageIds.getHomepageShell,
+        clientPageId: EntityRequestPageIds.getHomepageShell,
         surfaceId: AppUiSurfaces.homepageDetail.id,
         operationId: EntityApiMetadata.getHomepageShellOperation,
       );
@@ -744,7 +744,7 @@ void main() {
         );
         _expectSurfaceOperationHeaders(
           log.last.headers,
-          legacyPageId: EntityRequestPageIds.getHomepageReviewSummary,
+          clientPageId: EntityRequestPageIds.getHomepageReviewSummary,
           surfaceId: AppUiSurfaces.homepageDetail.id,
           operationId: EntityApiMetadata.getHomepageReviewSummaryOperation,
         );
@@ -762,7 +762,7 @@ void main() {
         );
         _expectSurfaceOperationHeaders(
           log.last.headers,
-          legacyPageId: EntityRequestPageIds.getHomepageRelatedGroups,
+          clientPageId: EntityRequestPageIds.getHomepageRelatedGroups,
           surfaceId: AppUiSurfaces.homepageDetail.id,
           operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
         );
@@ -797,7 +797,7 @@ void main() {
       expect(log.last.query['limit'], '8');
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        legacyPageId: IntegrationRequestPageIds.getNearbyLocations,
+        clientPageId: IntegrationRequestPageIds.getNearbyLocations,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
         operationId: IntegrationApiMetadata.getNearbyLocationsOperation,
       );
@@ -820,7 +820,7 @@ void main() {
       expect(log.last.query['limit'], '12');
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        legacyPageId: IntegrationRequestPageIds.searchLocations,
+        clientPageId: IntegrationRequestPageIds.searchLocations,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
         operationId: IntegrationApiMetadata.searchLocationsOperation,
       );

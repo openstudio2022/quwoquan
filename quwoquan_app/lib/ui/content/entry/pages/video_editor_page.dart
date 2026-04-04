@@ -32,7 +32,7 @@ class VideoEditorResult {
   final bool muted;
 }
 
-/// 本地视频剪辑；持久草稿在父链 `CreateEditorStateV2`（`ContentPublishDraftComposite`）。
+/// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
 class VideoEditorPage extends StatefulWidget {
   const VideoEditorPage({
     super.key,

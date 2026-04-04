@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/article_flow_layout_engine.dart';
 import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
@@ -23,6 +24,9 @@ class IdentitySuggestion {
 }
 
 enum CreateEditorKind { media, text }
+
+/// 沉浸文章顶栏：长文编辑（Word 式纵向）与预览（横向沉浸翻页）。
+enum ArticleEditorSurfaceMode { edit, preview }
 
 enum CreateMediaKind { none, images, video }
 
@@ -632,10 +636,25 @@ List<String> extractArticleImagePathsFromDocument(
 List<ArticlePageData> buildArticlePagesSnapshotFromDocument(
   ArticleDocumentData document, {
   ArticleFontPreset fontPreset = ArticleFontPreset.clean,
+  double stageWidth = 390,
+  double? contentHeightOverride,
+  ArticleCanvasMetrics? metrics,
 }) {
-  return ArticlePaginationEngine.paginateSnapshot(
+  final resolvedMetrics = metrics ?? ArticleCanvasMetrics.snapshot();
+  final viewportSliceHeight =
+      contentHeightOverride ??
+      resolvedMetrics.contentSizeForStageWidth(stageWidth).height;
+  return ArticleFlowLayoutEngine.buildPageSlicesForViewport(
     document: document,
-    fontPreset: fontPreset,
+    metrics: resolvedMetrics,
+    stageWidth: stageWidth,
+    titleStyle: ArticlePaginationEngine.snapshotTitleStyle(
+      fontPreset: fontPreset,
+    ),
+    bodyStyle: ArticlePaginationEngine.snapshotBodyStyle(
+      fontPreset: fontPreset,
+    ),
+    viewportSliceHeight: viewportSliceHeight,
   );
 }
 
@@ -739,11 +758,11 @@ int resolveArticlePageSplitIndex(
 }
 
 /// 创作发布草稿聚合（`metadata_driven_ui_gap_inventory`：`ContentPublishDraftComposite`）。
-typedef ContentPublishDraftComposite = CreateEditorStateV2;
+typedef ContentPublishDraftComposite = CreateEditorState;
 
 @immutable
-class CreateEditorStateV2 {
-  const CreateEditorStateV2({
+class CreateEditorState {
+  const CreateEditorState({
     required this.editorKind,
     required this.mediaKind,
     required this.imagePaths,
@@ -764,6 +783,7 @@ class CreateEditorStateV2 {
     required this.activeArticlePageId,
     required this.activeArticleBlockId,
     required this.articleTemplate,
+    required this.articlePaperTexture,
     required this.articleFontPreset,
     required this.articleCoverImagePath,
     required this.titlePresentation,
@@ -772,13 +792,13 @@ class CreateEditorStateV2 {
     this.draftId,
   });
 
-  factory CreateEditorStateV2.initial({
+  factory CreateEditorState.initial({
     CreateEditorKind editorKind = CreateEditorKind.text,
   }) {
     final initialDocument = createDefaultArticleDocument();
     final initialBlocks = buildArticleBlocksFromDocument(initialDocument);
     final initialPages = buildArticlePagesSnapshotFromDocument(initialDocument);
-    return CreateEditorStateV2(
+    return CreateEditorState(
       editorKind: editorKind,
       mediaKind: CreateMediaKind.none,
       imagePaths: const <String>[],
@@ -799,6 +819,7 @@ class CreateEditorStateV2 {
       activeArticlePageId: initialPages.first.id,
       activeArticleBlockId: initialBlocks.first.id,
       articleTemplate: ArticleTemplatePreset.gentle,
+      articlePaperTexture: ArticlePaperTexture.white,
       articleFontPreset: ArticleFontPreset.clean,
       articleCoverImagePath: '',
       titlePresentation: TitlePresentation.collapsed,
@@ -827,6 +848,7 @@ class CreateEditorStateV2 {
   final String? activeArticlePageId;
   final String? activeArticleBlockId;
   final ArticleTemplatePreset articleTemplate;
+  final ArticlePaperTexture articlePaperTexture;
   final ArticleFontPreset articleFontPreset;
   final String articleCoverImagePath;
   final TitlePresentation titlePresentation;
@@ -860,7 +882,7 @@ class CreateEditorStateV2 {
         imagePaths.isNotEmpty;
   }
 
-  CreateEditorStateV2 copyWith({
+  CreateEditorState copyWith({
     CreateEditorKind? editorKind,
     CreateMediaKind? mediaKind,
     List<String>? imagePaths,
@@ -881,6 +903,7 @@ class CreateEditorStateV2 {
     String? activeArticlePageId,
     String? activeArticleBlockId,
     ArticleTemplatePreset? articleTemplate,
+    ArticlePaperTexture? articlePaperTexture,
     ArticleFontPreset? articleFontPreset,
     String? articleCoverImagePath,
     TitlePresentation? titlePresentation,
@@ -891,7 +914,7 @@ class CreateEditorStateV2 {
     bool clearActiveArticlePageId = false,
     bool clearActiveArticleBlockId = false,
   }) {
-    return CreateEditorStateV2(
+    return CreateEditorState(
       editorKind: editorKind ?? this.editorKind,
       mediaKind: mediaKind ?? this.mediaKind,
       imagePaths: imagePaths ?? this.imagePaths,
@@ -916,6 +939,7 @@ class CreateEditorStateV2 {
           ? null
           : (activeArticleBlockId ?? this.activeArticleBlockId),
       articleTemplate: articleTemplate ?? this.articleTemplate,
+      articlePaperTexture: articlePaperTexture ?? this.articlePaperTexture,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
       articleCoverImagePath:
           articleCoverImagePath ?? this.articleCoverImagePath,
@@ -938,18 +962,10 @@ class CreateDraft {
 
   final String id;
   final int updatedAtMs;
-  final CreateEditorStateV2 state;
+  final CreateEditorState state;
   final String? sourceType;
 
   factory CreateDraft.fromStorageMap(Map<String, dynamic> map) {
-    final version = (map['draftVersion'] ?? '').toString().trim();
-    if (version == 'v2') {
-      return _fromV2Map(map);
-    }
-    return _fromLegacyMap(map);
-  }
-
-  static CreateDraft _fromV2Map(Map<String, dynamic> map) {
     final editorKind = (map['editorKind']?.toString() ?? 'text') == 'media'
         ? CreateEditorKind.media
         : CreateEditorKind.text;
@@ -1013,7 +1029,7 @@ class CreateDraft {
     return CreateDraft(
       id: (map['id'] ?? '').toString(),
       updatedAtMs: (map['updatedAt'] as num?)?.toInt() ?? 0,
-      state: CreateEditorStateV2(
+      state: CreateEditorState(
         editorKind: editorKind,
         mediaKind: mediaKind,
         imagePaths: editorKind == CreateEditorKind.text
@@ -1048,6 +1064,9 @@ class CreateDraft {
         articleTemplate: articleTemplatePresetFromString(
           map['articleTemplate']?.toString(),
         ),
+        articlePaperTexture: articlePaperTextureFromString(
+          map['articlePaperTexture']?.toString(),
+        ),
         articleFontPreset: articleFontPresetFromString(
           map['articleFontPreset']?.toString(),
         ),
@@ -1064,202 +1083,12 @@ class CreateDraft {
     );
   }
 
-  static CreateDraft _fromLegacyMap(Map<String, dynamic> map) {
-    final tabKey = (map['type'] ?? 'moment').toString();
-    final data = Map<String, dynamic>.from(
-      map['data'] as Map? ?? const <String, dynamic>{},
-    );
-    final settings = PublishSettings.fromMap(data);
-
-    late final CreateEditorStateV2 state;
-    switch (tabKey) {
-      case 'photo':
-        final photoBlocks = createDefaultArticleBlocks(
-          body: (data['description'] ?? '').toString(),
-          imagePaths: List<String>.from(
-            data['images'] as List? ?? const <String>[],
-          ),
-        );
-        final photoDocument = buildArticleDocumentFromBlocks(
-          photoBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        final photoPages = buildArticlePagesFromBlocks(
-          photoBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        state = CreateEditorStateV2.initial(editorKind: CreateEditorKind.media)
-            .copyWith(
-              mediaKind: CreateMediaKind.images,
-              imagePaths: List<String>.from(
-                data['images'] as List? ?? const <String>[],
-              ),
-              title: (data['title'] ?? '').toString(),
-              body: (data['description'] ?? '').toString(),
-              articleDocument: photoDocument,
-              articlePages: photoPages,
-              articleBlocks: photoBlocks,
-              activeArticlePageId: photoPages.first.id,
-              activeArticleBlockId: photoBlocks.first.id,
-              titlePresentation:
-                  ((data['title'] ?? '').toString().trim().isNotEmpty)
-                  ? TitlePresentation.expanded
-                  : TitlePresentation.collapsed,
-              settings: settings,
-              draftId: (map['id'] ?? '').toString(),
-            );
-        break;
-      case 'video':
-        final videoBlocks = createDefaultArticleBlocks(
-          body: (data['description'] ?? '').toString(),
-        );
-        final videoDocument = buildArticleDocumentFromBlocks(
-          videoBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        final videoPages = buildArticlePagesFromBlocks(
-          videoBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        state = CreateEditorStateV2.initial(editorKind: CreateEditorKind.media)
-            .copyWith(
-              mediaKind: CreateMediaKind.video,
-              videoPath: (data['videoPath'] ?? '').toString(),
-              originalVideoPath:
-                  ((data['originalVideoPath'] ?? data['videoPath']) ?? '')
-                      .toString(),
-              videoThumbnail:
-                  (data['thumbnail'] ?? data['videoThumbnail'] ?? '')
-                      .toString(),
-              videoDurationMs: (data['videoDurationMs'] as num?)?.toInt() ?? 0,
-              videoTrimStartMs:
-                  (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
-              videoTrimEndMs: (data['videoTrimEndMs'] as num?)?.toInt() ?? 0,
-              videoCoverTimeMs:
-                  (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
-              videoMuted: data['videoMuted'] == true,
-              title: (data['title'] ?? '').toString(),
-              body: (data['description'] ?? '').toString(),
-              articleDocument: videoDocument,
-              articlePages: videoPages,
-              articleBlocks: videoBlocks,
-              activeArticlePageId: videoPages.first.id,
-              activeArticleBlockId: videoBlocks.first.id,
-              titlePresentation:
-                  ((data['title'] ?? '').toString().trim().isNotEmpty)
-                  ? TitlePresentation.expanded
-                  : TitlePresentation.collapsed,
-              settings: settings,
-              draftId: (map['id'] ?? '').toString(),
-            );
-        break;
-      case 'article':
-        final legacyArticleImages = List<String>.from(
-          data['covers'] as List? ?? const <String>[],
-        );
-        final legacyArticleCover =
-            (data['coverUrl'] ??
-                    (legacyArticleImages.isNotEmpty
-                        ? legacyArticleImages.first
-                        : ''))
-                .toString()
-                .trim();
-        final articleBlocks = createDefaultArticleBlocks(
-          body: (data['content'] ?? '').toString(),
-          imagePaths: legacyArticleImages,
-        );
-        final articleDocument = buildArticleDocumentFromBlocks(
-          articleBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        final articlePages = buildArticlePagesFromBlocks(
-          articleBlocks,
-          title: (data['title'] ?? '').toString(),
-        );
-        state = CreateEditorStateV2.initial(editorKind: CreateEditorKind.text)
-            .copyWith(
-              imagePaths: extractArticleImagePaths(articleBlocks),
-              title: (data['title'] ?? '').toString(),
-              body: buildArticlePlainTextFromDocument(articleDocument),
-              articleDocument: articleDocument,
-              articlePages: articlePages,
-              articleBlocks: articleBlocks,
-              activeArticlePageId: articlePages.first.id,
-              activeArticleBlockId: articleBlocks.first.id,
-              articleCoverImagePath: legacyArticleCover,
-              titlePresentation:
-                  ((data['title'] ?? '').toString().trim().isNotEmpty)
-                  ? TitlePresentation.expanded
-                  : TitlePresentation.collapsed,
-              settings: settings,
-              draftId: (map['id'] ?? '').toString(),
-            );
-        break;
-      case 'moment':
-      default:
-        final videoPath = (data['videoPath'] ?? '').toString();
-        final originalVideoPath =
-            ((data['originalVideoPath'] ?? data['videoPath']) ?? '').toString();
-        final images = List<String>.from(
-          data['images'] as List? ?? const <String>[],
-        );
-        final momentBlocks = createDefaultArticleBlocks(
-          body: (data['content'] ?? '').toString(),
-          imagePaths: images,
-        );
-        final momentDocument = buildArticleDocumentFromBlocks(momentBlocks);
-        final momentPages = buildArticlePagesFromBlocks(momentBlocks);
-        state =
-            CreateEditorStateV2.initial(
-              editorKind: videoPath.isNotEmpty || images.isNotEmpty
-                  ? CreateEditorKind.media
-                  : CreateEditorKind.text,
-            ).copyWith(
-              mediaKind: videoPath.isNotEmpty
-                  ? CreateMediaKind.video
-                  : (images.isNotEmpty
-                        ? CreateMediaKind.images
-                        : CreateMediaKind.none),
-              imagePaths: images,
-              videoPath: videoPath,
-              originalVideoPath: originalVideoPath,
-              videoThumbnail: (data['videoThumbnail'] ?? '').toString(),
-              videoDurationMs: (data['videoDurationMs'] as num?)?.toInt() ?? 0,
-              videoTrimStartMs:
-                  (data['videoTrimStartMs'] as num?)?.toInt() ?? 0,
-              videoTrimEndMs: (data['videoTrimEndMs'] as num?)?.toInt() ?? 0,
-              videoCoverTimeMs:
-                  (data['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
-              videoMuted: data['videoMuted'] == true,
-              body: videoPath.isNotEmpty || images.isNotEmpty
-                  ? (data['content'] ?? '').toString()
-                  : buildArticlePlainTextFromDocument(momentDocument),
-              articleDocument: momentDocument,
-              articlePages: momentPages,
-              articleBlocks: momentBlocks,
-              activeArticlePageId: momentPages.first.id,
-              activeArticleBlockId: momentBlocks.first.id,
-              settings: settings,
-              draftId: (map['id'] ?? '').toString(),
-            );
-        break;
-    }
-
-    return CreateDraft(
-      id: (map['id'] ?? '').toString(),
-      updatedAtMs: (map['updatedAt'] as num?)?.toInt() ?? 0,
-      state: state,
-      sourceType: tabKey,
-    );
-  }
-
   Map<String, dynamic> toStorageMap() {
     return <String, dynamic>{
       'id': id,
       'type': storageType,
       'updatedAt': updatedAtMs,
       'identity': identity.value,
-      'draftVersion': 'v2',
       'editorKind': state.editorKind.name,
       'mediaKind': state.mediaKind.name,
       'imagePaths': state.imagePaths,
@@ -1284,6 +1113,7 @@ class CreateDraft {
       'activeArticlePageId': state.activeArticlePageId,
       'activeArticleBlockId': state.activeArticleBlockId,
       'articleTemplate': state.articleTemplate.name,
+      'articlePaperTexture': state.articlePaperTexture.name,
       'articleFontPreset': state.articleFontPreset.name,
       'articleCoverImagePath': state.articleCoverImagePath,
       'coverUrl': state.articleCoverImagePath,
@@ -1327,6 +1157,7 @@ class CreateDraft {
       'body': state.body,
       'articleDocument': state.articleDocument.toMap(),
       'articleTemplate': state.articleTemplate.name,
+      'articlePaperTexture': state.articlePaperTexture.name,
       'articleFontPreset': state.articleFontPreset.name,
       'articleCoverImagePath': state.articleCoverImagePath,
       'coverUrl': state.articleCoverImagePath,

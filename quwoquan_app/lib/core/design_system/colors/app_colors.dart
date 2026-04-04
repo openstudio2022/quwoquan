@@ -337,6 +337,142 @@ class ArticleTemplateColors {
   static const Color journalSticker = Color(0x88A7B8FF);
 }
 
+/// 文章阅读器「纸张质感」色板（见 `resolveArticlePaperPalette`）。
+class ArticlePaperPaletteColors {
+  ArticlePaperPaletteColors._();
+
+  // white
+  static const Color whiteStageLight = Color(0xFFF5F5F5);
+  static const Color whiteStageDark = Color(0xFF1C1C1E);
+  static const Color whitePaperLight = Color(0xFFFFFFFF);
+  static const Color whitePaperDark = Color(0xFF1C1C1E);
+  static const Color whitePaperBorderLight = Color(0xFFE5E5EA);
+  static const Color whitePaperBorderDark = Color(0xFF38383A);
+  static const Color whiteTextLight = Color(0xFF1C1C1E);
+  static const Color whiteTextDark = Color(0xFFE5E5EA);
+  static const Color whiteSecondaryTextLight = Color(0xFF8E8E93);
+  static const Color whiteSecondaryTextDark = Color(0xFF98989D);
+  static const Color whiteAccentLight = Color(0xFF007AFF);
+  static const Color whiteAccentDark = Color(0xFF0A84FF);
+  static const Color whiteBadgeBackgroundLight = Color(0xFFF2F2F7);
+  static const Color whiteBadgeBackgroundDark = Color(0xFF2C2C2E);
+  static const Color whiteBadgeTextLight = Color(0xFF3C3C43);
+  static const Color whiteBadgeTextDark = Color(0xFFEBEBF5);
+  static const Color whiteOverlayLight = Color(0x0A000000);
+  static const Color whiteOverlayDark = Color(0x0AFFFFFF);
+
+  // cream
+  static const Color creamStageLight = Color(0xFFF5F0E8);
+  static const Color creamStageDark = Color(0xFF1E1C18);
+  static const Color creamPaperLight = Color(0xFFFFF8F0);
+  static const Color creamPaperDark = Color(0xFF2C2520);
+  static const Color creamPaperBorderLight = Color(0xFFE8DDD0);
+  static const Color creamPaperBorderDark = Color(0xFF3A3228);
+  static const Color creamTextLight = Color(0xFF2C2418);
+  static const Color creamTextDark = Color(0xFFE8DDD0);
+  static const Color creamSecondaryTextLight = Color(0xFF8C7E6C);
+  static const Color creamSecondaryTextDark = Color(0xFF9C8E7C);
+  static const Color creamAccentLight = Color(0xFFA0845C);
+  static const Color creamAccentDark = Color(0xFFBFA07C);
+  static const Color creamBadgeBackgroundLight = Color(0xFFF0E8D8);
+  static const Color creamBadgeBackgroundDark = Color(0xFF3A3228);
+  static const Color creamBadgeTextLight = Color(0xFF4A3C28);
+  static const Color creamBadgeTextDark = Color(0xFFE8DDD0);
+  static const Color creamOverlayLight = Color(0x0A3C2810);
+  static const Color creamOverlayDark = Color(0x0AFFF8F0);
+
+  // sepia
+  static const Color sepiaStageLight = Color(0xFFEDE4D0);
+  static const Color sepiaStageDark = Color(0xFF1E1A14);
+  static const Color sepiaPaperLight = Color(0xFFF4ECD8);
+  static const Color sepiaPaperDark = Color(0xFF3A3228);
+  static const Color sepiaPaperBorderLight = Color(0xFFD8CEB8);
+  static const Color sepiaPaperBorderDark = Color(0xFF4A4038);
+  static const Color sepiaTextLight = Color(0xFF3A3020);
+  static const Color sepiaTextDark = Color(0xFFD8CEB8);
+  static const Color sepiaSecondaryTextLight = Color(0xFF7A6E58);
+  static const Color sepiaSecondaryTextDark = Color(0xFF9A8E78);
+  static const Color sepiaAccentLight = Color(0xFF8C6E3C);
+  static const Color sepiaAccentDark = Color(0xFFB09060);
+  static const Color sepiaBadgeBackgroundLight = Color(0xFFE8DCC4);
+  static const Color sepiaBadgeBackgroundDark = Color(0xFF4A4038);
+  static const Color sepiaBadgeTextLight = Color(0xFF4A3C28);
+  static const Color sepiaBadgeTextDark = Color(0xFFD8CEB8);
+  static const Color sepiaOverlayLight = Color(0x0A3C2810);
+  static const Color sepiaOverlayDark = Color(0x0AF4ECD8);
+
+  // parchment
+  static const Color parchmentStageLight = Color(0xFFE8DCC4);
+  static const Color parchmentStageDark = Color(0xFF1C1810);
+  static const Color parchmentPaperLight = Color(0xFFF0E6D2);
+  static const Color parchmentPaperDark = Color(0xFF3E3428);
+  static const Color parchmentPaperBorderLight = Color(0xFFD0C4A8);
+  static const Color parchmentPaperBorderDark = Color(0xFF504430);
+  static const Color parchmentTextLight = Color(0xFF3C3020);
+  static const Color parchmentTextDark = Color(0xFFD0C4A8);
+  static const Color parchmentSecondaryTextLight = Color(0xFF786850);
+  static const Color parchmentSecondaryTextDark = Color(0xFF988870);
+  static const Color parchmentAccentLight = Color(0xFF7C6030);
+  static const Color parchmentAccentDark = Color(0xFFA88050);
+  static const Color parchmentBadgeBackgroundLight = Color(0xFFE0D4B8);
+  static const Color parchmentBadgeBackgroundDark = Color(0xFF504430);
+  static const Color parchmentBadgeTextLight = Color(0xFF4A3C28);
+  static const Color parchmentBadgeTextDark = Color(0xFFD0C4A8);
+  static const Color parchmentOverlayLight = Color(0x0A3C2810);
+  static const Color parchmentOverlayDark = Color(0x0AF0E6D2);
+
+  // eyeCare
+  static const Color eyeCareStageLight = Color(0xFFE0ECD8);
+  static const Color eyeCareStageDark = Color(0xFF141E14);
+  static const Color eyeCarePaperLight = Color(0xFFE8F0E0);
+  static const Color eyeCarePaperDark = Color(0xFF1E2A1E);
+  static const Color eyeCarePaperBorderLight = Color(0xFFC8D8C0);
+  static const Color eyeCarePaperBorderDark = Color(0xFF2E3E2E);
+  static const Color eyeCareTextLight = Color(0xFF1C2C1C);
+  static const Color eyeCareTextDark = Color(0xFFC8D8C0);
+  static const Color eyeCareSecondaryTextLight = Color(0xFF5C7C5C);
+  static const Color eyeCareSecondaryTextDark = Color(0xFF7C9C7C);
+  static const Color eyeCareAccentLight = Color(0xFF3C7C3C);
+  static const Color eyeCareAccentDark = Color(0xFF5CA05C);
+  static const Color eyeCareBadgeBackgroundLight = Color(0xFFD0E0C8);
+  static const Color eyeCareBadgeBackgroundDark = Color(0xFF2E3E2E);
+  static const Color eyeCareBadgeTextLight = Color(0xFF2C3C2C);
+  static const Color eyeCareBadgeTextDark = Color(0xFFC8D8C0);
+  static const Color eyeCareOverlayLight = Color(0x0A1C3C1C);
+  static const Color eyeCareOverlayDark = Color(0x0AE8F0E0);
+
+  // quiet
+  static const Color quietStageLight = Color(0xFFEAEAEF);
+  static const Color quietStageDark = Color(0xFF1C1C1E);
+  static const Color quietPaperLight = Color(0xFFF2F2F7);
+  static const Color quietPaperDark = Color(0xFF2C2C2E);
+  static const Color quietPaperBorderLight = Color(0xFFD1D1D6);
+  static const Color quietPaperBorderDark = Color(0xFF3A3A3C);
+  static const Color quietTextLight = Color(0xFF1C1C1E);
+  static const Color quietTextDark = Color(0xFFD1D1D6);
+  static const Color quietSecondaryTextLight = Color(0xFF8E8E93);
+  static const Color quietSecondaryTextDark = Color(0xFF98989D);
+  static const Color quietAccentLight = Color(0xFF5856D6);
+  static const Color quietAccentDark = Color(0xFF7D7AFF);
+  static const Color quietBadgeBackgroundLight = Color(0xFFE5E5EA);
+  static const Color quietBadgeBackgroundDark = Color(0xFF3A3A3C);
+  static const Color quietBadgeTextLight = Color(0xFF3C3C43);
+  static const Color quietBadgeTextDark = Color(0xFFD1D1D6);
+  static const Color quietOverlayLight = Color(0x0A000000);
+  static const Color quietOverlayDark = Color(0x0AFFFFFF);
+
+  // night (fixed palette)
+  static const Color nightStage = Color(0xFF000000);
+  static const Color nightPaper = Color(0xFF000000);
+  static const Color nightPaperBorder = Color(0xFF38383A);
+  static const Color nightText = Color(0xFFD1D1D6);
+  static const Color nightSecondaryText = Color(0xFF8E8E93);
+  static const Color nightAccent = Color(0xFF0A84FF);
+  static const Color nightBadgeBackground = Color(0xFF1C1C1E);
+  static const Color nightBadgeText = Color(0xFFD1D1D6);
+  static const Color nightOverlay = Color(0x0AFFFFFF);
+}
+
 class AppColorsTheme {
   const AppColorsTheme({required this.isDark});
 

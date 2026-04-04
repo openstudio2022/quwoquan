@@ -24,6 +24,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/services/start_group_chat_wire.dart';
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
 
@@ -119,99 +120,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     super.dispose();
   }
 
-  static String _readWireString(Map<String, dynamic> source, List<String> keys) {
-    for (final key in keys) {
-      final value = source[key];
-      if (value == null) {
-        continue;
-      }
-      final text = value.toString().trim();
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return '';
-  }
-
   Set<String> get _mutualContactIds {
     return _contacts
         .map((contact) => contact.userId)
         .where((id) => id.isNotEmpty && !_existingMemberIds.contains(id))
         .toSet();
-  }
-
-  List<StartGroupPickableMember> _selectableFromChatMembers(
-    List<ChatConversationMemberDto> members, {
-    bool mutualOnly = false,
-  }) {
-    final allowedIds = _mutualContactIds;
-    final normalized = <StartGroupPickableMember>[];
-    final seen = <String>{};
-    for (final m in members) {
-      final userId = m.userId;
-      if (userId.isEmpty ||
-          _existingMemberIds.contains(userId) ||
-          seen.contains(userId)) {
-        continue;
-      }
-      if (mutualOnly && !allowedIds.contains(userId)) {
-        continue;
-      }
-      seen.add(userId);
-      final displayName =
-          m.displayName.isNotEmpty ? m.displayName : userId;
-      normalized.add(
-        StartGroupPickableMember(
-          userId: userId,
-          displayName: displayName,
-          avatarUrl: m.avatarUrl,
-        ),
-      );
-    }
-    return normalized;
-  }
-
-  List<StartGroupPickableMember> _selectableFromCircleWireMaps(
-    List<Map<String, dynamic>> members, {
-    bool mutualOnly = false,
-  }) {
-    final allowedIds = _mutualContactIds;
-    final normalized = <StartGroupPickableMember>[];
-    final seen = <String>{};
-    for (final member in members) {
-      final userId = _readWireString(member, const [
-        'userId',
-        'profileSubjectId',
-        'contactId',
-      ]);
-      if (userId.isEmpty ||
-          _existingMemberIds.contains(userId) ||
-          seen.contains(userId)) {
-        continue;
-      }
-      if (mutualOnly && !allowedIds.contains(userId)) {
-        continue;
-      }
-      seen.add(userId);
-      final displayName = _readWireString(member, const [
-        'displayName',
-        'nickname',
-        'name',
-        'username',
-      ]);
-      normalized.add(
-        StartGroupPickableMember(
-          userId: userId,
-          displayName: displayName.isNotEmpty ? displayName : userId,
-          avatarUrl: _readWireString(member, const [
-            'avatarUrl',
-            'avatar',
-            'coverUrl',
-          ]),
-        ),
-      );
-    }
-    return normalized;
   }
 
   void _mergeSelectedMembers(List<StartGroupPickableMember> members) {
@@ -334,8 +247,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 conversationId: group.id,
                 limit: 500,
               );
-          final selectableMembers = _selectableFromChatMembers(
+          final selectableMembers = selectableFromChatMembers(
             members,
+            existingMemberIds: _existingMemberIds,
+            mutualContactIds: _mutualContactIds,
             mutualOnly: true,
           );
           if (!context.mounted) {
@@ -367,8 +282,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           final members = await ref
               .read(circleRepositoryProvider)
               .listMembers(circle.id, limit: 500);
-          final selectableMembers = _selectableFromCircleWireMaps(
+          final selectableMembers = selectableFromCircleWireMaps(
             members,
+            existingMemberIds: _existingMemberIds,
+            mutualContactIds: _mutualContactIds,
             mutualOnly: true,
           );
           if (!context.mounted) {

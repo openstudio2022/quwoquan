@@ -27,15 +27,14 @@ try:
 except ImportError:
     yaml = None  # type: ignore
 
+from page_disk_scan_paths import EXCLUDE_REL, matrix_disk_scan_paths
+
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / (
     "specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md"
 )
 INV = ROOT / "specs/gates/metadata_driven_ui_gap_inventory.yaml"
 APP = ROOT / "quwoquan_app"
-LIB = APP / "lib"
-
-EXCLUDE_REL = frozenset({"lib/ui/chat/pages/chat_display_fallbacks.dart"})
 
 
 def matrix_paths() -> set[str]:
@@ -45,28 +44,7 @@ def matrix_paths() -> set[str]:
 
 
 def disk_scan_paths() -> set[str]:
-    out: set[str] = set()
-    if not LIB.is_dir():
-        return out
-    ui = LIB / "ui"
-    if ui.is_dir():
-        for p in ui.rglob("*_page.dart"):
-            rel = p.relative_to(APP).as_posix()
-            if rel in EXCLUDE_REL:
-                continue
-            out.add(rel)
-        welcome = ui / "welcome/pages/welcome_screen.dart"
-        if welcome.is_file():
-            out.add(welcome.relative_to(APP).as_posix())
-    comp = LIB / "components"
-    if comp.is_dir():
-        for p in comp.rglob("*_page.dart"):
-            out.add(p.relative_to(APP).as_posix())
-    shell = LIB / "app/shell"
-    if shell.is_dir():
-        for p in shell.glob("*.dart"):
-            out.add(p.relative_to(APP).as_posix())
-    return out
+    return set(matrix_disk_scan_paths(ROOT))
 
 
 def inventory_ui_paths() -> set[str]:

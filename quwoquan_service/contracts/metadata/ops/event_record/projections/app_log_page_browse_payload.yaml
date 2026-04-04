@@ -1,0 +1,46 @@
+version: 1
+read_model: AppLogPageBrowsePayload
+
+description: |
+  客户端 browse 事件完整 payload（event=browse，与 AppLog page_access JSONL 根级 payload 对齐）。
+
+source_entities: []
+
+consumers:
+  - app (MainAppShell)
+
+client_projection:
+  dart_class: AppLogPageBrowsePayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_page_browse_payload.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'browse'"
+    - name: route
+      dart_type: String
+      nullable: false
+      source: route
+      aliases: [route]
+      default: "''"
+    - name: pageName
+      dart_type: String
+      nullable: false
+      source: pageName
+      aliases: [pageName]
+      default: "''"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"
+    - name: actionMeta
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: actionMeta
+      aliases: [actionMeta]
+      default: "null"

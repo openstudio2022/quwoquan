@@ -264,7 +264,7 @@ class MomentSocialFeed extends ConsumerWidget {
                 ),
                 onLikeTap: () {
                   ref
-                      .read(discoveryStateProvider)
+                      .read(discoveryStateProvider.notifier)
                       .toggleLike(dto.id, baseLikesCount: dto.likeCount);
                 },
                 onMoreTap: () {
@@ -400,7 +400,7 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   void _recordShare(WidgetRef ref, String postId, String actionId) {
-    ref.read(discoveryStateProvider).incrementShares(postId);
+    ref.read(discoveryStateProvider.notifier).incrementShares(postId);
     ref
         .read(contentBehaviorTrackerProvider)
         .trackShare(postId, tags: <String>[actionId]);

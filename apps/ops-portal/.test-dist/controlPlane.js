@@ -13,6 +13,17 @@ async function fetchJSON(baseUrl, path) {
     }
     return (await response.json());
 }
+function withQuery(path, query = {}) {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') {
+            return;
+        }
+        params.set(key, String(value));
+    });
+    const encoded = params.toString();
+    return encoded ? `${path}?${encoded}` : path;
+}
 export async function fetchExperiments() {
     const payload = await fetchJSON(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), '/v1/control-plane/product/experiments');
     return payload.items;
@@ -114,4 +125,10 @@ export async function fetchProductApprovals() {
 }
 export async function fetchProductProjectionSummary() {
     return fetchJSON(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), '/v1/control-plane/product/projections/summary');
+}
+export async function fetchProductEventSummary(query = {}) {
+    return fetchJSON(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), withQuery('/v1/ops/events/summary', query));
+}
+export async function fetchProductEventDrilldown(query = {}) {
+    return fetchJSON(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), withQuery('/v1/ops/events/drilldown', query));
 }

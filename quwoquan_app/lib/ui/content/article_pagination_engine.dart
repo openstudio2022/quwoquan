@@ -15,41 +15,48 @@ class ArticlePaginationEngine {
     required double stageWidth,
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
+    double? contentHeightOverride,
   }) {
     final contentSize = metrics.contentSizeForStageWidth(stageWidth);
     final contentWidth = contentSize.width;
-    final contentHeight = contentSize.height;
+    final paperContentHeight = contentSize.height;
+    final contentHeight =
+        (contentHeightOverride != null && contentHeightOverride > 0)
+        ? contentHeightOverride
+        : paperContentHeight;
     if (contentWidth <= 0 || contentHeight <= 0) {
       return const <ArticlePageData>[ArticlePageData(id: 'page_0')];
     }
 
-    final title = document.title.trimRight();
+    final title = document.titleStyle == ArticleDocumentTitleStyle.none
+        ? ''
+        : document.title.trimRight();
     final body = document.body;
-    final semanticBlocks = document.blocks
-        .where(
-          (block) =>
-              block.type == ArticleDocumentBlockType.heading2 ||
-              block.type == ArticleDocumentBlockType.heading3 ||
-              block.type == ArticleDocumentBlockType.sectionTitle,
-        )
-        .toList(growable: false)
-      ..sort((left, right) {
-        final offsetCompare = left.offset.compareTo(right.offset);
-        if (offsetCompare != 0) {
-          return offsetCompare;
-        }
-        return left.id.compareTo(right.id);
-      });
-    final assets = document.assets
-        .where((asset) => asset.hasImage)
-        .toList(growable: false)
-      ..sort((left, right) {
-        final offsetCompare = left.offset.compareTo(right.offset);
-        if (offsetCompare != 0) {
-          return offsetCompare;
-        }
-        return left.id.compareTo(right.id);
-      });
+    final semanticBlocks =
+        document.blocks
+            .where(
+              (block) =>
+                  block.type == ArticleDocumentBlockType.heading2 ||
+                  block.type == ArticleDocumentBlockType.heading3 ||
+                  block.type == ArticleDocumentBlockType.sectionTitle,
+            )
+            .toList(growable: false)
+          ..sort((left, right) {
+            final offsetCompare = left.offset.compareTo(right.offset);
+            if (offsetCompare != 0) {
+              return offsetCompare;
+            }
+            return left.id.compareTo(right.id);
+          });
+    final assets =
+        document.assets.where((asset) => asset.hasImage).toList(growable: false)
+          ..sort((left, right) {
+            final offsetCompare = left.offset.compareTo(right.offset);
+            if (offsetCompare != 0) {
+              return offsetCompare;
+            }
+            return left.id.compareTo(right.id);
+          });
 
     final pages = <ArticlePageData>[];
     var titleOffset = 0;
@@ -110,36 +117,33 @@ class ArticlePaginationEngine {
         AppSpacing.containerMd,
         AppSpacing.containerMd,
       ),
+      headerReservedHeight:
+          AppSpacing.sm + AppSpacing.hairline + AppSpacing.intraGroupSm * 2,
+      footerReservedHeight:
+          AppSpacing.sm + AppSpacing.hairline + AppSpacing.interGroupSm,
       wrapImageGap: AppSpacing.containerSm,
       wrapImageMaxWidth: 132,
       fullWidthImageAspectRatio: 4 / 3,
       journalImageAspectRatio: 1,
-      inlineImageSpacing: AppSpacing.intraGroupSm,
+      inlineImageSpacing: AppSpacing.interGroupSm,
     ),
     double stageWidth = 390,
+    double? contentHeightOverride,
     ArticleFontPreset fontPreset = ArticleFontPreset.clean,
   }) {
-    final titleStyle = _measurementTextStyle(
-      fontPreset: fontPreset,
-      size: AppTypography.xl,
-      weight: AppTypography.semiBold,
-      height: AppSpacing.textLineHeightHeadline,
-    );
-    final bodyStyle = _measurementTextStyle(
-      fontPreset: fontPreset,
-      size: AppTypography.base,
-      height: AppSpacing.textLineHeightArticleBody,
-    );
+    final titleStyle = snapshotTitleStyle(fontPreset: fontPreset);
+    final bodyStyle = snapshotBodyStyle(fontPreset: fontPreset);
     return paginate(
       document: document,
       metrics: metrics,
       stageWidth: stageWidth,
       titleStyle: titleStyle,
       bodyStyle: bodyStyle,
+      contentHeightOverride: contentHeightOverride,
     );
   }
 
-  static TextStyle _measurementTextStyle({
+  static TextStyle measurementTextStyle({
     required ArticleFontPreset fontPreset,
     required double size,
     FontWeight weight = FontWeight.normal,
@@ -175,6 +179,27 @@ class ArticlePaginationEngine {
     );
   }
 
+  static TextStyle snapshotTitleStyle({
+    ArticleFontPreset fontPreset = ArticleFontPreset.clean,
+  }) {
+    return measurementTextStyle(
+      fontPreset: fontPreset,
+      size: AppTypography.xl,
+      weight: FontWeight.w600,
+      height: AppSpacing.textLineHeightHeadline,
+    );
+  }
+
+  static TextStyle snapshotBodyStyle({
+    ArticleFontPreset fontPreset = ArticleFontPreset.clean,
+  }) {
+    return measurementTextStyle(
+      fontPreset: fontPreset,
+      size: AppTypography.base,
+      height: AppSpacing.textLineHeightArticleBody,
+    );
+  }
+
   static _ArticlePageLayoutResult _paginateSinglePage({
     required int pageIndex,
     required String title,
@@ -194,7 +219,7 @@ class ArticlePaginationEngine {
     var remainingHeight = contentHeight;
     ArticleTextRange? titleRange;
     ArticleTextRange? bodyRange;
-    ArticleDocumentAsset? pageAsset;
+    final pageAssets = <ArticleDocumentAsset>[];
     final pageBlocks = <ArticleDocumentBlock>[];
     var nextTitleOffset = titleOffset;
     var nextBodyOffset = bodyOffset;
@@ -219,7 +244,8 @@ class ArticlePaginationEngine {
     }
 
     while (nextSemanticIndex < semanticBlocks.length &&
-        semanticBlocks[nextSemanticIndex].offset.clamp(0, body.length) <= nextBodyOffset &&
+        semanticBlocks[nextSemanticIndex].offset.clamp(0, body.length) <=
+            nextBodyOffset &&
         remainingHeight > 0) {
       final block = semanticBlocks[nextSemanticIndex];
       final spec = _semanticBlockSpec(
@@ -249,26 +275,70 @@ class ArticlePaginationEngine {
       nextSemanticIndex += 1;
     }
 
-    if (nextTitleOffset >= title.length && nextAssetIndex < assets.length) {
-      final candidateAsset = assets[nextAssetIndex];
-      if (candidateAsset.offset.clamp(0, body.length) <= nextBodyOffset) {
+    if (nextTitleOffset >= title.length) {
+      final figureGap = articleSpacingResolver().between(
+        ArticleSpacingSemantic.figure,
+        ArticleSpacingSemantic.figure,
+      );
+      while (nextAssetIndex < assets.length) {
+        final candidateAsset = assets[nextAssetIndex];
+        if (candidateAsset.offset.clamp(0, body.length) > nextBodyOffset) {
+          break;
+        }
+        if (candidateAsset.usesWrappedLayout) {
+          if (pageAssets.isNotEmpty) {
+            break;
+          }
+          final assetHeight = _assetHeightForPage(
+            asset: candidateAsset,
+            metrics: metrics,
+            contentWidth: contentWidth,
+            bodyStyle: bodyStyle,
+          );
+          final allowOverflow =
+              titleRange == null && pageBlocks.isEmpty && pageAssets.isEmpty;
+          if (assetHeight > remainingHeight && !allowOverflow) {
+            break;
+          }
+          pageAssets.add(candidateAsset);
+          nextAssetIndex += 1;
+          remainingHeight -= assetHeight;
+          break;
+        }
+        if (pageAssets.isNotEmpty && pageAssets.last.usesWrappedLayout) {
+          break;
+        }
         final assetHeight = _assetHeightForPage(
           asset: candidateAsset,
           metrics: metrics,
           contentWidth: contentWidth,
+          bodyStyle: bodyStyle,
         );
-        if (assetHeight <= remainingHeight || titleRange == null) {
-          pageAsset = candidateAsset;
-          nextAssetIndex += 1;
-          if (!candidateAsset.usesWrappedLayout) {
-            remainingHeight -= assetHeight;
-            if (remainingHeight > 0) {
-              remainingHeight -= metrics.inlineImageSpacing;
-            }
+        final allowFirstOverflow =
+            nextTitleOffset >= title.length &&
+            titleRange == null &&
+            pageBlocks.isEmpty &&
+            pageAssets.isEmpty;
+        if (assetHeight > remainingHeight && !allowFirstOverflow) {
+          if (pageAssets.isNotEmpty) {
+            break;
           }
+          if (titleRange != null || pageBlocks.isNotEmpty) {
+            break;
+          }
+        }
+        pageAssets.add(candidateAsset);
+        nextAssetIndex += 1;
+        remainingHeight -= assetHeight;
+        if (remainingHeight > 0) {
+          remainingHeight -= figureGap;
         }
       }
     }
+
+    final ArticleDocumentAsset? pageAsset = pageAssets.isEmpty
+        ? null
+        : pageAssets.first;
 
     final nextSemanticOffset = nextSemanticIndex < semanticBlocks.length
         ? semanticBlocks[nextSemanticIndex].offset.clamp(0, body.length)
@@ -279,22 +349,47 @@ class ArticlePaginationEngine {
     final nextStopOffset = math.min(nextSemanticOffset, nextAssetOffset);
     final textEndLimit = math.max(nextBodyOffset, nextStopOffset);
 
-    if (nextBodyOffset < body.length &&
-        nextBodyOffset < textEndLimit &&
+    final ArticleDocumentAsset? bodyLayoutAsset =
+        pageAssets.length == 1 && pageAssets.first.usesWrappedLayout
+        ? pageAssets.first
+        : null;
+    final int bodyFitStart;
+    if (bodyLayoutAsset != null) {
+      // 文内图 offset 之前的首图前正文只应由插文槽编辑；环绕切片若从 0 起算会与插槽双写同一段。
+      bodyFitStart = math.max(
+        nextBodyOffset,
+        bodyLayoutAsset.offset.clamp(0, body.length),
+      );
+    } else {
+      bodyFitStart = nextBodyOffset;
+    }
+
+    if (bodyFitStart < body.length &&
+        bodyFitStart < textEndLimit &&
         remainingHeight > 0) {
       final fit = _fitBodyTextForPage(
         text: body,
-        start: nextBodyOffset,
+        start: bodyFitStart,
         endLimit: textEndLimit,
         style: bodyStyle,
         maxWidth: contentWidth,
         maxHeight: remainingHeight,
-        asset: pageAsset,
+        asset: bodyLayoutAsset,
         metrics: metrics,
       );
-      if (fit.endOffset > nextBodyOffset) {
-        bodyRange = ArticleTextRange(start: nextBodyOffset, end: fit.endOffset);
-        nextBodyOffset = fit.endOffset;
+      if (fit.endOffset > bodyFitStart) {
+        final end = fit.endOffset.clamp(bodyFitStart, body.length);
+        if (end > bodyFitStart) {
+          bodyRange = ArticleTextRange(start: bodyFitStart, end: end);
+          nextBodyOffset = end;
+        }
+      }
+    }
+
+    if (pageAsset != null && pageAsset.usesWrappedLayout) {
+      final anchor = pageAsset.offset.clamp(0, body.length);
+      if (nextBodyOffset < anchor) {
+        nextBodyOffset = anchor;
       }
     }
 
@@ -304,9 +399,23 @@ class ArticlePaginationEngine {
     final bodyText = bodyRange == null
         ? ''
         : body.substring(bodyRange.start, bodyRange.end).trimRight();
-    final insertOffset = bodyRange?.start ??
+    final insertOffset =
+        bodyRange?.start ??
         pageAsset?.offset.clamp(0, body.length) ??
         nextBodyOffset.clamp(0, body.length);
+    final fragments = _buildPageFragments(
+      titleText: titleText,
+      bodyText: bodyText,
+      pageBlocks: pageBlocks,
+      pageAssets: pageAssets,
+      contentWidth: contentWidth,
+      bodyStyle: bodyStyle,
+      metrics: metrics,
+    );
+
+    final List<String>? multiIds = pageAssets.length > 1
+        ? pageAssets.map((a) => a.id).toList(growable: false)
+        : null;
 
     return _ArticlePageLayoutResult(
       page: ArticlePageData(
@@ -317,11 +426,13 @@ class ArticlePaginationEngine {
         imageLayout: pageAsset?.imageLayout ?? 'fullWidth',
         caption: pageAsset?.caption ?? '',
         contentBlocks: pageBlocks,
+        fragments: fragments,
         binding: ArticlePageBinding(
           titleRange: titleRange,
           bodyRange: bodyRange,
           assetId: pageAsset?.id,
           assetOffset: pageAsset?.offset,
+          pageAssetIds: multiIds,
           insertOffset: insertOffset,
         ),
       ),
@@ -353,6 +464,7 @@ class ArticlePaginationEngine {
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
   }) {
+    final spacing = articleSpacingResolver();
     final titleFont = titleStyle.fontSize ?? AppTypography.xl;
     final bodyFont = bodyStyle.fontSize ?? AppTypography.base;
     return switch (block.type) {
@@ -361,16 +473,16 @@ class ArticlePaginationEngine {
           fontSize: titleFont * 0.82,
           fontWeight: FontWeight.w600,
         ),
-        spacingBefore: AppSpacing.interGroupSm,
-        spacingAfter: AppSpacing.intraGroupSm,
+        spacingBefore: spacing.before(ArticleSpacingSemantic.headingMajor),
+        spacingAfter: spacing.after(ArticleSpacingSemantic.headingMajor),
       ),
       ArticleDocumentBlockType.heading3 => _SemanticBlockSpec(
         style: bodyStyle.copyWith(
           fontSize: math.max(bodyFont * 1.14, 18),
           fontWeight: FontWeight.w600,
         ),
-        spacingBefore: AppSpacing.intraGroupSm,
-        spacingAfter: AppSpacing.intraGroupXs,
+        spacingBefore: spacing.before(ArticleSpacingSemantic.headingMinor),
+        spacingAfter: spacing.after(ArticleSpacingSemantic.headingMinor),
       ),
       ArticleDocumentBlockType.sectionTitle => _SemanticBlockSpec(
         style: titleStyle.copyWith(
@@ -378,8 +490,8 @@ class ArticlePaginationEngine {
           fontWeight: FontWeight.w700,
           letterSpacing: 0.18,
         ),
-        spacingBefore: AppSpacing.interGroupSm,
-        spacingAfter: AppSpacing.intraGroupSm,
+        spacingBefore: spacing.before(ArticleSpacingSemantic.headingMajor),
+        spacingAfter: spacing.after(ArticleSpacingSemantic.headingMajor),
       ),
       _ => _SemanticBlockSpec(
         style: bodyStyle,
@@ -387,6 +499,108 @@ class ArticlePaginationEngine {
         spacingAfter: 0,
       ),
     };
+  }
+
+  static List<ArticleLayoutFragment> _buildPageFragments({
+    required String titleText,
+    required String bodyText,
+    required List<ArticleDocumentBlock> pageBlocks,
+    required List<ArticleDocumentAsset> pageAssets,
+    required double contentWidth,
+    required TextStyle bodyStyle,
+    required ArticleCanvasMetrics metrics,
+  }) {
+    final fragments = <ArticleLayoutFragment>[];
+    if (titleText.trim().isNotEmpty) {
+      fragments.add(
+        ArticleLayoutFragment(
+          kind: ArticleLayoutFragmentKind.title,
+          text: titleText.trim(),
+          textStyleKey: 'title',
+        ),
+      );
+    }
+    for (final block in pageBlocks) {
+      fragments.add(
+        ArticleLayoutFragment(
+          kind: ArticleLayoutFragmentKind.semanticBlock,
+          block: block,
+          text: block.text.trim(),
+          textStyleKey: switch (block.type) {
+            ArticleDocumentBlockType.heading2 => 'heading2',
+            ArticleDocumentBlockType.heading3 => 'heading3',
+            ArticleDocumentBlockType.sectionTitle => 'sectionTitle',
+            ArticleDocumentBlockType.orderedItem => 'orderedItem',
+            ArticleDocumentBlockType.bulletItem => 'bulletItem',
+            _ => 'body',
+          },
+          textAlign: block.textAlign,
+        ),
+      );
+    }
+    if (pageAssets.isNotEmpty) {
+      for (final pa in pageAssets) {
+        if (!pa.hasImage) {
+          continue;
+        }
+        if (pa.usesWrappedLayout) {
+          final wrap = resolveArticleWrapLayout(
+            ArticleWrapLayoutInput(
+              body: bodyText,
+              rowContentWidth: contentWidth,
+              bodyStyle: bodyStyle,
+              captionText: pa.caption,
+              captionStyle: bodyStyle.copyWith(
+                fontSize: AppTypography.sm,
+                height: AppSpacing.textLineHeightLabel,
+              ),
+              captionPlaceholderWhenEmpty: false,
+              imageLayout: pa.imageLayout,
+              metrics: metrics,
+            ),
+          );
+          fragments.add(
+            ArticleLayoutFragment(
+              kind: ArticleLayoutFragmentKind.wrapContent,
+              text: bodyText.trim(),
+              asset: pa,
+              wrapLayout: wrap.layout,
+              textStyleKey: 'body',
+              leadingText: wrap.leadingText.trim(),
+              trailingText: wrap.trailingText.trim(),
+            ),
+          );
+        } else {
+          fragments.add(
+            ArticleLayoutFragment(
+              kind: ArticleLayoutFragmentKind.fullWidthImage,
+              asset: pa,
+            ),
+          );
+        }
+      }
+      final hasFullWidthStack = pageAssets.any(
+        (a) => a.hasImage && !a.usesWrappedLayout,
+      );
+      if (hasFullWidthStack && bodyText.trim().isNotEmpty) {
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: ArticleLayoutFragmentKind.body,
+            text: bodyText.trim(),
+            textStyleKey: 'body',
+          ),
+        );
+      }
+    } else if (bodyText.trim().isNotEmpty) {
+      fragments.add(
+        ArticleLayoutFragment(
+          kind: ArticleLayoutFragmentKind.body,
+          text: bodyText.trim(),
+          textStyleKey: 'body',
+        ),
+      );
+    }
+    return fragments;
   }
 
   static _TextFitResult _fitBodyTextForPage({
@@ -421,23 +635,59 @@ class ArticlePaginationEngine {
       );
     }
 
-    final wrappedWidth = math.max(
-      88.0,
-      maxWidth - metrics.wrapImageWidthForContent(maxWidth) - metrics.wrapImageGap,
+    final wrap = resolveArticleWrapLayout(
+      ArticleWrapLayoutInput(
+        body: text.substring(start, endLimit),
+        rowContentWidth: maxWidth,
+        bodyStyle: style,
+        captionText: asset.caption,
+        captionStyle: style.copyWith(
+          fontSize: AppTypography.sm,
+          height: AppSpacing.textLineHeightLabel,
+        ),
+        captionPlaceholderWhenEmpty: false,
+        imageLayout: asset.imageLayout,
+        metrics: metrics,
+      ),
     );
-    final assetHeight = _assetHeightForPage(
-      asset: asset,
-      metrics: metrics,
-      contentWidth: maxWidth,
-    );
-    return _fitText(
+    // 环绕布局分两段测量：图旁窄列（leading）+ 图下通栏（trailing）。
+    // 旧实现把全部文字按 besideWidth 测量，导致图下文字高度被高估、分页提前截断。
+    final besideWidth = wrap.layout.besideWidth;
+    final besideHeight = wrap.layout.besideHeight;
+    final splitOffset = wrap.layout.splitOffset;
+    final trailingSpacing = wrap.layout.trailingSpacing;
+
+    // 图旁部分（leading）：固定占 besideHeight。
+    // 图下部分（trailing）：按 maxWidth 通栏测量，占剩余高度。
+    final trailingStart = start + splitOffset;
+    if (trailingStart >= endLimit) {
+      // 全部文字都在图旁，无图下部分。
+      return _TextFitResult(
+        endOffset: endLimit,
+        height: besideHeight,
+      );
+    }
+    final remainingAfterBeside = maxHeight - besideHeight - trailingSpacing;
+    if (remainingAfterBeside <= 0) {
+      // 图旁已占满页面高度，图下无空间。
+      return _TextFitResult(
+        endOffset: trailingStart.clamp(start, endLimit),
+        height: besideHeight,
+      );
+    }
+    // 图下文字按通栏宽度测量。
+    final trailFit = _fitText(
       text: text,
-      start: start,
+      start: trailingStart,
       endLimit: endLimit,
       style: style,
-      maxWidth: wrappedWidth,
-      maxHeight: maxHeight,
-      minimumHeight: assetHeight,
+      maxWidth: maxWidth,
+      maxHeight: remainingAfterBeside,
+    );
+    final totalHeight = besideHeight + trailingSpacing + trailFit.height;
+    return _TextFitResult(
+      endOffset: trailFit.endOffset,
+      height: totalHeight,
     );
   }
 
@@ -453,16 +703,10 @@ class ArticlePaginationEngine {
     final safeStart = start.clamp(0, text.length);
     final safeEnd = endLimit.clamp(safeStart, text.length);
     if (safeStart >= safeEnd) {
-      return _TextFitResult(
-        endOffset: safeStart,
-        height: minimumHeight,
-      );
+      return _TextFitResult(endOffset: safeStart, height: minimumHeight);
     }
     if (maxHeight <= 0) {
-      return _TextFitResult(
-        endOffset: safeStart,
-        height: minimumHeight,
-      );
+      return _TextFitResult(endOffset: safeStart, height: minimumHeight);
     }
 
     double heightForEnd(int end) {
@@ -477,10 +721,7 @@ class ArticlePaginationEngine {
     }
 
     if (heightForEnd(safeEnd) <= maxHeight) {
-      return _TextFitResult(
-        endOffset: safeEnd,
-        height: heightForEnd(safeEnd),
-      );
+      return _TextFitResult(endOffset: safeEnd, height: heightForEnd(safeEnd));
     }
 
     var low = safeStart + 1;
@@ -510,18 +751,11 @@ class ArticlePaginationEngine {
     int candidate,
     int upperBound,
   ) {
-    const breakTokens = <String>[
-      '\n',
-      '。',
-      '！',
-      '？',
-      '；',
-      '，',
-      '、',
-      '.',
-      ' ',
-    ];
-    final lowerBound = math.max(start + 1, start + ((candidate - start) * 0.6).round());
+    const breakTokens = <String>['\n', '。', '！', '？', '；', '，', '、', '.', ' '];
+    final lowerBound = math.max(
+      start + 1,
+      start + ((candidate - start) * 0.6).round(),
+    );
     for (var index = candidate; index >= lowerBound; index -= 1) {
       final token = text[index - 1];
       if (breakTokens.contains(token)) {
@@ -535,10 +769,30 @@ class ArticlePaginationEngine {
     required ArticleDocumentAsset asset,
     required ArticleCanvasMetrics metrics,
     required double contentWidth,
+    required TextStyle bodyStyle,
   }) {
     if (asset.usesWrappedLayout) {
-      final width = metrics.wrapImageWidthForContent(contentWidth);
-      return width;
+      final wrap = resolveArticleWrapLayout(
+        ArticleWrapLayoutInput(
+          body: '',
+          rowContentWidth: contentWidth,
+          bodyStyle: bodyStyle,
+          captionText: asset.caption,
+          captionStyle: bodyStyle.copyWith(
+            fontSize: AppTypography.sm,
+            height: articleCaptionLineHeight(),
+          ),
+          captionPlaceholderWhenEmpty: false,
+          imageLayout: asset.imageLayout,
+          metrics: metrics,
+        ),
+      );
+      final lineHeight =
+          (bodyStyle.fontSize ?? AppTypography.base) *
+          (bodyStyle.height ?? 1.0);
+      return math.max(wrap.layout.figureHeight, wrap.layout.besideHeight) +
+          wrap.layout.trailingSpacing +
+          lineHeight;
     }
     final aspectRatio = asset.imageLayout == 'journalCard'
         ? metrics.journalImageAspectRatio
@@ -548,10 +802,7 @@ class ArticlePaginationEngine {
 }
 
 class _TextFitResult {
-  const _TextFitResult({
-    required this.endOffset,
-    required this.height,
-  });
+  const _TextFitResult({required this.endOffset, required this.height});
 
   final int endOffset;
   final double height;

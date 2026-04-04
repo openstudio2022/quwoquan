@@ -95,10 +95,12 @@ class AppNavigationBarIconButton extends StatelessWidget {
     super.key,
     required this.icon,
     required this.onPressed,
+    this.color,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +119,7 @@ class AppNavigationBarIconButton extends StatelessWidget {
           child: Icon(
             icon,
             size: AppNavigationSemanticConstants.barIconSize,
-            color: AppNavigationSemanticConstants.barIconColor(isDark),
+            color: color ?? AppNavigationSemanticConstants.barIconColor(isDark),
           ),
         ),
       ),

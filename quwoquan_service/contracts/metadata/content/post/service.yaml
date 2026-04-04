@@ -28,7 +28,7 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, articleTemplate, articleFontPreset, articlePresentationVersion, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, personaContextVersion]
 
   - method: GET
     path: /v1/content/profile-subjects/{profileSubjectId}/posts
@@ -47,7 +47,7 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, articleTemplate, articleFontPreset, articlePresentationVersion, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
 
   - method: POST
     path: /v1/content/posts/{postId}/publish
@@ -69,15 +69,15 @@ api_routes:
   - method: PATCH
     path: /v1/content/posts/{postId}/settings
     operation: UpdatePostSettings
-    description: 更新发布后仍可调整的内容设置（visibility / circleIds / assistantUsePolicy / cover / presentation）
-    writable_fields: [visibility, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, circleIds, groupId, nodeId, assistantUsePolicy, coverUrl, articleTemplate, articleFontPreset, articlePresentationVersion]
+    description: 更新发布后仍可调整的外围设置（visibility / circleIds / assistantUsePolicy / homepage）
+    writable_fields: [visibility, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: POST
     path: /v1/content/posts/{postId}:promoteToWork
     operation: PromotePostToWork
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, tags, coverUrl, articleDocument, articleTemplate, articleFontPreset, articlePresentationVersion, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, title, summary, tags, coverUrl, articleDocument, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: GET

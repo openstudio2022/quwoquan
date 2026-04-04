@@ -1,14 +1,37 @@
 version: 1
 feature: event-schema-governance
-level: "L3_story"
+level: L3_story
 template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+tree_context:
+  feature_path: capability.product-ops-growth.feature.event-ingestion-and-analytics.subfeature.event-schema-governance
+  parent_path: capability.product-ops-growth.feature.event-ingestion-and-analytics
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A5_rollout_recovery
+    - A6_privacy_security
+    - A7_contract_metadata_consistency
+  notes: EventEnvelope、字段分级、幂等、采样、版本兼容是统一反馈基础设施的 schema 基线。
+  A1:
+    criteria: EventEnvelope、公共 context、业务扩展、反馈扩展、优先级与保留策略定义完整。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+  A5:
+    criteria: schema 升级、灰度、回滚、旧事件 adapter 与双写迁移策略明确。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/design.md
+  A6:
+    criteria: PII/SENSITIVE 字段分级、脱敏、trainingEligible 与保留策略明确。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+  A7:
+    criteria: eventId + eventVersion 幂等键、版本兼容与 metadata 真相源要求明确，不允许第二套 envelope 长期存在。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/design.md
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate: "make gate"
+  full_gate: "make gate-full"

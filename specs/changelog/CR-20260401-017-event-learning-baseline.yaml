@@ -1,0 +1,74 @@
+id: CR-20260401-017
+title: 全链路埋点与反馈基础设施 baseline
+slug: event-learning-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance
+  - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion
+  - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema
+
+entries:
+  - timestamp: "2026-04-01T12:00:00+08:00"
+    summary: >
+      冻结 event-learning-baseline：以全 App 域统一事件模型为核心，收口体验、行为、持续运营、在线学习与云侧冷热分层存储；
+      选定 Redis + EventBus + ClickHouse 类 OLAP + 对象存储为目标态，保留现有 Mongo/Redis serving 路径；
+      明确推荐、Assistant、运营三条反馈应用链路，以及统一指标字典、schema 治理、InteractionEvent/Scorecard 桥接规则。
+    reason: /baseline 交付全链路埋点与反馈基础设施规格基线
+    change_type:
+      - add
+      - refine
+    changed_documents:
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/plan.yaml
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/design.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/acceptance.yaml
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/design.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/acceptance.yaml
+        sections:
+          - 全文
+      - path: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema/spec.md
+        sections:
+          - 全文
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次 baseline 冻结目标态架构与文档真相源，不等同于一次性实现全部事件、总线、OLAP 与 dashboard。
+      - /dev 进入前需补 metadata/codegen 影响面、真实 cloud sync、事件 reporter 与验证脚本的具体切片。
+      - 商用收口阶段新增三类阻断项：`VisitRecord` 契约与实现漂移、page access/perf 仅本地日志、T3/T4 真实验证不足。
+      - /dev 收口要求将 page access/perf/analytics 从本地-only 观测路径升级为统一 event ingestion 主事实源；`visit_record` 仅保留访问聚合与体验标签职责。
+      - /dev 收口要求 `product-ops-service`、ops portal、assistant learning 与 content behavior 使用统一查询口径，并补齐 `test/core/**`、staging contract、Patrol/FTL 证据。

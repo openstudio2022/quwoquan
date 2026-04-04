@@ -58,6 +58,15 @@ type StoryRuntimeConfig struct {
 	CanaryMatrix     []StoryCanaryStage `json:"canaryMatrix"`
 }
 
+type articleDocumentSnapshot struct {
+	Title      string
+	Body       string
+	MediaURLs  []string
+	CoverURL   string
+	Template   string
+	FontPreset string
+}
+
 type PostService struct {
 	store         persistence.PostRepository
 	signaler      rtrec.SignalProcessor
@@ -324,6 +333,9 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		IllustrationAssetId: strings.TrimSpace(asString(payload["illustrationAssetId"])),
 		PublishLocation:     asMap(payload["publishLocation"]),
 		DeviceInfo:          asMap(payload["deviceInfo"]),
+		ArticleDocument:     asMap(payload["articleDocument"]),
+		ArticleTemplate:     strings.TrimSpace(asString(payload["articleTemplate"])),
+		ArticleFontPreset:   strings.TrimSpace(asString(payload["articleFontPreset"])),
 		Status:              "draft",
 		ModerationStatus:    "pending",
 		CreatedAt:           now,
@@ -335,6 +347,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 	if post.SourceType == "" {
 		post.SourceType = "original"
 	}
+	s.syncArticleDocumentSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -475,7 +488,11 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if illustrationAssetID, exists := payload["illustrationAssetId"]; exists {
 		post.IllustrationAssetId = strings.TrimSpace(asString(illustrationAssetID))
 	}
+	if articleDocument, exists := payload["articleDocument"]; exists {
+		post.ArticleDocument = asMap(articleDocument)
+	}
 	post.UpdatedAt = time.Now().UTC()
+	s.syncArticleDocumentSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -511,6 +528,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
+	s.syncArticleDocumentSnapshot(post)
 	now := time.Now().UTC()
 	post.Status = "published"
 	if post.PublishedAt.IsZero() {
@@ -676,9 +694,13 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
 	}
+	if articleDocument, exists := payload["articleDocument"]; exists {
+		post.ArticleDocument = asMap(articleDocument)
+	}
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
+	s.syncArticleDocumentSnapshot(post)
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
@@ -1033,7 +1055,7 @@ func (s *PostService) SelectManualVideoCover(_ context.Context, mediaID, coverAs
 	return &cp, nil
 }
 
-func (s *PostService) GenerateArticleSummary(title, body string) string {
+func generateArticleSummary(title, body string) string {
 	t := strings.TrimSpace(title)
 	b := strings.TrimSpace(body)
 	if b == "" {
@@ -1046,6 +1068,10 @@ func (s *PostService) GenerateArticleSummary(title, body string) string {
 		return b
 	}
 	return t + "：" + b
+}
+
+func (s *PostService) GenerateArticleSummary(title, body string) string {
+	return generateArticleSummary(title, body)
 }
 
 func (s *PostService) GetPostOrTombstone(ctx context.Context, postID string) (*postmodel.Post, bool, bool) {
@@ -1407,6 +1433,120 @@ func parseActivityTime(raw any) time.Time {
 		}
 	}
 	return time.Now().UTC()
+}
+
+func deriveArticleDocumentSnapshot(document map[string]any) articleDocumentSnapshot {
+	snapshot := articleDocumentSnapshot{
+		Template: strings.TrimSpace(asString(document["template"])),
+		FontPreset: strings.TrimSpace(
+			asString(document["fontPreset"]),
+		),
+		CoverURL: strings.TrimSpace(asString(document["coverImageUrl"])),
+	}
+	if snapshot.Template == "" {
+		snapshot.Template = strings.TrimSpace(asString(document["articleTemplate"]))
+	}
+	if snapshot.FontPreset == "" {
+		snapshot.FontPreset = strings.TrimSpace(asString(document["articleFontPreset"]))
+	}
+	if snapshot.CoverURL == "" {
+		snapshot.CoverURL = strings.TrimSpace(asString(document["coverUrl"]))
+	}
+	if len(document) == 0 {
+		return snapshot
+	}
+	appendLine := func(lines []string, line string) []string {
+		normalized := strings.TrimSpace(line)
+		if normalized == "" {
+			return lines
+		}
+		return append(lines, normalized)
+	}
+	var lines []string
+	orderedIndex := 0
+	rawNodes, _ := document["nodes"].([]any)
+	for _, rawNode := range rawNodes {
+		node := asMap(rawNode)
+		if len(node) == 0 {
+			continue
+		}
+		nodeType := strings.TrimSpace(asString(node["type"]))
+		text := strings.TrimSpace(asString(node["text"]))
+		switch nodeType {
+		case "documentTitle", "title":
+			if snapshot.Title == "" {
+				snapshot.Title = text
+			}
+			orderedIndex = 0
+		case "headingMajor", "headingMinor", "heading2", "heading3", "sectionTitle":
+			orderedIndex = 0
+			lines = appendLine(lines, text)
+		case "orderedItem":
+			if text == "" {
+				continue
+			}
+			orderedIndex++
+			lines = appendLine(lines, fmt.Sprintf("%d. %s", orderedIndex, text))
+		case "bulletItem":
+			orderedIndex = 0
+			lines = appendLine(lines, "• "+text)
+		case "figure", "image":
+			orderedIndex = 0
+			imageURL := strings.TrimSpace(asString(node["imageUrl"]))
+			if imageURL == "" {
+				continue
+			}
+			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
+			if snapshot.CoverURL == "" {
+				snapshot.CoverURL = imageURL
+			}
+		default:
+			orderedIndex = 0
+			lines = appendLine(lines, text)
+		}
+	}
+	if len(rawNodes) == 0 {
+		snapshot.Title = strings.TrimSpace(asString(document["title"]))
+		snapshot.Body = strings.TrimSpace(asString(document["body"]))
+		rawAssets, _ := document["assets"].([]any)
+		for _, rawAsset := range rawAssets {
+			asset := asMap(rawAsset)
+			if len(asset) == 0 {
+				continue
+			}
+			imageURL := strings.TrimSpace(asString(asset["imageUrl"]))
+			if imageURL == "" {
+				continue
+			}
+			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
+			if snapshot.CoverURL == "" {
+				snapshot.CoverURL = imageURL
+			}
+		}
+		if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
+			snapshot.CoverURL = snapshot.MediaURLs[0]
+		}
+		return snapshot
+	}
+	snapshot.Body = strings.Join(lines, "\n")
+	if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
+		snapshot.CoverURL = snapshot.MediaURLs[0]
+	}
+	return snapshot
+}
+
+func (s *PostService) syncArticleDocumentSnapshot(post *postmodel.Post) {
+	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
+		return
+	}
+	snapshot := deriveArticleDocumentSnapshot(post.ArticleDocument)
+	post.Title = snapshot.Title
+	post.Body = snapshot.Body
+	post.MediaUrls = snapshot.MediaURLs
+	post.CoverUrl = snapshot.CoverURL
+	post.ArticleTemplate = snapshot.Template
+	post.ArticleFontPreset = snapshot.FontPreset
+	post.Summary = generateArticleSummary(snapshot.Title, snapshot.Body)
 }
 
 func shareActorID(shareKey string) string {
@@ -2334,6 +2474,24 @@ func validateContentIdentity(contentType, identity string) error {
 }
 
 func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) error {
+	for _, key := range []string{
+		"title",
+		"body",
+		"summary",
+		"mediaUrls",
+		"coverUrl",
+		"articleDocument",
+		"articleTemplate",
+		"articleFontPreset",
+	} {
+		if _, exists := payload[key]; exists {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"发布后不可修改影响最终显示的文章内容",
+				"published content is immutable",
+			)
+		}
+	}
 	if contentIdentity, exists := payload["contentIdentity"]; exists {
 		post.ContentIdentity = normalizeContentIdentity(
 			post.ContentType,
@@ -2409,8 +2567,14 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "视频地址不能为空", "video requires videoUrl")
 		}
 	case "article":
-		if strings.TrimSpace(post.Title) == "" {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章标题必填", "article requires title")
+		if len(post.ArticleDocument) == 0 {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires articleDocument")
+		}
+		hasBody := strings.TrimSpace(post.Body) != ""
+		hasImages := len(asStringSlice(post.MediaUrls)) > 0
+		hasTitle := strings.TrimSpace(post.Title) != ""
+		if !hasBody && !hasImages && !hasTitle {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires title, body or image")
 		}
 	}
 	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && !supportsCircleDistribution(post.Visibility) {

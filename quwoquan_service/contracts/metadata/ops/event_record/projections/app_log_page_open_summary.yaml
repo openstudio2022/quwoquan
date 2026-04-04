@@ -1,0 +1,28 @@
+version: 1
+read_model: AppLogPageOpenSummaryPayload
+
+description: |
+  page open 的 summaryPayload。
+
+source_entities: []
+
+consumers:
+  - app (page_access_log_util)
+
+client_projection:
+  dart_class: AppLogPageOpenSummaryPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_page_open_summary.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'open'"
+    - name: route
+      dart_type: String
+      nullable: false
+      source: route
+      aliases: [route]
+      default: "''"

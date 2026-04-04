@@ -23,7 +23,7 @@ environments:
       domains: [ops]
     circle-service:
       domains: [circle]
-    seed-box:
+    assistant-service:
       domains: [assistant]
     notification-service:
       domains: [notification]
@@ -59,8 +59,10 @@ environments:
       domains: [media]
     coturn:
       domains: [turn]
+    assistant-service:
+      domains: [assistant]
     seed-box:
-      domains: [content, integration, chat, user, circle, assistant, notification, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
 
   prod:
     entity-service:
@@ -77,5 +79,7 @@ environments:
       domains: [media]
     coturn:
       domains: [turn]
+    assistant-service:
+      domains: [assistant]
     seed-box:
-      domains: [content, integration, chat, user, circle, assistant, notification, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]

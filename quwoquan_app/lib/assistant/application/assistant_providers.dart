@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
 import 'package:quwoquan_app/assistant/config/assistant_configuration_center.dart';
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
@@ -79,9 +80,9 @@ final assistantSkillMarketProvider =
 /// 助手「日程」tab 待办列表（GET /v1/assistant/tasks，Remote 不可用时 Repository fail-open 为空）。
 final assistantScheduleTasksProvider =
     FutureProvider.autoDispose<List<AssistantUserTaskView>>((ref) async {
-      return ref.read(assistantRepositoryProvider).listAssistantTasks(
-            limit: 32,
-          );
+      return ref
+          .read(assistantRepositoryProvider)
+          .listAssistantTasks(limit: 32);
     });
 
 final assistantProviderRegistryProvider = Provider<AssistantProviderRegistry>((
@@ -149,7 +150,7 @@ final assistantConfigurationCenterProvider =
           'alert.logEnabled': true,
           'alert.webhookUrl': '',
           'alert.feishuWebhook': '',
-          'sync.mode': 'local_mock',
+          'sync.mode': 'auto',
         },
       );
       return center;
@@ -275,18 +276,24 @@ final assistantAdapterRuntimeProvider = Provider<AssistantAdapterRuntime>((
 
 final assistantSyncModeProvider = Provider<AssistantSyncMode>((ref) {
   final cfg = ref.watch(assistantConfigurationCenterProvider);
-  return AssistantSyncModeParser.parse(
-    cfg.readString('sync.mode', 'local_mock'),
-  );
+  final rawMode = cfg.readString('sync.mode', 'auto').trim().toLowerCase();
+  if (rawMode.isEmpty || rawMode == 'auto') {
+    final dataSourceMode = ref.watch(appDataSourceModeProvider);
+    return dataSourceMode == AppDataSourceMode.remote
+        ? AssistantSyncMode.remote
+        : AssistantSyncMode.localMock;
+  }
+  return AssistantSyncModeParser.parse(rawMode);
 });
 
 final assistantSyncAdapterProvider = Provider<AssistantSyncAdapter>((ref) {
   final mode = ref.watch(assistantSyncModeProvider);
+  final repository = ref.watch(assistantRepositoryProvider);
   switch (mode) {
     case AssistantSyncMode.localMock:
       return LocalMockSyncAdapter();
-    case AssistantSyncMode.cloudStub:
-      return const CloudStubSyncAdapter();
+    case AssistantSyncMode.remote:
+      return RemoteAssistantSyncAdapter(repository: repository);
   }
 });
 

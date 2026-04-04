@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
+import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）
 /// 路由：/circle/:id/stats?type=members|groups|fans|likes
@@ -81,7 +82,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             return;
           }
           setState(() {
-            _groups = raw.map(_groupRowFromMap).toList(growable: false);
+            _groups = raw
+                .map(
+                  (g) => circleStatsGroupRowFromWireMap(
+                    Map<String, Object?>.from(g),
+                  ),
+                )
+                .toList(growable: false);
           });
           break;
         case 'likes':
@@ -98,7 +105,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             return;
           }
           setState(() {
-            _users = raw.map(_memberRowFromMap).toList(growable: false);
+            _users = raw
+                .map(
+                  (m) => circleStatsMemberRowFromWireMap(
+                    Map<String, Object?>.from(m),
+                  ),
+                )
+                .toList(growable: false);
           });
       }
     } catch (_) {
@@ -111,34 +124,6 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         _likes = [];
       });
     }
-  }
-
-  static CircleStatsMemberRowViewData _memberRowFromMap(Map<String, dynamic> m) {
-    final id = (m['userId'] ?? m['id'] ?? '').toString();
-    return CircleStatsMemberRowViewData(
-      id: id.isNotEmpty ? id : 'unknown',
-      name: (m['displayName'] ?? m['name'] ?? id).toString(),
-      avatarUrl: (m['avatarUrl'] ?? m['avatar'] ?? '').toString(),
-      worksCountLabel:
-          (m['worksCountLabel'] ?? m['worksCount'] ?? '—').toString(),
-      fansCountLabel: (m['fansCountLabel'] ?? m['fansCount'] ?? '—').toString(),
-      likesCountLabel:
-          (m['likesCountLabel'] ?? m['likesCount'] ?? '—').toString(),
-      isFollowed: m['isFollowed'] as bool? ?? false,
-    );
-  }
-
-  static CircleStatsGroupRowViewData _groupRowFromMap(Map<String, dynamic> m) {
-    final id = (m['_id'] ?? m['id'] ?? '').toString();
-    final mc = m['memberCount'];
-    final label = mc is num
-        ? mc.toString()
-        : (m['memberCountLabel'] ?? '—').toString();
-    return CircleStatsGroupRowViewData(
-      id: id.isNotEmpty ? id : 'g_unknown',
-      name: (m['name'] ?? '').toString(),
-      memberCountLabel: label,
-    );
   }
 
   List<CircleStatsMemberRowViewData> get _filteredUsers {

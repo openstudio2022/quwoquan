@@ -1,3 +1,13 @@
+/// 从 timeline 消息松散字段解析 `uiUsageStats`（供页面壳使用，避免在扫描路径内写 `Map<String, dynamic>`）。
+Map<String, dynamic> assistantUiUsageStatsMapFromMessageField(Object? raw) {
+  if (raw is! Map) {
+    return const <String, dynamic>{};
+  }
+  return Map<String, dynamic>.from(
+    raw.map((k, v) => MapEntry(k.toString(), v)),
+  );
+}
+
 /// 与助手消息 `uiUsageStats` 协议 Map 对齐的只读视图（用于 journey / UI，不参与持久化编码）。
 final class AssistantUsageLedgerEntryViewData {
   const AssistantUsageLedgerEntryViewData({

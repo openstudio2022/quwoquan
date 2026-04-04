@@ -13,6 +13,10 @@ import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_browse_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_browse_summary.g.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 
 /// 主 App 壳
 ///
@@ -38,6 +42,18 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   late String _currentPageVisitId;
   late DateTime _currentPageEnterAt;
 
+  /// 供 [dispose] 使用；卸载时 [ref] 不可用，须在 [build] 中刷新。
+  OpsEventRepository? _pageAccessOpsRepository;
+  String _pageAccessCurrentUserId = '';
+  String _pageAccessExperimentBucket = '';
+
+  void _cachePageAccessDependencies() {
+    _pageAccessOpsRepository = ref.read(opsEventRepositoryProvider);
+    _pageAccessCurrentUserId = ref.read(currentUserIdProvider);
+    _pageAccessExperimentBucket =
+        ref.read(contentRuntimeConfigProvider).experimentBucket;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +65,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
+        visitRecorder: ref.read(visitRecorderServiceProvider),
+        eventRepository: ref.read(opsEventRepositoryProvider),
+        currentUserId: ref.read(currentUserIdProvider),
+        experimentBucket: ref
+            .read(contentRuntimeConfigProvider)
+            .experimentBucket,
       );
     });
   }
@@ -62,6 +84,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
         enterAt: _currentPageEnterAt,
+        eventRepository: ref.read(opsEventRepositoryProvider),
+        currentUserId: ref.read(currentUserIdProvider),
+        experimentBucket: ref
+            .read(contentRuntimeConfigProvider)
+            .experimentBucket,
       );
       _currentLocation = widget.currentLocation;
       _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
@@ -69,6 +96,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
+        visitRecorder: ref.read(visitRecorderServiceProvider),
+        eventRepository: ref.read(opsEventRepositoryProvider),
+        currentUserId: ref.read(currentUserIdProvider),
+        experimentBucket: ref
+            .read(contentRuntimeConfigProvider)
+            .experimentBucket,
       );
     }
   }
@@ -79,12 +112,16 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       location: _currentLocation,
       pageVisitId: _currentPageVisitId,
       enterAt: _currentPageEnterAt,
+      eventRepository: _pageAccessOpsRepository,
+      currentUserId: _pageAccessCurrentUserId,
+      experimentBucket: _pageAccessExperimentBucket,
     );
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    _cachePageAccessDependencies();
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
@@ -146,7 +183,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final nextTab = mainTabFromBottomNavIndex(index);
     _logBrowseEvent(
       action: 'bottom_nav_tap',
-      meta: <String, dynamic>{'fromIndex': previousIndex, 'toIndex': index},
+      bottomNavTap: AppLogBottomNavTapMeta(
+        fromIndex: previousIndex,
+        toIndex: index,
+      ),
     );
     setState(() {
       _currentIndex = index;
@@ -202,7 +242,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   Future<void> _logBrowseEvent({
     required String action,
-    required Map<String, dynamic> meta,
+    AppLogBottomNavTapMeta? bottomNavTap,
   }) async {
     final trace = AppTraceContextStore.instance;
     await AppLogService.instance.writeEvent(
@@ -213,18 +253,18 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         journeyId: trace.journeyId,
         pageVisitId: _currentPageVisitId,
       ),
-      payload: <String, dynamic>{
-        'event': 'browse',
-        'route': _currentLocation,
-        'pageName': pageNameFromRouteLocation(_currentLocation),
-        'action': action,
-        'actionMeta': meta,
-      },
-      summaryPayload: <String, dynamic>{
-        'event': 'browse',
-        'route': _currentLocation,
-        'action': action,
-      },
+      payload: AppLogPageBrowsePayload(
+        event: 'browse',
+        route: _currentLocation,
+        pageName: pageNameFromRouteLocation(_currentLocation),
+        action: action,
+        actionMeta: bottomNavTap?.toMap(),
+      ).toMap(),
+      summaryPayload: AppLogPageBrowseSummaryPayload(
+        event: 'browse',
+        route: _currentLocation,
+        action: action,
+      ).toMap(),
     );
   }
 }

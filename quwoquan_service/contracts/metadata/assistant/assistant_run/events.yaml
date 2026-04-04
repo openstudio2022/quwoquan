@@ -22,10 +22,27 @@ events:
   - name: AssistantFeedbackReceived
     description: 用户对助手的反馈
     producer: assistant-service
-    consumers: [recommendation-engine]
+    consumers: [recommendation-engine, platform-ops]
     channel: event_store
     payload_entity: InteractionEvent
-    payload_fields: [runId, userId, feedbackType, feedbackScore, feedbackText]
+    payload_fields: [eventId, runId, userId, pageType, feedbackType, feedbackScore, feedbackText, explicitReasonCodes, eventType]
+    recommend_impact: learning_signal
+
+  - name: AssistantInteractionRecorded
+    description: 助手交互事件已记录
+    producer: assistant-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_entity: InteractionEvent
+    payload_fields: [eventId, runId, userId, pageType, eventType, feedbackType, feedbackScore, createdAt]
+
+  - name: AssistantScorecardReported
+    description: 助手评分卡已上报
+    producer: assistant-service
+    consumers: [recommendation-engine, platform-ops]
+    channel: event_store
+    payload_entity: Scorecard
+    payload_fields: [scoreId, eventId, runId, userId, metricId, scoreValue, scoreSource, createdAt]
     recommend_impact: learning_signal
 
   - name: SkillTriggered

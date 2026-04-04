@@ -198,13 +198,11 @@ void main() {
           'body': '文章摘要内容',
           'articleTemplate': 'journal',
           'articleFontPreset': 'handwritten',
-          'articlePresentationVersion': 1,
           'publishedAt': '2026-01-15T08:00:00Z',
         };
         final dto = ArticlePostDto.fromMap(raw);
         expect(dto.articleTemplate, equals('journal'));
         expect(dto.articleFontPreset, equals('handwritten'));
-        expect(dto.articlePresentationVersion, equals(1));
       });
 
       test('mock article data: body non-empty，标题可留空', () {
@@ -259,15 +257,6 @@ void main() {
             ),
             isTrue,
             reason: 'template=$template 的 canonical 样本必须带 articleDocument',
-          );
-          expect(
-            items.every(
-              (raw) =>
-                  (raw['articlePresentationVersion'] as num?)?.toInt() == 1,
-            ),
-            isTrue,
-            reason:
-                'template=$template 的 canonical 样本必须冻结 presentationVersion=1',
           );
         }
       });

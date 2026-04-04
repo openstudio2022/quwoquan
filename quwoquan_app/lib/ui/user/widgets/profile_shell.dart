@@ -117,7 +117,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }
 
   void _handleTabSwipe(TabSwipeDirection direction) {
-    final notifier = ref.read(profileNotifierProvider(widget.userId));
+    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     if (_trySwitchVisibleSecondaryTab(direction, notifier)) {
       return;
     }
@@ -452,8 +452,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   Widget build(BuildContext context) {
     _scheduleSectionMeasurement();
     final isDark = ref.watch(isDarkProvider);
-    final notifier = ref.watch(profileNotifierProvider(widget.userId));
-    final state = notifier.state;
+    final state = ref.watch(profileNotifierProvider(widget.userId));
+    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     final userData = ref.watch(userDataProvider);
     final bg = AppColors.iosPageBackground(context);
     final backgroundBridge = AppColors.iosPageBackground(context);
@@ -696,21 +696,25 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                 ),
               ),
               SizedBox(height: AppSpacing.sm),
-              ProfileActionBar(
-                mode: widget.mode,
-                isDark: isDark,
-                isFollowing: state.isFollowing,
-                capability: state.capability,
-                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                onManagePersonas: () =>
-                    context.push(AppRoutePaths.profilePersonas),
-                onFollow: notifier.toggleFollow,
-                onMessage: () =>
-                    context.push(AppRoutePaths.chatDetail(id: widget.userId)),
-                onGreet: () => _showGreetDialog(context),
-                onVoiceCall: () => _startCall(context, 'voice'),
-                onVideoCall: () => _startCall(context, 'video'),
-              ),
+              if (widget.mode == ProfileMode.other &&
+                  state.capability == null) ...[
+                SizedBox(height: AppSpacing.xl + AppSpacing.md),
+              ] else ...[
+                ProfileActionBar(
+                  mode: widget.mode,
+                  isDark: isDark,
+                  capability: state.capability,
+                  onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+                  onManagePersonas: () =>
+                      context.push(AppRoutePaths.profilePersonas),
+                  onFollow: notifier.toggleFollow,
+                  onMessage: () =>
+                      context.push(AppRoutePaths.chatDetail(id: widget.userId)),
+                  onGreet: () => _showGreetDialog(context),
+                  onVoiceCall: () => _startCall(context, 'voice'),
+                  onVideoCall: () => _startCall(context, 'video'),
+                ),
+              ],
             ],
           ),
         ),

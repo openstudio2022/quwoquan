@@ -1,0 +1,51 @@
+version: 1
+read_model: AssistantLearningProfile
+
+description: |
+  助手学习画像 ReadModel。
+  聚合 InteractionEvent / Scorecard 中与反馈、评分、优先级相关的关键信号，
+  供 assistant-service 的 tasks / memories / suggested-actions 注入，以及 recommendation / ops 下游消费。
+
+storage_backend: mongodb
+collection: rm_assistant_learning_profile
+
+source_entities:
+  - InteractionEvent
+  - Scorecard
+
+source_events:
+  - AssistantFeedbackReceived
+  - AssistantScorecardReported
+
+consumers:
+  - assistant-service (tasks/memories/suggested-actions)
+  - recommendation-engine
+  - platform-ops
+
+fields:
+  - { name: userId, type: string }
+  - { name: lastRunId, type: string }
+  - { name: lastEventId, type: string }
+  - { name: lastPageType, type: string }
+  - { name: lastFeedbackType, type: string }
+  - { name: lastFeedbackText, type: string }
+  - { name: lastFeedbackScore, type: float }
+  - { name: lastFeedbackAt, type: timestamp }
+  - { name: lastMetricId, type: string }
+  - { name: lastMetricScore, type: float }
+  - { name: totalFeedbackCount, type: int64 }
+  - { name: positiveFeedbackCount, type: int64 }
+  - { name: negativeFeedbackCount, type: int64 }
+  - { name: textFeedbackCount, type: int64 }
+  - { name: highPriorityCount, type: int64 }
+  - { name: mediumPriorityCount, type: int64 }
+  - { name: metricSampleCounts, type: map<string,int64> }
+  - { name: metricScoreSums, type: map<string,float> }
+  - { name: latestMetricScores, type: map<string,float> }
+  - { name: reasonCodeCounts, type: map<string,int64> }
+  - { name: updatedAt, type: timestamp }
+
+indexes:
+  - { name: idx_alp_user, keys: { userId: 1 }, unique: true }
+  - { name: idx_alp_updated, keys: { updatedAt: -1 } }
+  - { name: idx_alp_last_feedback, keys: { lastFeedbackAt: -1 }, sparse: true }

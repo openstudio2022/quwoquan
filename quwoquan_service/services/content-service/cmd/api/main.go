@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	rthttp "quwoquan_service/runtime/http"
+	runtimelearning "quwoquan_service/runtime/learning"
 	robs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
@@ -136,6 +137,15 @@ func main() {
 	var store persistence.PostRepository
 	var reportStore persistence.ReportRepository
 	var postServiceOpts []application.PostServiceOption
+	var sharedProjector application.Projector
+	recOpts := []rtrec.EngineOption{
+		rtrec.WithRecallTimeout(150 * time.Millisecond),
+		rtrec.WithLogger(logger),
+	}
+	learningRecorder := runtimelearning.NewBufferedRecorder(&runtimelearning.LogSink{Logger: logger}, logger, runtimelearning.WithFlushSize(32), runtimelearning.WithFlushInterval(2*time.Second))
+	defer learningRecorder.Stop()
+	recFeedback := rtrec.NewFeedbackRecorder(learningRecorder)
+	recOpts = append(recOpts, rtrec.WithFeedbackRecorder(recFeedback))
 	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
 	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
 	postServiceOpts = append(postServiceOpts, application.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
@@ -167,9 +177,12 @@ func main() {
 		// Event publisher: Redis Pub/Sub for cross-service consumption
 		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
 
-		// In-process projector: DiscoveryFeed read model
-		projector := &projectorAdapter{p: recinfra.NewDiscoveryFeedProjector(db)}
-		postServiceOpts = append(postServiceOpts, application.WithProjector(projector))
+		// In-process projectors: discovery feed + recommendation features.
+		discoveryProjector := recinfra.NewDiscoveryFeedProjector(db)
+		recommendProjector := recinfra.NewRecommendFeatureProjector(db)
+		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector}
+		postServiceOpts = append(postServiceOpts, application.WithProjector(sharedProjector))
+		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -195,10 +208,6 @@ func main() {
 
 	source := recinfra.NewPostRepositorySource(store)
 
-	recOpts := []rtrec.EngineOption{
-		rtrec.WithRecallTimeout(150 * time.Millisecond),
-		rtrec.WithLogger(logger),
-	}
 	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
 		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
 		if timeout <= 0 {
@@ -216,7 +225,13 @@ func main() {
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store, postServiceOpts...)
 	reportService := application.NewReportService(reportStore, eventPub)
-	behaviorService := application.NewBehaviorService(bufferedWriter, store)
+	behaviorService := application.NewBehaviorService(
+		bufferedWriter,
+		store,
+		application.WithBehaviorEventPublisher(eventPub),
+		application.WithBehaviorProjector(sharedProjector),
+		application.WithBehaviorFeedbackRecorder(recFeedback),
+	)
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
@@ -489,19 +504,31 @@ func hostname() string {
 	return h
 }
 
-// projectorAdapter bridges recinfra.DiscoveryFeedProjector to application.Projector.
+// projectorAdapter bridges content read-model projectors to application.Projector.
 type projectorAdapter struct {
-	p *recinfra.DiscoveryFeedProjector
+	discovery *recinfra.DiscoveryFeedProjector
+	recommend *recinfra.RecommendFeatureProjector
 }
 
 func (a *projectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
-	return a.p.Project(ctx, recinfra.ProjectorEvent{
+	projectorEvent := recinfra.ProjectorEvent{
 		Type:          event.Type,
 		AggregateType: event.AggregateType,
 		AggregateID:   event.AggregateID,
 		Payload:       event.Payload,
 		OccurredAt:    event.OccurredAt,
-	})
+	}
+	if a.discovery != nil {
+		if err := a.discovery.Project(ctx, projectorEvent); err != nil {
+			return err
+		}
+	}
+	if a.recommend != nil {
+		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func resolveMongoURI(cfg config) string {

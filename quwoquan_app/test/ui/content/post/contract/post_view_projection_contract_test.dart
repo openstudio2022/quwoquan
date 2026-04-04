@@ -646,18 +646,19 @@ void main() {
     });
 
     test(
-      'legacy fallback fixtures 覆盖 articleDocument/articleBlocks/cards/body 四条链路',
+      'article canonical fallback fixtures 覆盖 articleDocument/articleBlocks/cards/body 四条链路',
       () {
-        final fixtures = ContentMockData.legacyArticleFallbackData;
+        final fixtures = ContentMockData.articleCanonicalFallbackFixtures;
         expect(fixtures, hasLength(4));
         final expectedSources = <String, ArticleDetailDocumentSource>{
-          'legacy_document_only': ArticleDetailDocumentSource.articleDocument,
-          'legacy_blocks_only': ArticleDetailDocumentSource.articleBlocks,
-          'legacy_cards_only': ArticleDetailDocumentSource.cards,
-          'legacy_body_only': ArticleDetailDocumentSource.body,
+          'article_document_only_fixture':
+              ArticleDetailDocumentSource.articleDocument,
+          'article_blocks_only_fixture': ArticleDetailDocumentSource.articleBlocks,
+          'article_cards_only_fixture': ArticleDetailDocumentSource.cards,
+          'article_body_only_fixture': ArticleDetailDocumentSource.body,
         };
         for (final raw in fixtures) {
-          final postId = raw['postId']?.toString() ?? 'legacy_fallback';
+          final postId = raw['postId']?.toString() ?? 'article_fixture_unknown';
           final r = projectArticleDetailView(raw, fallbackArticleId: postId);
           expect(
             r.document.isEmpty,

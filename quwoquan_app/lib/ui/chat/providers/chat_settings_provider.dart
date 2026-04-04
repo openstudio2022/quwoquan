@@ -1,14 +1,18 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_user_state_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 管理单个会话的用户设置（免打扰、置顶、已读）。
-class ChatSettingsNotifier extends StateNotifier<ConversationUserStateDto?> {
-  ChatSettingsNotifier(this._repo, this.conversationId) : super(null);
+class ChatSettingsNotifier extends Notifier<ConversationUserStateDto?> {
+  ChatSettingsNotifier(this.conversationId);
 
-  final ChatRepository _repo;
   final String conversationId;
+
+  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+
+  @override
+  ConversationUserStateDto? build() => null;
 
   /// 从会话详情中初始化用户设置。
   void initialize(ConversationUserStateDto userState) {
@@ -95,10 +99,7 @@ class ChatSettingsNotifier extends StateNotifier<ConversationUserStateDto?> {
 }
 
 /// 按 conversationId 创建独立的会话设置管理器。
-final chatSettingsProvider = StateNotifierProvider.family<
+final chatSettingsProvider = NotifierProvider.family<
     ChatSettingsNotifier, ConversationUserStateDto?, String>(
-  (ref, conversationId) {
-    final repo = ref.watch(chatRepositoryProvider);
-    return ChatSettingsNotifier(repo, conversationId);
-  },
+  ChatSettingsNotifier.new,
 );

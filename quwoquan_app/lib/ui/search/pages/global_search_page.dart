@@ -25,6 +25,9 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   late final FocusNode _focusNode;
 
   SearchCoordinator get _coordinator =>
+      ref.read(searchCoordinatorProvider(widget.launchContext).notifier);
+
+  SearchSessionState get _searchSession =>
       ref.read(searchCoordinatorProvider(widget.launchContext));
 
   @override
@@ -51,10 +54,9 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final coordinator = ref.watch(
+    final state = ref.watch(
       searchCoordinatorProvider(widget.launchContext),
     );
-    final state = coordinator.state;
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
     final fgPrimary = AppColorsFunctional.getColor(
@@ -326,7 +328,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       context: context,
       barrierColor: AppColors.black.withValues(alpha: 0),
       builder: (_) => _SearchContentTypeSheet(
-        initialSelection: _coordinator.state.selection.normalized(),
+        initialSelection: _searchSession.selection.normalized(),
       ),
     );
     if (nextSelection != null) {
@@ -335,7 +337,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 
   void _selectObjectTarget(SearchObjectTarget? target) {
-    final current = _coordinator.state.selection.normalized();
+    final current = _searchSession.selection.normalized();
     _coordinator.updateSelection(
       SearchObjectSelection(
         targets: target == null
@@ -809,7 +811,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           ? null
           : SearchConversationAnchorContext(
               messageAnchorId: messageAnchorId,
-              sourceQuery: _coordinator.state.query.trim(),
+              sourceQuery: _searchSession.query.trim(),
             ),
     );
   }
@@ -824,7 +826,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     if (trimmedQuery.isEmpty) {
       return;
     }
-    final selection = _coordinator.state.selection.normalized();
+    final selection = _searchSession.selection.normalized();
     final effectiveInitialTabId =
         initialTabId ?? _defaultNetworkTabIdForSelection(selection);
     unawaited(_coordinator.rememberCurrentQuery(query: trimmedQuery));
@@ -836,7 +838,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       extra: widget.launchContext.copyWith(
         prefilledQuery: trimmedQuery,
         initialNetworkTabId: effectiveInitialTabId,
-        initialScope: _coordinator.state.scope,
+        initialScope: _searchSession.scope,
         initialFacet: selection.toFacet(),
         searchObjectSelection: selection,
         restoreState: false,
@@ -854,7 +856,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     if (trimmedValue.isEmpty) {
       return;
     }
-    if (!_allowsNetworkResults(_coordinator.state.selection)) {
+    if (!_allowsNetworkResults(_searchSession.selection)) {
       _focusNode.unfocus();
       return;
     }

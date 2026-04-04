@@ -64,7 +64,11 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final secondaryText = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final primaryText =
+        SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
+    final secondaryText =
+        SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
     final destructiveText = AppColors.iosDestructive(context);
 
     return Column(
@@ -73,13 +77,20 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
       children: [
         SizedBox(
           height: AppSpacing.modalHeaderHeight,
+          width: double.infinity,
           child: Center(
-            child: Text(
-              widget.template.title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.lg,
-                fontWeight: AppTypography.semiBold,
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                widget.template.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.semiBold,
+                  color: primaryText,
+                ),
               ),
             ),
           ),

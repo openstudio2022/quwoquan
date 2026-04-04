@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -73,7 +74,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   RelationshipCapabilityDto? _relationshipCapability;
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = <String>{};
-  Map<String, dynamic>? _actionMenuMessage;
+  Map<String, Object?>? _actionMenuMessage;
   Offset? _actionMenuPosition;
   bool _speechReady = false;
   String _lastAsrText = '';
@@ -139,7 +140,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     } catch (_) {}
   }
 
-  Future<void> _loadOtherParticipantId(dynamic repo) async {
+  Future<void> _loadOtherParticipantId(ChatRepository repo) async {
     try {
       final currentUserId = ref.read(userDataProvider)?.id ?? '';
       final members = await repo.listMembers(
@@ -493,7 +494,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   void _onLongPressMessage(
-    Map<String, dynamic> message,
+    Map<String, Object?> message,
     Offset globalPosition,
   ) {
     setState(() {
@@ -507,7 +508,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     if (msg == null) return;
     switch (action) {
       case 'forward':
-        _shareMessages(<Map<String, dynamic>>[msg]);
+        _shareMessages(<Map<String, Object?>>[msg]);
         break;
       case 'select':
         setState(() {
@@ -540,7 +541,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     });
   }
 
-  Future<void> _shareMessages(List<Map<String, dynamic>> messages) async {
+  Future<void> _shareMessages(List<Map<String, Object?>> messages) async {
     final lines = messages
         .map((item) => (item['content'] as String?)?.trim() ?? '')
         .where((item) => item.isNotEmpty)
@@ -654,8 +655,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       textColor: msg['isSelf'] == true ? AppColors.white : fgPrimary,
                       isSelectionMode: _isSelectionMode,
                       isSelected: _selectedIds.contains(msg['id']),
-                      onLongPressStart: (details) =>
-                          _onLongPressMessage(msg, details.globalPosition),
+                      onLongPressStart: (details) => _onLongPressMessage(
+                        Map<String, Object?>.from(msg),
+                        details.globalPosition,
+                      ),
                       onTap: _isSelectionMode
                           ? () => _toggleSelect(msg['id'] as String)
                           : null,

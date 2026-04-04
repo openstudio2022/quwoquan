@@ -6,7 +6,9 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/repository"
 	rtrec "quwoquan_service/runtime/recommendation"
+	"quwoquan_service/services/content-service/internal/domain/post/event"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -31,15 +33,38 @@ type BehaviorEventInput struct {
 }
 
 type BehaviorService struct {
-	hotPath rtrec.SignalProcessor
-	store   persistence.PostRepository
+	hotPath   rtrec.SignalProcessor
+	store     persistence.PostRepository
+	publisher repository.EventPublisher
+	projector Projector
+	feedback  *rtrec.FeedbackRecorder
 }
 
-func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository) *BehaviorService {
-	return &BehaviorService{
+type BehaviorServiceOption func(*BehaviorService)
+
+func WithBehaviorEventPublisher(pub repository.EventPublisher) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.publisher = pub }
+}
+
+func WithBehaviorProjector(p Projector) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.projector = p }
+}
+
+func WithBehaviorFeedbackRecorder(f *rtrec.FeedbackRecorder) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.feedback = f }
+}
+
+func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
+	svc := &BehaviorService{
 		hotPath: hotPath,
 		store:   store,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+	return svc
 }
 
 func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEventInput) error {
@@ -47,36 +72,94 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		return rterr.NewInvalidArgument(rterr.ModuleContent, "events 不能为空", "empty behavior events")
 	}
 	signals := make([]rtrec.BehaviorSignal, 0, len(events))
-	for _, event := range events {
-		action := strings.TrimSpace(strings.ToLower(event.Action))
+	projectedEvents := make([]map[string]any, 0, len(events))
+	occurredAt := time.Now().UTC()
+	batchUserID := ""
+	batchSessionID := ""
+	for _, eventInput := range events {
+		action := strings.TrimSpace(strings.ToLower(eventInput.Action))
 		if _, ok := supportedBehaviorActions[action]; !ok {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "action 不支持", "unsupported action: "+event.Action)
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "action 不支持", "unsupported action: "+eventInput.Action)
 		}
-		userID := strings.TrimSpace(event.UserID)
+		userID := strings.TrimSpace(eventInput.UserID)
 		if userID == "" {
 			userID = "guest"
 		}
-		contentID := strings.TrimSpace(event.ContentID)
+		contentID := strings.TrimSpace(eventInput.ContentID)
 		if contentID == "" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentId 必填", "missing contentId")
 		}
-		tags := event.Tags
+		tags := eventInput.Tags
 		if len(tags) == 0 {
 			if post, ok := s.store.FindByID(ctx, contentID); ok {
 				tags = behaviorTagsFromAny(post.Tags)
 			}
 		}
-		signals = append(signals, rtrec.BehaviorSignal{
+		signal := rtrec.BehaviorSignal{
 			UserID:    userID,
-			SessionID: strings.TrimSpace(event.SessionID),
+			SessionID: strings.TrimSpace(eventInput.SessionID),
 			ContentID: contentID,
 			Action:    action,
 			Tags:      tags,
-			Duration:  event.Duration,
-			Timestamp: time.Now().UTC(),
+			Duration:  eventInput.Duration,
+			Timestamp: occurredAt,
+		}
+		signals = append(signals, signal)
+		projectedEvents = append(projectedEvents, map[string]any{
+			"userId":    userID,
+			"sessionId": signal.SessionID,
+			"contentId": contentID,
+			"action":    action,
+			"tags":      append([]string(nil), tags...),
+			"duration":  eventInput.Duration,
+			"timestamp": occurredAt.Format(time.RFC3339),
+		})
+		if batchUserID == "" {
+			batchUserID = userID
+		}
+		if batchSessionID == "" {
+			batchSessionID = signal.SessionID
+		}
+	}
+	if err := s.hotPath.ProcessSignalBatch(ctx, signals); err != nil {
+		return err
+	}
+	if s.feedback != nil {
+		for _, signal := range signals {
+			_ = s.feedback.RecordEngagement(ctx, signal, 0)
+		}
+	}
+	payload := map[string]any{
+		"userId":     batchUserID,
+		"sessionId":  batchSessionID,
+		"events":     projectedEvents,
+		"count":      len(projectedEvents),
+		"reportedAt": occurredAt.Format(time.RFC3339),
+		"source":     "content_behavior_tracker",
+	}
+	if s.publisher != nil {
+		aggregateID := firstNonEmptyLocal(batchSessionID, batchUserID, occurredAt.Format(time.RFC3339Nano))
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          event.BehaviorBatchReported,
+			AggregateType: "BehaviorBatch",
+			AggregateID:   aggregateID,
+			Payload:       payload,
+			OccurredAt:    occurredAt.Format(time.RFC3339),
 		})
 	}
-	return s.hotPath.ProcessSignalBatch(ctx, signals)
+	if s.projector != nil {
+		aggregateID := firstNonEmptyLocal(batchSessionID, batchUserID, occurredAt.Format(time.RFC3339Nano))
+		if err := s.projector.Project(ctx, ProjectorEvent{
+			Type:          event.BehaviorBatchReported,
+			AggregateType: "BehaviorBatch",
+			AggregateID:   aggregateID,
+			Payload:       payload,
+			OccurredAt:    occurredAt,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func behaviorTagsFromAny(v any) []string {
@@ -94,4 +177,13 @@ func behaviorTagsFromAny(v any) []string {
 	default:
 		return nil
 	}
+}
+
+func firstNonEmptyLocal(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

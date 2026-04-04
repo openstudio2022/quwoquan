@@ -692,13 +692,14 @@ class _SearchNetworkResultsPageState
       return;
     }
     try {
-      final raw = await ref
+      final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: postId);
       if (!mounted) {
         return;
       }
-      final dto = postBaseDtoFromMap(raw);
+      final dto = detail.post;
+      final raw = detail.wireForArticleProjection;
       if (dto.isArticleLike) {
         context.push(AppRoutePaths.articleDetail(id: dto.id));
         return;
@@ -716,7 +717,9 @@ class _SearchNetworkResultsPageState
               ? 'video'
               : (dto.identity == 'moment' ? 'moment' : 'photo'),
           source: 'global-search-network',
-          rawPostsById: <String, Map<String, dynamic>>{dto.id: raw},
+          rawPostsById: <String, Map<String, Object?>>{
+            dto.id: Map<String, Object?>.from(raw),
+          },
         ),
       );
     } catch (_) {

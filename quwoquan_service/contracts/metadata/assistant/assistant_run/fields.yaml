@@ -703,46 +703,199 @@ entities:
   InteractionEvent:
     description: 交互事件与反馈
     fields:
-      - name: _id
-        type: ObjectId
+      - name: eventId
+        type: string
         constraints: [PK]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
 
       - name: runId
-        type: ObjectId
+        type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
+
+      - name: traceId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: OTEL trace 关联
 
       - name: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
+
+      - name: sessionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: pageType
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: domainId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: queryText
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+
+      - name: answerText
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+
+      - name: userTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: durationMs
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: explicitThumb
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: explicitReasonCodes
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: copiedAnswer
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: sharedAnswer
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: favoritedAnswer
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: regeneratedAnswer
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: styleAdjusted
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: modelSwitched
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: referenceOpened
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: interrupted
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: feedbackTargetMessageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: correctionText
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
 
       - name: eventType
         type: enum
         enum_ref: InteractionEventType
-        constraints: [NOT_NULL]
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
-
-      - name: payload
-        type: object
-        constraints: [NULLABLE]
-        classification: SENSITIVE
-        log_policy: mask
-        api_exposure: read
-        ops_exposure: mask
 
       - name: feedbackType
         type: enum
@@ -764,21 +917,330 @@ entities:
       - name: feedbackText
         type: string
         constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
 
-      - name: traceId
+  Scorecard:
+    description: 助手交互指标评分卡
+    fields:
+      - name: scoreId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: eventId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: runId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: domainId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: metricId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: scoreValue
+        type: float
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: scoreSource
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+  AssistantPolicyView:
+    description: 助手策略拉取快照
+    fields:
+      - name: version
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: values
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  SuggestedAction:
+    description: 建议动作项
+    fields:
+      - name: actionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: type
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: icon
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: payload
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  SuggestedActionListView:
+    description: 建议动作列表响应体
+    fields:
+      - name: items
+        type: "[]SuggestedAction"
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  PageContextAck:
+    description: 页面上下文上报确认
+    fields:
+      - name: accepted
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: contextKey
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: expiresAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  AssistantLearningProfile:
+    description: 助手学习画像聚合读模型
+    fields:
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastRunId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastEventId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastPageType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastFeedbackType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastFeedbackText
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
         api_exposure: drop
         ops_exposure: read
-        description: OTEL trace 关联
-
-      - name: timestamp
+      - name: lastFeedbackScore
+        type: float
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastFeedbackAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastMetricId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastMetricScore
+        type: float
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: totalFeedbackCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: positiveFeedbackCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: negativeFeedbackCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: textFeedbackCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: highPriorityCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: mediumPriorityCount
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: metricSampleCounts
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: metricScoreSums
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: latestMetricScores
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: reasonCodeCounts
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

@@ -81,11 +81,14 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final notifier = container.read(profileNotifierProvider('profile-1'));
+    final notifier = container.read(profileNotifierProvider('profile-1').notifier);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    expect(notifier.state.capability?.relationState, 'not_following');
+    expect(
+      container.read(profileNotifierProvider('profile-1')).capability?.relationState,
+      'not_following',
+    );
     expect(
       container.read(userRelationshipStateProvider).isFollowing('profile-1'),
       isFalse,
@@ -93,7 +96,10 @@ void main() {
 
     await notifier.toggleFollow();
 
-    expect(notifier.state.capability?.relationState, 'following');
+    expect(
+      container.read(profileNotifierProvider('profile-1')).capability?.relationState,
+      'following',
+    );
     expect(
       container.read(userRelationshipStateProvider).isFollowing('profile-1'),
       isTrue,
@@ -121,11 +127,12 @@ void main() {
         .read(userRelationshipStateProvider.notifier)
         .setFollowing('profile-1', true);
 
-    final notifier = container.read(profileNotifierProvider('profile-1'));
+    container.read(profileNotifierProvider('profile-1').notifier);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    expect(notifier.state.isFollowing, isTrue);
-    expect(notifier.state.capability?.relationState, 'following');
+    final profileState = container.read(profileNotifierProvider('profile-1'));
+    expect(profileState.isFollowing, isTrue);
+    expect(profileState.capability?.relationState, 'following');
   });
 }

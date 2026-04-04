@@ -8,6 +8,7 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
+import 'package:quwoquan_app/ui/circle/services/circle_create_merge_wire.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
@@ -72,7 +73,7 @@ class _CircleEditSettingsPageState
   late bool _autoSyncChat;
   late List<CircleSectionConfigDto> _sections;
   bool _isSaving = false;
-  Map<String, Map<String, dynamic>> _categoryLabelsFromRepo = {};
+  Map<String, Map<String, Object?>> _categoryLabelsFromRepo = {};
 
   bool get _isCreateMode => widget.isCreateMode;
 
@@ -129,7 +130,12 @@ class _CircleEditSettingsPageState
       if (!mounted) {
         return;
       }
-      setState(() => _categoryLabelsFromRepo = cfg);
+      setState(() {
+        _categoryLabelsFromRepo = {
+          for (final e in cfg.entries)
+            e.key: Map<String, Object?>.from(e.value),
+        };
+      });
     } catch (_) {}
   }
 
@@ -336,32 +342,18 @@ class _CircleEditSettingsPageState
       try {
         final repo = ref.read(circleRepositoryProvider);
         final created = await repo.createCircle(wire);
-        final merged = <String, dynamic>{
-          ...wire,
-          ...created,
-          'role': created['role'] ?? 'owner',
-          'joinStatus': created['joinStatus'] ?? 'joined',
-          'isFollowed': created['isFollowed'] ?? true,
-          'memberCount': created['memberCount'] ?? 1,
-          'postCount': created['postCount'] ?? 0,
-          'weeklyActiveCount': created['weeklyActiveCount'] ?? 0,
-          'createdAt': created['createdAt'] ?? DateTime.now().toIso8601String(),
-          'updatedAt': created['updatedAt'] ?? DateTime.now().toIso8601String(),
-        };
+        final merged = mergeCreateCircleWireWithCreated(wire, created);
         createdCircleId = CircleDto.fromMap(merged).id;
         success = createdCircleId.isNotEmpty;
         if (success) {
-          final refreshNotifier = ref.read(
-            circleDirectoryRefreshProvider.notifier,
-          );
-          refreshNotifier.state = refreshNotifier.state + 1;
+          ref.read(circleDirectoryRefreshProvider.notifier).bump();
         }
       } catch (_) {
         success = false;
       }
     } else {
-      final notifier = ref.read(circleStateProvider(widget.circleId!));
-      success = await notifier.updateCircleDetails(wire);
+      final circleCtrl = ref.read(circleStateProvider(widget.circleId!).notifier);
+      success = await circleCtrl.updateCircleDetails(wire);
     }
     if (!mounted) {
       return;

@@ -1,0 +1,66 @@
+version: 1
+entity: EventRecord
+
+service:
+  name: product-ops
+  domain: ops
+
+api_routes:
+  - method: POST
+    path: /v1/ops/events
+    operation: ReportEventBatch
+    description: 统一事件批量写入
+
+  - method: GET
+    path: /v1/ops/events/summary
+    operation: GetEventSummary
+    description: 统一事件聚合摘要
+
+  - method: GET
+    path: /v1/ops/events/drilldown
+    operation: GetEventDrilldown
+    description: 统一事件下钻明细
+
+consumers:
+  - name: app
+    capabilities: [report_event_batch]
+  - name: platform-ops
+    capabilities: [read_event_summary, read_event_drilldown]
+  - name: recommendation-engine
+    capabilities: [consume_event_summary]
+  - name: assistant-service
+    capabilities: [consume_event_summary]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+        - name: report_event_batch
+          route: POST /v1/ops/events
+          assertions: [status_200]
+        - name: get_event_summary
+          route: GET /v1/ops/events/summary
+          assertions: [status_200]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "db.event_records.DeleteMany(ctx, bson.D{})"
+      scenarios:
+        - name: report_batch_idempotent
+          command: ReportEventBatch x2 (same eventId)
+          seed: []
+          assertions:
+            - "db.event_records.CountDocuments({eventId}) → 1"
+            - "eventSpy.AssertPublished('EventBatchReported', {eventId, eventType, eventName})"
+        - name: get_event_summary_by_page
+          command: GetEventSummary
+          seed: [fixture.NewEventRecord(eventName='page_open', pageName='home')]
+          assertions:
+            - "summary.totalCount -> 1"
+            - "summary.dimensions.pageName['home'] -> 1"

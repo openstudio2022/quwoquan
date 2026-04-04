@@ -164,8 +164,8 @@ class AssistantUserTaskView {
 
   factory AssistantUserTaskView.fromJson(Map<String, dynamic> json) {
     return AssistantUserTaskView(
-      taskId:
-          (json['taskId'] ?? json['task_id'] ?? json['id'] ?? '').toString(),
+      taskId: (json['taskId'] ?? json['task_id'] ?? json['id'] ?? '')
+          .toString(),
       title: (json['title'] ?? '').toString(),
       description: json['description']?.toString(),
       status: (json['status'] ?? 'pending').toString(),
@@ -200,9 +200,8 @@ class AssistantUserMemoryView {
 
   factory AssistantUserMemoryView.fromJson(Map<String, dynamic> json) {
     return AssistantUserMemoryView(
-      memoryId:
-          (json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '')
-              .toString(),
+      memoryId: (json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '')
+          .toString(),
       title: (json['title'] ?? '').toString(),
       snippet: json['snippet']?.toString(),
       sourceType:
@@ -235,20 +234,16 @@ class AssistantSkillCatalogItemView {
 
   factory AssistantSkillCatalogItemView.fromJson(Map<String, dynamic> json) {
     return AssistantSkillCatalogItemView(
-      skillId:
-          (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString(),
+      skillId: (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '')
+          .toString(),
       displayName:
-          (json['displayName'] ??
-                  json['display_name'] ??
-                  json['name'] ??
-                  '')
+          (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '')
               .toString(),
       description: json['description']?.toString() ?? json['desc']?.toString(),
       category: json['category']?.toString(),
       requiresConsent:
           json['requiresConsent'] == true || json['requires_consent'] == true,
-      iconHint:
-          json['iconHint']?.toString() ?? json['icon_hint']?.toString(),
+      iconHint: json['iconHint']?.toString() ?? json['icon_hint']?.toString(),
     );
   }
 }
@@ -270,6 +265,18 @@ AssistantSearchResultView _buildFallbackSearchResult({
 }
 
 abstract class AssistantRepository {
+  Future<Map<String, dynamic>> getPolicySnapshot({
+    String policyVersionHint = '',
+  });
+
+  Future<Map<String, dynamic>> reportInteractionEvents({
+    required List<Map<String, dynamic>> events,
+  });
+
+  Future<Map<String, dynamic>> reportScorecards({
+    required List<Map<String, dynamic>> scorecards,
+  });
+
   Future<List<AssistantSkillConsent>> listConsents();
 
   Future<AssistantSkillConsent> grantSkillConsent({
@@ -306,6 +313,48 @@ class MockAssistantRepository implements AssistantRepository {
     : _store = store ?? const AssistantConsentStore();
 
   final AssistantConsentStore _store;
+
+  @override
+  Future<Map<String, dynamic>> getPolicySnapshot({
+    String policyVersionHint = '',
+  }) async {
+    return <String, dynamic>{
+      'version': policyVersionHint.trim().isEmpty
+          ? 'assistant_policy_local_mock_v1'
+          : policyVersionHint.trim(),
+      'values': <String, dynamic>{
+        'learningSyncEnabled': false,
+        'suggestedActionsEnabled': true,
+        'pageContextTtlSeconds': 300,
+        'searchFallbackMode': 'local_mock',
+        'defaultSearchIntensity': 'balanced',
+      },
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> reportInteractionEvents({
+    required List<Map<String, dynamic>> events,
+  }) async {
+    return <String, dynamic>{
+      'accepted': true,
+      'count': events.length,
+      'resource': 'interaction_event_batch',
+      'mode': 'local_mock',
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> reportScorecards({
+    required List<Map<String, dynamic>> scorecards,
+  }) async {
+    return <String, dynamic>{
+      'accepted': true,
+      'count': scorecards.length,
+      'resource': 'scorecard_batch',
+      'mode': 'local_mock',
+    };
+  }
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() {
@@ -417,15 +466,141 @@ class RemoteAssistantRepository implements AssistantRepository {
   final http.Client _client;
   final AssistantConsentStore _store;
 
+  @override
+  Future<Map<String, dynamic>> getPolicySnapshot({
+    String policyVersionHint = '',
+  }) async {
+    try {
+      final uri = _assistantGetUri(AssistantApiMetadata.getPolicyPath, {
+        if (policyVersionHint.trim().isNotEmpty)
+          'policyVersionHint': policyVersionHint.trim(),
+      });
+      final response = await _client.get(
+        uri,
+        headers: _headersForAssistantDialog(
+          operationId: AssistantApiMetadata.getPolicyOperation,
+          clientPageId: AssistantRequestPageIds.getPolicy,
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = response.body.trim().isEmpty
+            ? <String, dynamic>{}
+            : CloudResponseDecoder.asObject(
+                jsonDecode(response.body),
+                context: _assistantDialogContext(
+                  operationId: AssistantApiMetadata.getPolicyOperation,
+                ),
+              );
+        if (decoded.isNotEmpty) {
+          return decoded;
+        }
+      }
+    } catch (_) {
+      // Fall back to a safe default snapshot when assistant-service is unavailable.
+    }
+    return <String, dynamic>{
+      'version': policyVersionHint.trim().isEmpty
+          ? 'assistant_policy_remote_fallback_v1'
+          : policyVersionHint.trim(),
+      'values': <String, dynamic>{
+        'learningSyncEnabled': true,
+        'suggestedActionsEnabled': true,
+        'pageContextTtlSeconds': 300,
+        'searchFallbackMode': 'summary_with_citations',
+        'defaultSearchIntensity': 'balanced',
+      },
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> reportInteractionEvents({
+    required List<Map<String, dynamic>> events,
+  }) async {
+    final accepted = <Map<String, dynamic>>[];
+    for (final event in events) {
+      final eventId = (event['eventId'] ?? '').toString().trim();
+      final runId = (event['runId'] ?? '').toString().trim();
+      if (eventId.isEmpty || runId.isEmpty) {
+        continue;
+      }
+      try {
+        final uri = _assistantUri(
+          AssistantApiMetadata.reportInteractionEventPath,
+        );
+        final response = await _client.post(
+          uri,
+          headers: <String, String>{
+            ..._headersForAssistantDialog(
+              operationId: AssistantApiMetadata.reportInteractionEventOperation,
+              clientPageId: AssistantRequestPageIds.reportInteractionEvent,
+            ),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(event),
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          accepted.add(event);
+        }
+      } catch (_) {
+        // Best effort: keep batch partial-success semantics.
+      }
+    }
+    return <String, dynamic>{
+      'accepted': accepted.length == events.length,
+      'acceptedCount': accepted.length,
+      'count': events.length,
+      'resource': 'interaction_event_batch',
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> reportScorecards({
+    required List<Map<String, dynamic>> scorecards,
+  }) async {
+    final accepted = <Map<String, dynamic>>[];
+    for (final scorecard in scorecards) {
+      final scoreId = (scorecard['scoreId'] ?? '').toString().trim();
+      final eventId = (scorecard['eventId'] ?? '').toString().trim();
+      if (scoreId.isEmpty || eventId.isEmpty) {
+        continue;
+      }
+      try {
+        final uri = _assistantUri(AssistantApiMetadata.reportScorecardPath);
+        final response = await _client.post(
+          uri,
+          headers: <String, String>{
+            ..._headersForAssistantDialog(
+              operationId: AssistantApiMetadata.reportScorecardOperation,
+              clientPageId: AssistantRequestPageIds.reportScorecard,
+            ),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(scorecard),
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          accepted.add(scorecard);
+        }
+      } catch (_) {
+        // Best effort: keep batch partial-success semantics.
+      }
+    }
+    return <String, dynamic>{
+      'accepted': accepted.length == scorecards.length,
+      'acceptedCount': accepted.length,
+      'count': scorecards.length,
+      'resource': 'scorecard_batch',
+    };
+  }
+
   Map<String, String> _headersForSettings({
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
   }) {
     return CloudRequestHeaders.forSurfaceOperation(
       surfaceId: AppUiSurfaces.assistantSettings.id,
       routeId: AppUiSurfaces.assistantSettings.routeId,
       operationId: operationId,
-      legacyPageId: legacyPageId,
+      clientPageId: clientPageId,
     );
   }
 
@@ -441,7 +616,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
       routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
       operationId: operationId,
-      legacyPageId: AssistantRequestPageIds.searchXiaoquResults,
+      clientPageId: AssistantRequestPageIds.searchXiaoquResults,
     );
   }
 
@@ -454,13 +629,13 @@ class RemoteAssistantRepository implements AssistantRepository {
 
   Map<String, String> _headersForAssistantDialog({
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
   }) {
     return CloudRequestHeaders.forSurfaceOperation(
       surfaceId: AppUiSurfaces.assistantDialog.id,
       routeId: AppUiSurfaces.assistantDialog.routeId,
       operationId: operationId,
-      legacyPageId: legacyPageId,
+      clientPageId: clientPageId,
     );
   }
 
@@ -513,7 +688,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         uri,
         headers: _headersForSettings(
           operationId: AssistantApiMetadata.listConsentsOperation,
-          legacyPageId: AssistantRequestPageIds.listConsents,
+          clientPageId: AssistantRequestPageIds.listConsents,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -565,7 +740,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         headers: <String, String>{
           ..._headersForSettings(
             operationId: AssistantApiMetadata.grantSkillConsentOperation,
-            legacyPageId: AssistantRequestPageIds.grantSkillConsent,
+            clientPageId: AssistantRequestPageIds.grantSkillConsent,
           ),
           'Content-Type': 'application/json',
         },
@@ -599,7 +774,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         uri,
         headers: _headersForSettings(
           operationId: AssistantApiMetadata.revokeSkillConsentOperation,
-          legacyPageId: AssistantRequestPageIds.revokeSkillConsent,
+          clientPageId: AssistantRequestPageIds.revokeSkillConsent,
         ),
       );
     } catch (_) {
@@ -668,15 +843,17 @@ class RemoteAssistantRepository implements AssistantRepository {
     String? status,
   }) async {
     try {
-      final uri = _assistantGetUri(AssistantApiMetadata.listAssistantTasksPath, {
-        'limit': '$limit',
-        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
-      });
+      final uri =
+          _assistantGetUri(AssistantApiMetadata.listAssistantTasksPath, {
+            'limit': '$limit',
+            if (status != null && status.trim().isNotEmpty)
+              'status': status.trim(),
+          });
       final response = await _client.get(
         uri,
         headers: _headersForAssistantDialog(
           operationId: AssistantApiMetadata.listAssistantTasksOperation,
-          legacyPageId: AssistantRequestPageIds.listAssistantTasks,
+          clientPageId: AssistantRequestPageIds.listAssistantTasks,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -714,7 +891,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         uri,
         headers: _headersForAssistantDialog(
           operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
-          legacyPageId: AssistantRequestPageIds.listAssistantMemories,
+          clientPageId: AssistantRequestPageIds.listAssistantMemories,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -751,7 +928,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         uri,
         headers: _headersForAssistantDialog(
           operationId: AssistantApiMetadata.listSkillsOperation,
-          legacyPageId: AssistantRequestPageIds.listSkills,
+          clientPageId: AssistantRequestPageIds.listSkills,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {

@@ -199,10 +199,38 @@ void main() {
     expect(repository.createCallCount, 1);
     expect(repository.publishCallCount, 1);
     expect(repository.lastCreatePayload?['contentType'], 'article');
+    expect(repository.lastCreatePayload?.containsKey('body'), isFalse);
     expect(
-      (repository.lastCreatePayload?['body'] as String).replaceAll('\n', ''),
-      longText,
+      repository.lastCreatePayload?.containsKey('articleTemplate'),
+      isFalse,
     );
+    expect(
+      repository.lastCreatePayload?.containsKey('articleFontPreset'),
+      isFalse,
+    );
+    expect(
+      repository.lastCreatePayload?['articleDocument'],
+      isA<Map<String, dynamic>>(),
+    );
+    final articleDocument =
+        repository.lastCreatePayload?['articleDocument']
+            as Map<String, dynamic>;
+    expect(articleDocument['titleStyle'], isNotNull);
+    expect(articleDocument['template'], isNotNull);
+    expect(articleDocument['fontPreset'], isNotNull);
+    final nodes = (articleDocument['nodes'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(
+      nodes.any(
+        (node) =>
+            node['type'] == 'paragraph' &&
+            (node['text'] as String).replaceAll('\n', '') == longText,
+      ),
+      isTrue,
+    );
+    expect(repository.lastCreatePayload?.containsKey('articlePages'), isFalse);
+    expect(repository.lastCreatePayload?.containsKey('articleBlocks'), isFalse);
+    expect(repository.lastCreatePayload?.containsKey('cards'), isFalse);
     expect(
       repository.lastCreatePayload?.containsKey('contentIdentity'),
       isFalse,

@@ -1,14 +1,145 @@
 version: 1
 feature: event-ingestion-and-analytics
-level: "L2_feature"
+level: L2_feature
 template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+tree_context:
+  feature_path: capability.product-ops-growth.feature.event-ingestion-and-analytics
+  parent_path: capability.product-ops-growth
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A2_non_functional
+    - A4_feedback_loop
+    - A5_rollout_recovery
+    - A7_contract_metadata_consistency
+    - A8_test_evidence
+  notes: 统一事件字典、冷热分层、推荐/Assistant/运营三条反馈应用闭环，作为全链路埋点与反馈基础设施 baseline。
+  A1:
+    criteria: 全 App 域事件范围、统一 EventEnvelope、统一维度模型、指标域与反馈应用能力在 spec 中冻结，且 visit/page access/analytics/behavior/learning 不再依赖多套独立事件字典。
+    status: specified
+    linked_tasks:
+      - slice-1-benchmark-and-scope
+      - slice-2-unified-event-catalog
+      - slice-4-feedback-application
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+  A2:
+    criteria: SLO/KPI、容量假设、冷热分层、采样/背压、降级、生命周期与成本控制在 spec/design 中冻结。
+    status: specified
+    linked_tasks:
+      - slice-3-hot-cold-architecture
+      - slice-5-acceptance-and-slo
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+  A3:
+    criteria: 页级访问、内容行为、社交/分享/实体、Assistant 学习、实验与运维事件具备统一下钻维度，可从领域到页面到内容/实体/实验桶复盘；page access/perf 不再以本地 JSONL 作为唯一事实源。
+    status: specified
+    linked_tasks:
+      - slice-2-unified-event-catalog
+      - slice-4-feedback-application
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+  A4:
+    criteria: 推荐在线学习、Assistant 评分卡/反馈注入、运营分析三条反馈链路的输入、输出、存储与消费边界清晰，且 visit/page access/analytics 可进入统一查询面并参与复盘。
+    status: specified
+    linked_tasks:
+      - slice-4-feedback-application
+      - slice-6-cr-and-metadata-impact
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+      - file: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md
+  A5:
+    criteria: 方案 B（Redis + EventBus + OLAP + 冷归档）被选定为目标态，并具备按域、按事件、按消费侧的灰度与回滚策略；`product-ops-service` 与 metadata 契约不存在漂移。
+    status: specified
+    linked_tasks:
+      - slice-3-hot-cold-architecture
+      - slice-6-cr-and-metadata-impact
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+  A6:
+    criteria: PII/SENSITIVE 字段分级、userIdHash、训练资格、保留策略、对象存储归档与 release 态约束已冻结。
+    status: specified
+    linked_tasks:
+      - slice-2-unified-event-catalog
+      - slice-5-acceptance-and-slo
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+  A7:
+    criteria: 事件版本、幂等键、字段分级、surface/route/operation/experiment 统一维度与 metadata/codegen 影响面形成单一真相源，不允许第二套 schema 演进；`VisitRecord` 与统一 event ingestion 的职责边界清晰且实现对齐。
+    status: specified
+    linked_tasks:
+      - slice-2-unified-event-catalog
+      - slice-6-cr-and-metadata-impact
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+  A8:
+    criteria: 已具备进入 /baseline 的 spec/design/acceptance/plan/CR 文档闭环，并给出 T1~T4 证据矩阵与 gate；商用收口要求 T3/T4 不再以 deferred/skip 作为完成口径。
+    status: specified
+    linked_tasks:
+      - slice-5-acceptance-and-slo
+      - slice-6-cr-and-metadata-impact
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/plan.yaml
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+journey_acceptance:
+  - id: J1
+    statement: 任一领域服务都能以统一事件模型记录体验、行为与反馈，并接入同一云侧分析与学习层；页级访问与访问统计具备统一事实源。
+    t_layers: [T1, T2]
+  - id: J2
+    statement: 推荐、Assistant 与运营团队可基于同一事件口径复盘策略收益与回滚影响，且可通过统一查询面在页面/实体/实验桶三层下钻。
+    t_layers: [T2, T3]
+scenario_acceptance:
+  - id: S1
+    statement: discovery/content 域的 page access、content behavior 与 completion/negative feedback 可在 Redis 热路径和 OLAP 明细同时可见。
+    t_layers: [T3]
+  - id: S2
+    statement: assistant InteractionEvent 与 Scorecard 能进入统一 envelope，并形成学习/运营双消费视图。
+    t_layers: [T2, T3]
+  - id: S3
+    statement: chat/rtc/share/entity 事件具备统一维度，可按 experimentBucket 与 entityType 下钻。
+    t_layers: [T2, T4]
+evidence_matrix:
+  T1:
+    - type: doc
+      artifact: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+    - type: doc
+      artifact: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+    - type: doc
+      artifact: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+    - type: doc
+      artifact: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+  T2:
+    - type: doc
+      artifact: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md
+    - type: doc
+      artifact: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema/spec.md
+    - type: gate
+      note: metadata/schema/contract 变更进入 verify/codegen 与契约测试
+    - type: test
+      artifact: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
+    - type: test
+      artifact: quwoquan_app/test/core/services/analytics_service_test.dart
+    - type: test
+      artifact: quwoquan_app/test/core/services/visit_recorder_service_test.dart
+    - type: test
+      artifact: quwoquan_app/test/core/services/ops_event_repository_test.dart
+  T3:
+    - type: test
+      artifact: quwoquan_app/test/cloud/content/api_contract_runner.dart
+    - type: test
+      artifact: quwoquan_app/test/cloud/ops/api_contract_runner.dart
+    - type: test
+      artifact: quwoquan_service/services/product-ops-service/tests/visit_event_contract_test.go
+    - type: note
+      artifact: staging 环境必须配置 STAGING_BASE_URL / TEST_AUTH_TOKEN，并验证 page access、analytics、visit、behavior、assistant learning 的端到云与 dashboard/查询一致性
+  T4:
+    - type: test
+      artifact: quwoquan_app/test/patrol/ops/event_ingestion_journey_test.dart
+    - type: test
+      artifact: quwoquan_app/test/patrol/ops/event_reliability_replay_test.dart
+    - type: note
+      artifact: 验证弱网、高频播放、聊天高并发、实验切桶与回滚演练

@@ -9,8 +9,6 @@ class ArticleReaderMetricNames {
   static const String pageFlipCommitMs = 'article_page_flip_commit_ms';
   static const String pageCurlAbortRate = 'article_page_curl_abort_rate';
   static const String readerFallbackRate = 'article_reader_fallback_rate';
-  static const String legacyDocumentFallbackRate =
-      'article_legacy_document_fallback_rate';
 
   const ArticleReaderMetricNames._();
 }
@@ -22,7 +20,6 @@ class ArticleReaderObservability {
   final AnalyticsService _analytics;
   final Set<String> _openReportedPostIds = <String>{};
   final Set<String> _fallbackKeys = <String>{};
-  final Set<String> _legacyFallbackKeys = <String>{};
 
   void trackReaderOpen({
     required String postId,
@@ -120,25 +117,6 @@ class ArticleReaderObservability {
         'postId': postId,
         'reason': reason,
         'bookReaderEnabled': bookReaderEnabled,
-      },
-    );
-  }
-
-  void trackLegacyDocumentFallback({
-    required String postId,
-    required String source,
-    required bool hydrated,
-  }) {
-    final key = '$postId|$source|$hydrated';
-    if (!_legacyFallbackKeys.add(key)) {
-      return;
-    }
-    _track(
-      eventName: ArticleReaderMetricNames.legacyDocumentFallbackRate,
-      properties: <String, dynamic>{
-        'postId': postId,
-        'source': source,
-        'hydrated': hydrated,
       },
     );
   }

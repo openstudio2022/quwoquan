@@ -1,66 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 
-class CreateEntrySheet extends ConsumerWidget {
+class CreateEntrySheet extends StatelessWidget {
   const CreateEntrySheet({
     super.key,
     required this.isOpen,
     required this.onClose,
     required this.onSelect,
-    this.onOpenLegacyTab,
+    required this.onContinueFromDraft,
     this.priority = CreateActionSheetPriority.createPrimary,
   });
 
   final bool isOpen;
   final VoidCallback onClose;
   final void Function(EditorStartAction action) onSelect;
-  final void Function(String tabKey)? onOpenLegacyTab;
-  final CreateActionSheetPriority priority;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!isOpen) {
-      return const SizedBox.shrink();
-    }
-
-    final useSimpleSheet =
-        ref.watch(contentFeatureFlagProvider('simple_create_action_sheet')) ||
-        ref.watch(contentFeatureFlagProvider('enable_create_action_entry'));
-
-    return useSimpleSheet
-        ? CreateActionSheet(
-            onCreateAction: onSelect,
-            onStartGroupChat: onClose,
-            onAddContact: onClose,
-            onCancel: onClose,
-            priority: priority,
-          )
-        : _LegacyFallbackSheet(
-            onClose: onClose,
-            onSelect: onSelect,
-            priority: priority,
-          );
-  }
-}
-
-class _LegacyFallbackSheet extends StatelessWidget {
-  const _LegacyFallbackSheet({
-    required this.onClose,
-    required this.onSelect,
-    required this.priority,
-  });
-
-  final VoidCallback onClose;
-  final void Function(EditorStartAction action) onSelect;
+  final VoidCallback onContinueFromDraft;
   final CreateActionSheetPriority priority;
 
   @override
   Widget build(BuildContext context) {
+    if (!isOpen) {
+      return const SizedBox.shrink();
+    }
+
     return CreateActionSheet(
       onCreateAction: onSelect,
+      onContinueFromDraft: onContinueFromDraft,
       onStartGroupChat: onClose,
       onAddContact: onClose,
       onCancel: onClose,

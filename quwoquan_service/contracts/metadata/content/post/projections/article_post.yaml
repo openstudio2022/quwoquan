@@ -150,14 +150,6 @@ client_projection:
       default: "'clean'"
       description: "文章字体预设"
 
-    - name: articlePresentationVersion
-      dart_type: int
-      nullable: false
-      source: articlePresentationVersion
-      aliases: [articlePresentationVersion]
-      default: "1"
-      description: "文章展示版本"
-
     - name: likeCount
       dart_type: int
       nullable: false

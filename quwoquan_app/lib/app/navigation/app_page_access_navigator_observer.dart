@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 
 class _TrackedOverlay {
   const _TrackedOverlay({
@@ -23,16 +25,45 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
       AppPageAccessNavigatorObserver._();
 
   final List<_TrackedOverlay> _overlayStack = <_TrackedOverlay>[];
+  VisitRecorderService? _visitRecorder;
+  OpsEventRepository? _eventRepository;
+  String _currentUserId = '';
+  String _experimentBucket = '';
+
+  void attachVisitRecorder(VisitRecorderService service) {
+    _visitRecorder = service;
+  }
+
+  void attachEventReporter({
+    required OpsEventRepository repository,
+    required String currentUserId,
+    required String experimentBucket,
+  }) {
+    _eventRepository = repository;
+    _currentUserId = currentUserId.trim();
+    _experimentBucket = experimentBucket.trim();
+  }
 
   void _logOpenForRoute(Route<dynamic> route) {
     final loc = routeLocationFromSettings(route);
     if (loc == null || isShellTabLocation(loc)) return;
     final visitId = AppTraceContextStore.instance.newPageVisitId();
     _overlayStack.add(
-      _TrackedOverlay(location: loc, pageVisitId: visitId, enterAt: DateTime.now()),
+      _TrackedOverlay(
+        location: loc,
+        pageVisitId: visitId,
+        enterAt: DateTime.now(),
+      ),
     );
     unawaited(
-      writeAppPageAccessOpen(location: loc, pageVisitId: visitId),
+      writeAppPageAccessOpen(
+        location: loc,
+        pageVisitId: visitId,
+        visitRecorder: _visitRecorder,
+        eventRepository: _eventRepository,
+        currentUserId: _currentUserId,
+        experimentBucket: _experimentBucket,
+      ),
     );
   }
 
@@ -46,6 +77,9 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
         location: t.location,
         pageVisitId: t.pageVisitId,
         enterAt: t.enterAt,
+        eventRepository: _eventRepository,
+        currentUserId: _currentUserId,
+        experimentBucket: _experimentBucket,
       ),
     );
   }

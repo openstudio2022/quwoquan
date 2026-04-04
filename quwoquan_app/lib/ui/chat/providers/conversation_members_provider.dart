@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -56,19 +56,22 @@ class ConversationMembersState {
 
 /// 会话成员及设置的 Notifier（family by conversationId）
 /// 提供乐观更新写操作，失败时自动回滚
-class ConversationMembersNotifier
-    extends StateNotifier<ConversationMembersState> {
-  ConversationMembersNotifier(
-    this._repo,
-    this._conversationId,
-    this._currentUserId,
-  ) : super(const ConversationMembersState(isLoading: true)) {
-    load();
-  }
+class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
+  ConversationMembersNotifier(this._conversationId);
 
-  final ChatRepository _repo;
   final String _conversationId;
-  final String _currentUserId;
+  int _pendingWrites = 0;
+
+  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  String get _currentUserId => ref.read(currentUserIdProvider);
+
+  @override
+  ConversationMembersState build() {
+    ref.watch(chatRepositoryProvider);
+    ref.watch(currentUserIdProvider);
+    Future<void>.microtask(load);
+    return const ConversationMembersState(isLoading: true);
+  }
 
   /// 加载成员列表和群组设置
   Future<void> load() async {
@@ -82,6 +85,8 @@ class ConversationMembersNotifier
         ),
         _repo.getGroupSettings(_conversationId),
       ]);
+      // 若有乐观写操作进行中，跳过覆盖，避免竞态
+      if (_pendingWrites > 0) return;
       final raw = results[0] as List<ChatConversationMemberDto>;
       final members = raw
           .map(
@@ -103,18 +108,22 @@ class ConversationMembersNotifier
   /// 乐观更新管理员列表；失败时回滚
   Future<void> updateGroupAdmins(List<String> adminIds) async {
     final previous = state;
+    _pendingWrites++;
     state = state.copyWith(members: _applyAdminChange(state.members, adminIds));
     try {
       await _repo.updateGroupAdmins(_conversationId, adminIds);
     } catch (e) {
       state = previous;
       rethrow;
+    } finally {
+      _pendingWrites--;
     }
   }
 
   /// 乐观更新群主转让；失败时回滚
   Future<void> transferOwnership(String newOwnerId) async {
     final previous = state;
+    _pendingWrites++;
     state = state.copyWith(
       members: _applyOwnerTransfer(state.members, newOwnerId),
     );
@@ -123,6 +132,8 @@ class ConversationMembersNotifier
     } catch (e) {
       state = previous;
       rethrow;
+    } finally {
+      _pendingWrites--;
     }
   }
 
@@ -173,14 +184,8 @@ class ConversationMembersNotifier
 
 /// 会话成员与设置的全局共享 Provider（family by conversationId）
 final conversationMembersProvider =
-    StateNotifierProvider.family<
+    NotifierProvider.family<
       ConversationMembersNotifier,
       ConversationMembersState,
       String
-    >(
-      (ref, conversationId) => ConversationMembersNotifier(
-        ref.watch(chatRepositoryProvider),
-        conversationId,
-        ref.watch(currentUserIdProvider),
-      ),
-    );
+    >(ConversationMembersNotifier.new);

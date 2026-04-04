@@ -50,15 +50,19 @@ features:
               level: L3_story
               path: assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion
               domain: ""
-              status: specified
-              tags: []
+              status: in_progress
+              tags:
+                - learning
+                - baseline
             - id: learning-event-ingestion--interactionevent-scorecard-schema
               name: learning-event-ingestion--interactionevent-scorecard-schema
               level: L3_story
               path: assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema
               domain: ""
-              status: specified
-              tags: []
+              status: in_progress
+              tags:
+                - schema
+                - learning
         - id: profile-proposal-apply-loop
           name: profile-proposal-apply-loop
           level: L2_feature
@@ -1490,37 +1494,45 @@ features:
           level: L2_feature
           path: product-ops-growth/event-ingestion-and-analytics
           domain: ""
-          status: specified
-          tags: []
+          status: in_progress
+          tags:
+            - baseline
+            - analytics
+            - learning
           children:
             - id: analytics-metric-dictionary
               name: analytics-metric-dictionary
               level: L3_story
               path: product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary
               domain: ""
-              status: specified
-              tags: []
+              status: in_progress
+              tags:
+                - metric-dictionary
             - id: analytics-metric-dictionary--metric-dimension-standard
               name: analytics-metric-dictionary--metric-dimension-standard
               level: L3_story
               path: product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary--metric-dimension-standard
               domain: ""
               status: specified
-              tags: []
+              tags:
+                - metric-dimension
             - id: event-schema-governance
               name: event-schema-governance
               level: L3_story
               path: product-ops-growth/event-ingestion-and-analytics/event-schema-governance
               domain: ""
-              status: specified
-              tags: []
+              status: in_progress
+              tags:
+                - metadata-first
+                - schema
             - id: event-schema-governance--event-version-compatibility
               name: event-schema-governance--event-version-compatibility
               level: L3_story
               path: product-ops-growth/event-ingestion-and-analytics/event-schema-governance--event-version-compatibility
               domain: ""
               status: specified
-              tags: []
+              tags:
+                - compatibility
         - id: experiment-bucketing-and-rollout
           name: experiment-bucketing-and-rollout
           level: L2_feature
@@ -1850,6 +1862,13 @@ features:
               path: runtime/runtime-client-foundation/metadata-driven-client-data-contract
               domain: ""
               status: specified
+              tags: []
+            - id: article-editor-refactor
+              name: article-editor-refactor
+              level: L3_story
+              path: runtime/runtime-client-foundation/article-editor-refactor
+              domain: ""
+              status: in_progress
               tags: []
             - id: entity-link-templates-metadata
               name: entity-link-templates-metadata

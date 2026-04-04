@@ -1,8 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_restore_default_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_simple_mode_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_single_skill_payload.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -11,7 +18,7 @@ import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart
 
 // settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
 
-/// Skill Center（V2 原型版）
+/// Skill Center 仪表板（能力入口与统计）
 ///
 /// 目标：接入真实技能清单与开关，遵循 i18n 与语义 token。
 class AssistantSkillCenterPage extends ConsumerStatefulWidget {
@@ -272,10 +279,7 @@ class _AssistantSkillCenterPageState
                 activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
                 onChanged: (value) {
                   setState(() => _simpleMode = value);
-                  _logSkillCenterEvent(
-                    action: 'simple_mode_toggle',
-                    meta: <String, dynamic>{'enabled': value},
-                  );
+                  unawaited(_logSkillCenterSimpleMode(value));
                 },
               ),
             ],
@@ -695,10 +699,7 @@ class _AssistantSkillCenterPageState
             .setSkillEnabled(skill.manifest.id, true);
       }
       ref.invalidate(assistantSkillMarketProvider);
-      _logSkillCenterEvent(
-        action: 'restore_default_all',
-        meta: <String, dynamic>{'skillCount': skills.length},
-      );
+      await _logSkillCenterRestoreDefault(skills.length);
     } finally {
       await _setUpdating(false);
     }
@@ -716,12 +717,9 @@ class _AssistantSkillCenterPageState
             .setSkillEnabled(skill.manifest.id, enabled);
       }
       ref.invalidate(assistantSkillMarketProvider);
-      _logSkillCenterEvent(
-        action: 'package_toggle',
-        meta: <String, dynamic>{
-          'enabled': enabled,
-          'skillCount': skills.length,
-        },
+      await _logSkillCenterPackageToggle(
+        enabled: enabled,
+        skillCount: skills.length,
       );
     } finally {
       await _setUpdating(false);
@@ -733,12 +731,9 @@ class _AssistantSkillCenterPageState
     try {
       await ref.read(assistantGatewayProvider).setSkillEnabled(skillId, enabled);
       ref.invalidate(assistantSkillMarketProvider);
-      _logSkillCenterEvent(
-        action: 'single_skill_toggle',
-        meta: <String, dynamic>{
-          'skillId': skillId,
-          'enabled': enabled,
-        },
+      await _logSkillCenterSingleSkillToggle(
+        skillId: skillId,
+        enabled: enabled,
       );
     } finally {
       await _setUpdating(false);
@@ -772,9 +767,53 @@ class _AssistantSkillCenterPageState
     setState(() => _updating = value);
   }
 
-  Future<void> _logSkillCenterEvent({
-    required String action,
-    Map<String, dynamic>? meta,
+  Future<void> _logSkillCenterSimpleMode(bool enabled) async {
+    final trace = AppTraceContextStore.instance;
+    await AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        journeyId: trace.journeyId,
+        pageVisitId: trace.newPageVisitId(),
+      ),
+      payload: AppLogSkillCenterSimpleModePayload(
+        event: 'skill_center_action',
+        action: 'simple_mode_toggle',
+        enabled: enabled,
+      ).toMap(),
+      summaryPayload: AppLogSkillCenterActionSummaryPayload(
+        event: 'skill_center_action',
+        action: 'simple_mode_toggle',
+      ).toMap(),
+    );
+  }
+
+  Future<void> _logSkillCenterRestoreDefault(int skillCount) async {
+    final trace = AppTraceContextStore.instance;
+    await AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        journeyId: trace.journeyId,
+        pageVisitId: trace.newPageVisitId(),
+      ),
+      payload: AppLogSkillCenterRestoreDefaultPayload(
+        event: 'skill_center_action',
+        action: 'restore_default_all',
+        skillCount: skillCount,
+      ).toMap(),
+      summaryPayload: AppLogSkillCenterActionSummaryPayload(
+        event: 'skill_center_action',
+        action: 'restore_default_all',
+      ).toMap(),
+    );
+  }
+
+  Future<void> _logSkillCenterPackageToggle({
+    required bool enabled,
+    required int skillCount,
   }) async {
     final trace = AppTraceContextStore.instance;
     await AppLogService.instance.writeEvent(
@@ -785,15 +824,42 @@ class _AssistantSkillCenterPageState
         journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
       ),
-      payload: <String, dynamic>{
-        'event': 'skill_center_action',
-        'action': action,
-        'meta': meta ?? <String, dynamic>{},
-      },
-      summaryPayload: <String, dynamic>{
-        'event': 'skill_center_action',
-        'action': action,
-      },
+      payload: AppLogSkillCenterPackageTogglePayload(
+        event: 'skill_center_action',
+        action: 'package_toggle',
+        enabled: enabled,
+        skillCount: skillCount,
+      ).toMap(),
+      summaryPayload: AppLogSkillCenterActionSummaryPayload(
+        event: 'skill_center_action',
+        action: 'package_toggle',
+      ).toMap(),
+    );
+  }
+
+  Future<void> _logSkillCenterSingleSkillToggle({
+    required String skillId,
+    required bool enabled,
+  }) async {
+    final trace = AppTraceContextStore.instance;
+    await AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        journeyId: trace.journeyId,
+        pageVisitId: trace.newPageVisitId(),
+      ),
+      payload: AppLogSkillCenterSingleSkillPayload(
+        event: 'skill_center_action',
+        action: 'single_skill_toggle',
+        skillId: skillId,
+        enabled: enabled,
+      ).toMap(),
+      summaryPayload: AppLogSkillCenterActionSummaryPayload(
+        event: 'skill_center_action',
+        action: 'single_skill_toggle',
+      ).toMap(),
     );
   }
 }

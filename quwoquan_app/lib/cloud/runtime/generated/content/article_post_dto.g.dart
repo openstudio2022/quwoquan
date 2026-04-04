@@ -18,7 +18,6 @@ class ArticlePostDto extends PostBaseDto {
   final String coverUrl;
   final String articleTemplate;
   final String articleFontPreset;
-  final int articlePresentationVersion;
   @override final int likeCount;
   @override final int commentCount;
   @override final int favoriteCount;
@@ -40,7 +39,6 @@ class ArticlePostDto extends PostBaseDto {
     required this.coverUrl,
     required this.articleTemplate,
     required this.articleFontPreset,
-    required this.articlePresentationVersion,
     required this.likeCount,
     required this.commentCount,
     required this.favoriteCount,
@@ -64,7 +62,6 @@ class ArticlePostDto extends PostBaseDto {
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
       articleTemplate: m['articleTemplate']?.toString() ?? 'gentle',
       articleFontPreset: m['articleFontPreset']?.toString() ?? 'clean',
-      articlePresentationVersion: (m['articlePresentationVersion'] as num?)?.toInt() ?? 1,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? (m['likesCount'] as num?)?.toInt() ?? (m['likes'] as num?)?.toInt() ?? (m['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
@@ -90,7 +87,6 @@ class ArticlePostDto extends PostBaseDto {
       'coverUrl': coverUrl,
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
-      'articlePresentationVersion': articlePresentationVersion,
       'likeCount': likeCount,
       'commentCount': commentCount,
       'favoriteCount': favoriteCount,
@@ -114,7 +110,6 @@ class ArticlePostDto extends PostBaseDto {
     String? coverUrl,
     String? articleTemplate,
     String? articleFontPreset,
-    int? articlePresentationVersion,
     int? likeCount,
     int? commentCount,
     int? favoriteCount,
@@ -136,7 +131,6 @@ class ArticlePostDto extends PostBaseDto {
       coverUrl: coverUrl ?? this.coverUrl,
       articleTemplate: articleTemplate ?? this.articleTemplate,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
-      articlePresentationVersion: articlePresentationVersion ?? this.articlePresentationVersion,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       favoriteCount: favoriteCount ?? this.favoriteCount,

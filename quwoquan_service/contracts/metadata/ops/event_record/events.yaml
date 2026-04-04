@@ -1,0 +1,11 @@
+version: 1
+entity: EventRecord
+
+events:
+  - name: EventBatchReported
+    description: 统一事件批量写入
+    producer: product-ops
+    consumers: [platform-ops, recommendation-engine, assistant-service]
+    channel: direct
+    payload_fields: [eventId, eventType, eventName, pageName, surfaceId, routeId, operationId, targetType, targetKey, entityType, entityId, experimentBucket, occurredAt]
+    recommend_impact: learning_signal

@@ -9,10 +9,20 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/controlplane"
+	"quwoquan_service/services/product-ops-service/internal/application"
+	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
 
+func newTestProductService(t *testing.T) *productService {
+	t.Helper()
+	return newProductService(
+		controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")),
+		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+	)
+}
+
 func TestExperimentEndpoints(t *testing.T) {
-	service := newProductService(controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")))
+	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
@@ -54,7 +64,7 @@ func TestExperimentEndpoints(t *testing.T) {
 }
 
 func TestVisitEndpoints(t *testing.T) {
-	service := newProductService(controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")))
+	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
@@ -95,8 +105,65 @@ func TestVisitEndpoints(t *testing.T) {
 	}
 }
 
+func TestEventEndpoints(t *testing.T) {
+	service := newTestProductService(t)
+	if err := service.seed(); err != nil {
+		t.Fatalf("seed service: %v", err)
+	}
+	server := newServerMux(service)
+
+	body := bytes.NewBufferString(`{"events":[{"eventId":"evt-1","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"P0","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","occurredAt":"2026-04-01T00:00:00Z","payload":{"location":"/home"}},{"eventId":"evt-2","eventType":"analytics","eventName":"bottom_nav_tap","eventVersion":"v1","priority":"P1","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","experimentBucket":"control","occurredAt":"2026-04-01T00:00:05Z"}]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/ops/events", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("report events status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/v1/ops/events/summary?pageName=home", nil)
+	summaryResp := httptest.NewRecorder()
+	server.ServeHTTP(summaryResp, summaryReq)
+	if summaryResp.Code != http.StatusOK {
+		t.Fatalf("event summary status=%d body=%s", summaryResp.Code, summaryResp.Body.String())
+	}
+	var summary struct {
+		TotalCount int64                       `json:"totalCount"`
+		Dimensions map[string]map[string]int64 `json:"dimensions"`
+	}
+	if err := json.Unmarshal(summaryResp.Body.Bytes(), &summary); err != nil {
+		t.Fatalf("unmarshal event summary: %v", err)
+	}
+	if summary.TotalCount != 2 {
+		t.Fatalf("expected totalCount=2, got %d", summary.TotalCount)
+	}
+	if got := summary.Dimensions["pageName"]["home"]; got != 2 {
+		t.Fatalf("expected pageName.home=2, got %d", got)
+	}
+
+	drilldownReq := httptest.NewRequest(http.MethodGet, "/v1/ops/events/drilldown?eventType=analytics", nil)
+	drilldownResp := httptest.NewRecorder()
+	server.ServeHTTP(drilldownResp, drilldownReq)
+	if drilldownResp.Code != http.StatusOK {
+		t.Fatalf("event drilldown status=%d body=%s", drilldownResp.Code, drilldownResp.Body.String())
+	}
+	var drilldown struct {
+		TotalCount int64 `json:"totalCount"`
+		Items      []struct {
+			EventID   string `json:"eventId"`
+			EventName string `json:"eventName"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(drilldownResp.Body.Bytes(), &drilldown); err != nil {
+		t.Fatalf("unmarshal event drilldown: %v", err)
+	}
+	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].EventID != "evt-2" {
+		t.Fatalf("unexpected drilldown payload: %+v", drilldown)
+	}
+}
+
 func TestControlPlaneWorkflowEndpoints(t *testing.T) {
-	service := newProductService(controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")))
+	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}

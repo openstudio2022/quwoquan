@@ -63,7 +63,7 @@ class CloudRequestHeaders {
   static Map<String, String> forSurfaceOperation({
     required String surfaceId,
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
     String? routeId,
   }) {
     final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
@@ -72,7 +72,7 @@ class CloudRequestHeaders {
     final traceId = 'APP.$sessionId.$surfaceId.$operationId.$ts.$rand';
     final requestId = 'APP.$surfaceId.$operationId.$ts.$rand';
     return <String, String>{
-      'X-Client-Page-Id': legacyPageId,
+      'X-Client-Page-Id': clientPageId,
       'X-Client-Surface-Id': surfaceId,
       'X-Client-Operation-Id': operationId,
       if (routeId != null && routeId.isNotEmpty) 'X-Client-Route-Id': routeId,

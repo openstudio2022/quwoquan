@@ -32,7 +32,6 @@ import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
-import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
@@ -57,7 +56,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.initialPostIndex = 0,
     this.initialImageIndex = 0,
     this.source = 'featured',
-    this.rawPostsById = const <String, Map<String, dynamic>>{},
+    this.rawPostsById = const <String, Map<String, Object?>>{},
     this.defaultCircleId,
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.onDismissed,
@@ -84,7 +83,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final int initialPostIndex;
   final int initialImageIndex;
   final String source;
-  final Map<String, Map<String, dynamic>> rawPostsById;
+  final Map<String, Map<String, Object?>> rawPostsById;
   final String? defaultCircleId;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final ValueChanged<MediaViewerResult>? onDismissed;
@@ -117,8 +116,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // Dwell tracking：记录当前帖子进入时间
   DateTime? _pageEnterTime;
   final DateTime _viewerOpenedAt = DateTime.now();
-  final Map<String, Map<String, dynamic>> _hydratedRawPostsById =
-      <String, Map<String, dynamic>>{};
+  final Map<String, Map<String, Object?>> _hydratedRawPostsById =
+      <String, Map<String, Object?>>{};
   final Set<String> _hydratingArticleIds = <String>{};
 
   Timer? _autoCollapseTimer;
@@ -352,7 +351,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return result;
   }
 
-  bool _hasStructuredArticlePayload(Map<String, dynamic>? raw) {
+  bool _hasStructuredArticlePayload(Map<String, Object?>? raw) {
     if (raw == null) {
       return false;
     }
@@ -370,16 +369,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return false;
   }
 
-  Map<String, dynamic>? _effectiveRawPostById(String postId) {
+  Map<String, Object?>? _effectiveRawPostById(String postId) {
     return _hydratedRawPostsById[postId] ?? _rawPostById(postId);
   }
 
-  Map<String, dynamic> _rawArticleDataFor(PostBaseDto post) {
+  Map<String, Object?> _rawArticleDataFor(PostBaseDto post) {
     final raw = _effectiveRawPostById(post.id);
     final hasStructuredPayload = _hasStructuredArticlePayload(raw);
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     final rawBody = raw?['body']?.toString().trim() ?? '';
-    return <String, dynamic>{
+    return <String, Object?>{
       ...?raw,
       'postId': post.id,
       'type': (raw?['type'] ?? raw?['contentType'] ?? 'article').toString(),
@@ -409,7 +408,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   ArticleDetailView _articleViewFor(PostBaseDto post) {
     return projectArticleDetailView(
-      _rawArticleDataFor(post),
+      Map<String, dynamic>.from(_rawArticleDataFor(post)),
       fallbackArticleId: post.id,
     );
   }
@@ -543,12 +542,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
-  Map<String, dynamic>? _rawPostById(String postId) {
+  Map<String, Object?>? _rawPostById(String postId) {
     final external = widget.rawPostsById[postId];
     if (external != null) return external;
-    return ref.watch(appContentRepositoryProvider).discoveryFeedWireRowByPostId(
-          postId,
-        );
+    final wire = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryFeedWireRowByPostId(postId);
+    if (wire == null) return null;
+    return Map<String, Object?>.from(wire);
   }
 
   PostSummaryView? _summaryForPost(String postId) {
@@ -785,7 +786,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             bookReaderEnabled: false,
           );
     }
-    _trackLegacyDocumentFallback(
+    _trackDocumentStructureFallback(
       post: post,
       article: article,
       hydrated: _hydratedRawPostsById.containsKey(post.id),
@@ -803,7 +804,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     };
   }
 
-  void _trackLegacyDocumentFallback({
+  void _trackDocumentStructureFallback({
     required PostBaseDto post,
     required ArticleDetailView article,
     required bool hydrated,
@@ -811,12 +812,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (article.documentSource == ArticleDetailDocumentSource.articleDocument) {
       return;
     }
+    final bookReaderEnabled = ref.read(
+      contentFeatureFlagProvider('enable_article_book_reader'),
+    );
     ref
         .read(articleReaderObservabilityProvider)
-        .trackLegacyDocumentFallback(
+        .trackReaderFallback(
           postId: post.id,
-          source: _documentSourceName(article.documentSource),
-          hydrated: hydrated,
+          reason:
+              'document_structure:${_documentSourceName(article.documentSource)}:hydrated=$hydrated',
+          bookReaderEnabled: bookReaderEnabled,
         );
   }
 
@@ -836,10 +841,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         return;
       }
       setState(() {
-        _hydratedRawPostsById[post.id] = <String, dynamic>{...?raw, ...detail};
+        _hydratedRawPostsById[post.id] = <String, Object?>{
+          ...?raw,
+          ...Map<String, Object?>.from(detail.wireForArticleProjection),
+        };
       });
       final hydratedArticle = _articleViewFor(post);
-      _trackLegacyDocumentFallback(
+      _trackDocumentStructureFallback(
         post: post,
         article: hydratedArticle,
         hydrated: true,
@@ -1069,36 +1077,31 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             left: 0,
             right: 0,
             bottom: 0,
-            child: TabSwipeSwitchRegion(
-              enabled: _canSwipePrimaryTabs,
-              onSwipe: _handlePrimaryTabSwipe,
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                physics: const PageScrollPhysics(),
-                itemCount: posts.isEmpty ? 1 : posts.length,
-                onPageChanged: (index) {
-                  if (_currentPage != index) {
-                    // Flush dwell time for the previous post
-                    final prevPost =
-                        posts[_currentPage.clamp(0, posts.length - 1)];
-                    _flushDwell(prevPost);
+            child: PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.vertical,
+              physics: const PageScrollPhysics(),
+              itemCount: posts.isEmpty ? 1 : posts.length,
+              onPageChanged: (index) {
+                if (_currentPage != index) {
+                  // Flush dwell time for the previous post
+                  final prevPost = posts[_currentPage.clamp(0, posts.length - 1)];
+                  _flushDwell(prevPost);
 
-                    setState(() => _currentPage = index);
-                    // Reset + restart the follow-button timer for the new post.
-                    final newPost = posts[index.clamp(0, posts.length - 1)];
-                    _startFollowButtonTimer(newPost);
-                    _trackImpressionForPost(newPost);
-                    _pageEnterTime = DateTime.now();
-                  }
-                },
-                itemBuilder: (context, index) {
-                  if (posts.isEmpty) {
-                    return Center(child: CupertinoActivityIndicator());
-                  }
-                  return _buildPostCanvas(posts[index]);
-                },
-              ),
+                  setState(() => _currentPage = index);
+                  // Reset + restart the follow-button timer for the new post.
+                  final newPost = posts[index.clamp(0, posts.length - 1)];
+                  _startFollowButtonTimer(newPost);
+                  _trackImpressionForPost(newPost);
+                  _pageEnterTime = DateTime.now();
+                }
+              },
+              itemBuilder: (context, index) {
+                if (posts.isEmpty) {
+                  return Center(child: CupertinoActivityIndicator());
+                }
+                return _buildPostCanvas(posts[index]);
+              },
             ),
           ),
 
@@ -1235,9 +1238,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final onOverflowNext = _canSwipePrimaryTabs
         ? _switchToNextPrimaryTab
         : null;
-    final enableArticleBookReader = ref.watch(
-      contentFeatureFlagProvider('enable_article_book_reader'),
-    );
     final enableArticlePageCurl = ref.watch(
       contentFeatureFlagProvider('enable_article_page_curl'),
     );
@@ -1267,19 +1267,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       final safeInitialPage = (_articleInnerIndex[post.id] ?? 0)
           .clamp(0, article.pages.length - 1)
           .toInt();
-      if (!enableArticleBookReader) {
-        return _WorksLegacyArticleCanvas(
-          post: post,
-          article: article,
-          initialPage: safeInitialPage,
-          onPageChanged: (index) =>
-              setState(() => _articleInnerIndex[post.id] = index),
-          onPageFlipCommitted: (event) =>
-              _trackArticlePageFlipCommit(post, event),
-          onOverflowPrevious: onOverflowPrevious,
-          onOverflowNext: onOverflowNext,
-        );
-      }
       return _WorksArticleCanvas(
         post: post,
         article: article,
@@ -2037,14 +2024,6 @@ class _WorksArticleCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estimatedPages = ArticlePaginationEngine.paginateSnapshot(
-      document: article.document,
-      fontPreset: article.fontPreset,
-    );
-    final maxIndex = max(article.pages.length, estimatedPages.length) - 1;
-    final safeInitialPage = maxIndex <= 0
-        ? 0
-        : initialPage.clamp(0, maxIndex).toInt();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -2098,6 +2077,10 @@ class _WorksArticleCanvas extends StatelessWidget {
                 fallbackPages: article.pages,
                 variant: ArticleCanvasVariant.immersive,
               );
+              final maxIndex = pages.isEmpty ? 0 : pages.length - 1;
+              final safeInitialPage = pages.isEmpty
+                  ? 0
+                  : initialPage.clamp(0, maxIndex).toInt();
               final metrics = resolveArticleCanvasMetrics(
                 context,
                 constraints,
@@ -2111,219 +2094,13 @@ class _WorksArticleCanvas extends StatelessWidget {
                 coverUrl: post.primaryImageUrl,
                 initialPage: safeInitialPage,
                 enablePageCurl: enablePageCurl,
+                pagePadding: articleReaderStagePagePadding(),
                 onPageChanged: onPageChanged,
                 onOverflowPrevious: onOverflowPrevious,
                 onOverflowNext: onOverflowNext,
                 onFallbackResolved: onFallbackResolved,
                 onPageFlipCommitted: onPageFlipCommitted,
                 onPageCurlAborted: onPageCurlAborted,
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _WorksLegacyArticleCanvas extends StatefulWidget {
-  const _WorksLegacyArticleCanvas({
-    required this.post,
-    required this.article,
-    required this.onPageChanged,
-    this.onPageFlipCommitted,
-    this.initialPage = 0,
-    this.onOverflowPrevious,
-    this.onOverflowNext,
-  });
-
-  final PostBaseDto post;
-  final ArticleDetailView article;
-  final ValueChanged<int> onPageChanged;
-  final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
-  final int initialPage;
-  final VoidCallback? onOverflowPrevious;
-  final VoidCallback? onOverflowNext;
-
-  @override
-  State<_WorksLegacyArticleCanvas> createState() =>
-      _WorksLegacyArticleCanvasState();
-}
-
-class _WorksLegacyArticleCanvasState extends State<_WorksLegacyArticleCanvas> {
-  late final PageController _pageController;
-  DateTime? _pageTransitionStartedAt;
-  bool _overflowLocked = false;
-  late int _currentPage;
-
-  int get _safeInitialPage {
-    final estimatedPages = ArticlePaginationEngine.paginateSnapshot(
-      document: widget.article.document,
-      fontPreset: widget.article.fontPreset,
-    );
-    final maxIndex =
-        max(widget.article.pages.length, estimatedPages.length) - 1;
-    if (maxIndex <= 0) {
-      return 0;
-    }
-    return widget.initialPage.clamp(0, maxIndex).toInt();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _currentPage = _safeInitialPage;
-    _pageController = PageController(initialPage: _currentPage);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onPageChanged(_currentPage);
-    });
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  bool _handleScrollNotification(ScrollNotification notification) {
-    if (notification is ScrollStartNotification &&
-        notification.dragDetails != null &&
-        _pageTransitionStartedAt == null) {
-      _pageTransitionStartedAt = DateTime.now();
-    } else if (notification is OverscrollNotification && !_overflowLocked) {
-      if (notification.overscroll < 0) {
-        _overflowLocked = true;
-        widget.onOverflowPrevious?.call();
-      } else if (notification.overscroll > 0) {
-        _overflowLocked = true;
-        widget.onOverflowNext?.call();
-      }
-    } else if (notification is ScrollEndNotification) {
-      _overflowLocked = false;
-      _pageTransitionStartedAt = null;
-    }
-    return false;
-  }
-
-  void _emitPageFlipCommit({required int fromPage, required int toPage}) {
-    final startedAt = _pageTransitionStartedAt;
-    _pageTransitionStartedAt = null;
-    if (startedAt == null || fromPage == toPage) {
-      return;
-    }
-    widget.onPageFlipCommitted?.call(
-      ArticleReaderPageFlipCommit(
-        fromPage: fromPage,
-        toPage: toPage,
-        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        mechanism: 'legacy_pager',
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final post = widget.post;
-    final article = widget.article;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(color: AppColors.worksBackground),
-        if (post.primaryImageUrl.isNotEmpty)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.08,
-              child: CachedNetworkImage(
-                imageUrl: post.primaryImageUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.worksBackground),
-              ),
-            ),
-          ),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.black.withValues(alpha: 0.08),
-                  AppColors.worksBackground.withValues(alpha: 0.92),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: AppSpacing.intraGroupSm,
-          right: AppSpacing.intraGroupSm,
-          top:
-              MediaQuery.of(context).padding.top +
-              AppSpacing.tabNavigationHeight +
-              AppSpacing.intraGroupSm,
-          bottom:
-              _WorksImmersiveViewerState._toolbarReservedHeight +
-              AppSpacing.containerMd,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final pages = resolvePaginatedArticlePages(
-                context: context,
-                constraints: constraints,
-                document: article.document,
-                template: article.template,
-                fontPreset: article.fontPreset,
-                fallbackPages: article.pages,
-                variant: ArticleCanvasVariant.immersive,
-              );
-              final metrics = resolveArticleCanvasMetrics(
-                context,
-                constraints,
-                variant: ArticleCanvasVariant.immersive,
-              );
-              return NotificationListener<ScrollNotification>(
-                onNotification: _handleScrollNotification,
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: pages.length,
-                  onPageChanged: (index) {
-                    final previousPage = _currentPage;
-                    setState(() {
-                      _currentPage = index;
-                    });
-                    _emitPageFlipCommit(fromPage: previousPage, toPage: index);
-                    widget.onPageChanged(index);
-                  },
-                  itemBuilder: (context, index) {
-                    final page = pages[index];
-                    return Padding(
-                      padding: EdgeInsets.zero,
-                      child: ArticlePageShell(
-                        template: article.template,
-                        fontPreset: article.fontPreset,
-                        pageIndex: index,
-                        totalPages: pages.length,
-                        aspectRatio: metrics.aspectRatio,
-                        contentPadding: metrics.contentPadding,
-                        showIndicator: false,
-                        child: index == 0 && post.primaryImageUrl.isNotEmpty
-                            ? ArticleFrontispieceView(
-                                page: page,
-                                template: article.template,
-                                fontPreset: article.fontPreset,
-                                coverUrl: post.primaryImageUrl,
-                              )
-                            : ArticlePageReadOnlyView(
-                                page: page,
-                                template: article.template,
-                                fontPreset: article.fontPreset,
-                              ),
-                      ),
-                    );
-                  },
-                ),
               );
             },
           ),

@@ -94,13 +94,13 @@ class RemoteIntegrationRepository implements IntegrationRepository {
 
   Map<String, String> _headersForSurface({
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
   }) {
     return CloudRequestHeaders.forSurfaceOperation(
       surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
       routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
       operationId: operationId,
-      legacyPageId: legacyPageId,
+      clientPageId: clientPageId,
     );
   }
 
@@ -130,7 +130,7 @@ class RemoteIntegrationRepository implements IntegrationRepository {
       ),
       headers: _headersForSurface(
         operationId: IntegrationApiMetadata.getNearbyLocationsOperation,
-        legacyPageId: IntegrationRequestPageIds.getNearbyLocations,
+        clientPageId: IntegrationRequestPageIds.getNearbyLocations,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(
@@ -166,7 +166,7 @@ class RemoteIntegrationRepository implements IntegrationRepository {
       ),
       headers: _headersForSurface(
         operationId: IntegrationApiMetadata.searchLocationsOperation,
-        legacyPageId: IntegrationRequestPageIds.searchLocations,
+        clientPageId: IntegrationRequestPageIds.searchLocations,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(

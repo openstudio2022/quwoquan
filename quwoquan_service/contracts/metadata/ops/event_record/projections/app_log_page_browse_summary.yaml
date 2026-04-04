@@ -1,0 +1,34 @@
+version: 1
+read_model: AppLogPageBrowseSummaryPayload
+
+description: |
+  browse 事件 summaryPayload（截断策略下写入 JSONL 的精简字段）。
+
+source_entities: []
+
+consumers:
+  - app (MainAppShell)
+
+client_projection:
+  dart_class: AppLogPageBrowseSummaryPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_page_browse_summary.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'browse'"
+    - name: route
+      dart_type: String
+      nullable: false
+      source: route
+      aliases: [route]
+      default: "''"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"

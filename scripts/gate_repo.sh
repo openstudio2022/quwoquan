@@ -32,6 +32,7 @@ run_service() {
   bash scripts/verify_config_image_compat.sh
   bash scripts/verify_config_pr_policy.sh
   (cd quwoquan_service && make gate)
+  (cd quwoquan_service/services/product-ops-service && go test ./cmd/api ./tests -count=1)
 }
 
 run_app() {
@@ -57,17 +58,52 @@ run_app() {
     python3 scripts/verify_ios_native_surface_gate.py || exit 1
     python3 scripts/verify_page_horizontal_quality_matrix.py || exit 1
     python3 scripts/verify_page_matrix_scan_complete.py || exit 1
+    # 页面 A/B/C：默认 --quiet 仅汇总、不阻断；GATE_PAGE_ABC_ENFORCE 见 specs/gates/page_abc_governance.md
+    if [[ -n "${GATE_PAGE_ABC_ENFORCE:-}" ]]; then
+      _abc_flags=""
+      _gpe=$(echo "${GATE_PAGE_ABC_ENFORCE}" | tr '[:upper:]' '[:lower:]')
+      _gpe=${_gpe//,/ }
+      for _tok in ${_gpe}; do
+        case "${_tok}" in
+          abc)
+            _abc_flags="${_abc_flags} --enforce-a --enforce-b --enforce-c"
+            ;;
+          ab)
+            _abc_flags="${_abc_flags} --enforce-a --enforce-b"
+            ;;
+          ac)
+            _abc_flags="${_abc_flags} --enforce-a --enforce-c"
+            ;;
+          bc)
+            _abc_flags="${_abc_flags} --enforce-b --enforce-c"
+            ;;
+          a)
+            _abc_flags="${_abc_flags} --enforce-a"
+            ;;
+          b)
+            _abc_flags="${_abc_flags} --enforce-b"
+            ;;
+          c)
+            _abc_flags="${_abc_flags} --enforce-c"
+            ;;
+        esac
+      done
+      # shellcheck disable=SC2086
+      python3 scripts/verify_page_abc_governance.py --quiet ${_abc_flags} || exit 1
+    else
+      python3 scripts/verify_page_abc_governance.py --quiet
+    fi
     python3 scripts/verify_metadata_driven_ui_gate.py || exit 1
     python3 scripts/verify_ui_mock_isolation.py || exit 1
     python3 scripts/verify_lib_no_test_only_symbols.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_metadata_driven_ui_gate, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_metadata_driven_ui_gate, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
   local flutter_l1_output=""
   if ! flutter_l1_output="$(
-    cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ test/smoke/ 2>&1
+    cd quwoquan_app && flutter test test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1
   )"; then
     echo "$flutter_l1_output"
     if [[ "$flutter_l1_output" == *"Connection closed before full header was received"* ]]; then

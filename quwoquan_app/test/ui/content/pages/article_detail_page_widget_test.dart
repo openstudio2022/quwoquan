@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -14,8 +15,8 @@ class _ArticleGetPostRepo extends MockContentRepository {
   final Map<String, dynamic> _item;
 
   @override
-  Future<Map<String, dynamic>> getPost({required String postId}) async =>
-      _item;
+  Future<ContentPostDetailPayload> getPost({required String postId}) async =>
+      ContentPostDetailPayload.fromWire(_item);
 }
 
 void main() {

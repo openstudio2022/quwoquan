@@ -1,0 +1,46 @@
+version: 1
+read_model: AppLogPageRouteExceptionPayload
+
+description: |
+  全局异常关联的 page_access 全量 payload（event=exception）。
+
+source_entities: []
+
+consumers:
+  - app (quwoquan_app_shell)
+
+client_projection:
+  dart_class: AppLogPageRouteExceptionPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'exception'"
+    - name: route
+      dart_type: String
+      nullable: false
+      source: route
+      aliases: [route]
+      default: "'app'"
+    - name: pageName
+      dart_type: String
+      nullable: false
+      source: pageName
+      aliases: [pageName]
+      default: "'app'"
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source]
+      default: "''"
+    - name: exception
+      dart_type: String
+      nullable: false
+      source: exception
+      aliases: [exception]
+      default: "''"

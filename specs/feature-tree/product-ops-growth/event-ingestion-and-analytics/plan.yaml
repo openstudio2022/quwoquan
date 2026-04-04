@@ -1,0 +1,59 @@
+# plan：event-ingestion-and-analytics（/baseline 冻结 → /dev 实施）
+
+feature_path: product-ops-growth/event-ingestion-and-analytics
+order_note: benchmark/scope → event catalog → schema governance → hot/cold architecture → feedback application → metadata/codegen → tests
+
+slices:
+  - id: slice-1-benchmark-and-scope
+    title: 冻结全 App 域范围、竞品吸收结论、SLO/KPI、容量/成本与生命周期
+    outputs:
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+      - specs/changelog/CR-20260401-017-event-learning-baseline.yaml
+    tests:
+      - T1 文档评审
+    dev_status: specified
+
+  - id: slice-2-unified-event-catalog
+    title: 补齐统一事件字典、指标域、公共维度与字段分级规则
+    outputs:
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/design.md
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/design.md
+    tests:
+      - T1/T2 文档与 schema 评审
+    dev_status: specified
+
+  - id: slice-3-hot-cold-architecture
+    title: 冻结 Redis、EventBus、OLAP、ObjectStorage、Mongo/维表职责与迁移顺序
+    outputs:
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/design.md
+    tests:
+      - T1 架构评审
+    dev_status: specified
+
+  - id: slice-4-feedback-application
+    title: 定义推荐、Assistant、运营三条反馈应用闭环与消费边界
+    outputs:
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+      - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md
+      - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema/spec.md
+    tests:
+      - T2 学习与反馈语义评审
+    dev_status: specified
+
+  - id: slice-5-acceptance-and-slo
+    title: 补齐 A1~A8、T1~T4、降级、灰度、回滚、gate 与证据矩阵
+    outputs:
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml
+    tests:
+      - T1 文档评审
+    dev_status: specified
+
+  - id: slice-6-cr-and-metadata-impact
+    title: 记录 CR、metadata/codegen 影响面与 /dev 前置 verify 范围
+    outputs:
+      - specs/changelog/CR-20260401-017-event-learning-baseline.yaml
+    tests:
+      - CR 评审
+    dev_status: specified

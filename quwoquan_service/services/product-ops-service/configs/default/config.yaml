@@ -10,6 +10,10 @@ config:
   min_image_version: "0.0.1"
   max_image_version: "9.9.9"
 
+mongodb:
+  uri: ""
+  database: "quwoquan_product_ops"
+
 # Redis scenes (defaults)
 redis:
   rec:

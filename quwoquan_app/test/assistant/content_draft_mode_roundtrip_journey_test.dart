@@ -1,5 +1,3 @@
-library;
-
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -13,6 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _CreateJourneyHost extends StatelessWidget {
@@ -21,15 +20,43 @@ class _CreateJourneyHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(builder: (_) => const CreatePage()),
-            );
-          },
-          child: const Text('打开创作'),
-        ),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const CreatePage()),
+              );
+            },
+            child: const Text('打开创作'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              final raw = prefs.getString(CreateDraftLocalStorage.draftsKey);
+              String? draftId;
+              if (raw != null && raw.isNotEmpty) {
+                try {
+                  final list = jsonDecode(raw) as List<dynamic>;
+                  if (list.isNotEmpty && list.first is Map) {
+                    draftId =
+                        (list.first as Map<dynamic, dynamic>)['id'] as String?;
+                  }
+                } catch (_) {}
+              }
+              if (!context.mounted) {
+                return;
+              }
+              await Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => CreatePage(initialDraftId: draftId),
+                ),
+              );
+            },
+            child: const Text('从草稿继续'),
+          ),
+        ],
       ),
     );
   }
@@ -81,11 +108,7 @@ void main() {
 
       expect(find.text('打开创作'), findsOneWidget);
 
-      await tester.tap(find.text('打开创作'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(TestKeys.createDraftsButton));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('文字草稿').first);
+      await tester.tap(find.text('从草稿继续'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(TestKeys.createPage), findsOneWidget);
@@ -110,7 +133,7 @@ void main() {
       await tester.pump(const Duration(seconds: 11));
 
       final prefs = await SharedPreferences.getInstance();
-      final rawDrafts = prefs.getString('create_drafts_list');
+      final rawDrafts = prefs.getString(CreateDraftLocalStorage.draftsKey);
       expect(rawDrafts, isNotNull);
 
       final drafts = jsonDecode(rawDrafts!) as List<dynamic>;

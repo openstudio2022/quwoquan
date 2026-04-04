@@ -5,10 +5,9 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 
 void main() {
   group('CreateDraft', () {
-    test('从 v2 存储 map 恢复文字草稿与预览文案', () {
+    test('从存储 map 恢复文字草稿与预览文案', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'draft_1',
-        'draftVersion': 'v2',
         'updatedAt': 123,
         'type': 'text',
         'editorKind': 'text',
@@ -29,7 +28,6 @@ void main() {
     test('从文章块恢复正文与图片索引', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'draft_blocks',
-        'draftVersion': 'v2',
         'updatedAt': 456,
         'type': 'text',
         'editorKind': 'text',
@@ -81,16 +79,21 @@ void main() {
       expect(restored.usesWrappedLayout, isTrue);
     });
 
-    test('旧草稿缺失 identity 时按 tabKey 迁移到 v2', () {
+    test('扁平存储下图片类草稿解析为作品身份', () {
       final draft = CreateDraft.fromStorageMap({
-        'id': 'legacy_photo',
-        'type': 'photo',
+        'id': 'photo_draft',
+        'type': 'media',
         'updatedAt': 456,
-        'data': {'description': '旧版图片草稿'},
+        'editorKind': 'media',
+        'mediaKind': 'images',
+        'imagePaths': <String>['a.jpg'],
+        'title': '',
+        'body': '图片说明',
+        'settings': const <String, dynamic>{},
       });
 
       expect(draft.identity, CreateContentIdentity.work);
-      expect(draft.previewText, '旧版图片草稿');
+      expect(draft.previewText, '图片说明');
       expect(draft.state.editorKind, CreateEditorKind.media);
     });
   });

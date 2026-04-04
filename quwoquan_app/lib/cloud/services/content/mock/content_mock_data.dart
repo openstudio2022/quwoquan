@@ -964,10 +964,10 @@ class ContentMockData {
   ]);
 
   static List<Map<String, dynamic>>
-  get legacyArticleFallbackData => <Map<String, dynamic>>[
+  get articleCanonicalFallbackFixtures => <Map<String, dynamic>>[
     _buildArticlePost(
-      postId: 'legacy_document_only',
-      authorId: 'legacy_writer',
+      postId: 'article_document_only_fixture',
+      authorId: 'article_fixture_writer',
       displayName: '旧稿修复',
       authorAvatarUrl:
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
@@ -996,10 +996,10 @@ class ContentMockData {
       createdAt: '2026-01-05T10:00:00Z',
     ),
     <String, dynamic>{
-      'postId': 'legacy_blocks_only',
+      'postId': 'article_blocks_only_fixture',
       'contentType': 'article',
       'contentIdentity': 'work',
-      'authorId': 'legacy_writer',
+      'authorId': 'article_fixture_writer',
       'displayName': '旧稿修复',
       'authorAvatarUrl':
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
@@ -1026,10 +1026,10 @@ class ContentMockData {
       'shareCount': 1,
     },
     <String, dynamic>{
-      'postId': 'legacy_cards_only',
+      'postId': 'article_cards_only_fixture',
       'contentType': 'article',
       'contentIdentity': 'work',
-      'authorId': 'legacy_writer',
+      'authorId': 'article_fixture_writer',
       'displayName': '旧稿修复',
       'authorAvatarUrl':
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
@@ -1053,10 +1053,10 @@ class ContentMockData {
       'shareCount': 1,
     },
     <String, dynamic>{
-      'postId': 'legacy_body_only',
+      'postId': 'article_body_only_fixture',
       'contentType': 'article',
       'contentIdentity': 'work',
-      'authorId': 'legacy_writer',
+      'authorId': 'article_fixture_writer',
       'displayName': '旧稿修复',
       'authorAvatarUrl':
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',

@@ -1,14 +1,37 @@
 version: 1
 feature: analytics-metric-dictionary
-level: "L3_story"
+level: L3_story
 template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+tree_context:
+  feature_path: capability.product-ops-growth.feature.event-ingestion-and-analytics.subfeature.analytics-metric-dictionary
+  parent_path: capability.product-ops-growth.feature.event-ingestion-and-analytics
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A3_coverage_drilldown
+    - A4_feedback_loop
+    - A7_contract_metadata_consistency
+  notes: 指标字典作为体验/行为/学习/实验/运营共同口径源。
+  A1:
+    criteria: 九大指标域、公共维度、业务维度与对标映射完整登记。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+  A3:
+    criteria: 可从领域服务 -> 页面 -> 内容/实体 -> 事件 -> 实验桶进行下钻分析。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/design.md
+  A4:
+    criteria: 推荐、Assistant 与运营共享同一指标口径，不再维护第二套分子/分母。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+  A7:
+    criteria: 新增/修改指标必须经过字典治理、版本评审与 CR 记录。
+    status: specified
+    tests:
+      - file: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/design.md
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate: "make gate"
+  full_gate: "make gate-full"

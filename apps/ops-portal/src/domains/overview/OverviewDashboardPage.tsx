@@ -5,10 +5,14 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 
 import {
   fetchPlatformAudits,
+  fetchProductEventDrilldown,
+  fetchProductEventSummary,
   fetchProductProjectionSummary,
   fetchProductWorkflows,
   fetchReleases,
   type PlatformAuditItem,
+  type ProductEventDrilldownItem,
+  type ProductEventSummary,
   type ProductProjectionSummary,
   type ReleaseItem,
   type WorkflowItem,
@@ -22,6 +26,9 @@ export function OverviewDashboardPage() {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
+  const [pageAccessSummary, setPageAccessSummary] = useState<ProductEventSummary | null>(null);
+  const [behaviorSummary, setBehaviorSummary] = useState<ProductEventSummary | null>(null);
+  const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
 
   useEffect(() => {
@@ -30,12 +37,18 @@ export function OverviewDashboardPage() {
       fetchProductWorkflows(),
       fetchReleases(),
       fetchProductProjectionSummary(),
+      fetchProductEventSummary({ source: 'page_access' }),
+      fetchProductEventSummary({ eventType: 'behavior' }),
+      fetchProductEventDrilldown({ limit: 6 }),
     ])
-      .then(([auditItems, workflowItems, releaseItems, summaryItem]) => {
+      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, behaviorItem, drilldown]) => {
         setAudits(auditItems);
         setWorkflows(workflowItems);
         setReleases(releaseItems);
         setSummary(summaryItem);
+        setPageAccessSummary(pageAccessItem);
+        setBehaviorSummary(behaviorItem);
+        setDrilldownItems(drilldown.items);
         setRemoteReady(true);
       })
       .catch(() => {
@@ -72,6 +85,10 @@ export function OverviewDashboardPage() {
       })),
     [releases],
   );
+  const hottestPage = useMemo(() => {
+    const entries = Object.entries(pageAccessSummary?.dimensions.pageName ?? {});
+    return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'n/a';
+  }, [pageAccessSummary]);
 
   return (
     <PageScaffold
@@ -113,6 +130,14 @@ export function OverviewDashboardPage() {
           description="覆盖发现页 IA、推荐扶持和召回策略。"
         />
         <KpiCard
+          label="页面访问事件"
+          value={String(pageAccessSummary?.totalCount ?? 0)}
+          icon={<Activity size={20} color="#2563EB" />}
+          trendLabel={`热点页面 ${hottestPage}`}
+          trendTone="positive"
+          description="来自统一 event ingestion 的 page access / perf 主事实源。"
+        />
+        <KpiCard
           label="SLA 风险队列"
           value={String(summary?.pendingDualReview ?? 0)}
           icon={<AlertTriangle size={20} color="#F59E0B" />}
@@ -121,12 +146,12 @@ export function OverviewDashboardPage() {
           description="主要集中在恢复案例补证据和人工复核。"
         />
         <KpiCard
-          label="灰度发布成功率"
-          value={rolloutHealthTrend[0] ? `${rolloutHealthTrend[0].successRate}%` : '0%'}
+          label="行为事件总量"
+          value={String(behaviorSummary?.totalCount ?? 0)}
           icon={<Activity size={20} color="#16A34A" />}
-          trendLabel={`${releases.length} 个发布单`}
+          trendLabel={`${Object.keys(behaviorSummary?.dimensions.eventName ?? {}).length} 类行为`}
           trendTone="positive"
-          description="Platform Ops 与 Product Ops 共用审计和回滚链路。"
+          description="内容行为已桥接到统一事件面，可与页面、实验桶一起复盘。"
         />
       </div>
 
@@ -165,6 +190,62 @@ export function OverviewDashboardPage() {
                   <p className="item-subtitle">控制面可达后将展示待审批、补证据与回滚观察对象。</p>
                 </div>
                 <span className="badge badge--warning">offline</span>
+              </div>
+            ) : null}
+          </div>
+        </SectionCard>
+      </div>
+
+      <div className="section-grid section-grid--two">
+        <SectionCard title="业务埋点总览" subtitle="统一事件事实源的页面访问、行为与实验桶维度">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>指标</th>
+                <th>总量</th>
+                <th>关键维度</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>page access</td>
+                <td>{pageAccessSummary?.totalCount ?? 0}</td>
+                <td>{Object.keys(pageAccessSummary?.dimensions.pageName ?? {}).slice(0, 3).join(', ') || 'n/a'}</td>
+              </tr>
+              <tr>
+                <td>behavior</td>
+                <td>{behaviorSummary?.totalCount ?? 0}</td>
+                <td>{Object.keys(behaviorSummary?.dimensions.eventName ?? {}).slice(0, 3).join(', ') || 'n/a'}</td>
+              </tr>
+              <tr>
+                <td>experiment bucket</td>
+                <td>{Object.keys(pageAccessSummary?.dimensions.experimentBucket ?? {}).length}</td>
+                <td>{Object.keys(pageAccessSummary?.dimensions.experimentBucket ?? {}).join(', ') || 'n/a'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </SectionCard>
+
+        <SectionCard title="统一事件下钻" subtitle="页面 -> 行为 -> 实验桶的最近事件样本">
+          <div className="stack-list">
+            {drilldownItems.map((item) => (
+              <div className="timeline-item" key={item.eventId}>
+                <div>
+                  <p className="item-title">
+                    {item.eventType} / {item.eventName}
+                  </p>
+                  <p className="item-subtitle">
+                    {item.pageName || item.targetKey || 'n/a'} · bucket={item.experimentBucket || 'n/a'} · {item.occurredAt}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {drilldownItems.length === 0 ? (
+              <div className="timeline-item">
+                <div>
+                  <p className="item-title">等待统一事件下钻数据</p>
+                  <p className="item-subtitle">接入 product-ops 统一事件查询后会展示最近样本。</p>
+                </div>
               </div>
             ) : null}
           </div>

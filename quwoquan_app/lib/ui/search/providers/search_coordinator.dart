@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
@@ -12,24 +11,38 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final searchCoordinatorProvider = ChangeNotifierProvider.autoDispose
-    .family<SearchCoordinator, SearchLaunchContext>((ref, launchContext) {
-      return SearchCoordinator(ref, launchContext);
-    });
+final searchCoordinatorProvider =
+    NotifierProvider.autoDispose
+        .family<SearchCoordinator, SearchSessionState, SearchLaunchContext>(
+          SearchCoordinator.new,
+        );
 
-class SearchCoordinator extends ChangeNotifier {
-  SearchCoordinator(this._ref, SearchLaunchContext launchContext)
-    : _localStore = const SearchRecentHistoryStore(),
-      _state = SearchSessionState(
-        launchContext: launchContext,
-        query: launchContext.prefilledQuery,
-        scope: launchContext.initialScope,
-        selection: _resolveInitialSelection(launchContext),
-      ) {
-    unawaited(hydrateRecentSearches());
-    if (_state.hasQuery) {
-      scheduleSearch(immediate: true);
-    }
+class SearchCoordinator extends Notifier<SearchSessionState> {
+  SearchCoordinator(this._launchContext);
+
+  final SearchLaunchContext _launchContext;
+
+  @override
+  SearchSessionState build() {
+    ref.onDispose(() {
+      _debounceTimer?.cancel();
+    });
+    final initial = SearchSessionState(
+      launchContext: _launchContext,
+      query: _launchContext.prefilledQuery,
+      scope: _launchContext.initialScope,
+      selection: _resolveInitialSelection(_launchContext),
+    );
+    Future.microtask(() {
+      if (!ref.mounted) {
+        return;
+      }
+      unawaited(hydrateRecentSearches());
+      if (state.hasQuery) {
+        scheduleSearch(immediate: true);
+      }
+    });
+    return initial;
   }
 
   static const Duration _searchDebounce = Duration(milliseconds: 180);
@@ -40,15 +53,10 @@ class SearchCoordinator extends ChangeNotifier {
   static const int _conversationSearchLimit = 12;
   static const int _maxNetworkSuggestions = 6;
 
-  final Ref _ref;
-  final SearchRecentHistoryStore _localStore;
+  final SearchRecentHistoryStore _localStore = const SearchRecentHistoryStore();
 
-  SearchSessionState _state;
   Timer? _debounceTimer;
   int _searchRequestToken = 0;
-  bool _disposed = false;
-
-  SearchSessionState get state => _state;
 
   static SearchObjectSelection _resolveInitialSelection(
     SearchLaunchContext launchContext,
@@ -63,15 +71,14 @@ class SearchCoordinator extends ChangeNotifier {
     if (!facetSelection.isEmpty) {
       return facetSelection;
     }
-    return SearchObjectSelection.fromLegacyScope(launchContext.initialScope);
+    return SearchObjectSelection.fromSearchScope(launchContext.initialScope);
   }
 
   void _setState(SearchSessionState next) {
-    if (_disposed) {
+    if (!ref.mounted) {
       return;
     }
-    _state = next;
-    notifyListeners();
+    state = next;
   }
 
   void updateQuery(String query, {bool immediate = false}) {
@@ -183,15 +190,15 @@ class SearchCoordinator extends ChangeNotifier {
   Future<void> hydrateRecentSearches() async {
     _setState(state.copyWith(isHydratingHistory: true));
     final localEntries = await _localStore.load();
-    if (!_disposed && localEntries.isNotEmpty) {
+    if (ref.mounted && localEntries.isNotEmpty) {
       _setState(state.copyWith(recentSearches: localEntries));
     }
     try {
-      final remoteEntries = await _ref
+      final remoteEntries = await ref
           .read(userProfileRepositoryProvider)
           .listRecentSearches();
       final merged = _mergeHistory(localEntries, remoteEntries);
-      if (_disposed) {
+      if (!ref.mounted) {
         return;
       }
       _setState(
@@ -204,7 +211,7 @@ class SearchCoordinator extends ChangeNotifier {
           continue;
         }
         unawaited(
-          _ref
+          ref
               .read(userProfileRepositoryProvider)
               .upsertRecentSearch(
                 query: entry.query,
@@ -214,7 +221,7 @@ class SearchCoordinator extends ChangeNotifier {
         );
       }
     } catch (_) {
-      if (_disposed) {
+      if (!ref.mounted) {
         return;
       }
       _setState(state.copyWith(isHydratingHistory: false));
@@ -224,7 +231,7 @@ class SearchCoordinator extends ChangeNotifier {
   Future<void> useRecentSearch(RecentSearchEntryView entry) async {
     final facetSelection = SearchObjectSelection.fromFacet(entry.facet);
     final selection = facetSelection.isEmpty
-        ? SearchObjectSelection.fromLegacyScope(entry.scope)
+        ? SearchObjectSelection.fromSearchScope(entry.scope)
         : facetSelection;
     _setState(
       state.copyWith(
@@ -266,7 +273,7 @@ class SearchCoordinator extends ChangeNotifier {
     );
     await _localStore.save(nextEntries);
     try {
-      await _ref
+      await ref
           .read(userProfileRepositoryProvider)
           .deleteRecentSearch(entryId);
     } catch (_) {
@@ -284,7 +291,7 @@ class SearchCoordinator extends ChangeNotifier {
     );
     await _localStore.clear();
     try {
-      await _ref.read(userProfileRepositoryProvider).clearRecentSearches();
+      await ref.read(userProfileRepositoryProvider).clearRecentSearches();
     } catch (_) {
       // Keep local-first clear even when remote cleanup fails.
     }
@@ -304,7 +311,7 @@ class SearchCoordinator extends ChangeNotifier {
     final token = ++_searchRequestToken;
     _setState(state.copyWith(isLoading: true));
     final sections = await _buildSuggestionSections(query);
-    if (_disposed || token != _searchRequestToken) {
+    if (!ref.mounted || token != _searchRequestToken) {
       return;
     }
     _setState(state.copyWith(suggestionSections: sections, isLoading: false));
@@ -330,7 +337,7 @@ class SearchCoordinator extends ChangeNotifier {
     final includesCircles =
         objectTarget == null || objectTarget == SearchObjectTarget.circles;
     final includesNetwork = selection.enabledContentTypes.isNotEmpty;
-    final response = await _ref
+    final response = await ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -364,7 +371,7 @@ class SearchCoordinator extends ChangeNotifier {
               .map((hit) => CircleSearchItemView.fromMap(hit.payload))
               .toList(growable: false)
         : const <CircleSearchItemView>[];
-    final allConversations = _ref
+    final allConversations = ref
         .read(conversationCacheProvider)
         .getAll()
         .map(ConversationSearchItemView.fromMap)
@@ -373,7 +380,7 @@ class SearchCoordinator extends ChangeNotifier {
       for (final item in allConversations) item.conversationId: item,
       for (final item in conversationHits) item.conversationId: item,
     }.values.toList(growable: false);
-    final chatRepo = _ref.read(chatRepositoryProvider);
+    final chatRepo = ref.read(chatRepositoryProvider);
     final contactSuggestions = await _buildContactSuggestions(
       contacts: contacts,
       allConversations: seededConversations,
@@ -812,7 +819,7 @@ class SearchCoordinator extends ChangeNotifier {
     _setState(state.copyWith(recentSearches: merged));
     await _localStore.save(merged);
     try {
-      final remoteEntry = await _ref
+      final remoteEntry = await ref
           .read(userProfileRepositoryProvider)
           .upsertRecentSearch(
             query: trimmedQuery,
@@ -822,7 +829,7 @@ class SearchCoordinator extends ChangeNotifier {
       final nextEntries = _mergeHistory(<RecentSearchEntryView>[
         remoteEntry,
       ], merged);
-      if (_disposed) {
+      if (!ref.mounted) {
         return;
       }
       _setState(state.copyWith(recentSearches: nextEntries));
@@ -865,13 +872,6 @@ class SearchCoordinator extends ChangeNotifier {
       case null:
         return SearchScope.all;
     }
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    _debounceTimer?.cancel();
-    super.dispose();
   }
 }
 

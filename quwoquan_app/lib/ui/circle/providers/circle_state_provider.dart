@@ -1,6 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
@@ -82,30 +80,29 @@ class CircleState {
   }
 }
 
-class CircleStateNotifier extends ChangeNotifier {
-  CircleStateNotifier(this._ref, this._circleId) {
-    loadCircle();
+class CircleStateNotifier extends Notifier<CircleState> {
+  CircleStateNotifier(this._circleId);
+
+  final String _circleId;
+
+  @override
+  CircleState build() {
+    Future.microtask(loadCircle);
+    return CircleState(circleId: _circleId).copyWith(isLoading: true);
   }
 
-  final Ref _ref;
-  final String _circleId;
-  CircleState _state = const CircleState(circleId: '');
-
-  CircleState get state => _state;
-
   Future<void> loadCircle() async {
-    _state = CircleState(circleId: _circleId).copyWith(isLoading: true);
-    notifyListeners();
+    state = CircleState(circleId: _circleId).copyWith(isLoading: true);
     try {
-      final repo = _ref.read(circleRepositoryProvider);
-      final data = await repo.getCircle(_circleId);
+      final repo = ref.read(circleRepositoryProvider);
+      final detail = await repo.getCircle(_circleId);
       final statsWire = await repo.getCircleStats(_circleId);
-      final dto = CircleDto.fromMap(data);
-      _state = _state.copyWith(
+      final dto = detail.circle;
+      state = state.copyWith(
         circleData: dto,
-        role: _circleRoleFromRaw(data['role']),
-        joinStatus: (data['joinStatus'] ?? _state.joinStatus).toString(),
-        isFollowed: data['isFollowed'] as bool? ?? _state.isFollowed,
+        role: _circleRoleFromRaw(detail.viewerRole),
+        joinStatus: detail.joinStatusIfPresent ?? state.joinStatus,
+        isFollowed: detail.isFollowedIfPresent ?? state.isFollowed,
         circleStats: CircleStatsViewData.fromWire(
           statsWire,
           circleFallback: dto,
@@ -113,125 +110,122 @@ class CircleStateNotifier extends ChangeNotifier {
         isLoading: false,
       );
     } catch (e) {
-      _state = _state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
-    notifyListeners();
   }
 
   void setActiveTab(String type) {
-    _state = _state.copyWith(activeTabType: type);
-    notifyListeners();
+    state = state.copyWith(activeTabType: type);
   }
 
   void setSubTab(CreationSubTab tab) {
-    _state = _state.copyWith(
+    state = state.copyWith(
       activeSubTab: tab,
       activeWorkFormat: tab == CreationSubTab.work
-          ? _state.activeWorkFormat
+          ? state.activeWorkFormat
           : CreationWorkFormat.all,
     );
-    notifyListeners();
   }
 
   void setWorkFormat(CreationWorkFormat format) {
-    _state = _state.copyWith(activeWorkFormat: format);
-    notifyListeners();
+    state = state.copyWith(activeWorkFormat: format);
   }
 
   void setSortMode(CreationSortMode mode) {
-    _state = _state.copyWith(sortMode: mode);
-    notifyListeners();
+    state = state.copyWith(sortMode: mode);
   }
 
   void setViewMode(CreationViewMode mode) {
-    _state = _state.copyWith(viewMode: mode);
-    notifyListeners();
+    state = state.copyWith(viewMode: mode);
   }
 
   Future<void> joinCircle() async {
-    final previousStatus = _state.joinStatus;
-    final previousFollowed = _state.isFollowed;
+    final previousStatus = state.joinStatus;
+    final previousFollowed = state.isFollowed;
     final nextJoinStatus =
-        _state.circleData?.joinPolicy == 'approval' ? 'pending' : 'joined';
-    _state = _state.copyWith(joinStatus: nextJoinStatus, isFollowed: true);
-    notifyListeners();
+        state.circleData?.joinPolicy == 'approval' ? 'pending' : 'joined';
+    state = state.copyWith(joinStatus: nextJoinStatus, isFollowed: true);
     try {
-      final repo = _ref.read(circleRepositoryProvider);
+      final repo = ref.read(circleRepositoryProvider);
       await repo.joinCircle(_circleId);
     } catch (_) {
-      _state = _state.copyWith(
+      state = state.copyWith(
         joinStatus: previousStatus,
         isFollowed: previousFollowed,
       );
-      notifyListeners();
     }
   }
 
   Future<void> leaveCircle() async {
-    final previousStatus = _state.joinStatus;
-    final previousFollowed = _state.isFollowed;
-    _state = _state.copyWith(joinStatus: 'none', isFollowed: false);
-    notifyListeners();
+    final previousStatus = state.joinStatus;
+    final previousFollowed = state.isFollowed;
+    state = state.copyWith(joinStatus: 'none', isFollowed: false);
     try {
-      final repo = _ref.read(circleRepositoryProvider);
+      final repo = ref.read(circleRepositoryProvider);
       await repo.leaveCircle(_circleId);
     } catch (_) {
-      _state = _state.copyWith(
+      state = state.copyWith(
         joinStatus: previousStatus,
         isFollowed: previousFollowed,
       );
-      notifyListeners();
     }
   }
 
   Future<void> toggleFollow() async {
-    final wasFollowed = _state.isFollowed;
-    _state = _state.copyWith(isFollowed: !wasFollowed);
-    notifyListeners();
+    final wasFollowed = state.isFollowed;
+    state = state.copyWith(isFollowed: !wasFollowed);
     try {
-      final repo = _ref.read(circleRepositoryProvider);
+      final repo = ref.read(circleRepositoryProvider);
       if (wasFollowed) {
         await repo.leaveCircle(_circleId);
       } else {
         await repo.joinCircle(_circleId);
       }
     } catch (_) {
-      _state = _state.copyWith(isFollowed: wasFollowed);
-      notifyListeners();
+      state = state.copyWith(isFollowed: wasFollowed);
     }
   }
 
   Future<bool> updateCircleDetails(Map<String, dynamic> data) async {
     try {
-      final repo = _ref.read(circleRepositoryProvider);
+      final repo = ref.read(circleRepositoryProvider);
       final updated = await repo.updateCircle(_circleId, data);
       final merged = <String, dynamic>{
-        ...?_state.circleData?.toMap(),
+        ...?state.circleData?.toMap(),
         ...updated,
       };
-      _state = _state.copyWith(
+      state = state.copyWith(
         circleData: CircleDto.fromMap(merged),
         role: _circleRoleFromRaw(updated['role'] ?? merged['role']),
-        joinStatus: (updated['joinStatus'] ?? merged['joinStatus'] ?? _state.joinStatus)
-            .toString(),
+        joinStatus:
+            (updated['joinStatus'] ?? merged['joinStatus'] ?? state.joinStatus)
+                .toString(),
         isFollowed: updated['isFollowed'] as bool? ??
             merged['isFollowed'] as bool? ??
-            _state.isFollowed,
+            state.isFollowed,
         error: null,
       );
-      notifyListeners();
       return true;
     } catch (e) {
-      _state = _state.copyWith(error: e.toString());
-      notifyListeners();
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
 }
 
 final circleStateProvider =
-    ChangeNotifierProvider.family<CircleStateNotifier, String>(
-      (ref, circleId) => CircleStateNotifier(ref, circleId),
+    NotifierProvider.family<CircleStateNotifier, CircleState, String>(
+      CircleStateNotifier.new,
     );
 
-final circleDirectoryRefreshProvider = StateProvider<int>((ref) => 0);
+class CircleDirectoryRefreshNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
+final circleDirectoryRefreshProvider =
+    NotifierProvider<CircleDirectoryRefreshNotifier, int>(
+      CircleDirectoryRefreshNotifier.new,
+    );

@@ -1002,7 +1002,6 @@ class UnderstandPhase implements Phase {
       'displayPlainText',
       'journey',
       'uiProcessTimeline',
-      'uiProcessTimelineV2',
       'assistantResponse',
     ]) {
       sanitized.remove(key);

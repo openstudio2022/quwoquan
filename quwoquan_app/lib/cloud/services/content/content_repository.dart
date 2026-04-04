@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -55,7 +56,7 @@ abstract class ContentRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> getPost({required String postId});
+  Future<ContentPostDetailPayload> getPost({required String postId});
 
   Future<Map<String, dynamic>> createPost({
     required Map<String, dynamic> payload,
@@ -457,7 +458,7 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({required String postId}) async {
     final allRaw = [
       ...ContentMockData.discoveryPhotoData,
       ...ContentMockData.discoveryVideoData,
@@ -469,7 +470,7 @@ class MockContentRepository implements ContentRepository {
       orElse: () => <String, dynamic>{},
     );
     if (raw.isEmpty) return Future.error(Exception('Post $postId not found'));
-    return raw;
+    return ContentPostDetailPayload.fromWire(raw);
   }
 
   @override
@@ -605,7 +606,6 @@ class MockContentRepository implements ContentRepository {
           'enable_create_action_entry': true,
           'enable_unified_create_editor': true,
           'simple_create_action_sheet': true,
-          'create_editor_v2': true,
           'progressive_title_prompt': true,
           'enable_identity_based_surfaces': true,
           'enable_identity_share_template': true,
@@ -998,16 +998,17 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({required String postId}) async {
     final uri = _uri(ContentApiMetadata.getPostPath(postId: postId));
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getPost),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.getPost,
     );
+    return ContentPostDetailPayload.fromWire(obj);
   }
 
   @override

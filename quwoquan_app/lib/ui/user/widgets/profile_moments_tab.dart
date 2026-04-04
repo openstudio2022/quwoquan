@@ -26,7 +26,7 @@ class ProfileMomentsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(profileNotifierProvider(userId)).state;
+    final state = ref.watch(profileNotifierProvider(userId));
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
@@ -173,7 +173,7 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
             SizedBox(height: AppSpacing.interGroupSm),
             GestureDetector(
               onTap: () {
-                final state = ref.read(profileNotifierProvider(userId)).state;
+                final state = ref.read(profileNotifierProvider(userId));
                 final moments = state.creations
                     .where((post) => post.identity == 'moment')
                     .toList();
@@ -199,7 +199,7 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
             SizedBox(height: AppSpacing.interGroupSm),
             GestureDetector(
               onTap: () {
-                final state = ref.read(profileNotifierProvider(userId)).state;
+                final state = ref.read(profileNotifierProvider(userId));
                 final moments = state.creations
                     .where((post) => post.identity == 'moment')
                     .toList();

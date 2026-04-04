@@ -17,9 +17,6 @@ class _StubUserRepository implements UserRepository {
   Future<void> activateSubAccount(String subAccountId) async {}
 
   @override
-  Future<void> activatePersona(String personaId) => activateSubAccount(personaId);
-
-  @override
   Future<PersonaManagementItemViewData> createSubAccount({
     required String displayName,
     String isolationLevel = 'open',
@@ -88,9 +85,6 @@ class _StubUserRepository implements UserRepository {
   Future<List<PersonaManagementItemViewData>> listSubAccounts() async {
     return accounts;
   }
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() => listSubAccounts();
 
   @override
   Future<void> retireSubAccount(String subAccountId) async {}

@@ -1,208 +1,230 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/post_models.dart';
 import 'package:quwoquan_app/core/models/story_models.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
 
-// 发现页状态管理器
-class DiscoveryState extends ChangeNotifier {
-  // Tab导航状态
-  String _activeTab = 'following';
-  String _photographyCategory = 'all';
-  
-  // Feed数据状态
-  final Map<String, List<Post>> _feedData = {};
-  final Map<String, bool> _isLoading = {};
-  final Map<String, String?> _errorMessages = {};
-  
-  // 交互状态（使用非 final，每次修改创建新实例，确保 didUpdateWidget 能检测到变化）
-  Set<String> _followingUsers = {'nature_photographer', 'travel_photographer'};
-  Set<String> _savedPosts = <String>{};
-  Set<String> _likedPosts = <String>{};
-  final Map<String, int> _postLikesCount = <String, int>{};
-  final Map<String, int> _postBookmarksCount = <String, int>{};
-  final Map<String, int> _postSharesCount = <String, int>{};
-  
-  // Stories状态
-  List<Story> _stories = [];
-  bool _isStoriesLoading = false;
-  
-  // 用户资料状态
-  String? _currentUser;
-  User? _userProfileData;
-  bool _isUserProfileLoading = false;
-  
-  // Getters
-  String get activeTab => _activeTab;
-  String get photographyCategory => _photographyCategory;
-  Map<String, List<Post>> get feedData => _feedData;
-  Map<String, bool> get isLoading => _isLoading;
-  Map<String, String?> get errorMessages => _errorMessages;
-  Set<String> get followingUsers => _followingUsers;
-  Set<String> get savedPosts => _savedPosts;
-  Set<String> get likedPosts => _likedPosts;
-  List<Story> get stories => _stories;
-  bool get isStoriesLoading => _isStoriesLoading;
-  String? get currentUser => _currentUser;
-  User? get userProfileData => _userProfileData;
-  bool get isUserProfileLoading => _isUserProfileLoading;
-  
-  // Tab管理
+/// 发现页 UI 不可变快照；所有集合更新须用新实例赋值以保证 `ref.watch` 能感知变化。
+class DiscoveryUiState {
+  const DiscoveryUiState({
+    this.activeTab = 'following',
+    this.photographyCategory = 'all',
+    this.feedData = const <String, List<Post>>{},
+    this.isLoading = const <String, bool>{},
+    this.errorMessages = const <String, String?>{},
+    this.followingUsers = const {
+      'nature_photographer',
+      'travel_photographer',
+    },
+    this.savedPosts = const <String>{},
+    this.likedPosts = const <String>{},
+    this.postLikesCount = const <String, int>{},
+    this.postBookmarksCount = const <String, int>{},
+    this.postSharesCount = const <String, int>{},
+    this.stories = const <Story>[],
+    this.isStoriesLoading = false,
+    this.currentUser,
+    this.userProfileData,
+    this.isUserProfileLoading = false,
+  });
+
+  final String activeTab;
+  final String photographyCategory;
+  final Map<String, List<Post>> feedData;
+  final Map<String, bool> isLoading;
+  final Map<String, String?> errorMessages;
+  final Set<String> followingUsers;
+  final Set<String> savedPosts;
+  final Set<String> likedPosts;
+  final Map<String, int> postLikesCount;
+  final Map<String, int> postBookmarksCount;
+  final Map<String, int> postSharesCount;
+  final List<Story> stories;
+  final bool isStoriesLoading;
+  final String? currentUser;
+  final User? userProfileData;
+  final bool isUserProfileLoading;
+
+  /// 优先返回本地维护的展示数；未操作过时返回 0，由调用方用帖子原始数兜底
+  int getPostLikesCount(String postId) => postLikesCount[postId] ?? 0;
+
+  int getPostBookmarksCount(String postId) => postBookmarksCount[postId] ?? 0;
+
+  int getPostSharesCount(String postId) => postSharesCount[postId] ?? 0;
+
+  DiscoveryUiState copyWith({
+    String? activeTab,
+    String? photographyCategory,
+    Map<String, List<Post>>? feedData,
+    Map<String, bool>? isLoading,
+    Map<String, String?>? errorMessages,
+    Set<String>? followingUsers,
+    Set<String>? savedPosts,
+    Set<String>? likedPosts,
+    Map<String, int>? postLikesCount,
+    Map<String, int>? postBookmarksCount,
+    Map<String, int>? postSharesCount,
+    List<Story>? stories,
+    bool? isStoriesLoading,
+    String? currentUser,
+    User? userProfileData,
+    bool? isUserProfileLoading,
+    bool clearCurrentUser = false,
+  }) {
+    return DiscoveryUiState(
+      activeTab: activeTab ?? this.activeTab,
+      photographyCategory: photographyCategory ?? this.photographyCategory,
+      feedData: feedData ?? this.feedData,
+      isLoading: isLoading ?? this.isLoading,
+      errorMessages: errorMessages ?? this.errorMessages,
+      followingUsers: followingUsers ?? this.followingUsers,
+      savedPosts: savedPosts ?? this.savedPosts,
+      likedPosts: likedPosts ?? this.likedPosts,
+      postLikesCount: postLikesCount ?? this.postLikesCount,
+      postBookmarksCount: postBookmarksCount ?? this.postBookmarksCount,
+      postSharesCount: postSharesCount ?? this.postSharesCount,
+      stories: stories ?? this.stories,
+      isStoriesLoading: isStoriesLoading ?? this.isStoriesLoading,
+      currentUser: clearCurrentUser ? null : (currentUser ?? this.currentUser),
+      userProfileData: userProfileData ?? this.userProfileData,
+      isUserProfileLoading:
+          isUserProfileLoading ?? this.isUserProfileLoading,
+    );
+  }
+}
+
+class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
+  @override
+  DiscoveryUiState build() => const DiscoveryUiState();
+
   void setActiveTab(String tab) {
-    _activeTab = tab;
-    notifyListeners();
+    state = state.copyWith(activeTab: tab);
   }
-  
+
   void setPhotographyCategory(String category) {
-    _photographyCategory = category;
-    notifyListeners();
+    state = state.copyWith(photographyCategory: category);
   }
-  
-  // Feed数据管理
+
   void setFeedData(String tab, List<Post> posts) {
-    _feedData[tab] = posts;
-    notifyListeners();
+    state = state.copyWith(
+      feedData: Map<String, List<Post>>.from(state.feedData)..[tab] = posts,
+    );
   }
-  
+
   void setLoading(String tab, bool loading) {
-    _isLoading[tab] = loading;
-    notifyListeners();
+    state = state.copyWith(
+      isLoading: Map<String, bool>.from(state.isLoading)..[tab] = loading,
+    );
   }
-  
+
   void setError(String tab, String? error) {
-    _errorMessages[tab] = error;
-    notifyListeners();
+    state = state.copyWith(
+      errorMessages: Map<String, String?>.from(state.errorMessages)
+        ..[tab] = error,
+    );
   }
-  
+
   void clearError(String tab) {
-    _errorMessages.remove(tab);
-    notifyListeners();
+    final next = Map<String, String?>.from(state.errorMessages)..remove(tab);
+    state = state.copyWith(errorMessages: next);
   }
-  
-  // 交互状态管理
+
   void toggleFollow(String username) {
-    if (_followingUsers.contains(username)) {
-      _followingUsers = Set.from(_followingUsers)..remove(username);
-    } else {
-      _followingUsers = {..._followingUsers, username};
-    }
-    notifyListeners();
+    final next = state.followingUsers.contains(username)
+        ? (Set<String>.from(state.followingUsers)..remove(username))
+        : ({...state.followingUsers, username});
+    state = state.copyWith(followingUsers: next);
   }
-  
+
   /// [baseLikesCount] 帖子原始点赞数，首次点赞时用于与本地状态合并，保证详情与列表一致
   void toggleLike(String postId, {int? baseLikesCount}) {
-    if (_likedPosts.contains(postId)) {
-      _likedPosts = Set.from(_likedPosts)..remove(postId);
-      final currentCount = _postLikesCount[postId] ?? baseLikesCount ?? 0;
-      _postLikesCount[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
+    if (state.likedPosts.contains(postId)) {
+      final liked = Set<String>.from(state.likedPosts)..remove(postId);
+      final currentCount =
+          state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final counts = Map<String, int>.from(state.postLikesCount)
+        ..[postId] =
+            (currentCount - 1).clamp(0, double.infinity).toInt();
+      state = state.copyWith(likedPosts: liked, postLikesCount: counts);
     } else {
-      _likedPosts = {..._likedPosts, postId};
-      final currentCount = _postLikesCount[postId] ?? baseLikesCount ?? 0;
-      _postLikesCount[postId] = currentCount + 1;
+      final liked = {...state.likedPosts, postId};
+      final currentCount =
+          state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final counts = Map<String, int>.from(state.postLikesCount)
+        ..[postId] = currentCount + 1;
+      state = state.copyWith(likedPosts: liked, postLikesCount: counts);
     }
-    notifyListeners();
   }
 
   /// [baseBookmarksCount] 帖子原始收藏数，首次收藏时用于与本地状态合并
   void toggleSave(String postId, {int? baseBookmarksCount}) {
-    if (_savedPosts.contains(postId)) {
-      _savedPosts = Set.from(_savedPosts)..remove(postId);
-      final currentCount = _postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
-      _postBookmarksCount[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
+    if (state.savedPosts.contains(postId)) {
+      final saved = Set<String>.from(state.savedPosts)..remove(postId);
+      final currentCount =
+          state.postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
+      final counts = Map<String, int>.from(state.postBookmarksCount)
+        ..[postId] =
+            (currentCount - 1).clamp(0, double.infinity).toInt();
+      state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
     } else {
-      _savedPosts = {..._savedPosts, postId};
-      final currentCount = _postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
-      _postBookmarksCount[postId] = currentCount + 1;
+      final saved = {...state.savedPosts, postId};
+      final currentCount =
+          state.postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
+      final counts = Map<String, int>.from(state.postBookmarksCount)
+        ..[postId] = currentCount + 1;
+      state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
     }
-    notifyListeners();
-  }
-  
-  void incrementShares(String postId) {
-    final currentCount = _postSharesCount[postId] ?? 0;
-    _postSharesCount[postId] = currentCount + 1;
-    notifyListeners();
-  }
-  
-  /// 优先返回本地维护的展示数；未操作过时返回 0，由调用方用帖子原始数兜底
-  int getPostLikesCount(String postId) {
-    return _postLikesCount[postId] ?? 0;
   }
 
-  int getPostBookmarksCount(String postId) {
-    return _postBookmarksCount[postId] ?? 0;
-  }
-  
-  int getPostSharesCount(String postId) {
-    return _postSharesCount[postId] ?? 0;
+  void incrementShares(String postId) {
+    final currentCount = state.postSharesCount[postId] ?? 0;
+    final counts = Map<String, int>.from(state.postSharesCount)
+      ..[postId] = currentCount + 1;
+    state = state.copyWith(postSharesCount: counts);
   }
 
   void applyMediaViewerResult(MediaViewerResult result) {
-    _followingUsers = Set<String>.from(result.followingUsers);
-    _savedPosts = Set<String>.from(result.savedPosts);
-    _likedPosts = Set<String>.from(result.likedPosts);
-    _postLikesCount
-      ..clear()
-      ..addAll(result.postLikesCount);
-    _postBookmarksCount
-      ..clear()
-      ..addAll(result.postBookmarksCount);
-    _postSharesCount
-      ..clear()
-      ..addAll(result.postSharesCount);
-    notifyListeners();
+    state = state.copyWith(
+      followingUsers: Set<String>.from(result.followingUsers),
+      savedPosts: Set<String>.from(result.savedPosts),
+      likedPosts: Set<String>.from(result.likedPosts),
+      postLikesCount: Map<String, int>.from(result.postLikesCount),
+      postBookmarksCount: Map<String, int>.from(result.postBookmarksCount),
+      postSharesCount: Map<String, int>.from(result.postSharesCount),
+    );
   }
-  
-  // Stories管理
+
   void setStories(List<Story> stories) {
-    _stories = stories;
-    notifyListeners();
+    state = state.copyWith(stories: stories);
   }
-  
+
   void setStoriesLoading(bool loading) {
-    _isStoriesLoading = loading;
-    notifyListeners();
+    state = state.copyWith(isStoriesLoading: loading);
   }
-  
-  // 用户资料管理
+
   void setCurrentUser(String? username) {
-    _currentUser = username;
-    notifyListeners();
+    state = state.copyWith(
+      currentUser: username,
+      clearCurrentUser: username == null,
+    );
   }
-  
+
   void setUserProfileData(User? user) {
-    _userProfileData = user;
-    notifyListeners();
+    state = state.copyWith(userProfileData: user);
   }
-  
+
   void setUserProfileLoading(bool loading) {
-    _isUserProfileLoading = loading;
-    notifyListeners();
+    state = state.copyWith(isUserProfileLoading: loading);
   }
-  
-  // 重置状态
+
   void reset() {
-    _activeTab = 'following';
-    _photographyCategory = 'all';
-    _feedData.clear();
-    _isLoading.clear();
-    _errorMessages.clear();
-    _stories.clear();
-    _isStoriesLoading = false;
-    _currentUser = null;
-    _userProfileData = null;
-    _isUserProfileLoading = false;
-    notifyListeners();
+    state = const DiscoveryUiState();
   }
 }
 
-// 发现页状态提供者：使用 ChangeNotifierProvider 订阅 notifyListeners 变更
-final discoveryStateProvider = ChangeNotifierProvider<DiscoveryState>((ref) {
-  return DiscoveryState();
-});
+final discoveryStateProvider =
+    NotifierProvider<DiscoveryNotifier, DiscoveryUiState>(DiscoveryNotifier.new);
 
-// 便捷访问器
 final activeTabProvider = Provider<String>((ref) {
   return ref.watch(discoveryStateProvider).activeTab;
 });

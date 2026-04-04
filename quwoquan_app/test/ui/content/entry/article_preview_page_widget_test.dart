@@ -8,6 +8,9 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.d
 
 void main() {
   testWidgets('预览页可切换封面并与模板字体共用同一阅读壳层', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final container = ProviderContainer();
     addTearDown(container.dispose);
 

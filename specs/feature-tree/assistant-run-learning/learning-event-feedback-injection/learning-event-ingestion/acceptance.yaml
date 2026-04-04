@@ -2,13 +2,29 @@ version: 1
 feature: learning-event-ingestion
 level: "L3_story"
 template: A1-A8
-focus_groups: []
+focus_groups:
+  - A1_functional
+  - A7_contract_metadata_consistency
+  - A8_test_evidence
 tests:
   mock: []
-  unit: []
-  contract: []
-  integration: []
+  unit:
+    - quwoquan_service/services/assistant-service/internal/application/service_test.go
+  contract:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
+  integration:
+    - quwoquan_app/test/cloud/assistant/assistant_repository_learning_contract_test.dart
   uat: []
+level_acceptance:
+  A1:
+    criteria: learning events/scorecards 通过真实 remote sync 上报，服务端完成 schema 校验、幂等、落库、投影与事件发布。
+    status: specified
+  A7:
+    criteria: learning-event-ingestion 与 interactionevent-scorecard-schema 中定义的字段在 metadata/codegen/app/service 中保持一致。
+    status: specified
+  A8:
+    criteria: 具备单测、HTTP 契约测试、端云 contract 与 staging 证据，不能以 localMock/cloudStub 作为完成口径。
+    status: specified
 execution:
   local_gate: make gate
   full_gate: make gate-full

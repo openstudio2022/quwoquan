@@ -1,0 +1,13 @@
+# 页面 A/B/C 门禁白名单（与 verify_page_abc_governance.py 联用）
+#
+# 路径：quwoquan_app 相对路径，须落在矩阵扫描 64 路径内（与 page-horizontal-quality 基线一致）。
+# 每条须含 reason；建议填 tracking（CR / issue）便于收口后删除。
+#
+# 示例（勿提交真实长期豁免；需要时取消注释并改路径）：
+# exemptions:
+#   - path: lib/ui/content/entry/pages/create_page.dart
+#     dimensions: [C]
+#     reason: "metadata/codegen 强类型迁移进行中"
+#     tracking: "CR-xxxx"
+
+exemptions: []

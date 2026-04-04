@@ -62,7 +62,7 @@ class RelationshipCapabilityDto {
            ),
        relationTier =
            relationTier ??
-           _legacyRelationTier(
+           _relationTierFromNormalizedState(
              _normalizeRelationState(
                relationState ?? relationTier ?? 'not_following',
              ),
@@ -124,7 +124,7 @@ class RelationshipCapabilityDto {
     }
   }
 
-  static String _legacyRelationTier(String relationState) {
+  static String _relationTierFromNormalizedState(String relationState) {
     switch (relationState) {
       case 'self':
         return 'self';
@@ -187,8 +187,8 @@ class RelationshipCapabilityDto {
     );
   }
 
-  /// 本地推导：仅当后端 API 未就绪时使用（从旧版 isFollowing/isFollowedBy 推导）
-  factory RelationshipCapabilityDto.fromLegacyRelationship({
+  /// 本地推导：由关注/被关注布尔量合成 [RelationshipCapabilityDto]（Mock 与乐观 UI 更新）。
+  factory RelationshipCapabilityDto.fromFollowFlags({
     required String viewerId,
     required String targetId,
     required bool isFollowing,
@@ -243,7 +243,7 @@ class MockRelationshipCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final relationState = UserProfileMockData.relationStateFor(targetUserId);
-    return RelationshipCapabilityDto.fromLegacyRelationship(
+    return RelationshipCapabilityDto.fromFollowFlags(
       viewerId: ChatMockData.currentUserProfileId,
       targetId: targetUserId,
       isFollowing: UserProfileMockData.viewerFollowsTarget(targetUserId),

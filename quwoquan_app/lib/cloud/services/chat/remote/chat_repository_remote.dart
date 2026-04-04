@@ -39,13 +39,13 @@ class RemoteChatRepository implements ChatRepository {
   Map<String, String> _headersForSurface(
     AppUiSurface surface, {
     required String operationId,
-    required String legacyPageId,
+    required String clientPageId,
   }) {
     return CloudRequestHeaders.forSurfaceOperation(
       surfaceId: surface.id,
       routeId: surface.routeId,
       operationId: operationId,
-      legacyPageId: legacyPageId,
+      clientPageId: clientPageId,
     );
   }
 
@@ -78,7 +78,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listInboxOperation,
-        legacyPageId: ChatRequestPageIds.listInbox,
+        clientPageId: ChatRequestPageIds.listInbox,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(
@@ -108,7 +108,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationsOperation,
-        legacyPageId: ChatRequestPageIds.listConversations,
+        clientPageId: ChatRequestPageIds.listConversations,
       ),
     );
     return CloudResponseDecoder.asCursorPage(
@@ -134,7 +134,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchConversationsOperation,
-        legacyPageId: ChatRequestPageIds.searchConversations,
+        clientPageId: ChatRequestPageIds.searchConversations,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(
@@ -176,7 +176,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.startGroupChat,
         operationId: ChatApiMetadata.createConversationOperation,
-        legacyPageId: ChatRequestPageIds.createConversation,
+        clientPageId: ChatRequestPageIds.createConversation,
       ),
       body: body,
     );
@@ -196,7 +196,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.getConversationOperation,
-        legacyPageId: ChatRequestPageIds.getConversation,
+        clientPageId: ChatRequestPageIds.getConversation,
       ),
     );
   }
@@ -214,7 +214,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.getConversationOperation,
-        legacyPageId: ChatRequestPageIds.getConversation,
+        clientPageId: ChatRequestPageIds.getConversation,
       ),
       body: <String, dynamic>{'title': title},
     );
@@ -240,7 +240,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.listMessagesOperation,
-        legacyPageId: ChatRequestPageIds.listMessages,
+        clientPageId: ChatRequestPageIds.listMessages,
       ),
     );
     final items = CloudResponseDecoder.asCursorPage(
@@ -267,7 +267,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchMessagesOperation,
-        legacyPageId: ChatRequestPageIds.searchMessages,
+        clientPageId: ChatRequestPageIds.searchMessages,
       ),
     );
     final page = CloudResponseDecoder.asCursorPage(
@@ -305,7 +305,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.sendMessageOperation,
-        legacyPageId: ChatRequestPageIds.sendMessage,
+        clientPageId: ChatRequestPageIds.sendMessage,
       ),
       body: {
         'type': type,
@@ -339,7 +339,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.recallMessageOperation,
-        legacyPageId: ChatRequestPageIds.recallMessage,
+        clientPageId: ChatRequestPageIds.recallMessage,
       ),
       body: {},
     );
@@ -359,7 +359,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.syncMessagesOperation,
-        legacyPageId: ChatRequestPageIds.syncMessages,
+        clientPageId: ChatRequestPageIds.syncMessages,
       ),
       body: {'lastSeq': lastSeq, 'limit': limit},
     );
@@ -383,7 +383,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.markAsReadOperation,
-        legacyPageId: ChatRequestPageIds.markAsRead,
+        clientPageId: ChatRequestPageIds.markAsRead,
       ),
       body: {},
     );
@@ -405,7 +405,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.getReceiptsOperation,
-        legacyPageId: ChatRequestPageIds.getReceipts,
+        clientPageId: ChatRequestPageIds.getReceipts,
       ),
     );
     final items = decoded['items'];
@@ -439,7 +439,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.listMembersOperation,
-        legacyPageId: ChatRequestPageIds.listMembers,
+        clientPageId: ChatRequestPageIds.listMembers,
       ),
     );
     final items = decoded['items'];
@@ -465,7 +465,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatAddMembers,
         operationId: ChatApiMetadata.addMembersOperation,
-        legacyPageId: ChatRequestPageIds.addMembers,
+        clientPageId: ChatRequestPageIds.addMembers,
       ),
       body: {'userIds': userIds},
     );
@@ -487,7 +487,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.removeMemberOperation,
-        legacyPageId: ChatRequestPageIds.removeMember,
+        clientPageId: ChatRequestPageIds.removeMember,
       ),
     );
   }
@@ -507,7 +507,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.inviteAssistantOperation,
-        legacyPageId: ChatRequestPageIds.inviteAssistant,
+        clientPageId: ChatRequestPageIds.inviteAssistant,
       ),
       body: {'skillId': ?skillId},
     );
@@ -523,7 +523,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.removeAssistantOperation,
-        legacyPageId: ChatRequestPageIds.removeAssistant,
+        clientPageId: ChatRequestPageIds.removeAssistant,
       ),
     );
   }
@@ -546,7 +546,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.updateConversationSettingsOperation,
-        legacyPageId: ChatRequestPageIds.updateConversationSettings,
+        clientPageId: ChatRequestPageIds.updateConversationSettings,
       ),
       body: {'muted': ?muted, 'pinned': ?pinned},
     );
@@ -571,7 +571,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listContactsOperation,
-        legacyPageId: ChatRequestPageIds.listContacts,
+        clientPageId: ChatRequestPageIds.listContacts,
       ),
     );
     final items = decoded['items'];
@@ -624,7 +624,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchContactsOperation,
-        legacyPageId: ChatRequestPageIds.searchContacts,
+        clientPageId: ChatRequestPageIds.searchContacts,
       ),
     );
     final items = decoded['items'];
@@ -647,7 +647,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationTimestampsOperation,
-        legacyPageId: ChatRequestPageIds.listConversationTimestamps,
+        clientPageId: ChatRequestPageIds.listConversationTimestamps,
       ),
     );
     final items = decoded['items'];
@@ -667,7 +667,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.batchGetConversationsOperation,
-        legacyPageId: ChatRequestPageIds.batchGetConversations,
+        clientPageId: ChatRequestPageIds.batchGetConversations,
       ),
       body: {'ids': ids},
     );
@@ -690,7 +690,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.getConversationOperation,
-        legacyPageId: ChatRequestPageIds.getConversation,
+        clientPageId: ChatRequestPageIds.getConversation,
       ),
     );
     return ChatGroupSettingsDto.fromMap(decoded);
@@ -711,7 +711,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.updateConversationSettingsOperation,
-        legacyPageId: ChatRequestPageIds.updateConversationSettings,
+        clientPageId: ChatRequestPageIds.updateConversationSettings,
       ),
       body: settings.toGroupSettingsPatchBody(),
     );
@@ -730,7 +730,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatTransferOwnership,
         operationId: ChatApiMetadata.transferOwnershipOperation,
-        legacyPageId: ChatRequestPageIds.transferOwnership,
+        clientPageId: ChatRequestPageIds.transferOwnership,
       ),
       body: {'newOwnerId': newOwnerId},
     );
@@ -749,7 +749,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatAdmins,
         operationId: ChatApiMetadata.updateGroupAdminsOperation,
-        legacyPageId: ChatRequestPageIds.updateGroupAdmins,
+        clientPageId: ChatRequestPageIds.updateGroupAdmins,
       ),
       body: {'adminIds': adminIds},
     );
@@ -765,7 +765,7 @@ class RemoteChatRepository implements ChatRepository {
       headers: _headersForSurface(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.dissolveConversationOperation,
-        legacyPageId: ChatRequestPageIds.dissolveConversation,
+        clientPageId: ChatRequestPageIds.dissolveConversation,
       ),
     );
   }

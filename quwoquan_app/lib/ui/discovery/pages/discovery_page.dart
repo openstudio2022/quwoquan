@@ -437,7 +437,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       onShareTap: _onMomentShareTap,
       followingUsers: ref.watch(discoveryStateProvider).followingUsers,
       onFollowClick: (authorId, _) =>
-          ref.read(discoveryStateProvider).toggleFollow(authorId),
+          ref.read(discoveryStateProvider.notifier).toggleFollow(authorId),
       onVideoTap: (post, index) {
         _onPostTap(post, index, feedPosts: videos.toList(), category: tabId);
       },
@@ -743,14 +743,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return cardWidth / ratio;
   }
 
-  static int? _displayLikesCount(DiscoveryState homeState, PostBaseDto post) {
+  static int? _displayLikesCount(DiscoveryUiState homeState, PostBaseDto post) {
     final n = homeState.getPostLikesCount(post.id);
     if (n > 0) return n;
     return post.likeCount > 0 ? post.likeCount : null;
   }
 
   static int? _displayBookmarksCount(
-    DiscoveryState homeState,
+    DiscoveryUiState homeState,
     PostBaseDto post,
   ) {
     final n = homeState.getPostBookmarksCount(post.id);

@@ -89,7 +89,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/pages/article_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：详情面 ReadPresentation(detail_article)；当前 getPost+projectArticleDetailView |
+| `lib/ui/content/pages/article_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：详情面 ReadPresentation(detail_article)；当前 getPost+projectArticleDetailView。P7/P8：与预览/沉浸共用统一 `ArticleReadOnlyBookDeck`、纸张规格与段距 token |
 | `lib/ui/content/pages/photo_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：ReadPresentation(detail_photo)；`PostSummaryView` 待表面化 |
 | `lib/ui/content/pages/video_detail_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：同 photo（视频） |
 | `lib/ui/content/pages/unified_media_viewer_page.dart` | T2 | ✓ | ○ | ✓ | ✓ | — | — | ✓ | ✓ | **P2 ○**：沉浸面+`WorksImmersiveViewer`；P6 exempt（S6-2） |
@@ -100,8 +100,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：Draft→预览 ReadPresentation + Draft→Payload 与只读管道对齐；P6 与双色矩阵 `create_page` full 对齐 |
-| `lib/ui/content/entry/pages/article_preview_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：预览=ReadPresentation 自 Draft |
+| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：Draft→预览 ReadPresentation + Draft→Payload 与只读管道对齐；P6 与双色矩阵 `create_page` full 对齐。P7/P8：预览宿主与沉浸/详情共享统一 reader host、单页/对开口径与三层节奏 token |
+| `lib/ui/content/entry/pages/article_preview_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：预览=ReadPresentation 自 Draft。P7/P8：与 create 预览 / 沉浸 / 详情共用统一 reader host、page slice 真相源与语义段距 |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：创作子链与主 Draft/发布映射对齐 |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：剪辑→Draft→预览/提交统一管道 |
 | `lib/ui/content/entry/pages/publish_circle_select_page.dart` | T5 | ✓ | ○ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ○**：圈选择与发布 payload 显式映射 |

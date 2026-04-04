@@ -609,7 +609,6 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
   normalized['content'] = bestContent;
   normalized.remove('machineEnvelope');
   normalized.remove('streamFinalAnswer');
-  normalized.remove('uiProcessTimelineV2');
   normalized.remove('decisionJson');
   final runArtifacts = (normalized['runArtifacts'] as Map?)
       ?.cast<String, dynamic>();

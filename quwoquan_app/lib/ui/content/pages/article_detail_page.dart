@@ -62,11 +62,11 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   Future<void> _loadArticle() async {
     try {
-      final raw = await ref
+      final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: widget.articleId);
       final article = projectArticleDetailView(
-        raw,
+        detail.wireForArticleProjection,
         fallbackArticleId: widget.articleId,
       );
       if (!mounted) return;
@@ -210,41 +210,26 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                         constraints,
                         variant: ArticleCanvasVariant.detail,
                       );
-                      if (pages.isEmpty) {
-                        return Column(
-                          children: article.contentBlocks.map(
-                            (block) {
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: AppSpacing.interGroupSm,
-                                ),
-                                child: ArticleContentBlockRenderer(block: block),
-                              );
-                            },
-                          ).toList(growable: false),
-                        );
-                      }
-                      return Column(
-                        children: pages.asMap().entries.map((entry) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              bottom: AppSpacing.interGroupMd,
-                            ),
-                            child: ArticlePageShell(
-                              template: article.template,
-                              fontPreset: article.fontPreset,
-                              pageIndex: entry.key,
-                              totalPages: pages.length,
-                              aspectRatio: metrics.aspectRatio,
-                              contentPadding: metrics.contentPadding,
-                              child: ArticlePageReadOnlyView(
-                                page: entry.value,
-                                template: article.template,
-                                fontPreset: article.fontPreset,
-                              ),
-                            ),
-                          );
-                        }).toList(growable: false),
+                      final pagePadding = articleReaderStagePagePadding();
+                      final stageWidth = resolveArticlePaperStageWidth(
+                        context,
+                        constraints,
+                        stagePadding: pagePadding,
+                        allowLandscapeSpread: true,
+                      );
+                      final stageHeight =
+                          metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                          pagePadding.vertical;
+                      return SizedBox(
+                        height: stageHeight,
+                        child: ArticleReadOnlyBookDeck(
+                          pages: pages,
+                          template: article.template,
+                          fontPreset: article.fontPreset,
+                          metrics: metrics,
+                          coverUrl: article.coverImage,
+                          pagePadding: pagePadding,
+                        ),
                       );
                     },
                   ),

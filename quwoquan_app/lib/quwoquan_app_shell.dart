@@ -7,10 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
+import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_app_exception_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -30,30 +34,30 @@ void logQuwoquanAppException({
     logType: AppLogType.error,
     level: AppLogLevel.error,
     context: context,
-    payload: <String, dynamic>{
-      'kind': 'app_exception',
-      'source': source,
-      'exception': exceptionText,
-      'stack': stackText,
-    },
+    payload: AppLogAppExceptionPayload(
+      kind: 'app_exception',
+      source: source,
+      exception: exceptionText,
+      stack: stackText,
+    ).toMap(),
     hasError: true,
   );
   AppLogService.instance.writeEvent(
     logType: AppLogType.pageAccess,
     level: AppLogLevel.error,
     context: context,
-    payload: <String, dynamic>{
-      'event': 'exception',
-      'route': 'app',
-      'pageName': 'app',
-      'source': source,
-      'exception': exceptionText,
-    },
-    summaryPayload: <String, dynamic>{
-      'event': 'exception',
-      'route': 'app',
-      'source': source,
-    },
+    payload: AppLogPageRouteExceptionPayload(
+      event: 'exception',
+      route: 'app',
+      pageName: 'app',
+      source: source,
+      exception: exceptionText,
+    ).toMap(),
+    summaryPayload: AppLogPageRouteExceptionSummaryPayload(
+      event: 'exception',
+      route: 'app',
+      source: source,
+    ).toMap(),
     hasError: true,
   );
 }
@@ -86,7 +90,8 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
 
 class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     with WidgetsBindingObserver {
-  bool _assistantApiStarted = false;
+  /// [dispose] 时不可用 [ref]，在启动成功时保存实例供 [dispose] 调用 [AssistantApiGateway.stop]。
+  AssistantApiGateway? _assistantApiGatewayForDispose;
 
   @override
   void initState() {
@@ -100,9 +105,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   @override
   void dispose() {
-    if (_assistantApiStarted) {
-      ref.read(assistantApiGatewayProvider).stop();
-    }
+    _assistantApiGatewayForDispose?.stop();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -169,8 +172,9 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           )).toLowerCase() ==
           'true';
       if (enableAssistantApi) {
-        await ref.read(assistantApiGatewayProvider).start();
-        _assistantApiStarted = true;
+        final gateway = ref.read(assistantApiGatewayProvider);
+        await gateway.start();
+        _assistantApiGatewayForDispose = gateway;
       }
       await ref
           .read(appearanceSettingsControllerProvider.notifier)

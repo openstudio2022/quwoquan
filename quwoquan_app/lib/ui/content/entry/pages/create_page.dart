@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -9,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -17,11 +15,14 @@ import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/article_preview_page.dart';
@@ -30,31 +31,38 @@ import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.d
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
+import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
-/// 创作入口主面；草稿 [CreateEditorStateV2]（清单 ContentPublishDraftComposite）+ [PublishSettings]（强类型 POI）。
+/// 创作入口主面；草稿 [CreateEditorState]（清单 ContentPublishDraftComposite）+ [PublishSettings]（强类型 POI）。
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({
     super.key,
     this.initialAction,
     this.initialTabKey,
     this.initialHomepage,
+    this.initialDraftId,
   });
 
   final EditorStartAction? initialAction;
   final String? initialTabKey;
   final HomepageCanonicalReference? initialHomepage;
 
+  /// 从全局「从草稿继续」进入时由路由 query 注入，与本地清单 id 对齐。
+  final String? initialDraftId;
+
   @override
   ConsumerState<CreatePage> createState() => _CreatePageState();
 }
 
+enum _TypographyToolbarTab { paper, font }
+
 class _CreatePageState extends ConsumerState<CreatePage> {
-  static const String _draftsStorageKey = 'create_drafts_list';
-  static const String _currentDraftIdKey = 'create_current_draft_id';
   static const int _kMaxMediaImages = 20;
   static const int _kMaxBodyLength = 5000;
 
@@ -72,14 +80,34 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   double _heroCollapseProgress = 0;
   String? _draggingMediaPath;
   String? _pressedMediaPath;
+
+  /// 图片拖动过程中最后一次指针全局坐标（用于松手时按重叠面积落点）。
+  Offset? _imageDragLastGlobal;
+  final GlobalKey _createMediaAddStripKey = GlobalKey();
+  final Map<String, GlobalKey> _mediaTileBoundsKeys = <String, GlobalKey>{};
   List<CreateDraft> _savedDrafts = <CreateDraft>[];
   String? _currentDraftId;
 
-  bool get _editorV2Enabled =>
-      ref.read(contentFeatureFlagProvider('create_editor_v2')) ||
+  /// 沉浸文章：编辑（纵向 Word 式）/ 预览（横向沉浸翻页）。
+  ArticleEditorSurfaceMode _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
+
+  /// 下一张文内图在 [ArticleDocumentData.body] 中的插入位置（由 [ArticleEditor] 按焦点/选区更新）。
+  final ValueNotifier<int> _articleImageBodyInsertOffset = ValueNotifier<int>(
+    0,
+  );
+
+  /// 非 null 时 [ArticleEditor] 在该页展开文内图工具栏（如新插入图片后）。
+  final ValueNotifier<String?> _revealArticleImageToolbarForPageId =
+      ValueNotifier<String?>(null);
+
+  /// 按 asset id 展开工具条（多图同页时优先于 [_revealArticleImageToolbarForPageId]）。
+  final ValueNotifier<String?> _revealArticleImageToolbarForAssetId =
+      ValueNotifier<String?>(null);
+
+  bool get _unifiedCreateEditorEnabled =>
       ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
 
-  bool _useImmersiveArticleExperience(CreateEditorStateV2 state) {
+  bool _useImmersiveArticleExperience(CreateEditorState state) {
     return widget.initialAction == EditorStartAction.write &&
         state.editorKind == CreateEditorKind.text;
   }
@@ -88,7 +116,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
-    _loadDrafts();
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       final state = ref.read(createEditorProvider);
       if (state.hasContent) {
@@ -99,25 +126,59 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       if (!mounted) {
         return;
       }
-      final notifier = ref.read(createEditorProvider.notifier);
-      notifier.reset(editorKind: _resolveInitialEditorKind());
-      if (widget.initialAction != null) {
-        notifier.setStartAction(widget.initialAction);
+      final loaded = await CreateDraftLocalStorage.loadDraftsWithCurrentId();
+      if (!mounted) {
+        return;
       }
-      if (widget.initialHomepage != null) {
-        notifier.setSettings(
-          ref
-              .read(createEditorProvider)
-              .settings
-              .copyWith(homepage: widget.initialHomepage),
-        );
-      }
-      _syncControllersFromState(ref.read(createEditorProvider));
-      await _applyInitialActionIfNeeded();
-      await _reportEvent('create_editor_ready', <String, dynamic>{
-        'editorKind': ref.read(createEditorProvider).editorKind.name,
-        'flag': _editorV2Enabled,
+      setState(() {
+        _savedDrafts = loaded.drafts;
+        _currentDraftId = loaded.currentId;
       });
+
+      final wantedId = widget.initialDraftId?.trim();
+      CreateDraft? initialDraft;
+      if (wantedId != null && wantedId.isNotEmpty) {
+        for (final d in loaded.drafts) {
+          if (d.id == wantedId) {
+            initialDraft = d;
+            break;
+          }
+        }
+      }
+
+      final notifier = ref.read(createEditorProvider.notifier);
+      if (initialDraft != null) {
+        notifier.reset(editorKind: initialDraft.state.editorKind);
+        await _restoreDraft(initialDraft);
+        _didApplyInitialAction = true;
+      } else {
+        notifier.reset(editorKind: _resolveInitialEditorKind());
+        if (widget.initialAction != null) {
+          notifier.setStartAction(widget.initialAction);
+        }
+        if (widget.initialHomepage != null) {
+          notifier.setSettings(
+            ref
+                .read(createEditorProvider)
+                .settings
+                .copyWith(homepage: widget.initialHomepage),
+          );
+        }
+        _syncControllersFromState(ref.read(createEditorProvider));
+        await _applyInitialActionIfNeeded();
+      }
+
+      if (!mounted) {
+        return;
+      }
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_editor_ready',
+        <String, Object?>{
+          'editorKind': ref.read(createEditorProvider).editorKind.name,
+          'flag': _unifiedCreateEditorEnabled,
+        },
+      );
     });
   }
 
@@ -131,6 +192,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     _bodyController.dispose();
     _titleFocusNode.dispose();
     _bodyFocusNode.dispose();
+    _articleImageBodyInsertOffset.dispose();
+    _revealArticleImageToolbarForPageId.dispose();
+    _revealArticleImageToolbarForAssetId.dispose();
     super.dispose();
   }
 
@@ -180,7 +244,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
   }
 
-  void _syncControllersFromState(CreateEditorStateV2 state) {
+  void _syncControllersFromState(CreateEditorState state) {
     if (_titleController.text != state.title) {
       _titleController.value = TextEditingValue(
         text: state.title,
@@ -219,24 +283,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     });
   }
 
-  String _coverAssetPathForState(CreateEditorStateV2 state) {
-    if (state.editorKind == CreateEditorKind.text) {
-      return _shouldPublishAsArticle(state)
-          ? state.articleCoverImagePath.trim()
-          : '';
-    }
-    if (state.hasVideo) {
-      if (state.videoThumbnail.trim().isNotEmpty) {
-        return state.videoThumbnail.trim();
-      }
-      return state.videoPath.trim();
-    }
-    if (state.imagePaths.isEmpty) {
-      return '';
-    }
-    return state.imagePaths.first;
-  }
-
   int _mediaColumnsForWidth(double width) {
     if (width >= 720) {
       return 5;
@@ -258,11 +304,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
   }
 
-  String _pageTitleForState(CreateEditorStateV2 state) {
+  String _pageTitleForState(CreateEditorState state) {
     return '创作';
   }
 
-  String _mediaHeaderHintForState(CreateEditorStateV2 state) {
+  String _mediaHeaderHintForState(CreateEditorState state) {
     if (state.hasVideo) {
       return '轻点视频编辑，可设置封面';
     }
@@ -272,7 +318,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     return '拖拽排序，轻点编辑';
   }
 
-  bool _canAddMoreImages(CreateEditorStateV2 state) {
+  bool _canAddMoreImages(CreateEditorState state) {
     return !state.hasVideo && state.imagePaths.length < _kMaxMediaImages;
   }
 
@@ -333,55 +379,80 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .reorderImages(fromIndex, targetIndex);
   }
 
-  Future<void> _reportEvent(
-    String event, [
-    Map<String, dynamic> extras = const <String, dynamic>{},
-  ]) async {
-    try {
-      await ref
-          .read(contentRepositoryProvider)
-          .reportBehaviors(
-            events: <Map<String, dynamic>>[
-              <String, dynamic>{
-                'event': event,
-                'surface': 'create_editor',
-                'timestamp': DateTime.now().toIso8601String(),
-                ...extras,
-              },
-            ],
-          );
-    } catch (_) {
-      // Keep editor resilient when reporting fails.
-    }
+  GlobalKey _mediaTileBoundsKeyForPath(String path) {
+    return _mediaTileBoundsKeys.putIfAbsent(path, GlobalKey.new);
   }
 
-  Future<void> _loadDrafts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_draftsStorageKey);
-    if (raw == null || raw.isEmpty) {
+  Rect? _rectFromGlobalKey(GlobalKey? key) {
+    final ctx = key?.currentContext;
+    if (ctx == null) {
+      return null;
+    }
+    final box = ctx.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) {
+      return null;
+    }
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  double _rectOverlapArea(Rect a, Rect b) {
+    final i = a.intersect(b);
+    if (i.width <= 0 || i.height <= 0) {
+      return 0;
+    }
+    return i.width * i.height;
+  }
+
+  /// 松手时按拖动矩形与各缩略图（及「添加」格）重叠面积取最大者，执行一次排序。
+  void _applyImageReorderOnDragEnd({
+    required String draggedPath,
+    required double tileWidth,
+    required double tileHeight,
+    required bool addEnabled,
+  }) {
+    final latest = ref.read(createEditorProvider).imagePaths;
+    final fromIndex = latest.indexOf(draggedPath);
+    if (fromIndex < 0) {
       return;
     }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return;
+    final pos = _imageDragLastGlobal;
+    if (pos == null) {
+      return;
+    }
+    final dragRect = Rect.fromCenter(
+      center: pos,
+      width: tileWidth,
+      height: tileHeight,
+    );
+    double bestArea = 0;
+    int? bestTargetIndex;
+    for (var i = 0; i < latest.length; i++) {
+      if (i == fromIndex) {
+        continue;
       }
-      final drafts = decoded
-          .whereType<Map>()
-          .map(
-            (entry) =>
-                CreateDraft.fromStorageMap(Map<String, dynamic>.from(entry)),
-          )
-          .toList(growable: false);
-      if (!mounted) {
-        return;
+      final path = latest[i];
+      final tileRect = _rectFromGlobalKey(_mediaTileBoundsKeys[path]);
+      if (tileRect == null) {
+        continue;
       }
-      setState(() {
-        _savedDrafts = drafts;
-      });
-      _currentDraftId = prefs.getString(_currentDraftIdKey);
-    } catch (_) {
-      // Ignore malformed drafts cache.
+      final area = _rectOverlapArea(dragRect, tileRect);
+      if (area > bestArea) {
+        bestArea = area;
+        bestTargetIndex = i;
+      }
+    }
+    if (addEnabled) {
+      final addRect = _rectFromGlobalKey(_createMediaAddStripKey);
+      if (addRect != null) {
+        final area = _rectOverlapArea(dragRect, addRect);
+        if (area > bestArea) {
+          bestArea = area;
+          bestTargetIndex = latest.length;
+        }
+      }
+    }
+    if (bestTargetIndex != null && bestArea > 0) {
+      _reorderImageByPath(draggedPath, bestTargetIndex);
     }
   }
 
@@ -389,18 +460,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     List<CreateDraft> drafts,
     String? currentId,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _draftsStorageKey,
-      jsonEncode(
-        drafts.map((draft) => draft.toStorageMap()).toList(growable: false),
-      ),
-    );
-    if (currentId == null) {
-      await prefs.remove(_currentDraftIdKey);
-    } else {
-      await prefs.setString(_currentDraftIdKey, currentId);
-    }
+    await CreateDraftLocalStorage.persistDrafts(drafts, currentId);
   }
 
   Future<void> _saveDraft({bool silent = false}) async {
@@ -425,9 +485,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     });
     ref.read(createEditorProvider.notifier).setDraftId(nextId);
     await _persistDrafts(nextDrafts, nextId);
-    await _reportEvent('create_draft_saved', <String, dynamic>{
-      'editorKind': nextDraft.state.editorKind.name,
-    });
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_draft_saved',
+      <String, Object?>{'editorKind': nextDraft.state.editorKind.name},
+    );
     if (!silent && mounted) {
       AppToast.show(context, UITextConstants.saveDraft);
     }
@@ -455,52 +517,14 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       _currentDraftId = draft.id;
     });
     await _persistDrafts(_savedDrafts, draft.id);
-    await _reportEvent('create_draft_restored', <String, dynamic>{
-      'editorKind': draft.state.editorKind.name,
-    });
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_draft_restored',
+      <String, Object?>{'editorKind': draft.state.editorKind.name},
+    );
     if (draft.state.editorKind == CreateEditorKind.text) {
       _focusBodyField();
     }
-  }
-
-  Future<void> _deleteDraft(String draftId) async {
-    final nextDrafts = _savedDrafts
-        .where((draft) => draft.id != draftId)
-        .toList(growable: false);
-    final nextCurrentId = _currentDraftId == draftId ? null : _currentDraftId;
-    setState(() {
-      _savedDrafts = nextDrafts;
-      _currentDraftId = nextCurrentId;
-    });
-    if (nextCurrentId == null) {
-      ref.read(createEditorProvider.notifier).setDraftId(null);
-    }
-    await _persistDrafts(nextDrafts, nextCurrentId);
-  }
-
-  Future<void> _showDraftsSheet() async {
-    if (_savedDrafts.isEmpty) {
-      return;
-    }
-    await showCupertinoModalPopup<void>(
-      context: context,
-      barrierColor: AppColors.transparent,
-      builder: (sheetContext) {
-        return _CreateDraftsSheet(
-          drafts: _savedDrafts,
-          onSelect: (draft) async {
-            Navigator.of(sheetContext).pop();
-            await _restoreDraft(draft);
-          },
-          onDelete: (draft) async {
-            await _deleteDraft(draft.id);
-            if (sheetContext.mounted && _savedDrafts.isEmpty) {
-              Navigator.of(sheetContext).pop();
-            }
-          },
-        );
-      },
-    );
   }
 
   Future<void> _onCloseRequest() async {
@@ -591,16 +615,69 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Future<void> _pickImagesForCurrentEditor() async {
+  /// 为文章编辑器在指定 node 之后插入图片（node 级操作）。
+  Future<void> _pickImagesForArticleNode(String? afterNodeId) async {
     final state = ref.read(createEditorProvider);
-    if (state.hasVideo && state.editorKind == CreateEditorKind.media) {
-      AppToast.show(context, '请先删除当前视频，再改为图片');
+    final remainingSlots =
+        (_kMaxMediaImages - state.imagePaths.length).clamp(0, _kMaxMediaImages);
+    if (remainingSlots <= 0) {
+      AppToast.show(context, '最多添加 $_kMaxMediaImages 张图片');
       return;
     }
     final result = await _openMediaPicker(
       mode: MediaPickerEntryMode.image,
-      maxSelection: _kMaxMediaImages,
-      initialPaths: state.imagePaths,
+      maxSelection: remainingSlots,
+      initialPaths: const <String>[],
+    );
+    if (!mounted || result == null) return;
+    final paths = result.items
+        .where((item) => item.isImage)
+        .map((item) => item.path)
+        .take(remainingSlots)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+    final notifier = ref.read(createEditorProvider.notifier);
+    var anchorNodeId = afterNodeId;
+    for (final path in paths) {
+      anchorNodeId = notifier.insertImageAfterNode(anchorNodeId, path);
+    }
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_media_images_selected',
+      <String, Object?>{
+        'count': paths.length,
+        'editorKind': state.editorKind.name,
+      },
+    );
+  }
+
+  Future<void> _pickImagesForCurrentEditor() async {
+    // 文本编辑器走 node 级插入
+    final state = ref.read(createEditorProvider);
+    if (state.editorKind == CreateEditorKind.text) {
+      await _pickImagesForArticleNode(null);
+      return;
+    }
+    if (state.hasVideo && state.editorKind == CreateEditorKind.media) {
+      AppToast.show(context, '请先删除当前视频，再改为图片');
+      return;
+    }
+    final remainingSlots = state.editorKind == CreateEditorKind.text
+        ? (_kMaxMediaImages - state.imagePaths.length).clamp(
+            0,
+            _kMaxMediaImages,
+          )
+        : _kMaxMediaImages;
+    if (state.editorKind == CreateEditorKind.text && remainingSlots <= 0) {
+      AppToast.show(context, '最多添加 $_kMaxMediaImages 张图片');
+      return;
+    }
+    final result = await _openMediaPicker(
+      mode: MediaPickerEntryMode.image,
+      maxSelection: remainingSlots,
+      initialPaths: state.editorKind == CreateEditorKind.text
+          ? const <String>[]
+          : state.imagePaths,
     );
     if (!mounted || result == null) {
       return;
@@ -615,25 +692,48 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       final activePageId =
           state.activeArticlePageId ?? state.articlePages.first.id;
       if (paths.isNotEmpty) {
-        notifier.replaceArticlePageImage(activePageId, paths.first);
+        final bodyLen = state.articleDocument.body.length;
+        final insertOffset = _articleImageBodyInsertOffset.value.clamp(
+          0,
+          bodyLen,
+        );
+        var anchorPageId = notifier.insertArticleImageAtBodyOffset(
+          paths.first,
+          bodyInsertOffset: insertOffset,
+          fallbackActivePageId: activePageId,
+        );
+        for (final path in paths.skip(1)) {
+          anchorPageId = notifier.insertArticleImageAfterPage(
+            anchorPageId,
+            path,
+          );
+        }
+        final docAfter = ref.read(createEditorProvider).articleDocument;
+        if (docAfter.assets.isNotEmpty) {
+          _revealArticleImageToolbarForAssetId.value = docAfter.assets.last.id;
+        }
       }
-      var anchorPageId = activePageId;
-      for (final path in paths.skip(1)) {
-        anchorPageId = notifier.insertArticleImageAfterPage(anchorPageId, path);
-      }
-      await _reportEvent('create_media_images_selected', <String, dynamic>{
-        'count': paths.length,
-        'editorKind': state.editorKind.name,
-      });
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_media_images_selected',
+        <String, Object?>{
+          'count': paths.length,
+          'editorKind': state.editorKind.name,
+        },
+      );
       return;
     }
     ref
         .read(createEditorProvider.notifier)
         .setImages(paths, editorKind: state.editorKind);
-    await _reportEvent('create_media_images_selected', <String, dynamic>{
-      'count': paths.length,
-      'editorKind': state.editorKind.name,
-    });
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_media_images_selected',
+      <String, Object?>{
+        'count': paths.length,
+        'editorKind': state.editorKind.name,
+      },
+    );
   }
 
   Future<void> _pickVideoForMedia() async {
@@ -672,7 +772,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           coverTimeMs: preserved.coverTimeMs,
           muted: preserved.muted,
         );
-    await _reportEvent('create_media_video_selected');
+    await reportCreateEditorSurfaceEvent(ref, 'create_media_video_selected');
     if (state.hasVideo && mounted) {
       await _editCurrentVideo();
     }
@@ -707,9 +807,22 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       }
       final activePageId =
           state.activeArticlePageId ?? state.articlePages.first.id;
+      final bodyLen = state.articleDocument.body.length;
+      final insertOffset = _articleImageBodyInsertOffset.value.clamp(
+        0,
+        bodyLen,
+      );
       ref
           .read(createEditorProvider.notifier)
-          .replaceArticlePageImage(activePageId, result.path);
+          .insertArticleImageAtBodyOffset(
+            result.path,
+            bodyInsertOffset: insertOffset,
+            fallbackActivePageId: activePageId,
+          );
+      final docAfter = ref.read(createEditorProvider).articleDocument;
+      if (docAfter.assets.isNotEmpty) {
+        _revealArticleImageToolbarForAssetId.value = docAfter.assets.last.id;
+      }
       return;
     }
     if (result.type == CreateMediaType.video) {
@@ -754,7 +867,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         );
   }
 
-  Future<void> _showAddMediaOptions(CreateEditorStateV2 state) async {
+  Future<void> _showAddMediaOptions(CreateEditorState state) async {
     final isTextEditor = state.editorKind == CreateEditorKind.text;
     final isVideoState = state.mediaKind == CreateMediaKind.video;
     final supportsVideo =
@@ -845,11 +958,15 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           muted: result.muted,
           originalVideoPath: result.originalVideoPath,
         );
-    await _reportEvent('create_media_video_edited', <String, dynamic>{
-      'muted': result.muted,
-      'trimStartMs': result.trimStartMs,
-      'trimEndMs': result.trimEndMs,
-    });
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_media_video_edited',
+      <String, Object?>{
+        'muted': result.muted,
+        'trimStartMs': result.trimStartMs,
+        'trimEndMs': result.trimEndMs,
+      },
+    );
   }
 
   Future<String?> _generateVideoThumbnail(String path) async {
@@ -877,7 +994,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   _VideoEditContext _deriveVideoEditContext({
-    required CreateEditorStateV2 previousState,
+    required CreateEditorState previousState,
     required int nextDurationMs,
   }) {
     if (!previousState.hasVideo || nextDurationMs <= 0) {
@@ -958,29 +1075,12 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .setImages(next, editorKind: state.editorKind, currentIndex: index);
   }
 
-  Future<void> _editArticlePageImage(ArticlePageData page) async {
-    final result = await _openMediaPicker(
-      mode: MediaPickerEntryMode.image,
-      maxSelection: 1,
-    );
-    if (!mounted || result == null || result.items.isEmpty) {
-      return;
-    }
-    final path = result.items.first.path.trim();
-    if (path.isEmpty) {
-      return;
-    }
-    ref
-        .read(createEditorProvider.notifier)
-        .replaceArticlePageImageFromBinding(page.binding!, path);
-  }
-
   Future<List<CreateCircleOption>> _loadJoinedCircles() {
     return _circleService.listCircles(ref.read(circleRepositoryProvider));
   }
 
   Future<PublishSettings?> _showPublishConfirmationSheet(
-    CreateEditorStateV2 state,
+    CreateEditorState state,
   ) async {
     final joinedCircles = await _loadJoinedCircles();
     if (!mounted) {
@@ -994,7 +1094,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         fullscreenDialog: true,
         builder: (_) => _CreatePublishConfirmSheet(
           initialSettings: state.settings,
-          contentIdentity: CreateDraft(id: '', updatedAtMs: 0, state: state).identity,
+          contentIdentity: CreateDraft(
+            id: '',
+            updatedAtMs: 0,
+            state: state,
+          ).identity,
           title: state.title.trim(),
           body: state.body.trim(),
           imageCount: state.imagePaths.length,
@@ -1003,33 +1107,18 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           joinedCircles: joinedCircles,
           recommendedCircles:
               ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock
-                  ? mockRecommendedCircles
-                  : const <CreateCircleOption>[],
+              ? mockRecommendedCircles
+              : const <CreateCircleOption>[],
         ),
       ),
     );
-  }
-
-  int _paragraphCount(String text) {
-    return text
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .length;
   }
 
   List<TextInputFormatter> get _bodyInputFormatters => <TextInputFormatter>[
     LengthLimitingTextInputFormatter(_kMaxBodyLength),
   ];
 
-  bool _shouldPublishAsArticle(CreateEditorStateV2 state) {
-    return state.title.trim().isNotEmpty ||
-        state.imagePaths.isNotEmpty ||
-        state.body.trim().length >= 140 ||
-        _paragraphCount(state.body) >= 2;
-  }
-
-  bool _canPublish(CreateEditorStateV2 state) {
+  bool _canPublish(CreateEditorState state) {
     if (state.editorKind == CreateEditorKind.media) {
       return state.hasImages ||
           state.hasVideo ||
@@ -1037,110 +1126,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           state.hasTitle;
     }
     return state.hasBody || state.hasTitle || state.hasImages;
-  }
-
-  String _articleSummaryForState(CreateEditorStateV2 state) {
-    final plainText = state.body.trim();
-    if (plainText.isEmpty) {
-      return state.imagePaths.isNotEmpty ? '图文内容' : '';
-    }
-    if (plainText.length <= 120) {
-      return plainText;
-    }
-    return '${plainText.substring(0, 120)}...';
-  }
-
-  List<Map<String, dynamic>> _buildArticleCards(CreateEditorStateV2 state) {
-    return buildArticleCardsFromPages(state.articlePages);
-  }
-
-  Map<String, dynamic> _buildCreatePayload(CreateEditorStateV2 state) {
-    final settings = state.settings.toPayloadFields();
-    final coverAssetPath = _coverAssetPathForState(state);
-    if (state.editorKind == CreateEditorKind.media) {
-      if (state.hasVideo) {
-        return <String, dynamic>{
-          'type': 'video',
-          'contentType': 'video',
-          'title': state.title.trim(),
-          'body': state.body.trim(),
-          'videoUrl': state.videoPath,
-          'mediaUrls': <String>[state.videoPath],
-          'coverUrl': coverAssetPath,
-          ...settings,
-        };
-      }
-      return <String, dynamic>{
-        'type': 'image',
-        'contentType': 'image',
-        'title': state.title.trim(),
-        'body': state.body.trim(),
-        'mediaUrls': state.imagePaths,
-        'coverUrl': coverAssetPath,
-        ...settings,
-      };
-    }
-    final asArticle = _shouldPublishAsArticle(state);
-    if (asArticle) {
-      final articleBody = buildArticlePlainTextFromDocument(
-        state.articleDocument,
-      ).trim();
-      return <String, dynamic>{
-        'type': 'article',
-        'contentType': 'article',
-        'title': state.title.trim(),
-        'body': articleBody.isNotEmpty
-            ? articleBody
-            : _articleSummaryForState(state),
-        'mediaUrls': state.imagePaths,
-        'coverUrl': coverAssetPath,
-        'articleTemplate': state.articleTemplate.name,
-        'articleFontPreset': state.articleFontPreset.name,
-        'articleDocument': state.articleDocument.toMap(),
-        'articlePages': state.articlePages
-            .map((page) => page.toMap())
-            .toList(growable: false),
-        'cards': _buildArticleCards(state),
-        'articleBlocks': state.articleBlocks
-            .map((block) => block.toMap())
-            .toList(growable: false),
-        ...settings,
-      };
-    }
-    return <String, dynamic>{
-      'type': 'moment',
-      'contentType': 'micro',
-      'title': state.title.trim(),
-      'body': state.body.trim(),
-      'mediaUrls': state.imagePaths,
-      'coverUrl': coverAssetPath,
-      ...settings,
-    };
-  }
-
-  String _extractPostId(Map<String, dynamic> payload) {
-    return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
-        .toString()
-        .trim();
-  }
-
-  Future<Map<String, dynamic>> _attachActivePersonaContext(
-    Map<String, dynamic> payload,
-  ) async {
-    final activeContext = await ref.read(activePersonaContextProvider.future);
-    final mode = ref.read(appDataSourceModeProvider);
-    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
-      throw StateError('active persona context unavailable');
-    }
-    return <String, dynamic>{
-      ...payload,
-      if (activeContext.subAccountId.isNotEmpty)
-        'personaId': activeContext.subAccountId,
-      if (activeContext.profileSubjectId.isNotEmpty)
-        'profileSubjectId': activeContext.profileSubjectId,
-      if (activeContext.personaContextVersion.isNotEmpty)
-        'personaContextVersion': activeContext.personaContextVersion,
-    };
   }
 
   Future<void> _publish() async {
@@ -1176,29 +1161,33 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     setState(() => _isPublishing = true);
     try {
       final repository = ref.read(contentRepositoryProvider);
-      final payload = await _attachActivePersonaContext(
-        _buildCreatePayload(publishState),
+      final payload = await attachActivePersonaToCreatePayload(
+        ref,
+        buildCreatePostPayloadMap(publishState),
       );
-      final created = await repository.createPost(payload: payload);
-      final postId = _extractPostId(created);
+      final created = await repositoryCreatePost(repository, payload);
+      final postId = extractCreatedPostId(created);
       if (postId.isEmpty) {
         throw StateError('missing post id');
       }
-      await repository.publishPost(
+      await repositoryPublishPostWithSettings(
+        repository,
         postId: postId,
-        payload: confirmedSettings.toPayloadFields(),
+        settings: confirmedSettings,
       );
       await _clearCurrentDraft();
-      await _reportEvent('create_publish_success', <String, dynamic>{
-        'contentType': payload['contentType'],
-      });
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_publish_success',
+        <String, Object?>{'contentType': payload['contentType']},
+      );
       if (!mounted) {
         return;
       }
       AppToast.show(context, UITextConstants.publishAction);
       _doClose();
     } catch (error) {
-      await _reportEvent('create_publish_failure');
+      await reportCreateEditorSurfaceEvent(ref, 'create_publish_failure');
       if (mounted) {
         AppToast.show(
           context,
@@ -1224,8 +1213,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     final background = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    final foreground = CupertinoColors.label.resolveFrom(context);
-    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -1244,37 +1231,53 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             child: ColoredBox(
               color: background,
               child: SafeArea(
+                top: false,
                 bottom: false,
                 child: Column(
                   children: <Widget>[
                     _buildHeader(
-                      foreground: foreground,
-                      secondary: secondary,
                       state: state,
                       collapseProgress: _heroCollapseProgress,
                     ),
                     Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.containerMd,
-                          AppSpacing.containerSm,
-                          AppSpacing.containerMd,
-                          MediaQuery.of(context).padding.bottom +
-                              AppSpacing.containerLg,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            if (!_editorV2Enabled)
-                              _buildRollbackBanner(secondary),
-                            if (state.editorKind == CreateEditorKind.media)
-                              _buildMediaEditor(state)
-                            else
-                              _buildTextEditor(state),
-                          ],
-                        ),
-                      ),
+                      child: state.editorKind == CreateEditorKind.media
+                          ? SingleChildScrollView(
+                              controller: _scrollController,
+                              padding: EdgeInsets.fromLTRB(
+                                AppSpacing.containerMd,
+                                AppSpacing.containerSm,
+                                AppSpacing.containerMd,
+                                MediaQuery.of(context).padding.bottom +
+                                    AppSpacing.containerLg,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  if (!_unifiedCreateEditorEnabled)
+                                    _buildRollbackBanner(
+                                      CupertinoColors.secondaryLabel
+                                          .resolveFrom(context),
+                                    ),
+                                  _buildMediaEditor(state),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                if (!_unifiedCreateEditorEnabled)
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.containerMd,
+                                    ),
+                                    child: _buildRollbackBanner(
+                                      CupertinoColors.secondaryLabel
+                                          .resolveFrom(context),
+                                    ),
+                                  ),
+                                Expanded(child: _buildTextEditor(state)),
+                              ],
+                            ),
                     ),
                   ],
                 ),
@@ -1286,13 +1289,38 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Widget _buildImmersiveArticlePage(CreateEditorStateV2 state) {
-    final background = CupertinoColors.systemBackground.resolveFrom(context);
-    final foreground = CupertinoColors.label.resolveFrom(context);
-    final divider = CupertinoColors.separator.resolveFrom(context);
-    final actionTint = _isPublishing
-        ? CupertinoColors.tertiaryLabel.resolveFrom(context)
-        : AppColors.iosAccentLight;
+  Widget _buildImmersiveArticlePage(CreateEditorState state) {
+    final isPreview =
+        _articleSurfaceMode == ArticleEditorSurfaceMode.preview;
+    final palette = resolveArticlePaperPalette(context, state.articlePaperTexture);
+    final background = isPreview
+        ? palette.stageBackground
+        : CupertinoColors.systemBackground.resolveFrom(context);
+    final foreground = isPreview
+        ? AppColors.white
+        : CupertinoColors.label.resolveFrom(context);
+
+    // 排版模式下使用沉浸式黑色状态栏
+    if (isPreview) {
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarBrightness: Brightness.dark,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      );
+    } else {
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarBrightness:
+              CupertinoTheme.of(context).brightness ?? Brightness.light,
+          statusBarIconBrightness:
+              CupertinoTheme.of(context).brightness == Brightness.dark
+                  ? Brightness.light
+                  : Brightness.dark,
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -1307,130 +1335,398 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           type: MaterialType.transparency,
           child: KeyedSubtree(
             key: TestKeys.createPage,
-            child: ColoredBox(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
               color: background,
               child: SafeArea(
+                top: false,
                 bottom: false,
                 child: Column(
                   children: <Widget>[
-                    Container(
-                      height: AppSpacing.toolbarHeight,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.containerSm,
+                    _buildImmersiveArticleTopBar(
+                      foreground: foreground,
+                      immersiveDark: isPreview,
+                    ),
+                    Expanded(
+                      child: AnimatedPadding(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        padding: EdgeInsets.only(
+                          top: isPreview ? 0 : AppSpacing.containerSm,
+                        ),
+                        child: _buildImmersiveArticleStage(state),
                       ),
-                      decoration: BoxDecoration(
-                        color: background.withValues(alpha: 0.98),
-                        border: Border(
-                          bottom: BorderSide(
-                            color: divider.withValues(alpha: 0.45),
-                            width: AppSpacing.hairline,
-                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImmersiveArticleStage(CreateEditorState state) {
+    if (_articleSurfaceMode == ArticleEditorSurfaceMode.preview) {
+      return _buildImmersiveArticlePreview(state);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (!_unifiedCreateEditorEnabled) ...<Widget>[
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+            child: _buildRollbackBanner(
+              CupertinoColors.secondaryLabel.resolveFrom(context),
+            ),
+          ),
+          SizedBox(height: AppSpacing.interGroupSm),
+        ],
+        Expanded(child: _buildTextEditor(state)),
+      ],
+    );
+  }
+
+  /// 排版模式下当前选中的工具栏 tab。
+  _TypographyToolbarTab _typographyTab = _TypographyToolbarTab.paper;
+
+  Widget _buildImmersiveArticlePreview(CreateEditorState state) {
+    return Column(
+      children: <Widget>[
+        // 上方：翻页预览
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.preview,
+              );
+              final pages = resolvePaginatedArticlePages(
+                context: context,
+                constraints: constraints,
+                document: state.articleDocument,
+                template: state.articleTemplate,
+                fontPreset: state.articleFontPreset,
+                fallbackPages: state.articlePages,
+                variant: ArticleCanvasVariant.preview,
+              );
+              final idx =
+                  pages.indexWhere((p) => p.id == state.activeArticlePageId);
+              final enablePageCurl = ref.watch(
+                contentFeatureFlagProvider('enable_article_page_curl'),
+              );
+              final palette = resolveArticlePaperPalette(
+                context,
+                state.articlePaperTexture,
+              );
+              return ColoredBox(
+                color: palette.stageBackground,
+                child: ArticleReadOnlyBookDeck(
+                  pages: pages,
+                  template: state.articleTemplate,
+                  fontPreset: state.articleFontPreset,
+                  metrics: metrics,
+                  coverUrl: state.articleCoverImagePath,
+                  initialPage: idx < 0 ? 0 : idx,
+                  enablePageCurl: enablePageCurl,
+                  pagePadding: EdgeInsets.zero,
+                  onPageChanged: (int i) {
+                    if (i >= 0 && i < pages.length) {
+                      ref
+                          .read(createEditorProvider.notifier)
+                          .setActiveArticlePage(pages[i].id);
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        // 下方：排版工具栏
+        _buildTypographyToolbar(state),
+      ],
+    );
+  }
+
+  Widget _buildTypographyToolbar(CreateEditorState state) {
+    // 沉浸式黑色面板，与滤镜编辑器一致
+    const panelBg = AppColors.black;
+    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      true,
+      ColorType.foregroundSecondary,
+    );
+    final separatorOpaque = AppColorsFunctional.getColor(
+      true,
+      ColorType.separatorOpaque,
+    );
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    // 统一面板高度：纸张和字体都用同一高度，避免跳变
+    const double panelContentHeight = 96;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: panelBg,
+        border: Border(
+          top: BorderSide(
+            color: separatorOpaque,
+            width: AppSpacing.hairline,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            // tab 栏：圆圈删除图标 | 纸张 | 字体（左对齐）
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerMd,
+                vertical: AppSpacing.intraGroupSm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  // 带圆圈的关闭图标（与滤镜顶部一致）
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
+                      });
+                    },
+                    child: SizedBox(
+                      width: AppSpacing.minInteractiveSize,
+                      height: AppSpacing.minInteractiveSize,
+                      child: Center(
+                        child: Icon(
+                          CupertinoIcons.xmark_circle_fill,
+                          size: AppSpacing.iconMedium,
+                          color: fgSecondary,
                         ),
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: <Widget>[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size.square(
-                            AppSpacing.iconButtonMinSizeSm,
-                          ),
-                          onPressed: _onCloseRequest,
-                          child: Icon(CupertinoIcons.clear, color: foreground),
-                        ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  // 纸张 tab
+                  _buildTypographyTabItem(
+                    label: '纸张',
+                    selected: _typographyTab == _TypographyToolbarTab.paper,
+                    labelColor: fg,
+                    secondaryColor: fgSecondary,
+                    onTap: () => setState(
+                      () => _typographyTab = _TypographyToolbarTab.paper,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.containerLg),
+                  // 字体 tab
+                  _buildTypographyTabItem(
+                    label: '字体',
+                    selected: _typographyTab == _TypographyToolbarTab.font,
+                    labelColor: fg,
+                    secondaryColor: fgSecondary,
+                    onTap: () => setState(
+                      () => _typographyTab = _TypographyToolbarTab.font,
+                    ),
+                  ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+            // 横滑效果图列表（统一高度）
+            SizedBox(
+              height: panelContentHeight,
+              child: _typographyTab == _TypographyToolbarTab.paper
+                  ? _buildPaperTextureList(state)
+                  : _buildFontPresetList(state),
+            ),
+            SizedBox(height: bottomPad > 0 ? 0 : AppSpacing.intraGroupSm),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypographyTabItem({
+    required String label,
+    required bool selected,
+    required Color labelColor,
+    required Color secondaryColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: selected ? AppTypography.semiBold : AppTypography.regular,
+              color: selected ? labelColor : secondaryColor,
+            ),
+          ),
+          SizedBox(height: AppSpacing.three),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: selected ? AppSpacing.twenty : 0,
+            height: AppSpacing.two,
+            decoration: BoxDecoration(
+              color: selected ? labelColor : labelColor.withValues(alpha: 0),
+              borderRadius: BorderRadius.circular(AppSpacing.one),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaperTextureList(CreateEditorState state) {
+    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      true,
+      ColorType.foregroundSecondary,
+    );
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      itemCount: ArticlePaperTexture.values.length,
+      separatorBuilder: (_, __) => SizedBox(width: AppSpacing.intraGroupSm),
+      itemBuilder: (context, index) {
+        final texture = ArticlePaperTexture.values[index];
+        final isSelected = texture == state.articlePaperTexture;
+        final palette = resolveArticlePaperPalette(context, texture);
+        return GestureDetector(
+          onTap: () {
+            ref.read(createEditorProvider.notifier).setArticlePaperTexture(texture);
+          },
+          child: SizedBox(
+            width: AppSpacing.largeAvatarSize,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  width: AppSpacing.avatarCircleLg,
+                  height: AppSpacing.avatarCircleLg,
+                  decoration: BoxDecoration(
+                    color: palette.paperColor,
+                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                    border: Border.all(
+                      color: isSelected
+                          ? CupertinoColors.activeBlue.resolveFrom(context)
+                          : palette.paperBorderColor,
+                      width: isSelected ? 2.5 : 0.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '文',
+                      style: TextStyle(
+                        fontSize: AppTypography.lg,
+                        fontWeight: AppTypography.medium,
+                        color: palette.textColor,
                       ),
-                      Text(
-                        '文章编辑',
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: AppTypography.base,
-                          fontWeight: AppTypography.semiBold,
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            CupertinoButton(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.intraGroupSm,
-                              ),
-                              minimumSize: const Size.square(
-                                AppSpacing.iconButtonMinSizeSm,
-                              ),
-                              onPressed: _savedDrafts.isEmpty
-                                  ? null
-                                  : () => _showDraftsSheet(),
-                              child: Text(
-                                '草稿',
-                                style: TextStyle(
-                                  color: _savedDrafts.isEmpty
-                                      ? CupertinoColors.tertiaryLabel
-                                            .resolveFrom(context)
-                                      : foreground,
-                                  fontSize: AppTypography.sm,
-                                  fontWeight: AppTypography.medium,
-                                ),
-                              ),
-                            ),
-                            CupertinoButton(
-                              key: TestKeys.createPublishButton,
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size.square(
-                                AppSpacing.iconButtonMinSizeSm,
-                              ),
-                              onPressed: _isPublishing ? null : _publish,
-                              child: Text(
-                                _isPublishing ? '处理中' : '下一步',
-                                style: TextStyle(
-                                  color: actionTint,
-                                  fontSize: AppTypography.base,
-                                  fontWeight: AppTypography.semiBold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: AnimatedPadding(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.only(top: AppSpacing.containerSm),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (!_editorV2Enabled) ...<Widget>[
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.containerMd,
-                            ),
-                            child: _buildRollbackBanner(
-                              CupertinoColors.secondaryLabel.resolveFrom(
-                                context,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.interGroupSm),
-                        ],
-                        Expanded(child: _buildTextEditor(state)),
-                      ],
-                    ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  texture.label,
+                  style: TextStyle(
+                    fontSize: AppTypography.xxs,
+                    fontWeight: isSelected
+                        ? AppTypography.semiBold
+                        : AppTypography.regular,
+                    color: isSelected ? fg : fgSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFontPresetList(CreateEditorState state) {
+    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      true,
+      ColorType.foregroundSecondary,
+    );
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      itemCount: ArticleFontPreset.values.length,
+      separatorBuilder: (_, __) => SizedBox(width: AppSpacing.intraGroupSm),
+      itemBuilder: (context, index) {
+        final preset = ArticleFontPreset.values[index];
+        final isSelected = preset == state.articleFontPreset;
+        final fontFamily = switch (preset) {
+          ArticleFontPreset.classic => 'Songti SC',
+          ArticleFontPreset.handwritten => 'Kaiti SC',
+          ArticleFontPreset.rounded => 'SF Pro Rounded',
+          ArticleFontPreset.mono => 'Menlo',
+          ArticleFontPreset.clean => null,
+        };
+        return GestureDetector(
+          onTap: () {
+            ref.read(createEditorProvider.notifier).setArticleFontPreset(preset);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerMd,
+              vertical: AppSpacing.intraGroupSm,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.white.withValues(alpha: 0.14)
+                  : AppColors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              border: Border.all(
+                color: isSelected
+                    ? CupertinoColors.activeBlue.resolveFrom(context)
+                    : AppColors.white.withValues(alpha: 0.2),
+                width: isSelected ? 2 : 0.5,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  '春江',
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontFamily: fontFamily,
+                    fontFamilyFallback: const <String>['PingFang SC'],
+                    color: fg,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  preset.label,
+                  style: TextStyle(
+                    fontSize: AppTypography.xxs,
+                    fontWeight: isSelected
+                        ? AppTypography.semiBold
+                        : AppTypography.regular,
+                    color: isSelected ? fg : fgSecondary,
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        ),
-      ),
-    ),
+        );
+      },
     );
   }
 
@@ -1449,157 +1745,273 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Widget _buildHeader({
-    required Color foreground,
-    required Color secondary,
-    required CreateEditorStateV2 state,
+  /// 创作/沉浸文章顶栏共用：毛玻璃 + 底部分割线，并向上延伸至状态栏区域使背景连续。
+  Widget _buildCreateTopChromeBar({
     required double collapseProgress,
+    required Widget child,
+    bool immersiveDark = false,
   }) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final onAccentLabel =
-        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
-    final title = _pageTitleForState(state);
-    final divider = CupertinoColors.separator.resolveFrom(context);
-    final chrome = CupertinoColors.systemBackground
-        .resolveFrom(context)
-        .withValues(alpha: lerpDouble(0.78, 0.94, collapseProgress)!);
+    final divider = immersiveDark
+        ? AppColors.white.withValues(alpha: 0.12)
+        : CupertinoColors.separator.resolveFrom(context);
+    final chrome = immersiveDark
+        ? AppColors.black
+        : CupertinoColors.systemBackground
+            .resolveFrom(context)
+            .withValues(alpha: lerpDouble(0.78, 0.94, collapseProgress)!);
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+          padding: EdgeInsets.only(
+            top: MediaQuery.viewPaddingOf(context).top,
+            left: AppSpacing.containerSm,
+            right: AppSpacing.containerSm,
+          ),
           decoration: BoxDecoration(
             color: chrome,
             border: Border(
               bottom: BorderSide(
-                color: divider.withValues(alpha: 0.45),
+                color: divider.withValues(alpha: immersiveDark ? 0.12 : 0.45),
                 width: AppSpacing.hairline,
               ),
             ),
           ),
           child: SizedBox(
             height: AppSpacing.toolbarHeight,
-            child: Stack(
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      _buildHeaderIconButton(
-                        key: TestKeys.createCloseButton,
-                        icon: CupertinoIcons.xmark,
-                        color: foreground,
-                        onPressed: _onCloseRequest,
-                      ),
-                      if (_savedDrafts.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.only(
-                            left: AppSpacing.intraGroupXs,
-                          ),
-                          child: CupertinoButton(
-                            key: TestKeys.createDraftsButton,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.containerSm,
-                              vertical: AppSpacing.intraGroupXs,
-                            ),
-                            minimumSize: const Size.square(
-                              AppSpacing.buttonHeightSm,
-                            ),
-                            color: CupertinoColors.systemFill.resolveFrom(
-                              context,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusTwenty,
-                            ),
-                            onPressed: _showDraftsSheet,
-                            child: Text(
-                              UITextConstants.drafts,
-                              style: TextStyle(
-                                color: secondary,
-                                fontSize: AppTypography.smPlus,
-                                fontWeight: AppTypography.medium,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Center(
-                  child: Opacity(
-                    opacity: lerpDouble(0.34, 1, collapseProgress)!,
-                    child: Transform.translate(
-                      offset: Offset(0, lerpDouble(6, 0, collapseProgress)!),
-                      child: Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: AppTypography.xl,
-                          fontWeight: AppTypography.semiBold,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: CupertinoButton(
-                    key: TestKeys.createPublishButton,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerSm,
-                    ),
-                    minimumSize: const Size.square(AppSpacing.buttonHeightSm),
-                    color: AppColors.iosAccentLight,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.radiusTwenty,
-                    ),
-                    onPressed: _isPublishing ? null : _publish,
-                    child: _isPublishing
-                        ? CupertinoActivityIndicator(color: onAccentLabel)
-                        : Text(
-                            '下一步',
-                            style: TextStyle(
-                              color: onAccentLabel,
-                              fontSize: AppTypography.base,
-                              fontWeight: AppTypography.semiBold,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
+            child: child,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderIconButton({
-    required Key key,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onPressed,
+  Widget _buildPillTab({
+    required String label,
+    required bool selected,
+    required Color foreground,
+    required VoidCallback onTap,
   }) {
-    return CupertinoButton(
-      key: key,
-      padding: EdgeInsets.zero,
-      onPressed: onPressed,
-      child: Container(
-        width: AppSpacing.buttonHeightSm,
-        height: AppSpacing.buttonHeightSm,
+    final isImmersiveDark =
+        _articleSurfaceMode == ArticleEditorSurfaceMode.preview;
+    final bg = selected
+        ? (isImmersiveDark
+            ? AppColors.white.withValues(alpha: 0.16)
+            : CupertinoColors.tertiarySystemFill.resolveFrom(context))
+        : AppColors.transparent;
+    final textColor = selected
+        ? (isImmersiveDark
+            ? AppColors.white
+            : CupertinoColors.label.resolveFrom(context))
+        : (isImmersiveDark
+            ? AppColors.white.withValues(alpha: 0.6)
+            : CupertinoColors.secondaryLabel.resolveFrom(context));
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
         decoration: BoxDecoration(
-          color: CupertinoColors.systemFill.resolveFrom(context),
-          shape: BoxShape.circle,
+          color: bg,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
         ),
-        child: Icon(icon, color: color, size: AppSpacing.iconMedium),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.base,
+            fontWeight: selected ? AppTypography.semiBold : AppTypography.regular,
+            color: textColor,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildTextEditor(CreateEditorStateV2 state) {
+  Widget _buildImmersiveArticleTopBar({
+    required Color foreground,
+    bool immersiveDark = false,
+  }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onAccentLabel = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.badgeForeground,
+    );
+    final state = ref.read(createEditorProvider);
+    final pages = state.articlePages;
+    final activeIdx = pages.indexWhere((p) => p.id == state.activeArticlePageId);
+    final pageLabel = _articleSurfaceMode == ArticleEditorSurfaceMode.preview &&
+            pages.length > 1 &&
+            activeIdx >= 0
+        ? '${activeIdx + 1}/${pages.length}'
+        : null;
+
+    return _buildCreateTopChromeBar(
+      collapseProgress: 1,
+      immersiveDark: immersiveDark,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          // 返回按钮
+          KeyedSubtree(
+            key: TestKeys.createCloseButton,
+            child: AppNavigationBarIconButton(
+              icon: CupertinoIcons.back,
+              color: immersiveDark ? AppColors.white : null,
+              onPressed: _onCloseRequest,
+            ),
+          ),
+          // 页码（紧跟返回按钮）
+          if (pageLabel != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Text(
+                pageLabel,
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.medium,
+                  color: immersiveDark
+                      ? AppColors.white.withValues(alpha: 0.6)
+                      : CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+              ),
+            ),
+          // 中间弹性空间 + 编辑/排版标签
+          Expanded(
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _buildPillTab(
+                    label: '编辑',
+                    selected:
+                        _articleSurfaceMode == ArticleEditorSurfaceMode.edit,
+                    foreground: foreground,
+                    onTap: () {
+                      setState(() {
+                        _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
+                      });
+                      final st = ref.read(createEditorProvider);
+                      if (st.articlePages.isNotEmpty) {
+                        ref
+                            .read(createEditorProvider.notifier)
+                            .setActiveArticlePage(st.articlePages.first.id);
+                      }
+                    },
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  _buildPillTab(
+                    label: '排版',
+                    selected:
+                        _articleSurfaceMode == ArticleEditorSurfaceMode.preview,
+                    foreground: foreground,
+                    onTap: () {
+                      setState(() {
+                        _articleSurfaceMode = ArticleEditorSurfaceMode.preview;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // 发布按钮
+          CupertinoButton(
+            key: TestKeys.createPublishButton,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+            ),
+            minimumSize: const Size.square(AppSpacing.buttonHeightSm),
+            color: AppColors.iosAccentLight,
+            borderRadius: BorderRadius.circular(
+              AppSpacing.radiusTwenty,
+            ),
+            onPressed: _isPublishing ? null : _publish,
+            child: _isPublishing
+                ? CupertinoActivityIndicator(color: onAccentLabel)
+                : Text(
+                    UITextConstants.mediaPickerNextStep,
+                    style: TextStyle(
+                      color: onAccentLabel,
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader({
+    required CreateEditorState state,
+    required double collapseProgress,
+  }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final onAccentLabel = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.badgeForeground,
+    );
+    final title = _pageTitleForState(state);
+    final titleColor = AppNavigationSemanticConstants.barTitleColor(isDark);
+    return _buildCreateTopChromeBar(
+      collapseProgress: collapseProgress,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          KeyedSubtree(
+            key: TestKeys.createCloseButton,
+            child: AppNavigationBarIconButton(
+              icon: CupertinoIcons.back,
+              onPressed: _onCloseRequest,
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Opacity(
+                opacity: lerpDouble(0.34, 1, collapseProgress)!,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: AppTypography.iosNavTitle,
+                    fontWeight: AppTypography.regular,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          CupertinoButton(
+            key: TestKeys.createPublishButton,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+            ),
+            minimumSize: const Size.square(AppSpacing.buttonHeightSm),
+            color: AppColors.iosAccentLight,
+            borderRadius: BorderRadius.circular(
+              AppSpacing.radiusTwenty,
+            ),
+            onPressed: _isPublishing ? null : _publish,
+            child: _isPublishing
+                ? CupertinoActivityIndicator(color: onAccentLabel)
+                : Text(
+                    UITextConstants.mediaPickerNextStep,
+                    style: TextStyle(
+                      color: onAccentLabel,
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextEditor(CreateEditorState state) {
     return ArticleEditor(
       state: state,
       titleController: _titleController,
@@ -1607,67 +2019,80 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       onTitleChanged: (value) {
         ref.read(createEditorProvider.notifier).updateTitle(value);
       },
-      onUpdatePageText: (page, value) {
+      onTitleStyleChanged: (style) {
+        ref.read(createEditorProvider.notifier).updateArticleTitleStyle(style);
+      },
+      onUpdateNodeText: (nodeId, value) {
+        ref.read(createEditorProvider.notifier).updateArticleNodeText(nodeId, value);
+      },
+      onUpdateNodeImageLayout: (nodeId, layout) {
         ref
             .read(createEditorProvider.notifier)
-            .updateArticlePageTextFromBinding(page.binding!, value);
+            .updateArticleNodeImageLayout(nodeId, layout);
       },
-      onEditPageImage: _editArticlePageImage,
-      onUpdatePageImageLayout: (page, layout) {
+      onUpdateNodeCaption: (nodeId, caption) {
         ref
             .read(createEditorProvider.notifier)
-            .updateArticlePageImageLayoutFromBinding(page.binding!, layout);
+            .updateArticleNodeCaption(nodeId, caption);
       },
-      onRemovePage: (page) {
-        if (page.contentBlocks.isNotEmpty) {
-          ref
-              .read(createEditorProvider.notifier)
-              .removeArticleBlocks(page.contentBlocks.map((block) => block.id));
-        }
+      onEditNodeImage: (nodeId) async {
+        final path = ref
+            .read(createEditorProvider.notifier)
+            .articleNodeImageUrl(nodeId);
+        if (path == null || path.trim().isEmpty || !mounted) return;
+        final result = await Navigator.of(context).push<String?>(
+          MaterialPageRoute<String?>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.createPageImagePreview,
+            ),
+            fullscreenDialog: true,
+            builder: (_) => ImageEditorPage(
+              initialPath: path,
+              source: 'create',
+              index: 0,
+              total: 1,
+              imagePaths: <String>[path],
+            ),
+          ),
+        );
+        if (!mounted || result == null || result.trim().isEmpty) return;
         ref
             .read(createEditorProvider.notifier)
-            .removeArticlePageFromBinding(page.binding!);
+            .replaceArticleNodeImage(nodeId, result.trim());
       },
-      onActivePageChanged: (pageId) {
-        ref.read(createEditorProvider.notifier).setActiveArticlePage(pageId);
+      onRemoveNodeImage: (nodeId) {
+        ref.read(createEditorProvider.notifier).removeArticleNode(nodeId);
+      },
+      onInsertImageAfter: (afterNodeId) async {
+        await _pickImagesForArticleNode(afterNodeId);
       },
       onActiveBlockChanged: (blockId) {
         ref.read(createEditorProvider.notifier).setActiveArticleBlock(blockId);
       },
-      onUpdateTextBlock: (blockId, value) {
-        ref
-            .read(createEditorProvider.notifier)
-            .updateArticleTextBlock(blockId, value);
+      onInsertTextNodeAfter: (afterNodeId, {String initialText = ''}) {
+        return ref.read(createEditorProvider.notifier).insertTextNodeAfter(
+          afterNodeId,
+          initialText: initialText,
+        );
       },
-      onInsertTextBlock: (afterBlockId, type) {
-        return ref
-            .read(createEditorProvider.notifier)
-            .insertArticleTextBlock(afterBlockId: afterBlockId, type: type);
+      onArticleIntrinsicImageResolved: () {
+        if (mounted) setState(() {});
       },
-      onUpdateTextBlockType: (blockId, type) {
-        ref
-            .read(createEditorProvider.notifier)
-            .updateArticleTextBlockType(blockId, type);
+      onPaperTextureSelected: (texture) {
+        ref.read(createEditorProvider.notifier).setArticlePaperTexture(texture);
       },
-      onRemoveTextBlock: (blockId) {
-        ref.read(createEditorProvider.notifier).removeArticleBlock(blockId);
-      },
-      onCoverChanged: (imagePath) {
-        ref.read(createEditorProvider.notifier).setArticleCoverImage(imagePath);
-      },
-      onTemplateChanged: (template) {
-        ref.read(createEditorProvider.notifier).setArticleTemplate(template);
-      },
-      onFontPresetChanged: (fontPreset) {
-        ref
-            .read(createEditorProvider.notifier)
-            .setArticleFontPreset(fontPreset);
+      onFontSelected: (preset) {
+        ref.read(createEditorProvider.notifier).setArticleFontPreset(preset);
       },
       immersive: widget.initialAction == EditorStartAction.write,
+      onUndo: () => ref.read(createEditorProvider.notifier).undoArticle(),
+      onRedo: () => ref.read(createEditorProvider.notifier).redoArticle(),
+      canUndo: ref.read(createEditorProvider.notifier).canUndoArticle,
+      canRedo: ref.read(createEditorProvider.notifier).canRedoArticle,
     );
   }
 
-  Widget _buildMediaEditor(CreateEditorStateV2 state) {
+  Widget _buildMediaEditor(CreateEditorState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -1711,7 +2136,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildMediaComposerSection({
-    required CreateEditorStateV2 state,
+    required CreateEditorState state,
     required String title,
     required String trailing,
   }) {
@@ -1856,7 +2281,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildMediaStrip({
-    required CreateEditorStateV2 state,
+    required CreateEditorState state,
     required Future<void> Function() onAdd,
     required Future<void> Function(int index) onTapImage,
     required void Function(int index) onRemove,
@@ -1899,7 +2324,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                   isVideo: true,
                   width: videoWidth,
                   height: tileHeight,
-                  showDragHandle: false,
                   isEmphasized: true,
                   onTap: _editCurrentVideo,
                   onRemove: () => onRemove(0),
@@ -1937,6 +2361,29 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           );
         }
 
+        final activePaths = items.toSet();
+        _mediaTileBoundsKeys.removeWhere(
+          (path, _) => !activePaths.contains(path),
+        );
+
+        void finishImageDragSession(String path) {
+          HapticFeedback.selectionClick();
+          if (!mounted) {
+            return;
+          }
+          _applyImageReorderOnDragEnd(
+            draggedPath: path,
+            tileWidth: tileWidth,
+            tileHeight: tileHeight,
+            addEnabled: addEnabled,
+          );
+          setState(() {
+            _draggingMediaPath = null;
+            _pressedMediaPath = null;
+            _imageDragLastGlobal = null;
+          });
+        }
+
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
@@ -1944,123 +2391,98 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             for (int index = 0; index < items.length; index++)
               SizedBox(
                 width: tileWidth,
-                child: DragTarget<String>(
-                  onWillAcceptWithDetails: (details) =>
-                      details.data != items[index],
-                  onMove: (details) {
-                    _autoScrollDuringMediaDrag(details.offset);
-                    _reorderImageByPath(details.data, index);
-                  },
-                  builder: (context, candidateData, rejectedData) {
-                    final assetPath = items[index];
-                    final tile = _buildMediaTile(
-                      assetPath: assetPath,
-                      index: index,
-                      isVideo: false,
-                      width: tileWidth,
-                      height: tileHeight,
-                      showDragHandle: true,
-                      isEmphasized: candidateData.isNotEmpty,
-                      isPressed: _pressedMediaPath == assetPath,
-                      onTap: () => onTapImage(index),
-                      onRemove: () => onRemove(index),
-                    );
-                    return LongPressDraggable<String>(
-                      data: assetPath,
-                      onDragStarted: () {
-                        HapticFeedback.mediumImpact();
-                        setState(() {
-                          _draggingMediaPath = assetPath;
-                          _pressedMediaPath = assetPath;
-                        });
-                      },
-                      onDragUpdate: (details) {
-                        _autoScrollDuringMediaDrag(details.globalPosition);
-                      },
-                      onDragEnd: (_) {
-                        HapticFeedback.selectionClick();
-                        if (!mounted) {
-                          return;
-                        }
+                child: RepaintBoundary(
+                  key: _mediaTileBoundsKeyForPath(items[index]),
+                  child: LongPressDraggable<String>(
+                    data: items[index],
+                    onDragStarted: () {
+                      HapticFeedback.mediumImpact();
+                      setState(() {
+                        _draggingMediaPath = items[index];
+                        _pressedMediaPath = items[index];
+                        _imageDragLastGlobal = null;
+                      });
+                    },
+                    onDragUpdate: (details) {
+                      _imageDragLastGlobal = details.globalPosition;
+                      _autoScrollDuringMediaDrag(details.globalPosition);
+                    },
+                    onDragEnd: (_) {
+                      final dragged = _draggingMediaPath;
+                      if (dragged != null) {
+                        finishImageDragSession(dragged);
+                      } else if (mounted) {
                         setState(() {
                           _draggingMediaPath = null;
                           _pressedMediaPath = null;
+                          _imageDragLastGlobal = null;
                         });
-                      },
-                      onDraggableCanceled: (_, offset) {
-                        _autoScrollDuringMediaDrag(offset);
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() {
-                          _draggingMediaPath = null;
-                          _pressedMediaPath = null;
-                        });
-                      },
-                      onDragCompleted: () {
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() {
-                          _draggingMediaPath = null;
-                          _pressedMediaPath = null;
-                        });
-                      },
-                      feedback: ColoredBox(
-                        color: AppColors.transparent,
-                        child: Transform.scale(
-                          scale: 1.03,
-                          child: _buildMediaTile(
-                            assetPath: assetPath,
-                            index: index,
-                            isVideo: false,
-                            width: tileWidth,
-                            height: tileHeight,
-                            showDragHandle: true,
-                            showRemoveButton: false,
-                            isEmphasized: true,
-                            showFloatingShadow: true,
-                            onTap: () async {},
-                            onRemove: () {},
-                          ),
+                      }
+                    },
+                    onDraggableCanceled: (_, offset) {
+                      _autoScrollDuringMediaDrag(offset);
+                    },
+                    feedback: ColoredBox(
+                      color: AppColors.transparent,
+                      child: Transform.scale(
+                        scale: 1.06,
+                        child: _buildMediaTile(
+                          assetPath: items[index],
+                          index: index,
+                          isVideo: false,
+                          width: tileWidth,
+                          height: tileHeight,
+                          showRemoveButton: false,
+                          isEmphasized: true,
+                          showFloatingShadow: true,
+                          onTap: () async {},
+                          onRemove: () {},
                         ),
                       ),
-                      childWhenDragging: Opacity(opacity: 0.18, child: tile),
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: _draggingMediaPath == assetPath ? 0.84 : 1,
-                        child: tile,
+                    ),
+                    childWhenDragging: Opacity(
+                      opacity: 0.28,
+                      child: _buildMediaTile(
+                        assetPath: items[index],
+                        index: index,
+                        isVideo: false,
+                        width: tileWidth,
+                        height: tileHeight,
+                        isPressed: _pressedMediaPath == items[index],
+                        onTap: () => onTapImage(index),
+                        onRemove: () => onRemove(index),
                       ),
-                    );
-                  },
+                    ),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: _draggingMediaPath == items[index] ? 0.88 : 1,
+                      child: _buildMediaTile(
+                        assetPath: items[index],
+                        index: index,
+                        isVideo: false,
+                        width: tileWidth,
+                        height: tileHeight,
+                        isEmphasized: false,
+                        isPressed: _pressedMediaPath == items[index],
+                        onTap: () => onTapImage(index),
+                        onRemove: () => onRemove(index),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             SizedBox(
               width: tileWidth,
-              child: DragTarget<String>(
-                onWillAcceptWithDetails: (details) =>
-                    items.isNotEmpty && details.data != items.last,
-                onMove: (details) {
-                  _autoScrollDuringMediaDrag(details.offset);
-                  final latestItems = ref.read(createEditorProvider).imagePaths;
-                  final fromIndex = latestItems.indexOf(details.data);
-                  if (fromIndex >= 0 && fromIndex != latestItems.length - 1) {
-                    ref
-                        .read(createEditorProvider.notifier)
-                        .reorderImages(fromIndex, latestItems.length);
-                  }
-                },
-                builder: (context, candidateData, rejectedData) {
-                  return _AddThumbnailButton(
-                    key: TestKeys.createMediaAddButton,
-                    onPressed: onAdd,
-                    width: tileWidth,
-                    height: tileHeight,
-                    label: addLabel,
-                    isHighlighted: candidateData.isNotEmpty && addEnabled,
-                    enabled: addEnabled,
-                  );
-                },
+              child: RepaintBoundary(
+                key: _createMediaAddStripKey,
+                child: _AddThumbnailButton(
+                  key: TestKeys.createMediaAddButton,
+                  onPressed: onAdd,
+                  width: tileWidth,
+                  height: tileHeight,
+                  label: addLabel,
+                  enabled: addEnabled,
+                ),
               ),
             ),
           ],
@@ -2079,7 +2501,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required VoidCallback onRemove,
     bool isEmphasized = false,
     bool isPressed = false,
-    bool showDragHandle = true,
     bool showRemoveButton = true,
     bool showFloatingShadow = false,
   }) {
@@ -2088,12 +2509,21 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       isDark,
       ColorType.createMediaOverlayBase,
     );
-    final onLightContent =
-        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
+    final onLightContent = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.badgeForeground,
+    );
     final glassBorder = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundInverse,
     );
+    final deleteGlassTint = isDark
+        ? AppColors.black.withValues(alpha: 0.24)
+        : AppColors.iosSecondaryFill(context).withValues(alpha: 0.82);
+    final deleteIconColor = AppColors.iosLabel(context);
+    final deleteRingColor = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: 0.2);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
@@ -2152,13 +2582,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       ? <BoxShadow>[
                           BoxShadow(
                             color: AppColors.iosAccentLight.withValues(
-                              alpha: showFloatingShadow ? 0.22 : 0.14,
+                              alpha: showFloatingShadow ? 0.28 : 0.14,
                             ),
                             blurRadius: showFloatingShadow
-                                ? 18
+                                ? AppSpacing.twenty
                                 : AppSpacing.ten,
-                            offset: Offset(0, showFloatingShadow ? 10 : 4),
-                            spreadRadius: showFloatingShadow ? 1.5 : 0,
+                            offset: Offset(
+                              0,
+                              showFloatingShadow
+                                  ? AppSpacing.ten
+                                  : AppSpacing.contentSpacingXs,
+                            ),
+                            spreadRadius: showFloatingShadow
+                                ? AppSpacing.oneHalf
+                                : 0,
                           ),
                         ]
                       : const <BoxShadow>[],
@@ -2235,12 +2672,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       Image.file(
                         File(assetPath),
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Container(
-                              color: mediaScrim.withValues(
-                                alpha: isDark ? 0.16 : 0.12,
-                              ),
-                            ),
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: mediaScrim.withValues(
+                            alpha: isDark ? 0.16 : 0.12,
+                          ),
+                        ),
                       ),
                     if (isVideo)
                       Positioned(
@@ -2261,78 +2697,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                           label: '视频',
                           backgroundColor: mediaScrim.withValues(
                             alpha: isDark ? 0.42 : 0.48,
-                          ),
-                        ),
-                      ),
-                    if (!isVideo)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Center(
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 180),
-                              opacity: isPressed
-                                  ? 0.92
-                                  : (isEmphasized ? 0.54 : 0.14),
-                              child: ClipOval(
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: AppSpacing.containerSm,
-                                    sigmaY: AppSpacing.containerSm,
-                                  ),
-                                  child: Container(
-                                    width: AppSpacing.buttonHeight,
-                                    height: AppSpacing.buttonHeight,
-                                    decoration: BoxDecoration(
-                                      color: mediaScrim.withValues(
-                                        alpha: isPressed
-                                            ? (isDark ? 0.26 : 0.2)
-                                            : (isDark ? 0.12 : 0.08),
-                                      ),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: glassBorder.withValues(
-                                          alpha: isPressed
-                                              ? (isDark ? 0.26 : 0.18)
-                                              : (isDark ? 0.12 : 0.06),
-                                        ),
-                                        width: AppSpacing.hairline,
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      Icons.edit_square,
-                                      size: AppSpacing.iconSmall + 2,
-                                      color: onLightContent.withValues(
-                                        alpha: isPressed ? 0.96 : 0.88,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (showDragHandle && !isVideo)
-                      Positioned(
-                        right: AppSpacing.intraGroupXs,
-                        bottom: AppSpacing.intraGroupXs,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.intraGroupXs,
-                            vertical: AppSpacing.intraGroupXs / 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: mediaScrim.withValues(
-                              alpha: isDark ? 0.26 : 0.18,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusTwenty,
-                            ),
-                          ),
-                          child: Icon(
-                            CupertinoIcons.line_horizontal_3,
-                            size: AppTypography.base,
-                            color: onLightContent,
                           ),
                         ),
                       ),
@@ -2358,20 +2722,17 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                           height:
                               AppSpacing.iconMedium + AppSpacing.intraGroupSm,
                           decoration: BoxDecoration(
-                            color: AppColorsFunctional.getColor(
-                              isDark,
-                              ColorType.glassSurface,
-                            ).withValues(alpha: 0.88),
+                            color: deleteGlassTint,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: glassBorder.withValues(alpha: 0.12),
+                              color: deleteRingColor,
                               width: AppSpacing.hairline,
                             ),
                           ),
                           child: Icon(
                             CupertinoIcons.xmark,
                             size: AppTypography.xsPlus,
-                            color: onLightContent.withValues(alpha: 0.92),
+                            color: deleteIconColor,
                           ),
                         ),
                       ),
@@ -2386,7 +2747,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildTitleSection({
-    required CreateEditorStateV2 state,
+    required CreateEditorState state,
     required Key titleFieldKey,
   }) {
     return Column(
@@ -2481,10 +2842,10 @@ class _PreviewBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final bg = backgroundColor ??
+    final bg =
+        backgroundColor ??
         mediaScrimBackdrop(isDark).withValues(alpha: isDark ? 0.42 : 0.45);
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
@@ -2530,7 +2891,6 @@ class _AddThumbnailButton extends StatelessWidget {
     required this.width,
     required this.height,
     required this.label,
-    this.isHighlighted = false,
     this.enabled = true,
   });
 
@@ -2538,7 +2898,6 @@ class _AddThumbnailButton extends StatelessWidget {
   final double width;
   final double height;
   final String label;
-  final bool isHighlighted;
   final bool enabled;
 
   @override
@@ -2549,193 +2908,56 @@ class _AddThumbnailButton extends StatelessWidget {
         : CupertinoColors.tertiaryLabel.resolveFrom(context);
     return GestureDetector(
       onTap: enabled ? () => onPressed() : null,
-      child: Transform.scale(
-        scale: isHighlighted ? 1.015 : 1.0,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          width: width,
-          height: height,
-          padding: EdgeInsets.all(AppSpacing.containerSm),
-          decoration: BoxDecoration(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: width,
+        height: height,
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        decoration: BoxDecoration(
+          color: enabled
+              ? CupertinoColors.systemBackground.resolveFrom(context)
+              : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+                  context,
+                ),
+          borderRadius: BorderRadius.circular(AppSpacing.containerSm),
+          border: Border.all(
             color: enabled
-                ? CupertinoColors.systemBackground.resolveFrom(context)
-                : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-                    context,
-                  ),
-            borderRadius: BorderRadius.circular(AppSpacing.containerSm),
-            border: Border.all(
+                ? AppColors.iosAccentLight.withValues(alpha: 0.24)
+                : CupertinoColors.separator
+                      .resolveFrom(context)
+                      .withValues(alpha: 0.18),
+            width: AppSpacing.hairline,
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
               color: enabled
-                  ? (isHighlighted
-                        ? AppColors.iosAccentLight
-                        : AppColors.iosAccentLight.withValues(alpha: 0.24))
-                  : CupertinoColors.separator
-                        .resolveFrom(context)
-                        .withValues(alpha: 0.18),
-              width: isHighlighted ? AppSpacing.oneHalf : AppSpacing.hairline,
+                  ? AppColors.iosAccentLight.withValues(alpha: 0.06)
+                  : AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundPrimary,
+                    ).withValues(alpha: 0.045),
+              blurRadius: AppSpacing.ten,
+              offset: const Offset(0, AppSpacing.contentSpacingXs),
             ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: enabled
-                    ? AppColors.iosAccentLight.withValues(
-                        alpha: isHighlighted ? 0.12 : 0.06,
-                      )
-                    : AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundPrimary,
-                      ).withValues(alpha: 0.045),
-                blurRadius: isHighlighted ? 12 : AppSpacing.ten,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(
-                CupertinoIcons.add,
-                color: accent,
-                size: AppSpacing.iconLarge,
-              ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: accent,
-                  fontSize: AppTypography.smPlus,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _CreateDraftsSheet extends StatelessWidget {
-  const _CreateDraftsSheet({
-    required this.drafts,
-    required this.onSelect,
-    required this.onDelete,
-  });
-
-  final List<CreateDraft> drafts;
-  final ValueChanged<CreateDraft> onSelect;
-  final ValueChanged<CreateDraft> onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
-    return AppBottomModalSurface(
-      onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
-        context,
-      ),
-      maxHeightRatio: 0.72,
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.containerSm,
-        0,
-        AppSpacing.containerSm,
-        AppSpacing.containerSm,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.containerSm,
-              AppSpacing.containerMd,
-              AppSpacing.containerSm,
-            ),
-            child: Column(
-              children: <Widget>[
-                Text(
-                  UITextConstants.drafts,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  '最近保存的内容会保留在这里',
-                  style: TextStyle(
-                    color: secondary,
-                    fontSize: AppTypography.sm,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: ListView.separated(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.containerSm,
-                0,
-                AppSpacing.containerSm,
-                AppSpacing.containerSm,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(CupertinoIcons.add, color: accent, size: AppSpacing.iconLarge),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: accent,
+                fontSize: AppTypography.smPlus,
+                fontWeight: AppTypography.medium,
               ),
-              itemCount: drafts.length,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: AppSpacing.intraGroupSm),
-              itemBuilder: (context, index) {
-                final draft = drafts[index];
-                final preview = draft.previewText.trim().isEmpty
-                    ? '继续完善这条内容'
-                    : draft.previewText.trim();
-                return Container(
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.secondarySystemGroupedBackground
-                        .resolveFrom(context),
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.largeBorderRadius,
-                    ),
-                  ),
-                  child: CupertinoListTile(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerSm,
-                      vertical: AppSpacing.intraGroupXs,
-                    ),
-                    title: Text(draft.draftLabel),
-                    subtitle: Text(
-                      preview,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => onDelete(draft),
-                      child: Container(
-                        width: AppSpacing.largeButtonSize,
-                        height: AppSpacing.largeButtonSize,
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemBackground.resolveFrom(
-                            context,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.delete,
-                          color: CupertinoColors.destructiveRed,
-                        ),
-                      ),
-                    ),
-                    onTap: () => onSelect(draft),
-                  ),
-                );
-              },
             ),
-          ),
-          CupertinoButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(UITextConstants.cancel),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

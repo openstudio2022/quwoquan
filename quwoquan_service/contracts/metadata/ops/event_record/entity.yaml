@@ -1,0 +1,25 @@
+version: 1
+domain: ops
+entity: EventRecord
+is_aggregate: false
+
+description: |
+  统一事件明细。承载 page access、perf、analytics façade、behavior/learning 桥接后的统一事实源，
+  用于运营看板、实验复盘、学习反馈回放与冷/热分层分析。
+
+storage_backend: mongodb
+cache_layer: redis
+capabilities:
+  - queryable
+  - aggregatable
+  - replayable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/ops/model
+  repository: internal/domain/ops/repository
+  application: internal/application/ops
+  adapter_rest: internal/adapter/rest/ops
+  adapter_event: internal/adapter/event/ops

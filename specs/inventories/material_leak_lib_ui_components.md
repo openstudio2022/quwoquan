@@ -126,7 +126,7 @@
 | `quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart` | ui | full | yes | `range_slider`×1, `slider`×2 |
 | `quwoquan_app/lib/ui/content/entry/widgets/create_entry_sheet.dart` | ui | full | no | — |
-| `quwoquan_app/lib/ui/content/entry/widgets/ios_article_editor.dart` | ui | show (show Colors) | yes | — |
+| `quwoquan_app/lib/ui/content/entry/widgets/article_editor.dart` | ui | show (show Colors) | yes | — |
 | `quwoquan_app/lib/ui/content/pages/article_detail_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/content/share/content_share_actions.dart` | ui | full | no | — |
 | `quwoquan_app/lib/ui/content/share/content_share_sheet.dart` | ui | full | yes | — |

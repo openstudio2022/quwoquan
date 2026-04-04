@@ -141,7 +141,9 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 文章连续文档 canonical payload（标题、正文、图片资产、语义块）
+        description: |
+          文章最终显示快照 canonical payload。
+          JSON 形状见同目录 article_document_schema.yaml（根：template/fontPreset/coverImageUrl/titleStyle/nodes[]）。
 
       - name: articleTemplate
         type: enum
@@ -149,9 +151,9 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
-        description: 文章书本模板真相源（gentle/ritual/diffuse/journal/tech）
+        description: 从 articleDocument.template 派生的文章模板只读快照
 
       - name: articleFontPreset
         type: enum
@@ -159,18 +161,9 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
-        description: 文章阅读与编辑共享的字体预设
-
-      - name: articlePresentationVersion
-        type: int
-        constraints: [NOT_NULL, DEFAULT_1]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 文章展示版本，用于模板/分页/灰度演进
+        description: 从 articleDocument.fontPreset 派生的文章字体预设只读快照
 
       - name: videoUrl
         type: string

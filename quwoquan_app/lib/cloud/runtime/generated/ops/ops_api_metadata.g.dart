@@ -14,24 +14,33 @@ class OpsApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AssignBucket': '/v1/ops/experiments/{experimentId}/assign',
     'GetBucket': '/v1/ops/experiments/{experimentId}/bucket',
+    'GetEventDrilldown': '/v1/ops/events/drilldown',
+    'GetEventSummary': '/v1/ops/events/summary',
     'GetExperimentStats': '/v1/ops/experiments/{experimentId}/stats',
     'GetVisitStats': '/v1/ops/visits/stats',
     'RecordVisit': '/v1/ops/visits',
+    'ReportEventBatch': '/v1/ops/events',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AssignBucket': 'POST',
     'GetBucket': 'GET',
+    'GetEventDrilldown': 'GET',
+    'GetEventSummary': 'GET',
     'GetExperimentStats': 'GET',
     'GetVisitStats': 'GET',
     'RecordVisit': 'POST',
+    'ReportEventBatch': 'POST',
   };
 
   static const String assignBucketOperation = 'AssignBucket';
   static const String getBucketOperation = 'GetBucket';
+  static const String getEventDrilldownOperation = 'GetEventDrilldown';
+  static const String getEventSummaryOperation = 'GetEventSummary';
   static const String getExperimentStatsOperation = 'GetExperimentStats';
   static const String getVisitStatsOperation = 'GetVisitStats';
   static const String recordVisitOperation = 'RecordVisit';
+  static const String reportEventBatchOperation = 'ReportEventBatch';
 
   static const String assignBucketPathTemplate = '/v1/ops/experiments/{experimentId}/assign';
   static String assignBucketPath({required String experimentId}) {
@@ -45,6 +54,8 @@ class OpsApiMetadata {
       'experimentId': experimentId,
     });
   }
+  static const String getEventDrilldownPath = '/v1/ops/events/drilldown';
+  static const String getEventSummaryPath = '/v1/ops/events/summary';
   static const String getExperimentStatsPathTemplate = '/v1/ops/experiments/{experimentId}/stats';
   static String getExperimentStatsPath({required String experimentId}) {
     return _fillPath(getExperimentStatsPathTemplate, <String, String>{
@@ -53,6 +64,7 @@ class OpsApiMetadata {
   }
   static const String getVisitStatsPath = '/v1/ops/visits/stats';
   static const String recordVisitPath = '/v1/ops/visits';
+  static const String reportEventBatchPath = '/v1/ops/events';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

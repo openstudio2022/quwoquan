@@ -1,0 +1,81 @@
+id: CR-20260331-016
+title: 文章编辑器重构设计基线与状态命名收敛
+slug: article-editor-refactor-design
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor
+
+entries:
+  - timestamp: "2026-03-31T12:00:00+08:00"
+    summary: >
+      冻结 article-editor-refactor 的 design.md、plan.yaml、acceptance.yaml；
+      明确 CreateEditorStateV2 更名为 CreateEditorState、移除 create_editor_v2 特性键，
+      全库迁移至无版本后缀命名。
+    reason: /design 交付与重构前命名债务清理
+    change_type:
+      - refine
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/design.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/acceptance.yaml
+        sections:
+          - acceptance
+      - path: specs/feature-tree/runtime/runtime-client-foundation/spec.md
+        sections:
+          - 功能说明
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 实现阶段按 plan.yaml 切片执行；metadata 扩展以 slice-metadata-article-editor-contract 为准
+  - timestamp: "2026-04-02T12:00:00+08:00"
+    summary: >
+      以 /baseline 方式补齐 article-editor-refactor 的终态规格：冻结编辑/预览共用 page slice、
+      顶栏与主 CTA 对齐图片编辑器质感、预览宿主对齐 WorksImmersiveViewer、
+      翻书前翻/回翻、caption 空态不占高与用户可见“正文/小标题/大标题”低心智语义。
+    reason: 响应长文精品排版、iOS 原生质感与大众低心智使用诉求，收口到可直接开发的统一基线
+    change_type:
+      - refine
+      - rebaseline
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/spec.md
+        sections:
+          - 2. 核心设计原则
+          - 3. 信息架构总览
+          - 4. 顶栏规格
+          - 6. 各面板内容规格
+          - 7. 主编辑视口
+          - 8. 文内图与环绕文字
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/design.md
+        sections:
+          - 5.3 WYSIWYG、低心智层次与卡片侵入式
+          - 5.4 顶栏与主视口：编辑 / 预览
+          - 5.6 文内图：内容区宽度、半宽、caption 与工具栏
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/acceptance.yaml
+        sections:
+          - acceptance
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/plan.yaml
+        sections:
+          - slices
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 编辑态不再以“结构页 ≠ 预览页”的弱一致为终态，后续开发必须以统一 page slice 为核心实现

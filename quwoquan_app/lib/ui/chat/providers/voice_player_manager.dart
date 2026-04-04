@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -41,16 +41,30 @@ class VoicePlaybackState {
 }
 
 /// Global singleton voice player: ensures only one voice message plays at a time.
-class VoicePlayerManager extends StateNotifier<VoicePlaybackState> {
-  VoicePlayerManager(this._downloadCache) : super(const VoicePlaybackState()) {
-    _init();
-  }
-
-  final MediaDownloadCache _downloadCache;
+class VoicePlayerManager extends Notifier<VoicePlaybackState> {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
+  bool _scheduledInit = false;
+
+  MediaDownloadCache get _downloadCache =>
+      ref.read(mediaDownloadCacheProvider);
+
+  @override
+  VoicePlaybackState build() {
+    ref.onDispose(() {
+      _playerStateSub?.cancel();
+      _positionSub?.cancel();
+      _durationSub?.cancel();
+      _player.dispose();
+    });
+    if (!_scheduledInit) {
+      _scheduledInit = true;
+      Future<void>.microtask(_init);
+    }
+    return const VoicePlaybackState();
+  }
 
   Future<void> _init() async {
     final session = await AudioSession.instance;
@@ -113,22 +127,10 @@ class VoicePlayerManager extends StateNotifier<VoicePlaybackState> {
   Future<void> seek(Duration position) async {
     await _player.seek(position);
   }
-
-  @override
-  void dispose() {
-    _playerStateSub?.cancel();
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-    _player.dispose();
-    super.dispose();
-  }
 }
 
 /// Global voice player manager provider.
 final voicePlayerManagerProvider =
-    StateNotifierProvider<VoicePlayerManager, VoicePlaybackState>(
-  (ref) {
-    final cache = ref.watch(mediaDownloadCacheProvider);
-    return VoicePlayerManager(cache);
-  },
+    NotifierProvider<VoicePlayerManager, VoicePlaybackState>(
+  VoicePlayerManager.new,
 );

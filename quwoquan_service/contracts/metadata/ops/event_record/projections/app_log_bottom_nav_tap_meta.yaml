@@ -1,0 +1,29 @@
+version: 1
+read_model: AppLogBottomNavTapMeta
+
+description: |
+  客户端 page_access 日志中 bottom_nav_tap 的 actionMeta 结构（与 JSONL 中 actionMeta 对象键一致）。
+  真相源：本投影；端侧禁止在业务代码中手写同形状 Map。
+
+source_entities: []
+
+consumers:
+  - app (MainAppShell browse log)
+
+client_projection:
+  dart_class: AppLogBottomNavTapMeta
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart
+  fields:
+    - name: fromIndex
+      dart_type: int
+      nullable: false
+      source: fromIndex
+      aliases: [fromIndex]
+      default: "0"
+    - name: toIndex
+      dart_type: int
+      nullable: false
+      source: toIndex
+      aliases: [toIndex]
+      default: "0"

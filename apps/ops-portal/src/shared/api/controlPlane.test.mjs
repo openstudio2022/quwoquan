@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   fetchOnboardingDomains,
+  fetchProductEventDrilldown,
+  fetchProductEventSummary,
   fetchProductProjectionSummary,
   fetchServiceCatalog,
 } from '../../../.test-dist/controlPlane.js';
@@ -95,5 +97,33 @@ test('requests product projection summary from configured base url', async () =>
 
   assert.equal(calls[0], 'http://product.test/v1/control-plane/product/projections/summary');
   assert.equal(summary.pendingDualReview, 2);
+  restoreEnvAndFetch();
+});
+
+test('requests product event summary from configured base url', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetch({
+    totalCount: 12,
+    dimensions: { pageName: { home: 8 } },
+  });
+
+  const summary = await fetchProductEventSummary({ source: 'page_access' });
+
+  assert.equal(calls[0], 'http://product.test/v1/ops/events/summary?source=page_access');
+  assert.equal(summary.totalCount, 12);
+  restoreEnvAndFetch();
+});
+
+test('requests product event drilldown from configured base url', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetch({
+    totalCount: 1,
+    items: [{ eventId: 'evt-1', eventType: 'experience', eventName: 'page_open', occurredAt: '2026-04-01T00:00:00Z' }],
+  });
+
+  const drilldown = await fetchProductEventDrilldown({ eventType: 'experience', limit: 5 });
+
+  assert.equal(calls[0], 'http://product.test/v1/ops/events/drilldown?eventType=experience&limit=5');
+  assert.equal(drilldown.items[0].eventId, 'evt-1');
   restoreEnvAndFetch();
 });

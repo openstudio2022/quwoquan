@@ -126,7 +126,8 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
         );
       },
       followingUsers: discoveryState.followingUsers,
-      onFollowClick: (username, _) => ref.read(discoveryStateProvider).toggleFollow(username),
+      onFollowClick: (username, _) =>
+          ref.read(discoveryStateProvider.notifier).toggleFollow(username),
       likedPosts: discoveryState.likedPosts,
       savedPosts: discoveryState.savedPosts,
       getPostLikesCount: (post) {
@@ -138,10 +139,14 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
         return n > 0 ? n : post.savesCount;
       },
       onLikeClick: (post) {
-        ref.read(discoveryStateProvider).toggleLike(post.id, baseLikesCount: post.likesCount);
+        ref
+            .read(discoveryStateProvider.notifier)
+            .toggleLike(post.id, baseLikesCount: post.likesCount);
       },
       onSaveClick: (post) {
-        ref.read(discoveryStateProvider).toggleSave(post.id, baseBookmarksCount: post.savesCount);
+        ref
+            .read(discoveryStateProvider.notifier)
+            .toggleSave(post.id, baseBookmarksCount: post.savesCount);
       },
       onAssistantClick: () {
         final target = VisitTarget.page('discovery_video');

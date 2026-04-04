@@ -197,7 +197,6 @@ void main() {
         coverUrl: 'https://example.com/work.jpg',
         articleTemplate: 'tech',
         articleFontPreset: 'mono',
-        articlePresentationVersion: 1,
         likeCount: 12,
         commentCount: 4,
         favoriteCount: 9,
@@ -241,7 +240,6 @@ void main() {
         coverUrl: '',
         articleTemplate: 'gentle',
         articleFontPreset: 'clean',
-        articlePresentationVersion: 1,
         likeCount: 0,
         commentCount: 0,
         favoriteCount: 0,
@@ -266,10 +264,10 @@ void main() {
     expect(find.text(UITextConstants.copyLink), findsNothing);
   });
 
-  testWidgets('关闭 identity share flag 后回退到通用分享面板', (tester) async {
+  testWidgets('关闭 identity share flag 仍使用身份模板布局但标记为非身份模板', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       post: MomentPostDto(
-        id: 'legacy_1',
+        id: 'share_flag_off_1',
         type: 'micro',
         identity: 'moment',
         assistantUsePolicy: 'inherit',
@@ -296,10 +294,12 @@ void main() {
 
     expect(template.isIdentityTemplate, isFalse);
     expect(
-      find.text(UITextConstants.shareLegacyFallbackNotice),
+      find.text(
+        UITextConstants.contentLabelForKey('share_template_moment_subtitle'),
+      ),
       findsAtLeastNWidgets(1),
     );
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
-    expect(find.text(UITextConstants.shareActionSavePoster), findsNothing);
+    expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
   });
 }

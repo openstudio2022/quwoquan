@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -70,11 +69,11 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
                   controller: _tabController,
                   children: [
                     _CommentsListView(
-                      provider: sentCommentsProvider,
+                      tab: _ProfileCommentsTabKind.sent,
                       isDark: isDark,
                     ),
                     _CommentsListView(
-                      provider: receivedCommentsProvider,
+                      tab: _ProfileCommentsTabKind.received,
                       isDark: isDark,
                     ),
                   ],
@@ -118,16 +117,19 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
   }
 }
 
-class _CommentsListView extends ConsumerWidget {
-  final StateNotifierProvider<ProfileCommentsNotifier, ProfileCommentsState>
-      provider;
-  final bool isDark;
+enum _ProfileCommentsTabKind { sent, received }
 
-  const _CommentsListView({required this.provider, required this.isDark});
+class _CommentsListView extends ConsumerWidget {
+  const _CommentsListView({required this.tab, required this.isDark});
+
+  final _ProfileCommentsTabKind tab;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(provider);
+    final state = tab == _ProfileCommentsTabKind.sent
+        ? ref.watch(sentCommentsProvider)
+        : ref.watch(receivedCommentsProvider);
 
     if (state.isLoading && state.comments.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
@@ -144,7 +146,7 @@ class _CommentsListView extends ConsumerWidget {
                         isDark, ColorType.foregroundSecondary))),
             SizedBox(height: AppSpacing.md),
             CupertinoButton(
-              onPressed: () => ref.read(provider.notifier).load(),
+              onPressed: () => _load(ref),
               child: Text(UITextConstants.retry),
             ),
           ],
@@ -166,7 +168,7 @@ class _CommentsListView extends ConsumerWidget {
         if (notification is ScrollEndNotification &&
             notification.metrics.pixels >=
                 notification.metrics.maxScrollExtent - 200) {
-          ref.read(provider.notifier).loadMore();
+          _loadMore(ref);
         }
         return false;
       },
@@ -188,6 +190,22 @@ class _CommentsListView extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  void _load(WidgetRef ref) {
+    if (tab == _ProfileCommentsTabKind.sent) {
+      ref.read(sentCommentsProvider.notifier).load();
+    } else {
+      ref.read(receivedCommentsProvider.notifier).load();
+    }
+  }
+
+  void _loadMore(WidgetRef ref) {
+    if (tab == _ProfileCommentsTabKind.sent) {
+      ref.read(sentCommentsProvider.notifier).loadMore();
+    } else {
+      ref.read(receivedCommentsProvider.notifier).loadMore();
+    }
   }
 }
 

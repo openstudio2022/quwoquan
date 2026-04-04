@@ -20,6 +20,7 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (action) => selectedAction = action,
+                onContinueFromDraft: () {},
               ),
             ),
           ),
@@ -30,10 +31,12 @@ void main() {
 
     expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
     expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionContinueFromDraft), findsOneWidget);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
 
     expect(find.text('从相册选择'), findsOneWidget);
     expect(find.text('写文字'), findsOneWidget);
+    expect(find.text('从草稿继续'), findsOneWidget);
     expect(find.text('相机'), findsOneWidget);
     expect(find.text('发起群聊'), findsOneWidget);
     expect(find.text('添加同好'), findsOneWidget);

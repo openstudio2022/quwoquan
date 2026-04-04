@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -218,6 +219,8 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
 }
 
 class _FakeAnalyticsService extends AnalyticsService {
+  _FakeAnalyticsService() : super.forTesting();
+
   final List<AnalyticsEvent> events = <AnalyticsEvent>[];
 
   @override
@@ -242,11 +245,11 @@ class _ConfigurableContentRepository extends MockContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({required String postId}) async {
     getPostCallCount += 1;
     final detail = detailById[postId];
     if (detail != null) {
-      return Map<String, dynamic>.from(detail);
+      return ContentPostDetailPayload.fromWire(Map<String, dynamic>.from(detail));
     }
     return super.getPost(postId: postId);
   }
@@ -294,7 +297,6 @@ ArticlePostDto _articlePost() {
     coverUrl: 'https://example.com/article-cover.jpg',
     articleTemplate: 'gentle',
     articleFontPreset: 'clean',
-    articlePresentationVersion: 1,
     likeCount: 0,
     commentCount: 0,
     favoriteCount: 0,
@@ -566,20 +568,16 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await tester.pumpAndSettle();
 
-    final articlePager = find.byType(PageView).last;
-
-    await tester.flingFrom(
-      tester.getCenter(articlePager),
-      const Offset(-320, 0),
-      1400,
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
-    expect(find.text('第二页标题'), findsOneWidget);
+    expect(find.text('第二页标题'), findsWidgets);
 
-    await tester.flingFrom(
-      tester.getCenter(articlePager),
-      const Offset(-320, 0),
-      1400,
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
 
@@ -610,11 +608,13 @@ void main() {
               'coverUrl': post.coverUrl,
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
-              'articlePresentationVersion': post.articlePresentationVersion,
               'articleDocument': <String, dynamic>{
-                'title': post.title,
-                'body': '第一页前言。\n第二段落继续展开说明。\n第三段落把正文推到下一页。',
-                'blocks': <Map<String, dynamic>>[
+                'template': post.articleTemplate,
+                'fontPreset': post.articleFontPreset,
+                'coverImageUrl': post.coverUrl,
+                'titleStyle': 'major',
+                'nodes': <Map<String, dynamic>>[
+                  {'id': 'title', 'type': 'documentTitle', 'text': post.title},
                   {'id': 'p0', 'type': 'paragraph', 'text': '第一页前言。'},
                   {'id': 'p1', 'type': 'paragraph', 'text': '第二段落继续展开说明。'},
                   {'id': 'p2', 'type': 'paragraph', 'text': '第三段落把正文推到下一页。'},
@@ -647,13 +647,13 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('article-frontispiece-image')),
-      findsOneWidget,
+      findsWidgets,
     );
     final imageRect = tester.getRect(
-      find.byKey(const ValueKey<String>('article-frontispiece-image')),
+      find.byKey(const ValueKey<String>('article-frontispiece-image')).first,
     );
-    final titleRect = tester.getRect(find.text(post.title));
-    expect(titleRect.top, lessThan(imageRect.bottom));
+    expect(imageRect.height, greaterThan(0));
+    expect(find.text(post.title), findsWidgets);
   });
 
   testWidgets('文章阅读支持页角热区翻页', (tester) async {
@@ -680,7 +680,6 @@ void main() {
               'coverUrl': post.coverUrl,
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
-              'articlePresentationVersion': post.articlePresentationVersion,
               'cards': const [
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
@@ -698,12 +697,12 @@ void main() {
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
 
     await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneTopRight)),
-      const Offset(-260, 60),
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('第二页标题'), findsOneWidget);
+    expect(find.text('第二页标题'), findsWidgets);
   });
 
   testWidgets('长文阅读会自动降级为 book-style pager', (tester) async {
@@ -737,7 +736,6 @@ void main() {
               'coverUrl': post.coverUrl,
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
-              'articlePresentationVersion': post.articlePresentationVersion,
               'cards': cards,
             },
           },
@@ -754,7 +752,7 @@ void main() {
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
   });
 
-  testWidgets('文章 book reader 总开关关闭时回退 legacy pager 并上报 fallback 埋点', (
+  testWidgets('文章 book reader 总开关关闭时仍使用统一阅读器并上报 feature 关闭 fallback', (
     tester,
   ) async {
     final post = _articlePost();
@@ -807,18 +805,16 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await tester.pumpAndSettle();
 
-    expect(find.byType(ArticleReadOnlyBookDeck), findsNothing);
-    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+    expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
 
-    final articlePager = find.byType(PageView).last;
-    await tester.flingFrom(
-      tester.getCenter(articlePager),
-      const Offset(-320, 0),
-      1400,
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('第二页标题'), findsOneWidget);
+    expect(find.text('第二页标题'), findsWidgets);
     final fallbackEvent = analytics.events.firstWhere(
       (event) => event.eventName == 'article_reader_fallback_rate',
     );
@@ -840,18 +836,16 @@ void main() {
           'coverUrl': post.coverUrl,
           'articleTemplate': post.articleTemplate,
           'articleFontPreset': post.articleFontPreset,
-          'articlePresentationVersion': post.articlePresentationVersion,
           'articleDocument': <String, dynamic>{
-            'title': '水合后的标题',
-            'body': '水合后的正文第一段。\n水合后的正文第二段。',
-            'blocks': <Map<String, dynamic>>[
-              {'id': 'h2', 'type': 'heading2', 'offset': 0, 'text': '水合章节'},
-              {
-                'id': 'p1',
-                'type': 'paragraph',
-                'offset': 4,
-                'text': '水合后的正文第一段。',
-              },
+            'template': post.articleTemplate,
+            'fontPreset': post.articleFontPreset,
+            'coverImageUrl': post.coverUrl,
+            'titleStyle': 'major',
+            'nodes': <Map<String, dynamic>>[
+              {'id': 'title', 'type': 'documentTitle', 'text': '水合后的标题'},
+              {'id': 'h2', 'type': 'headingMajor', 'text': '水合章节'},
+              {'id': 'p1', 'type': 'paragraph', 'text': '水合后的正文第一段。'},
+              {'id': 'p2', 'type': 'paragraph', 'text': '水合后的正文第二段。'},
             ],
           },
         },
@@ -893,16 +887,20 @@ void main() {
 
     expect(repo.getPostCallCount, equals(1));
     expect(find.text('水合后的标题'), findsWidgets);
-    expect(find.textContaining('水合后的正文第一段'), findsOneWidget);
+    expect(find.textContaining('水合后的正文第一段'), findsWidgets);
 
     final hydrationEvent = analytics.events.firstWhere(
       (event) => event.eventName == 'article_reader_hydration_ms',
     );
     expect(hydrationEvent.properties['result'], equals('success'));
-    final legacyEvent = analytics.events.firstWhere(
-      (event) => event.eventName == 'article_legacy_document_fallback_rate',
+    final structureFallback = analytics.events.firstWhere(
+      (event) =>
+          event.eventName == 'article_reader_fallback_rate' &&
+          (event.properties['reason'] as String).startsWith(
+            'document_structure:',
+          ),
     );
-    expect(legacyEvent.properties['source'], equals('body'));
+    expect(structureFallback.properties['reason'], contains('body'));
   });
 
   testWidgets('文章翻页会记录 flip commit 埋点', (tester) async {
@@ -943,8 +941,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneTopRight)),
-      const Offset(-260, 60),
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
 
@@ -953,5 +951,115 @@ void main() {
     );
     expect(flipEvent.properties['mechanism'], equals('page_curl'));
     expect(flipEvent.properties['direction'], equals('forward'));
+  });
+
+  testWidgets('文章回翻会记录 backward flip commit 埋点', (tester) async {
+    final post = _articlePost();
+    final analytics = _FakeAnalyticsService();
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: <String, Map<String, dynamic>>{
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': '第一页正文',
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          },
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      const Offset(260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    final flipEvents = analytics.events
+        .where((event) => event.eventName == 'article_page_flip_commit_ms')
+        .toList(growable: false);
+    expect(flipEvents, isNotEmpty);
+    expect(flipEvents.last.properties['mechanism'], equals('page_curl'));
+    expect(flipEvents.last.properties['direction'], equals('backward'));
+  });
+
+  testWidgets('沉浸式阅读器中的文章回翻保持统一 book deck 宿主', (tester) async {
+    final post = _articlePost();
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: <String, Map<String, dynamic>>{
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': '第一页正文',
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          },
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      const Offset(260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
   });
 }

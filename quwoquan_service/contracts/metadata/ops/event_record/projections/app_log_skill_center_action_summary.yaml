@@ -1,0 +1,28 @@
+version: 1
+read_model: AppLogSkillCenterActionSummaryPayload
+
+description: |
+  Skill Center 各类操作的 page_access summaryPayload。
+
+source_entities: []
+
+consumers:
+  - app (assistant_skill_center_page)
+
+client_projection:
+  dart_class: AppLogSkillCenterActionSummaryPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart
+  fields:
+    - name: event
+      dart_type: String
+      nullable: false
+      source: event
+      aliases: [event]
+      default: "'skill_center_action'"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"

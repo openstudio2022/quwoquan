@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_schedule_row.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 
@@ -278,9 +279,10 @@ class _AssistantScheduleView extends ConsumerWidget {
     );
     final tasksAsync = ref.watch(assistantScheduleTasksProvider);
     final taskItems = tasksAsync.maybeWhen(
-      data: (tasks) =>
-          tasks.map((task) => task.toScheduleRowMap()).toList(growable: false),
-      orElse: () => const <Map<String, dynamic>>[],
+      data: (tasks) => tasks
+          .map(AssistantScheduleRow.fromTask)
+          .toList(growable: false),
+      orElse: () => const <AssistantScheduleRow>[],
     );
     final tasksLoading = tasksAsync.isLoading;
 
@@ -337,7 +339,7 @@ class _AssistantScheduleView extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            item['title']?.toString() ?? '',
+                            item.title,
                             style: TextStyle(
                               fontSize: AppTypography.base,
                               fontWeight: AppTypography.semiBold,
@@ -346,7 +348,7 @@ class _AssistantScheduleView extends ConsumerWidget {
                           ),
                           SizedBox(height: AppSpacing.intraGroupXs),
                           Text(
-                            item['desc']?.toString() ?? '',
+                            item.desc,
                             style: TextStyle(
                               fontSize: AppTypography.sm,
                               color: fgSecondary,

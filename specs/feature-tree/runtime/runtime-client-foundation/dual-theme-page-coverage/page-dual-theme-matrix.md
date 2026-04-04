@@ -98,7 +98,7 @@
 
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
-| `lib/ui/content/entry/pages/create_page.dart` | content | 模态 | full | | TBD | 媒体格按压遮罩基色 `createMediaOverlayBase`；`ios_article_editor` 封面叠字走 `mediaThumbnailOverlay*` + `ColorType.black`；`video_editor_page` 预览区同色体系。 |
+| `lib/ui/content/entry/pages/create_page.dart` | content | 模态 | full | | TBD | 媒体格按压遮罩基色 `createMediaOverlayBase`；`article_editor` 封面叠字走 `mediaThumbnailOverlay*` + `ColorType.black`；`video_editor_page` 预览区同色体系。 |
 | `lib/ui/content/entry/pages/article_preview_page.dart` | content | push | full | | TBD | `CupertinoColors.systemGroupedBackground.resolveFrom(context)`。 |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | content | push | full | | TBD | `isDarkProvider` / 功能色。 |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | content | push | full | | TBD | `CupertinoTheme.of(context).brightness` 驱动 `backgroundColor`；预览区固定黑底为编辑场景。 |

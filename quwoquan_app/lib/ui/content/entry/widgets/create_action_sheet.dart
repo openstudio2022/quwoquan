@@ -11,6 +11,7 @@ class CreateActionSheet extends StatelessWidget {
   const CreateActionSheet({
     super.key,
     required this.onCreateAction,
+    required this.onContinueFromDraft,
     required this.onStartGroupChat,
     required this.onAddContact,
     required this.onCancel,
@@ -19,6 +20,7 @@ class CreateActionSheet extends StatelessWidget {
   });
 
   final CreateActionSelected onCreateAction;
+  final VoidCallback onContinueFromDraft;
   final VoidCallback onStartGroupChat;
   final VoidCallback onAddContact;
   final VoidCallback onCancel;
@@ -66,6 +68,11 @@ class CreateActionSheet extends StatelessWidget {
         labelKey: TestKeys.createActionWrite,
         onPressed: () => onCreateAction(EditorStartAction.write),
       ),
+      _SheetActionSpec(
+        label: UITextConstants.createActionContinueFromDraft,
+        labelKey: TestKeys.createActionContinueFromDraft,
+        onPressed: onContinueFromDraft,
+      ),
     ];
 
     final socialActions = <_SheetActionSpec>[
@@ -102,15 +109,25 @@ class CreateActionSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < orderedGroups.length; i++) ...[
-            _SheetActionGroup(
-              actions: orderedGroups[i],
-              backgroundColor: blockBackground,
-              dividerColor: dividerColor,
-              foregroundColor: AppColors.primaryColor,
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < orderedGroups.length; i++) ...[
+                    _SheetActionGroup(
+                      actions: orderedGroups[i],
+                      backgroundColor: blockBackground,
+                      dividerColor: dividerColor,
+                      foregroundColor: AppColors.primaryColor,
+                    ),
+                    SizedBox(height: AppSpacing.interGroupSm),
+                  ],
+                ],
+              ),
             ),
-            SizedBox(height: AppSpacing.interGroupSm),
-          ],
+          ),
           _SheetActionGroup(
             actions: <_SheetActionSpec>[
               _SheetActionSpec(

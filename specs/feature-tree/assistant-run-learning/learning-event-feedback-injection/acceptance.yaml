@@ -2,13 +2,34 @@ version: 1
 feature: learning-event-feedback-injection
 level: "L2_feature"
 template: A1-A8
-focus_groups: []
+focus_groups:
+  - A1_functional
+  - A4_feedback_loop
+  - A7_contract_metadata_consistency
+  - A8_test_evidence
 tests:
   mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+  unit:
+    - quwoquan_service/services/assistant-service/internal/application/service_test.go
+  contract:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
+  integration:
+    - quwoquan_app/test/cloud/assistant/assistant_repository_learning_contract_test.dart
+  uat:
+    - quwoquan_app/test/patrol/assistant/assistant_learning_feedback_journey_test.dart
+level_acceptance:
+  A1:
+    criteria: InteractionEvent / Scorecard 的字段、幂等键、trainingEligible 与反馈类型在 metadata 和代码中一致，端云之间无 cloudStub 残留。
+    status: specified
+  A4:
+    criteria: Assistant 学习事件可以形成统一存储、学习画像、运营摘要与推荐/策略消费边界，且与统一事件模型可桥接。
+    status: specified
+  A7:
+    criteria: assistant learning service.yaml / events.yaml / projections 与 app/service 代码通过 codegen 维持单一真相源，不维护第二套 schema。
+    status: specified
+  A8:
+    criteria: 具备 T1~T4 证据，包含 app sync、service ingestion、projection、ops summary、staging contract 与 Patrol 旅程。
+    status: specified
 execution:
   local_gate: make gate
   full_gate: make gate-full

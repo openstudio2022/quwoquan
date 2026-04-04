@@ -1,0 +1,104 @@
+feature: article-editor-refactor
+level: L3_story
+version: 1
+node: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor
+derived_from:
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/design.md
+
+tests:
+  mock: []
+  unit:
+    - quwoquan_app/test/ui/content/entry/providers/create_editor_provider_test.dart
+    - quwoquan_app/test/ui/content/entry/unified_editor_runtime_flag_test.dart
+    - quwoquan_app/test/ui/content/article_document_models_test.dart
+    - quwoquan_app/test/ui/content/article_pagination_engine_test.dart
+    - quwoquan_app/test/ui/content/article_flow_layout_engine_test.dart
+  contract: []
+  integration:
+    - quwoquan_app/test/ui/content/entry/article_editor_wysiwyg_widget_test.dart
+    - quwoquan_app/test/ui/content/entry/article_edit_preview_chrome_widget_test.dart
+  uat: []
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+acceptance:
+  - id: A-rename-state
+    criteria: >
+      创作主状态类型与 typedef 不再使用「V2」等版本后缀：统一为 `CreateEditorState`；
+      `ContentPublishDraftComposite` 指向该类型；全库引用与测试已迁移，无残留 `CreateEditorStateV2`。
+  - id: A-feature-flag-no-v
+    criteria: >
+      端侧不再使用 `create_editor_v2` 特性开关键；与统一创作编辑器相关的开关以 metadata/codegen
+      已登记键为准（当前为 `enable_unified_create_editor`），默认与回滚策略在 design 中说明。
+  - id: A-wysiwyg-wrap
+    criteria: >
+      文章页在「通栏 / 左环绕 / 右环绕」下，编辑画布布局与阅读态投影一致（非「仅数据为 wrap、界面仍上图下文」）。
+  - id: A-image-content-area-half-width
+    criteria: >
+      左/右环绕模式下文内图默认宽度为「内容区」宽度的 50%（内容区 = 主编辑区扣水平内边距后的可排版宽度）；
+      高度由图片宽高比在定宽下计算；实现以内容区约束为准，不得误用全屏宽作为唯一基准。
+  - id: A-image-wrap-alignment-caption
+    criteria: >
+      环绕时上下正文与图块竖直对齐；若存在配图说明，图块总高度含说明区，下方正文对齐到说明下沿；
+      行距/段距按 spec §8.4：未分段用行距，已分段用段距。
+  - id: A-image-wrap-interaction
+    criteria: >
+      文内图可点击进图片编辑页；右上角提供删除；文内图位图无圆角（与 spec §8.6 一致）。
+  - id: A-accessory-toolbar
+    criteria: >
+      底栏为左组五项（图片、emoji、样式、序号、排版）+ 分割条 + undo/redo；面板与键盘同高占位；
+      打开面板时对应项可切换为键盘图标以恢复输入。
+  - id: A-style-panel
+    criteria: >
+      样式面板含行内样式（B/I/U/S、多选）、对齐（四选一）、文本层级（正文 / 小标题 / 大标题，单选）；
+      面向用户不得暴露 H1/H2/H3/H4 术语；文案与语义走 UITextConstants/l10n 与语义 token。
+  - id: A-list-depth
+    criteria: >
+      序号面板支持有序/无序与嵌套层级，最大深度 3。
+  - id: A-typography-panel
+    criteria: >
+      排版为单一入口，内 Tab：模版 | 字号（与现有模版/字号能力对齐）。
+  - id: A-undo-redo
+    criteria: >
+      编辑文档支持 undo/redo；不可用时置灰；与面板打开状态正交（不强制关面板，除非实现约束另有说明）。
+  - id: A-edit-preview-modes
+    criteria: >
+      顶栏以「编辑 / 预览」替代「卡片 / 瀑布流」：控件紧凑、置于导航栏同行（不增加独立第二行专高），Cupertino 语义；
+      两种模式共用同一文档与同一分页切片结果，切换无数据丢失；从预览回到编辑时保持当前逻辑页锚点或映射回对应 page slice；
+      预览态只读且底栏编辑工具不干扰沉浸阅读。
+  - id: A-word-editor-chrome
+    criteria: >
+      编辑态为纵向连续滚动多可编辑纸页；页宽/页高/内容区与预览态一致，整列无粗外框、单页有细边框、页眉与 n/m 页码；
+      编辑态可弱化沉浸背景与阴影，但不得使用另一套无限高页面模型；
+      跨页通栏图按统一分页规则整块落到下一页，不纵向裁切跨页。
+  - id: A-flow-preview-viewport-slices
+    criteria: >
+      编辑态与预览态共享同一 `ArticleFlowLayoutEngine` + page slice 结果，而非结构页与预览切片两套真相；
+      预览横向页由该统一切片结果得到，而非按文内图张数机械一页一图；
+      文内图 intrinsic 宽高比可通过 `ArticleImageIntrinsicRegistry` 影响流式测量并在解码后触发外层重建。
+  - id: A-image-toolbar-and-caption
+    criteria: >
+      选中图片必显示以 assetId 为锚点的图片工具栏，至少含通栏、左图右文、右图左文、说明、删除；
+      caption 编辑走图片工具栏；caption 在编辑与预览均居中，空 caption 默认不占高度，分页测量与显示规则一致。
+  - id: A-preview-immersive-parity
+    criteria: >
+      预览态横向分页，手势节奏、全屏沉浸层次与 `WorksImmersiveViewer`（`UnifiedMediaViewerPage` 宿主）对齐到可验收水准（背景、边距、跟手翻页）；
+      具体像素级对标以设计走查为准。
+  - id: A-book-flip-transition
+    criteria: >
+      预览横向翻页具备书本向动效（铰链/卷曲近似或等价自定义过渡），且前翻 / 回翻两方向均成立；
+      非裸 PageView 无过渡硬切作为终态；
+      若低端机降级须在 design 所述策略内并可在 PR 说明。
+  - id: A-chrome-next-step-consistency
+    criteria: >
+      沉浸文章顶栏与主 CTA（草稿、下一步）与图片编辑流「下一步」及现网 `create_page` 沉浸条在材质、字重、强调色上可衔接，符合 iOS 语义 token。
+  - id: A-metadata-single-source
+    criteria: >
+      新增/变更的块类型、布局、序列化字段以 contracts/metadata 为唯一真相源，codegen 通过，端侧无第二套魔法字符串表。
+  - id: A-cross-cutting-gates
+    criteria: >
+      相关页面满足 page-horizontal-quality 矩阵与 P2 清单；`make verify-app-page-horizontal-quality` 与
+      `scripts/gate_repo.sh --scope app` 在 PR 前通过；UI 不 import mock 目录；语义与 iOS 规范符合 design 引用。

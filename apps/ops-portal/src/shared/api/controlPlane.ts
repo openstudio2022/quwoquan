@@ -244,6 +244,51 @@ export interface ProductProjectionSummary {
   activeObjectTypes: string[];
 }
 
+export interface ProductEventSummary {
+  totalCount: number;
+  eventType?: string;
+  eventName?: string;
+  latestOccurredAt?: string;
+  dimensions: Record<string, Record<string, number>>;
+}
+
+export interface ProductEventDrilldownItem {
+  eventId: string;
+  eventType: string;
+  eventName: string;
+  occurredAt: string;
+  pageName?: string;
+  surfaceId?: string;
+  routeId?: string;
+  targetType?: string;
+  targetKey?: string;
+  entityType?: string;
+  entityId?: string;
+  experimentBucket?: string;
+  payload?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+}
+
+export interface ProductEventDrilldown {
+  totalCount: number;
+  items: ProductEventDrilldownItem[];
+}
+
+export interface ProductEventQuery {
+  eventType?: string;
+  eventName?: string;
+  pageName?: string;
+  surfaceId?: string;
+  routeId?: string;
+  targetType?: string;
+  targetKey?: string;
+  entityType?: string;
+  entityId?: string;
+  experimentBucket?: string;
+  source?: string;
+  limit?: number;
+}
+
 function envBaseUrl(key: 'VITE_PRODUCT_OPS_BASE_URL' | 'VITE_PLATFORM_OPS_BASE_URL' | 'VITE_CONTENT_SERVICE_BASE_URL') {
   const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
   const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
@@ -259,6 +304,18 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
     throw new Error(`request failed: ${response.status}`);
   }
   return (await response.json()) as T;
+}
+
+function withQuery(path: string, query: ProductEventQuery = {}): string {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+    params.set(key, String(value));
+  });
+  const encoded = params.toString();
+  return encoded ? `${path}?${encoded}` : path;
 }
 
 export async function fetchExperiments(): Promise<ExperimentItem[]> {
@@ -464,5 +521,19 @@ export async function fetchProductProjectionSummary(): Promise<ProductProjection
   return fetchJSON<ProductProjectionSummary>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     '/v1/control-plane/product/projections/summary',
+  );
+}
+
+export async function fetchProductEventSummary(query: ProductEventQuery = {}): Promise<ProductEventSummary> {
+  return fetchJSON<ProductEventSummary>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/v1/ops/events/summary', query),
+  );
+}
+
+export async function fetchProductEventDrilldown(query: ProductEventQuery = {}): Promise<ProductEventDrilldown> {
+  return fetchJSON<ProductEventDrilldown>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/v1/ops/events/drilldown', query),
   );
 }

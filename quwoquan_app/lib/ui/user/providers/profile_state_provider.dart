@@ -1,6 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ProfileCircleViewData, ProfileSubjectViewData, UserLifeItem, UserWorkItem;
@@ -82,23 +80,21 @@ class ProfileState {
   }
 }
 
-class ProfileNotifier extends ChangeNotifier {
-  ProfileNotifier(this._ref, this._userId) {
-    // Avoid notifying listeners during provider creation/build.
-    Future<void>.microtask(loadProfile);
+class ProfileNotifier extends Notifier<ProfileState> {
+  ProfileNotifier(this._userId);
+
+  final String _userId;
+
+  @override
+  ProfileState build() {
+    Future.microtask(loadProfile);
+    return ProfileState(userId: _userId);
   }
 
-  final Ref _ref;
-  final String _userId;
-  ProfileState _state = const ProfileState(userId: '');
-
-  ProfileState get state => _state;
-
   Future<void> loadProfile() async {
-    _state = ProfileState(userId: _userId).copyWith(isLoading: true);
-    notifyListeners();
+    state = ProfileState(userId: _userId).copyWith(isLoading: true);
     try {
-      final repo = _ref.read(userProfileRepositoryProvider);
+      final repo = ref.read(userProfileRepositoryProvider);
       final profile = await repo.getProfileSubject(_userId);
       final posts = await repo.listUserPosts(_userId);
       final works = await repo.listUserWorks(_userId);
@@ -108,14 +104,14 @@ class ProfileNotifier extends ChangeNotifier {
           ? profile.profileSubjectId
           : _userId;
       final isRemote =
-          _ref.read(appDataSourceModeProvider) == AppDataSourceMode.remote;
+          ref.read(appDataSourceModeProvider) == AppDataSourceMode.remote;
       RelationshipCapabilityDto? seededCapability;
-      final sharedFollowing = _ref
+      final sharedFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(profileSubjectId);
       if (!isRemote) {
         try {
-          seededCapability = await _ref
+          seededCapability = await ref
               .read(relationshipCapabilityRepositoryProvider)
               .getCapability(profileSubjectId);
           if (sharedFollowing && !seededCapability.viewerFollowsTarget) {
@@ -130,7 +126,7 @@ class ProfileNotifier extends ChangeNotifier {
       }
       final seededFollowing =
           seededCapability?.viewerFollowsTarget ?? sharedFollowing;
-      _state = _state.copyWith(
+      state = state.copyWith(
         profile: profile,
         creations: posts,
         works: works,
@@ -140,108 +136,121 @@ class ProfileNotifier extends ChangeNotifier {
         isFollowing: seededFollowing,
         capability: seededCapability,
       );
-      _ref
+      ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowing(profileSubjectId, seededFollowing);
     } catch (_) {
-      _state = _state.copyWith(isLoading: false);
+      state = state.copyWith(isLoading: false);
     }
-    notifyListeners();
     // 异步加载关系能力位（不阻塞主内容展示）
-    if (_state.capability == null) {
+    if (state.capability == null) {
       _loadRelationshipCapability();
     }
   }
 
   Future<void> _loadRelationshipCapability() async {
     try {
-      final targetUserId = _state.profile?.profileSubjectId.isNotEmpty == true
-          ? _state.profile!.profileSubjectId
+      final targetUserId = state.profile?.profileSubjectId.isNotEmpty == true
+          ? state.profile!.profileSubjectId
           : _userId;
-      final seededFollowing = _ref
+      final seededFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(targetUserId);
-      final capRepo = _ref.read(relationshipCapabilityRepositoryProvider);
+      final capRepo = ref.read(relationshipCapabilityRepositoryProvider);
       var cap = await capRepo.getCapability(targetUserId);
-      if (_ref.read(appDataSourceModeProvider) != AppDataSourceMode.remote &&
+      if (ref.read(appDataSourceModeProvider) != AppDataSourceMode.remote &&
           seededFollowing &&
           !cap.viewerFollowsTarget) {
         cap = _copyCapabilityWithFollowState(cap, true);
       }
-      final latestTargetId = _state.profile?.profileSubjectId.isNotEmpty == true
-          ? _state.profile!.profileSubjectId
+      final latestTargetId = state.profile?.profileSubjectId.isNotEmpty == true
+          ? state.profile!.profileSubjectId
           : _userId;
       if (latestTargetId != targetUserId) {
         return;
       }
-      _ref
+      ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowing(targetUserId, cap.viewerFollowsTarget);
-      _state = _state.copyWith(
+      state = state.copyWith(
         capability: cap,
         isFollowing: cap.viewerFollowsTarget,
       );
-      notifyListeners();
     } catch (_) {
-      // 加载失败时回退到旧版 isFollowing 显示
+      final targetUserId = state.profile?.profileSubjectId.isNotEmpty == true
+          ? state.profile!.profileSubjectId
+          : _userId;
+      final viewerId = ref.read(currentUserIdProvider);
+      final seededFollowing = ref
+          .read(userRelationshipStateProvider)
+          .isFollowing(targetUserId);
+      state = state.copyWith(
+        capability: RelationshipCapabilityDto.fromFollowFlags(
+          viewerId: viewerId,
+          targetId: targetUserId,
+          isFollowing: seededFollowing,
+          isFollowedBy: false,
+        ),
+        isFollowing: seededFollowing,
+      );
     }
   }
 
   void setSubTab(CreationSubTab tab) {
-    _state = _state.copyWith(
+    state = state.copyWith(
       activeSubTab: tab,
       activeWorkFormat: CreationWorkFormat.all,
     );
-    notifyListeners();
   }
 
   void setWorkFormat(CreationWorkFormat format) {
-    _state = _state.copyWith(activeWorkFormat: format);
-    notifyListeners();
+    state = state.copyWith(activeWorkFormat: format);
   }
 
   void setVisibility(CreationVisibility v) {
-    _state = _state.copyWith(activeVisibility: v);
-    notifyListeners();
+    state = state.copyWith(activeVisibility: v);
   }
 
   void setInteractionSubTab(InteractionSubTab tab) {
-    _state = _state.copyWith(interactionSubTab: tab);
-    notifyListeners();
+    state = state.copyWith(interactionSubTab: tab);
   }
 
   void setInteractionDirection(InteractionDirection d) {
-    _state = _state.copyWith(interactionDirection: d);
-    notifyListeners();
+    state = state.copyWith(interactionDirection: d);
   }
 
   void setLifestyleSubTab(LifestyleSubTab tab) {
-    _state = _state.copyWith(lifestyleSubTab: tab);
-    notifyListeners();
+    state = state.copyWith(lifestyleSubTab: tab);
   }
 
   Future<void> toggleFollow() async {
-    final profileSubjectId = _state.profile?.profileSubjectId.isNotEmpty == true
-        ? _state.profile!.profileSubjectId
+    final profileSubjectId = state.profile?.profileSubjectId.isNotEmpty == true
+        ? state.profile!.profileSubjectId
         : _userId;
-    final wasFollowing = _state.isFollowing;
+    final wasFollowing = state.isFollowing;
     final nextFollowing = !wasFollowing;
-    _ref
+    ref
         .read(userRelationshipStateProvider.notifier)
         .setFollowing(profileSubjectId, nextFollowing);
-    _ref
+    ref
         .read(clientStateSyncOutboxProvider.notifier)
         .enqueueFollow(
           profileSubjectId: profileSubjectId,
           shouldFollow: nextFollowing,
         );
-    _state = _state.copyWith(
+    final existing = state.capability;
+    final base =
+        existing ??
+        RelationshipCapabilityDto.fromFollowFlags(
+          viewerId: ref.read(currentUserIdProvider),
+          targetId: profileSubjectId,
+          isFollowing: wasFollowing,
+          isFollowedBy: false,
+        );
+    state = state.copyWith(
       isFollowing: nextFollowing,
-      capability: _state.capability == null
-          ? null
-          : _copyCapabilityWithFollowState(_state.capability!, nextFollowing),
+      capability: _copyCapabilityWithFollowState(base, nextFollowing),
     );
-    notifyListeners();
   }
 }
 
@@ -249,7 +258,7 @@ RelationshipCapabilityDto _copyCapabilityWithFollowState(
   RelationshipCapabilityDto capability,
   bool isFollowing,
 ) {
-  final next = RelationshipCapabilityDto.fromLegacyRelationship(
+  final next = RelationshipCapabilityDto.fromFollowFlags(
     viewerId: capability.viewerSubAccountId,
     targetId: capability.targetSubAccountId,
     isFollowing: isFollowing,
@@ -277,6 +286,6 @@ RelationshipCapabilityDto _copyCapabilityWithFollowState(
 }
 
 final profileNotifierProvider =
-    ChangeNotifierProvider.family<ProfileNotifier, String>(
-      (ref, userId) => ProfileNotifier(ref, userId),
+    NotifierProvider.family<ProfileNotifier, ProfileState, String>(
+      ProfileNotifier.new,
     );

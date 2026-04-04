@@ -499,8 +499,7 @@ mock 规则：
 - `article_reader_hydration_ms`
 - `article_page_flip_commit_ms`
 - `article_page_curl_abort_rate`
-- `article_reader_fallback_rate`
-- `article_legacy_document_fallback_rate`
+- `article_reader_fallback_rate`（非主文档来源时 `reason` 形如 `document_structure:<source>:hydrated=<bool>`）
 - `article_template_render_error_rate`
 
 #### SLO 验证

@@ -15,19 +15,19 @@
 
 ## 矩阵更新
 
-- [ ] 已在 [`page-horizontal-quality-matrix.md`](../feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md) **新增一行**或更新已有行（路径、领域、类型、**P1–P8**）。
-- [ ] **P1–P8** 每项已填 **`✓` / `—` / `○`**（`○` = 待审计，专项合入前须收敛），**无空白**；`—` 已在「备注」列简要说明。
+- [x] 已在 [`page-horizontal-quality-matrix.md`](../feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md) **新增一行**或更新已有行（路径、领域、类型、**P1–P8**）。
+- [x] **P1–P8** 每项已填 **`✓` / `—` / `○`**（`○` = 待审计，专项合入前须收敛），**无空白**；`—` 已在「备注」列简要说明。
 
 ## 维度快速核对（当前 P1–P8）
 
-- [ ] **P1** iOS 根壳与材质符合规范；无违规 Material 根 Scaffold（见 `ios-native-page-enforcement`）。
-- [ ] **P2** 云接口与模型来自 metadata codegen；无手写 path/operation 第二真相源。
-- [ ] **P3** 有 Mock + Remote Repository 与数据源切换（无云则标 **—**）；且 **未** 在 `lib/ui`、`lib/app`、`lib/core` 新增 `import .../cloud/services/*/mock/` 或 UI 模型内嵌域名 `prototype*` 占位数据（见 §Mock 与端云隔离）。
-- [ ] **P4** 页面观测已接统一管道或已标 **—**（豁免说明备注）。
-- [ ] **P5** 设置/半屏场景已复用标准组件或标 **—**。
-- [ ] **P6** 浅色/深色可读可点或已登记豁免（S6）。
-- [ ] **P7** 仅谈 **断点与版式**：`AppSpacing`/`responsiveValue`/登记宽度语义；**不与 token 混写**。
-- [ ] **P8** 仅谈 **语义 token**：间距/字阶/圆角/色等；**不与断点策略混写**。
+- [x] **P1** iOS 根壳与材质符合规范；无违规 Material 根 Scaffold（见 `ios-native-page-enforcement`）。
+- [x] **P2** 云接口与模型来自 metadata codegen；无手写 path/operation 第二真相源。
+- [x] **P3** 有 Mock + Remote Repository 与数据源切换（无云则标 **—**）；且 **未** 在 `lib/ui`、`lib/app`、`lib/core` 新增 `import .../cloud/services/*/mock/` 或 UI 模型内嵌域名 `prototype*` 占位数据（见 §Mock 与端云隔离）。
+- [x] **P4** 页面观测已接统一管道或已标 **—**（豁免说明备注）。
+- [x] **P5** 设置/半屏场景已复用标准组件或标 **—**。
+- [x] **P6** 浅色/深色可读可点或已登记豁免（S6）。
+- [x] **P7** 仅谈 **断点与版式**：`AppSpacing`/`responsiveValue`/登记宽度语义；**不与 token 混写**。
+- [x] **P8** 仅谈 **语义 token**：间距/字阶/圆角/色等；**不与断点策略混写**。
 
 ## 各维置 ✓ 的最低证据（与门禁 / 脚本对齐）
 
@@ -47,12 +47,12 @@
 > 策略全文：[`mock_data_cloud_integration_policy.md`](./mock_data_cloud_integration_policy.md)  
 > **禁止**为本 PR **新增** `specs/gates/ui_mock_isolation_allowlist.yaml` 条目；仅允许在清历史债时 **删除** 已有条目。
 
-- [ ] `lib/ui/**`、`lib/app/**`、`lib/core/**` **未新增** `import 'package:quwoquan_app/.../mock/...'`。
-- [ ] **未新增** UI 模型中的域名占位（如 `prototypeCircles`、`unsplash` 业务头像链等）；假数据只放在 **`Mock*Repository` 或 `test/`**。
-- [ ] 若改动数据源切换：正式包路径不得依赖 **伪 Remote→Mock 委托**（见策略 §3 P2）；开发者开关仅 **非 Release** 可见；正式/上架构建须符合策略 **§5.1 R5**（`--dart-define=APP_DATA_SOURCE=remote` 或等价）。
-- [ ] **编译单元**：未在 `lib/**` 与业务代码 **同文件** 新增仅测用 fake、`forTest` 工厂、`@visibleForTesting` 扩权等（策略 [`mock_data_cloud_integration_policy.md`](./mock_data_cloud_integration_policy.md) **§4.1**）；夹具放在 `test/**`。
-- [ ] 本地：`make verify-app-mock-isolation` 或 `python3 scripts/verify_ui_mock_isolation.py` 通过。
+- [x] `lib/ui/**`、`lib/app/**`、`lib/core/**` **未新增** `import 'package:quwoquan_app/.../mock/...'`。
+- [x] **未新增** UI 模型中的域名占位（如 `prototypeCircles`、`unsplash` 业务头像链等）；假数据只放在 **`Mock*Repository` 或 `test/`**。
+- [x] 若改动数据源切换：正式包路径不得依赖 **伪 Remote→Mock 委托**（见策略 §3 P2）；开发者开关仅 **非 Release** 可见；正式/上架构建须符合策略 **§5.1 R5**（`--dart-define=APP_DATA_SOURCE=remote` 或等价）。
+- [x] **编译单元**：未在 `lib/**` 与业务代码 **同文件** 新增仅测用 fake、`forTest` 工厂、`@visibleForTesting` 扩权等（策略 [`mock_data_cloud_integration_policy.md`](./mock_data_cloud_integration_policy.md) **§4.1**）；夹具放在 `test/**`。
+- [x] 本地：`make verify-app-mock-isolation` 或 `python3 scripts/verify_ui_mock_isolation.py` 通过。
 
 ## Reviewer
 
-- [ ] Reviewer 已确认矩阵列与代码变更一致。
+- [x] Reviewer 已确认矩阵列与代码变更一致。

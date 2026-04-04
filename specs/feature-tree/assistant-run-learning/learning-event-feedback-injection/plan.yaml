@@ -1,0 +1,52 @@
+# plan：learning-event-feedback-injection（/baseline 冻结 → /dev 实施）
+
+feature_path: assistant-run-learning/learning-event-feedback-injection
+order_note: contract/schema → metadata/codegen → cloud sync → aggregation/injection → tests
+
+slices:
+  - id: slice-1-learning-event-contract
+    title: 冻结 InteractionEvent / Scorecard 桥接规则、字段分级、trainingEligible 与幂等键
+    outputs:
+      - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md
+      - specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion--interactionevent-scorecard-schema/spec.md
+    tests:
+      - T1/T2 文档与 schema 评审
+    dev_status: specified
+
+  - id: slice-2-metadata-and-codegen
+    title: 补齐 assistant learning events/scorecards metadata、error/schema 与 codegen 影响面
+    outputs:
+      - quwoquan_service/contracts/metadata/assistant/assistant_run/service.yaml
+      - 相关 metadata/codegen 产物
+    tests:
+      - make -C quwoquan_service verify-metadata
+      - make codegen
+      - make codegen-app
+    dev_status: specified
+
+  - id: slice-3-cloud-sync-adapter
+    title: 将端侧 Assistant learning 从 localMock/cloudStub 迁移到真实 remote sync adapter
+    outputs:
+      - quwoquan_app/lib/assistant/sync/**
+      - quwoquan_app/lib/assistant/learning/**
+    tests:
+      - flutter test（assistant learning / sync）
+      - contract test（assistant-service learning APIs）
+    dev_status: specified
+
+  - id: slice-4-learning-storage-and-projection
+    title: 定义并实现学习事件落库、聚合、反馈注入特征投影与保留策略
+    outputs:
+      - assistant-service learning ingestion / projection
+      - recommendation / ops 相关消费接口或投影
+    tests:
+      - integration test（ingestion -> projection -> injection）
+    dev_status: specified
+
+  - id: slice-5-acceptance-and-rollout
+    title: 回填 acceptance 证据、灰度、回滚、性能与隐私验证
+    outputs:
+      - 对应 acceptance / CR 证据
+    tests:
+      - T3/T4 证据补齐
+    dev_status: specified

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
@@ -99,53 +99,49 @@ class VoiceOfflineQueue {
   }
 }
 
-/// Provider for the offline voice queue (per conversation).
-final voiceOfflineQueueProvider =
-    StateNotifierProvider.family<VoiceOfflineQueueNotifier, int, String>(
-  (ref, conversationId) {
-    final sendNotifier = ref.watch(voiceSendProvider(conversationId).notifier);
-    return VoiceOfflineQueueNotifier(
-      conversationId: conversationId,
-      sendNotifier: sendNotifier,
-    );
-  },
-);
-
-class VoiceOfflineQueueNotifier extends StateNotifier<int> {
-  VoiceOfflineQueueNotifier({
-    required this.conversationId,
-    required VoiceSendNotifier sendNotifier,
-  }) : super(0) {
-    _queue = VoiceOfflineQueue(maxQueueSize: 50);
-    _init(sendNotifier);
-  }
+class VoiceOfflineQueueNotifier extends Notifier<int> {
+  VoiceOfflineQueueNotifier(this.conversationId);
 
   final String conversationId;
-  late final VoiceOfflineQueue _queue;
+  VoiceOfflineQueue? _queue;
 
-  Future<void> _init(VoiceSendNotifier sendNotifier) async {
-    await _queue.init();
-    _queue.bindSendNotifier(sendNotifier);
-    _queue.startMonitor();
-    state = _queue.queueLength;
+  @override
+  int build() {
+    final sendNotifier = ref.watch(voiceSendProvider(conversationId).notifier);
+    final queue = VoiceOfflineQueue(maxQueueSize: 50);
+    _queue = queue;
+    ref.onDispose(() {
+      queue.dispose();
+    });
+    Future<void>.microtask(() async {
+      await queue.init();
+      queue.bindSendNotifier(sendNotifier);
+      queue.startMonitor();
+      state = queue.queueLength;
+    });
+    return 0;
   }
 
   Future<void> enqueue(VoiceRecordResult result) async {
-    await _queue.enqueue(
+    final q = _queue;
+    if (q == null) return;
+    await q.enqueue(
       conversationId: conversationId,
       result: result,
     );
-    state = _queue.queueLength;
+    state = q.queueLength;
   }
 
   Future<void> drain() async {
-    await _queue.drainQueue();
-    state = _queue.queueLength;
-  }
-
-  @override
-  void dispose() {
-    _queue.dispose();
-    super.dispose();
+    final q = _queue;
+    if (q == null) return;
+    await q.drainQueue();
+    state = q.queueLength;
   }
 }
+
+/// Provider for the offline voice queue (per conversation).
+final voiceOfflineQueueProvider =
+    NotifierProvider.family<VoiceOfflineQueueNotifier, int, String>(
+  VoiceOfflineQueueNotifier.new,
+);

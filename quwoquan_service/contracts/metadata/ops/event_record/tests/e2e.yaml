@@ -1,0 +1,27 @@
+version: 1
+entity: EventRecord
+layer: e2e
+
+description: |
+  Product Ops 统一事件接入端到端场景（integration/staging）。
+  关注页面访问、analytics façade 与学习反馈进入统一事实源后，运营门户能读取聚合与下钻结果。
+
+scenarios:
+  - name: page_access_event_visible_in_summary
+    steps:
+      - app opens a tracked page and reports page_open / page_return through /v1/ops/events
+      - product ops reads /v1/ops/events/summary for page_access
+    assertions:
+      - event_record_created
+      - page_name_dimension_visible
+      - summary_total_incremented
+
+  - name: analytics_and_learning_visible_in_drilldown
+    steps:
+      - analytics façade reports analytics event through /v1/ops/events
+      - assistant learning reports scorecard / feedback and bridge event summary
+      - operator opens event drilldown view
+    assertions:
+      - analytics_event_visible
+      - learning_event_visible
+      - experiment_bucket_dimension_visible

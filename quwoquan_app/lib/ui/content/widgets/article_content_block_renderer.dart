@@ -1,10 +1,10 @@
-import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
 class ArticleContentSurface extends StatelessWidget {
   const ArticleContentSurface({
@@ -60,7 +60,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const sectionHeadingLineHeight = 1.3;
+    final sectionHeadingLineHeight = articleBodyLineHeight() * 0.72;
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
 
@@ -78,7 +78,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
               color: titleColor,
               fontSize: AppTypography.xl,
               fontWeight: AppTypography.semiBold,
-              height: AppSpacing.textLineHeightBody,
+              height: articleBodyLineHeight(),
             ),
           ),
           'heading_3' => Text(
@@ -103,20 +103,18 @@ class ArticleContentBlockRenderer extends StatelessWidget {
           'image' => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: ArticleAdaptiveImage(imageUrl: block.imageUrl ?? ''),
-                ),
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: ArticleAdaptiveImage(imageUrl: block.imageUrl ?? ''),
               ),
               if ((block.caption ?? '').trim().isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupSm),
+                SizedBox(height: articleCaptionSpacing()),
                 Text(
                   block.caption!,
                   style: TextStyle(
                     color: bodyColor,
                     fontSize: AppTypography.sm,
+                    height: articleCaptionLineHeight(),
                   ),
                 ),
               ],
@@ -153,7 +151,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                   style: TextStyle(
                     color: titleColor,
                     fontSize: AppTypography.base,
-                    height: 1.8, // ignore: verify_dart_semantic
+                    height: articleBodyLineHeight(),
                   ),
                 ),
               ),
@@ -180,7 +178,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                   style: TextStyle(
                     color: titleColor,
                     fontSize: AppTypography.base,
-                    height: 1.8, // ignore: verify_dart_semantic
+                    height: articleBodyLineHeight(),
                   ),
                 ),
               ),
@@ -190,19 +188,17 @@ class ArticleContentBlockRenderer extends StatelessWidget {
             imageUrl: block.imageUrl ?? '',
             body: block.body,
             imageLayout: block.imageLayout,
+            caption: block.caption ?? '',
           ),
           'section' => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if ((block.imageUrl ?? '').isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: ArticleAdaptiveImage(imageUrl: block.imageUrl!),
-                  ),
+                AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: ArticleAdaptiveImage(imageUrl: block.imageUrl!),
                 ),
-                SizedBox(height: AppSpacing.interGroupSm),
+                SizedBox(height: articleChapterSpacing()),
               ],
               if (block.title.trim().isNotEmpty) ...[
                 Text(
@@ -221,16 +217,17 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                   style: TextStyle(
                     color: titleColor,
                     fontSize: AppTypography.base,
-                    height: 1.8, // ignore: verify_dart_semantic
+                    height: articleBodyLineHeight(),
                   ),
                 ),
               if ((block.caption ?? '').trim().isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupSm),
+                SizedBox(height: articleCaptionSpacing()),
                 Text(
                   block.caption!,
                   style: TextStyle(
                     color: bodyColor,
                     fontSize: AppTypography.sm,
+                    height: articleCaptionLineHeight(),
                   ),
                 ),
               ],
@@ -241,7 +238,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
             style: TextStyle(
               color: titleColor,
               fontSize: AppTypography.base,
-              height: 1.9, // ignore: verify_dart_semantic
+              height: articleBodyLineHeight(),
             ),
           ),
         },
@@ -290,59 +287,73 @@ class ArticleWrappedParagraph extends StatelessWidget {
     required this.imageUrl,
     required this.body,
     required this.imageLayout,
+    this.caption = '',
+    this.metrics,
   });
 
   final String imageUrl;
   final String body;
   final String imageLayout;
+  final String caption;
+  final ArticleCanvasMetrics? metrics;
 
   @override
   Widget build(BuildContext context) {
     final textStyle = TextStyle(
       color: CupertinoColors.label.resolveFrom(context),
       fontSize: AppTypography.base,
-      height: 1.85, // ignore: verify_dart_semantic
+      height: articleBodyLineHeight(),
     );
-    final horizontalGap = AppSpacing.containerSm;
+    final captionStyle = TextStyle(
+      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+      fontSize: AppTypography.sm,
+      height: articleCaptionLineHeight(),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final imageWidth = math.min(132.0, constraints.maxWidth * 0.42);
-        final imageHeight = imageWidth;
-        final sideWidth = (constraints.maxWidth - imageWidth - horizontalGap)
-            .clamp(120.0, constraints.maxWidth)
-            .toDouble();
-        final lineHeight =
-            (textStyle.fontSize ?? AppTypography.base) *
-            (textStyle.height ?? 1.0);
-        final maxLinesBesideImage = (imageHeight / lineHeight).floor().clamp(
-          2,
-          8,
+        final resolvedMetrics = metrics ?? ArticleCanvasMetrics.snapshot();
+        final wrap = resolveArticleWrapLayout(
+          ArticleWrapLayoutInput(
+            body: body,
+            rowContentWidth: constraints.maxWidth,
+            bodyStyle: textStyle,
+            captionText: caption,
+            captionStyle: captionStyle,
+            captionPlaceholderWhenEmpty: false,
+            imageLayout: imageLayout,
+            metrics: resolvedMetrics,
+          ),
         );
-        final splitIndex = resolveWrappedSplitIndex(
-          text: body,
-          sideWidth: sideWidth,
-          style: textStyle,
-          maxLines: maxLinesBesideImage,
-        );
-        final leadingText = body.substring(0, splitIndex).trim();
-        final trailingText = body.substring(splitIndex).trim();
         final textColumn = Expanded(
           child: Text(
-            leadingText.isEmpty ? body : leadingText,
+            wrap.leadingText.trim().isEmpty ? body : wrap.leadingText.trim(),
             style: textStyle,
           ),
         );
         final image = SizedBox(
-          width: imageWidth,
-          height: imageHeight,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-            child: ArticleAdaptiveImage(imageUrl: imageUrl),
+          width: wrap.layout.imageWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                width: wrap.layout.imageWidth,
+                height: wrap.layout.imageHeight,
+                child: ArticleAdaptiveImage(imageUrl: imageUrl),
+              ),
+              if (caption.trim().isNotEmpty) ...<Widget>[
+                SizedBox(height: wrap.layout.captionSpacing),
+                Text(
+                  caption.trim(),
+                  textAlign: TextAlign.center,
+                  style: captionStyle,
+                ),
+              ],
+            ],
           ),
         );
         final rowChildren = imageLayout == 'wrapRight'
-            ? <Widget>[textColumn, SizedBox(width: horizontalGap), image]
-            : <Widget>[image, SizedBox(width: horizontalGap), textColumn];
+            ? <Widget>[textColumn, SizedBox(width: wrap.layout.sideGap), image]
+            : <Widget>[image, SizedBox(width: wrap.layout.sideGap), textColumn];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -350,39 +361,13 @@ class ArticleWrappedParagraph extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: rowChildren,
             ),
-            if (trailingText.isNotEmpty) ...[
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(trailingText, style: textStyle),
+            if (wrap.trailingText.trim().isNotEmpty) ...[
+              SizedBox(height: wrap.layout.trailingSpacing),
+              Text(wrap.trailingText.trim(), style: textStyle),
             ],
           ],
         );
       },
     );
   }
-}
-
-int resolveWrappedSplitIndex({
-  required String text,
-  required double sideWidth,
-  required TextStyle style,
-  required int maxLines,
-}) {
-  var low = 0;
-  var high = text.length;
-  var best = 0;
-  while (low <= high) {
-    final mid = (low + high) ~/ 2;
-    final painter = TextPainter(
-      text: TextSpan(text: text.substring(0, mid), style: style),
-      textDirection: TextDirection.ltr,
-      maxLines: maxLines,
-    )..layout(maxWidth: sideWidth);
-    if (!painter.didExceedMaxLines) {
-      best = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return best.clamp(0, text.length);
 }

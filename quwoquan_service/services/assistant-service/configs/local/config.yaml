@@ -1,0 +1,21 @@
+# local overrides (developer laptop)
+service:
+  http:
+    addr: ":18087"
+
+postgres:
+  dsn: "postgres://quwoquan:quwoquan@127.0.0.1:5432/quwoquan?sslmode=disable"
+
+mongodb:
+  uri: "mongodb://127.0.0.1:27017"
+  database: quwoquan_assistant
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0
+  general:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 1

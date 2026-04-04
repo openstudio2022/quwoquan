@@ -7,7 +7,6 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -16,6 +15,8 @@ import 'package:quwoquan_app/cloud/services/content/content_interaction_reposito
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
@@ -39,7 +40,6 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
-import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -254,170 +254,34 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
   );
 });
 
-/// 数据服务Provider
-final dataServiceProvider = Provider<DataService>((ref) {
+final opsVisitRepositoryProvider = Provider<OpsVisitRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    // 过渡层：UI 仍可调用 DataService，但底层已经按 ContentRepository（业务对象）组织。
-    final repo = ref.watch(contentRepositoryProvider);
-    return _LegacyContentDataService(repo);
+    return RemoteOpsVisitRepository();
   }
-  return DataServiceImpl();
+  return MockOpsVisitRepository();
 });
 
-class _LegacyContentDataService implements DataService {
-  _LegacyContentDataService(this._contentRepository);
-
-  final ContentRepository _contentRepository;
-  final List<Map<String, dynamic>> _localGeneratedPosts =
-      <Map<String, dynamic>>[];
-
-  List<Map<String, dynamic>> _mergeLocalGeneratedPosts({
-    required List<Map<String, dynamic>> remoteItems,
-    required String category,
-  }) {
-    final remoteIds = remoteItems
-        .map((item) => item['id']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
-    final local = _localGeneratedPosts
-        .where(
-          (post) =>
-              _matchesCategory(post, category) &&
-              !remoteIds.contains(post['id']?.toString() ?? ''),
-        )
-        .toList(growable: false);
-    if (local.isEmpty) return remoteItems;
-    return <Map<String, dynamic>>[...local, ...remoteItems];
+final opsEventRepositoryProvider = Provider<OpsEventRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  if (mode == AppDataSourceMode.remote) {
+    return RemoteOpsEventRepository();
   }
-
-  bool _matchesCategory(Map<String, dynamic> post, String category) {
-    final expectedFeedType =
-        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category];
-    if (expectedFeedType == null || expectedFeedType.isEmpty) {
-      return true;
-    }
-    final postType = (post['type'] ?? '').toString().trim();
-    if (postType.isEmpty) return false;
-    final normalizedPostType = switch (postType) {
-      'image' => 'photo',
-      _ => postType,
-    };
-    return normalizedPostType == expectedFeedType;
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> getDataList({
-    required String endpoint,
-    Map<String, dynamic>? params,
-    int? limit,
-    int? offset,
-  }) async {
-    if (endpoint == '/posts') {
-      final category = (params?['category'] as String?) ?? 'recommended';
-      final subCategory = params?['subCategory'] as String?;
-      final cursor = params?['cursor'] as String?;
-      final dtos = await _contentRepository.listDiscoveryFeed(
-        category: category,
-        subCategory: subCategory,
-        cursor: cursor,
-        limit: limit ?? GeneratedPostRuntimeMetadata.feedDefaultLimit,
-      );
-      final remoteItems = dtos
-          .map((dto) => dto.toMap())
-          .toList(growable: false);
-      return _mergeLocalGeneratedPosts(
-        remoteItems: remoteItems,
-        category: category,
-      );
-    }
-    throw UnimplementedError('LegacyDataService endpoint=$endpoint');
-  }
-
-  @override
-  Future<Map<String, dynamic>> getDataItem({
-    required String endpoint,
-    required String id,
-    Map<String, dynamic>? params,
-  }) {
-    if (endpoint == '/posts') {
-      for (final post in _localGeneratedPosts) {
-        if (post['id']?.toString() == id) {
-          return Future<Map<String, dynamic>>.value(post);
-        }
-      }
-      return _contentRepository.getPost(postId: id);
-    }
-    throw UnimplementedError(
-      'LegacyDataService getDataItem endpoint=$endpoint',
-    );
-  }
-
-  @override
-  Future<Map<String, dynamic>> createDataItem({
-    required String endpoint,
-    required Map<String, dynamic> data,
-  }) async {
-    if (endpoint == '/posts') {
-      final remotePost = await _contentRepository.createPost(payload: data);
-      _localGeneratedPosts.insert(0, remotePost);
-      return remotePost;
-    }
-    throw UnimplementedError(
-      'LegacyDataService createDataItem endpoint=$endpoint',
-    );
-  }
-
-  @override
-  Future<Map<String, dynamic>> updateDataItem({
-    required String endpoint,
-    required String id,
-    required Map<String, dynamic> data,
-  }) {
-    if (endpoint == '/posts') {
-      final index = _localGeneratedPosts.indexWhere(
-        (post) => post['id']?.toString() == id,
-      );
-      if (index < 0) {
-        throw UnsupportedError(
-          'LegacyDataService updateDataItem only supports local-generated posts: $id',
-        );
-      }
-      final updated = <String, dynamic>{
-        ..._localGeneratedPosts[index],
-        ...data,
-        'updatedAt': DateTime.now().toIso8601String(),
-      };
-      _localGeneratedPosts[index] = updated;
-      return Future<Map<String, dynamic>>.value(updated);
-    }
-    throw UnimplementedError(
-      'LegacyDataService updateDataItem endpoint=$endpoint',
-    );
-  }
-
-  @override
-  Future<void> deleteDataItem({required String endpoint, required String id}) {
-    if (endpoint == '/posts') {
-      _localGeneratedPosts.removeWhere((post) => post['id']?.toString() == id);
-      return Future<void>.value();
-    }
-    throw UnimplementedError(
-      'LegacyDataService deleteDataItem endpoint=$endpoint',
-    );
-  }
-}
+  return MockOpsEventRepository();
+});
 
 /// 浏览记录服务 Provider（小趣基线：记录访问用于 experienceLevel）
 final visitRecorderServiceProvider = Provider<VisitRecorderService>((ref) {
-  return VisitRecorderService();
+  return VisitRecorderService(
+    remoteRepository: ref.watch(opsVisitRepositoryProvider),
+    currentUserId: ref.watch(currentUserIdProvider),
+  );
 });
 
 const Map<String, bool> _contentStoryBootstrapFlags = <String, bool>{
   'enable_create_action_entry': true,
   'enable_unified_create_editor': true,
   'simple_create_action_sheet': true,
-  'create_editor_v2': true,
   'progressive_title_prompt': true,
   'enable_identity_based_surfaces': true,
   'enable_identity_share_template': true,
@@ -1163,7 +1027,13 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    return RemoteBehaviorRepository();
+    return RemoteBehaviorRepository(
+      eventRepository: ref.watch(opsEventRepositoryProvider),
+      currentUserId: ref.watch(currentUserIdProvider),
+      experimentBucket: ref
+          .watch(contentRuntimeConfigProvider)
+          .experimentBucket,
+    );
   }
   return MockBehaviorRepository();
 });

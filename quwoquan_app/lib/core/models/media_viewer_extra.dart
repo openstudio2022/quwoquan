@@ -59,7 +59,7 @@ class MediaViewerExtra {
     this.source = 'default',
     this.circleId,
     this.showWorksNavigation = false,
-    this.rawPostsById = const <String, Map<String, dynamic>>{},
+    this.rawPostsById = const <String, Map<String, Object?>>{},
     this.interactionSnapshot = const MediaViewerInteractionSnapshot(),
   });
 
@@ -72,6 +72,6 @@ class MediaViewerExtra {
   final String source;
   final String? circleId;
   final bool showWorksNavigation;
-  final Map<String, Map<String, dynamic>> rawPostsById;
+  final Map<String, Map<String, Object?>> rawPostsById;
   final MediaViewerInteractionSnapshot interactionSnapshot;
 }

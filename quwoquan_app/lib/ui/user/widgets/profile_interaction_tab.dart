@@ -48,14 +48,14 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
   @override
   void initState() {
     super.initState();
-    final state = ref.read(profileNotifierProvider(widget.userId)).state;
+    final state = ref.read(profileNotifierProvider(widget.userId));
     _loadedSubTab = state.interactionSubTab;
     _loadedDirection = state.interactionDirection;
     _load();
   }
 
   Future<void> _load() async {
-    final notifier = ref.read(profileNotifierProvider(widget.userId));
+    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     final direction = notifier.state.interactionDirection;
     final subTab = notifier.state.interactionSubTab;
     _loadedDirection = direction;
@@ -89,8 +89,8 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
 
   @override
   Widget build(BuildContext context) {
-    final notifier = ref.watch(profileNotifierProvider(widget.userId));
-    final state = notifier.state;
+    final state = ref.watch(profileNotifierProvider(widget.userId));
+    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     _scheduleReloadIfNeeded(state);
     final fg = AppColorsFunctional.getColor(
       widget.isDark,

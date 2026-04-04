@@ -66,9 +66,6 @@ class ContentShareTemplateBuilder {
     List<String> tags = const <String>[],
   }) {
     final permission = _normalizeVisibility(visibility);
-    if (!enableIdentityTemplate) {
-      return _buildLegacyTemplate(post: post, permission: permission);
-    }
     if (permission == 'private') {
       return ContentShareTemplate(
         profileId: post.identity,
@@ -82,9 +79,9 @@ class ContentShareTemplateBuilder {
         shareSummary: _shareSeedForPost(post).summary,
         coverUrl: _shareSeedForPost(post).coverUrl,
         actions: const <ContentShareAction>[],
-        isIdentityTemplate: true,
-        isBlocked: true,
-        notice: UITextConstants.sharePrivateBlocked,
+      isIdentityTemplate: enableIdentityTemplate,
+      isBlocked: true,
+      notice: UITextConstants.sharePrivateBlocked,
       );
     }
 
@@ -129,48 +126,11 @@ class ContentShareTemplateBuilder {
           label: UITextConstants.shareActionSystemShare,
         ),
       ],
-      isIdentityTemplate: true,
+      isIdentityTemplate: enableIdentityTemplate,
       isBlocked: false,
       notice: permission == 'circle_visible'
           ? UITextConstants.shareCircleVisibilityNotice
           : null,
-    );
-  }
-
-  static ContentShareTemplate _buildLegacyTemplate({
-    required PostBaseDto post,
-    required String permission,
-  }) {
-    final shareSeed = _shareSeedForPost(post);
-    return ContentShareTemplate(
-      profileId: 'legacy',
-      layout: 'legacy_sheet',
-      permission: permission,
-      deeplink: permission == 'private'
-          ? ''
-          : AppLinkTemplates.postAppDeepLink(
-              post.id,
-              visibilityIsCircleVisible: permission == 'circle_visible',
-            ),
-      landingPage: 'legacy_content',
-      title: UITextConstants.shareTo,
-      subtitle: UITextConstants.shareLegacyFallbackNotice,
-      shareTitle: shareSeed.title,
-      shareSummary: shareSeed.summary,
-      coverUrl: shareSeed.coverUrl,
-      actions: permission == 'private'
-          ? const <ContentShareAction>[]
-          : const <ContentShareAction>[
-              ContentShareAction(
-                id: 'copy_link',
-                label: UITextConstants.copyLink,
-              ),
-            ],
-      isIdentityTemplate: false,
-      isBlocked: permission == 'private',
-      notice: permission == 'private'
-          ? UITextConstants.sharePrivateBlocked
-          : UITextConstants.shareLegacyFallbackNotice,
     );
   }
 

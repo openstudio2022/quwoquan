@@ -10,4 +10,7 @@ tags:
   orientation:
   comment:
   like:
+  ops:
+  event:
+  replay:
   flaky:

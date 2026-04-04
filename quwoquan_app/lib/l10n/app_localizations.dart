@@ -350,11 +350,11 @@ abstract class AppLocalizations {
   /// **'找小趣'**
   String get assistantEntryFind;
 
-  /// No description provided for @assistantEntryAskLegacy.
+  /// No description provided for @assistantEntryAsk.
   ///
   /// In zh, this message translates to:
   /// **'问小趣'**
-  String get assistantEntryAskLegacy;
+  String get assistantEntryAsk;
 
   /// No description provided for @assistantHalfSheetEnterFullChat.
   ///

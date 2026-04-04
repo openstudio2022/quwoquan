@@ -20,7 +20,7 @@ void main() {
       final postId =
           rawFixture['postId']?.toString() ?? 'article_contract_post';
       final mockRepo = MockContentRepository();
-      final mockRaw = await mockRepo.getPost(postId: postId);
+      final mockDetail = await mockRepo.getPost(postId: postId);
       final remoteRepo = RemoteContentRepository(
         client: MockClient((request) async {
           return http.Response(
@@ -31,13 +31,13 @@ void main() {
         }),
         baseUrl: 'https://example.com',
       );
-      final remoteRaw = await remoteRepo.getPost(postId: postId);
+      final remoteDetail = await remoteRepo.getPost(postId: postId);
       final mockView = projectArticleDetailView(
-        mockRaw,
+        mockDetail.wireForArticleProjection,
         fallbackArticleId: postId,
       );
       final remoteView = projectArticleDetailView(
-        remoteRaw,
+        remoteDetail.wireForArticleProjection,
         fallbackArticleId: postId,
       );
 

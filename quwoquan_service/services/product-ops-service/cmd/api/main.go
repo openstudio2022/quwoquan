@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"hash/fnv"
@@ -12,7 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
 	"quwoquan_service/runtime/controlplane"
+	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
+	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
 
 type bucketDef struct {
@@ -83,20 +90,63 @@ type visitRecord struct {
 	TargetKey  string `json:"targetKey"`
 	UserID     string `json:"userId"`
 	VisitCount int    `json:"visitCount"`
+	LastSeenAt string `json:"lastSeenAt,omitempty"`
+	SessionID  string `json:"sessionId,omitempty"`
+	Source     string `json:"source,omitempty"`
 }
 
 type productService struct {
-	store *controlplane.FileStore
+	store     *controlplane.FileStore
+	telemetry *application.TelemetryService
 }
 
 func main() {
-	addr := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SERVICE_ADDR"))
-	if addr == "" {
+	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
+	if err != nil {
+		log.Fatalf("product-ops-service runtime identity invalid: %v", err)
+	}
+	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
+	if err != nil {
+		log.Fatalf("product-ops-service config load failed: %v", err)
+	}
+	applyEnvOverrides(&cfg)
+	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
+		log.Fatalf("product-ops-service config compatibility failed: %v", err)
+	}
+	addr := getenvOrDefault("PRODUCT_OPS_SERVICE_ADDR", cfg.Service.HTTP.Addr)
+	if strings.TrimSpace(addr) == "" {
 		addr = ":18086"
 	}
 	repoRoot := resolveRepoRoot()
 	store := controlplane.NewFileStore(filepath.Join(repoRoot, ".control-plane-state", "product-ops-service.json"))
-	service := newProductService(store)
+	router := buildRedisRouter(cfg)
+	defer router.Close()
+	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
+	telemetryStore := application.TelemetryStore(telemetrypersistence.NewMemoryTelemetryStore())
+	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
+		mongoClient, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoDB.URI))
+		if err != nil {
+			log.Fatalf("product-ops-service mongo connect failed: %v", err)
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = mongoClient.Disconnect(shutdownCtx)
+		}()
+		dbName := cfg.MongoDB.Database
+		if strings.TrimSpace(dbName) == "" {
+			dbName = "quwoquan_product_ops"
+		}
+		mongoStore := telemetrypersistence.NewMongoTelemetryStore(mongoClient.Database(dbName))
+		if err := mongoStore.EnsureIndexes(context.Background()); err != nil {
+			log.Printf("WARN: product-ops-service ensure mongo indexes: %v", err)
+		}
+		telemetryStore = mongoStore
+		log.Printf("product-ops-service telemetry storage=mongodb db=%s", dbName)
+	} else {
+		log.Printf("product-ops-service telemetry storage=inmemory (no mongodb.uri configured)")
+	}
+	service := newProductService(store, application.NewTelemetryService(telemetryStore, publisher))
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed product ops service: %v", err)
 	}
@@ -105,8 +155,8 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
-func newProductService(store *controlplane.FileStore) *productService {
-	return &productService{store: store}
+func newProductService(store *controlplane.FileStore, telemetry *application.TelemetryService) *productService {
+	return &productService{store: store, telemetry: telemetry}
 }
 
 func newServerMux(service *productService) *http.ServeMux {
@@ -140,6 +190,27 @@ func newServerMux(service *productService) *http.ServeMux {
 			return
 		}
 		service.handleGetVisitStats(w, r)
+	})
+	mux.HandleFunc("/v1/ops/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		service.handleReportEventBatch(w, r)
+	})
+	mux.HandleFunc("/v1/ops/events/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		service.handleGetEventSummary(w, r)
+	})
+	mux.HandleFunc("/v1/ops/events/drilldown", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		service.handleGetEventDrilldown(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/experiments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -512,20 +583,20 @@ func (s *productService) handleRollout(w http.ResponseWriter, r *http.Request) {
 		Decision:   "approved",
 	})
 	_ = s.store.AppendAudit(controlplane.AuditEvent{
-		AuditID:      "experiment_rollout_changed",
-		ObjectType:   "experiment",
-		ObjectID:     experiment.ID,
-		Action:       "rollout",
-		DangerLevel:  "high",
-		Actor:        actorFromRequest(r),
-		Environment:  environmentFromRequest(r),
-		RequestID:    requestIDFromRequest(r),
-		TraceID:      traceIDFromRequest(r),
-		WorkflowRef:  workflow.WorkflowID,
+		AuditID:       "experiment_rollout_changed",
+		ObjectType:    "experiment",
+		ObjectID:      experiment.ID,
+		Action:        "rollout",
+		DangerLevel:   "high",
+		Actor:         actorFromRequest(r),
+		Environment:   environmentFromRequest(r),
+		RequestID:     requestIDFromRequest(r),
+		TraceID:       traceIDFromRequest(r),
+		WorkflowRef:   workflow.WorkflowID,
 		RollbackToken: "rbk-" + experiment.ID,
-		Before:       before,
-		After:        documentFromStruct(experiment),
-		Metadata:     map[string]any{"bucketCount": len(experiment.Buckets)},
+		Before:        before,
+		After:         documentFromStruct(experiment),
+		Metadata:      map[string]any{"bucketCount": len(experiment.Buckets)},
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":            experiment.ID,
@@ -1022,20 +1093,20 @@ func (s *productService) handleActivateRecommendationPolicy(w http.ResponseWrite
 	}
 	_ = s.store.UpsertWorkflow(workflow)
 	_ = s.store.AppendAudit(controlplane.AuditEvent{
-		AuditID:      "recommendation_policy_activated",
-		ObjectType:   "recommendation_policy",
-		ObjectID:     policy.ID,
-		Action:       "activate",
-		DangerLevel:  "high",
-		Actor:        actorFromRequest(r),
-		Environment:  environmentFromRequest(r),
-		RequestID:    requestIDFromRequest(r),
-		TraceID:      traceIDFromRequest(r),
-		WorkflowRef:  workflow.WorkflowID,
+		AuditID:       "recommendation_policy_activated",
+		ObjectType:    "recommendation_policy",
+		ObjectID:      policy.ID,
+		Action:        "activate",
+		DangerLevel:   "high",
+		Actor:         actorFromRequest(r),
+		Environment:   environmentFromRequest(r),
+		RequestID:     requestIDFromRequest(r),
+		TraceID:       traceIDFromRequest(r),
+		WorkflowRef:   workflow.WorkflowID,
 		RollbackToken: "rbk-" + policy.ID,
-		Before:       before,
-		After:        documentFromStruct(policy),
-		Metadata:     map[string]any{"guardrailSnapshot": policy.GuardrailSnapshot},
+		Before:        before,
+		After:         documentFromStruct(policy),
+		Metadata:      map[string]any{"guardrailSnapshot": policy.GuardrailSnapshot},
 	})
 	writeJSON(w, http.StatusOK, policy)
 }
@@ -1045,30 +1116,25 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 		TargetType string `json:"targetType"`
 		TargetKey  string `json:"targetKey"`
 		UserID     string `json:"userId"`
+		SessionID  string `json:"sessionId"`
+		Source     string `json:"source"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid json body"})
+		return
+	}
 	if strings.TrimSpace(body.TargetType) == "" || strings.TrimSpace(body.TargetKey) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "targetType and targetKey are required"})
 		return
 	}
-	if strings.TrimSpace(body.UserID) == "" {
-		body.UserID = "anonymous"
-	}
-	key := body.UserID + "|" + body.TargetType + "|" + body.TargetKey
-	record, ok, err := s.getVisitRecord(key)
+	record, err := s.telemetry.RecordVisit(r.Context(), application.VisitInput{
+		UserID:     body.UserID,
+		TargetType: body.TargetType,
+		TargetKey:  body.TargetKey,
+		SessionID:  body.SessionID,
+		Source:     body.Source,
+	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
-	}
-	if !ok {
-		record = visitRecord{
-			TargetType: body.TargetType,
-			TargetKey:  body.TargetKey,
-			UserID:     body.UserID,
-		}
-	}
-	record.VisitCount++
-	if err := s.putDocument("visit_records", key, record); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
@@ -1076,40 +1142,15 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *productService) handleGetVisitStats(w http.ResponseWriter, r *http.Request) {
-	targetType := strings.TrimSpace(r.URL.Query().Get("targetType"))
-	targetKey := strings.TrimSpace(r.URL.Query().Get("targetKey"))
-	items, err := s.store.ListDocuments("visit_records")
+	stats, err := s.telemetry.GetVisitStats(r.Context(), application.VisitStatsQuery{
+		TargetType: strings.TrimSpace(r.URL.Query().Get("targetType")),
+		TargetKey:  strings.TrimSpace(r.URL.Query().Get("targetKey")),
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
-	total := 0
-	out := make([]visitRecord, 0, len(items))
-	for _, item := range items {
-		record, err := decodeDocument[visitRecord](item)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-			return
-		}
-		if targetType != "" && record.TargetType != targetType {
-			continue
-		}
-		if targetKey != "" && record.TargetKey != targetKey {
-			continue
-		}
-		total += record.VisitCount
-		out = append(out, record)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].VisitCount == out[j].VisitCount {
-			return out[i].TargetKey < out[j].TargetKey
-		}
-		return out[i].VisitCount > out[j].VisitCount
-	})
-	writeJSON(w, http.StatusOK, map[string]any{
-		"totalVisits": total,
-		"items":       out,
-	})
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *productService) handleListWorkflows(w http.ResponseWriter) {
@@ -1162,11 +1203,11 @@ func (s *productService) handleProjectionSummary(w http.ResponseWriter) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"workflowCount":       len(workflows),
-		"approvalCount":       len(approvals),
-		"auditCount":          len(audits),
-		"pendingDualReview":   pendingDualReview,
-		"activeObjectTypes":   []string{"moderation_case", "recovery_case", "appeal_case", "experiment", "recommendation_policy"},
+		"workflowCount":     len(workflows),
+		"approvalCount":     len(approvals),
+		"auditCount":        len(audits),
+		"pendingDualReview": pendingDualReview,
+		"activeObjectTypes": []string{"moderation_case", "recovery_case", "appeal_case", "experiment", "recommendation_policy"},
 	})
 }
 

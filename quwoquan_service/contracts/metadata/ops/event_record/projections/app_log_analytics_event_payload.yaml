@@ -1,0 +1,40 @@
+version: 1
+read_model: AppLogAnalyticsEventPayload
+
+description: |
+  AnalyticsService 写入 AppLog 的 analytics_facade 全量 payload。
+
+source_entities: []
+
+consumers:
+  - app (analytics.dart)
+
+client_projection:
+  dart_class: AppLogAnalyticsEventPayload
+  base_class: ""
+  output_path: cloud/runtime/generated/ops/app_log_analytics_event_payload.g.dart
+  fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind]
+      default: "'analytics_event'"
+    - name: eventType
+      dart_type: String
+      nullable: false
+      source: eventType
+      aliases: [eventType]
+      default: "''"
+    - name: eventName
+      dart_type: String
+      nullable: false
+      source: eventName
+      aliases: [eventName]
+      default: "''"
+    - name: properties
+      dart_type: Map<String, dynamic>
+      nullable: false
+      source: properties
+      aliases: [properties]
+      default: "<String, dynamic>{}"

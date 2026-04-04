@@ -265,6 +265,9 @@ ArticleDocumentData _projectArticleDocument({
       body: buffer.toString(),
       assets: assets,
       blocks: blocks,
+      template: raw['articleTemplate']?.toString() ?? 'gentle',
+      fontPreset: raw['articleFontPreset']?.toString() ?? 'clean',
+      coverImageUrl: raw['coverUrl']?.toString() ?? '',
     );
   }
   final buffer = StringBuffer();
@@ -298,6 +301,9 @@ ArticleDocumentData _projectArticleDocument({
         : postTitle.trim(),
     body: buffer.toString(),
     assets: assets,
+    template: raw['articleTemplate']?.toString() ?? 'gentle',
+    fontPreset: raw['articleFontPreset']?.toString() ?? 'clean',
+    coverImageUrl: raw['coverUrl']?.toString() ?? '',
   );
 }
 
@@ -476,10 +482,10 @@ List<ArticlePageData> _projectArticlePages({
 List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
   ArticleDocumentData document,
 ) {
-  if (document.blocks.isNotEmpty) {
+  if (document.contentBlocks.isNotEmpty) {
     final blocks = <ArticleContentBlockView>[];
     var orderedIndex = 0;
-    final normalized = document.blocks;
+    final normalized = document.contentBlocks;
     for (var index = 0; index < normalized.length; index++) {
       final block = normalized[index];
       final text = block.text.trim();

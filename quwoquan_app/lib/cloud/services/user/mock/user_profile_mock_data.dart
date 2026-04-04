@@ -275,8 +275,9 @@ class UserProfileMockData {
           'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
       'a1':
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+      // photo-1545996124 returns 404 from CDN; align with default avatar for stable mock.
       'mo_yun':
-          'https://images.unsplash.com/photo-1545996124-0501eb292251?w=100',
+          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
     };
     return map[userId] ??
         'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100';

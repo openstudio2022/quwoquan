@@ -53,8 +53,8 @@ class ProfileLifestyleTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.watch(profileNotifierProvider(userId));
-    final state = notifier.state;
+    final state = ref.watch(profileNotifierProvider(userId));
+    final notifier = ref.read(profileNotifierProvider(userId).notifier);
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,

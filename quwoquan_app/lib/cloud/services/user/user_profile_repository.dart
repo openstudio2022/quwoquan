@@ -791,17 +791,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       return json.decode(subjectResp.body) as Map<String, dynamic>;
     }
 
-    final legacyUrl = _uri(UserApiMetadata.getUserProfilePath(userId: userId));
-    final legacyResp = await _client.get(
-      legacyUrl,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getUserProfile),
+    throw Exception(
+      'getUserProfile failed: subject=${subjectResp.statusCode}',
     );
-    if (legacyResp.statusCode != 200) {
-      throw Exception(
-        'getUserProfile failed: subject=${subjectResp.statusCode}, legacy=${legacyResp.statusCode}',
-      );
-    }
-    return json.decode(legacyResp.body) as Map<String, dynamic>;
   }
 
   @override

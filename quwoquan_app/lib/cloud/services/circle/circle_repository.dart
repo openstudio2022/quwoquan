@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
@@ -48,7 +49,7 @@ abstract class CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> getCircle(String circleId);
+  Future<CircleDetailPayload> getCircle(String circleId);
 
   Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data);
 
@@ -514,7 +515,7 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getCircle(String circleId) async {
+  Future<CircleDetailPayload> getCircle(String circleId) async {
     final match = _circles.firstWhere(
       (c) => c['id'] == circleId,
       orElse: () => <String, dynamic>{},
@@ -522,7 +523,7 @@ class MockCircleRepository implements CircleRepository {
     if (match.isEmpty) {
       return Future.error(Exception('Circle $circleId not found'));
     }
-    return Map<String, dynamic>.from(match);
+    return CircleDetailPayload.fromWire(Map<String, dynamic>.from(match));
   }
 
   @override
@@ -541,7 +542,7 @@ class MockCircleRepository implements CircleRepository {
     String circleId,
     Map<String, dynamic> data,
   ) async {
-    final existing = await getCircle(circleId);
+    final existing = (await getCircle(circleId)).repositoryMergeBase();
     final updatedAt = DateTime.now().toIso8601String();
     final merged = _normalizedCircle(
       <String, dynamic>{...existing, ...data, 'updatedAt': updatedAt},
@@ -1049,13 +1050,13 @@ class RemoteCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getCircle(String circleId) async {
+  Future<CircleDetailPayload> getCircle(String circleId) async {
     final uri = _uri(CircleApiMetadata.getCirclePath(circleId: circleId));
     final resp = await _client.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircle),
     );
-    return _decodeObject(resp);
+    return CircleDetailPayload.fromWire(_decodeObject(resp));
   }
 
   @override

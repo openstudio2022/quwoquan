@@ -13,9 +13,9 @@
 ///   ```
 ///
 /// CI 策略：
-///   - daily（staging 可用时自动触发）
+///   - daily（staging 必须可用）
 ///   - pre-release 必须通过
-///   - staging 不可用 → markTestSkipped，不 fail
+///   - staging 不可用或未配置 → 直接 fail
 ///
 /// Mock Wall：本文件发真实 HTTP，位于 Mock Wall 右侧，禁止注入 MockRepository。
 library;
@@ -86,24 +86,20 @@ Map<String, String> _authHeaders(String pageId) => {
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 void main() {
-  // ── Staging 可达性探测：不可达则 skip 全部场景 ────────────────────────────
+  // ── Staging 可达性探测：不可达则直接 fail ───────────────────────────────
   setUpAll(() async {
     if (_stagingBase.isEmpty) {
-      markTestSkipped('L3: STAGING_BASE_URL not set — all api_contract tests skipped');
-      return;
+      throw StateError('L3: STAGING_BASE_URL not set');
     }
     try {
       final probe = await http
           .head(Uri.parse(_stagingBase))
           .timeout(const Duration(seconds: 5));
       if (probe.statusCode >= 500) {
-        markTestSkipped(
-            'L3: staging returned ${probe.statusCode} — tests skipped');
-        return;
+        throw StateError('L3: staging returned ${probe.statusCode}');
       }
     } catch (e) {
-      markTestSkipped('L3: staging unreachable ($e) — tests skipped');
-      return;
+      throw StateError('L3: staging unreachable ($e)');
     }
     _client = http.Client();
     _stagingAvailable = true;

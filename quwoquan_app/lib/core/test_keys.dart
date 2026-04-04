@@ -18,6 +18,14 @@ class TestKeys {
     'discovery_create_button',
   );
   static const createPage = ValueKey<String>('create_page');
+  /// 沉浸文章顶栏「编辑 / 预览」分段控件。
+  static const articleSurfaceModeSegmented = ValueKey<String>(
+    'article_surface_mode_segmented',
+  );
+  /// 沉浸文章预览态横向翻页（含翻书动效）。
+  static const articlePreviewBookPager = ValueKey<String>(
+    'article_preview_book_pager',
+  );
   static const assistantTabPage = ValueKey<String>('assistant_tab_page');
   static const assistantDialogPage = ValueKey<String>('assistant_dialog_page');
   static const fullscreenModalSurface = ValueKey<String>(
@@ -182,7 +190,13 @@ class TestKeys {
   // ── Create Flow ─────────────────────────────────────────────────────
   static const createActionGallery = ValueKey<String>('create_action_gallery');
   static const createActionWrite = ValueKey<String>('create_action_write');
+  static const createActionContinueFromDraft = ValueKey<String>(
+    'create_action_continue_from_draft',
+  );
   static const createActionCapture = ValueKey<String>('create_action_capture');
+  static const createDraftPickerPanel = ValueKey<String>(
+    'create_draft_picker_panel',
+  );
   static const createIdentityMoment = ValueKey<String>(
     'create_identity_moment',
   );
@@ -197,7 +211,6 @@ class TestKeys {
     'create_work_format_note',
   );
   static const createPublishButton = ValueKey<String>('create_publish_button');
-  static const createDraftsButton = ValueKey<String>('create_drafts_button');
   static const createCloseButton = ValueKey<String>('create_close_button');
   static const createTitleToggle = ValueKey<String>('create_title_toggle');
   static const createTitleInput = ValueKey<String>('create_title_input');
@@ -334,6 +347,7 @@ class TestKeys {
   static const articlePageCurlHotzoneBottomRight = ValueKey<String>(
     'article_page_curl_hotzone_bottom_right',
   );
+  static const articleEditorPageGap = ValueKey<String>('article_editor_page_gap');
   static const articlePreviewCoverStrip = ValueKey<String>(
     'article_preview_cover_strip',
   );

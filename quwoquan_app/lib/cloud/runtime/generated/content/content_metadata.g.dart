@@ -7,7 +7,6 @@ class GeneratedPostRuntimeMetadata {
 
   // Field defaults derived from post/fields.yaml constraints.
   static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{
-    'articlePresentationVersion': 1,
     'assistantUsePolicy': 'inherit',
     'circleIds': <String>[],
     'commentCount': 0,
@@ -81,9 +80,6 @@ class GeneratedPostRuntimeMetadata {
     'mediaUrls',
     'coverUrl',
     'articleDocument',
-    'articleTemplate',
-    'articleFontPreset',
-    'articlePresentationVersion',
     'videoUrl',
     'illustrationAssetId',
     'location',

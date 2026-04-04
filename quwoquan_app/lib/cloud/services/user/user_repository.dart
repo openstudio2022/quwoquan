@@ -33,10 +33,6 @@ abstract class UserRepository {
 
   Future<Map<String, dynamic>> getNotificationSettings();
   Future<Map<String, dynamic>> getPrivacySettings();
-
-  // Legacy aliases kept for transitional callers.
-  Future<List<PersonaManagementItemViewData>> listPersonas() => listSubAccounts();
-  Future<void> activatePersona(String personaId) => activateSubAccount(personaId);
 }
 
 class MockUserRepository implements UserRepository {
@@ -67,9 +63,6 @@ class MockUserRepository implements UserRepository {
 
   @override
   Future<void> activateSubAccount(String subAccountId) async {}
-
-  @override
-  Future<void> activatePersona(String personaId) => activateSubAccount(personaId);
 
   @override
   Future<PersonaManagementItemViewData> createSubAccount({
@@ -137,9 +130,6 @@ class MockUserRepository implements UserRepository {
         .map(PersonaManagementItemViewData.fromMap)
         .toList(growable: false);
   }
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() => listSubAccounts();
 
   @override
   Future<void> retireSubAccount(String subAccountId) async {}
@@ -219,9 +209,6 @@ class RemoteUserRepository implements UserRepository {
       context: UserRequestPageIds.listSubAccounts,
     ).map(PersonaManagementItemViewData.fromMap).toList(growable: false);
   }
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() => listSubAccounts();
 
   @override
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
@@ -319,9 +306,6 @@ class RemoteUserRepository implements UserRepository {
       body: const <String, dynamic>{},
     );
   }
-
-  @override
-  Future<void> activatePersona(String personaId) => activateSubAccount(personaId);
 
   @override
   Future<PersonaLifecycleGuardViewData> getSubAccountLifecycleGuard(

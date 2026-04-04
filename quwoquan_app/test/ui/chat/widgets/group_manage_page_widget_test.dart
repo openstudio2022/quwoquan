@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
@@ -12,7 +13,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 const _testConvId = 'conv_002';
 
-_chatTestOverrides(ChatRepository repo) => [
+List<Override> _chatTestOverrides(ChatRepository repo) => [
       chatRepositoryProvider.overrideWithValue(repo),
       currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
     ];

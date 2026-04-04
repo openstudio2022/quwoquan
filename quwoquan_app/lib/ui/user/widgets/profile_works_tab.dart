@@ -43,8 +43,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   @override
   Widget build(BuildContext context) {
-    final notifier = ref.read(profileNotifierProvider(widget.userId));
-    final state = ref.watch(profileNotifierProvider(widget.userId)).state;
+    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
+    final state = ref.watch(profileNotifierProvider(widget.userId));
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final filtered = state.creations
         .where((post) => _matchesCreationFilter(post, state.activeSubTab))
@@ -265,7 +265,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       return;
     }
 
-    final state = ref.read(profileNotifierProvider(widget.userId)).state;
+    final state = ref.read(profileNotifierProvider(widget.userId));
     final filtered = state.creations
         .where((p) => _matchesCreationFilter(p, state.activeSubTab))
         .toList(growable: false);

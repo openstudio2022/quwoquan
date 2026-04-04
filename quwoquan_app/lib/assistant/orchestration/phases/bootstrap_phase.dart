@@ -272,7 +272,6 @@ class BootstrapPhase implements Phase {
       'displayPlainText',
       'journey',
       'uiProcessTimeline',
-      'uiProcessTimelineV2',
       'assistantResponse',
       'previousUnderstandingSnapshot',
       'previousAnswerProcessing',

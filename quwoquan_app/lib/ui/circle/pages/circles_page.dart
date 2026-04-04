@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
@@ -45,7 +46,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   String _selectedDimension = 'all';
   String _selectedExpandedMenuId = _expandedMenuAllId;
   bool _routeContextApplied = false;
-  Map<String, Map<String, dynamic>> _categoryConfig = const {
+  Map<String, Map<String, Object?>> _categoryConfig = const {
     'all': {'label': '推荐'},
   };
 
@@ -119,14 +120,12 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       final cfg = await repo.getCircleCategoryConfig();
       if (mounted) {
         setState(() {
-          _categoryConfig = cfg;
+          _categoryConfig = {
+            for (final e in cfg.entries)
+              e.key: Map<String, Object?>.from(e.value),
+          };
           _repoCircles = data
-              .map(
-                (c) => CircleDto.fromMap({
-                  ...c,
-                  'description': c['description'] ?? c['desc'],
-                }),
-              )
+              .map((c) => circleDtoFromHubMockMap(Map<String, Object?>.from(c)))
               .toList(growable: false);
           _circlesLoaded = true;
         });
@@ -134,7 +133,9 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     } catch (_) {
       if (mounted) {
         setState(() {
-          _categoryConfig = const {'all': {'label': '推荐'}};
+          _categoryConfig = const <String, Map<String, Object?>>{
+            'all': {'label': '推荐'},
+          };
           _repoCircles = [];
           _circlesLoaded = true;
         });

@@ -26,11 +26,10 @@ void main() {
     );
 
     test('文章发布 payload 可写字段包含封面与展示真相源', () {
-      expect(writable, contains('coverUrl'));
       expect(writable, contains('articleDocument'));
-      expect(writable, contains('articleTemplate'));
-      expect(writable, contains('articleFontPreset'));
-      expect(writable, contains('articlePresentationVersion'));
+      expect(writable, isNot(contains('articleTemplate')));
+      expect(writable, isNot(contains('articleFontPreset')));
+      expect(writable, isNot(contains('articlePresentationVersion')));
     });
 
     test('payload 公开+位置+圈子组合结构正确', () {

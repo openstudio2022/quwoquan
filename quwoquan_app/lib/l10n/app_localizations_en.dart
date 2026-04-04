@@ -137,7 +137,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get assistantEntryFind => 'TODO: translate';
 
   @override
-  String get assistantEntryAskLegacy => 'TODO: translate';
+  String get assistantEntryAsk => 'TODO: translate';
 
   @override
   String get assistantHalfSheetEnterFullChat => 'TODO: translate';

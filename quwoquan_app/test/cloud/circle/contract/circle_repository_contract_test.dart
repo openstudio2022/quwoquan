@@ -18,14 +18,15 @@ void main() {
     });
 
     test('getCircle 返回完整圈子信息', () async {
-      final circle = await repo.getCircle('circle_photo_01');
-      expect(circle['id'], 'circle_photo_01');
-      expect(circle['name'], isNotEmpty);
-      expect(circle.containsKey('sectionConfig'), isTrue);
-      expect(circle.containsKey('storageUsedBytes'), isTrue);
-      expect(circle.containsKey('storageQuotaBytes'), isTrue);
-      expect(circle.containsKey('domainId'), isTrue);
-      expect(circle.containsKey('autoSyncChat'), isTrue);
+      final detail = await repo.getCircle('circle_photo_01');
+      expect(detail.circle.id, 'circle_photo_01');
+      expect(detail.circle.name, isNotEmpty);
+      final wire = detail.repositoryMergeBase();
+      expect(wire.containsKey('sectionConfig'), isTrue);
+      expect(wire.containsKey('storageUsedBytes'), isTrue);
+      expect(wire.containsKey('storageQuotaBytes'), isTrue);
+      expect(wire.containsKey('domainId'), isTrue);
+      expect(wire.containsKey('autoSyncChat'), isTrue);
     });
 
     test('getCircleFeed 返回 feed 列表', () async {

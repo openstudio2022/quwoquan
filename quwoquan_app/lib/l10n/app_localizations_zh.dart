@@ -137,7 +137,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get assistantEntryFind => '找小趣';
 
   @override
-  String get assistantEntryAskLegacy => '问小趣';
+  String get assistantEntryAsk => '问小趣';
 
   @override
   String get assistantHalfSheetEnterFullChat => '进入完整对话';

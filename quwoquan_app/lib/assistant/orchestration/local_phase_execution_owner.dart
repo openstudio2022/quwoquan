@@ -480,7 +480,6 @@ class LocalPhaseExecutionOwner {
       'displayPlainText',
       'journey',
       'uiProcessTimeline',
-      'uiProcessTimelineV2',
       'assistantResponse',
     ]) {
       sanitized.remove(key);

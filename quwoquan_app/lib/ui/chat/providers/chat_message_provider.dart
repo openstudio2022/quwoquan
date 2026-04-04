@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
@@ -37,20 +36,22 @@ class ChatMessageState {
 }
 
 /// 管理单个会话的消息列表、发送、撤回、seq gap 补全。
-class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
-  ChatMessageNotifier(this._ref, this._repo, this.conversationId)
-    : super(const ChatMessageState());
+class ChatMessageNotifier extends Notifier<ChatMessageState> {
+  ChatMessageNotifier(this.conversationId);
 
-  final Ref _ref;
-  final ChatRepository _repo;
   final String conversationId;
+
+  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+
+  @override
+  ChatMessageState build() => const ChatMessageState();
 
   // seq=0 表示消息尚未被服务端确认（发送中/发送失败）
   static const int _unconfirmedSeq = 0;
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
-    final activeContext = await _ref.read(activePersonaContextProvider.future);
-    final mode = _ref.read(appDataSourceModeProvider);
+    final activeContext = await ref.read(activePersonaContextProvider.future);
+    final mode = ref.read(appDataSourceModeProvider);
     if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
@@ -115,7 +116,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
     final resolvedSenderId =
         activeContext.profileSubjectId.isNotEmpty
         ? activeContext.profileSubjectId
-        : _ref.read(currentUserIdProvider);
+        : ref.read(currentUserIdProvider);
     final resolvedSenderPersonaId = activeContext.subAccountId;
     final optimistic = MessageDto(
       id: clientMsgId,
@@ -338,9 +339,6 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
 
 /// 按 conversationId 创建独立的消息状态管理器。
 final chatMessageProvider =
-    StateNotifierProvider.family<ChatMessageNotifier, ChatMessageState, String>(
-      (ref, conversationId) {
-        final repo = ref.watch(chatRepositoryProvider);
-        return ChatMessageNotifier(ref, repo, conversationId);
-      },
+    NotifierProvider.family<ChatMessageNotifier, ChatMessageState, String>(
+      ChatMessageNotifier.new,
     );

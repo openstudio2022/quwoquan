@@ -212,6 +212,10 @@ flutter:
     - assets/assistant/tools/catalog/
     - assistant/config.json
     - assistant/.env
+
+  shaders:
+    - shaders/article_page_curl_lighting.frag
+    - shaders/article_page_curl_backface.frag
   
   # fonts:
   #   - family: CustomFont
