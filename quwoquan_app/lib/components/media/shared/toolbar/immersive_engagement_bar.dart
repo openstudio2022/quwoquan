@@ -50,6 +50,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final VoidCallback? onRevealSystemNav;
 
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
+
+  /// 工具栏预留高度（含内边距），供宿主布局使用。
+  static const double preferredReservedHeight = 108;
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
   static double _actionCellWidth(BuildContext ctx) =>
       AppSpacing.responsiveValue(

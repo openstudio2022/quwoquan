@@ -1,10 +1,9 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -62,16 +61,25 @@ class ArticlePageCurlMeshBuilder {
     required StPageFlipCorner corner,
     Path? bottomClipPath,
     ReverseFlipPose? reversePose,
+    StPageFlipRenderFrame? renderFrame,
   }) {
-    final settledProgress = progress.clamp(0.0, 1.0).toDouble();
-    final timeline = _resolveTimeline(
-      direction: direction,
-      progress: settledProgress,
-      dragPoint: dragPoint,
-      pageSize: pageSize,
-      corner: corner,
-      reversePose: reversePose,
-    );
+    final effectiveFrame = renderFrame;
+    final effectiveDirection = effectiveFrame?.renderDirection ?? direction;
+    final effectiveCorner = effectiveFrame?.corner ?? corner;
+    final effectiveDragPoint = effectiveFrame?.localPagePoint ?? dragPoint;
+    final settledProgress = (effectiveFrame?.progress ?? progress)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final timeline = effectiveFrame == null
+        ? _resolveTimeline(
+            direction: effectiveDirection,
+            progress: settledProgress,
+            dragPoint: effectiveDragPoint,
+            pageSize: pageSize,
+            corner: effectiveCorner,
+            reversePose: reversePose,
+          )
+        : _CurlTimeline.fromRenderFrame(effectiveFrame.timeline);
     final pointCount = (horizontalSegments + 1) * (verticalSegments + 1);
     final points = List<_CurlMeshPoint>.filled(
       pointCount,
@@ -83,7 +91,9 @@ class ArticlePageCurlMeshBuilder {
 
     for (var row = 0; row <= verticalSegments; row += 1) {
       final rowT = row / verticalSegments;
-      final cornerInfluence = corner == StPageFlipCorner.top ? 1 - rowT : rowT;
+      final cornerInfluence = effectiveCorner == StPageFlipCorner.top
+          ? 1 - rowT
+          : rowT;
       final rowPivot =
           (timeline.basePivot + (1 - cornerInfluence) * timeline.diagonalExtent)
               .clamp(0.0, pageSize.width)
@@ -108,8 +118,8 @@ class ArticlePageCurlMeshBuilder {
           rowPivot: rowPivot,
           rowRadius: rowRadius,
           perspective: timeline.perspective,
-          direction: direction,
-          corner: corner,
+          direction: effectiveDirection,
+          corner: effectiveCorner,
           timeline: timeline,
         );
         points[_indexFor(row, col)] = point;
@@ -167,9 +177,10 @@ class ArticlePageCurlMeshBuilder {
       }
     }
 
-    final foldXNormalized = (pivotAccumulator / (verticalSegments + 1) / pageSize.width)
-              .clamp(0.0, 1.0)
-              .toDouble();
+    final foldXNormalized =
+        (pivotAccumulator / (verticalSegments + 1) / pageSize.width)
+            .clamp(0.0, 1.0)
+            .toDouble();
     return ArticlePageCurlFrame(
       frontSurface: _buildSurface(frontPositions, frontTexCoords, maxDepth),
       backSurface: _buildSurface(backPositions, backTexCoords, maxDepth),
@@ -383,6 +394,15 @@ class ArticlePageCurlMeshBuilder {
     required ReverseFlipPose? reversePose,
   }) {
     if (direction == StPageFlipDirection.back) {
+      // 竖屏回翻且有三阶段 pose 时，走三阶段主线。
+      if (reversePose != null) {
+        return _resolveReverseTimeline(
+          reversePose: reversePose,
+          dragPoint: dragPoint,
+          pageSize: pageSize,
+        );
+      }
+      // 横屏回翻或无 reversePose 的降级路径。
       return _resolveMirroredForwardTimeline(
         progress: progress,
         dragPoint: dragPoint,
@@ -393,6 +413,59 @@ class ArticlePageCurlMeshBuilder {
       progress: progress,
       dragPoint: dragPoint,
       pageSize: pageSize,
+    );
+  }
+
+  _CurlTimeline _resolveReverseTimeline({
+    required ReverseFlipPose reversePose,
+    required Offset dragPoint,
+    required Size pageSize,
+  }) {
+    // 从三阶段 pose 提取 pivot（leadingEdgeX 镜像到前翻坐标系）。
+    final mirroredPivot =
+        (pageSize.width - reversePose.leadingEdgeX).clamp(0.0, pageSize.width);
+    final curlWidth = math.max(1.0, pageSize.width - mirroredPivot);
+    final progress = reversePose.progress.clamp(0.0, 1.0).toDouble();
+    final diagonalExtent =
+        ui.lerpDouble(
+          pageSize.width * 0.06,
+          pageSize.width * 0.32,
+          Curves.easeOutCubic.transform(progress),
+        ) ??
+        (pageSize.width * 0.18);
+    final radiusBase =
+        ui.lerpDouble(
+          math.max(curlWidth / math.pi, pageSize.width * 0.085),
+          pageSize.width * 0.058,
+          Curves.easeInOut.transform(progress),
+        ) ??
+        (pageSize.width * 0.085);
+    // 三阶段 rollProgress 来自 emergence，cylinder/unfold 来自各自阶段。
+    final rollProgress = reversePose.emergenceProgress.clamp(0.0, 1.0).toDouble();
+    final cylinderProgress =
+        reversePose.cylinderProgress.clamp(0.0, 1.0).toDouble();
+    final unfoldProgress =
+        reversePose.unrollProgress.clamp(0.0, 1.0).toDouble();
+    final sheetShift =
+        -(ui.lerpDouble(
+              0.0,
+              pageSize.width * 0.18,
+              Curves.easeOut.transform(progress),
+            ) ??
+            0.0);
+    return _CurlTimeline(
+      mirrored: true,
+      basePivot: mirroredPivot,
+      diagonalExtent: diagonalExtent,
+      leadingRadius: radiusBase * 1.12,
+      trailingRadius: radiusBase * 0.72,
+      sheetShift: -sheetShift,
+      perspective: pageSize.width * 2.7,
+      rollProgress: rollProgress,
+      cylinderProgress: cylinderProgress,
+      unfoldProgress: unfoldProgress,
+      heightLiftBias: 0.22,
+      reversePose: reversePose,
     );
   }
 
@@ -519,7 +592,6 @@ class ArticlePageCurlMeshBuilder {
       depth: depth,
     );
   }
-
 }
 
 @immutable
@@ -562,6 +634,23 @@ class _CurlTimeline {
     required this.heightLiftBias,
     required this.reversePose,
   });
+
+  factory _CurlTimeline.fromRenderFrame(StPageFlipTimeline timeline) {
+    return _CurlTimeline(
+      mirrored: timeline.mirrored,
+      basePivot: timeline.basePivot,
+      diagonalExtent: timeline.diagonalExtent,
+      leadingRadius: timeline.leadingRadius,
+      trailingRadius: timeline.trailingRadius,
+      sheetShift: timeline.sheetShift,
+      perspective: timeline.perspective,
+      rollProgress: timeline.rollProgress,
+      cylinderProgress: timeline.cylinderProgress,
+      unfoldProgress: timeline.unfoldProgress,
+      heightLiftBias: timeline.heightLiftBias,
+      reversePose: null,
+    );
+  }
 
   final bool mirrored;
   final double basePivot;

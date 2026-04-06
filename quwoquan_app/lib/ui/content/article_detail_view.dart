@@ -102,6 +102,8 @@ class ArticleContentBlockView {
     required this.type,
     this.title = '',
     this.body = '',
+    this.leadingText = '',
+    this.trailingText = '',
     this.imageUrl,
     this.caption,
     this.orderedIndex,
@@ -111,6 +113,8 @@ class ArticleContentBlockView {
   final String type; // paragraph | ordered_item | image | section
   final String title;
   final String body;
+  final String leadingText;
+  final String trailingText;
   final String? imageUrl;
   final String? caption;
   final int? orderedIndex;

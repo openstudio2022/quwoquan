@@ -33,6 +33,7 @@ List<ArticlePageData> resolvePaginatedArticlePages({
   List<ArticlePageData> fallbackPages = const <ArticlePageData>[],
   ArticleCanvasVariant variant = ArticleCanvasVariant.preview,
   double? contentHeightOverride,
+  ArticlePaperTexture? paperTexture,
 }) {
   final visibleTitle = document.titleStyle == ArticleDocumentTitleStyle.none
       ? ''
@@ -56,7 +57,9 @@ List<ArticlePageData> resolvePaginatedArticlePages({
     constraints,
     variant: variant,
   );
-  final typography = resolveArticleTypography(context, template, fontPreset);
+  final typography = paperTexture != null
+      ? resolveArticleTypographyForPaper(context, paperTexture, fontPreset)
+      : resolveArticleTypography(context, template, fontPreset);
   final stagePadding = articleReaderStagePagePadding();
   final stageWidth = resolveArticlePaperStageWidth(
     context,
@@ -98,6 +101,7 @@ class ArticlePageShell extends StatelessWidget {
     this.variant = ArticlePageShellVariant.book,
     this.headerLabel,
     this.footerLabel,
+    this.paperTexture,
   });
 
   final ArticleTemplatePreset template;
@@ -114,10 +118,14 @@ class ArticlePageShell extends StatelessWidget {
   final ArticlePageShellVariant variant;
   final String? headerLabel;
   final String? footerLabel;
+  /// 非 null 时纸张/正文色取自纸张质感，与模版几何（圆角、手帐裁剪等）仍由 [template] 决定。
+  final ArticlePaperTexture? paperTexture;
 
   @override
   Widget build(BuildContext context) {
-    final palette = resolveArticleTemplatePalette(context, template);
+    final palette = paperTexture != null
+        ? resolveArticlePaperPalette(context, paperTexture!)
+        : resolveArticleTemplatePalette(context, template);
     final headerText = headerLabel?.trim() ?? '';
     final footerText = footerLabel?.trim() ?? '';
     final resolvedOuterPadding =
@@ -374,16 +382,20 @@ class ArticlePageReadOnlyView extends StatelessWidget {
     required this.template,
     required this.fontPreset,
     this.metrics,
+    this.paperTexture,
   });
 
   final ArticlePageData page;
   final ArticleTemplatePreset template;
   final ArticleFontPreset fontPreset;
   final ArticleCanvasMetrics? metrics;
+  final ArticlePaperTexture? paperTexture;
 
   @override
   Widget build(BuildContext context) {
-    final typography = resolveArticleTypography(context, template, fontPreset);
+    final typography = paperTexture != null
+        ? resolveArticleTypographyForPaper(context, paperTexture!, fontPreset)
+        : resolveArticleTypography(context, template, fontPreset);
     return Align(
       alignment: Alignment.topLeft,
       child: Column(
@@ -569,6 +581,8 @@ List<Widget> _buildReadOnlyPageFragments(
           ArticleWrappedParagraph(
             imageUrl: fragment.asset!.imageUrl.trim(),
             body: fragment.text.trim(),
+            leadingText: fragment.leadingText,
+            trailingText: fragment.trailingText,
             imageLayout: fragment.asset!.imageLayout,
             caption: fragment.asset!.caption,
             metrics: metrics,
@@ -610,6 +624,7 @@ class ArticleFrontispieceView extends StatelessWidget {
     required this.fontPreset,
     required this.coverUrl,
     this.imageKey = const ValueKey<String>('article-frontispiece-image'),
+    this.paperTexture,
   });
 
   final ArticlePageData page;
@@ -617,11 +632,14 @@ class ArticleFrontispieceView extends StatelessWidget {
   final ArticleFontPreset fontPreset;
   final String coverUrl;
   final Key imageKey;
+  final ArticlePaperTexture? paperTexture;
 
   @override
   Widget build(BuildContext context) {
     const coverTitleLineHeight = 1.15;
-    final typography = resolveArticleTypography(context, template, fontPreset);
+    final typography = paperTexture != null
+        ? resolveArticleTypographyForPaper(context, paperTexture!, fontPreset)
+        : resolveArticleTypography(context, template, fontPreset);
     final frontispieceBody = _resolvedBodyText();
     final coverTitle = page.title.trim();
     return LayoutBuilder(
@@ -712,6 +730,11 @@ enum ArticleReaderFallbackReason {
   forcedDegradedPager,
   pageCurlDisabled,
   accessibilityDisableAnimations,
+
+  /// 超大文档性能降级。
+  ///
+  /// 仅在页数超过 [ArticleReadOnlyBookDeck.maxPageCurlPages] 时触发，
+  /// 作为极端情况的安全网，而非常规长文的禁用开关。
   longDocument,
 }
 
@@ -737,10 +760,14 @@ class ArticleReaderPageCurlAbort {
   const ArticleReaderPageCurlAbort({
     required this.corner,
     required this.progress,
+    required this.direction,
   });
 
   final String corner;
   final double progress;
+
+  /// `'forward'` or `'backward'`.
+  final String direction;
 }
 
 class ArticleReadOnlyBookDeck extends StatefulWidget {
@@ -761,7 +788,15 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
     this.onFallbackResolved,
     this.onPageFlipCommitted,
     this.onPageCurlAborted,
+    this.showFooterPageLabel = true,
+    this.paperTexture,
   });
+
+  /// 超大文档安全网阈值。
+  ///
+  /// 仅当页数超过此值时才因性能原因降级为 book-style pager。
+  /// 常规长文（18–80 页）不再被禁用 page curl。
+  static const int maxPageCurlPages = 80;
 
   final List<ArticlePageData> pages;
   final ArticleTemplatePreset template;
@@ -778,6 +813,12 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
   final ValueChanged<ArticleReaderFallbackReason>? onFallbackResolved;
   final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
   final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
+
+  /// 为 `false` 时不绘制页脚页码（如顶栏已展示 `current/total` 的沉浸排版）。
+  final bool showFooterPageLabel;
+
+  /// 非 null 时与创作态纸张质感一致，驱动页壳色与只读正文字形/色。
+  final ArticlePaperTexture? paperTexture;
 
   @override
   State<ArticleReadOnlyBookDeck> createState() =>
@@ -848,7 +889,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (disableAnimations) {
       return ArticleReaderFallbackReason.accessibilityDisableAnimations;
     }
-    if (widget.pages.length > 18) {
+    if (widget.pages.length > ArticleReadOnlyBookDeck.maxPageCurlPages) {
       return ArticleReaderFallbackReason.longDocument;
     }
     return null;
@@ -890,7 +931,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         widget.template != oldWidget.template ||
         widget.fontPreset != oldWidget.fontPreset ||
         widget.metrics != oldWidget.metrics ||
-        widget.coverUrl != oldWidget.coverUrl) {
+        widget.coverUrl != oldWidget.coverUrl ||
+        widget.showFooterPageLabel != oldWidget.showFooterPageLabel ||
+        widget.paperTexture != oldWidget.paperTexture) {
       _pageSurfaceCache.clear();
       _resetPageTextureSnapshots();
       _clearActiveTextureSession();
@@ -1047,7 +1090,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       });
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('ArticleReadOnlyBookDeck: page curl shaders failed to load: $e');
+        debugPrint(
+          'ArticleReadOnlyBookDeck: page curl shaders failed to load: $e',
+        );
         debugPrintStack(stackTrace: st);
       }
     }
@@ -1140,18 +1185,32 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     for (final index in pending) {
       final boundaryKey = _pageTextureBoundaryKeys[index];
       final boundaryContext = boundaryKey?.currentContext;
-      final boundary =
-          boundaryContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundaryContext == null || !boundaryContext.mounted) {
+        continue;
+      }
+      RenderRepaintBoundary? boundary;
+      try {
+        final renderObject = boundaryContext.findRenderObject();
+        if (renderObject is RenderRepaintBoundary) {
+          boundary = renderObject;
+        }
+      } catch (_) {
+        // The keyed boundary can temporarily point to an inactive element while
+        // the hidden capture layer is being rebuilt. Skip this frame and retry
+        // on the next scheduled pass instead of crashing the whole stage.
+        continue;
+      }
       if (boundary == null ||
+          !boundary.attached ||
           !boundary.hasSize ||
           boundary.size.isEmpty ||
           boundary.debugNeedsPaint) {
         continue;
       }
+      final logicalSize = boundary.size;
+      final pixelRatio = _pageTexturePixelRatio(boundaryContext);
       try {
-        final image = await boundary.toImage(
-          pixelRatio: _pageTexturePixelRatio(boundaryContext!),
-        );
+        final image = await boundary.toImage(pixelRatio: pixelRatio);
         if (!mounted) {
           image.dispose();
           return;
@@ -1159,8 +1218,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         _pageTextureSnapshots[index]?.dispose();
         _pageTextureSnapshots[index] = ArticlePageTextureSnapshot(
           image: image,
-          logicalSize: boundary.size,
-          pixelRatio: _pageTexturePixelRatio(boundaryContext),
+          logicalSize: logicalSize,
+          pixelRatio: pixelRatio,
         );
         _pendingTexturePages.remove(index);
         capturedAny = true;
@@ -1262,26 +1321,48 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     return _textureBundleForBinding(binding, fallback: session.bundle);
   }
 
+  double _sceneProgress(StPageFlipScene scene) {
+    return scene.renderFrame?.progress ??
+        ((scene.calculation?.getFlippingProgress() ?? 0) / 100)
+            .clamp(0.0, 1.0)
+            .toDouble();
+  }
+
+  StPageFlipDirection? _sceneRenderDirection(StPageFlipScene scene) {
+    return scene.effectiveRenderDirection ?? scene.direction;
+  }
+
+  StPageFlipShadowData? _sceneShadow(StPageFlipScene scene) {
+    return scene.renderFrame?.shadow ?? scene.shadow;
+  }
+
   Path _buildBottomClipPath(StPageFlipScene scene) {
     final calculation = scene.calculation;
-    final direction = scene.direction;
+    final renderFrame = scene.renderFrame;
+    final direction = _sceneRenderDirection(scene);
     final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
     final pageRectPath = Path()..addRect(pageRect);
-    if (calculation == null || direction == null) {
+    if (direction == null) {
       return pageRectPath;
     }
-    final area = calculation.getBottomClipArea();
-    if (area.length < 3) {
+    final area =
+        renderFrame?.bottomClipArea ?? calculation?.getBottomClipArea();
+    if (area == null || area.length < 3) {
+      return pageRectPath;
+    }
+    final anchor =
+        renderFrame?.bottomAnchor ?? calculation?.getBottomPagePosition();
+    if (anchor == null) {
       return pageRectPath;
     }
     final polygon = _localPolygonFromArea(
       area: area,
-      anchor: calculation.getBottomPagePosition(),
+      anchor: anchor,
       angle: 0,
       direction: direction,
     );
     final position = convertBookPointToViewport(
-      calculation.getBottomPagePosition(),
+      anchor,
       scene.layout.bounds,
       direction: direction,
     );
@@ -1304,12 +1385,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return null;
     }
     final calculation = scene.calculation;
+    final renderFrame = scene.renderFrame;
     final session = _activeTextureSession;
-    final direction = scene.direction;
-    final corner = scene.corner;
+    final direction = _sceneRenderDirection(scene);
+    final corner = renderFrame?.corner ?? scene.corner;
     final binding = _textureBindingForScene(scene);
-    if (calculation == null ||
-        direction == null ||
+    if (direction == null ||
         corner == null ||
         binding == null ||
         session == null ||
@@ -1323,19 +1404,23 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return null;
     }
     final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
-    final progress = ((calculation.getFlippingProgress()) / 100)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final progress = _sceneProgress(scene);
+    final dragPoint = renderFrame?.localPagePoint ?? calculation?.getPosition();
+    if (dragPoint == null) {
+      return null;
+    }
     final meshFrame = _curlMeshBuilder.build(
       pageRect: pageRect,
       pageSize: pageSize,
-      dragPoint: calculation.getPosition(),
+      dragPoint: dragPoint,
       progress: progress,
       direction: direction,
       corner: corner,
       bottomClipPath: _buildBottomClipPath(scene),
-      reversePose: null,
+      reversePose: scene.reversePose,
+      renderFrame: renderFrame,
     );
+    final timeline = renderFrame?.timeline;
     final palette = resolveArticleTemplatePalette(context, widget.template);
     final lightState = resolveArticlePageCurlLightState(
       progress: progress,
@@ -1344,9 +1429,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       rollProgress: meshFrame.rollProgress,
       cylinderProgress: meshFrame.cylinderProgress,
       unfoldProgress: meshFrame.unfoldProgress,
-      cylinderRadiusNormalized: 0,
-      unrollWidthNormalized: 0,
-      bottomGapNormalized: 0,
+      cylinderRadiusNormalized: timeline?.cylinderRadiusNormalized ?? 0,
+      unrollWidthNormalized: timeline?.unrollWidthNormalized ?? 0,
+      bottomGapNormalized: timeline?.bottomGapNormalized ?? 0,
       direction: direction,
       corner: corner,
     );
@@ -1392,7 +1477,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required _ArticlePageSurfaceKind kind,
   }) {
     final cacheKey =
-        '${kind.name}:$pageIndex:${pageSize.width.toStringAsFixed(2)}:${pageSize.height.toStringAsFixed(2)}:${widget.template.name}:${widget.fontPreset.name}:${widget.coverUrl.trim().isNotEmpty ? 1 : 0}';
+        '${kind.name}:$pageIndex:${pageSize.width.toStringAsFixed(2)}:${pageSize.height.toStringAsFixed(2)}:${widget.template.name}:${widget.fontPreset.name}:${widget.coverUrl.trim().isNotEmpty ? 1 : 0}:${widget.showFooterPageLabel ? 1 : 0}:${widget.paperTexture?.name ?? 'none'}';
     return _pageSurfaceCache.putIfAbsent(cacheKey, () {
       switch (kind) {
         case _ArticlePageSurfaceKind.front:
@@ -1481,7 +1566,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     controller.applyAnimationFrame(
       plan.frames[nextIndex],
-      reversePose: null,
+      reversePose: plan.reversePoses != null &&
+              nextIndex < plan.reversePoses!.length
+          ? plan.reversePoses![nextIndex]
+          : null,
     );
     _syncActiveTextureSession(controller.scene);
     _lastAnimationFrameIndex = nextIndex;
@@ -1628,6 +1716,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       ArticleReaderPageCurlAbort(
         corner: _cornerNameFromPageFlip(plan.corner, plan.direction),
         progress: progress,
+        direction: plan.direction == StPageFlipDirection.forward
+            ? 'forward'
+            : 'backward',
       ),
     );
   }
@@ -1755,6 +1846,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
               ? controller.cornerForGlobalPoint(dragStart)
               : StPageFlipCorner.bottom);
       final progress =
+          controller.scene.renderFrame?.progress ??
           ((controller.scene.calculation?.getFlippingProgress() ?? 0) / 100)
               .clamp(0.0, 1.0)
               .toDouble();
@@ -1974,19 +2066,24 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       footerReservedHeight: widget.metrics.footerReservedHeight,
       variant: ArticlePageShellVariant.readerSheet,
       showIndicator: false,
-      footerLabel: '${index + 1}/${widget.pages.length}',
+      footerLabel: widget.showFooterPageLabel
+          ? '${index + 1}/${widget.pages.length}'
+          : null,
+      paperTexture: widget.paperTexture,
       child: index == 0 && widget.coverUrl.trim().isNotEmpty
           ? ArticleFrontispieceView(
               page: page,
               template: widget.template,
               fontPreset: widget.fontPreset,
               coverUrl: widget.coverUrl.trim(),
+              paperTexture: widget.paperTexture,
             )
           : ArticlePageReadOnlyView(
               page: page,
               template: widget.template,
               fontPreset: widget.fontPreset,
               metrics: widget.metrics,
+              paperTexture: widget.paperTexture,
             ),
     );
   }
@@ -2243,9 +2340,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }
 
   _ArticlePageCurlCorner? _stageCornerForScene(StPageFlipScene scene) {
-    final direction = scene.direction;
-    final corner = scene.corner;
-    if (direction == null || corner == null || scene.calculation == null) {
+    final direction = _sceneRenderDirection(scene);
+    final corner = scene.renderFrame?.corner ?? scene.corner;
+    if (direction == null ||
+        corner == null ||
+        (scene.renderFrame == null && scene.calculation == null)) {
       return null;
     }
     return switch ((direction, corner)) {
@@ -2271,8 +2370,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     // 层完成，这里不需要再做 X 轴镜像。
     return area
         .map((point) {
-          final translated =
-              Offset(point.dx - anchor.dx, point.dy - anchor.dy);
+          final translated = Offset(point.dx - anchor.dx, point.dy - anchor.dy);
           return rotatePoint(translated, Offset.zero, angle);
         })
         .toList(growable: false);
@@ -2351,7 +2449,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required StPageFlipScene scene,
     required StPageFlipDirection direction,
   }) {
-    final progress = scene.calculation?.getFlippingProgress() ?? 0;
+    final progress = _sceneProgress(scene) * 100;
     final hardAngle = direction == StPageFlipDirection.forward
         ? (90 * (200 - progress * 2)) / 100
         : (-90 * (200 - progress * 2)) / 100;
@@ -2411,10 +2509,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       direction: direction,
       bounds: scene.layout.bounds,
       isFlippingPage: isFlippingPage,
-      progress: ((scene.calculation?.getFlippingProgress() ?? 0) / 100)
-          .clamp(0.0, 1.0)
-          .toDouble(),
-      projectedShadow: isFlippingPage ? null : scene.shadow,
+      progress: _sceneProgress(scene),
+      projectedShadow: isFlippingPage ? null : _sceneShadow(scene),
     );
   }
 
@@ -2543,9 +2639,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
     final bookRect = scene.layout.bounds.rect;
     final calculation = scene.calculation;
-    final progress = ((calculation?.getFlippingProgress() ?? 0) / 100)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final renderFrame = scene.renderFrame;
+    final progress = _sceneProgress(scene);
     _queuePageTextureSnapshots(<int>{
       scene.currentPageIndex,
       scene.currentPageIndex - 1,
@@ -2598,7 +2693,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       );
     }
 
-    final direction = scene.direction;
+    final direction = _sceneRenderDirection(scene);
     if (highFidelityScene != null) {
       layers.add(
         Positioned.fill(
@@ -2610,7 +2705,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         ),
       );
     } else {
-      if (calculation != null &&
+      final bottomArea =
+          renderFrame?.bottomClipArea ?? calculation?.getBottomClipArea();
+      final bottomAnchor =
+          renderFrame?.bottomAnchor ?? calculation?.getBottomPagePosition();
+      if (bottomArea != null &&
+          bottomAnchor != null &&
           direction != null &&
           scene.bottomPageIndex != null) {
         layers.add(
@@ -2618,8 +2718,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
             context: context,
             pageIndex: scene.bottomPageIndex!,
             pageSize: pageSize,
-            area: calculation.getBottomClipArea(),
-            anchor: calculation.getBottomPagePosition(),
+            area: bottomArea,
+            anchor: bottomAnchor,
             angle: 0,
             scene: scene,
             direction: direction,
@@ -2632,7 +2732,14 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         );
       }
 
-      if (calculation != null &&
+      final flippingArea =
+          renderFrame?.flippingClipArea ?? calculation?.getFlippingClipArea();
+      final flippingAnchor =
+          renderFrame?.flippingAnchor ?? calculation?.getActiveCorner();
+      final flippingAngle = renderFrame?.angle ?? calculation?.getAngle();
+      if (flippingArea != null &&
+          flippingAnchor != null &&
+          flippingAngle != null &&
           direction != null &&
           scene.flippingPageIndex != null) {
         layers.add(
@@ -2640,9 +2747,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
             context: context,
             pageIndex: scene.flippingPageIndex!,
             pageSize: pageSize,
-            area: calculation.getFlippingClipArea(),
-            anchor: calculation.getActiveCorner(),
-            angle: calculation.getAngle(),
+            area: flippingArea,
+            anchor: flippingAnchor,
+            angle: flippingAngle,
             scene: scene,
             direction: direction,
             density: scene.flippingPageDensity ?? StPageFlipDensity.soft,
@@ -3830,8 +3937,8 @@ class _StableTextureCaptureLayerState
                         child: SizedBox(
                           width: widget.pageSize.width,
                           height: widget.pageSize.height,
-                          child: _cachedWidgets[index] ??
-                              const SizedBox.shrink(),
+                          child:
+                              _cachedWidgets[index] ?? const SizedBox.shrink(),
                         ),
                       );
                     })

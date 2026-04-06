@@ -49,6 +49,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   final Map<String, CreateMediaItem> _selectedById =
       <String, CreateMediaItem>{};
 
+  /// 选中/取消选中会触发整页 [setState]；若每次 build 都为格子新建
+  /// [FutureBuilder] 的 future，会重置所有缩略图为加载态，表现为「整页刷新」。
+  final Map<String, Future<Uint8List?>> _thumbnailFutures =
+      <String, Future<Uint8List?>>{};
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +113,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     if (album == null) return;
     setState(() {
       _assets.clear();
+      _thumbnailFutures.clear();
       _page = 0;
       _hasMore = true;
       _isLoadingMore = false;
@@ -788,9 +794,16 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     ).pop(CreateMediaPickerResult(items: selected, openOneTapMovie: true));
   }
 
+  Future<Uint8List?> _cachedThumbnailFuture(AssetEntity entity) {
+    return _thumbnailFutures.putIfAbsent(
+      entity.id,
+      () => entity.thumbnailDataWithSize(const ThumbnailSize.square(240)),
+    );
+  }
+
   Widget _buildAssetThumb(AssetEntity entity, bool isDark) {
     return FutureBuilder<Uint8List?>(
-      future: entity.thumbnailDataWithSize(const ThumbnailSize.square(240)),
+      future: _cachedThumbnailFuture(entity),
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes != null && bytes.isNotEmpty) {

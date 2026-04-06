@@ -383,6 +383,8 @@ class ArticleFlowLayoutEngine {
       assetsById: assetsById,
     );
     if (fragment.kind == ArticleLayoutFragmentKind.wrapContent) {
+      final hasExplicitSegments =
+          fragment.leadingText.isNotEmpty || fragment.trailingText.isNotEmpty;
       final wrapText =
           binding.bodyRange == null || binding.bodyRange!.isCollapsed
           ? ''
@@ -393,9 +395,11 @@ class ArticleFlowLayoutEngine {
         id: fragment.id.isNotEmpty
             ? fragment.id
             : 'wrap_${fragment.asset?.id ?? sourcePage.id}',
-        text: wrapText,
-        leadingText: '',
-        trailingText: '',
+        text: hasExplicitSegments
+            ? '${fragment.leadingText}${fragment.trailingText}'
+            : wrapText,
+        leadingText: hasExplicitSegments ? fragment.leadingText : '',
+        trailingText: hasExplicitSegments ? fragment.trailingText : '',
         binding: binding,
       );
     }
@@ -654,6 +658,10 @@ class ArticleFlowLayoutEngine {
         final wrap = resolveArticleWrapLayout(
           ArticleWrapLayoutInput(
             body: fragment.text,
+            leadingText:
+                fragment.leadingText.isEmpty ? null : fragment.leadingText,
+            trailingText:
+                fragment.trailingText.isEmpty ? null : fragment.trailingText,
             rowContentWidth: contentWidth,
             bodyStyle: bodyStyle,
             captionText: asset.caption,

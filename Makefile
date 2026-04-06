@@ -6,6 +6,7 @@
 .PHONY: verify-app-page-abc-governance-enforce-b
 .PHONY: verify-app-page-abc-governance-enforce-c
 .PHONY: verify-app-page-abc-governance-enforce-all
+.PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-session-b-legacy
 .PHONY: verify
 .PHONY: codegen
@@ -46,6 +47,10 @@ verify-app-page-abc-governance-enforce-c:
 
 verify-app-page-abc-governance-enforce-all:
 	@python3 scripts/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
+
+# UI 层 Map<String,dynamic> 字面量防回退（见 specs/gates/ui_map_literal_budget.json）
+verify-app-ui-map-literal-budget:
+	@python3 scripts/verify_ui_map_literal_budget.py
 
 verify-app-session-b-legacy:
 	@python3 scripts/verify_session_b_legacy_governance.py

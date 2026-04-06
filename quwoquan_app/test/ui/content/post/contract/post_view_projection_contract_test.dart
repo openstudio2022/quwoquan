@@ -632,7 +632,7 @@ void main() {
       expect(r.contentBlocks, isNotEmpty);
       expect(r.contentBlocks.first.type, equals('heading_2'));
       expect(r.title, equals('连续文档标题'));
-      expect(r.description, contains('前言段落'));
+      expect(r.description, contains('图旁正文'));
       expect(
         r.contentBlocks.any(
           (block) =>

@@ -22,7 +22,6 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/article_preview_page.dart';
@@ -35,6 +34,7 @@ import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storag
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/article_typography_thumbnail_raster.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -65,6 +65,12 @@ enum _TypographyToolbarTab { paper, font }
 class _CreatePageState extends ConsumerState<CreatePage> {
   static const int _kMaxMediaImages = 20;
   static const int _kMaxBodyLength = 5000;
+  static const double _typographyPickThumbWidth = AppSpacing.largeAvatarSize;
+
+  double _typographyPickPanelScrollHeight(double pageAspectRatio) =>
+      _typographyPickThumbWidth / pageAspectRatio +
+      AppSpacing.intraGroupXs +
+      AppSpacing.md;
 
   final CreateLocationService _locationService = CreateLocationService();
   final CreateCircleService _circleService = const CreateCircleService();
@@ -90,11 +96,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
 
   /// 沉浸文章：编辑（纵向 Word 式）/ 预览（横向沉浸翻页）。
   ArticleEditorSurfaceMode _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
-
-  /// 下一张文内图在 [ArticleDocumentData.body] 中的插入位置（由 [ArticleEditor] 按焦点/选区更新）。
-  final ValueNotifier<int> _articleImageBodyInsertOffset = ValueNotifier<int>(
-    0,
-  );
 
   /// 非 null 时 [ArticleEditor] 在该页展开文内图工具栏（如新插入图片后）。
   final ValueNotifier<String?> _revealArticleImageToolbarForPageId =
@@ -192,7 +193,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     _bodyController.dispose();
     _titleFocusNode.dispose();
     _bodyFocusNode.dispose();
-    _articleImageBodyInsertOffset.dispose();
     _revealArticleImageToolbarForPageId.dispose();
     _revealArticleImageToolbarForAssetId.dispose();
     super.dispose();
@@ -651,6 +651,47 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
+  Future<void> _pickImagesForArticleTextSelection(
+    String nodeId,
+    int selectionOffset,
+  ) async {
+    final state = ref.read(createEditorProvider);
+    final remainingSlots =
+        (_kMaxMediaImages - state.imagePaths.length).clamp(0, _kMaxMediaImages);
+    if (remainingSlots <= 0) {
+      AppToast.show(context, '最多添加 $_kMaxMediaImages 张图片');
+      return;
+    }
+    final result = await _openMediaPicker(
+      mode: MediaPickerEntryMode.image,
+      maxSelection: remainingSlots,
+      initialPaths: const <String>[],
+    );
+    if (!mounted || result == null) return;
+    final paths = result.items
+        .where((item) => item.isImage)
+        .map((item) => item.path)
+        .take(remainingSlots)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+    final notifier = ref.read(createEditorProvider.notifier);
+    var anchorNodeId = notifier.prepareTextNodeForImageInsertion(
+      nodeId,
+      selectionOffset,
+    );
+    for (final path in paths) {
+      anchorNodeId = notifier.insertImageAfterNode(anchorNodeId, path);
+    }
+    await reportCreateEditorSurfaceEvent(
+      ref,
+      'create_media_images_selected',
+      <String, Object?>{
+        'count': paths.length,
+        'editorKind': state.editorKind.name,
+      },
+    );
+  }
+
   Future<void> _pickImagesForCurrentEditor() async {
     // 文本编辑器走 node 级插入
     final state = ref.read(createEditorProvider);
@@ -689,28 +730,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         .toList(growable: false);
     if (state.editorKind == CreateEditorKind.text) {
       final notifier = ref.read(createEditorProvider.notifier);
-      final activePageId =
-          state.activeArticlePageId ?? state.articlePages.first.id;
       if (paths.isNotEmpty) {
-        final bodyLen = state.articleDocument.body.length;
-        final insertOffset = _articleImageBodyInsertOffset.value.clamp(
-          0,
-          bodyLen,
-        );
-        var anchorPageId = notifier.insertArticleImageAtBodyOffset(
-          paths.first,
-          bodyInsertOffset: insertOffset,
-          fallbackActivePageId: activePageId,
-        );
-        for (final path in paths.skip(1)) {
-          anchorPageId = notifier.insertArticleImageAfterPage(
-            anchorPageId,
-            path,
-          );
-        }
-        final docAfter = ref.read(createEditorProvider).articleDocument;
-        if (docAfter.assets.isNotEmpty) {
-          _revealArticleImageToolbarForAssetId.value = docAfter.assets.last.id;
+        var anchorNodeId = state.activeArticleBlockId;
+        for (final path in paths) {
+          anchorNodeId = notifier.insertImageAfterNode(anchorNodeId, path);
         }
       }
       await reportCreateEditorSurfaceEvent(
@@ -805,24 +828,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         AppToast.show(context, '写文字编辑器暂不支持视频');
         return;
       }
-      final activePageId =
-          state.activeArticlePageId ?? state.articlePages.first.id;
-      final bodyLen = state.articleDocument.body.length;
-      final insertOffset = _articleImageBodyInsertOffset.value.clamp(
-        0,
-        bodyLen,
-      );
       ref
           .read(createEditorProvider.notifier)
-          .insertArticleImageAtBodyOffset(
-            result.path,
-            bodyInsertOffset: insertOffset,
-            fallbackActivePageId: activePageId,
-          );
-      final docAfter = ref.read(createEditorProvider).articleDocument;
-      if (docAfter.assets.isNotEmpty) {
-        _revealArticleImageToolbarForAssetId.value = docAfter.assets.last.id;
-      }
+          .insertImageAfterNode(state.activeArticleBlockId, result.path);
       return;
     }
     if (result.type == CreateMediaType.video) {
@@ -1292,9 +1300,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   Widget _buildImmersiveArticlePage(CreateEditorState state) {
     final isPreview =
         _articleSurfaceMode == ArticleEditorSurfaceMode.preview;
-    final palette = resolveArticlePaperPalette(context, state.articlePaperTexture);
+    // 与 [WorksImmersiveViewer] 舞台一致：深色沉浸底，避免纸张 stage 色在书页外呈「浅灰留白」。
     final background = isPreview
-        ? palette.stageBackground
+        ? AppColors.worksBackground
         : CupertinoColors.systemBackground.resolveFrom(context);
     final foreground = isPreview
         ? AppColors.white
@@ -1393,46 +1401,44 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   _TypographyToolbarTab _typographyTab = _TypographyToolbarTab.paper;
 
   Widget _buildImmersiveArticlePreview(CreateEditorState state) {
-    return Column(
-      children: <Widget>[
-        // 上方：翻页预览
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final metrics = resolveArticleCanvasMetrics(
-                context,
-                constraints,
-                variant: ArticleCanvasVariant.preview,
-              );
-              final pages = resolvePaginatedArticlePages(
-                context: context,
-                constraints: constraints,
-                document: state.articleDocument,
-                template: state.articleTemplate,
-                fontPreset: state.articleFontPreset,
-                fallbackPages: state.articlePages,
-                variant: ArticleCanvasVariant.preview,
-              );
-              final idx =
-                  pages.indexWhere((p) => p.id == state.activeArticlePageId);
-              final enablePageCurl = ref.watch(
-                contentFeatureFlagProvider('enable_article_page_curl'),
-              );
-              final palette = resolveArticlePaperPalette(
-                context,
-                state.articlePaperTexture,
-              );
-              return ColoredBox(
-                color: palette.stageBackground,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final metrics = resolveArticleCanvasMetrics(
+          context,
+          constraints,
+          variant: ArticleCanvasVariant.preview,
+        );
+        final pages = resolvePaginatedArticlePages(
+          context: context,
+          constraints: constraints,
+          document: state.articleDocument,
+          template: state.articleTemplate,
+          fontPreset: state.articleFontPreset,
+          fallbackPages: state.articlePages,
+          variant: ArticleCanvasVariant.preview,
+          paperTexture: state.articlePaperTexture,
+        );
+        final idx =
+            pages.indexWhere((p) => p.id == state.activeArticlePageId);
+        final enablePageCurl = ref.watch(
+          contentFeatureFlagProvider('enable_article_page_curl'),
+        );
+        return Column(
+          children: <Widget>[
+            Expanded(
+              child: ColoredBox(
+                color: AppColors.worksBackground,
                 child: ArticleReadOnlyBookDeck(
                   pages: pages,
                   template: state.articleTemplate,
                   fontPreset: state.articleFontPreset,
                   metrics: metrics,
                   coverUrl: state.articleCoverImagePath,
+                  paperTexture: state.articlePaperTexture,
                   initialPage: idx < 0 ? 0 : idx,
                   enablePageCurl: enablePageCurl,
                   pagePadding: EdgeInsets.zero,
+                  showFooterPageLabel: false,
                   onPageChanged: (int i) {
                     if (i >= 0 && i < pages.length) {
                       ref
@@ -1440,18 +1446,26 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                           .setActiveArticlePage(pages[i].id);
                     }
                   },
+                  onFallbackResolved: (reason) {
+                    debugPrint(
+                      'ArticlePreview fallback: ${reason.name}',
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-        ),
-        // 下方：排版工具栏
-        _buildTypographyToolbar(state),
-      ],
+              ),
+            ),
+            _buildTypographyToolbar(state, constraints, metrics),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildTypographyToolbar(CreateEditorState state) {
+  Widget _buildTypographyToolbar(
+    CreateEditorState state,
+    BoxConstraints layoutConstraints,
+    ArticleCanvasMetrics metrics,
+  ) {
     // 沉浸式黑色面板，与滤镜编辑器一致
     const panelBg = AppColors.black;
     final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
@@ -1464,8 +1478,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       ColorType.separatorOpaque,
     );
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    // 统一面板高度：纸张和字体都用同一高度，避免跳变
-    const double panelContentHeight = 96;
+    final pageAspect = metrics.aspectRatio;
+    final panelListHeight = _typographyPickPanelScrollHeight(pageAspect);
 
     return Container(
       decoration: BoxDecoration(
@@ -1482,7 +1496,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            // tab 栏：圆圈删除图标 | 纸张 | 字体（左对齐）
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.containerMd,
@@ -1490,8 +1503,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
               ),
               child: Row(
                 children: <Widget>[
-                  // 带圆圈的关闭图标（与滤镜顶部一致）
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
                       setState(() {
                         _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
@@ -1509,8 +1522,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       ),
                     ),
                   ),
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  // 纸张 tab
+                  SizedBox(width: AppSpacing.containerLg),
                   _buildTypographyTabItem(
                     label: '纸张',
                     selected: _typographyTab == _TypographyToolbarTab.paper,
@@ -1521,7 +1533,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                     ),
                   ),
                   SizedBox(width: AppSpacing.containerLg),
-                  // 字体 tab
                   _buildTypographyTabItem(
                     label: '字体',
                     selected: _typographyTab == _TypographyToolbarTab.font,
@@ -1535,12 +1546,20 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                 ],
               ),
             ),
-            // 横滑效果图列表（统一高度）
             SizedBox(
-              height: panelContentHeight,
-              child: _typographyTab == _TypographyToolbarTab.paper
-                  ? _buildPaperTextureList(state)
-                  : _buildFontPresetList(state),
+              height: panelListHeight,
+              child: ArticleTypographyThumbnailStrip(
+                editorState: state,
+                layoutConstraints: layoutConstraints,
+                metrics: metrics,
+                coverUrl: state.articleCoverImagePath,
+                activeTab: _typographyTab == _TypographyToolbarTab.paper
+                    ? ArticleTypographyThumbnailTab.paper
+                    : ArticleTypographyThumbnailTab.font,
+                child: _typographyTab == _TypographyToolbarTab.paper
+                    ? _buildPaperTextureList(state, pageAspect)
+                    : _buildFontPresetList(state, pageAspect),
+              ),
             ),
             SizedBox(height: bottomPad > 0 ? 0 : AppSpacing.intraGroupSm),
           ],
@@ -1557,82 +1576,78 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     required VoidCallback onTap,
   }) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: selected ? AppTypography.semiBold : AppTypography.regular,
-              color: selected ? labelColor : secondaryColor,
-            ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: AppSpacing.minInteractiveSize,
+          minHeight: AppSpacing.minInteractiveSize,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: AppTypography.base,
+                  fontWeight: selected
+                      ? AppTypography.semiBold
+                      : AppTypography.regular,
+                  color: selected ? labelColor : secondaryColor,
+                ),
+              ),
+              SizedBox(height: AppSpacing.three),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: selected ? AppSpacing.twenty : 0,
+                height: AppSpacing.two,
+                decoration: BoxDecoration(
+                  color: selected ? labelColor : labelColor.withValues(alpha: 0),
+                  borderRadius: BorderRadius.circular(AppSpacing.one),
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: AppSpacing.three),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: selected ? AppSpacing.twenty : 0,
-            height: AppSpacing.two,
-            decoration: BoxDecoration(
-              color: selected ? labelColor : labelColor.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(AppSpacing.one),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildPaperTextureList(CreateEditorState state) {
+  Widget _buildPaperTextureList(
+    CreateEditorState state,
+    double pageAspectRatio,
+  ) {
     final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(
       true,
       ColorType.foregroundSecondary,
     );
+    final thumbH = _typographyPickThumbWidth / pageAspectRatio;
     return ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       itemCount: ArticlePaperTexture.values.length,
-      separatorBuilder: (_, __) => SizedBox(width: AppSpacing.intraGroupSm),
+      separatorBuilder: (_, _) => SizedBox(width: AppSpacing.containerSm),
       itemBuilder: (context, index) {
         final texture = ArticlePaperTexture.values[index];
         final isSelected = texture == state.articlePaperTexture;
-        final palette = resolveArticlePaperPalette(context, texture);
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             ref.read(createEditorProvider.notifier).setArticlePaperTexture(texture);
           },
           child: SizedBox(
-            width: AppSpacing.largeAvatarSize,
+            width: _typographyPickThumbWidth,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  width: AppSpacing.avatarCircleLg,
-                  height: AppSpacing.avatarCircleLg,
-                  decoration: BoxDecoration(
-                    color: palette.paperColor,
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                    border: Border.all(
-                      color: isSelected
-                          ? CupertinoColors.activeBlue.resolveFrom(context)
-                          : palette.paperBorderColor,
-                      width: isSelected ? 2.5 : 0.5,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '文',
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        fontWeight: AppTypography.medium,
-                        color: palette.textColor,
-                      ),
-                    ),
-                  ),
+                ArticleTypographyRasterCell(
+                  paper: texture,
+                  font: state.articleFontPreset,
+                  width: _typographyPickThumbWidth,
+                  height: thumbH,
+                  isSelected: isSelected,
                 ),
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Text(
@@ -1646,6 +1661,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -1655,61 +1671,40 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Widget _buildFontPresetList(CreateEditorState state) {
+  Widget _buildFontPresetList(
+    CreateEditorState state,
+    double pageAspectRatio,
+  ) {
     final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(
       true,
       ColorType.foregroundSecondary,
     );
+    final thumbH = _typographyPickThumbWidth / pageAspectRatio;
     return ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       itemCount: ArticleFontPreset.values.length,
-      separatorBuilder: (_, __) => SizedBox(width: AppSpacing.intraGroupSm),
+      separatorBuilder: (_, _) => SizedBox(width: AppSpacing.containerSm),
       itemBuilder: (context, index) {
         final preset = ArticleFontPreset.values[index];
         final isSelected = preset == state.articleFontPreset;
-        final fontFamily = switch (preset) {
-          ArticleFontPreset.classic => 'Songti SC',
-          ArticleFontPreset.handwritten => 'Kaiti SC',
-          ArticleFontPreset.rounded => 'SF Pro Rounded',
-          ArticleFontPreset.mono => 'Menlo',
-          ArticleFontPreset.clean => null,
-        };
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             ref.read(createEditorProvider.notifier).setArticleFontPreset(preset);
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerMd,
-              vertical: AppSpacing.intraGroupSm,
-            ),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.white.withValues(alpha: 0.14)
-                  : AppColors.transparent,
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              border: Border.all(
-                color: isSelected
-                    ? CupertinoColors.activeBlue.resolveFrom(context)
-                    : AppColors.white.withValues(alpha: 0.2),
-                width: isSelected ? 2 : 0.5,
-              ),
-            ),
+          child: SizedBox(
+            width: _typographyPickThumbWidth,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(
-                  '春江',
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontFamily: fontFamily,
-                    fontFamilyFallback: const <String>['PingFang SC'],
-                    color: fg,
-                  ),
+                ArticleTypographyRasterCell(
+                  paper: state.articlePaperTexture,
+                  font: preset,
+                  width: _typographyPickThumbWidth,
+                  height: thumbH,
+                  isSelected: isSelected,
                 ),
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Text(
@@ -1721,6 +1716,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         : AppTypography.regular,
                     color: isSelected ? fg : fgSecondary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -2025,6 +2023,13 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       onUpdateNodeText: (nodeId, value) {
         ref.read(createEditorProvider.notifier).updateArticleNodeText(nodeId, value);
       },
+      onUpdateWrapParagraphTexts: (figureNodeId, narrowText, belowText) {
+        ref.read(createEditorProvider.notifier).updateArticleWrapParagraphTexts(
+              figureNodeId,
+              narrowText: narrowText,
+              belowText: belowText,
+            );
+      },
       onUpdateNodeImageLayout: (nodeId, layout) {
         ref
             .read(createEditorProvider.notifier)
@@ -2066,6 +2071,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       onInsertImageAfter: (afterNodeId) async {
         await _pickImagesForArticleNode(afterNodeId);
       },
+      onInsertImageAtSelection: (nodeId, selectionOffset) async {
+        await _pickImagesForArticleTextSelection(nodeId, selectionOffset);
+      },
       onActiveBlockChanged: (blockId) {
         ref.read(createEditorProvider.notifier).setActiveArticleBlock(blockId);
       },
@@ -2074,6 +2082,12 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           afterNodeId,
           initialText: initialText,
         );
+      },
+      onEnsureWrapNodeGroup: (figureNodeId, {int? splitOffset}) {
+        return ref.read(createEditorProvider.notifier).ensureArticleWrapNodeGroup(
+              figureNodeId,
+              splitOffset: splitOffset,
+            );
       },
       onArticleIntrinsicImageResolved: () {
         if (mounted) setState(() {});
@@ -2089,6 +2103,21 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       onRedo: () => ref.read(createEditorProvider.notifier).redoArticle(),
       canUndo: ref.read(createEditorProvider.notifier).canUndoArticle,
       canRedo: ref.read(createEditorProvider.notifier).canRedoArticle,
+      onUpdateNodeType: (nodeId, type) {
+        ref.read(createEditorProvider.notifier).updateArticleNodeType(nodeId, type);
+      },
+      onToggleInlineStyle: (nodeId, start, end, {bool? bold, bool? italic, bool? underline, bool? strikethrough}) {
+        ref.read(createEditorProvider.notifier).toggleArticleInlineStyle(
+          nodeId, start, end,
+          bold: bold,
+          italic: italic,
+          underline: underline,
+          strikethrough: strikethrough,
+        );
+      },
+      onCommitTextEdit: () {
+        ref.read(createEditorProvider.notifier).commitArticleTextEdit();
+      },
     );
   }
 

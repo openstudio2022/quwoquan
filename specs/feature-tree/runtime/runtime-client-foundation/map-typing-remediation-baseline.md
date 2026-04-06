@@ -1,6 +1,6 @@
 # Map / 弱类型数据整改 — 基线快照
 
-_Generated: 2026-04-04 13:00 UTC_ (`scripts/report_map_typing_baseline.py`)
+_Generated: 2026-04-04 14:46 UTC_ (`scripts/report_map_typing_baseline.py`)
 
 ## 1. 口径
 
@@ -12,7 +12,7 @@ _Generated: 2026-04-04 13:00 UTC_ (`scripts/report_map_typing_baseline.py`)
 
 | 指标 | 值 |
 |------|-----|
-| `Map<String, dynamic>` 出现次数 | **2205** |
+| `Map<String, dynamic>` 出现次数 | **2199** |
 | 涉及文件数 | **280** |
 | `contracts/metadata/**/service.yaml` 文件数（约） | **23** |
 
@@ -21,7 +21,7 @@ _Generated: 2026-04-04 13:00 UTC_ (`scripts/report_map_typing_baseline.py`)
 | 目录 | 次数 |
 |------|------|
 | `assistant/` | 1091 |
-| `cloud/` | 722 |
+| `cloud/` | 716 |
 | `ui/` | 178 |
 | `core/` | 173 |
 | `components/` | 34 |
@@ -33,8 +33,8 @@ _Generated: 2026-04-04 13:00 UTC_ (`scripts/report_map_typing_baseline.py`)
 | 次数 | 路径 |
 |------|------|
 | assistant/orchestration/local_phase_execution_owner.dart | `195` |
-| cloud/services/circle/circle_repository.dart | `124` |
-| cloud/services/content/content_repository.dart | `94` |
+| cloud/services/circle/circle_repository.dart | `121` |
+| cloud/services/content/content_repository.dart | `91` |
 | cloud/services/user/user_profile_repository.dart | `85` |
 | assistant/infrastructure/llm/llm_provider.dart | `75` |
 | assistant/tool/impl/web/websearch_tool.dart | `71` |
@@ -79,8 +79,8 @@ _Generated: 2026-04-04 13:00 UTC_ (`scripts/report_map_typing_baseline.py`)
 
 | 文件 | 粗计数 |
 |------|--------|
-| `quwoquan_app/lib/cloud/services/content/content_repository.dart` | ~60 `Future<...Map<String,dynamic>>` shapes |
-| `quwoquan_app/lib/cloud/services/circle/circle_repository.dart` | ~60 `Future<...Map<String,dynamic>>` shapes |
+| `quwoquan_app/lib/cloud/services/content/content_repository.dart` | ~57 `Future<...Map<String,dynamic>>` shapes |
+| `quwoquan_app/lib/cloud/services/circle/circle_repository.dart` | ~57 `Future<...Map<String,dynamic>>` shapes |
 | `quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart` | ~9 `Future<...Map<String,dynamic>>` shapes |
 | `quwoquan_app/lib/cloud/services/user/user_profile_repository.dart` | ~33 `Future<...Map<String,dynamic>>` shapes |
 | `quwoquan_app/lib/cloud/services/rtc/rtc_repository.dart` | ~18 `Future<...Map<String,dynamic>>` shapes |

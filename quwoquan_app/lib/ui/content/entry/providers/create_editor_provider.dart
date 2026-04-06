@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/article_editor_projection.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_undo_snapshot.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
@@ -166,6 +167,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 nodes 级操作')
   void updateBody(String value) {
     state = state.copyWith(body: value);
   }
@@ -338,50 +340,23 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     bool clearActivePageId = false,
     bool clearActiveBlockId = false,
     bool recordUndoPoint = true,
-    bool nodesAreSourceOfTruth = false,
   }) {
     if (recordUndoPoint) {
       _recordUndoPointBeforeMutation();
     }
-    final normalizedBody = _normalizeArticleBody(document.body);
     final normalizedCoverImagePath = _normalizeArticleCoverImagePath(
       document.coverImageUrl.trim().isNotEmpty
           ? document.coverImageUrl
           : state.articleCoverImagePath,
       extractArticleImagePathsFromDocument(document),
     );
-    // 当 nodes 是唯一真相源时，不通过 copyWith(body:) 触发
-    // _buildDocumentNodesFromLegacy，避免覆盖 node 级变更。
-    final ArticleDocumentData normalizedDocument;
-    if (nodesAreSourceOfTruth) {
-      // 自动修复结构：确保每个 figure 前后都有 paragraph
-      final fixedNodes = _ensureEditableNodes(document.nodes);
-      normalizedDocument = ArticleDocumentData(
-        nodes: fixedNodes,
-        template: state.articleTemplate.name,
-        fontPreset: state.articleFontPreset.name,
-        coverImageUrl: normalizedCoverImagePath,
-        titleStyle: document.titleStyle,
-      );
-    } else {
-      final rawDocument = document.copyWith(
-        body: normalizedBody,
-        assets: _normalizeAssets(document.assets, normalizedBody.length),
-        blocks: document.blocks,
-        template: state.articleTemplate.name,
-        fontPreset: state.articleFontPreset.name,
-        coverImageUrl: normalizedCoverImagePath,
-      );
-      // 同样修复结构：确保每个 figure 前后都有 paragraph
-      final fixedNodes = _ensureEditableNodes(rawDocument.nodes);
-      normalizedDocument = ArticleDocumentData(
-        nodes: fixedNodes,
-        template: rawDocument.template,
-        fontPreset: rawDocument.fontPreset,
-        coverImageUrl: rawDocument.coverImageUrl,
-        titleStyle: rawDocument.titleStyle,
-      );
-    }
+    final normalizedDocument = ArticleDocumentData(
+      nodes: document.nodes,
+      template: document.template,
+      fontPreset: document.fontPreset,
+      coverImageUrl: normalizedCoverImagePath,
+      titleStyle: document.titleStyle,
+    );
     final imagePaths = extractArticleImagePathsFromDocument(normalizedDocument);
     final blocks = buildArticleBlocksFromDocument(normalizedDocument);
     final pages = buildArticlePagesSnapshotFromDocument(
@@ -494,6 +469,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 block 路径，文章编辑请使用 insertTextNodeAfter')
   String insertArticleParagraph({String? afterBlockId, String text = ''}) {
     final block = CreateTextBlock.paragraph(
       id: _nextArticleBlockId(CreateTextBlockType.paragraph),
@@ -503,6 +479,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return block.id;
   }
 
+  @Deprecated('遗留 block 路径，文章编辑请使用 insertTextNodeAfter')
   String insertArticleOrderedItem({String? afterBlockId, String text = ''}) {
     final block = CreateTextBlock.orderedItem(
       id: _nextArticleBlockId(CreateTextBlockType.orderedItem),
@@ -512,6 +489,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return block.id;
   }
 
+  @Deprecated('遗留 block 路径，文章编辑请使用 insertTextNodeAfter')
   String insertArticleTextBlock({
     String? afterBlockId,
     required CreateTextBlockType type,
@@ -561,6 +539,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleBlocks(blocks, activeBlockId: block.id);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 nodes 级操作')
   void updateArticleTextBlock(String blockId, String value) {
     final blocks = state.articleBlocks
         .map(
@@ -570,6 +549,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleBlocks(blocks, activeBlockId: blockId);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 nodes 级操作')
   void updateArticleTextBlockType(String blockId, CreateTextBlockType type) {
     final blocks = state.articleBlocks
         .map(
@@ -579,6 +559,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleBlocks(blocks, activeBlockId: blockId);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertTextNodeAfter')
   String insertArticlePageAfter({String? afterPageId, String body = ''}) {
     final binding = _bindingForPageId(afterPageId);
     final insertionOffset =
@@ -595,6 +576,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return state.articlePages.last.id;
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeText')
   void updateArticlePageText(String pageId, String value) {
     final binding = _bindingForPageId(pageId);
     if (binding == null) {
@@ -622,6 +604,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleDocument(nextDocument, activePageId: pageId);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeText')
   void updateArticlePageTextFromBinding(
     ArticlePageBinding binding,
     String value,
@@ -780,6 +763,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 removeArticlePage')
   void removeArticlePage(String pageId) {
     final binding = _bindingForPageId(pageId);
     if (binding == null) {
@@ -818,6 +802,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
   ///
   /// 无论当前活动页本身是否已绑定图片，都新增 asset，而不是替换已有图片。
   /// [bodyInsertOffset] 为 null 时回落到文末；返回承载该新图的 [ArticlePageData.id]。
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertImageAfterNode')
   String insertArticleImageAtBodyOffset(
     String imagePath, {
     int? bodyInsertOffset,
@@ -863,6 +848,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
   /// 替换当前页已绑定的文内图；若当前页无图片，则在给定 `body` 偏移新增一张。
   ///
   /// 仅供“替换当前图”语义调用，不应用作通用插图入口。
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertImageAfterNode')
   String replaceArticlePageImage(
     String pageId,
     String imagePath, {
@@ -1010,6 +996,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return landingPageId;
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertImageAfterNode')
   void replaceArticlePageImageFromBinding(
     ArticlePageBinding binding,
     String imagePath,
@@ -1051,6 +1038,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeImageLayout')
   void updateArticlePageImageLayout(String pageId, String imageLayout) {
     final binding = _bindingForPageId(pageId);
     if (binding == null || !binding.hasAsset) {
@@ -1071,6 +1059,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeCaption')
   void updateArticlePageCaptionFromBinding(
     ArticlePageBinding binding,
     String caption,
@@ -1093,6 +1082,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeImageLayout')
   void updateArticlePageImageLayoutFromBinding(
     ArticlePageBinding binding,
     String imageLayout,
@@ -1117,6 +1107,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
   /// 仅移除当前页绑定的文内图，不删除正文/标题（spec §8.6）。
   ///
   /// 多图同页时请用 [removeArticleImageAssetById]。
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 removeArticleNode')
   void removeArticleImageAsset(ArticlePageBinding binding) {
     final id = binding.assetId?.trim();
     if (id == null || id.isEmpty) {
@@ -1125,6 +1116,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     removeArticleImageAssetById(id);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 removeArticleNode')
   void removeArticlePageFromBinding(ArticlePageBinding binding) {
     var nextDocument = state.articleDocument;
     if (binding.hasTitleSlice) {
@@ -1155,6 +1147,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleDocument(nextDocument);
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 removeArticleNode')
   void removeArticleImageAssetById(String assetId) {
     final id = assetId.trim();
     if (id.isEmpty) {
@@ -1171,6 +1164,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeCaption')
   void updateArticlePageCaptionForAsset(String assetId, String caption) {
     final id = assetId.trim();
     if (id.isEmpty) {
@@ -1189,6 +1183,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 updateArticleNodeImageLayout')
   void updateArticlePageImageLayoutForAsset(
     String assetId,
     String imageLayout,
@@ -1238,23 +1233,6 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     if (id.isEmpty) return;
     final doc = state.articleDocument;
 
-    // 占位正文：文档中无文本 node 时，编辑器发送此 id
-    if (id == '_placeholder_body') {
-      _articleBlockSeed += 1;
-      final newNode = ArticleDocumentNode(
-        id: 'paragraph_$_articleBlockSeed',
-        type: ArticleDocumentNodeType.paragraph,
-        text: value,
-      );
-      final nextNodes = List<ArticleDocumentNode>.from(doc.nodes)
-        ..add(newNode);
-      _applyArticleDocument(
-        doc.copyWith(nodes: nextNodes),
-        nodesAreSourceOfTruth: true,
-      );
-      return;
-    }
-
     final nextNodes = doc.nodes.map((node) {
       if (node.id == id) return node.copyWith(text: value);
       return node;
@@ -1263,7 +1241,65 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       doc.copyWith(nodes: nextNodes),
       activeBlockId: state.activeArticleBlockId,
       recordUndoPoint: false,
-      nodesAreSourceOfTruth: true,
+    );
+  }
+
+  ArticleWrapNodeGroup? ensureArticleWrapNodeGroup(
+    String figureNodeId, {
+    int? splitOffset,
+    bool recordUndoPoint = false,
+  }) {
+    final id = figureNodeId.trim();
+    if (id.isEmpty) return null;
+    final doc = state.articleDocument;
+    final mutation = _ensureArticleWrapNodeGroupInNodes(
+      doc.nodes,
+      id,
+      splitOffset: splitOffset,
+    );
+    if (mutation == null) {
+      return null;
+    }
+    if (mutation.changed) {
+      _applyArticleDocument(
+        doc.copyWith(nodes: mutation.nodes),
+        recordUndoPoint: recordUndoPoint,
+      );
+    }
+    return resolveArticleWrapNodeGroupByFigureId(mutation.nodes, id);
+  }
+
+  void updateArticleWrapParagraphTexts(
+    String figureNodeId, {
+    required String narrowText,
+    required String belowText,
+  }) {
+    final id = figureNodeId.trim();
+    if (id.isEmpty) return;
+    final doc = state.articleDocument;
+    final mutation = _ensureArticleWrapNodeGroupInNodes(doc.nodes, id);
+    if (mutation == null) {
+      return;
+    }
+    final group = resolveArticleWrapNodeGroupByFigureId(mutation.nodes, id);
+    if (group?.narrowParagraph == null || group?.belowParagraph == null) {
+      return;
+    }
+    final normalizedNarrow = _normalizeArticleBody(narrowText);
+    final normalizedBelow = _normalizeArticleBody(belowText);
+    final nextNodes = mutation.nodes.map((node) {
+      if (node.id == group!.narrowParagraph!.id) {
+        return node.copyWith(text: normalizedNarrow);
+      }
+      if (node.id == group.belowParagraph!.id) {
+        return node.copyWith(text: normalizedBelow);
+      }
+      return node;
+    }).toList(growable: false);
+    _applyArticleDocument(
+      doc.copyWith(nodes: nextNodes),
+      activeBlockId: state.activeArticleBlockId,
+      recordUndoPoint: false,
     );
   }
 
@@ -1272,13 +1308,18 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     final id = nodeId.trim();
     if (id.isEmpty) return;
     final doc = state.articleDocument;
-    final nextNodes = doc.nodes.map((node) {
+    var nextNodes = doc.nodes.map((node) {
       if (node.id == id) return node.copyWith(imageLayout: layout);
       return node;
     }).toList(growable: false);
+    if (layout == 'wrapLeft' || layout == 'wrapRight') {
+      final mutation = _ensureArticleWrapNodeGroupInNodes(nextNodes, id);
+      if (mutation != null) {
+        nextNodes = mutation.nodes;
+      }
+    }
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
-      nodesAreSourceOfTruth: true,
     );
   }
 
@@ -1294,8 +1335,15 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
       recordUndoPoint: false,
-      nodesAreSourceOfTruth: true,
     );
+  }
+
+  /// 提交一次文本编辑 undo 点。
+  ///
+  /// 由 Widget 层在输入间歇（防抖）或焦点离开时调用，
+  /// 解决 [updateArticleNodeText] / [updateArticleNodeCaption] 逐字不记录 undo 的问题。
+  void commitArticleTextEdit() {
+    _recordUndoPointBeforeMutation();
   }
 
   /// 移除指定 figure node。
@@ -1307,7 +1355,38 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
         doc.nodes.where((node) => node.id != id).toList(growable: false);
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
-      nodesAreSourceOfTruth: true,
+    );
+  }
+
+  /// 切换指定文本 node 的类型（段落 / H2 / H3 / 有序列表 / 无序列表）。
+  void updateArticleNodeType(String nodeId, ArticleDocumentNodeType type) {
+    final id = nodeId.trim();
+    if (id.isEmpty) return;
+    final doc = state.articleDocument;
+    final node = doc.nodes.firstWhere(
+      (n) => n.id == id,
+      orElse: () => const ArticleDocumentNode(
+        id: '',
+        type: ArticleDocumentNodeType.paragraph,
+      ),
+    );
+    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    if (node.type == type) return;
+    final newId = _nextArticleTextNodeId(type);
+    final nextNodes = doc.nodes.map((n) {
+      if (n.id != id) return n;
+      return ArticleDocumentNode(
+        id: newId,
+        type: type,
+        text: n.text,
+        textAlign: n.textAlign,
+        listDepth: n.listDepth,
+        spans: n.spans,
+      );
+    }).toList(growable: false);
+    _applyArticleDocument(
+      doc.copyWith(nodes: nextNodes),
+      activeBlockId: newId,
     );
   }
 
@@ -1333,18 +1412,143 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     }).toList(growable: false);
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
-      nodesAreSourceOfTruth: true,
     );
+  }
+
+  /// 在指定文本 node 的 [start, end) 范围内 toggle 行内样式。
+  ///
+  /// 传入的 bool 参数为 `true` 表示开启，`false` 表示关闭，`null` 表示不变。
+  /// 如果范围内该样式已全部开启，则关闭；否则开启（toggle 语义）。
+  void toggleArticleInlineStyle(
+    String nodeId,
+    int start,
+    int end, {
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    bool? strikethrough,
+  }) {
+    final id = nodeId.trim();
+    if (id.isEmpty || start >= end) return;
+    final doc = state.articleDocument;
+    final node = doc.nodes.firstWhere(
+      (n) => n.id == id,
+      orElse: () => const ArticleDocumentNode(
+        id: '',
+        type: ArticleDocumentNodeType.paragraph,
+      ),
+    );
+    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    final clampedStart = start.clamp(0, node.text.length);
+    final clampedEnd = end.clamp(clampedStart, node.text.length);
+    if (clampedStart >= clampedEnd) return;
+
+    final nextSpans = _toggleSpansInRange(
+      node.spans,
+      clampedStart,
+      clampedEnd,
+      bold: bold,
+      italic: italic,
+      underline: underline,
+      strikethrough: strikethrough,
+    );
+    final nextNodes = doc.nodes.map((n) {
+      if (n.id != id) return n;
+      return n.copyWith(spans: nextSpans);
+    }).toList(growable: false);
+    _applyArticleDocument(
+      doc.copyWith(nodes: nextNodes),
+    );
+  }
+
+  /// 合并/拆分 spans 以在 [start, end) 范围内 toggle 指定样式。
+  static List<ArticleInlineSpan> _toggleSpansInRange(
+    List<ArticleInlineSpan> existing,
+    int start,
+    int end, {
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    bool? strikethrough,
+  }) {
+    // 构建逐字符样式数组
+    final maxOffset = existing.fold<int>(
+      end,
+      (prev, span) => span.end > prev ? span.end : prev,
+    );
+    final bolds = List<bool>.filled(maxOffset, false);
+    final italics = List<bool>.filled(maxOffset, false);
+    final underlines = List<bool>.filled(maxOffset, false);
+    final strikethroughs = List<bool>.filled(maxOffset, false);
+    for (final span in existing) {
+      for (var i = span.start; i < span.end && i < maxOffset; i++) {
+        if (span.bold) bolds[i] = true;
+        if (span.italic) italics[i] = true;
+        if (span.underline) underlines[i] = true;
+        if (span.strikethrough) strikethroughs[i] = true;
+      }
+    }
+    // 在 [start, end) 范围内 toggle
+    if (bold != null) {
+      for (var i = start; i < end; i++) {
+        bolds[i] = bold;
+      }
+    }
+    if (italic != null) {
+      for (var i = start; i < end; i++) {
+        italics[i] = italic;
+      }
+    }
+    if (underline != null) {
+      for (var i = start; i < end; i++) {
+        underlines[i] = underline;
+      }
+    }
+    if (strikethrough != null) {
+      for (var i = start; i < end; i++) {
+        strikethroughs[i] = strikethrough;
+      }
+    }
+    // 从逐字符数组重建 spans（合并相邻同样式区间）
+    final result = <ArticleInlineSpan>[];
+    var i = 0;
+    while (i < maxOffset) {
+      final b = bolds[i];
+      final it = italics[i];
+      final u = underlines[i];
+      final s = strikethroughs[i];
+      if (!b && !it && !u && !s) {
+        i++;
+        continue;
+      }
+      final spanStart = i;
+      while (i < maxOffset &&
+          bolds[i] == b &&
+          italics[i] == it &&
+          underlines[i] == u &&
+          strikethroughs[i] == s) {
+        i++;
+      }
+      result.add(ArticleInlineSpan(
+        start: spanStart,
+        end: i,
+        bold: b,
+        italic: it,
+        underline: u,
+        strikethrough: s,
+      ));
+    }
+    return result;
   }
 
   /// 在指定 node 之后插入一个空文本 node。
   /// 在指定 node 之后插入一个空段落。返回新 node 的 id。
   String insertTextNodeAfter(String afterNodeId, {String initialText = ''}) {
-    final id = afterNodeId.trim();
-    if (id.isEmpty) return '';
     final doc = state.articleDocument;
-    final index = doc.nodes.indexWhere((n) => n.id == id);
-    if (index < 0) return '';
+    final insertIndex = _resolveNodeInsertionIndex(
+      doc.nodes,
+      afterNodeId: afterNodeId,
+    );
     _articleBlockSeed += 1;
     final newNodeId = 'paragraph_$_articleBlockSeed';
     final newNode = ArticleDocumentNode(
@@ -1353,67 +1557,83 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       text: initialText,
     );
     final nextNodes = List<ArticleDocumentNode>.from(doc.nodes)
-      ..insert(index + 1, newNode);
+      ..insert(insertIndex, newNode);
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
-      nodesAreSourceOfTruth: true,
     );
     return newNodeId;
   }
 
-  /// 保证文档结构可编辑：每个 figure 前后都有 paragraph node。
-  void ensureEditableStructure() {
+  /// 在指定文本 node 的光标位置为插图腾出空间。
+  ///
+  /// 返回后续图片应插入到哪个锚点之后。
+  String prepareTextNodeForImageInsertion(String nodeId, int selectionOffset) {
+    final id = nodeId.trim();
+    if (id.isEmpty) {
+      return kArticleEditorStartAnchorId;
+    }
     final doc = state.articleDocument;
-    final nodes = doc.nodes;
-    if (nodes.isEmpty) return;
+    final index = doc.nodes.indexWhere((node) => node.id == id);
+    if (index < 0) {
+      return kArticleEditorStartAnchorId;
+    }
+    final node = doc.nodes[index];
+    if (node.isFigure || node.isDocumentTitle) {
+      return index > 0 ? doc.nodes[index - 1].id : kArticleEditorStartAnchorId;
+    }
 
-    final fixed = _ensureEditableNodes(nodes);
-    if (fixed.length != nodes.length) {
-      _applyArticleDocument(
-        doc.copyWith(nodes: fixed),
-        nodesAreSourceOfTruth: true,
+    final text = node.text;
+    final offset = selectionOffset.clamp(0, text.length);
+    if (offset <= 0) {
+      return index > 0 ? doc.nodes[index - 1].id : kArticleEditorStartAnchorId;
+    }
+    if (offset >= text.length) {
+      return node.id;
+    }
+
+    final leftText = text.substring(0, offset);
+    final rightText = text.substring(offset);
+    final keepLeft = leftText.trim().isNotEmpty;
+    final keepRight = rightText.trim().isNotEmpty;
+    final leftSpans = _sliceInlineSpans(node.spans, 0, offset);
+    final rightSpans = _sliceInlineSpans(node.spans, offset, text.length);
+    final nextNodes = List<ArticleDocumentNode>.from(doc.nodes)..removeAt(index);
+
+    var insertIndex = index;
+    var anchorId =
+        index > 0 ? doc.nodes[index - 1].id : kArticleEditorStartAnchorId;
+
+    if (keepLeft) {
+      nextNodes.insert(
+        insertIndex,
+        _cloneTextNode(
+          node,
+          id: node.id,
+          text: leftText,
+          spans: leftSpans,
+        ),
+      );
+      anchorId = node.id;
+      insertIndex += 1;
+    }
+
+    if (keepRight) {
+      final rightNodeId = keepLeft ? _nextArticleTextNodeId(node.type) : node.id;
+      nextNodes.insert(
+        insertIndex,
+        _cloneTextNode(
+          node,
+          id: rightNodeId,
+          text: rightText,
+          spans: rightSpans,
+        ),
       );
     }
-  }
 
-  /// 纯函数：在 figure 前后插入空 paragraph，返回修复后的 nodes。
-  List<ArticleDocumentNode> _ensureEditableNodes(
-    List<ArticleDocumentNode> nodes,
-  ) {
-    if (nodes.isEmpty) return nodes;
-
-    final result = <ArticleDocumentNode>[];
-
-    for (var i = 0; i < nodes.length; i++) {
-      final node = nodes[i];
-
-      if (node.isFigure) {
-        // 前一个 node 不是普通 paragraph → 插入空 paragraph
-        final prev = result.isNotEmpty ? result.last : null;
-        final needGapBefore =
-            prev == null || prev.isDocumentTitle || prev.isFigure;
-        if (needGapBefore) {
-          _articleBlockSeed += 1;
-          result.add(ArticleDocumentNode(
-            id: 'paragraph_$_articleBlockSeed',
-            type: ArticleDocumentNodeType.paragraph,
-          ));
-        }
-      }
-
-      result.add(node);
-    }
-
-    // 末尾如果是 figure，追加一个空 paragraph
-    if (result.isNotEmpty && result.last.isFigure) {
-      _articleBlockSeed += 1;
-      result.add(ArticleDocumentNode(
-        id: 'paragraph_$_articleBlockSeed',
-        type: ArticleDocumentNodeType.paragraph,
-      ));
-    }
-
-    return result;
+    _applyArticleDocument(
+      doc.copyWith(nodes: nextNodes),
+    );
+    return anchorId;
   }
 
   /// 在指定 node 之后插入一张图片（node 级操作）。
@@ -1430,26 +1650,182 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
     final doc = state.articleDocument;
     final nextNodes = List<ArticleDocumentNode>.from(doc.nodes);
-    if (afterNodeId != null && afterNodeId.trim().isNotEmpty) {
-      final index = nextNodes.indexWhere((n) => n.id == afterNodeId);
-      if (index >= 0) {
-        nextNodes.insert(index + 1, newNode);
-      } else {
-        nextNodes.add(newNode);
-      }
-    } else {
-      nextNodes.add(newNode);
-    }
+    final insertIndex = _resolveNodeInsertionIndex(
+      nextNodes,
+      afterNodeId: afterNodeId,
+    );
+    nextNodes.insert(insertIndex, newNode);
     _applyArticleDocument(
       doc.copyWith(nodes: nextNodes),
-      nodesAreSourceOfTruth: true,
     );
     return newNode.id;
+  }
+
+  int _resolveNodeInsertionIndex(
+    List<ArticleDocumentNode> nodes, {
+    String? afterNodeId,
+  }) {
+    final anchor = afterNodeId?.trim() ?? '';
+    if (anchor.isEmpty) {
+      return nodes.length;
+    }
+    if (anchor == kArticleEditorStartAnchorId) {
+      return 0;
+    }
+    final index = nodes.indexWhere((node) => node.id == anchor);
+    if (index < 0) {
+      return nodes.length;
+    }
+    return index + 1;
+  }
+
+  _WrapGroupMutationResult? _ensureArticleWrapNodeGroupInNodes(
+    List<ArticleDocumentNode> nodes,
+    String figureNodeId, {
+    int? splitOffset,
+  }) {
+    final figureId = figureNodeId.trim();
+    if (figureId.isEmpty) {
+      return null;
+    }
+    final figureIndex = nodes.indexWhere((node) => node.id == figureId);
+    if (figureIndex < 0) {
+      return null;
+    }
+    final figure = nodes[figureIndex];
+    if (!figure.isFigure || !figure.usesWrappedLayout) {
+      return null;
+    }
+
+    final nextNodes = List<ArticleDocumentNode>.from(nodes);
+    var changed = false;
+
+    ArticleDocumentNode? narrowParagraph;
+    ArticleDocumentNode? belowParagraph;
+    if (figureIndex + 1 < nextNodes.length &&
+        nextNodes[figureIndex + 1].type == ArticleDocumentNodeType.paragraph) {
+      narrowParagraph = nextNodes[figureIndex + 1];
+      if (figureIndex + 2 < nextNodes.length &&
+          nextNodes[figureIndex + 2].type == ArticleDocumentNodeType.paragraph) {
+        belowParagraph = nextNodes[figureIndex + 2];
+      }
+    }
+
+    if (narrowParagraph == null) {
+      changed = true;
+      final newNarrow = ArticleDocumentNode(
+        id: _nextArticleTextNodeId(ArticleDocumentNodeType.paragraph),
+        type: ArticleDocumentNodeType.paragraph,
+      );
+      nextNodes.insert(figureIndex + 1, newNarrow);
+      narrowParagraph = newNarrow;
+    }
+
+    if (belowParagraph == null) {
+      changed = true;
+      final rawSplitOffset = splitOffset;
+      final canSplitLegacyParagraph =
+          rawSplitOffset != null && narrowParagraph.text.isNotEmpty;
+      final clampedSplit = canSplitLegacyParagraph
+          ? rawSplitOffset!.clamp(0, narrowParagraph.text.length)
+          : narrowParagraph.text.length;
+      final leftText = canSplitLegacyParagraph
+          ? narrowParagraph.text.substring(0, clampedSplit)
+          : narrowParagraph.text;
+      final rightText = canSplitLegacyParagraph
+          ? narrowParagraph.text.substring(clampedSplit)
+          : '';
+      final leftSpans = canSplitLegacyParagraph
+          ? _sliceInlineSpans(narrowParagraph.spans, 0, clampedSplit)
+          : narrowParagraph.spans;
+      final rightSpans = canSplitLegacyParagraph
+          ? _sliceInlineSpans(
+              narrowParagraph.spans,
+              clampedSplit,
+              narrowParagraph.text.length,
+            )
+          : const <ArticleInlineSpan>[];
+      if (canSplitLegacyParagraph) {
+        nextNodes[figureIndex + 1] = narrowParagraph.copyWith(
+          text: leftText,
+          spans: leftSpans,
+        );
+        narrowParagraph = nextNodes[figureIndex + 1];
+      }
+      final newBelow = ArticleDocumentNode(
+        id: _nextArticleTextNodeId(ArticleDocumentNodeType.paragraph),
+        type: ArticleDocumentNodeType.paragraph,
+        text: rightText,
+        spans: rightSpans,
+      );
+      nextNodes.insert(figureIndex + 2, newBelow);
+      belowParagraph = newBelow;
+    }
+
+    return _WrapGroupMutationResult(
+      nodes: nextNodes,
+      changed: changed,
+    );
+  }
+
+  String _nextArticleTextNodeId(ArticleDocumentNodeType type) {
+    _articleBlockSeed += 1;
+    final prefix = switch (type) {
+      ArticleDocumentNodeType.orderedItem => 'ordered',
+      ArticleDocumentNodeType.bulletItem => 'bullet',
+      ArticleDocumentNodeType.headingMajor => 'heading_major',
+      ArticleDocumentNodeType.headingMinor => 'heading_minor',
+      _ => 'paragraph',
+    };
+    return '${prefix}_$_articleBlockSeed';
+  }
+
+  ArticleDocumentNode _cloneTextNode(
+    ArticleDocumentNode source, {
+    required String id,
+    required String text,
+    required List<ArticleInlineSpan> spans,
+  }) {
+    return ArticleDocumentNode(
+      id: id,
+      type: source.type,
+      text: text,
+      textAlign: source.textAlign,
+      listDepth: source.listDepth,
+      spans: spans,
+    );
+  }
+
+  List<ArticleInlineSpan> _sliceInlineSpans(
+    List<ArticleInlineSpan> spans,
+    int start,
+    int end,
+  ) {
+    final result = <ArticleInlineSpan>[];
+    for (final span in spans) {
+      final nextStart = math.max(span.start, start);
+      final nextEnd = math.min(span.end, end);
+      if (nextEnd <= nextStart) {
+        continue;
+      }
+      result.add(
+        ArticleInlineSpan(
+          start: nextStart - start,
+          end: nextEnd - start,
+          bold: span.bold,
+          italic: span.italic,
+          underline: span.underline,
+          strikethrough: span.strikethrough,
+        ),
+      );
+    }
+    return result;
   }
 
   /// 在上一页之后插入文内图。
   ///
   /// 图间可输入空位由 editor-only 邻接锚点提供，不再把占位换行写入 canonical body。
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertImageAfterNode')
   String insertArticleImageAfterPage(String? afterPageId, String imagePath) {
     final sanitized = imagePath.trim();
     if (sanitized.isEmpty) {
@@ -1479,6 +1855,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return landingPageId;
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertTextNodeAfter')
   String insertArticleParagraphAfterAsset(String assetId, {String text = ''}) {
     return _insertArticleParagraphRelativeToAsset(
       assetId,
@@ -1495,6 +1872,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertTextNodeAfter')
   String materializeArticleParagraphBeforeAsset(
     String assetId, {
     required String text,
@@ -1512,6 +1890,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     );
   }
 
+  @Deprecated('遗留 body/assets 路径，文章编辑请使用 insertTextNodeAfter')
   String materializeArticleParagraphAfterAsset(
     String assetId, {
     required String text,
@@ -1598,6 +1977,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleBlocks(blocks, activeBlockId: blockId);
   }
 
+  @Deprecated('遗留 block 路径，文章编辑请使用 insertImageAfterNode')
   void insertArticleImages(List<String> paths, {String? afterBlockId}) {
     final sanitized = paths
         .map((path) => path.trim())
@@ -1891,6 +2271,16 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
           draft.state.articleBlocks.first.id,
     );
   }
+}
+
+class _WrapGroupMutationResult {
+  const _WrapGroupMutationResult({
+    required this.nodes,
+    required this.changed,
+  });
+
+  final List<ArticleDocumentNode> nodes;
+  final bool changed;
 }
 
 final createEditorProvider =

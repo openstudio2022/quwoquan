@@ -121,6 +121,7 @@ class ArticleWrapLayoutData {
     required this.maxLinesBeside,
     required this.splitOffset,
     this.reserveCaptionPlaceholder = false,
+    this.textHalfLeading = 0,
   });
 
   final double imageWidth;
@@ -135,6 +136,10 @@ class ArticleWrapLayoutData {
   final int maxLinesBeside;
   final int splitOffset;
   final bool reserveCaptionPlaceholder;
+
+  /// 正文 half-leading = (lineHeight - fontSize) / 2。
+  /// 图片列需要加 Padding(top: textHalfLeading) 来与文字视觉顶部对齐。
+  final double textHalfLeading;
 
   double get figureHeight =>
       imageHeight + (captionHeight > 0 ? captionSpacing + captionHeight : 0);
@@ -297,6 +302,8 @@ class ArticleWrapLayoutInput {
     required this.bodyStyle,
     required this.captionText,
     required this.captionStyle,
+    this.leadingText,
+    this.trailingText,
     this.captionPlaceholderWhenEmpty = true,
     this.imageLayout = 'wrapLeft',
     this.metrics = const ArticleCanvasMetrics(
@@ -325,6 +332,8 @@ class ArticleWrapLayoutInput {
   final TextStyle bodyStyle;
   final String captionText;
   final TextStyle captionStyle;
+  final String? leadingText;
+  final String? trailingText;
   final bool captionPlaceholderWhenEmpty;
   final String imageLayout;
   final ArticleCanvasMetrics metrics;
@@ -385,15 +394,23 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
   ArticleWrapLayoutInput input,
 ) {
   final fullBody = input.body;
+  final hasExplicitSegments =
+      input.leadingText != null || input.trailingText != null;
+  var explicitLeading = input.leadingText ?? '';
+  var explicitTrailing = input.trailingText ?? '';
   final rowContentWidth = input.rowContentWidth;
   final gap = input.metrics.wrapImageGap;
   final imageWidth =
       input.metrics.wrapImageWidthForContent(rowContentWidth);
   final baseImageHeight =
       imageWidth / input.metrics.fullWidthImageAspectRatio;
-  final besideWidth =
-      (rowContentWidth - imageWidth - gap).clamp(120.0, rowContentWidth)
-          .toDouble();
+  const wrapBesideMinPreferred = 120.0;
+  final rawBesideWidth = rowContentWidth - imageWidth - gap;
+  // `clamp(lower, upper)` 要求 lower≤upper；窄版心（如排版缩略图 ~100pt）时不得用 min=120 且 max<120。
+  final besideWidth = (rowContentWidth < wrapBesideMinPreferred
+          ? rawBesideWidth.clamp(0.0, rowContentWidth)
+          : rawBesideWidth.clamp(wrapBesideMinPreferred, rowContentWidth))
+      .toDouble();
   final lineHeight =
       (input.bodyStyle.fontSize ?? AppTypography.base) *
       (input.bodyStyle.height ?? 1.0);
@@ -412,15 +429,25 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
     );
   }
 
-  var besideHeight = baseImageHeight + captionSpacing + captionHeight;
+  // 只有实际渲染 caption 时才计入 captionSpacing + captionHeight。
+  // 无配文且不需要 placeholder 时，imageColumn 不包含 caption，
+  // besideHeight 不应加 captionSpacing。
+  final hasCaption =
+      input.captionText.trim().isNotEmpty || reserveCaptionPlaceholder;
+  final effectiveCaptionSpacing = hasCaption ? captionSpacing : 0.0;
+  final effectiveCaptionHeight = hasCaption ? captionHeight : 0.0;
+
+  var besideHeight =
+      baseImageHeight + effectiveCaptionSpacing + effectiveCaptionHeight;
   var maxLines = (besideHeight / lineHeight).ceil().clamp(2, 24);
-  var split = resolveWrappedSplitIndex(
+  var split = hasExplicitSegments ? explicitLeading.length : resolveWrappedSplitIndex(
     text: fullBody,
     sideWidth: besideWidth,
     style: input.bodyStyle,
     maxLines: maxLines,
   );
-  var leading = fullBody.substring(0, split);
+  var leading =
+      hasExplicitSegments ? explicitLeading : fullBody.substring(0, split);
   var leadingHeight = measureArticleTextHeight(
     leading,
     input.bodyStyle,
@@ -431,24 +458,35 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
     besideHeight,
     math.max(leadingHeight, minLineAlignedBesideHeight),
   );
-  var displayImageHeight = besideHeight - captionSpacing - captionHeight;
+
+  final fontSize = input.bodyStyle.fontSize ?? AppTypography.base;
+  final textHalfLeading = (lineHeight - fontSize) / 2;
+
+  // displayImageHeight = besideHeight - 2*halfLeading - caption
+  // 因为编辑器会给图片加 Padding(top: halfLeading)，
+  // 图片列总高度 = halfLeading + displayImageHeight + captionSpacing + captionHeight
+  // 这个总高度应该 = besideHeight - halfLeading（最后一行底部 leading 不需要图片覆盖）
+  // 所以 displayImageHeight = besideHeight - 2*halfLeading - captionSpacing - captionHeight
+  var displayImageHeight =
+      besideHeight - 2 * textHalfLeading - effectiveCaptionSpacing - effectiveCaptionHeight;
   displayImageHeight = displayImageHeight.clamp(
     baseImageHeight * 0.88,
     baseImageHeight * 2.35,
   );
+  // 回算 besideHeight，确保 = halfLeading + displayImageHeight + caption + halfLeading
   besideHeight = math.max(
-    displayImageHeight + captionSpacing + captionHeight,
+    displayImageHeight + 2 * textHalfLeading + effectiveCaptionSpacing + effectiveCaptionHeight,
     math.max(leadingHeight, minLineAlignedBesideHeight),
   );
 
   maxLines = (besideHeight / lineHeight).ceil().clamp(2, 24);
-  split = resolveWrappedSplitIndex(
+  split = hasExplicitSegments ? explicitLeading.length : resolveWrappedSplitIndex(
     text: fullBody,
     sideWidth: besideWidth,
     style: input.bodyStyle,
     maxLines: maxLines,
   );
-  leading = fullBody.substring(0, split);
+  leading = hasExplicitSegments ? explicitLeading : fullBody.substring(0, split);
   leadingHeight = measureArticleTextHeight(
     leading,
     input.bodyStyle,
@@ -458,22 +496,23 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
     besideHeight,
     math.max(leadingHeight, maxLines * lineHeight),
   );
-  displayImageHeight = (besideHeight - captionSpacing - captionHeight).clamp(
+  displayImageHeight = (besideHeight - 2 * textHalfLeading - effectiveCaptionSpacing - effectiveCaptionHeight).clamp(
     baseImageHeight * 0.88,
     baseImageHeight * 2.35,
   );
   besideHeight = math.max(
-    displayImageHeight + captionSpacing + captionHeight,
+    displayImageHeight + 2 * textHalfLeading + effectiveCaptionSpacing + effectiveCaptionHeight,
     math.max(leadingHeight, maxLines * lineHeight),
   );
-  final trailing = fullBody.substring(split);
+  final trailing =
+      hasExplicitSegments ? explicitTrailing : fullBody.substring(split);
 
   return ArticleWrapLayoutResult(
     layout: ArticleWrapLayoutData(
       imageWidth: imageWidth,
       imageHeight: displayImageHeight,
-      captionHeight: captionHeight,
-      captionSpacing: captionSpacing,
+      captionHeight: effectiveCaptionHeight,
+      captionSpacing: effectiveCaptionSpacing,
       besideWidth: besideWidth,
       besideHeight: besideHeight,
       sideGap: gap,
@@ -482,6 +521,7 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
       maxLinesBeside: maxLines,
       splitOffset: split,
       reserveCaptionPlaceholder: reserveCaptionPlaceholder,
+      textHalfLeading: textHalfLeading,
     ),
     leadingText: leading,
     trailingText: trailing,

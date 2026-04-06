@@ -4,10 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 
 class ArticleReaderMetricNames {
+  /// 阅读器打开耗时（区分 hydration 问题）。
   static const String readerOpenMs = 'article_reader_open_ms';
+
+  /// 文档水合耗时（区分 hydration 问题）。
   static const String hydrationMs = 'article_reader_hydration_ms';
+
+  /// 翻页完成耗时（区分 page_curl 问题，含 direction: forward/backward）。
   static const String pageFlipCommitMs = 'article_page_flip_commit_ms';
+
+  /// 翻页中止率（区分 page_curl abort，含 direction: forward/backward）。
   static const String pageCurlAbortRate = 'article_page_curl_abort_rate';
+
+  /// 降级率（区分 fallback 问题，reason 含 long_document / forced_degraded_pager /
+  /// page_curl_disabled / accessibility_disable_animations）。
   static const String readerFallbackRate = 'article_reader_fallback_rate';
 
   const ArticleReaderMetricNames._();
@@ -91,6 +101,7 @@ class ArticleReaderObservability {
     required String postId,
     required String corner,
     required double progress,
+    required String direction,
   }) {
     _track(
       eventName: ArticleReaderMetricNames.pageCurlAbortRate,
@@ -98,6 +109,7 @@ class ArticleReaderObservability {
         'postId': postId,
         'corner': corner,
         'progress': progress,
+        'direction': direction,
       },
     );
   }

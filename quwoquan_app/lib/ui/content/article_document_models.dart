@@ -147,6 +147,93 @@ class ArticleDocumentNode {
   }
 }
 
+@immutable
+class ArticleWrapNodeGroup {
+  const ArticleWrapNodeGroup({
+    required this.figureIndex,
+    required this.figure,
+    this.narrowParagraph,
+    this.belowParagraph,
+  });
+
+  final int figureIndex;
+  final ArticleDocumentNode figure;
+  final ArticleDocumentNode? narrowParagraph;
+  final ArticleDocumentNode? belowParagraph;
+
+  String get assetId =>
+      figure.assetId.trim().isNotEmpty ? figure.assetId : figure.id;
+  String get narrowText => narrowParagraph?.text ?? '';
+  String get belowText => belowParagraph?.text ?? '';
+  String get combinedText => '$narrowText$belowText';
+  bool get hasBothParagraphs =>
+      narrowParagraph != null && belowParagraph != null;
+  Set<String> get paragraphNodeIds => <String>{
+    if (narrowParagraph != null && narrowParagraph!.id.trim().isNotEmpty)
+      narrowParagraph!.id,
+    if (belowParagraph != null && belowParagraph!.id.trim().isNotEmpty)
+      belowParagraph!.id,
+  };
+}
+
+List<ArticleWrapNodeGroup> resolveArticleWrapNodeGroups(
+  List<ArticleDocumentNode> nodes,
+) {
+  final groups = <ArticleWrapNodeGroup>[];
+  for (var index = 0; index < nodes.length; index += 1) {
+    final node = nodes[index];
+    if (!node.isFigure || !node.usesWrappedLayout) {
+      continue;
+    }
+    ArticleDocumentNode? narrowParagraph;
+    ArticleDocumentNode? belowParagraph;
+    if (index + 1 < nodes.length && _isWrapParagraphCandidate(nodes[index + 1])) {
+      narrowParagraph = nodes[index + 1];
+      if (index + 2 < nodes.length &&
+          _isWrapParagraphCandidate(nodes[index + 2])) {
+        belowParagraph = nodes[index + 2];
+      }
+    }
+    groups.add(
+      ArticleWrapNodeGroup(
+        figureIndex: index,
+        figure: node,
+        narrowParagraph: narrowParagraph,
+        belowParagraph: belowParagraph,
+      ),
+    );
+  }
+  return groups;
+}
+
+ArticleWrapNodeGroup? resolveArticleWrapNodeGroupByFigureId(
+  List<ArticleDocumentNode> nodes,
+  String figureNodeId,
+) {
+  final targetId = figureNodeId.trim();
+  if (targetId.isEmpty) {
+    return null;
+  }
+  for (final group in resolveArticleWrapNodeGroups(nodes)) {
+    if (group.figure.id == targetId) {
+      return group;
+    }
+  }
+  return null;
+}
+
+Map<String, ArticleWrapNodeGroup> buildArticleWrapNodeGroupsByAssetId(
+  List<ArticleDocumentNode> nodes,
+) {
+  return <String, ArticleWrapNodeGroup>{
+    for (final group in resolveArticleWrapNodeGroups(nodes)) group.assetId: group,
+  };
+}
+
+bool _isWrapParagraphCandidate(ArticleDocumentNode node) {
+  return node.type == ArticleDocumentNodeType.paragraph;
+}
+
 /// 行内样式 span（与 contracts/metadata/content/post/article_document_schema.yaml 对齐）
 @immutable
 class ArticleInlineSpan {
@@ -363,6 +450,13 @@ class ArticleDocumentAsset {
 
 @immutable
 class ArticleDocumentData {
+  /// 文章文档数据。
+  ///
+  /// [nodes] 是唯一编辑真相源。当 [nodes] 非空时，[title]、[body]、[assets]、
+  /// [blocks] 均从 [nodes] 自动投影派生，外部传入的同名参数会被忽略。
+  ///
+  /// 当 [nodes] 为空时（兼容旧格式反序列化），会从 [title]、[body]、[assets]、
+  /// [blocks] 反向构建 [nodes]。新代码应始终传入 [nodes]。
   ArticleDocumentData({
     List<ArticleDocumentNode> nodes = const <ArticleDocumentNode>[],
     this.template = 'gentle',
@@ -373,8 +467,7 @@ class ArticleDocumentData {
     String body = '',
     List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
     List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
-  })  : _rawBody = body,
-        nodes = nodes.isNotEmpty
+  }) : nodes = nodes.isNotEmpty
             ? _normalizeDocumentNodes(nodes)
             : _buildDocumentNodesFromLegacy(
                 title: title,
@@ -395,7 +488,10 @@ class ArticleDocumentData {
         .where(
           (node) =>
               node.id.trim().isNotEmpty &&
-              (node.hasText || node.hasImage || node.isDocumentTitle),
+              (node.hasText ||
+                  node.hasImage ||
+                  node.isDocumentTitle ||
+                  node.type == ArticleDocumentNodeType.paragraph),
         )
         .toList(growable: false);
     final assets = ((map['assets'] as List?) ?? const <dynamic>[])
@@ -457,8 +553,7 @@ class ArticleDocumentData {
     List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
     List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
     bool useFullBlockSequence = false,
-  })  : _rawBody = body,
-        nodes = nodes.isNotEmpty
+  }) : nodes = nodes.isNotEmpty
             ? _normalizeDocumentNodes(nodes)
             : _buildDocumentNodesFromLegacy(
                 title: title,
@@ -473,18 +568,19 @@ class ArticleDocumentData {
   final String fontPreset;
   final String coverImageUrl;
   final ArticleDocumentTitleStyle titleStyle;
-  final String _rawBody;
 
+  /// 从 [nodes] 自动投影的只读属性。不要用这些值反向驱动编辑。
   late final _ArticleDocumentProjection _projection = _projectArticleDocument(
     nodes,
   );
 
+  /// 只读投影：文档标题（从 nodes 中 documentTitle 节点派生）。
   String get title => _projection.title;
-  /// 优先返回原始 body 文本（用于摘要/description），回退到从 nodes 提取的 body。
-  String get body =>
-      _rawBody.trim().isNotEmpty ? _rawBody.trim() : _projection.body;
+  /// 只读投影：正文纯文本（从 nodes 中正文类节点按行拼接，不含图片语义）。
+  String get body => _projection.body;
+  /// 只读投影：图片资产列表（从 nodes 中 figure 节点派生）。
   List<ArticleDocumentAsset> get assets => _projection.assets;
-  /// 仅含 heading/sectionTitle/image 类型（供外部结构查询）。
+  /// 只读投影：仅含 heading/sectionTitle/image 类型（供外部结构查询）。
   List<ArticleDocumentBlock> get blocks => _projection.blocks;
   /// 含所有类型（包括 paragraph），供内容块投射使用。
   List<ArticleDocumentBlock> get contentBlocks => _projection.allBlocks;
@@ -499,6 +595,13 @@ class ArticleDocumentData {
   bool get hasStructuredTextBlocks => nodes.any((node) => node.isHeading);
   bool get isEmpty => nodes.isEmpty && coverImageUrl.trim().isEmpty;
 
+  /// 复制并修改文档。
+  ///
+  /// 当显式传入 [nodes] 时，[title]、[body]、[assets]、[blocks] 参数会被忽略，
+  /// 因为它们会从 [nodes] 自动投影。
+  ///
+  /// 当未传入 [nodes] 但传入了 [body]/[assets]/[blocks] 时，会从这些参数反向
+  /// 构建 nodes（兼容旧路径，已标记 @Deprecated 的方法仍依赖此行为）。
   ArticleDocumentData copyWith({
     List<ArticleDocumentNode>? nodes,
     String? template,
@@ -513,12 +616,14 @@ class ArticleDocumentData {
     final nextNodes =
         nodes ??
         ((title != null || body != null || assets != null || blocks != null)
-            ? _buildDocumentNodesFromLegacy(
-                title: title ?? this.title,
-                body: body ?? this.body,
-                assets: assets ?? this.assets,
-                blocks: blocks ?? this.blocks,
-              )
+            ? (body != null || assets != null || blocks != null
+                ? _buildDocumentNodesFromLegacy(
+                    title: title ?? this.title,
+                    body: body ?? this.body,
+                    assets: assets ?? this.assets,
+                    blocks: blocks ?? this.blocks,
+                  )
+                : _replaceDocumentTitleNode(this.nodes, title ?? this.title))
             : this.nodes);
     return ArticleDocumentData(
       nodes: nextNodes,
@@ -605,7 +710,10 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
       .where(
         (node) =>
             node.id.trim().isNotEmpty &&
-            (node.hasText || node.hasImage || node.isDocumentTitle),
+            (node.hasText ||
+                node.hasImage ||
+                node.isDocumentTitle ||
+                node.type == ArticleDocumentNodeType.paragraph),
       )
       .map(
         (node) => node.copyWith(
@@ -939,13 +1047,17 @@ _ArticleDocumentProjection _projectArticleDocument(
   final blocks = <ArticleDocumentBlock>[];
   final allBlocks = <ArticleDocumentBlock>[];
   var orderedIndex = 0;
+  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(nodes)
+      .map((group) => group.belowParagraph?.id)
+      .whereType<String>()
+      .toSet();
 
-  void appendBodyLine(String line) {
+  void appendBodyText(String line, {bool separateLine = true}) {
     final normalized = line.trim();
     if (normalized.isEmpty) {
       return;
     }
-    if (bodyBuffer.isNotEmpty) {
+    if (separateLine && bodyBuffer.isNotEmpty) {
       bodyBuffer.write('\n');
     }
     bodyBuffer.write(normalized);
@@ -1004,15 +1116,20 @@ _ArticleDocumentProjection _projectArticleDocument(
             ),
           );
         }
-        appendBodyLine(node.text);
+        appendBodyText(
+          node.text,
+          separateLine: !joinedWrapBelowParagraphIds.contains(node.id),
+        );
         break;
       case ArticleDocumentNodeType.orderedItem:
         orderedIndex += 1;
-        appendBodyLine('$orderedIndex. ${node.text.trim()}');
+        appendBodyText('$orderedIndex. ${node.text.trim()}');
         break;
       case ArticleDocumentNodeType.bulletItem:
         orderedIndex = 0;
-        appendBodyLine(node.text.trim().isEmpty ? '' : '• ${node.text.trim()}');
+        appendBodyText(
+          node.text.trim().isEmpty ? '' : '• ${node.text.trim()}',
+        );
         break;
       case ArticleDocumentNodeType.figure:
         orderedIndex = 0;
@@ -1050,4 +1167,26 @@ _ArticleDocumentProjection _projectArticleDocument(
     blocks: blocks,
     allBlocks: allBlocks,
   );
+}
+
+List<ArticleDocumentNode> _replaceDocumentTitleNode(
+  List<ArticleDocumentNode> nodes,
+  String title,
+) {
+  final normalizedTitle = _normalizeArticleText(title).trim();
+  final nextNodes = nodes
+      .where((node) => !node.isDocumentTitle)
+      .toList(growable: true);
+  if (normalizedTitle.isEmpty) {
+    return nextNodes;
+  }
+  nextNodes.insert(
+    0,
+    ArticleDocumentNode(
+      id: 'document_title',
+      type: ArticleDocumentNodeType.documentTitle,
+      text: normalizedTitle,
+    ),
+  );
+  return nextNodes;
 }

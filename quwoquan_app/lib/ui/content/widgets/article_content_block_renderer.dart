@@ -187,6 +187,8 @@ class ArticleContentBlockRenderer extends StatelessWidget {
           'wrapped_paragraph' => ArticleWrappedParagraph(
             imageUrl: block.imageUrl ?? '',
             body: block.body,
+            leadingText: block.leadingText,
+            trailingText: block.trailingText,
             imageLayout: block.imageLayout,
             caption: block.caption ?? '',
           ),
@@ -286,6 +288,8 @@ class ArticleWrappedParagraph extends StatelessWidget {
     super.key,
     required this.imageUrl,
     required this.body,
+    this.leadingText = '',
+    this.trailingText = '',
     required this.imageLayout,
     this.caption = '',
     this.metrics,
@@ -293,6 +297,8 @@ class ArticleWrappedParagraph extends StatelessWidget {
 
   final String imageUrl;
   final String body;
+  final String leadingText;
+  final String trailingText;
   final String imageLayout;
   final String caption;
   final ArticleCanvasMetrics? metrics;
@@ -315,6 +321,8 @@ class ArticleWrappedParagraph extends StatelessWidget {
         final wrap = resolveArticleWrapLayout(
           ArticleWrapLayoutInput(
             body: body,
+            leadingText: leadingText.isEmpty ? null : leadingText,
+            trailingText: trailingText.isEmpty ? null : trailingText,
             rowContentWidth: constraints.maxWidth,
             bodyStyle: textStyle,
             captionText: caption,
@@ -330,25 +338,31 @@ class ArticleWrappedParagraph extends StatelessWidget {
             style: textStyle,
           ),
         );
-        final image = SizedBox(
-          width: wrap.layout.imageWidth,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SizedBox(
-                width: wrap.layout.imageWidth,
-                height: wrap.layout.imageHeight,
-                child: ArticleAdaptiveImage(imageUrl: imageUrl),
-              ),
-              if (caption.trim().isNotEmpty) ...<Widget>[
-                SizedBox(height: wrap.layout.captionSpacing),
-                Text(
-                  caption.trim(),
-                  textAlign: TextAlign.center,
-                  style: captionStyle,
+        // Padding(top: halfLeading) 让图片视觉顶部与文字视觉顶部对齐。
+        // Text widget 的第一行文字有 halfLeading 的顶部空白，
+        // 图片需要同样的偏移才能视觉对齐。
+        final image = Padding(
+          padding: EdgeInsets.only(top: wrap.layout.textHalfLeading),
+          child: SizedBox(
+            width: wrap.layout.imageWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(
+                  width: wrap.layout.imageWidth,
+                  height: wrap.layout.imageHeight,
+                  child: ArticleAdaptiveImage(imageUrl: imageUrl),
                 ),
+                if (caption.trim().isNotEmpty) ...<Widget>[
+                  SizedBox(height: wrap.layout.captionSpacing),
+                  Text(
+                    caption.trim(),
+                    textAlign: TextAlign.center,
+                    style: captionStyle,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         );
         final rowChildren = imageLayout == 'wrapRight'

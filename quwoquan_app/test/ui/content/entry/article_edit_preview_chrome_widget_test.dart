@@ -98,14 +98,29 @@ void main() {
               onTitleChanged: (_) {},
               onTitleStyleChanged: (_) {},
               onUpdateNodeText: (String nodeId, String value) {},
+              onUpdateWrapParagraphTexts: (
+                String figureNodeId,
+                String narrowText,
+                String belowText,
+              ) {},
               onUpdateNodeImageLayout: (String nodeId, String layout) {},
               onUpdateNodeCaption: (String nodeId, String caption) {},
               onEditNodeImage: (String nodeId) async {},
               onRemoveNodeImage: (String nodeId) {},
               onInsertImageAfter: (String? afterNodeId) async {},
+              onInsertImageAtSelection: (
+                String nodeId,
+                int selectionOffset,
+              ) async {},
               onActiveBlockChanged: (String? id) {},
               onInsertTextNodeAfter: (String afterNodeId, {String initialText = ''}) {
                 return '';
+              },
+              onEnsureWrapNodeGroup: (
+                String figureNodeId, {
+                int? splitOffset,
+              }) {
+                return null;
               },
             ),
           ),

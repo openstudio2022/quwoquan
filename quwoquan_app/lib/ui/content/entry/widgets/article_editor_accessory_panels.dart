@@ -1,21 +1,24 @@
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons, TextDirection, TextPainter, TextSpan, TextStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/article_theme.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
-import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
-enum ArticleEditorAccessoryPanelType { none, emoji, style, list, typography }
+enum ArticleEditorAccessoryPanelType { none, emoji, style }
 
 enum ArticleEditorStructureAction {
   titleNone,
   titleMajor,
   titleMinor,
+  headingMajor,
+  headingMinor,
+  paragraph,
   orderedList,
   bulletList,
+  blockquote,
 }
 
 class ArticleEditorAccessoryHost extends StatelessWidget {
@@ -23,55 +26,49 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
     super.key,
     required this.panelType,
     required this.panelHeight,
-    required this.template,
-    required this.paperTexture,
-    required this.fontPreset,
-    required this.coverImagePaths,
-    required this.selectedCoverPath,
     required this.onImageTap,
     required this.onEmojiTap,
     required this.onStyleTap,
-    required this.onListTap,
-    required this.onTypographyTap,
     required this.onUndo,
     required this.onRedo,
     required this.canUndo,
     required this.canRedo,
     required this.onEmojiSelected,
     required this.onStructureActionSelected,
-    required this.onCoverSelected,
-    required this.onTemplateSelected,
-    required this.onPaperTextureSelected,
-    required this.onFontSelected,
     this.activeStructureAction,
     this.showTopHairline = true,
+    this.onToggleBold,
+    this.onToggleItalic,
+    this.onToggleUnderline,
+    this.isBoldActive = false,
+    this.isItalicActive = false,
+    this.isUnderlineActive = false,
+    this.activeAlignment = 'left',
+    this.onAlignmentSelected,
   });
 
   final ArticleEditorAccessoryPanelType panelType;
   final double panelHeight;
-  final ArticleTemplatePreset template;
-  final ArticlePaperTexture paperTexture;
-  final ArticleFontPreset fontPreset;
-  final List<String> coverImagePaths;
-  final String selectedCoverPath;
   final VoidCallback onImageTap;
   final VoidCallback onEmojiTap;
   final VoidCallback onStyleTap;
-  final VoidCallback onListTap;
-  final VoidCallback onTypographyTap;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final bool canUndo;
   final bool canRedo;
   final ValueChanged<String> onEmojiSelected;
   final ValueChanged<ArticleEditorStructureAction> onStructureActionSelected;
-  final ValueChanged<String?> onCoverSelected;
-  final ValueChanged<ArticleTemplatePreset> onTemplateSelected;
-  final ValueChanged<ArticlePaperTexture> onPaperTextureSelected;
-  final ValueChanged<ArticleFontPreset> onFontSelected;
   final ArticleEditorStructureAction? activeStructureAction;
   /// 为 `false` 时不画上边框，便于与紧贴在上方的条（如文内图工具栏）共用一条分割线。
   final bool showTopHairline;
+  final VoidCallback? onToggleBold;
+  final VoidCallback? onToggleItalic;
+  final VoidCallback? onToggleUnderline;
+  final bool isBoldActive;
+  final bool isItalicActive;
+  final bool isUnderlineActive;
+  final String activeAlignment;
+  final ValueChanged<String>? onAlignmentSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +78,12 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
     final divider = CupertinoColors.separator
         .resolveFrom(context)
         .withValues(alpha: 0.3);
+    // 键盘弹起时 viewInsets.bottom > 0，此时系统已处理安全区；
+    // 面板展开或键盘收起时需要手动补底部安全区（同底部导航栏处理方式）。
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final bottomInset = keyboardVisible
+        ? 0.0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -102,95 +105,80 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                 constraints: const BoxConstraints(
                   maxWidth: AppSpacing.feedMaxContentWidth,
                 ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerSm,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      ArticleEditorAccessoryButton(
-                        buttonKey: TestKeys.createMediaAddButton,
-                        glyph: ArticleEditorAccessoryGlyph.image,
-                        semanticLabel: '图片',
-                        onPressed: onImageTap,
-                      ),
-                      ArticleEditorAccessoryButton(
-                        buttonKey: TestKeys.createAccessoryEmojiButton,
-                        glyph: panelType == ArticleEditorAccessoryPanelType.emoji
-                            ? ArticleEditorAccessoryGlyph.keyboard
-                            : ArticleEditorAccessoryGlyph.emoji,
-                        semanticLabel:
-                            panelType == ArticleEditorAccessoryPanelType.emoji
-                            ? '键盘'
-                            : '表情',
-                        onPressed: onEmojiTap,
-                        selected:
-                            panelType == ArticleEditorAccessoryPanelType.emoji,
-                      ),
-                      ArticleEditorAccessoryButton(
-                        buttonKey: TestKeys.createAccessoryStructureButton,
-                        glyph: panelType == ArticleEditorAccessoryPanelType.style
-                            ? ArticleEditorAccessoryGlyph.keyboard
-                            : ArticleEditorAccessoryGlyph.style,
-                        semanticLabel:
-                            panelType == ArticleEditorAccessoryPanelType.style
-                            ? '键盘'
-                            : '样式',
-                        onPressed: onStyleTap,
-                        selected:
-                            panelType == ArticleEditorAccessoryPanelType.style,
-                      ),
-                      ArticleEditorAccessoryButton(
-                        buttonKey: TestKeys.createAccessoryTemplateButton,
-                        glyph: panelType == ArticleEditorAccessoryPanelType.list
-                            ? ArticleEditorAccessoryGlyph.keyboard
-                            : ArticleEditorAccessoryGlyph.list,
-                        semanticLabel:
-                            panelType == ArticleEditorAccessoryPanelType.list
-                            ? '键盘'
-                            : '序号',
-                        onPressed: onListTap,
-                        selected:
-                            panelType == ArticleEditorAccessoryPanelType.list,
-                      ),
-                      ArticleEditorAccessoryButton(
-                        buttonKey: TestKeys.createAccessoryFontButton,
-                        glyph: panelType ==
-                                ArticleEditorAccessoryPanelType.typography
-                            ? ArticleEditorAccessoryGlyph.keyboard
-                            : ArticleEditorAccessoryGlyph.typography,
-                        semanticLabel: panelType ==
-                                ArticleEditorAccessoryPanelType.typography
-                            ? '键盘'
-                            : '排版',
-                        onPressed: onTypographyTap,
-                        selected: panelType ==
-                            ArticleEditorAccessoryPanelType.typography,
-                      ),
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.intraGroupXs,
+                // 工具栏：固定 5 个 44 触控区 + 竖线；剩余宽度均分为 7 段（左缘、5 处
+                // 相邻间隔、右缘），与下方样式面板同宽（feedMaxContentWidth），左右对称。
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const fixedToolbarWidth =
+                        5 * AppSpacing.minInteractiveSize + AppSpacing.hairline;
+                    final maxW = constraints.maxWidth;
+                    final gap = maxW > fixedToolbarWidth
+                        ? (maxW - fixedToolbarWidth) / 7.0
+                        : 0.0;
+                    Widget gapBox() => SizedBox(width: gap);
+                    return Row(
+                      children: <Widget>[
+                        gapBox(),
+                        ArticleEditorAccessoryButton(
+                          buttonKey: TestKeys.createMediaAddButton,
+                          glyph: ArticleEditorAccessoryGlyph.image,
+                          semanticLabel: '图片',
+                          onPressed: onImageTap,
                         ),
-                        child: SizedBox(
+                        gapBox(),
+                        ArticleEditorAccessoryButton(
+                          buttonKey: TestKeys.createAccessoryStructureButton,
+                          glyph:
+                              panelType == ArticleEditorAccessoryPanelType.style
+                              ? ArticleEditorAccessoryGlyph.keyboard
+                              : ArticleEditorAccessoryGlyph.style,
+                          semanticLabel:
+                              panelType == ArticleEditorAccessoryPanelType.style
+                              ? '键盘'
+                              : '样式',
+                          onPressed: onStyleTap,
+                          selected: panelType ==
+                              ArticleEditorAccessoryPanelType.style,
+                        ),
+                        gapBox(),
+                        ArticleEditorAccessoryButton(
+                          buttonKey: TestKeys.createAccessoryEmojiButton,
+                          glyph:
+                              panelType == ArticleEditorAccessoryPanelType.emoji
+                              ? ArticleEditorAccessoryGlyph.keyboard
+                              : ArticleEditorAccessoryGlyph.emoji,
+                          semanticLabel:
+                              panelType == ArticleEditorAccessoryPanelType.emoji
+                              ? '键盘'
+                              : '表情',
+                          onPressed: onEmojiTap,
+                          selected: panelType ==
+                              ArticleEditorAccessoryPanelType.emoji,
+                        ),
+                        gapBox(),
+                        SizedBox(
                           height: AppSpacing.iconMedium,
                           width: AppSpacing.hairline,
                           child: ColoredBox(
                             color: divider,
                           ),
                         ),
-                      ),
-                      _AccessoryIconButton(
-                        icon: CupertinoIcons.arrow_uturn_left,
-                        semanticLabel: '撤销',
-                        onPressed: canUndo ? onUndo : null,
-                      ),
-                      _AccessoryIconButton(
-                        icon: CupertinoIcons.arrow_uturn_right,
-                        semanticLabel: '重做',
-                        onPressed: canRedo ? onRedo : null,
-                      ),
-                    ],
-                  ),
+                        gapBox(),
+                        _AccessoryIconButton(
+                          icon: CupertinoIcons.arrow_uturn_left,
+                          semanticLabel: '撤销',
+                          onPressed: canUndo ? onUndo : null,
+                        ),
+                        gapBox(),
+                        _AccessoryIconButton(
+                          icon: CupertinoIcons.arrow_uturn_right,
+                          semanticLabel: '重做',
+                          onPressed: canRedo ? onRedo : null,
+                        ),
+                        gapBox(),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -198,7 +186,7 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
           if (panelType != ArticleEditorAccessoryPanelType.none)
             SizedBox(
               key: TestKeys.createAccessoryPanel,
-              height: panelHeight,
+              height: panelHeight + bottomInset,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
@@ -209,27 +197,29 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                       AppSpacing.containerMd,
                       AppSpacing.intraGroupSm,
                       AppSpacing.containerMd,
-                      AppSpacing.containerMd,
+                      AppSpacing.containerMd + bottomInset,
                     ),
                     child: _AccessoryPanelSwitcher(
                       panelType: panelType,
-                      template: template,
-                      paperTexture: paperTexture,
-                      fontPreset: fontPreset,
-                      coverImagePaths: coverImagePaths,
-                      selectedCoverPath: selectedCoverPath,
                       onEmojiSelected: onEmojiSelected,
                       onStructureActionSelected: onStructureActionSelected,
-                      onCoverSelected: onCoverSelected,
-                      onTemplateSelected: onTemplateSelected,
-                      onPaperTextureSelected: onPaperTextureSelected,
-                      onFontSelected: onFontSelected,
                       activeStructureAction: activeStructureAction,
+                      onToggleBold: onToggleBold,
+                      onToggleItalic: onToggleItalic,
+                      onToggleUnderline: onToggleUnderline,
+                      isBoldActive: isBoldActive,
+                      isItalicActive: isItalicActive,
+                      isUnderlineActive: isUnderlineActive,
+                      activeAlignment: activeAlignment,
+                      onAlignmentSelected: onAlignmentSelected,
                     ),
                   ),
                 ),
               ),
             ),
+          // 键盘收起且无面板时，补底部安全区占位
+          if (panelType == ArticleEditorAccessoryPanelType.none && bottomInset > 0)
+            SizedBox(height: bottomInset),
         ],
       ),
     );
@@ -239,33 +229,31 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
 class _AccessoryPanelSwitcher extends StatelessWidget {
   const _AccessoryPanelSwitcher({
     required this.panelType,
-    required this.template,
-    required this.paperTexture,
-    required this.fontPreset,
-    required this.coverImagePaths,
-    required this.selectedCoverPath,
     required this.onEmojiSelected,
     required this.onStructureActionSelected,
-    required this.onCoverSelected,
-    required this.onTemplateSelected,
-    required this.onPaperTextureSelected,
-    required this.onFontSelected,
     this.activeStructureAction,
+    this.onToggleBold,
+    this.onToggleItalic,
+    this.onToggleUnderline,
+    this.isBoldActive = false,
+    this.isItalicActive = false,
+    this.isUnderlineActive = false,
+    this.activeAlignment = 'left',
+    this.onAlignmentSelected,
   });
 
   final ArticleEditorAccessoryPanelType panelType;
-  final ArticleTemplatePreset template;
-  final ArticlePaperTexture paperTexture;
-  final ArticleFontPreset fontPreset;
-  final List<String> coverImagePaths;
-  final String selectedCoverPath;
   final ValueChanged<String> onEmojiSelected;
   final ValueChanged<ArticleEditorStructureAction> onStructureActionSelected;
-  final ValueChanged<String?> onCoverSelected;
-  final ValueChanged<ArticleTemplatePreset> onTemplateSelected;
-  final ValueChanged<ArticlePaperTexture> onPaperTextureSelected;
-  final ValueChanged<ArticleFontPreset> onFontSelected;
   final ArticleEditorStructureAction? activeStructureAction;
+  final VoidCallback? onToggleBold;
+  final VoidCallback? onToggleItalic;
+  final VoidCallback? onToggleUnderline;
+  final bool isBoldActive;
+  final bool isItalicActive;
+  final bool isUnderlineActive;
+  final String activeAlignment;
+  final ValueChanged<String>? onAlignmentSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -282,25 +270,15 @@ class _AccessoryPanelSwitcher extends StatelessWidget {
           key: const ValueKey<String>('style_panel'),
           activeAction: activeStructureAction,
           onStructureSelected: onStructureActionSelected,
+          onToggleBold: onToggleBold,
+          onToggleItalic: onToggleItalic,
+          onToggleUnderline: onToggleUnderline,
+          isBoldActive: isBoldActive,
+          isItalicActive: isItalicActive,
+          isUnderlineActive: isUnderlineActive,
+          activeAlignment: activeAlignment,
+          onAlignmentSelected: onAlignmentSelected,
         ),
-        ArticleEditorAccessoryPanelType.list => ArticleEditorListPanel(
-          key: const ValueKey<String>('list_panel'),
-          onStructureSelected: onStructureActionSelected,
-          activeAction: activeStructureAction,
-        ),
-        ArticleEditorAccessoryPanelType.typography =>
-          ArticleEditorTypographyPanel(
-            key: const ValueKey<String>('typography_panel'),
-            template: template,
-            paperTexture: paperTexture,
-            fontPreset: fontPreset,
-            coverImagePaths: coverImagePaths,
-            selectedCoverPath: selectedCoverPath,
-            onCoverSelected: onCoverSelected,
-            onTemplateSelected: onTemplateSelected,
-            onPaperTextureSelected: onPaperTextureSelected,
-            onFontSelected: onFontSelected,
-          ),
         ArticleEditorAccessoryPanelType.none => const SizedBox.shrink(),
       },
     );
@@ -446,76 +424,291 @@ class _EmojiCell extends StatelessWidget {
   }
 }
 
-/// 样式面板：标题层级 + 行内样式入口（粗斜体等于后续富文本接入）
+/// 样式面板：标题层级 + 正文结构 + 行内样式
 class ArticleEditorStylePanel extends StatelessWidget {
   const ArticleEditorStylePanel({
     super.key,
     required this.onStructureSelected,
     this.activeAction,
+    this.onToggleBold,
+    this.onToggleItalic,
+    this.onToggleUnderline,
+    this.isBoldActive = false,
+    this.isItalicActive = false,
+    this.isUnderlineActive = false,
+    this.activeAlignment = 'left',
+    this.onAlignmentSelected,
   });
 
   final ValueChanged<ArticleEditorStructureAction> onStructureSelected;
   final ArticleEditorStructureAction? activeAction;
+  final VoidCallback? onToggleBold;
+  final VoidCallback? onToggleItalic;
+  final VoidCallback? onToggleUnderline;
+  final bool isBoldActive;
+  final bool isItalicActive;
+  final bool isUnderlineActive;
+  final String activeAlignment;
+  final ValueChanged<String>? onAlignmentSelected;
+
+  /// 三选一行：选中再点取消（回到 paragraph）。
+  void _onExclusiveTap(ArticleEditorStructureAction action) {
+    if (activeAction == action) {
+      onStructureSelected(ArticleEditorStructureAction.paragraph);
+    } else {
+      onStructureSelected(action);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    final labelColor = CupertinoColors.label.resolveFrom(context);
+    const rowSpacing = 8.0;
+    const cellSpacing = 6.0;
+
+    return Column(
       key: TestKeys.createStructurePanel,
-      physics: const BouncingScrollPhysics(),
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        _AccessorySectionLabel(label: '标题'),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        Wrap(
-          spacing: AppSpacing.intraGroupSm,
-          runSpacing: AppSpacing.intraGroupSm,
+        // ── 第一行：大标题 / 小标题 / 引用 ──
+        _StyleRow(
+          spacing: cellSpacing,
           children: <Widget>[
-            _StructureChip(
-              label: '无标题',
-              selected: activeAction == ArticleEditorStructureAction.titleNone,
-              onTap: () =>
-                  onStructureSelected(ArticleEditorStructureAction.titleNone),
+            _StyleCell(
+              child: Text(
+                '大标题',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+              selected: activeAction == ArticleEditorStructureAction.headingMajor,
+              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.headingMajor),
             ),
-            _StructureChip(
-              label: '大标题',
-              selected: activeAction == ArticleEditorStructureAction.titleMajor,
-              onTap: () =>
-                  onStructureSelected(ArticleEditorStructureAction.titleMajor),
+            _StyleCell(
+              child: Text(
+                '小标题',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+              selected: activeAction == ArticleEditorStructureAction.headingMinor,
+              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.headingMinor),
             ),
-            _StructureChip(
-              label: '小标题',
-              selected: activeAction == ArticleEditorStructureAction.titleMinor,
-              onTap: () =>
-                  onStructureSelected(ArticleEditorStructureAction.titleMinor),
+            _StyleCell(
+              child: Text(
+                '引用',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.regular,
+                ),
+              ),
+              selected: activeAction == ArticleEditorStructureAction.blockquote,
+              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.blockquote),
             ),
           ],
         ),
-        SizedBox(height: AppSpacing.interGroupMd),
-        _AccessorySectionLabel(label: '字样式'),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        Wrap(
-          spacing: AppSpacing.intraGroupSm,
-          runSpacing: AppSpacing.intraGroupSm,
+        SizedBox(height: rowSpacing),
+        // ── 第二行：无序 / 数字序号 / 中文数字序号（三选一，再点取消）──
+        _StyleRow(
+          spacing: cellSpacing,
           children: <Widget>[
-            _StructureChip(label: 'B', selected: false, onTap: () {}),
-            _StructureChip(label: 'I', selected: false, onTap: () {}),
-            _StructureChip(label: 'U', selected: false, onTap: () {}),
-            _StructureChip(label: 'S', selected: false, onTap: () {}),
+            _StyleCell(
+              child: Icon(
+                CupertinoIcons.list_bullet,
+                size: AppSpacing.iconMedium,
+                color: labelColor,
+              ),
+              selected: activeAction == ArticleEditorStructureAction.bulletList,
+              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.bulletList),
+            ),
+            _StyleCell(
+              child: Icon(
+                CupertinoIcons.list_number,
+                size: AppSpacing.iconMedium,
+                color: labelColor,
+              ),
+              selected: activeAction == ArticleEditorStructureAction.orderedList,
+              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.orderedList),
+            ),
+            _StyleCell(
+              child: _CnListIcon(color: labelColor),
+              selected: false, // 占位：中文数字序号暂不支持
+              onTap: () {},
+            ),
           ],
         ),
-        SizedBox(height: AppSpacing.interGroupMd),
-        _AccessorySectionLabel(label: '对齐'),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        Wrap(
-          spacing: AppSpacing.intraGroupSm,
-          runSpacing: AppSpacing.intraGroupSm,
+        SizedBox(height: rowSpacing),
+        // ── 第三行：左对齐 / 居中 / 右对齐 ──
+        _StyleRow(
+          spacing: cellSpacing,
           children: <Widget>[
-            _StructureChip(label: '左', selected: false, onTap: () {}),
-            _StructureChip(label: '中', selected: false, onTap: () {}),
-            _StructureChip(label: '右', selected: false, onTap: () {}),
-            _StructureChip(label: '两端', selected: false, onTap: () {}),
+            _StyleCell(
+              child: Icon(
+                CupertinoIcons.text_alignleft,
+                size: AppSpacing.twenty,
+                color: labelColor,
+              ),
+              selected: activeAlignment == 'left',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'left' ? '' : 'left',
+              ),
+            ),
+            _StyleCell(
+              child: Icon(
+                CupertinoIcons.text_aligncenter,
+                size: AppSpacing.twenty,
+                color: labelColor,
+              ),
+              selected: activeAlignment == 'center',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'center' ? 'left' : 'center',
+              ),
+            ),
+            _StyleCell(
+              child: Icon(
+                CupertinoIcons.text_alignright,
+                size: AppSpacing.twenty,
+                color: labelColor,
+              ),
+              selected: activeAlignment == 'right',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'right' ? 'left' : 'right',
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: rowSpacing),
+        // ── 第四行：加粗 / 斜体 / 下划线 ──
+        _StyleRow(
+          spacing: cellSpacing,
+          children: <Widget>[
+            _StyleCell(
+              child: Text(
+                '加粗',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.bold,
+                ),
+              ),
+              selected: isBoldActive,
+              onTap: onToggleBold ?? () {},
+            ),
+            _StyleCell(
+              child: Text(
+                '斜体',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.regular,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              selected: isItalicActive,
+              onTap: onToggleItalic ?? () {},
+            ),
+            _StyleCell(
+              child: Text(
+                '下划线',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.regular,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+              selected: isUnderlineActive,
+              onTap: onToggleUnderline ?? () {},
+            ),
           ],
         ),
       ],
+    );
+  }
+}
+
+/// 面板中一行，子项均分宽度。
+class _StyleRow extends StatelessWidget {
+  const _StyleRow({required this.children, this.spacing = 6.0});
+  final List<Widget> children;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) items.add(SizedBox(width: spacing));
+      items.add(Expanded(child: children[i]));
+    }
+    return Row(children: items);
+  }
+}
+
+/// 面板中一个可点击格子（iOS 风格）。
+///
+/// 未选中：`CupertinoColors.tertiarySystemFill`（浅灰，深色/浅色自适应，有可见轮廓）
+/// 选中：`CupertinoColors.activeBlue` 12% 不透明度背景 + 蓝色边框
+class _StyleCell extends StatelessWidget {
+  const _StyleCell({
+    required this.child,
+    required this.selected,
+    required this.onTap,
+  });
+  final Widget child;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor = CupertinoColors.activeBlue.resolveFrom(context);
+    final normalBg =
+        CupertinoColors.tertiarySystemFill.resolveFrom(context);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: AppSpacing.minInteractiveSize,
+        decoration: BoxDecoration(
+          color: selected
+              ? accentColor.withValues(alpha: 0.12)
+              : normalBg,
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          border: selected
+              ? Border.all(color: accentColor, width: AppSpacing.oneHalf)
+              : Border.all(
+                  color: AppColors.transparent,
+                  width: AppSpacing.oneHalf,
+                ),
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// 中文数字序号列表图标：水平显示「一二三」。
+class _CnListIcon extends StatelessWidget {
+  const _CnListIcon({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '一二三',
+      style: TextStyle(
+        color: color,
+        fontSize: AppTypography.iosFootnote,
+        fontWeight: AppTypography.semiBold,
+        height: AppSpacing.textLineHeightSingle,
+        letterSpacing: -AppSpacing.one,
+      ),
     );
   }
 }
@@ -575,28 +768,18 @@ class ArticleEditorListPanel extends StatelessWidget {
   }
 }
 
-/// 排版：模版 Tab + 字号 Tab
+/// 排版：纸张质感 + 字体
 class ArticleEditorTypographyPanel extends StatefulWidget {
   const ArticleEditorTypographyPanel({
     super.key,
-    required this.template,
     required this.paperTexture,
     required this.fontPreset,
-    required this.coverImagePaths,
-    required this.selectedCoverPath,
-    required this.onCoverSelected,
-    required this.onTemplateSelected,
     required this.onPaperTextureSelected,
     required this.onFontSelected,
   });
 
-  final ArticleTemplatePreset template;
   final ArticlePaperTexture paperTexture;
   final ArticleFontPreset fontPreset;
-  final List<String> coverImagePaths;
-  final String selectedCoverPath;
-  final ValueChanged<String?> onCoverSelected;
-  final ValueChanged<ArticleTemplatePreset> onTemplateSelected;
   final ValueChanged<ArticlePaperTexture> onPaperTextureSelected;
   final ValueChanged<ArticleFontPreset> onFontSelected;
 
@@ -748,7 +931,7 @@ class ArticleEditorTemplatePanel extends StatelessWidget {
           runSpacing: AppSpacing.containerSm,
           children: ArticleTemplatePreset.values
               .map((template) {
-                return ArticleTemplateThumbnail(
+                return _AccessoryTemplateThumbnail(
                   template: template,
                   fontPreset: selectedFontPreset,
                   label: template.label,
@@ -759,6 +942,130 @@ class ArticleEditorTemplatePanel extends StatelessWidget {
               .toList(growable: false),
         ),
       ],
+    );
+  }
+}
+
+class _AccessoryTemplateThumbnail extends StatelessWidget {
+  const _AccessoryTemplateThumbnail({
+    required this.template,
+    required this.fontPreset,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ArticleTemplatePreset template;
+  final ArticleFontPreset fontPreset;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = resolveArticleTemplatePalette(context, template);
+    final typography = resolveArticleTypography(context, template, fontPreset);
+    final borderColor = selected
+        ? AppColors.primaryColor
+        : CupertinoColors.separator.resolveFrom(context);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            width: AppSpacing.avatarUserXl,
+            height: AppSpacing.oneHundred + AppSpacing.xs,
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: palette.paperColor,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              border: Border.all(color: borderColor, width: selected ? 2 : 1),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: palette.shadowColor.withValues(alpha: 0.12),
+                  blurRadius: AppSpacing.md,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Container(
+                  height: AppSpacing.two,
+                  decoration: BoxDecoration(
+                    color: palette.accentColor.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupSm),
+                Container(
+                  height: AppSpacing.six,
+                  decoration: BoxDecoration(
+                    color: palette.textColor.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: typography.captionStyle.copyWith(color: palette.textColor),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Container(
+                  height: AppSpacing.two,
+                  decoration: BoxDecoration(
+                    color: palette.secondaryTextColor.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Container(
+                  height: AppSpacing.two,
+                  decoration: BoxDecoration(
+                    color: palette.secondaryTextColor.withValues(alpha: 0.26),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
+                  ),
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.intraGroupXs,
+                      vertical: AppSpacing.two,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.badgeBackground,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusNinetyNine,
+                      ),
+                    ),
+                    child: Text(label, style: typography.badgeStyle),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            label,
+            style: TextStyle(
+              color: CupertinoColors.label.resolveFrom(context),
+              fontSize: AppTypography.sm,
+              fontWeight: selected
+                  ? AppTypography.semiBold
+                  : AppTypography.medium,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1086,7 +1393,30 @@ class ArticleEditorAccessoryButton extends StatelessWidget {
       expanded: 1.8,
     );
 
-    return Expanded(
+    // emoji 使用 Material Icon（与聊天页底部工具栏一致）
+    final Widget glyphWidget;
+    if (glyph == ArticleEditorAccessoryGlyph.emoji) {
+      glyphWidget = Icon(
+        Icons.sentiment_satisfied_alt,
+        size: iconSize + 2,
+        color: color,
+      );
+    } else {
+      glyphWidget = SizedBox(
+        width: iconSize,
+        height: iconSize,
+        child: CustomPaint(
+          painter: _AccessoryGlyphPainter(
+            glyph: glyph,
+            color: color,
+            strokeWidth: strokeWidth,
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: AppSpacing.minInteractiveSize,
       child: Semantics(
         button: true,
         label: semanticLabel,
@@ -1095,19 +1425,7 @@ class ArticleEditorAccessoryButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           minimumSize: const Size.square(AppSpacing.iconButtonMinSizeSm),
           onPressed: onPressed,
-          child: Center(
-            child: SizedBox(
-              width: iconSize,
-              height: iconSize,
-              child: CustomPaint(
-                painter: _AccessoryGlyphPainter(
-                  glyph: glyph,
-                  color: color,
-                  strokeWidth: strokeWidth,
-                ),
-              ),
-            ),
-          ),
+          child: Center(child: glyphWidget),
         ),
       ),
     );
@@ -1139,55 +1457,34 @@ class _AccessoryGlyphPainter extends CustomPainter {
 
     switch (glyph) {
       case ArticleEditorAccessoryGlyph.image:
+        // 图片图标：圆角矩形框 + 右上角实心小圆点太阳 + 山峰折线（参考图一）
         final rect = RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            size.width * 0.08,
-            size.height * 0.08,
-            size.width * 0.84,
-            size.height * 0.84,
+            size.width * 0.06,
+            size.height * 0.06,
+            size.width * 0.88,
+            size.height * 0.88,
           ),
-          Radius.circular(size.width * 0.16),
+          Radius.circular(size.width * 0.14),
         );
         canvas.drawRRect(rect, stroke);
+        // 太阳：实心小圆点
         canvas.drawCircle(
-          Offset(size.width * 0.72, size.height * 0.32),
-          size.width * 0.07,
+          Offset(size.width * 0.72, size.height * 0.3),
+          size.width * 0.06,
           fill,
         );
-        final path = Path()
-          ..moveTo(size.width * 0.18, size.height * 0.72)
-          ..lineTo(size.width * 0.4, size.height * 0.48)
-          ..lineTo(size.width * 0.54, size.height * 0.62)
-          ..lineTo(size.width * 0.76, size.height * 0.4);
-        canvas.drawPath(path, stroke);
+        // 山峰折线
+        final mountainPath = Path()
+          ..moveTo(size.width * 0.12, size.height * 0.78)
+          ..lineTo(size.width * 0.36, size.height * 0.48)
+          ..lineTo(size.width * 0.52, size.height * 0.6)
+          ..lineTo(size.width * 0.72, size.height * 0.42)
+          ..lineTo(size.width * 0.88, size.height * 0.64);
+        canvas.drawPath(mountainPath, stroke);
       case ArticleEditorAccessoryGlyph.emoji:
-        canvas.drawCircle(
-          Offset(size.width / 2, size.height / 2),
-          size.width * 0.42,
-          stroke,
-        );
-        canvas.drawCircle(
-          Offset(size.width * 0.38, size.height * 0.42),
-          size.width * 0.045,
-          fill,
-        );
-        canvas.drawCircle(
-          Offset(size.width * 0.62, size.height * 0.42),
-          size.width * 0.045,
-          fill,
-        );
-        canvas.drawArc(
-          Rect.fromLTWH(
-            size.width * 0.28,
-            size.height * 0.42,
-            size.width * 0.44,
-            size.height * 0.28,
-          ),
-          0.15 * math.pi,
-          0.7 * math.pi,
-          false,
-          stroke,
-        );
+        // emoji 由 ArticleEditorAccessoryButton 直接用 Icon 渲染
+        break;
       case ArticleEditorAccessoryGlyph.keyboard:
         final rect = RRect.fromRectAndRadius(
           Rect.fromLTWH(
@@ -1211,112 +1508,51 @@ class _AccessoryGlyphPainter extends CustomPainter {
           Offset(size.width * 0.72, size.height * 0.66),
           stroke,
         );
-      case ArticleEditorAccessoryGlyph.structure:
-        canvas.drawLine(
-          Offset(size.width * 0.36, size.height * 0.12),
-          Offset(size.width * 0.28, size.height * 0.88),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.68, size.height * 0.12),
-          Offset(size.width * 0.6, size.height * 0.88),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.16, size.height * 0.38),
-          Offset(size.width * 0.84, size.height * 0.32),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.12, size.height * 0.64),
-          Offset(size.width * 0.8, size.height * 0.58),
-          stroke,
-        );
-      case ArticleEditorAccessoryGlyph.template:
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            size.width * 0.14,
-            size.height * 0.12,
-            size.width * 0.72,
-            size.height * 0.76,
-          ),
-          Radius.circular(size.width * 0.14),
-        );
-        canvas.drawRRect(rect, stroke);
-        canvas.drawLine(
-          Offset(size.width * 0.5, size.height * 0.22),
-          Offset(size.width * 0.5, size.height * 0.78),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.24, size.height * 0.5),
-          Offset(size.width * 0.76, size.height * 0.5),
-          stroke,
-        );
-      case ArticleEditorAccessoryGlyph.font:
-        final path = Path()
-          ..moveTo(size.width * 0.18, size.height * 0.86)
-          ..lineTo(size.width * 0.5, size.height * 0.14)
-          ..lineTo(size.width * 0.82, size.height * 0.86)
-          ..moveTo(size.width * 0.32, size.height * 0.56)
-          ..lineTo(size.width * 0.68, size.height * 0.56);
-        canvas.drawPath(path, stroke);
       case ArticleEditorAccessoryGlyph.style:
-        canvas.drawLine(
-          Offset(size.width * 0.36, size.height * 0.12),
-          Offset(size.width * 0.28, size.height * 0.88),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.68, size.height * 0.12),
-          Offset(size.width * 0.6, size.height * 0.88),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.16, size.height * 0.38),
-          Offset(size.width * 0.84, size.height * 0.32),
-          stroke,
-        );
-        canvas.drawLine(
-          Offset(size.width * 0.12, size.height * 0.64),
-          Offset(size.width * 0.8, size.height * 0.58),
-          stroke,
-        );
-      case ArticleEditorAccessoryGlyph.list:
-        for (var row = 0; row < 3; row += 1) {
-          final y = size.height * (0.28 + row * 0.2);
-          canvas.drawCircle(
-            Offset(size.width * 0.18, y),
-            size.width * 0.03,
-            fill,
-          );
-          canvas.drawLine(
-            Offset(size.width * 0.28, y),
-            Offset(size.width * 0.84, y),
-            stroke,
-          );
-        }
-      case ArticleEditorAccessoryGlyph.typography:
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            size.width * 0.12,
-            size.height * 0.12,
-            size.width * 0.76,
-            size.height * 0.76,
+        // "Aa" 样式图标：在 iconSize×iconSize 画布内绘制，视觉居中
+        final bigA = TextPainter(
+          text: TextSpan(
+            text: 'A',
+            style: TextStyle(
+              color: color,
+              fontSize: size.height * 0.88,
+              fontWeight: AppTypography.semiBold,
+              height: AppSpacing.textLineHeightSingle,
+            ),
           ),
-          Radius.circular(size.width * 0.12),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final smallA = TextPainter(
+          text: TextSpan(
+            text: 'a',
+            style: TextStyle(
+              color: color,
+              fontSize: size.height * 0.62,
+              fontWeight: AppTypography.regular,
+              height: AppSpacing.textLineHeightSingle,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        // 整体水平居中
+        final totalWidth = bigA.width + smallA.width - size.width * 0.06;
+        final startX = (size.width - totalWidth) / 2;
+        // 略低于几何中心，与描边类图标（山峰在下方）视觉重心对齐
+        final baselineY = size.height * 0.88;
+        // 大 A
+        bigA.paint(canvas, Offset(startX, baselineY - bigA.height));
+        // 小 a 底部对齐大 A
+        smallA.paint(
+          canvas,
+          Offset(startX + bigA.width - size.width * 0.06, baselineY - smallA.height),
         );
-        canvas.drawRRect(rect, stroke);
-        canvas.drawLine(
-          Offset(size.width * 0.5, size.height * 0.18),
-          Offset(size.width * 0.5, size.height * 0.82),
-          stroke,
-        );
-        final path = Path()
-          ..moveTo(size.width * 0.58, size.height * 0.72)
-          ..lineTo(size.width * 0.78, size.height * 0.22)
-          ..lineTo(size.width * 0.88, size.height * 0.72);
-        canvas.drawPath(path, stroke);
+      // 以下 glyph 不再在工具栏使用，保留以避免编译错误
+      case ArticleEditorAccessoryGlyph.structure:
+      case ArticleEditorAccessoryGlyph.template:
+      case ArticleEditorAccessoryGlyph.font:
+      case ArticleEditorAccessoryGlyph.list:
+      case ArticleEditorAccessoryGlyph.typography:
+        break;
     }
   }
 

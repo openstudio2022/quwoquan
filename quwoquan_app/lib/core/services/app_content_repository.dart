@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 
 export 'package:quwoquan_app/cloud/services/app_content/app_content_repository_provider.dart';
 
@@ -83,6 +84,17 @@ Map<String, dynamic>? lookupDiscoveryFeedWireRow(
     }
   }
   return null;
+}
+
+/// 在四类发现 mock 聚合中按帖子 id 解析为 [PostBaseDto]（无则 null）。
+///
+/// 与 [lookupDiscoveryFeedWireRow] 成对使用：优先消费本函数的强类型结果，仅在需要 wire 扩展字段时回退 map。
+PostBaseDto? lookupDiscoveryPostBaseDto(AppContentRepository repo, String postId) {
+  final row = lookupDiscoveryFeedWireRow(repo, postId);
+  if (row == null || row.isEmpty) {
+    return null;
+  }
+  return postBaseDtoFromMap(row);
 }
 
 class RemoteAppContentRepository implements AppContentRepository {

@@ -96,7 +96,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
 class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     with TickerProviderStateMixin {
   static bool _didAutoExpandInSession = false;
-  static const double _toolbarReservedHeight = 108;
+  static const double _toolbarReservedHeight =
+      ImmersiveEngagementBar.preferredReservedHeight;
 
   String? _filterType;
   bool _isFilterExpanded = false;
@@ -927,6 +928,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           postId: post.id,
           corner: event.corner,
           progress: event.progress,
+          direction: event.direction,
         );
   }
 
@@ -2003,6 +2005,7 @@ class _WorksArticleCanvas extends StatelessWidget {
     required this.article,
     required this.enablePageCurl,
     required this.onPageChanged,
+    this.forceDegradedPager = false,
     this.onFallbackResolved,
     this.onPageFlipCommitted,
     this.onPageCurlAborted,
@@ -2014,6 +2017,7 @@ class _WorksArticleCanvas extends StatelessWidget {
   final PostBaseDto post;
   final ArticleDetailView article;
   final bool enablePageCurl;
+  final bool forceDegradedPager;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<ArticleReaderFallbackReason>? onFallbackResolved;
   final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
@@ -2094,6 +2098,7 @@ class _WorksArticleCanvas extends StatelessWidget {
                 coverUrl: post.primaryImageUrl,
                 initialPage: safeInitialPage,
                 enablePageCurl: enablePageCurl,
+                forceDegradedPager: forceDegradedPager,
                 pagePadding: articleReaderStagePagePadding(),
                 onPageChanged: onPageChanged,
                 onOverflowPrevious: onOverflowPrevious,

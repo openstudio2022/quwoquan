@@ -51,6 +51,7 @@ class ArticlePreviewPage extends ConsumerWidget {
                     fontPreset: state.articleFontPreset,
                     fallbackPages: state.articlePages,
                     variant: ArticleCanvasVariant.preview,
+                    paperTexture: state.articlePaperTexture,
                   );
                   return ArticleReadOnlyBookDeck(
                     pages: pages,
@@ -58,8 +59,14 @@ class ArticlePreviewPage extends ConsumerWidget {
                     fontPreset: state.articleFontPreset,
                     metrics: metrics,
                     coverUrl: state.articleCoverImagePath,
+                    paperTexture: state.articlePaperTexture,
                     enablePageCurl: enablePageCurl,
                     pagePadding: articleReaderStagePagePadding(),
+                    onFallbackResolved: (reason) {
+                      debugPrint(
+                        'ArticlePreviewPage fallback: ${reason.name}',
+                      );
+                    },
                   );
                 },
               ),

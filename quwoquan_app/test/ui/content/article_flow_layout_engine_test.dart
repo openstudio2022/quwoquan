@@ -188,15 +188,17 @@ void main() {
     expect(wrapFragments, hasLength(2));
     expect(wrapFragments[0].binding?.bodyRange?.start, anchor0);
     expect(wrapFragments[0].binding?.bodyRange?.end, anchor1);
+    // 投影 body 在相邻段落节点之间会插入 `\n`，锚点可能落在换行上；wrap 显式
+    // leadingText 对应段落纯文本，故 fragment.text 与 substring 相比无段前换行。
     expect(
       wrapFragments[0].text,
-      doc.body.substring(anchor0, anchor1).trimRight(),
+      doc.body.substring(anchor0, anchor1).trimRight().trimLeft(),
     );
     expect(wrapFragments[1].binding?.bodyRange?.start, anchor1);
     expect(wrapFragments[1].binding?.bodyRange?.end, bodyLen);
     expect(
       wrapFragments[1].text,
-      doc.body.substring(anchor1, bodyLen).trimRight(),
+      doc.body.substring(anchor1, bodyLen).trimRight().trimLeft(),
     );
   });
 }

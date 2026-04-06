@@ -482,42 +482,35 @@ List<ArticlePageData> _projectArticlePages({
 List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
   ArticleDocumentData document,
 ) {
-  if (document.contentBlocks.isNotEmpty) {
+  final bodyNodes = document.nodes
+      .where((node) => !node.isDocumentTitle)
+      .toList(growable: false);
+  if (bodyNodes.isNotEmpty) {
     final blocks = <ArticleContentBlockView>[];
     var orderedIndex = 0;
-    final normalized = document.contentBlocks;
-    for (var index = 0; index < normalized.length; index++) {
-      final block = normalized[index];
-      final text = block.text.trim();
-      switch (block.type) {
-        case ArticleDocumentBlockType.heading2:
+    for (var index = 0; index < bodyNodes.length; index += 1) {
+      final node = bodyNodes[index];
+      final text = node.text.trim();
+      switch (node.type) {
+        case ArticleDocumentNodeType.headingMajor:
           orderedIndex = 0;
           if (text.isEmpty) {
             continue;
           }
           blocks.add(ArticleContentBlockView(type: 'heading_2', body: text));
           break;
-        case ArticleDocumentBlockType.heading3:
+        case ArticleDocumentNodeType.headingMinor:
           orderedIndex = 0;
           if (text.isEmpty) {
             continue;
           }
           blocks.add(ArticleContentBlockView(type: 'heading_3', body: text));
           break;
-        case ArticleDocumentBlockType.sectionTitle:
-          orderedIndex = 0;
+        case ArticleDocumentNodeType.orderedItem:
           if (text.isEmpty) {
             continue;
           }
-          blocks.add(
-            ArticleContentBlockView(type: 'section_heading', body: text),
-          );
-          break;
-        case ArticleDocumentBlockType.orderedItem:
-          if (text.isEmpty) {
-            continue;
-          }
-          orderedIndex = block.orderedIndex ?? (orderedIndex + 1);
+          orderedIndex += 1;
           blocks.add(
             ArticleContentBlockView(
               type: 'ordered_item',
@@ -526,49 +519,63 @@ List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
             ),
           );
           break;
-        case ArticleDocumentBlockType.bulletItem:
+        case ArticleDocumentNodeType.bulletItem:
           orderedIndex = 0;
           if (text.isEmpty) {
             continue;
           }
           blocks.add(ArticleContentBlockView(type: 'bullet_item', body: text));
           break;
-        case ArticleDocumentBlockType.image:
+        case ArticleDocumentNodeType.figure:
           orderedIndex = 0;
-          if (!block.hasImage) {
+          if (!node.hasImage) {
             continue;
           }
-          if (block.usesWrappedLayout && index + 1 < normalized.length) {
-            final next = normalized[index + 1];
-            if (next.type == ArticleDocumentBlockType.paragraph &&
-                next.text.trim().isNotEmpty) {
-              blocks.add(
-                ArticleContentBlockView(
-                  type: 'wrapped_paragraph',
-                  body: next.text.trim(),
-                  imageUrl: block.imageUrl,
-                  imageLayout: block.imageLayout,
-                ),
-              );
+          if (node.usesWrappedLayout) {
+            ArticleDocumentNode? narrowParagraph;
+            ArticleDocumentNode? belowParagraph;
+            if (index + 1 < bodyNodes.length &&
+                bodyNodes[index + 1].type == ArticleDocumentNodeType.paragraph) {
+              narrowParagraph = bodyNodes[index + 1];
               index += 1;
-              continue;
+              if (index + 1 < bodyNodes.length &&
+                  bodyNodes[index + 1].type == ArticleDocumentNodeType.paragraph) {
+                belowParagraph = bodyNodes[index + 1];
+                index += 1;
+              }
             }
+            blocks.add(
+              ArticleContentBlockView(
+                type: 'wrapped_paragraph',
+                body:
+                    '${narrowParagraph?.text ?? ''}${belowParagraph?.text ?? ''}'
+                        .trimRight(),
+                leadingText: narrowParagraph?.text ?? '',
+                trailingText: belowParagraph?.text ?? '',
+                imageUrl: node.imageUrl,
+                imageLayout: node.imageLayout,
+                caption: node.caption,
+              ),
+            );
+            continue;
           }
           blocks.add(
             ArticleContentBlockView(
               type: 'image',
-              imageUrl: block.imageUrl,
-              imageLayout: block.imageLayout,
-              caption: block.caption,
+              imageUrl: node.imageUrl,
+              imageLayout: node.imageLayout,
+              caption: node.caption,
             ),
           );
           break;
-        case ArticleDocumentBlockType.paragraph:
+        case ArticleDocumentNodeType.paragraph:
           orderedIndex = 0;
           if (text.isEmpty) {
             continue;
           }
           blocks.add(ArticleContentBlockView(type: 'paragraph', body: text));
+          break;
+        case ArticleDocumentNodeType.documentTitle:
           break;
       }
     }

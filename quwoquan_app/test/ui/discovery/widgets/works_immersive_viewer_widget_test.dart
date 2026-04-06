@@ -708,7 +708,7 @@ void main() {
   testWidgets('长文阅读会自动降级为 book-style pager', (tester) async {
     final post = _articlePost();
     final cards = List<Map<String, dynamic>>.generate(
-      22,
+      82,
       (index) => <String, dynamic>{
         'title': '第${index + 2}页',
         'body': '这是第 ${index + 2} 页正文。',

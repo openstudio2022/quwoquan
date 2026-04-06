@@ -29,6 +29,15 @@ Future<void> runQuwoquanApp({
   }());
   final previousFlutterErrorHandler = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
+    // Flutter 框架已知 bug：semantics tree 在 layout 未完成时被访问。
+    // 仅在 debug 模式触发，release 不受影响。
+    // 参考：https://github.com/flutter/flutter/issues/153692
+    //       https://github.com/flutter/flutter/issues/81182
+    final message = details.exceptionAsString();
+    if (message.contains('_needsLayout') &&
+        message.contains('childSemantics.renderObject')) {
+      return;
+    }
     if (previousFlutterErrorHandler != null) {
       previousFlutterErrorHandler(details);
     } else {

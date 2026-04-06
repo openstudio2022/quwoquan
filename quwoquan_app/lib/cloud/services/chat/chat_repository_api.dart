@@ -41,11 +41,13 @@ List<ChatConversationMemberDto> sortChatMemberDtos(
 /// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
 abstract class ChatRepository {
   // ── 会话 ────────────────────────────────────────────────────────────────────
+  /// 收件箱会话列表（强类型，优先用于新代码）。
   Future<List<ChatInboxDto>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
+  /// 历史 wire 形态会话列表；新实现应优先 [listInbox]。
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,

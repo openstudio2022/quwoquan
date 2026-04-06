@@ -39,6 +39,13 @@ class ReverseFlipPose {
   final double cornerBiasY;
 }
 
+double resolveReverseFlipProgress({
+  required double localX,
+  required double pageWidth,
+}) {
+  return ((pageWidth - localX) / (pageWidth * 1.1)).clamp(0.0, 1.0).toDouble();
+}
+
 ReverseFlipPose resolveReverseFlipPose({
   required Offset localPagePoint,
   required Size pageSize,
@@ -150,7 +157,10 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
     _pose ??= resolveReverseFlipPose(
       localPagePoint: _localPagePoint,
       pageSize: Size(pageWidth, pageHeight),
-      progress: _resolveProgress(_localPagePoint.dx),
+      progress: resolveReverseFlipProgress(
+        localX: _localPagePoint.dx,
+        pageWidth: pageWidth,
+      ),
       corner: corner,
     );
     return true;
@@ -176,34 +186,22 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
         Offset.zero,
       ];
     }
-    final foldX = currentPose.leadingEdgeX;
-    final foldInset = currentPose.cylinderRadius * 0.42;
-    final ridgeY = pageHeight * (0.24 + currentPose.lift * 0.2);
-    if (corner == StPageFlipCorner.top) {
-      return <Offset>[
-        Offset.zero,
-        Offset(foldX, 0),
-        Offset((foldX + foldInset).clamp(0.0, pageWidth), ridgeY),
-        Offset(foldX, pageHeight),
-        Offset.zero,
-      ];
-    }
+    // 底页（旧页面）的可见区域：从展开边界到右边缘。
+    // 随着回翻推进，展开边界向右移动，底页可见区域缩小。
+    final expandedWidth = currentPose.coveredWidth.clamp(0.0, pageWidth);
     return <Offset>[
-      Offset.zero,
-      Offset(foldX, 0),
-      Offset((foldX + foldInset).clamp(0.0, pageWidth), pageHeight - ridgeY),
-      Offset(foldX, pageHeight),
-      Offset.zero,
+      Offset(expandedWidth, 0),
+      Offset(pageWidth, 0),
+      Offset(pageWidth, pageHeight),
+      Offset(expandedWidth, pageHeight),
     ];
   }
 
   /// 回翻叶片的裁剪多边形。
   ///
-  /// 坐标系与前翻 [StPageFlipCalculation.getFlippingClipArea] 一致：
-  /// 原点在页面左上角，x 向右，y 向下。
-  /// [_buildSoftPageLayer] 会通过 [_localPolygonFromArea] 把这些点
-  /// 相对于 [getActiveCorner] 做平移 + [getAngle] 旋转，
-  /// 所以这里返回的是 **未变换的页内绝对坐标**。
+  /// 回翻是前翻的逆向过程：页面从左边缘开始展开，向右铺开。
+  /// 裁剪区域从 [0, 0] 到 [coveredWidth, pageHeight]，
+  /// 随 progress 增大，coveredWidth 从 0 增大到 pageWidth。
   @override
   List<Offset> getFlippingClipArea() {
     final currentPose = _pose;
@@ -215,70 +213,35 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
         Offset(0, pageHeight),
       ];
     }
-    // 用 _reverseAngle 和 _reverseActiveCorner 推导出的折线，
-    // 构造一个与前翻 getFlippingClipArea 等价的旋转矩形 + 交点多边形。
-    // 简化方案：直接用 leadingEdgeX 作为折线 x，构造右侧矩形。
-    final foldX = currentPose.leadingEdgeX;
+    // coveredWidth 表示已展开的宽度，从右边缘算起。
+    // 回翻是从左边缘展开，所以裁剪区域是 [0, 0] 到 [coveredWidth, pageHeight]。
+    final expandedWidth = currentPose.coveredWidth.clamp(0.0, pageWidth);
     return <Offset>[
-      Offset(foldX, 0),
-      Offset(pageWidth, 0),
-      Offset(pageWidth, pageHeight),
-      Offset(foldX, pageHeight),
+      Offset.zero,
+      Offset(expandedWidth, 0),
+      Offset(expandedWidth, pageHeight),
+      Offset(0, pageHeight),
     ];
   }
 
-  /// 动态铰链锚点：折线与页边的交点，随 [ReverseFlipPose.leadingEdgeX] 移动。
+  /// 回翻锚点：固定在页面左上角或左下角。
   ///
-  /// 前翻时 [StPageFlipCalculation.getActiveCorner] 返回 `_rect.topLeft`（动态），
-  /// 后翻对称地返回折线在页顶/底边的交点。
-  /// [_buildSoftPageLayer] 用此点做 `Positioned` 定位 + `_localPolygonFromArea` 平移原点。
+  /// 回翻是从左边缘展开，锚点固定在左边缘，
+  /// 让 [_buildSoftPageLayer] 的 Positioned 从页面左边缘开始定位。
   @override
   Offset getActiveCorner() {
-    final currentPose = _pose;
-    if (currentPose == null) {
-      return corner == StPageFlipCorner.top
-          ? Offset(pageWidth, 0)
-          : Offset(pageWidth, pageHeight);
-    }
     return corner == StPageFlipCorner.top
-        ? Offset(currentPose.leadingEdgeX, 0)
-        : Offset(currentPose.leadingEdgeX, pageHeight);
+        ? Offset.zero
+        : Offset(0, pageHeight);
   }
 
-  /// 折线倾斜角，与前翻 [StPageFlipCalculation.getAngle] 对称。
+  /// 回翻角度：固定为 0（不旋转）。
   ///
-  /// 前翻返回 `-_angle`（负值，页面顺时针折起）；
-  /// 后翻返回正值，让 [Transform.rotate] 产生逆时针折起的视觉。
-  /// 角度来自 `leadingEdgeX` 到页面右边缘的距离与页高的比值，
-  /// 模拟前翻 `_calculateAngle` 中 `left / sqrt(top^2 + left^2)` 的逻辑。
+  /// 回翻是前翻的逆向过程，低保真路径用裁剪区域从左向右扩大来表达展开，
+  /// 不需要旋转。旋转只会让叶片偏离正确位置。
   @override
   double getAngle() {
-    final currentPose = _pose;
-    if (currentPose == null) {
-      return 0;
-    }
-    final foldX = currentPose.leadingEdgeX;
-    // 折页「露出宽度」：从折线到页面右边缘
-    final exposedWidth = pageWidth - foldX;
-    if (exposedWidth <= 0) {
-      return 0;
-    }
-    // 用与前翻 _calculateAngle 同构的公式：
-    // 前翻: angle = 2 * acos(left / sqrt(top^2 + left^2))
-    // 这里 left = exposedWidth, top = pageHeight/2（折线中点到角的距离）
-    final halfHeight = pageHeight / 2;
-    final hypotenuse = math.sqrt(
-      exposedWidth * exposedWidth + halfHeight * halfHeight,
-    );
-    if (hypotenuse < 1) {
-      return 0;
-    }
-    final rawAngle = 2 *
-        math.acos(
-          (exposedWidth / hypotenuse).clamp(-1.0, 1.0).toDouble(),
-        );
-    // 后翻角度为正值（与前翻的负值镜像），并按 corner 翻转符号
-    return corner == StPageFlipCorner.top ? rawAngle : -rawAngle;
+    return 0;
   }
 
   @override
@@ -320,11 +283,5 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
 
   void clearPose() {
     _pose = null;
-  }
-
-  double _resolveProgress(double localX) {
-    return ((pageWidth - localX) / (pageWidth * 1.1))
-        .clamp(0.0, 1.0)
-        .toDouble();
   }
 }

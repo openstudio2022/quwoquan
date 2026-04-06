@@ -57,6 +57,9 @@ class ArticlePaginationEngine {
             }
             return left.id.compareTo(right.id);
           });
+    final wrapGroupsByAssetId = buildArticleWrapNodeGroupsByAssetId(
+      document.nodes,
+    );
 
     final pages = <ArticlePageData>[];
     var titleOffset = 0;
@@ -89,6 +92,7 @@ class ArticlePaginationEngine {
         metrics: metrics,
         titleStyle: titleStyle,
         bodyStyle: bodyStyle,
+        wrapGroupsByAssetId: wrapGroupsByAssetId,
       );
       pages.add(page.page);
       titleOffset = page.nextTitleOffset;
@@ -215,6 +219,7 @@ class ArticlePaginationEngine {
     required ArticleCanvasMetrics metrics,
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
+    required Map<String, ArticleWrapNodeGroup> wrapGroupsByAssetId,
   }) {
     var remainingHeight = contentHeight;
     ArticleTextRange? titleRange;
@@ -411,6 +416,7 @@ class ArticlePaginationEngine {
       contentWidth: contentWidth,
       bodyStyle: bodyStyle,
       metrics: metrics,
+      wrapGroupsByAssetId: wrapGroupsByAssetId,
     );
 
     final List<String>? multiIds = pageAssets.length > 1
@@ -509,6 +515,7 @@ class ArticlePaginationEngine {
     required double contentWidth,
     required TextStyle bodyStyle,
     required ArticleCanvasMetrics metrics,
+    required Map<String, ArticleWrapNodeGroup> wrapGroupsByAssetId,
   }) {
     final fragments = <ArticleLayoutFragment>[];
     if (titleText.trim().isNotEmpty) {
@@ -544,9 +551,12 @@ class ArticlePaginationEngine {
           continue;
         }
         if (pa.usesWrappedLayout) {
+          final explicitGroup = wrapGroupsByAssetId[pa.id];
           final wrap = resolveArticleWrapLayout(
             ArticleWrapLayoutInput(
-              body: bodyText,
+              body: explicitGroup?.combinedText ?? bodyText,
+              leadingText: explicitGroup?.narrowText,
+              trailingText: explicitGroup?.belowText,
               rowContentWidth: contentWidth,
               bodyStyle: bodyStyle,
               captionText: pa.caption,
@@ -562,12 +572,12 @@ class ArticlePaginationEngine {
           fragments.add(
             ArticleLayoutFragment(
               kind: ArticleLayoutFragmentKind.wrapContent,
-              text: bodyText.trim(),
+              text: (explicitGroup?.combinedText ?? bodyText).trimRight(),
               asset: pa,
               wrapLayout: wrap.layout,
               textStyleKey: 'body',
-              leadingText: wrap.leadingText.trim(),
-              trailingText: wrap.trailingText.trim(),
+              leadingText: wrap.leadingText.trimRight(),
+              trailingText: wrap.trailingText.trimRight(),
             ),
           );
         } else {

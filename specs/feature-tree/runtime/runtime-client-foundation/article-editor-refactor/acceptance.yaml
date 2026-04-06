@@ -92,6 +92,7 @@ acceptance:
       预览横向翻页具备书本向动效（铰链/卷曲近似或等价自定义过渡），且前翻 / 回翻两方向均成立；
       非裸 PageView 无过渡硬切作为终态；
       若低端机降级须在 design 所述策略内并可在 PR 说明。
+    status: implemented
   - id: A-chrome-next-step-consistency
     criteria: >
       沉浸文章顶栏与主 CTA（草稿、下一步）与图片编辑流「下一步」及现网 `create_page` 沉浸条在材质、字重、强调色上可衔接，符合 iOS 语义 token。

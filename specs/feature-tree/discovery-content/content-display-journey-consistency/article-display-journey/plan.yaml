@@ -116,7 +116,7 @@ slices:
       - journal/ritual/diffuse/tech/gentle 五套 reader chrome 可切换
       - 真实翻页支持四角热区与中间停留态
       - reduced motion / 低性能下可自动降级为 book-style pager
-    status: planned
+    status: implemented
 
   - id: P7
     title: align editor presentation settings and preview
@@ -163,4 +163,4 @@ slices:
       - feed card / reader shell / editor preview / fallback projection 都有稳定测试
       - 观测指标可用，能区分 hydration / page curl / fallback 问题
       - enable_article_book_reader / enable_article_page_curl / enable_article_distribution_profiles 可独立灰度与回滚
-    status: planned
+    status: in_progress
