@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
+import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
 
@@ -60,7 +63,8 @@ class AssistantSessionManager {
       await _wipePersistedHistoryFile(file);
       return;
     }
-    if ((raw['version'] ?? '').toString().trim() != assistantHistoryStorageVersion) {
+    if ((raw['version'] ?? '').toString().trim() !=
+        assistantHistoryStorageVersion) {
       await _wipePersistedHistoryFile(file);
       return;
     }
@@ -69,7 +73,8 @@ class AssistantSessionManager {
       await _wipePersistedHistoryFile(file);
       return;
     }
-    final rawMetadata = (raw['metadata'] as Map?)?.cast<String, dynamic>() ??
+    final rawMetadata =
+        (raw['metadata'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     var mutated = false;
     for (final entry in rawSessions.entries) {
@@ -165,7 +170,31 @@ class AssistantSessionManager {
     });
   }
 
-  String summarizeRecent(String sessionId, {int limit = 8}) {
+  List<Map<String, dynamic>> recentDialogueRounds(
+    String sessionId, {
+    int limit = defaultRecentDialogueRoundsLimit,
+  }) {
+    final history = getOrCreateSession(sessionId);
+    if (history.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+    return buildRecentDialogueRounds(history, limit: limit);
+  }
+
+  String summarizeRecent(
+    String sessionId, {
+    int limit = 8,
+    int? roundsLimit,
+  }) {
+    final normalizedRoundsLimit = roundsLimit ?? 0;
+    if (normalizedRoundsLimit > 0) {
+      final transcript = buildRecentDialogueRoundsTranscript(
+        recentDialogueRounds(sessionId, limit: normalizedRoundsLimit),
+      );
+      if (transcript.isNotEmpty) {
+        return transcript;
+      }
+    }
     final history = getOrCreateSession(sessionId);
     if (history.isEmpty) return '';
     final segment = history.length <= limit
@@ -247,9 +276,14 @@ class AssistantSessionManager {
   Future<String> summarizeRecentAsync(
     String sessionId, {
     int limit = 8,
+    int? roundsLimit,
     Future<String> Function(String transcript)? summarizer,
   }) async {
-    final raw = summarizeRecent(sessionId, limit: limit);
+    final raw = summarizeRecent(
+      sessionId,
+      limit: limit,
+      roundsLimit: roundsLimit,
+    );
     if (raw.isEmpty) return '';
     if (summarizer == null) return raw;
     try {
@@ -470,7 +504,9 @@ class AssistantSessionManager {
     final normalized = Map<String, dynamic>.from(raw);
     final role = (normalized['role'] ?? '').toString();
     if (role != 'assistant') return normalized;
-    final canonical = normalizeCanonicalPersistedAssistantTurnMessage(normalized);
+    final canonical = normalizeCanonicalPersistedAssistantTurnMessage(
+      normalized,
+    );
     if (canonical == null) {
       return null;
     }
@@ -488,7 +524,13 @@ class AssistantSessionManager {
       displayMarkdown,
       content,
     ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
-    if (best.isEmpty) {
+    final hasReplayableProcessState =
+        !resolvePersistedAssistantJourney(canonical).isEmpty ||
+        resolvePersistedAssistantProcessTimeline(canonical).isNotEmpty ||
+        hasAssistantDisplayState(
+          resolvePersistedAssistantDisplayState(canonical),
+        );
+    if (best.isEmpty && !hasReplayableProcessState) {
       return null;
     }
     canonical['content'] = best;

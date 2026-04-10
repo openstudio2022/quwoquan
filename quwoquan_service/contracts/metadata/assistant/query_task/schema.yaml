@@ -82,3 +82,23 @@ fields:
     dart_type: int
     json_key: freshnessHoursMax
     default: 0
+  - name: timeScope
+    dart_type: String
+    json_key: timeScope
+    default: ''
+  - name: timeRangeStart
+    dart_type: String
+    json_key: timeRangeStart
+    default: ''
+  - name: timeRangeEnd
+    dart_type: String
+    json_key: timeRangeEnd
+    default: ''
+  - name: timePoint
+    dart_type: String
+    json_key: timePoint
+    default: ''
+  - name: timezone
+    dart_type: String
+    json_key: timezone
+    default: ''

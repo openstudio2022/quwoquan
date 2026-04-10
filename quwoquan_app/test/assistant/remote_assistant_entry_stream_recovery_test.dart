@@ -75,6 +75,9 @@ void main() {
     expect(completed!.finalText, '这是远端流式回答。');
     expect(completed.degraded, isTrue);
     expect(completed.errorCode, 'remote_stream_terminal_payload_missing');
+    expect(completed.answerGateDecision.finalAnswerReady, isFalse);
+    expect(completed.answerGateDecision.reasonCode, 'missing_terminal_payload');
+    expect(completed.answerGateDecision.answerEligibility, 'blocked');
     expect(
       events.where(
         (event) => event.type == AssistantRunStreamEventType.journeyUpdate,

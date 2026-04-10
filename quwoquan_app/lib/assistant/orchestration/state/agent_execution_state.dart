@@ -21,6 +21,8 @@ class AssistantBootstrapContext {
     this.sessionId = 'default',
     this.latestUserQuery = '',
     this.historySummary = '',
+    this.recentDialogueRounds = const <Map<String, dynamic>>[],
+    this.recentDialogueRoundsLimit = 5,
     this.recalledTexts = const <String>[],
     this.previousIntentGraph,
     this.previousAnswerSummary = '',
@@ -43,6 +45,8 @@ class AssistantBootstrapContext {
   final String sessionId;
   final String latestUserQuery;
   final String historySummary;
+  final List<Map<String, dynamic>> recentDialogueRounds;
+  final int recentDialogueRoundsLimit;
   final List<String> recalledTexts;
   final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
@@ -63,6 +67,8 @@ class AssistantBootstrapContext {
     String? sessionId,
     String? latestUserQuery,
     String? historySummary,
+    List<Map<String, dynamic>>? recentDialogueRounds,
+    int? recentDialogueRoundsLimit,
     List<String>? recalledTexts,
     IntentGraph? previousIntentGraph,
     String? previousAnswerSummary,
@@ -83,6 +89,9 @@ class AssistantBootstrapContext {
       sessionId: sessionId ?? this.sessionId,
       latestUserQuery: latestUserQuery ?? this.latestUserQuery,
       historySummary: historySummary ?? this.historySummary,
+      recentDialogueRounds: recentDialogueRounds ?? this.recentDialogueRounds,
+      recentDialogueRoundsLimit:
+          recentDialogueRoundsLimit ?? this.recentDialogueRoundsLimit,
       recalledTexts: recalledTexts ?? this.recalledTexts,
       previousIntentGraph: previousIntentGraph ?? this.previousIntentGraph,
       previousAnswerSummary:

@@ -8,6 +8,8 @@ import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_run
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
@@ -71,6 +73,13 @@ class BootstrapPhase implements Phase {
     final previousIntentGraph = _parsePreviousIntentGraph(latestAssistant);
     final previousAnswerSummary = _resolvePreviousAnswerSummary(
       latestAssistant,
+    );
+    final recentRoundsLimit = resolveRecentDialogueRoundsLimit(
+      request.contextScopeHint,
+    );
+    final recentDialogueRounds = sessionManager.recentDialogueRounds(
+      sessionId,
+      limit: recentRoundsLimit,
     );
     final previousProviderReasoningContinuation =
         _resolveProviderReasoningContinuation(latestAssistant);
@@ -138,6 +147,7 @@ class BootstrapPhase implements Phase {
         enableChatRecent && continuityPolicy.allowHistorySummary
         ? await sessionManager.summarizeRecentAsync(
             sessionId,
+            roundsLimit: recentRoundsLimit,
             summarizer: (transcript) => _summarizeWithLlm(
               transcript: transcript,
               sessionId: sessionId,
@@ -169,6 +179,9 @@ class BootstrapPhase implements Phase {
       if (_hasStructuredContent(carriedHistoricalThinkingSnapshot.toJson()))
         'historicalThinkingSnapshot': carriedHistoricalThinkingSnapshot
             .toJson(),
+      if (recentDialogueRounds.isNotEmpty)
+        'recentDialogueRounds': recentDialogueRounds,
+      'recentDialogueRoundsLimit': recentRoundsLimit,
       if (carriedProviderReasoningContinuation.isNotEmpty)
         'providerReasoningContinuation': carriedProviderReasoningContinuation,
     };
@@ -214,6 +227,8 @@ class BootstrapPhase implements Phase {
           sessionId: sessionId,
           latestUserQuery: latestUserQuery,
           historySummary: historySummary,
+          recentDialogueRounds: recentDialogueRounds,
+          recentDialogueRoundsLimit: recentRoundsLimit,
           recalledTexts: recalledTexts,
           previousIntentGraph: carriedPreviousIntentGraph,
           previousAnswerSummary: carriedPreviousAnswerSummary,
@@ -345,7 +360,7 @@ class BootstrapPhase implements Phase {
     );
     if (raw.isEmpty) return const RunArtifactsUnderstandingSnapshot();
     try {
-      return RunArtifactsUnderstandingSnapshot.fromJson(raw);
+      return parseRunArtifactsUnderstandingSnapshotFromMap(raw);
     } catch (_) {
       return const RunArtifactsUnderstandingSnapshot();
     }

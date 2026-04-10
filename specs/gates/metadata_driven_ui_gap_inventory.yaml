@@ -127,7 +127,7 @@ domains:
         target_dto: ContentPublishDraftComposite
         target_read_projection: PostReadPresentation
         target_edit_draft: ContentPublishDraftComposite
-      - path: quwoquan_app/lib/ui/content/entry/pages/article_preview_page.dart
+      - path: quwoquan_app/lib/ui/content/entry/pages/article_typography_page.dart
         status: partial
         note: P2 预览应等同 ReadPresentation(detail|feed) 自 Draft；当前仅 provider 快照
         target_dto: ContentPublishDraftComposite

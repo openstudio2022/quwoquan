@@ -79,7 +79,7 @@ class ArticlePageCurlMeshBuilder {
             corner: effectiveCorner,
             reversePose: reversePose,
           )
-        : _CurlTimeline.fromRenderFrame(effectiveFrame.timeline);
+        : _CurlTimeline.fromRenderFrame(effectiveFrame, pageSize);
     final pointCount = (horizontalSegments + 1) * (verticalSegments + 1);
     final points = List<_CurlMeshPoint>.filled(
       pointCount,
@@ -635,7 +635,51 @@ class _CurlTimeline {
     required this.reversePose,
   });
 
-  factory _CurlTimeline.fromRenderFrame(StPageFlipTimeline timeline) {
+  factory _CurlTimeline.fromRenderFrame(
+    StPageFlipRenderFrame renderFrame,
+    Size pageSize,
+  ) {
+    final timeline = renderFrame.timeline;
+    final backwardLeafFrame = renderFrame.backwardLeafFrame;
+    if (renderFrame.direction == StPageFlipDirection.back &&
+        backwardLeafFrame != null) {
+      final displayCurlWidth =
+          (pageSize.width * backwardLeafFrame.curlWidthNormalized)
+              .clamp(pageSize.width * 0.04, pageSize.width * 0.32)
+              .toDouble();
+      final radiusBase = math.max(
+        displayCurlWidth / math.pi,
+        pageSize.width * 0.045,
+      );
+      final meshPivot =
+          (pageSize.width * (1 - backwardLeafFrame.curlPivotNormalized))
+              .clamp(0.0, pageSize.width)
+              .toDouble();
+      return _CurlTimeline(
+        mirrored: true,
+        basePivot: meshPivot,
+        diagonalExtent: math.max(
+          pageSize.width * 0.04,
+          displayCurlWidth * 0.65,
+        ),
+        leadingRadius: radiusBase * 1.08,
+        trailingRadius: radiusBase * 0.72,
+        sheetShift:
+            (ui.lerpDouble(
+                  0.0,
+                  pageSize.width * 0.04,
+                  backwardLeafFrame.unrollProgress,
+                ) ??
+                0.0)
+                .toDouble(),
+        perspective: timeline.perspective,
+        rollProgress: backwardLeafFrame.emergenceProgress,
+        cylinderProgress: backwardLeafFrame.unrollProgress,
+        unfoldProgress: backwardLeafFrame.settleProgress,
+        heightLiftBias: backwardLeafFrame.edgeLift,
+        reversePose: null,
+      );
+    }
     return _CurlTimeline(
       mirrored: timeline.mirrored,
       basePivot: timeline.basePivot,

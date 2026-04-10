@@ -4,15 +4,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/components/assistant/petal_mark.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/main.dart' as app;
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
+
+import 'support/assistant_replay_baseline.dart';
 
 const _defaultFirstQuery = '如果把九寨沟方向考虑进去，多给我几个备选方案';
 const _defaultSecondQuery = '如果我只有4天，优先哪条路线？';
@@ -24,8 +29,172 @@ const _secondQuery = String.fromEnvironment(
   'ASSISTANT_REPLAY_SECOND_QUERY',
   defaultValue: _defaultSecondQuery,
 );
+const _temporalReplayCaseFilter = String.fromEnvironment(
+  'ASSISTANT_TEMPORAL_CASE_FILTER',
+  defaultValue: '',
+);
+const _replayCaseFilter = String.fromEnvironment(
+  'ASSISTANT_REPLAY_CASE_FILTER',
+  defaultValue: '',
+);
+const _replayRepeatCount = int.fromEnvironment(
+  'ASSISTANT_REPLAY_REPEAT_COUNT',
+  defaultValue: 3,
+);
+const _enableLegacyReplayCases = bool.fromEnvironment(
+  'ASSISTANT_ENABLE_LEGACY_REPLAY_CASES',
+  defaultValue: false,
+);
+const _knownFailureClasses = <String>[
+  'none',
+  'degraded_fail_closed',
+  'heuristic_fallback_used',
+  'tool_progress_as_answer',
+  'internal_protocol_leak',
+  'generic_fallback_answer',
+  'empty_final_answer',
+  'missing_query_design',
+  'weak_evidence_answered',
+  'next_action_not_answer',
+  'final_answer_not_ready',
+  'timeline_not_canonical',
+  'reload_state_lost',
+  'exception',
+];
 const _weatherFirstQuery = '深圳今天天气怎么样？需要带外套吗？';
 const _weatherSecondQuery = '明天会下雨吗，要带伞还是外套？';
+const _m0ReplayCases = <_M0ReplayCase>[
+  _M0ReplayCase(
+    caseId: 'yesterday_stock_reason',
+    turnShape: _M0ReplayTurnShape.singleTurn,
+    expectedScope: 'stock_reason',
+    expectedTemporalAnchor: 'explicit_date_from_yesterday',
+    expectedOutcomeClass: 'answer_ready',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'turn_1',
+        query: '昨天股票为什么大涨',
+        expectedScope: 'stock_reason',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.yesterday,
+      ),
+    ],
+  ),
+  _M0ReplayCase(
+    caseId: 'followup_a_stock_reason',
+    turnShape: _M0ReplayTurnShape.followup,
+    expectedScope: 'stock_reason',
+    expectedTemporalAnchor: 'followup_after_explicit_yesterday_anchor',
+    expectedOutcomeClass: 'answer_ready',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'turn_1',
+        query: '昨天股票为什么大涨',
+        expectedScope: 'stock_reason',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.yesterday,
+      ),
+      _M0ReplayTurnSpec(
+        turnId: 'turn_2',
+        query: 'a股大涨原因是什么',
+        expectedScope: 'stock_reason',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.none,
+      ),
+    ],
+  ),
+  _M0ReplayCase(
+    caseId: 'yesterday_a_stock_reason',
+    turnShape: _M0ReplayTurnShape.singleTurn,
+    expectedScope: 'stock_reason',
+    expectedTemporalAnchor: 'explicit_date_from_yesterday',
+    expectedOutcomeClass: 'answer_ready',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'turn_1',
+        query: '昨天A股为什么大涨',
+        expectedScope: 'stock_reason',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.yesterday,
+      ),
+    ],
+  ),
+  _M0ReplayCase(
+    caseId: 'wednesday_a_stock_reason',
+    turnShape: _M0ReplayTurnShape.singleTurn,
+    expectedScope: 'stock_reason',
+    expectedTemporalAnchor: 'explicit_calendar_anchor_from_weekday',
+    expectedOutcomeClass: 'answer_ready',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'turn_1',
+        query: '周三A股为什么大涨',
+        expectedScope: 'stock_reason',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.weekday,
+      ),
+    ],
+  ),
+  _M0ReplayCase(
+    caseId: 'tomorrow_weather',
+    turnShape: _M0ReplayTurnShape.singleTurn,
+    expectedScope: 'weather_forecast',
+    expectedTemporalAnchor: 'explicit_date_from_tomorrow',
+    expectedOutcomeClass: 'answer_ready',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'turn_1',
+        query: '明天天气怎么样？需要带外套吗？',
+        expectedScope: 'weather_forecast',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.tomorrow,
+      ),
+    ],
+  ),
+  _M0ReplayCase(
+    caseId: 'cold_start_reload',
+    turnShape: _M0ReplayTurnShape.coldStartReload,
+    expectedScope: 'weather_forecast',
+    expectedTemporalAnchor: 'explicit_date_from_tomorrow',
+    expectedOutcomeClass: 'reload_recovered',
+    turns: <_M0ReplayTurnSpec>[
+      _M0ReplayTurnSpec(
+        turnId: 'seed_turn',
+        query: '明天天气怎么样？需要带外套吗？',
+        expectedScope: 'weather_forecast',
+        expectedOutcomeClass: 'answer_ready',
+        temporalExpectation: _M0TemporalExpectation.tomorrow,
+      ),
+    ],
+  ),
+];
+const _temporalReplayCases = <_TemporalReplayCase>[
+  _TemporalReplayCase(
+    caseName: 'last_wednesday_stock',
+    query: '上周三A股为什么大涨',
+    kind: _TemporalReplayExpectationKind.lastWednesday,
+  ),
+  _TemporalReplayCase(
+    caseName: 'next_wednesday_weather',
+    query: '下周三深圳天气怎么样？要带外套吗？',
+    kind: _TemporalReplayExpectationKind.nextWednesday,
+  ),
+  _TemporalReplayCase(
+    caseName: 'day_after_tomorrow_weather',
+    query: '深圳后天天气怎么样，要带伞还是外套？',
+    kind: _TemporalReplayExpectationKind.dayAfterTomorrow,
+  ),
+  _TemporalReplayCase(
+    caseName: 'recent_market_window',
+    query: '最近股市走向怎么样？',
+    kind: _TemporalReplayExpectationKind.recentWindow,
+  ),
+  _TemporalReplayCase(
+    caseName: 'future_market_forecast',
+    query: '结合最近股市走向及国际经济形势，预测下未来股市走向',
+    kind: _TemporalReplayExpectationKind.futureForecast,
+  ),
+];
 const _skeletalProcessHeaders = <String>[
   '理解问题',
   '结果处理',
@@ -63,27 +232,1059 @@ const _forbiddenFragments = <String>[
   'MissingPluginException',
   'personalassistant/nativeapi',
   'Local context failed',
+  'Unsupported content type',
+  'application/pdf',
+  '这个操作我暂时还没拿到可展示结果',
+  '本次任务已完成，但没有生成可展示结果',
 ];
+const MethodChannel _nativeApiChannel = MethodChannel(
+  'personal_assistant/native_api',
+);
+const Map<String, dynamic> _replayLocalContext = <String, dynamic>{
+  'city': '深圳',
+  'currentCity': '深圳',
+  'locationSource': 'integration_test',
+  'timezone': 'Asia/Shanghai',
+  'locale': 'zh_CN',
+  'location': <String, dynamic>{
+    'city': '深圳',
+    'latitude': 22.5431,
+    'longitude': 114.0579,
+    'accuracyM': 1200,
+    'source': 'integration_test',
+  },
+  'permissions': <String, dynamic>{
+    'location': true,
+    'photos': false,
+    'camera': false,
+    'notification': false,
+  },
+  'device': <String, dynamic>{
+    'os': 'iOS',
+    'model': 'iPhone Simulator',
+    'locale': 'zh_CN',
+    'timezone': 'Asia/Shanghai',
+  },
+};
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_nativeApiChannel, (call) async {
+        switch (call.method) {
+          case 'getLocalContext':
+            return _replayLocalContext;
+          default:
+            return <String, dynamic>{'error': 'unsupported_test_method'};
+        }
+      });
 
-  testWidgets('助理回放与天气问答回归', (tester) async {
-    await _runReplayCase(
-      tester,
-      binding: binding,
-      caseName: 'manual_replay',
-      firstQuery: _firstQuery,
-      secondQuery: _secondQuery,
-    );
-    await _runReplayCase(
-      tester,
-      binding: binding,
-      caseName: 'weather_replay',
-      firstQuery: _weatherFirstQuery,
-      secondQuery: _weatherSecondQuery,
-    );
+  testWidgets('Assistant M0 replay baseline', (tester) async {
+    await _runM0ReplayBaseline(tester, binding: binding);
   });
+
+  if (_enableLegacyReplayCases) {
+    testWidgets('助理回放与天气问答回归', (tester) async {
+      await _runReplayCase(
+        tester,
+        binding: binding,
+        caseName: 'manual_replay',
+        firstQuery: _firstQuery,
+        secondQuery: _secondQuery,
+      );
+      await _runReplayCase(
+        tester,
+        binding: binding,
+        caseName: 'weather_replay',
+        firstQuery: _weatherFirstQuery,
+        secondQuery: _weatherSecondQuery,
+      );
+    });
+
+    testWidgets('时间锚点真实回放回归', (tester) async {
+      for (final replayCase in _selectedTemporalReplayCases()) {
+        await _runSingleQueryReplayCase(
+          tester,
+          binding: binding,
+          replayCase: replayCase,
+        );
+      }
+    });
+
+    testWidgets('冷启动 reload 后仍恢复最后一条 assistant canonical state', (
+      tester,
+    ) async {
+      await _runColdStartReloadCase(tester, binding: binding);
+    });
+  }
+}
+
+Future<void> _runM0ReplayBaseline(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+}) async {
+  final selectedCases = _selectedM0ReplayCases();
+  final caseReports = <String, dynamic>{};
+  final caseGateResults = <String, bool>{};
+  final packs = <AssistantReplayBaselinePack>[];
+  final blockingMessages = <String>[];
+  for (final replayCase in selectedCases) {
+    final pack = await _runM0BaselineCase(tester, replayCase: replayCase);
+    final artifactPath = await writeAssistantReplayBaselinePack(pack);
+    packs.add(pack);
+    caseGateResults[replayCase.caseId] = pack.m1Entry.eligible;
+    caseReports[replayCase.caseId] = <String, dynamic>{
+      'artifactPath': artifactPath,
+      'pack': pack.toJson(),
+      'm1Entry': pack.m1Entry.toJson(),
+      'stability': pack.stability.toJson(),
+      'attemptOutcomeClasses': pack.attempts
+          .map((item) => item.outcomeClass)
+          .toList(growable: false),
+      'attemptFailureClasses': pack.attempts
+          .map((item) => item.failureClass)
+          .toList(growable: false),
+    };
+    if (!pack.m1Entry.eligible) {
+      blockingMessages.add(
+        '${replayCase.caseId}: ${_summarizePackBlocking(pack)} | $artifactPath',
+      );
+    }
+  }
+  final corpusEntry = _buildM0CorpusM1Entry(
+    packs: packs,
+    selectedCases: selectedCases,
+  );
+  final indexPayload = <String, dynamic>{
+    'schemaVersion': assistantReplayM0BaselinePackVersion,
+    'generatedAt': DateTime.now().toIso8601String(),
+    'repeatCount': _replayRepeatCount,
+    'selectedCaseIds': selectedCases
+        .map((item) => item.caseId)
+        .toList(growable: false),
+    'knownFailureClasses': _knownFailureClasses,
+    'caseGateResults': caseGateResults,
+    'cases': caseReports,
+    'm1Entry': corpusEntry.toJson(),
+  };
+  final indexPath = await writeAssistantReplayBaselineIndex(
+    fileName: 'assistant_m0_index.json',
+    payload: indexPayload,
+  );
+  final existingReportData = switch (binding.reportData) {
+    final Map<Object?, Object?> map => map.map(
+      (key, value) => MapEntry(key.toString(), value),
+    ),
+    _ => <String, dynamic>{},
+  };
+  binding.reportData = <String, dynamic>{
+    ...existingReportData,
+    'assistant_m0_baseline': <String, dynamic>{
+      ...indexPayload,
+      'artifactPath': indexPath,
+    },
+  };
+  if (!corpusEntry.eligible) {
+    fail(
+      'Assistant M0 replay baseline 未准出。\n'
+      '索引: $indexPath\n'
+      '${blockingMessages.join('\n')}',
+    );
+  }
+}
+
+String _summarizePackBlocking(AssistantReplayBaselinePack pack) {
+  final attemptSummaries = pack.attempts
+      .map(
+        (attempt) =>
+            'attempt${attempt.attemptIndex}'
+            '[outcome=${attempt.outcomeClass}, failure=${attempt.failureClass}, issues=${attempt.issues.join(',')}]',
+      )
+      .join(' ; ');
+  final blocking = pack.m1Entry.blockingReasons.join('；');
+  return '$blocking | $attemptSummaries';
+}
+
+List<_M0ReplayCase> _selectedM0ReplayCases() {
+  final filterValues = <String>{
+    ..._splitCaseFilter(_replayCaseFilter),
+    ..._splitCaseFilter(_temporalReplayCaseFilter),
+  };
+  if (filterValues.isEmpty) {
+    return _m0ReplayCases;
+  }
+  return _m0ReplayCases
+      .where((item) => filterValues.contains(item.caseId))
+      .toList(growable: false);
+}
+
+Set<String> _splitCaseFilter(String raw) {
+  return raw
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet();
+}
+
+Future<AssistantReplayBaselinePack> _runM0BaselineCase(
+  WidgetTester tester, {
+  required _M0ReplayCase replayCase,
+}) async {
+  final attempts = <AssistantReplayBaselineAttempt>[];
+  for (var i = 0; i < _replayRepeatCount; i++) {
+    final attempt = replayCase.turnShape == _M0ReplayTurnShape.coldStartReload
+        ? await _runM0ReloadAttempt(
+            tester,
+            replayCase: replayCase,
+            attemptIndex: i + 1,
+          )
+        : await _runM0StandardAttempt(
+            tester,
+            replayCase: replayCase,
+            attemptIndex: i + 1,
+          );
+    attempts.add(attempt);
+  }
+  final stability = _buildM0Stability(attempts);
+  final m1Entry = _buildM0CaseM1Entry(
+    replayCase: replayCase,
+    attempts: attempts,
+    stability: stability,
+  );
+  return AssistantReplayBaselinePack(
+    caseId: replayCase.caseId,
+    turnShape: replayCase.turnShape.name,
+    expectedScope: replayCase.expectedScope,
+    expectedTemporalAnchor: replayCase.expectedTemporalAnchor,
+    expectedOutcomeClass: replayCase.expectedOutcomeClass,
+    repeatCount: _replayRepeatCount,
+    knownFailureClasses: _knownFailureClasses,
+    attempts: attempts,
+    stability: stability,
+    m1Entry: m1Entry,
+    generatedAt: DateTime.now().toIso8601String(),
+    softEvidence: const <String, dynamic>{
+      'visualReviewMode': 'text_snapshot_only',
+      'screenshotGate': 'soft_evidence_only',
+    },
+  );
+}
+
+Future<AssistantReplayBaselineAttempt> _runM0StandardAttempt(
+  WidgetTester tester, {
+  required _M0ReplayCase replayCase,
+  required int attemptIndex,
+}) async {
+  final originalOnError = FlutterError.onError;
+  final referenceNow = DateTime.now();
+  final turns = <AssistantReplayBaselineTurn>[];
+  final issues = <String>[];
+  try {
+    await _resetAssistantApp(tester);
+    await _wipeAssistantStorage();
+    _suppressNetworkImageErrors();
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+
+    for (final turn in replayCase.turns) {
+      final result = await _sendQueryWithSingleRetry(tester, query: turn.query);
+      final snapshot = _latestAssistantSnapshot(tester);
+      final artifact = await _buildM0TurnArtifact(
+        result: result,
+        snapshot: snapshot,
+        turn: turn,
+        referenceNow: referenceNow,
+      );
+      turns.add(artifact);
+      issues.addAll(artifact.issues.map((item) => '${turn.turnId}: $item'));
+    }
+  } catch (error) {
+    issues.add('exception: $error');
+  } finally {
+    FlutterError.onError = originalOnError;
+    await _resetAssistantApp(tester);
+  }
+  final failureClass = _resolveAttemptFailureClass(
+    turns: turns,
+    issues: issues,
+  );
+  final outcomeClass = _resolveAttemptOutcomeClass(
+    replayCase: replayCase,
+    turns: turns,
+    failureClass: failureClass,
+  );
+  return AssistantReplayBaselineAttempt(
+    attemptIndex: attemptIndex,
+    outcomeClass: outcomeClass,
+    failureClass: failureClass,
+    gatePassed:
+        issues.isEmpty &&
+        failureClass == 'none' &&
+        outcomeClass == replayCase.expectedOutcomeClass,
+    issues: issues,
+    turns: turns,
+    details: <String, dynamic>{
+      'referenceNow': referenceNow.toIso8601String(),
+      'turnCount': turns.length,
+    },
+  );
+}
+
+Future<AssistantReplayBaselineAttempt> _runM0ReloadAttempt(
+  WidgetTester tester, {
+  required _M0ReplayCase replayCase,
+  required int attemptIndex,
+}) async {
+  final originalOnError = FlutterError.onError;
+  final referenceNow = DateTime.now();
+  final turns = <AssistantReplayBaselineTurn>[];
+  final issues = <String>[];
+  Map<String, dynamic> beforeReload = const <String, dynamic>{};
+  Map<String, dynamic> afterReload = const <String, dynamic>{};
+  try {
+    await _resetAssistantApp(tester);
+    await _wipeAssistantStorage();
+    _suppressNetworkImageErrors();
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+
+    final seedTurn = replayCase.turns.first;
+    final result = await _sendQueryWithSingleRetry(
+      tester,
+      query: seedTurn.query,
+    );
+    final seedSnapshot = _latestAssistantSnapshot(tester);
+    final seedArtifact = await _buildM0TurnArtifact(
+      result: result,
+      snapshot: seedSnapshot,
+      turn: seedTurn,
+      referenceNow: referenceNow,
+    );
+    turns.add(seedArtifact);
+    issues.addAll(
+      seedArtifact.issues.map((item) => '${seedTurn.turnId}: $item'),
+    );
+    beforeReload = _reloadStateFromSnapshot(seedSnapshot);
+
+    await _resetAssistantApp(tester);
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+    await _pumpUntil(
+      tester,
+      condition: () {
+        final snapshot = _latestAssistantSnapshot(tester);
+        return snapshot != null && snapshot.answerText.trim().isNotEmpty;
+      },
+      timeout: const Duration(seconds: 20),
+    );
+    final recoveredSnapshot = _latestAssistantSnapshot(tester);
+    afterReload = _reloadStateFromSnapshot(recoveredSnapshot);
+    issues.addAll(
+      _collectReloadIssues(
+        beforeReload: beforeReload,
+        afterReload: afterReload,
+      ),
+    );
+  } catch (error) {
+    issues.add('exception: $error');
+  } finally {
+    FlutterError.onError = originalOnError;
+    await _resetAssistantApp(tester);
+  }
+  final failureClass = issues.any((item) => item.startsWith('reload_'))
+      ? 'reload_state_lost'
+      : _resolveAttemptFailureClass(turns: turns, issues: issues);
+  final outcomeClass = failureClass == 'none' && issues.isEmpty
+      ? 'reload_recovered'
+      : 'reload_state_lost';
+  return AssistantReplayBaselineAttempt(
+    attemptIndex: attemptIndex,
+    outcomeClass: outcomeClass,
+    failureClass: failureClass,
+    gatePassed:
+        issues.isEmpty &&
+        failureClass == 'none' &&
+        outcomeClass == replayCase.expectedOutcomeClass,
+    issues: issues,
+    turns: turns,
+    details: <String, dynamic>{
+      'referenceNow': referenceNow.toIso8601String(),
+      'beforeReload': beforeReload,
+      'afterReload': afterReload,
+    },
+  );
+}
+
+Future<AssistantReplayBaselineTurn> _buildM0TurnArtifact({
+  required _ReplayResult result,
+  required _AssistantBubbleSnapshot? snapshot,
+  required _M0ReplayTurnSpec turn,
+  required DateTime referenceNow,
+}) async {
+  final queryDesignLines =
+      snapshot?.queryDesignLines ?? result.queryDesignLines;
+  final issues = <String>[
+    ..._collectReplayGateIssues(result),
+    ..._collectTurnScopeIssues(
+      result: result,
+      turn: turn,
+      queryDesignLines: queryDesignLines,
+    ),
+    ..._collectTemporalAnchorIssues(
+      result: result,
+      turn: turn,
+      referenceNow: referenceNow,
+      queryDesignLines: queryDesignLines,
+    ),
+  ];
+  final finalAnswerReady = snapshot?.finalAnswerReady ?? false;
+  if (!finalAnswerReady) {
+    issues.add('final_answer_not_ready');
+  }
+  final runId = snapshot?.runId ?? '';
+  final traceId = snapshot?.traceId ?? '';
+  final messageId = snapshot?.messageId ?? '';
+  final runLogPath = await resolveAssistantRunLogPath(runId) ?? '';
+  final runLog = await loadAssistantRunLog(runLogPath);
+  final replayRecord = runLogPath.isEmpty
+      ? null
+      : await buildAssistantReplayRecordFromRunLog(
+          messageId: messageId,
+          query: turn.query,
+          answerText: snapshot?.answerText ?? result.finalAnswerText,
+          displayPlainText: snapshot?.answerText ?? result.finalAnswerText,
+          runLogPath: runLogPath,
+        );
+  final canonicalState = snapshot == null
+      ? const <String, dynamic>{}
+      : _buildCanonicalBaselineState(snapshot);
+  if (runLogPath.isEmpty) {
+    issues.add('missing_run_log_path');
+  }
+  if (canonicalState.isEmpty) {
+    issues.add('missing_canonical_state');
+  }
+  final failureClass = _resolveTurnFailureClass(result: result, issues: issues);
+  final outcomeClass = _resolveTurnOutcomeClass(
+    failureClass: failureClass,
+    finalAnswerReady: finalAnswerReady,
+  );
+  return AssistantReplayBaselineTurn(
+    turnId: turn.turnId,
+    query: turn.query,
+    runId: runId,
+    traceId: traceId,
+    runLogPath: runLogPath,
+    expectedOutcomeClass: turn.expectedOutcomeClass,
+    outcomeClass: outcomeClass,
+    failureClass: failureClass,
+    gatePassed:
+        issues.isEmpty &&
+        failureClass == 'none' &&
+        finalAnswerReady &&
+        outcomeClass == turn.expectedOutcomeClass,
+    finalAnswerReady: finalAnswerReady,
+    issues: issues,
+    queryDesignLines: queryDesignLines,
+    report: <String, dynamic>{
+      ...result.toJson(),
+      'messageId': messageId,
+      'runId': runId,
+      'traceId': traceId,
+      'finalAnswerReady': finalAnswerReady,
+    },
+    canonicalState: canonicalState,
+    runLogMeta: _extractRunLogMeta(runLog),
+    replayRecord: replayRecord?.toJson() ?? const <String, dynamic>{},
+  );
+}
+
+List<String> _collectReplayGateIssues(_ReplayResult result) {
+  final issues = <String>[];
+  if (!result.phaseLabelSeen) {
+    issues.add('missing_process_header');
+  }
+  if (result.degraded) {
+    issues.add('degraded_fail_closed');
+  }
+  if (result.heuristicFallbackUsed) {
+    issues.add('heuristic_fallback_used');
+  }
+  if (result.finalAnswerText.trim().isEmpty) {
+    issues.add('empty_final_answer');
+  }
+  if (_isGenericAssistantFallback(result.finalAnswerText)) {
+    issues.add('generic_fallback_answer');
+  }
+  if (AssistantContentFilters.isProgressPlaceholder(result.finalAnswerText) ||
+      AssistantContentFilters.isProgressPlaceholder(result.finalVisibleText)) {
+    issues.add('tool_progress_as_answer');
+  }
+  if (result.finalMessageStreaming) {
+    issues.add('final_message_still_streaming');
+  }
+  if (_containsInternalProtocolLeak(result.finalAnswerText)) {
+    issues.add('internal_protocol_answer');
+  }
+  if (_containsInternalProtocolLeak(result.finalVisibleText)) {
+    issues.add('internal_protocol_visible');
+  }
+  if (!_isCompletedProcessHeader(result.processHeaderText)) {
+    issues.add('process_header_not_completed');
+  }
+  if (!result.matchedExpected) {
+    issues.add('answer_missing_expected_anchor');
+  }
+  if (_completedHeaderHasDocumentCount(result.processHeaderText) &&
+      result.evidenceLedgerCount <= 0) {
+    issues.add('missing_evidence_ledger');
+  }
+  if (_completedHeaderHasDocumentCount(result.processHeaderText) &&
+      result.answerEvidenceBindingCount <= 0) {
+    issues.add('missing_answer_evidence_binding');
+  }
+  if (result.nextAction != 'answer') {
+    issues.add('next_action_not_answer');
+  }
+  if (!_listEquals(result.timelinePhases, const <String>[
+    'analyze',
+    'search',
+    'answer',
+  ])) {
+    issues.add('timeline_phases_not_canonical');
+  }
+  if (!_listEquals(result.journalStages, const <String>[
+    'analyze',
+    'search',
+    'answer',
+  ])) {
+    issues.add('journal_stages_not_canonical');
+  }
+  if (result.finalAnswerMode != 'full' &&
+      result.finalAnswerMode != 'bounded_answer') {
+    issues.add('unexpected_final_answer_mode');
+  }
+  return issues;
+}
+
+List<String> _collectTurnScopeIssues({
+  required _ReplayResult result,
+  required _M0ReplayTurnSpec turn,
+  required List<String> queryDesignLines,
+}) {
+  final issues = <String>[];
+  if (queryDesignLines.isEmpty) {
+    issues.add('missing_query_design');
+  }
+  switch (turn.expectedScope) {
+    case 'stock_reason':
+      if (!_matchesStockAnswer(result.finalAnswerText)) {
+        issues.add('scope_answer_not_stock_reason');
+      }
+      final normalizedLines = queryDesignLines
+          .map((item) => item.replaceAll(RegExp(r'\s+'), ' ').trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      if (normalizedLines.length > 2) {
+        issues.add('query_design_too_verbose');
+      }
+      if (normalizedLines.toSet().length != normalizedLines.length) {
+        issues.add('query_design_repeated');
+      }
+      break;
+    case 'weather_forecast':
+      if (!_matchesWeatherAnswer(result.finalAnswerText)) {
+        issues.add('scope_answer_not_weather');
+      }
+      break;
+  }
+  return issues;
+}
+
+List<String> _collectTemporalAnchorIssues({
+  required _ReplayResult result,
+  required _M0ReplayTurnSpec turn,
+  required DateTime referenceNow,
+  required List<String> queryDesignLines,
+}) {
+  if (turn.temporalExpectation == _M0TemporalExpectation.none) {
+    return const <String>[];
+  }
+  final issues = <String>[];
+  switch (turn.temporalExpectation) {
+    case _M0TemporalExpectation.yesterday:
+      final targetDate = _startOfDay(
+        referenceNow,
+      ).subtract(const Duration(days: 1));
+      if (!queryDesignLines.any(
+        (line) => _containsDateAnchor(line, targetDate),
+      )) {
+        issues.add('query_design_missing_explicit_date');
+      }
+      if (!_containsDateAnchor(result.finalVisibleText, targetDate)) {
+        issues.add('visible_text_missing_explicit_date');
+      }
+      if (!_containsDateAnchor(result.finalAnswerText, targetDate)) {
+        issues.add('final_answer_missing_explicit_date');
+      }
+      return issues;
+    case _M0TemporalExpectation.tomorrow:
+      final targetDate = _startOfDay(referenceNow).add(const Duration(days: 1));
+      if (!queryDesignLines.any(
+        (line) => _containsDateAnchor(line, targetDate),
+      )) {
+        issues.add('query_design_missing_explicit_date');
+      }
+      if (!_containsDateAnchor(result.finalVisibleText, targetDate)) {
+        issues.add('visible_text_missing_explicit_date');
+      }
+      if (!_containsDateAnchor(result.finalAnswerText, targetDate)) {
+        issues.add('final_answer_missing_explicit_date');
+      }
+      return issues;
+    case _M0TemporalExpectation.weekday:
+      if (!queryDesignLines.any(_containsExplicitCalendarAnchor)) {
+        issues.add('query_design_missing_calendar_anchor');
+      }
+      if (queryDesignLines.any(
+        (line) => line.contains('周三') && !_containsExplicitCalendarAnchor(line),
+      )) {
+        issues.add('query_design_retains_relative_weekday');
+      }
+      if (!_containsExplicitCalendarAnchor(result.finalVisibleText)) {
+        issues.add('visible_text_missing_calendar_anchor');
+      }
+      if (!_containsExplicitCalendarAnchor(result.finalAnswerText)) {
+        issues.add('final_answer_missing_calendar_anchor');
+      }
+      return issues;
+    case _M0TemporalExpectation.none:
+      return issues;
+  }
+}
+
+String _resolveTurnFailureClass({
+  required _ReplayResult result,
+  required List<String> issues,
+}) {
+  if (issues.any((item) => item.startsWith('exception'))) {
+    return 'exception';
+  }
+  if (result.degraded) {
+    return 'degraded_fail_closed';
+  }
+  if (result.heuristicFallbackUsed) {
+    return 'heuristic_fallback_used';
+  }
+  if (AssistantContentFilters.isProgressPlaceholder(result.finalAnswerText) ||
+      AssistantContentFilters.isProgressPlaceholder(result.finalVisibleText)) {
+    return 'tool_progress_as_answer';
+  }
+  if (_containsInternalProtocolLeak(result.finalAnswerText) ||
+      _containsInternalProtocolLeak(result.finalVisibleText)) {
+    return 'internal_protocol_leak';
+  }
+  if (result.finalAnswerText.trim().isEmpty) {
+    return 'empty_final_answer';
+  }
+  if (_isGenericAssistantFallback(result.finalAnswerText)) {
+    return 'generic_fallback_answer';
+  }
+  if (issues.contains('missing_query_design') ||
+      issues.any((item) => item.startsWith('query_design_'))) {
+    return 'missing_query_design';
+  }
+  if (issues.contains('next_action_not_answer')) {
+    return 'next_action_not_answer';
+  }
+  if (issues.contains('final_answer_not_ready')) {
+    return 'final_answer_not_ready';
+  }
+  if (issues.contains('timeline_phases_not_canonical') ||
+      issues.contains('journal_stages_not_canonical')) {
+    return 'timeline_not_canonical';
+  }
+  if (issues.contains('answer_missing_expected_anchor') ||
+      issues.contains('missing_evidence_ledger') ||
+      issues.contains('missing_answer_evidence_binding') ||
+      issues.any((item) => item.startsWith('scope_answer_not_')) ||
+      issues.any((item) => item.startsWith('visible_text_missing_')) ||
+      issues.any((item) => item.startsWith('final_answer_missing_'))) {
+    return 'weak_evidence_answered';
+  }
+  return 'none';
+}
+
+String _resolveTurnOutcomeClass({
+  required String failureClass,
+  required bool finalAnswerReady,
+}) {
+  if (failureClass == 'none' && finalAnswerReady) {
+    return 'answer_ready';
+  }
+  switch (failureClass) {
+    case 'weak_evidence_answered':
+      return 'weak_evidence_answered';
+    case 'tool_progress_as_answer':
+      return 'tool_progress_as_answer';
+    case 'internal_protocol_leak':
+      return 'internal_protocol_leak';
+    default:
+      return 'answer_failed';
+  }
+}
+
+String _resolveAttemptFailureClass({
+  required List<AssistantReplayBaselineTurn> turns,
+  required List<String> issues,
+}) {
+  if (issues.any((item) => item.startsWith('exception'))) {
+    return 'exception';
+  }
+  for (final turn in turns) {
+    if (turn.failureClass != 'none') {
+      return turn.failureClass;
+    }
+  }
+  return 'none';
+}
+
+String _resolveAttemptOutcomeClass({
+  required _M0ReplayCase replayCase,
+  required List<AssistantReplayBaselineTurn> turns,
+  required String failureClass,
+}) {
+  if (replayCase.turnShape == _M0ReplayTurnShape.coldStartReload) {
+    return failureClass == 'none' ? 'reload_recovered' : 'reload_state_lost';
+  }
+  if (failureClass == 'none' &&
+      turns.length == replayCase.turns.length &&
+      turns.every((item) => item.outcomeClass == item.expectedOutcomeClass)) {
+    return replayCase.expectedOutcomeClass;
+  }
+  if (turns.isNotEmpty) {
+    return turns.last.outcomeClass;
+  }
+  return 'answer_failed';
+}
+
+AssistantReplayBaselineStability _buildM0Stability(
+  List<AssistantReplayBaselineAttempt> attempts,
+) {
+  const comparedFields = <String>[
+    'outcomeClass',
+    'nextAction',
+    'finalAnswerReady',
+    'queryDesignSignature',
+  ];
+  final fieldDiffs = <Map<String, dynamic>>[];
+  for (final field in comparedFields) {
+    final values = attempts
+        .map((attempt) => _stabilityFieldValue(attempt, field))
+        .toList(growable: false);
+    if (values.toSet().length > 1) {
+      fieldDiffs.add(<String, dynamic>{'field': field, 'values': values});
+    }
+  }
+  return AssistantReplayBaselineStability(
+    stable: attempts.isNotEmpty && fieldDiffs.isEmpty,
+    repeatCount: attempts.length,
+    comparedFields: comparedFields,
+    fieldDiffs: fieldDiffs,
+  );
+}
+
+String _stabilityFieldValue(
+  AssistantReplayBaselineAttempt attempt,
+  String field,
+) {
+  final finalTurn = attempt.turns.isEmpty ? null : attempt.turns.last;
+  switch (field) {
+    case 'outcomeClass':
+      return attempt.outcomeClass;
+    case 'nextAction':
+      return (finalTurn?.report['nextAction'] as String?)?.trim() ?? '';
+    case 'finalAnswerReady':
+      return (finalTurn?.finalAnswerReady ?? false).toString();
+    case 'queryDesignSignature':
+      return (finalTurn?.queryDesignLines ?? const <String>[]).join(' | ');
+  }
+  return '';
+}
+
+AssistantReplayM1EntryAssessment _buildM0CaseM1Entry({
+  required _M0ReplayCase replayCase,
+  required List<AssistantReplayBaselineAttempt> attempts,
+  required AssistantReplayBaselineStability stability,
+}) {
+  final satisfied = <String>[];
+  final blocking = <String>[];
+  if (attempts.length == _replayRepeatCount) {
+    satisfied.add('repeat_count_met');
+  } else {
+    blocking.add('repeat_count_mismatch');
+  }
+  final hasArtifacts = attempts.every(
+    (attempt) => attempt.turns.every(
+      (turn) =>
+          turn.runLogPath.trim().isNotEmpty &&
+          turn.canonicalState.isNotEmpty &&
+          turn.failureClass.trim().isNotEmpty,
+    ),
+  );
+  if (hasArtifacts) {
+    satisfied.add('artifacts_linked');
+  } else {
+    blocking.add('missing_artifacts');
+  }
+  final outcomesMatch = attempts.every(
+    (attempt) =>
+        attempt.gatePassed &&
+        attempt.outcomeClass == replayCase.expectedOutcomeClass,
+  );
+  if (outcomesMatch) {
+    satisfied.add('expected_outcome_stable');
+  } else {
+    blocking.add('unexpected_outcome_or_gate_failure');
+  }
+  if (stability.stable) {
+    satisfied.add('replay_stable');
+  } else {
+    blocking.add('replay_unstable');
+  }
+  return AssistantReplayM1EntryAssessment(
+    eligible: blocking.isEmpty,
+    satisfiedChecks: satisfied,
+    blockingReasons: blocking,
+  );
+}
+
+AssistantReplayM1EntryAssessment _buildM0CorpusM1Entry({
+  required List<AssistantReplayBaselinePack> packs,
+  required List<_M0ReplayCase> selectedCases,
+}) {
+  final satisfied = <String>[];
+  final blocking = <String>[];
+  if (packs.length == selectedCases.length) {
+    satisfied.add('all_selected_cases_emitted_pack');
+  } else {
+    blocking.add('missing_case_pack');
+  }
+  if (_knownFailureClasses.contains('weak_evidence_answered') &&
+      _knownFailureClasses.contains('tool_progress_as_answer')) {
+    satisfied.add('failure_signatures_frozen');
+  } else {
+    blocking.add('failure_signature_taxonomy_incomplete');
+  }
+  if (packs.every((pack) => pack.attempts.length == _replayRepeatCount)) {
+    satisfied.add('all_cases_repeat_count_met');
+  } else {
+    blocking.add('case_repeat_count_incomplete');
+  }
+  if (packs.every((pack) => pack.m1Entry.eligible)) {
+    satisfied.add('all_cases_ready_for_m1');
+  } else {
+    blocking.add('cases_not_ready_for_m1');
+  }
+  return AssistantReplayM1EntryAssessment(
+    eligible: blocking.isEmpty,
+    satisfiedChecks: satisfied,
+    blockingReasons: blocking,
+  );
+}
+
+Map<String, dynamic> _reloadStateFromSnapshot(
+  _AssistantBubbleSnapshot? snapshot,
+) {
+  if (snapshot == null) {
+    return const <String, dynamic>{};
+  }
+  return <String, dynamic>{
+    'answerText': snapshot.answerText,
+    'timelinePhases': snapshot.timelinePhaseIds,
+    'canonicalProcessSteps': snapshot.canonicalProcessSteps,
+    'queryDesignLines': snapshot.queryDesignLines,
+  };
+}
+
+List<String> _collectReloadIssues({
+  required Map<String, dynamic> beforeReload,
+  required Map<String, dynamic> afterReload,
+}) {
+  final issues = <String>[];
+  if (beforeReload.isEmpty) {
+    issues.add('reload_missing_before_state');
+    return issues;
+  }
+  if (afterReload.isEmpty) {
+    issues.add('reload_missing_after_state');
+    return issues;
+  }
+  final beforeAnswer =
+      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        (beforeReload['answerText'] as String?) ?? '',
+      );
+  final afterAnswer =
+      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        (afterReload['answerText'] as String?) ?? '',
+      );
+  if (beforeAnswer != afterAnswer) {
+    issues.add('reload_answer_text_changed');
+  }
+  if (!_listEquals(
+    ((beforeReload['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
+        .map((item) => item.toString())
+        .toList(growable: false),
+    ((afterReload['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
+        .map((item) => item.toString())
+        .toList(growable: false),
+  )) {
+    issues.add('reload_process_steps_changed');
+  }
+  if (!_listEquals(
+    ((beforeReload['queryDesignLines'] as List?) ?? const <dynamic>[])
+        .map((item) => item.toString())
+        .toList(growable: false),
+    ((afterReload['queryDesignLines'] as List?) ?? const <dynamic>[])
+        .map((item) => item.toString())
+        .toList(growable: false),
+  )) {
+    issues.add('reload_query_design_changed');
+  }
+  return issues;
+}
+
+Map<String, dynamic> _buildCanonicalBaselineState(
+  _AssistantBubbleSnapshot snapshot,
+) {
+  final normalized = snapshot.normalizedMessage;
+  final displayState = resolvePersistedAssistantDisplayState(
+    normalized,
+  ).toJson();
+  final answerState =
+      (displayState['answer'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final understanding =
+      (normalized[assistantUnderstandingSnapshotField] as Map?)
+          ?.cast<String, dynamic>() ??
+      (((normalized['runArtifacts']
+                  as Map?)?[assistantUnderstandingSnapshotField]
+              as Map?)
+          ?.cast<String, dynamic>()) ??
+      const <String, dynamic>{};
+  final answerProcessing =
+      (normalized[assistantAnswerProcessingField] as Map?)
+          ?.cast<String, dynamic>() ??
+      (((normalized['runArtifacts'] as Map?)?[assistantAnswerProcessingField]
+              as Map?)
+          ?.cast<String, dynamic>()) ??
+      const <String, dynamic>{};
+  final retrievalProcessing =
+      (normalized[assistantRetrievalProcessingField] as Map?)
+          ?.cast<String, dynamic>() ??
+      (((normalized['runArtifacts'] as Map?)?[assistantRetrievalProcessingField]
+              as Map?)
+          ?.cast<String, dynamic>()) ??
+      const <String, dynamic>{};
+  final journey =
+      (normalized[assistantJourneyField] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final readiness =
+      (journey['readiness'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final processTimeline =
+      (normalized[assistantProcessTimelineField] as List?)
+          ?.whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .map(
+            (item) => <String, dynamic>{
+              'stepId': (item['stepId'] as String?)?.trim() ?? '',
+              'status': (item['status'] as String?)?.trim() ?? '',
+              'headline':
+                  (item['headline'] as String?)?.trim() ??
+                  (item['summary'] as String?)?.trim() ??
+                  '',
+            },
+          )
+          .toList(growable: false) ??
+      const <Map<String, dynamic>>[];
+  return <String, dynamic>{
+    'assistantTurnSchemaVersion':
+        (normalized[assistantTurnSchemaVersionField] as String?)?.trim() ?? '',
+    'displayMarkdown': resolvePersistedAssistantDisplayMarkdown(normalized),
+    'displayPlainText': resolvePersistedAssistantDisplayPlainText(normalized),
+    'displayAnswerBlocks':
+        (answerState['blocks'] as List?) ?? const <dynamic>[],
+    'processTimeline': processTimeline,
+    'understandingSnapshot': <String, dynamic>{
+      'userFacingSummary':
+          (understanding['userFacingSummary'] as String?)?.trim() ?? '',
+      'queryDesignSummary':
+          (understanding['queryDesignSummary'] as String?)?.trim() ?? '',
+      'queryGroups':
+          (understanding['queryGroups'] as List?) ?? const <dynamic>[],
+    },
+    'answerProcessing': <String, dynamic>{
+      'readinessSummary':
+          (answerProcessing['readinessSummary'] as String?)?.trim() ?? '',
+      'keyFacts': (answerProcessing['keyFacts'] as List?) ?? const <dynamic>[],
+      'missingDimensions':
+          (answerProcessing['missingDimensions'] as List?) ?? const <dynamic>[],
+    },
+    'retrievalProcessing': <String, dynamic>{
+      'processingSummary':
+          (retrievalProcessing['processingSummary'] as String?)?.trim() ?? '',
+      'coverageSummary':
+          (retrievalProcessing['coverageSummary'] as String?)?.trim() ?? '',
+    },
+    'journeyReadiness': <String, dynamic>{
+      'nextAction': (readiness['nextAction'] ?? '').toString(),
+      'finalAnswerReady': readiness['finalAnswerReady'] == true,
+      'answerEligibility': (readiness['answerEligibility'] ?? '').toString(),
+    },
+    'phaseOneRoutingDiagnostics': snapshot.phaseOneRoutingDiagnostics,
+    'queryDesignLines': snapshot.queryDesignLines,
+    'messageId': snapshot.messageId,
+  };
+}
+
+Map<String, dynamic> _extractRunLogMeta(Map<String, dynamic> runLog) {
+  final meta =
+      (runLog['meta'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final output =
+      (runLog['output'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  return <String, dynamic>{
+    'generatedAt': (meta['generatedAt'] ?? '').toString(),
+    'runId': (meta['runId'] ?? '').toString(),
+    'traceId': (meta['traceId'] ?? '').toString(),
+    'sessionId': (meta['sessionId'] ?? '').toString(),
+    'channel': (meta['channel'] ?? '').toString(),
+    'finalText': (output['finalText'] ?? '').toString(),
+    'degraded': output['degraded'] == true,
+  };
+}
+
+bool _listEquals(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var i = 0; i < left.length; i++) {
+    if (left[i] != right[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 Future<void> _runReplayCase(
@@ -94,49 +1295,197 @@ Future<void> _runReplayCase(
   required String secondQuery,
 }) async {
   final originalOnError = FlutterError.onError;
-  addTearDown(() {
-    FlutterError.onError = originalOnError;
-  });
-  addTearDown(() async {
+  try {
     await _resetAssistantApp(tester);
-  });
-  await _resetAssistantApp(tester);
-  await _wipeAssistantStorage();
-  _suppressNetworkImageErrors();
-  app.main();
+    await _wipeAssistantStorage();
+    _suppressNetworkImageErrors();
+    app.main();
 
-  await _waitForMainEntry(tester);
-  await _openAssistantConversation(tester);
-  await _waitForChatInput(tester);
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
 
-  final firstResult = await _sendQueryWithSingleRetry(
-    tester,
-    query: firstQuery,
-  );
-  debugPrint('${caseName.toUpperCase()}_FIRST_RESULT: ${firstResult.toJson()}');
-  _expectReplayResult(firstResult);
+    final firstResult = await _sendQueryWithSingleRetry(
+      tester,
+      query: firstQuery,
+    );
+    debugPrint(
+      '${caseName.toUpperCase()}_FIRST_RESULT: ${firstResult.toJson()}',
+    );
+    _expectReplayResult(firstResult);
 
-  final secondResult = await _sendQueryWithSingleRetry(
-    tester,
-    query: secondQuery,
-  );
-  debugPrint('${caseName.toUpperCase()}_SECOND_RESULT: ${secondResult.toJson()}');
-  _expectReplayResult(secondResult);
+    final secondResult = await _sendQueryWithSingleRetry(
+      tester,
+      query: secondQuery,
+    );
+    debugPrint(
+      '${caseName.toUpperCase()}_SECOND_RESULT: ${secondResult.toJson()}',
+    );
+    _expectReplayResult(secondResult);
 
-  final existingReportData = switch (binding.reportData) {
-    final Map<Object?, Object?> map => map.map(
-      (key, value) => MapEntry(key.toString(), value),
-    ),
-    _ => <String, dynamic>{},
-  };
-  binding.reportData = <String, dynamic>{
-    ...existingReportData,
-    caseName: <String, dynamic>{
-      'firstQuery': firstResult.toJson(),
-      'secondQuery': secondResult.toJson(),
-    },
-  };
-  await _resetAssistantApp(tester);
+    final existingReportData = switch (binding.reportData) {
+      final Map<Object?, Object?> map => map.map(
+        (key, value) => MapEntry(key.toString(), value),
+      ),
+      _ => <String, dynamic>{},
+    };
+    binding.reportData = <String, dynamic>{
+      ...existingReportData,
+      caseName: <String, dynamic>{
+        'firstQuery': firstResult.toJson(),
+        'secondQuery': secondResult.toJson(),
+      },
+    };
+  } finally {
+    FlutterError.onError = originalOnError;
+    await _resetAssistantApp(tester);
+  }
+}
+
+Future<void> _runSingleQueryReplayCase(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+  required _TemporalReplayCase replayCase,
+}) async {
+  final originalOnError = FlutterError.onError;
+  final referenceNow = DateTime.now();
+  try {
+    await _resetAssistantApp(tester);
+    await _wipeAssistantStorage();
+    _suppressNetworkImageErrors();
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+
+    final result = await _sendQueryWithSingleRetry(
+      tester,
+      query: replayCase.query,
+    );
+    debugPrint(
+      '${replayCase.caseName.toUpperCase()}_RESULT: ${result.toJson()}',
+    );
+    _expectReplayResult(result);
+    _expectTemporalReplayResult(
+      result,
+      replayCase: replayCase,
+      referenceNow: referenceNow,
+    );
+
+    final existingReportData = switch (binding.reportData) {
+      final Map<Object?, Object?> map => map.map(
+        (key, value) => MapEntry(key.toString(), value),
+      ),
+      _ => <String, dynamic>{},
+    };
+    binding.reportData = <String, dynamic>{
+      ...existingReportData,
+      replayCase.caseName: result.toJson(),
+    };
+  } finally {
+    FlutterError.onError = originalOnError;
+    await _resetAssistantApp(tester);
+  }
+}
+
+Future<void> _runColdStartReloadCase(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+}) async {
+  final originalOnError = FlutterError.onError;
+  try {
+    await _resetAssistantApp(tester);
+    await _wipeAssistantStorage();
+    _suppressNetworkImageErrors();
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+
+    final firstResult = await _sendQueryWithSingleRetry(
+      tester,
+      query: _weatherFirstQuery,
+    );
+    debugPrint('COLD_START_RELOAD_FIRST_RESULT: ${firstResult.toJson()}');
+    _expectReplayResult(firstResult);
+
+    final beforeReload = _latestAssistantSnapshot(tester);
+    expect(beforeReload, isNotNull);
+    expect(
+      beforeReload!.queryDesignLines,
+      isNotEmpty,
+      reason: '首轮完成后必须已经展示 query design，reload 才有意义',
+    );
+    expect(beforeReload.answerText.trim(), isNotEmpty);
+
+    await _resetAssistantApp(tester);
+    app.main();
+
+    await _waitForMainEntry(tester);
+    await _openAssistantConversation(tester);
+    await _waitForChatInput(tester);
+    await _pumpUntil(
+      tester,
+      condition: () {
+        final snapshot = _latestAssistantSnapshot(tester);
+        return snapshot != null && snapshot.answerText.trim().isNotEmpty;
+      },
+      timeout: const Duration(seconds: 20),
+    );
+
+    final afterReload = _latestAssistantSnapshot(tester);
+    expect(afterReload, isNotNull);
+    expect(
+      afterReload!.queryDesignLines,
+      equals(beforeReload.queryDesignLines),
+      reason: 'reload 后 query design 不应丢失或被空白 fallback 覆盖',
+    );
+    expect(
+      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        afterReload.answerText,
+      ),
+      equals(
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          beforeReload.answerText,
+        ),
+      ),
+      reason: 'reload 后最后一条 assistant 答案应完整恢复',
+    );
+    expect(
+      afterReload.canonicalProcessSteps,
+      orderedEquals(beforeReload.canonicalProcessSteps),
+    );
+    expect(afterReload.journalStages, isNotEmpty);
+
+    final existingReportData = switch (binding.reportData) {
+      final Map<Object?, Object?> map => map.map(
+        (key, value) => MapEntry(key.toString(), value),
+      ),
+      _ => <String, dynamic>{},
+    };
+    binding.reportData = <String, dynamic>{
+      ...existingReportData,
+      'cold_start_reload': <String, dynamic>{
+        'beforeReload': <String, dynamic>{
+          'answerText': beforeReload.answerText,
+          'timelinePhases': beforeReload.timelinePhaseIds,
+          'canonicalProcessSteps': beforeReload.canonicalProcessSteps,
+          'queryDesignLines': beforeReload.queryDesignLines,
+        },
+        'afterReload': <String, dynamic>{
+          'answerText': afterReload.answerText,
+          'timelinePhases': afterReload.timelinePhaseIds,
+          'canonicalProcessSteps': afterReload.canonicalProcessSteps,
+          'queryDesignLines': afterReload.queryDesignLines,
+        },
+      },
+    };
+  } finally {
+    FlutterError.onError = originalOnError;
+    await _resetAssistantApp(tester);
+  }
 }
 
 Future<void> _resetAssistantApp(WidgetTester tester) async {
@@ -335,7 +1684,8 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     final currentAnswer = latestAnswer.trim();
     if (!observedNewAssistantTurn &&
         (snapshot.streaming ||
-            (currentMessageId.isNotEmpty && currentMessageId != baselineMessageId) ||
+            (currentMessageId.isNotEmpty &&
+                currentMessageId != baselineMessageId) ||
             (currentAnswer.isNotEmpty && currentAnswer != baselineAnswer))) {
       observedNewAssistantTurn = true;
     }
@@ -344,9 +1694,9 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     }
     snapshots.add(latestText);
     _throwIfForbidden(latestText);
-    if (_matchesExpectation(query, latestAnswer)) {
-      matchedExpected = true;
-    }
+    matchedExpected =
+        _matchesExpectation(query, latestAnswer) &&
+        !_isGenericAssistantFallback(latestAnswer);
     if (latestAnswer == previousAnswer) {
       stableTicks += 1;
     } else {
@@ -388,6 +1738,7 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
         latestSnapshot?.phaseOneRoutingDiagnostics ?? const <String, dynamic>{},
     timelinePhases: latestSnapshot?.timelinePhaseIds ?? const <String>[],
     journalStages: latestSnapshot?.journalStages ?? const <String>[],
+    queryDesignLines: latestSnapshot?.queryDesignLines ?? const <String>[],
   );
 }
 
@@ -406,6 +1757,7 @@ Future<_ReplayResult> _sendQueryWithSingleRetry(
 bool _shouldRetryReplay(_ReplayResult result) {
   final answer = result.finalAnswerText.trim();
   if (answer.isEmpty) return true;
+  if (_isGenericAssistantFallback(answer)) return true;
   return answer.contains('模型输出无效，已停止本轮回答。') || answer.contains('没有生成可展示结果');
 }
 
@@ -569,8 +1921,17 @@ bool _matchesExpectation(String query, String text) {
   if (_isDefaultSecondReplayQuery(query)) {
     return _matchesFollowupRouteAnswer(text);
   }
+  if (_isStockForecastReplayQuery(query)) {
+    return _matchesStockForecastAnswer(text);
+  }
+  if (_isStockTrendReplayQuery(query)) {
+    return _matchesStockTrendAnswer(text);
+  }
   if (_isWeatherReplayQuery(query)) {
     return _matchesWeatherAnswer(text);
+  }
+  if (_isStockReplayQuery(query)) {
+    return _matchesStockAnswer(text);
   }
   return text.trim().isNotEmpty;
 }
@@ -583,11 +1944,43 @@ bool _isDefaultSecondReplayQuery(String query) {
   return query == _secondQuery && _secondQuery == _defaultSecondQuery;
 }
 
+List<_TemporalReplayCase> _selectedTemporalReplayCases() {
+  final normalizedFilter = _temporalReplayCaseFilter
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet();
+  if (normalizedFilter.isEmpty) {
+    return _temporalReplayCases;
+  }
+  return _temporalReplayCases
+      .where((item) => normalizedFilter.contains(item.caseName))
+      .toList(growable: false);
+}
+
 bool _isWeatherReplayQuery(String query) {
   return query.contains('天气') ||
       query.contains('下雨') ||
       query.contains('雨伞') ||
       query.contains('外套');
+}
+
+bool _isStockForecastReplayQuery(String query) {
+  return _isStockReplayQuery(query) &&
+      (query.contains('预测') || query.contains('未来'));
+}
+
+bool _isStockTrendReplayQuery(String query) {
+  return _isStockReplayQuery(query) &&
+      (query.contains('最近') || query.contains('走势') || query.contains('走向'));
+}
+
+bool _isStockReplayQuery(String query) {
+  return query.contains('A股') ||
+      query.contains('股市') ||
+      query.contains('上证') ||
+      query.contains('深证') ||
+      query.contains('创业板');
 }
 
 bool _matchesTravelAlternativeAnswer(String text) {
@@ -624,8 +2017,121 @@ bool _matchesWeatherAnswer(String text) {
   return weatherSignals >= 2 && hasAdvice && hasSubstance;
 }
 
+bool _matchesStockAnswer(String text) {
+  final normalized = _normalizeLoose(text);
+  final hasMarketTopic = RegExp(
+    r'(A股|股市|上证|深证|创业板|大盘|市场)',
+  ).hasMatch(normalized);
+  final causeSignals = RegExp(
+    r'(原因|因为|主要|驱动|政策|利好|资金|流动性|情绪|板块|成交|主力)',
+  ).allMatches(normalized).length;
+  final hasSubstance = normalized.length >= 28;
+  return hasMarketTopic && causeSignals >= 2 && hasSubstance;
+}
+
+bool _matchesStockTrendAnswer(String text) {
+  final normalized = _normalizeLoose(text);
+  final hasMarketTopic = RegExp(
+    r'(A股|股市|上证|深证|创业板|大盘|市场)',
+  ).hasMatch(normalized);
+  final trendSignals = RegExp(
+    r'(走势|走向|趋势|态势|走强|走弱|高开|上涨|下跌|回落|反弹|回调|震荡|波动|区间|成交|情绪|资金|板块)',
+  ).allMatches(normalized).length;
+  final hasSubstance = normalized.length >= 28;
+  return hasMarketTopic && trendSignals >= 2 && hasSubstance;
+}
+
+bool _matchesStockForecastAnswer(String text) {
+  final normalized = _normalizeLoose(text);
+  final hasMarketTopic = RegExp(
+    r'(A股|股市|上证|深证|创业板|大盘|市场)',
+  ).hasMatch(normalized);
+  final forecastSignals = RegExp(
+    r'(预测|预计|可能|大概率|风险|情景|短期|中期|后市|走势)',
+  ).allMatches(normalized).length;
+  final evidenceSignals = RegExp(
+    r'(国际经济|全球经济|海外|美联储|政策|资金|成交|情绪|关税|通胀)',
+  ).allMatches(normalized).length;
+  final hasSubstance = normalized.length >= 32;
+  return hasMarketTopic &&
+      forecastSignals >= 2 &&
+      evidenceSignals >= 1 &&
+      hasSubstance;
+}
+
+bool _isGenericAssistantFallback(String text) {
+  final normalized = _normalizeLoose(text);
+  if (normalized.isEmpty) {
+    return true;
+  }
+  return normalized.contains('这个操作我暂时还没拿到可展示结果') ||
+      normalized.contains('本次任务已完成，但没有生成可展示结果') ||
+      normalized.contains('Unsupported content type') ||
+      normalized.contains('application/pdf');
+}
+
 String _normalizeLoose(String text) {
   return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+List<String> _extractQueryDesignLines(String text) {
+  final lines = text
+      .split('\n')
+      .map(_normalizeLoose)
+      .where((line) => line.isNotEmpty)
+      .toList(growable: false);
+  final queryLines = <String>[];
+  for (final line in lines) {
+    if (line == '生成答案') {
+      break;
+    }
+    if (line.startsWith('•')) {
+      queryLines.add(line);
+    }
+  }
+  return queryLines;
+}
+
+bool _containsDateAnchor(String text, DateTime date) {
+  final normalized = text.replaceAll(RegExp(r'\s+'), '');
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString();
+  final month2 = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString();
+  final day2 = date.day.toString().padLeft(2, '0');
+  return normalized.contains('$year-$month2-$day2') ||
+      normalized.contains('$year年$month月$day日') ||
+      normalized.contains('$year年$month2月$day2日') ||
+      normalized.contains('$month月$day日') ||
+      normalized.contains('$month2月$day2日');
+}
+
+bool _containsExplicitCalendarAnchor(String text) {
+  final normalized = text.replaceAll(RegExp(r'\s+'), '');
+  return RegExp(
+        r'20\d{2}-\d{2}-\d{2}(?:至|到|~|-|—)20\d{2}-\d{2}-\d{2}',
+      ).hasMatch(normalized) ||
+      RegExp(r'20\d{2}年\d{1,2}月\d{1,2}日').hasMatch(normalized) ||
+      RegExp(r'20\d{2}-\d{2}-\d{2}').hasMatch(normalized) ||
+      RegExp(r'20\d{2}年\d{1,2}月').hasMatch(normalized) ||
+      RegExp(r'20\d{2}年Q[1-4]').hasMatch(normalized) ||
+      RegExp(r'20\d{2}(?:上半年|下半年|全年)').hasMatch(normalized);
+}
+
+DateTime _relativeWeekdayDate(
+  DateTime referenceNow, {
+  required int weekday,
+  required int weekOffset,
+}) {
+  final referenceDate = _startOfDay(referenceNow);
+  final weekStart = referenceDate.subtract(
+    Duration(days: referenceDate.weekday - DateTime.monday),
+  );
+  return weekStart.add(Duration(days: weekOffset * 7 + weekday - 1));
+}
+
+DateTime _startOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
 }
 
 bool _isAcceptableProcessHeader(String text) {
@@ -656,6 +2162,129 @@ bool _completedHeaderHasDocumentCount(String text) {
   return RegExp(r'处理 \d+ 篇文档').hasMatch(normalized);
 }
 
+void _expectTemporalReplayResult(
+  _ReplayResult result, {
+  required _TemporalReplayCase replayCase,
+  required DateTime referenceNow,
+}) {
+  final queryLines = result.queryDesignLines.isNotEmpty
+      ? result.queryDesignLines
+      : _extractQueryDesignLines(result.finalVisibleText);
+  expect(
+    queryLines,
+    isNotEmpty,
+    reason: '${replayCase.caseName} 必须在处理问题阶段展示 query design',
+  );
+  switch (replayCase.kind) {
+    case _TemporalReplayExpectationKind.lastWednesday:
+      final targetDate = _relativeWeekdayDate(
+        referenceNow,
+        weekday: DateTime.wednesday,
+        weekOffset: -1,
+      );
+      _expectExplicitDateAnchor(
+        result: result,
+        replayCase: replayCase,
+        queryLines: queryLines,
+        targetDate: targetDate,
+      );
+      return;
+    case _TemporalReplayExpectationKind.nextWednesday:
+      final targetDate = _relativeWeekdayDate(
+        referenceNow,
+        weekday: DateTime.wednesday,
+        weekOffset: 1,
+      );
+      _expectExplicitDateAnchor(
+        result: result,
+        replayCase: replayCase,
+        queryLines: queryLines,
+        targetDate: targetDate,
+      );
+      return;
+    case _TemporalReplayExpectationKind.dayAfterTomorrow:
+      final targetDate = _startOfDay(referenceNow).add(const Duration(days: 2));
+      _expectExplicitDateAnchor(
+        result: result,
+        replayCase: replayCase,
+        queryLines: queryLines,
+        targetDate: targetDate,
+      );
+      return;
+    case _TemporalReplayExpectationKind.recentWindow:
+      _expectExplicitWindowQueryDesign(
+        replayCase: replayCase,
+        queryLines: queryLines,
+        forbidFutureToken: false,
+      );
+      return;
+    case _TemporalReplayExpectationKind.futureForecast:
+      _expectExplicitWindowQueryDesign(
+        replayCase: replayCase,
+        queryLines: queryLines,
+        forbidFutureToken: true,
+      );
+      expect(
+        RegExp(
+          r'(预测|预计|可能|风险|走势)',
+        ).hasMatch(_normalizeLoose(result.finalAnswerText)),
+        isTrue,
+        reason: '${replayCase.caseName} 的最终答案必须明确给出预测/走势判断',
+      );
+      return;
+  }
+}
+
+void _expectExplicitDateAnchor({
+  required _ReplayResult result,
+  required _TemporalReplayCase replayCase,
+  required List<String> queryLines,
+  required DateTime targetDate,
+}) {
+  expect(
+    queryLines.any((line) => _containsDateAnchor(line, targetDate)),
+    isTrue,
+    reason: '${replayCase.caseName} 的 query design 必须落成明确日期锚点',
+  );
+  expect(
+    _containsDateAnchor(result.finalVisibleText, targetDate),
+    isTrue,
+    reason: '${replayCase.caseName} 的界面文本必须体现明确日期锚点',
+  );
+  expect(
+    _containsDateAnchor(result.finalAnswerText, targetDate),
+    isTrue,
+    reason: '${replayCase.caseName} 的最终答案必须体现明确日期锚点',
+  );
+}
+
+void _expectExplicitWindowQueryDesign({
+  required _TemporalReplayCase replayCase,
+  required List<String> queryLines,
+  required bool forbidFutureToken,
+}) {
+  expect(
+    queryLines.any(_containsExplicitCalendarAnchor),
+    isTrue,
+    reason: '${replayCase.caseName} 的 query design 必须包含明确时间范围或年月锚点',
+  );
+  for (final line in queryLines) {
+    expect(
+      RegExp(r'(最近|最新|近期)').hasMatch(line),
+      isFalse,
+      reason: '${replayCase.caseName} 的 query design 不得直接保留模糊相对时间词',
+    );
+    if (forbidFutureToken) {
+      expect(
+        line.contains('未来'),
+        isFalse,
+        reason:
+            '${replayCase.caseName} 的 query design 应检索支撑预测的历史/当前依据，而不是直接搜索未来事实',
+      );
+    }
+  }
+}
+
 void _expectReplayResult(_ReplayResult result) {
   expect(result.phaseLabelSeen, isTrue, reason: '过程区首行必须是用户语言摘要或完成摘要');
   expect(result.degraded, isFalse, reason: '真实回放不允许进入 degraded');
@@ -668,6 +2297,11 @@ void _expectReplayResult(_ReplayResult result) {
     result.finalAnswerText.trim(),
     isNotEmpty,
     reason: '最终 assistant answer 不得为空',
+  );
+  expect(
+    _isGenericAssistantFallback(result.finalAnswerText),
+    isFalse,
+    reason: '最终 assistant answer 不得退化为通用兜底或工具错误',
   );
   expect(
     result.finalMessageStreaming,
@@ -737,10 +2371,7 @@ void _expectReplayResult(_ReplayResult result) {
       anyOf(equals('phase_one_direct_answer'), equals('formal_synthesis')),
       reason: '第二轮连续追问必须稳定收口到 answer，不允许掉回扩检或空路由',
     );
-    final maxModelCalls =
-        route == 'phase_one_direct_answer'
-        ? 4
-        : 5;
+    final maxModelCalls = route == 'phase_one_direct_answer' ? 4 : 5;
     expect(
       result.modelCallCount,
       lessThanOrEqualTo(maxModelCalls),
@@ -785,6 +2416,7 @@ class _ReplayResult {
     required this.phaseOneRoutingDiagnostics,
     required this.timelinePhases,
     required this.journalStages,
+    required this.queryDesignLines,
   });
 
   final String query;
@@ -807,6 +2439,7 @@ class _ReplayResult {
   final Map<String, dynamic> phaseOneRoutingDiagnostics;
   final List<String> timelinePhases;
   final List<String> journalStages;
+  final List<String> queryDesignLines;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -830,8 +2463,67 @@ class _ReplayResult {
       'phaseOneRoutingDiagnostics': phaseOneRoutingDiagnostics,
       'timelinePhases': timelinePhases,
       'journalStages': journalStages,
+      'queryDesignLines': queryDesignLines,
     };
   }
+}
+
+enum _M0ReplayTurnShape { singleTurn, followup, coldStartReload }
+
+enum _M0TemporalExpectation { none, yesterday, tomorrow, weekday }
+
+class _M0ReplayTurnSpec {
+  const _M0ReplayTurnSpec({
+    required this.turnId,
+    required this.query,
+    required this.expectedScope,
+    required this.expectedOutcomeClass,
+    required this.temporalExpectation,
+  });
+
+  final String turnId;
+  final String query;
+  final String expectedScope;
+  final String expectedOutcomeClass;
+  final _M0TemporalExpectation temporalExpectation;
+}
+
+class _M0ReplayCase {
+  const _M0ReplayCase({
+    required this.caseId,
+    required this.turnShape,
+    required this.expectedScope,
+    required this.expectedTemporalAnchor,
+    required this.expectedOutcomeClass,
+    required this.turns,
+  });
+
+  final String caseId;
+  final _M0ReplayTurnShape turnShape;
+  final String expectedScope;
+  final String expectedTemporalAnchor;
+  final String expectedOutcomeClass;
+  final List<_M0ReplayTurnSpec> turns;
+}
+
+enum _TemporalReplayExpectationKind {
+  lastWednesday,
+  nextWednesday,
+  dayAfterTomorrow,
+  recentWindow,
+  futureForecast,
+}
+
+class _TemporalReplayCase {
+  const _TemporalReplayCase({
+    required this.caseName,
+    required this.query,
+    required this.kind,
+  });
+
+  final String caseName;
+  final String query;
+  final _TemporalReplayExpectationKind kind;
 }
 
 class _AssistantBubbleSnapshot {
@@ -993,6 +2685,80 @@ class _AssistantBubbleSnapshot {
             .length;
     return raw;
   }
+
+  List<String> get queryDesignLines {
+    final candidates = <Map<String, dynamic>>[
+      ((message['runArtifacts'] as Map?)?['understandingSnapshot'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      (message['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    ];
+    for (final snapshot in candidates) {
+      final groups =
+          (snapshot['queryGroups'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      final queries = <String>[
+        for (final group in groups)
+          ...((group['queries'] as List?)
+                  ?.map((item) => item.toString().trim())
+                  .where((item) => item.isNotEmpty) ??
+              const Iterable<String>.empty()),
+      ];
+      final uniqueQueries = _uniqueNonEmpty(queries);
+      if (uniqueQueries.isNotEmpty) {
+        return uniqueQueries;
+      }
+    }
+    return const <String>[];
+  }
+
+  List<String> get canonicalProcessSteps {
+    final candidates = <List<dynamic>>[
+      (message['processTimeline'] as List?) ?? const <dynamic>[],
+      ((message['runArtifacts'] as Map?)?['processTimeline'] as List?) ??
+          const <dynamic>[],
+    ];
+    for (final raw in candidates) {
+      final steps = raw
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .map((item) => (item['stepId'] as String?)?.trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      final uniqueSteps = _uniqueNonEmpty(steps);
+      if (uniqueSteps.isNotEmpty) {
+        return uniqueSteps;
+      }
+    }
+    return const <String>[];
+  }
+
+  String get messageId => (message['id'] as String?)?.trim() ?? '';
+
+  String get runId => (message['runId'] as String?)?.trim() ?? '';
+
+  String get traceId => (message['traceId'] as String?)?.trim() ?? '';
+
+  bool get finalAnswerReady {
+    final normalized = normalizedMessage;
+    final journey =
+        (normalized[assistantJourneyField] as Map?)?.cast<String, dynamic>() ??
+        _journey;
+    final readiness =
+        (journey['readiness'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return readiness['finalAnswerReady'] == true;
+  }
+
+  Map<String, dynamic> get normalizedMessage =>
+      normalizeCanonicalPersistedAssistantTurnMessage(
+        Map<String, dynamic>.from(message),
+      ) ??
+      Map<String, dynamic>.from(message);
 }
 
 List<String> _uniqueNonEmpty(Iterable<String> values) {

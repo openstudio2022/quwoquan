@@ -153,6 +153,7 @@ void main() {
       });
       expect(result.success, false);
       expect(result.message, contains('Unsupported content type'));
+      expect(result.errorCode, AssistantErrorCode.unsupportedTarget);
     });
 
     test('decodes HTML entities', () async {

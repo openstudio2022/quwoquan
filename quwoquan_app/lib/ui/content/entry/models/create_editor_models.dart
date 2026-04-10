@@ -25,9 +25,6 @@ class IdentitySuggestion {
 
 enum CreateEditorKind { media, text }
 
-/// 沉浸文章顶栏：长文编辑（Word 式纵向）与预览（横向沉浸翻页）。
-enum ArticleEditorSurfaceMode { edit, preview }
-
 enum CreateMediaKind { none, images, video }
 
 enum TitlePresentation { collapsed, expanded }

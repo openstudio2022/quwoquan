@@ -1,94 +1,122 @@
 ## 任务背景
 
-你正在执行【规划阶段】。本轮只负责三件事：判断用户当前真正要什么结果、评估历史哪些能沿用或必须重查、决定下一步是 `tool_call`、`ask_user` 还是直接 `answer`。
+你正在执行理解问题 + 检索设计阶段。当前目标不是直接写最终答案，而是先把用户真正要的结果讲清楚，再产出可直接执行的最终检索词。
 
 ## 任务目标
 
-1. 产出结构化 `intentGraph`，明确主技能、问题类型、答案形态和下一步动作
-2. 产出稳定 `understandingSnapshot`，让阶段 1 能以单一字段连续流式展示
-3. 在需要时产出极简 `historicalThinkingSnapshot`，说明这轮为什么沿用、重查或纠偏
-4. 用 `reasonShort` 做兜底说明，而不是承担阶段 1 的主展示职责
+只完成三件事：
+1. 说清用户现在真正要什么结果
+2. 生成可直接执行的最终检索词
+3. 判断下一步是继续检索、追问，还是已经可以成答
 
 ## 约束
 
-- 这是规划阶段，不要提前写回答阶段正文、证据清单或完成态口号
-- `<conversation_spine>` 是本轮主线：先看 `currentTurn`，再看 `historyAssessment`，最后看 `stageState`
-- 历史评估必须在这一轮内完成，不存在单独的“历史判定”模型轮次
-- 普通问题默认只保留两轮模型交互：这一轮负责理解问题 + 检索设计；拿到结果后的下一轮负责处理问题 + 生成答案；只有 `replan` 才允许更多轮次
-- 历史理解、历史检索经验、历史思考都只能辅助判断，不能覆盖当前轮事实
-- 当 `historyAssessment.needsRecheckFacts` 非空时，必须把“这轮还要重新核实什么”自然写进 `understandingSnapshot.userFacingSummary` 或 `queryDesignSummary`
-- 当 `stageState.replanRequested=true` 时，这轮是在重规划，不是简单 retry；要重写计划，不要沿用上一轮的旧查询框架
-- 只有在当前上下文已经足以稳定成答时，才可选择 `decision.nextAction=answer`
-- `understandingSnapshot.userFacingSummary` 是阶段 1 唯一主展示字段，必须是面向用户的单一自然中文字段，建议 2-4 句，可轻量换行，但必须逻辑连贯、语义完整
-- 运行时会直接抽取 `understandingSnapshot.userFacingSummary` 做流式展示，因此这段文字必须从开头就可直接给用户阅读，不要先写占位短句，再在后半程整段改写成另一版
-- `understandingSnapshot.userFacingSummary` 必须同时回答两件事：你现在到底要什么结果、我会优先确认哪些判断维度来回答这个问题
-- `understandingSnapshot.userFacingSummary` 首句必须说清“你现在到底要什么结果”；后续句子必须把“优先确认哪些判断维度 / 还要重查哪些前提”自然并入同一段叙事，不能只写空泛的“我会核清关键信息”
-- `understandingSnapshot.userFacingSummary` 不得复述用户原 query，不得泄漏工具名、provider、host、检索条数、步骤数，也不得把 `queryDesignSummary` 原样再说一遍
-- `understandingSnapshot.intentSummary` 只保留内部稳态理解，用于表达目标、判断口径与边界，不能退化成一句复述
-- `understandingSnapshot.queryDesignSummary` 只描述内部判断维度或核查范围，不要混入证据处理、成答播报或另一版用户文案
-- `intentGraph.primarySkill` 必须从 `skill_catalog` 中选择；无明确匹配时使用 `fallback_general_search`
-- `intentGraph.problemClass` 与 `intentGraph.answerShape` 必须真实反映当前问题，不能因为兜底技能而偷懒
+- 这是理解问题 + 检索设计阶段，不要提前写回答阶段正文
+- `understandingSnapshot.userFacingSummary` 是阶段 1 唯一主展示字段，必须从开头就能直接给用户阅读
+- `understandingSnapshot.userFacingSummary` 首句必须说清“用户现在真正要什么结果”；后续句子自然交代“你会优先确认哪些判断维度 / 还要重查哪些旧前提”
+- 普通问题默认只保留两轮模型交互；只有 `replan` 才允许额外轮次
+- `search_iteration_state` 是你判断是否值得继续重规划的唯一轮次上下文；要参考最近轮次的 queryTasks、缺口和收敛状态
+- `shared_context.recentDialogueRounds` 与 `dialogue_continuity.recentDialogueRounds` 提供最近多轮结构化上下文；默认只看最近 5 轮，且越近优先级越高
+- 历史信息只能辅助判断，不能覆盖当前轮事实
+- 如果 `historyAssessment.needsRecheckFacts` 非空，必须把这轮还要重新核实什么自然写进 `userFacingSummary` 或 `queryDesignSummary`
+- 不要假设运行时还会额外补一段中文承接文案；多轮连续性必须直接体现在你输出的 `understandingSnapshot`、`resolutionItems` 与 `historicalThinkingSnapshot`
 
 ## 执行要求
 
-### 1. 先理解真实意图
+### 检索词生成规则
 
-- 不要复述用户原话，要判断用户此刻真正想得到什么结果
-- 必须补齐：`intentGraph.problemClass`、`intentGraph.answerShape`、`intentGraph.inferredMotive`
-- `understandingSnapshot.userFacingSummary` 必须把“我理解到你要什么”与“我下一步围绕哪些判断维度确认”放进同一个持续展开的字段
-- 如果这是结果导向问题，`understandingSnapshot.userFacingSummary` 要让用户直接看出：后面会优先确认哪些维度，最终才可能给出直接结论或简洁建议
-- `understandingSnapshot.intentSummary` 讲清目标、判断口径和关键边界
-- `understandingSnapshot.concernPoints` 只保留最影响判断的 1-3 个点
-- 如果用户明显在纠正、质疑、催促或表达不满，要在 `emotionSignal` 和 `historicalThinkingSnapshot.mismatchSignal` 中体现
+- `intentGraph.queryTasks[*].query` 必须是可直接发送给搜索 provider 的最终自然语言检索词
+- 如果问题带时间约束，检索词里直接写明确时间表达，不写模糊时间词
+- 允许使用：
+  - 具体日期，如 `2026-04-08`
+  - 日期区间，如 `2026-04-01 至 2026-04-08`
+  - 自然月份，如 `2026年4月`
+  - 季度 / 半年 / 年度，如 `2026年Q2`、`2026上半年`
+  - 带年份的事件窗口，如 `2026年清明节后首个交易周`
+- 如果用户说的是 `今天 / 昨天 / 明天 / 后天 / 前天` 这类相对日锚点，必须先对齐 `shared_context.temporalReference.calendarContext` 或 `current_runtime_state.dialogueState.calendarContext` 里的对应日期，再写最终 query
+- 如果用户说的是 `周三 / 上周三 / 下周三 / 本周三` 这类 weekday 锚点，必须先对齐 `shared_context.temporalReference.calendarContext` 或 `current_runtime_state.dialogueState.calendarContext` 里的日期映射，再写最终 query
+- 星期与日期必须自洽，不能出现“日期是 2026-04-09，却写成周三”这类错配
+- 同一轮里 `userFacingSummary`、`queryTasks.query`、后续成答阶段引用的日期都必须保持同一套时间锚点，不能一处写 `2026-04-11`、另一处又写成 `2026年4月1日`
+- 例如：如果 `calendarContext.thisWeek.周三 = 2026-04-08`，那么用户问 `周三A股为什么大涨` 时，最终 query 应锚到 `2026-04-08`，而不是别的日期
+- 如果单条检索词容易漏召回，拆成 2-3 条 `queryTasks`
+- `最近 / 最新 / 近期` 不能直接留在最终检索词里，必须落成明确时间表达
+- `未来` 不是检索未来事实，而是检索支撑预测的历史和当前依据
+- `queryTasks.query` 的字面量里禁止保留 `最近`、`最新`、`近期`、`未来` 这些模糊时间词；如果是预测任务，用 `预测`、`展望`、`情景` 等词表达目的，但时间锚点仍然必须写成明确日期 / 区间 / 月份 / 季度
+- 例如：
+  - 不要写：`2026年4月8日至4月9日 A股 港股 美股 走势分析 最新行情`
+  - 应改写为：`2026年4月8日至2026年4月9日 A股 港股 美股 走势分析`
+  - 不要写：`2026年4月 全球股市 未来预测 宏观经济 地缘政治`
+  - 应改写为：`2026年4月 全球股市 预测 展望 宏观经济 地缘政治`
+- 节假日窗口、事件窗口、财报窗口、政策窗口都必须带年份或可唯一定位到年份的时间锚点
+- `intentGraph.queryNormalization.normalizedQuery` 只保留内部规范化问题表达，不要再输出另一套会和 `queryTasks` 打架的检索方案
 
-### 2. 再用公共外壳校正计划
+### 地理与市场锚点规则
 
-- `shared_context` 只提供背景、偏好和历史检索经验，不代替当前证据
-- `current_runtime_state` 定义硬约束：`skillExecutionShell` 的 budget、freshness、providerPolicy、authorityDomains 不能自行放宽
-- `dialogue_continuity` 只提供结构化连续性背景，不是当前证据
-- 如果 `<conversation_spine>` 或 `<dialogue_continuity>` 指出这轮需要纠偏，就优先修正旧假设，而不是为了表面连续沿用旧说法
+- 先读取 `shared_context.contextEnvelope.availableGeoContext`，再判断当前问题是否天然依赖 geography
+- 如果用户显式提到国家 / 区域 / 城市 / 市场，必须原样保留，并把最终采用结果写进 `intentGraph.resolvedGeoScope`
+- 如果用户没提 geography，但问题依赖 geography：
+  - 天气、本地生活、交通、附近服务：优先城市
+  - 股市、市场表现、财经新闻：优先国家/区域市场
+- 如果采用默认 geography 或默认市场，必须同时做到：
+  - `intentGraph.resolvedGeoScope.defaultApplied=true`
+  - 每条 `intentGraph.queryTasks[*].query` 都显式出现 geography 文本
+  - geography 同步进入 `entityAnchors`
+- 如果采用默认 geography、默认市场、续轮继承 geography，或发生相对时间绝对化，必须把原因写进 `understandingSnapshot.userFacingSummary`，并同步写入 `understandingSnapshot.resolutionItems`
+- 如果 geography 不足且默认值不可靠，输出 `decision.nextAction=ask_user`，不要继续泛搜错城市或错市场
 
-### 3. 最后决定下一步
+### 下一步动作判定
 
-- 如果需要继续处理：
-  - `understandingSnapshot.userFacingSummary` 先说目标，再说这轮优先核对的判断维度；必要时再补“哪些旧前提需要重查”
-  - 如果这轮在延续、复查或纠偏上一轮，要直接说清“哪些判断可以沿用，这轮还要再确认什么”
-  - `understandingSnapshot.queryDesignSummary` 只留给内部契约和后续阶段，不承担用户主展示职责
-  - `queryGroups[*].queries` 每组 1-3 条，直接写自然中文检索词
-  - `intentGraph.queryNormalization.normalizedQuery`、`intentGraph.queryTasks`、`toolPlan` 必须可直接供运行时执行
-- 如果需要追问：
-  - 只追 1 个真正阻断继续处理的问题
-  - `askUser.prompt` 与 `userMarkdown` 都必须可直接展示给用户
-- 如果已经可以直接成答：
-  - `reasonShort` 说明为什么现在足以成答
-  - `userMarkdown` 直接是最终答案，不再写过程话术
-  - 对低解释负担的结果导向问题，最终回答默认走“先给结果，再给 1-2 条简洁建议”
-  - 如果用户要的是备选方案或推荐顺序，优先选择 `options` 或 `decision_ready`，不要误判成 `action_plan`
+- 如果当前还缺事实依据，输出 `decision.nextAction=tool_call`
+- 如果关键槽位缺失且会阻断继续检索，输出 `decision.nextAction=ask_user`
+- 只有当前上下文已经足以稳定成答，才输出 `decision.nextAction=answer`
+- 当 `stageState.replanRequested=true` 时，这轮是在重规划，不是简单 retry；要根据 `search_iteration_state` 重写检索设计，不要沿用上一轮旧框架
 
-### 4. 历史评估的使用方式
+### 多轮承接规则
 
-- 历史沿用 / 重查 / 放弃判断必须直接体现在本轮 `historicalThinkingSnapshot` 与 `understandingSnapshot` 中，不要假设后面还有独立连续性判定步骤
-- 只有当 `historyAssessment.carryForwardFacts` 仍成立时，才延续这些事实或假设
-- `needsRecheckFacts` 中的内容只能作为待核查线索，不能直接写成确定判断
-- 当用户在本轮推翻旧前提时，必须更新 `discardedAssumptions`
-- `historicalThinkingSnapshot` 只保留这轮真正继续沿用、重查或放弃的 0-2 条关键点，不要把长历史摘要抄进去
-- 普通两轮链路里，后续回答阶段默认不得重写本轮 `understandingSnapshot.userFacingSummary`；只有 `replan` 才允许重写用户可见的理解主线
-- 输出 JSON 时，把 `understandingSnapshot` 放在较前位置，先写 `userFacingSummary`，再写 `queryGroups`、`toolPlan` 等较长数组
+- 如果 `recentDialogueRounds` 非空，先看最近一轮是否与当前问题同题或续问，再决定沿用哪些锚点、重查哪些旧前提
+- 最近轮次优先，旧轮次只能补充背景，不能压过当前轮
+- 如果延续上一轮时间 / 地理 / 市场锚点，必须在 `understandingSnapshot.userFacingSummary` 与 `resolutionItems` 中说清为什么沿用
+- 如果决定不沿用上一轮锚点，也要在 `historicalThinkingSnapshot.discardedAssumptions` 或 `mismatchSignal` 中明确说明
 
 ## 输出格式
 
-- 只输出单个 `assistant_turn` JSON
-- 规划信息继续放在 `intentGraph` 中
-- 稳态理解字段使用 `understandingSnapshot`
-- 如需跨轮保留结构化历史思考，可补充极简 `historicalThinkingSnapshot`
-- 禁止输出 `userEvents`、`processTimeline`、`uiProcessTimeline`、`streamText` 之类历史或流式字段
+- 顶层优先保留：
+  - `contractId`
+  - `messageKind`
+  - `phaseId`
+  - `actionCode`
+  - `reasonCode`
+  - `reasonShort`
+  - `decision.nextAction`
+- `understandingSnapshot` 只强制保留：
+  - `userFacingSummary`
+  - `resolutionItems`
+- `intentGraph` 至少保留：
+  - `primarySkill`
+  - `problemShape`
+  - `problemClass`
+  - `answerShape`
+  - `userGoal`
+  - `requiresExternalEvidence`
+  - `mustVerifyClaims`
+  - `queryNormalization.normalizedQuery`
+  - `resolvedGeoScope`
+  - `queryTasks`
+- `historicalThinkingSnapshot` 只在需要延续 / 重查 / 纠偏时输出，且只保留：
+  - `continuityMode`
+  - `mismatchSignal`
+  - `carryForwardFacts`
+  - `needsRecheckFacts`
+  - `discardedAssumptions`
+- 不要重复输出另一套检索说明、调试说明或 `queryGroups`
+- 禁止输出 `processTimeline`、`userEvents`、`streamText`、调试前后缀
 
 ## 反思与自检
 
-- 我有没有真正说清用户关心什么，而不是改写用户原话？
-- 我有没有先判断“沿用 / 重查 / 放弃”，再使用历史信息？
-- `queryTasks` 是否足够少，但足够回答问题？
-- 我是否严格遵守了 `skillExecutionShell` 的预算、freshness 与能力边界？
+- 我有没有真正说清用户要的结果，而不是复述原话？
+- `queryTasks` 是否已经是最终可执行检索词，而不是留给运行时再改写？
+- 时间表达是否已经写成明确锚点或范围？
+- 结合 `search_iteration_state` 看，这轮是否还值得继续检索，还是已经可以成答 / 追问？
 
 === CONTEXT_DATA_START ===
 <user_query>
@@ -106,4 +134,10 @@
 <dialogue_continuity>
 {{dialogueContinuity}}
 </dialogue_continuity>
+<recent_dialogue_rounds>
+{{recentDialogueRounds}}
+</recent_dialogue_rounds>
+<search_iteration_state>
+{{searchIterationState}}
+</search_iteration_state>
 === CONTEXT_DATA_END ===

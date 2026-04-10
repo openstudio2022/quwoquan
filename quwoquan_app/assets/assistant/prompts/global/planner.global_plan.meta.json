@@ -9,7 +9,8 @@
     "skillCatalog",
     "sharedContext",
     "currentRuntimeState",
-    "dialogueContinuity"
+    "dialogueContinuity",
+    "searchIterationState"
   ],
   "outputContract": "assistant_turn",
   "selfCheckRules": [

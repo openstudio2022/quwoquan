@@ -130,8 +130,12 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
       AssistantUiUsageStatsViewData.empty,
   int elapsedMs = 0,
   AssistantDisplayState displayState = const AssistantDisplayState(),
+  RunArtifactsUnderstandingSnapshot understandingSnapshot =
+      const RunArtifactsUnderstandingSnapshot(),
   RetrievalProcessingSnapshot retrievalProcessing =
       const RetrievalProcessingSnapshot(),
+  RunArtifactsAnswerProcessing answerProcessing =
+      const RunArtifactsAnswerProcessing(),
 }) {
   final timelineInput = processTimeline.isNotEmpty
       ? buildVisibleProcessTimeline(processTimeline)
@@ -149,8 +153,12 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
   final effectiveDisplayState = buildAssistantDisplayState(
     explicitState: displayState,
     processTimeline: effectiveTimeline,
+    understandingSnapshot: understandingSnapshot,
     retrievalProcessing: effectiveRetrievalProcessing,
-    finalAnswerReady: displayState.process.finalAnswerReady,
+    answerProcessing: answerProcessing,
+    finalAnswerReady:
+        displayState.process.finalAnswerReady ||
+        journey.readiness.finalAnswerReady,
   );
   final fallbackStages = _buildStages(
     processTimeline: effectiveTimeline,
@@ -181,6 +189,12 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
     fallback: fallbackBlocks,
   );
   final activeStage = _resolveActiveStage(stages, isRunning: isRunning);
+  final finalAnswerReadyForView =
+      journey.readiness.finalAnswerReady ||
+      (!isRunning &&
+          effectiveDisplayState.answer.blocks.isNotEmpty &&
+          journey.readiness.nextAction == AssistantNextAction.answer &&
+          !journey.readiness.clarificationNeeded);
   final summary = _resolveSummary(
     stages: stages,
     blocks: blocks,
@@ -210,7 +224,7 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
     isRunning: isRunning,
     usageStats: usageStats,
     elapsedMs: elapsedMs,
-    finalAnswerReady: journey.readiness.finalAnswerReady,
+    finalAnswerReady: finalAnswerReadyForView,
     clarificationNeeded: journey.readiness.clarificationNeeded,
     needExpansion: journey.readiness.needExpansion,
   );

@@ -5,7 +5,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -97,14 +96,15 @@ void main() {
     );
   });
 
-  testWidgets('写文字入口进入沉浸式文章编辑页', (tester) async {
+  testWidgets('写文字入口进入沉浸式文章编辑页且不再内嵌排版 tab', (tester) async {
     await tester.pumpWidget(
       _buildCreatePageApp(initialAction: EditorStartAction.write),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('编辑'), findsOneWidget);
-    expect(find.text('排版'), findsOneWidget);
+    expect(find.text('编辑'), findsNothing);
+    expect(find.text('排版'), findsNothing);
+    expect(find.text(UITextConstants.createArticleSurfaceLongEdit), findsOneWidget);
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);
     expect(find.text('输入文章标题（可选）'), findsOneWidget);
     expect(find.text('继续写内容，支持 emoji、图片、序号和模板'), findsOneWidget);

@@ -11,10 +11,12 @@ void main() {
       String query, {
       List<Map<String, dynamic>> sessionHistory =
           const <Map<String, dynamic>>[],
+      int recentRoundsLimit = 5,
     }) {
       return orchestrator.buildContinuityPolicy(
         query: query,
         sessionHistory: sessionHistory,
+        recentRoundsLimit: recentRoundsLimit,
       );
     }
 
@@ -58,6 +60,49 @@ void main() {
       final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
       expect(gpsLocation?.containsKey('city'), isFalse);
       expect(result.hasRealtimeNeed, isFalse);
+    });
+
+    test('buildContinuityPolicy 优先使用 structured recent rounds 的 user queries', () {
+      final policy = continuity(
+        '第三问怎么继续',
+        recentRoundsLimit: 2,
+        sessionHistory: const <Map<String, dynamic>>[
+          <String, dynamic>{'role': 'user', 'content': '第一问'},
+          <String, dynamic>{
+            'role': 'assistant',
+            'content': '第一答',
+            'id': 'turn_1',
+            'runArtifacts': <String, dynamic>{
+              'journey': <String, dynamic>{
+                'readiness': <String, dynamic>{'finalAnswerReady': true},
+              },
+              'understandingSnapshot': <String, dynamic>{
+                'userFacingSummary': '第一轮理解',
+              },
+            },
+          },
+          <String, dynamic>{'role': 'user', 'content': '第二问'},
+          <String, dynamic>{
+            'role': 'assistant',
+            'content': '第二答',
+            'id': 'turn_2',
+            'runArtifacts': <String, dynamic>{
+              'journey': <String, dynamic>{
+                'readiness': <String, dynamic>{'finalAnswerReady': true},
+              },
+              'understandingSnapshot': <String, dynamic>{
+                'userFacingSummary': '第二轮理解',
+              },
+            },
+          },
+          <String, dynamic>{'role': 'user', 'content': '第三问'},
+        ],
+      );
+
+      expect(
+        policy.referenceQueries,
+        equals(const <String>['第二问', '第一问']),
+      );
     });
 
     test(

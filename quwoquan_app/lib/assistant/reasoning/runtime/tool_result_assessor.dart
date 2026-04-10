@@ -1,10 +1,13 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/tool_assessment.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
 /// Evaluates tool results post-execution to determine next action.
 /// Tracks consecutive failures to break out of futile retry loops.
@@ -27,6 +30,9 @@ class ToolResultAssessor {
 
   /// Unified answer boundary shared with synthesis and state kernel.
   AnswerBoundaryPolicy boundaryPolicy = const AnswerBoundaryPolicy();
+  static const RetrievalOutcomeResolver _retrievalOutcomeResolver =
+      RetrievalOutcomeResolver();
+  static const AnswerGateResolver _answerGateResolver = AnswerGateResolver();
 
   bool get _isFastConvergence =>
       parseProblemClass(problemClass).isFastConvergence;
@@ -46,16 +52,23 @@ class ToolResultAssessor {
     final resultData =
         (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final retrievalOutcome = _retrievalOutcomeResolver.resolveFromToolResult(
+      resultData: resultData,
+      policy: boundaryPolicy,
+    );
     final queryCount = _positiveInt(resultData['queryCount']);
-    final explicitReferenceCount = _positiveInt(resultData['referenceCount']);
-    final referenceCount = explicitReferenceCount > 0
-        ? explicitReferenceCount
-        : ((resultData['references'] as List?)?.length ?? 0);
-    final coveredDimensions = _normalizedDimensions(resultData['coveredDimensions']);
-    final missingDimensions = _normalizedDimensions(resultData['missingDimensions']);
+    final referenceCount = retrievalOutcome.referenceCount;
+    final coveredDimensions = _normalizedDimensions(
+      retrievalOutcome.coveredDimensions,
+    );
+    final missingDimensions = _normalizedDimensions(
+      retrievalOutcome.missingDimensions,
+    );
     final canAnswerWithCurrentEvidence =
-        boundaryPolicy.allowBoundedAnswer &&
-        (referenceCount > 0 || coveredDimensions.isNotEmpty);
+        _answerGateResolver.canAnswerWithCurrentEvidence(
+          retrievalOutcome: retrievalOutcome,
+          policy: boundaryPolicy,
+        );
     if (state.shouldStopByBudget || state.shouldStopByIteration) {
       return ToolAssessment(
         assessmentType: AssessmentType.budgetExhausted,

@@ -139,6 +139,11 @@ class QueryTask {
     this.freshnessHoursMax = 0,
     this.answerShape = AnswerShape.unspecified,
     this.freshnessNeed = FreshnessNeed.unspecified,
+    this.timeScope = '',
+    this.timeRangeStart = '',
+    this.timeRangeEnd = '',
+    this.timePoint = '',
+    this.timezone = '',
   });
 
   final String id;
@@ -151,6 +156,11 @@ class QueryTask {
   final int freshnessHoursMax;
   final AnswerShape answerShape;
   final FreshnessNeed freshnessNeed;
+  final String timeScope;
+  final String timeRangeStart;
+  final String timeRangeEnd;
+  final String timePoint;
+  final String timezone;
 
   String get effectiveLabel =>
       label.trim().isNotEmpty ? label.trim() : dimension.displayLabel;
@@ -173,6 +183,11 @@ class QueryTask {
           'answerShape': answerShape.wireName,
         if (freshnessNeed != FreshnessNeed.unspecified)
           'freshnessNeed': freshnessNeed.wireName,
+        if (timeScope.trim().isNotEmpty) 'timeScope': timeScope,
+        if (timeRangeStart.trim().isNotEmpty) 'timeRangeStart': timeRangeStart,
+        if (timeRangeEnd.trim().isNotEmpty) 'timeRangeEnd': timeRangeEnd,
+        if (timePoint.trim().isNotEmpty) 'timePoint': timePoint,
+        if (timezone.trim().isNotEmpty) 'timezone': timezone,
       };
 
   factory QueryTask.fromJson(Map<String, dynamic> json) {
@@ -201,6 +216,11 @@ class QueryTask {
       freshnessNeed: parseFreshnessNeed(
         (json['freshnessNeed'] as String?)?.trim() ?? '',
       ),
+      timeScope: (json['timeScope'] as String?)?.trim() ?? '',
+      timeRangeStart: (json['timeRangeStart'] as String?)?.trim() ?? '',
+      timeRangeEnd: (json['timeRangeEnd'] as String?)?.trim() ?? '',
+      timePoint: (json['timePoint'] as String?)?.trim() ?? '',
+      timezone: (json['timezone'] as String?)?.trim() ?? '',
     );
   }
 
@@ -215,6 +235,11 @@ class QueryTask {
     int? freshnessHoursMax,
     AnswerShape? answerShape,
     FreshnessNeed? freshnessNeed,
+    String? timeScope,
+    String? timeRangeStart,
+    String? timeRangeEnd,
+    String? timePoint,
+    String? timezone,
   }) {
     return QueryTask(
       id: id ?? this.id,
@@ -227,6 +252,11 @@ class QueryTask {
       freshnessHoursMax: freshnessHoursMax ?? this.freshnessHoursMax,
       answerShape: answerShape ?? this.answerShape,
       freshnessNeed: freshnessNeed ?? this.freshnessNeed,
+      timeScope: timeScope ?? this.timeScope,
+      timeRangeStart: timeRangeStart ?? this.timeRangeStart,
+      timeRangeEnd: timeRangeEnd ?? this.timeRangeEnd,
+      timePoint: timePoint ?? this.timePoint,
+      timezone: timezone ?? this.timezone,
     );
   }
 

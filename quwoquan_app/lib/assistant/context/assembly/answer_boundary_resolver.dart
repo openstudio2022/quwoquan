@@ -13,7 +13,9 @@ class AnswerBoundaryResolver {
     required Map<String, dynamic> retrievalPolicy,
     List<QueryTask> queryTasks = const <QueryTask>[],
   }) {
-    final effectiveTasks = queryTasks.isNotEmpty ? queryTasks : intentGraph.queryTasks;
+    final effectiveTasks = queryTasks.isNotEmpty
+        ? queryTasks
+        : intentGraph.queryTasks;
     final requiredDimensions = normalizedTaskDimensions(effectiveTasks);
     final authorityDomains = _uniqueNonEmpty(<String>[
       ...intentGraph.authorityDomains,
@@ -36,16 +38,21 @@ class AnswerBoundaryResolver {
         requiredDimensions.isNotEmpty;
     final requireToolResultBeforeSynthesis =
         contextAssembly.hasRealtimeNeed || intentGraph.mustVerifyClaims;
+    final allowBoundedAnswer =
+        !evidenceRequired ||
+        (!authorityRequired &&
+            !requireToolResultBeforeSynthesis &&
+            requiredDimensions.isEmpty);
     final summary = evidenceRequired
-        ? (requireToolResultBeforeSynthesis
-              ? '当前问题需要至少一轮外部证据后再进入成答。'
-              : '当前问题允许基于已覆盖证据先给出 bounded answer。')
+        ? (allowBoundedAnswer
+              ? '当前问题允许基于已覆盖证据先给出 bounded answer。'
+              : '当前问题需要先满足证据时效、权威或关键维度后再进入成答。')
         : '当前问题不强制依赖外部证据。';
     return AnswerBoundaryPolicy(
       evidenceRequired: evidenceRequired,
       authorityRequired: authorityRequired,
       requireToolResultBeforeSynthesis: requireToolResultBeforeSynthesis,
-      allowBoundedAnswer: true,
+      allowBoundedAnswer: allowBoundedAnswer,
       freshnessHoursMax: freshnessHoursMax,
       authorityDomains: authorityDomains,
       requiredDimensions: requiredDimensions,

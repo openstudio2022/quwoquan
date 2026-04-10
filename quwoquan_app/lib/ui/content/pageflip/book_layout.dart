@@ -8,6 +8,7 @@ StPageFlipLayout computeStPageFlipLayout({
   required double pageWidth,
   required double pageHeight,
   bool usePortrait = true,
+  StPageFlipOrientation? orientationOverride,
 }) {
   final safeViewportWidth = math.max(1.0, viewportSize.width).toDouble();
   final safeViewportHeight = math.max(1.0, viewportSize.height).toDouble();
@@ -16,12 +17,14 @@ StPageFlipLayout computeStPageFlipLayout({
     safeViewportHeight / 2,
   );
 
-  var orientation = StPageFlipOrientation.landscape;
-  var left = middlePoint.dx - pageWidth;
-  if (safeViewportWidth < pageWidth * 2 && usePortrait) {
-    orientation = StPageFlipOrientation.portrait;
-    left = middlePoint.dx - (pageWidth / 2) - pageWidth;
-  }
+  final orientation =
+      orientationOverride ??
+      (safeViewportWidth < pageWidth * 2 && usePortrait
+          ? StPageFlipOrientation.portrait
+          : StPageFlipOrientation.landscape);
+  final left = orientation == StPageFlipOrientation.portrait
+      ? middlePoint.dx - (pageWidth / 2) - pageWidth
+      : middlePoint.dx - pageWidth;
 
   return StPageFlipLayout(
     orientation: orientation,

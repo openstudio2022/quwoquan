@@ -116,10 +116,41 @@ class AssistantStreamingProjector {
 
   AssistantJourney resolveCompletedJourney(AssistantRunResponse response) {
     final direct = _journeyFromResponse(response);
-    if (!direct.isEmpty) {
-      return direct;
+    final candidate = !direct.isEmpty ? direct : _journeyProjector.snapshot;
+    return _applyCanonicalReadiness(candidate, response);
+  }
+
+  AssistantJourney _applyCanonicalReadiness(
+    AssistantJourney journey,
+    AssistantRunResponse response,
+  ) {
+    final gate = response.answerGateDecision;
+    final readiness = journey.readiness;
+    final resolvedNextAction = gate.nextAction.trim().isNotEmpty
+        ? parseAssistantNextAction(gate.nextAction)
+        : readiness.nextAction;
+    final resolvedEligibility = gate.answerEligibility.trim().isNotEmpty
+        ? parseAnswerEligibility(gate.answerEligibility)
+        : readiness.answerEligibility;
+    if (readiness.finalAnswerReady == gate.finalAnswerReady &&
+        readiness.nextAction == resolvedNextAction &&
+        readiness.answerEligibility == resolvedEligibility) {
+      return journey;
     }
-    return _journeyProjector.snapshot;
+    return AssistantJourney(
+      stages: journey.stages,
+      entries: journey.entries,
+      summary: journey.summary,
+      referenceSummary: journey.referenceSummary,
+      readiness: AssistantJourneyReadiness(
+        nextAction: resolvedNextAction,
+        finalAnswerMode: readiness.finalAnswerMode,
+        answerEligibility: resolvedEligibility,
+        finalAnswerReady: gate.finalAnswerReady,
+        clarificationNeeded: readiness.clarificationNeeded,
+        needExpansion: readiness.needExpansion,
+      ),
+    );
   }
 
   List<ProcessTimelineFrame> resolveCompletedProcessTimeline(

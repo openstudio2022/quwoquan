@@ -1,10 +1,13 @@
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
 class AnswerOutcomeSnapshot {
   const AnswerOutcomeSnapshot({
@@ -14,6 +17,8 @@ class AnswerOutcomeSnapshot {
     this.evidenceEvaluation = const EvidenceEvaluationResult(),
     this.aggregationState = const AggregationState(),
     this.synthesisReadiness = const SynthesisReadinessResult(),
+    this.retrievalOutcome = const RetrievalOutcome(),
+    this.answerGateDecision = const AnswerGateDecision(),
     this.conversationStateDecision,
     this.domainPolicyBundle,
     this.journey = const AssistantJourney(),
@@ -25,6 +30,8 @@ class AnswerOutcomeSnapshot {
   final EvidenceEvaluationResult evidenceEvaluation;
   final AggregationState aggregationState;
   final SynthesisReadinessResult synthesisReadiness;
+  final RetrievalOutcome retrievalOutcome;
+  final AnswerGateDecision answerGateDecision;
   final ConversationStateDecision? conversationStateDecision;
   final DomainPolicyBundle? domainPolicyBundle;
   final AssistantJourney journey;
@@ -40,6 +47,8 @@ class AnswerOutcomeSnapshot {
     'evidenceEvaluation': evidenceEvaluation.toJson(),
     'aggregationState': aggregationState.toJson(),
     'synthesisReadiness': synthesisReadiness.toJson(),
+    'retrievalOutcome': retrievalOutcome.toJson(),
+    'answerGateDecision': answerGateDecision.toJson(),
     if (conversationStateDecision != null)
       'conversationStateDecision': conversationStateDecision!.toDecisionMap(),
     if (domainPolicyBundle != null)
@@ -49,7 +58,15 @@ class AnswerOutcomeSnapshot {
 }
 
 class AnswerOutcomeResolver {
-  const AnswerOutcomeResolver();
+  const AnswerOutcomeResolver({
+    RetrievalOutcomeResolver retrievalOutcomeResolver =
+        const RetrievalOutcomeResolver(),
+    AnswerGateResolver answerGateResolver = const AnswerGateResolver(),
+  }) : _retrievalOutcomeResolver = retrievalOutcomeResolver,
+       _answerGateResolver = answerGateResolver;
+
+  final RetrievalOutcomeResolver _retrievalOutcomeResolver;
+  final AnswerGateResolver _answerGateResolver;
 
   AnswerOutcomeSnapshot resolve({
     required Map<String, dynamic> structured,
@@ -147,6 +164,20 @@ class AnswerOutcomeResolver {
             : null) ??
         runArtifacts?.domainPolicyBundle ??
         fallbackDomainPolicyBundle;
+    final retrievalOutcome = (_hasOutcomeField(rawOutcome, 'retrievalOutcome')
+            ? _parseRetrievalOutcome(rawOutcome!['retrievalOutcome'])
+            : null) ??
+        _retrievalOutcomeResolver.resolveFromStructured(
+          structured: structured,
+          runArtifacts: runArtifacts,
+        );
+    final answerGateDecision = (_hasOutcomeField(rawOutcome, 'answerGateDecision')
+            ? _parseAnswerGateDecision(rawOutcome!['answerGateDecision'])
+            : null) ??
+        _answerGateResolver.resolveFromStructured(
+          structured: structured,
+          runArtifacts: runArtifacts,
+        );
     final journey =
         (_hasOutcomeField(rawOutcome, 'journey')
             ? _parseJourney(rawOutcome!['journey'])
@@ -161,6 +192,8 @@ class AnswerOutcomeResolver {
       evidenceEvaluation: evidenceEvaluation,
       aggregationState: aggregationState,
       synthesisReadiness: synthesisReadiness,
+      retrievalOutcome: retrievalOutcome,
+      answerGateDecision: answerGateDecision,
       conversationStateDecision: conversationStateDecision,
       domainPolicyBundle: domainPolicyBundle,
       journey: journey,
@@ -309,6 +342,24 @@ class AnswerOutcomeResolver {
     if (raw is! Map) return null;
     try {
       return DomainPolicyBundle.fromJson(raw.cast<String, dynamic>());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  RetrievalOutcome? _parseRetrievalOutcome(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return RetrievalOutcome.fromJson(raw.cast<String, dynamic>());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  AnswerGateDecision? _parseAnswerGateDecision(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return AnswerGateDecision.fromJson(raw.cast<String, dynamic>());
     } catch (_) {
       return null;
     }

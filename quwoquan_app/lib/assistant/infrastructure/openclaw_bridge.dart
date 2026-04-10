@@ -263,7 +263,19 @@ class OpenClawBridge {
     }
     if (dataLines.isEmpty) return null;
     final payloadRaw = dataLines.join('\n');
+    if (payloadRaw.trim() == '[DONE]') {
+      return null;
+    }
     final decoded = _tryDecodeMap(payloadRaw);
+
+    if (eventName == 'error') {
+      final message = decoded != null
+          ? ((decoded['message'] as String?)?.trim() ?? payloadRaw)
+          : payloadRaw;
+      return OpenClawRemoteStreamEvent.failed(
+        message.isNotEmpty ? message : 'remote stream error event',
+      );
+    }
 
     if (eventName == 'trace') {
       if (decoded != null) {

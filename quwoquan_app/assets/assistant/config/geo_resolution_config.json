@@ -1,0 +1,16 @@
+{
+  "contractVersion": "geo_resolution_config_v1",
+  "timezoneCountryCodes": {
+    "Asia/Shanghai": "CN",
+    "Asia/Chongqing": "CN",
+    "Asia/Urumqi": "CN",
+    "Asia/Hong_Kong": "HK",
+    "America/New_York": "US",
+    "America/Los_Angeles": "US"
+  },
+  "countryLabels": {
+    "CN": "中国",
+    "HK": "中国香港",
+    "US": "美国"
+  }
+}

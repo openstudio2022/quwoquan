@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
@@ -46,9 +47,20 @@ class DefaultRetrievalPlanner {
         AssistantToolCall(
           name: retrievalToolName,
           arguments: <String, dynamic>{
-            'query': frame.normalizedQuery,
+            'query': applyResolvedGeoToQuery(
+              frame.normalizedQuery,
+              frame.resolvedGeoScope,
+            ),
             'mode': 'result',
             'queryNormalization': _queryNormalization(frame),
+            'resolvedGeoScope': frame.resolvedGeoScope.toJson(),
+            if (frame.timeScope.isNotEmpty) 'timeScope': frame.timeScope,
+            if (frame.timeRangeStart.isNotEmpty)
+              'timeRangeStart': frame.timeRangeStart,
+            if (frame.timeRangeEnd.isNotEmpty)
+              'timeRangeEnd': frame.timeRangeEnd,
+            if (frame.timePoint.isNotEmpty) 'timePoint': frame.timePoint,
+            if (frame.timezone.isNotEmpty) 'timezone': frame.timezone,
             if (queryTasks.isNotEmpty)
               'queryTasks': queryTasks
                   .map((item) => item.toJson())
@@ -82,7 +94,40 @@ class DefaultRetrievalPlanner {
       'answerShape': frame.answerShapeKind.wireName,
       'freshnessNeed': frame.freshnessNeedKind.wireName,
       'excludedScopes': frame.excludedScopes,
+      'resolvedGeoScope': frame.resolvedGeoScope.toJson(),
+      if (frame.referenceNowIso.isNotEmpty)
+        'referenceNowIso': frame.referenceNowIso,
+      if (frame.timezone.isNotEmpty) 'timezone': frame.timezone,
+      if (frame.resolvedTemporalHints.isNotEmpty)
+        'resolvedTemporalHints': frame.resolvedTemporalHints,
+      if (frame.timeScope.isNotEmpty) 'timeScope': frame.timeScope,
+      if (frame.timeRangeStart.isNotEmpty)
+        'timeRangeStart': frame.timeRangeStart,
+      if (frame.timeRangeEnd.isNotEmpty) 'timeRangeEnd': frame.timeRangeEnd,
+      if (frame.timePoint.isNotEmpty) 'timePoint': frame.timePoint,
     };
+  }
+
+  QueryTask _queryTask({
+    required ProblemFrame frame,
+    required String id,
+    required String query,
+    required String label,
+    required QueryTaskDimension dimension,
+  }) {
+    return QueryTask(
+      id: id,
+      query: applyResolvedGeoToQuery(query, frame.resolvedGeoScope),
+      label: label,
+      dimension: dimension,
+      entityAnchors: mergeGeoAnchors(frame.entityAnchors, frame.resolvedGeoScope),
+      negativeKeywords: frame.negativeKeywords,
+      timeScope: frame.timeScope,
+      timeRangeStart: frame.timeRangeStart,
+      timeRangeEnd: frame.timeRangeEnd,
+      timePoint: frame.timePoint,
+      timezone: frame.timezone,
+    );
   }
 
   List<QueryTask> _buildQueryTasks(ProblemFrame frame) {
@@ -91,48 +136,43 @@ class DefaultRetrievalPlanner {
       case AnswerShape.comparison:
       case AnswerShape.options:
         return <QueryTask>[
-          QueryTask(
+          _queryTask(
+            frame: frame,
             id: 'candidate_space',
             query: '${frame.normalizedQuery} 备选 方案',
             label: '候选范围',
             dimension: QueryTaskDimension.candidateSpace,
-            entityAnchors: frame.entityAnchors,
-            negativeKeywords: frame.negativeKeywords,
           ),
-          QueryTask(
+          _queryTask(
+            frame: frame,
             id: 'fit_scenarios',
             query: '${frame.normalizedQuery} 适用 场景',
             label: '适用场景',
             dimension: QueryTaskDimension.fitScenarios,
-            entityAnchors: frame.entityAnchors,
-            negativeKeywords: frame.negativeKeywords,
           ),
-          QueryTask(
+          _queryTask(
+            frame: frame,
             id: 'risks',
             query: '${frame.normalizedQuery} 风险 注意事项',
             label: '风险边界',
             dimension: QueryTaskDimension.riskBoundaries,
-            entityAnchors: frame.entityAnchors,
-            negativeKeywords: frame.negativeKeywords,
           ),
         ];
       case AnswerShape.decisionReady:
         return <QueryTask>[
-          QueryTask(
+          _queryTask(
+            frame: frame,
             id: 'key_facts',
             query: '${frame.normalizedQuery} 关键事实',
             label: '关键事实',
             dimension: QueryTaskDimension.keyFacts,
-            entityAnchors: frame.entityAnchors,
-            negativeKeywords: frame.negativeKeywords,
           ),
-          QueryTask(
+          _queryTask(
+            frame: frame,
             id: 'decision_threshold',
             query: '${frame.normalizedQuery} 判断条件',
             label: '判断条件',
             dimension: QueryTaskDimension.decisionThreshold,
-            entityAnchors: frame.entityAnchors,
-            negativeKeywords: frame.negativeKeywords,
           ),
         ];
       default:
@@ -140,49 +180,44 @@ class DefaultRetrievalPlanner {
     }
     if (frame.problemClassKind == ProblemClass.complexReasoning) {
       return <QueryTask>[
-        QueryTask(
+        _queryTask(
+          frame: frame,
           id: 'candidate_space',
           query: '${frame.normalizedQuery} 备选 方案',
           label: '候选范围',
           dimension: QueryTaskDimension.candidateSpace,
-          entityAnchors: frame.entityAnchors,
-          negativeKeywords: frame.negativeKeywords,
         ),
-        QueryTask(
+        _queryTask(
+          frame: frame,
           id: 'fit_scenarios',
           query: '${frame.normalizedQuery} 适用 场景',
           label: '适用场景',
           dimension: QueryTaskDimension.fitScenarios,
-          entityAnchors: frame.entityAnchors,
-          negativeKeywords: frame.negativeKeywords,
         ),
-        QueryTask(
+        _queryTask(
+          frame: frame,
           id: 'risks',
           query: '${frame.normalizedQuery} 风险 注意事项',
           label: '风险边界',
           dimension: QueryTaskDimension.riskBoundaries,
-          entityAnchors: frame.entityAnchors,
-          negativeKeywords: frame.negativeKeywords,
         ),
       ];
     }
     if (frame.problemClassKind == ProblemClass.evidenceLookup) {
       return <QueryTask>[
-        QueryTask(
+        _queryTask(
+          frame: frame,
           id: 'key_facts',
           query: '${frame.normalizedQuery} 关键事实',
           label: '关键事实',
           dimension: QueryTaskDimension.keyFacts,
-          entityAnchors: frame.entityAnchors,
-          negativeKeywords: frame.negativeKeywords,
         ),
-        QueryTask(
+        _queryTask(
+          frame: frame,
           id: 'decision_threshold',
           query: '${frame.normalizedQuery} 判断条件',
           label: '判断条件',
           dimension: QueryTaskDimension.decisionThreshold,
-          entityAnchors: frame.entityAnchors,
-          negativeKeywords: frame.negativeKeywords,
         ),
       ];
     }

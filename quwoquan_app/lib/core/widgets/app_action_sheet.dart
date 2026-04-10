@@ -4,6 +4,7 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/conversation_sheet.dart';
+import 'package:quwoquan_app/core/widgets/ios_selection_page_components.dart';
 
 class AppActionSheetItem<T> {
   const AppActionSheetItem({
@@ -52,7 +53,7 @@ Future<T?> showAppActionSheet<T>(
   );
 }
 
-/// 选项仅高亮草稿选中态；点「确定」才返回选中值，点「取消」或关闭返回 `null`。
+/// 选项仅高亮草稿选中态；点「确认」才返回选中值，点「取消」或关闭返回 `null`。
 Future<T?> showAppActionSheetForConfirm<T>(
   BuildContext context, {
   String? title,
@@ -60,7 +61,7 @@ Future<T?> showAppActionSheetForConfirm<T>(
   required List<AppActionSheetSection<T>> sections,
   required T initialValue,
   String cancelLabel = UITextConstants.cancel,
-  String confirmLabel = UITextConstants.ok,
+  String confirmLabel = UITextConstants.confirm,
   double? maxHeightRatio,
 }) {
   return showCupertinoModalPopup<T>(
@@ -270,8 +271,8 @@ class _AppActionSheetForConfirmState<T>
                 height: SettingsSemanticConstants.conversationSheetSectionGap,
               ),
             ],
-            ConversationSheetCancelConfirmBar(
-              isDark: isDark,
+            IosSelectionBottomBar(
+              includeViewPaddingBottom: false,
               cancelLabel: widget.cancelLabel,
               confirmLabel: widget.confirmLabel,
               onCancel: () => Navigator.of(context).pop(),

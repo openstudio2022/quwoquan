@@ -115,9 +115,17 @@ fields:
     type: object
     ref: understanding_snapshot
     default: {}
+  - name: retrievalProcessing
+    type: object
+    ref: RetrievalProcessingSnapshot
+    default: {}
   - name: answerProcessing
     type: object
     ref: answer_processing
+    default: {}
+  - name: answerGateAssessment
+    type: object
+    ref: answer_gate_assessment
     default: {}
   - name: historicalThinkingSnapshot
     type: object
@@ -210,6 +218,7 @@ subcontracts:
       - { name: emotionSignal, type: string, default: '' }
       - { name: queryDesignSummary, type: string, default: '' }
       - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
+      - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }
       - { name: assumptions, type: list<string>, default: [] }
       - { name: mismatchSignal, type: string, default: '' }
       - { name: carryForwardFacts, type: list<string>, default: [] }
@@ -220,6 +229,17 @@ subcontracts:
       - { name: dimension, type: string, default: '' }
       - { name: queries, type: list<string>, default: [] }
       - { name: why, type: string, default: '' }
+  understanding_resolution_item:
+    class_name: AssistantTurnUnderstandingResolutionItem
+    fields:
+      - { name: kind, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: originalValue, type: string, default: '' }
+      - { name: resolvedValue, type: string, default: '' }
+      - { name: defaultApplied, type: bool, default: false }
+      - { name: visibleInUnderstanding, type: bool, default: true }
   answer_processing:
     class_name: AssistantTurnAnswerProcessing
     fields:
@@ -227,6 +247,21 @@ subcontracts:
       - { name: keyFacts, type: list<string>, default: [] }
       - { name: missingDimensions, type: list<string>, default: [] }
       - { name: retrieveMoreReason, type: string, default: '' }
+  answer_gate_assessment:
+    class_name: AssistantTurnAnswerGateAssessment
+    fields:
+      - { name: canAnswerNow, type: bool, default: false }
+      - { name: answerMode, type: string, default: '' }
+      - { name: replanNeeded, type: bool, default: false }
+      - { name: replanReason, type: string, default: '' }
+      - {
+          name: convergenceStatus,
+          type: enum,
+          enum_ref: SearchIterationConvergenceStatus,
+          default: '',
+        }
+      - { name: attemptsUsed, type: int, default: 0 }
+      - { name: maxAttempts, type: int, default: 0 }
   historical_thinking_snapshot:
     class_name: AssistantTurnHistoricalThinkingSnapshot
     fields:

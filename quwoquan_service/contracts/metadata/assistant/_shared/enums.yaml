@@ -99,6 +99,17 @@ enums:
         wire: explore
         aliases: [exhaustive]
 
+  - name: SearchIterationConvergenceStatus
+    values:
+      - name: unknown
+        wire: ''
+      - name: improving
+        wire: improving
+      - name: flat
+        wire: flat
+      - name: saturated
+        wire: saturated
+
   - name: FinalAnswerMode
     values:
       - name: full

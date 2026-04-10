@@ -2,8 +2,11 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 
-AssistantJourney resolveAssistantJourneyFromMessage(Map<String, dynamic> message) {
+AssistantJourney resolveAssistantJourneyFromMessage(
+  Map<String, dynamic> message,
+) {
   return resolvePersistedAssistantJourneyForDisplay(message);
 }
 
@@ -33,7 +36,8 @@ RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromMessage(
   if (direct != null && direct.isNotEmpty) {
     return RetrievalProcessingSnapshot.fromJson(direct);
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  final runArtifacts = (message['runArtifacts'] as Map?)
+      ?.cast<String, dynamic>();
   final nested = (runArtifacts?[assistantRetrievalProcessingField] as Map?)
       ?.cast<String, dynamic>();
   if (nested != null && nested.isNotEmpty) {
@@ -42,19 +46,19 @@ RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromMessage(
   return const RetrievalProcessingSnapshot();
 }
 
-RunArtifactsUnderstandingSnapshot resolveAssistantUnderstandingSnapshotFromMessage(
-  Map<String, dynamic> message,
-) {
+RunArtifactsUnderstandingSnapshot
+resolveAssistantUnderstandingSnapshotFromMessage(Map<String, dynamic> message) {
   final direct = (message[assistantUnderstandingSnapshotField] as Map?)
       ?.cast<String, dynamic>();
   if (direct != null && direct.isNotEmpty) {
-    return RunArtifactsUnderstandingSnapshot.fromJson(direct);
+    return parseRunArtifactsUnderstandingSnapshotFromMap(direct);
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  final runArtifacts = (message['runArtifacts'] as Map?)
+      ?.cast<String, dynamic>();
   final nested = (runArtifacts?[assistantUnderstandingSnapshotField] as Map?)
       ?.cast<String, dynamic>();
   if (nested != null && nested.isNotEmpty) {
-    return RunArtifactsUnderstandingSnapshot.fromJson(nested);
+    return parseRunArtifactsUnderstandingSnapshotFromMap(nested);
   }
   return const RunArtifactsUnderstandingSnapshot();
 }
@@ -67,7 +71,8 @@ RunArtifactsAnswerProcessing resolveAssistantAnswerProcessingFromMessage(
   if (direct != null && direct.isNotEmpty) {
     return RunArtifactsAnswerProcessing.fromJson(direct);
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  final runArtifacts = (message['runArtifacts'] as Map?)
+      ?.cast<String, dynamic>();
   final nested = (runArtifacts?[assistantAnswerProcessingField] as Map?)
       ?.cast<String, dynamic>();
   if (nested != null && nested.isNotEmpty) {

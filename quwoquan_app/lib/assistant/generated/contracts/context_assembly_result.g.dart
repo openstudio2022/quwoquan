@@ -4,6 +4,88 @@
 
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 
+class AvailableGeoContext {
+  const AvailableGeoContext({
+    this.countryCode = "",
+    this.countryLabel = "",
+    this.regionCode = "",
+    this.regionLabel = "",
+    this.cityLabel = "",
+    this.districtLabel = "",
+    this.lat = 0,
+    this.lng = 0,
+    this.timezone = "",
+    this.source = "",
+    this.confidence = 0,
+    this.capturedAt = "",
+    this.privacyTier = "",
+  });
+
+  final String countryCode;
+  final String countryLabel;
+  final String regionCode;
+  final String regionLabel;
+  final String cityLabel;
+  final String districtLabel;
+  final double lat;
+  final double lng;
+  final String timezone;
+  final String source;
+  final double confidence;
+  final String capturedAt;
+  final String privacyTier;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'countryCode': countryCode,
+        'countryLabel': countryLabel,
+        'regionCode': regionCode,
+        'regionLabel': regionLabel,
+        'cityLabel': cityLabel,
+        'districtLabel': districtLabel,
+        'lat': lat,
+        'lng': lng,
+        'timezone': timezone,
+        'source': source,
+        'confidence': confidence,
+        'capturedAt': capturedAt,
+        'privacyTier': privacyTier,
+      };
+
+  factory AvailableGeoContext.fromJson(Map<String, dynamic> json) {
+    return AvailableGeoContext(
+      countryCode: (json['countryCode'] as String?)?.trim() ?? "",
+      countryLabel: (json['countryLabel'] as String?)?.trim() ?? "",
+      regionCode: (json['regionCode'] as String?)?.trim() ?? "",
+      regionLabel: (json['regionLabel'] as String?)?.trim() ?? "",
+      cityLabel: (json['cityLabel'] as String?)?.trim() ?? "",
+      districtLabel: (json['districtLabel'] as String?)?.trim() ?? "",
+      lat: (json['lat'] as num?)?.toDouble() ?? 0,
+      lng: (json['lng'] as num?)?.toDouble() ?? 0,
+      timezone: (json['timezone'] as String?)?.trim() ?? "",
+      source: (json['source'] as String?)?.trim() ?? "",
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+      capturedAt: (json['capturedAt'] as String?)?.trim() ?? "",
+      privacyTier: (json['privacyTier'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class AvailableGeoContextFields {
+  static const String countryCode = 'countryCode';
+  static const String countryLabel = 'countryLabel';
+  static const String regionCode = 'regionCode';
+  static const String regionLabel = 'regionLabel';
+  static const String cityLabel = 'cityLabel';
+  static const String districtLabel = 'districtLabel';
+  static const String lat = 'lat';
+  static const String lng = 'lng';
+  static const String timezone = 'timezone';
+  static const String source = 'source';
+  static const String confidence = 'confidence';
+  static const String capturedAt = 'capturedAt';
+  static const String privacyTier = 'privacyTier';
+}
+
 class ContextAssemblyResult {
   const ContextAssemblyResult({
     this.contextEnvelope = const <String, dynamic>{},
@@ -12,6 +94,7 @@ class ContextAssemblyResult {
     this.summaryText = "",
     this.hasRealtimeNeed = false,
     this.hasLongtermNeed = false,
+    this.availableGeoContext = const AvailableGeoContext(),
   });
 
   final Map<String, dynamic> contextEnvelope;
@@ -20,6 +103,7 @@ class ContextAssemblyResult {
   final String summaryText;
   final bool hasRealtimeNeed;
   final bool hasLongtermNeed;
+  final AvailableGeoContext availableGeoContext;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'contextEnvelope': contextEnvelope,
@@ -28,6 +112,7 @@ class ContextAssemblyResult {
         'summaryText': summaryText,
         'hasRealtimeNeed': hasRealtimeNeed,
         'hasLongtermNeed': hasLongtermNeed,
+        'availableGeoContext': availableGeoContext.toJson(),
       };
 
   factory ContextAssemblyResult.fromJson(Map<String, dynamic> json) {
@@ -38,8 +123,10 @@ class ContextAssemblyResult {
       summaryText: (json['summaryText'] as String?)?.trim() ?? "",
       hasRealtimeNeed: json['hasRealtimeNeed'] == true,
       hasLongtermNeed: json['hasLongtermNeed'] == true,
+      availableGeoContext: json['availableGeoContext'] is Map ? AvailableGeoContext.fromJson((json['availableGeoContext'] as Map).cast<String, dynamic>()) : const AvailableGeoContext(),
     );
   }
+
 }
 
 class ContextAssemblyResultFields {
@@ -49,4 +136,5 @@ class ContextAssemblyResultFields {
   static const String summaryText = 'summaryText';
   static const String hasRealtimeNeed = 'hasRealtimeNeed';
   static const String hasLongtermNeed = 'hasLongtermNeed';
+  static const String availableGeoContext = 'availableGeoContext';
 }

@@ -718,5 +718,25 @@
   "replyToPrefix": " replied to ",
   "@replyToPrefix": {
     "description": "Reply-to prefix between usernames in comment thread (with spaces)"
+  },
+  "createMaxImagesToastTemplate": "You can add at most {count} photos",
+  "@createMaxImagesToastTemplate": {
+    "description": "Toast when user exceeds max image count on create flow",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "9"
+      }
+    }
+  },
+  "createPublishPreviewImageCountTemplate": "{count} photos",
+  "@createPublishPreviewImageCountTemplate": {
+    "description": "Publish preview chip label for image-only posts",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -168,7 +169,7 @@ class AssistantProcessTimelineProjector {
     if (raw == null || raw.isEmpty) {
       return current.understandingSnapshot;
     }
-    return RunArtifactsUnderstandingSnapshot.fromJson(raw);
+    return parseRunArtifactsUnderstandingSnapshotFromMap(raw);
   }
 
   RetrievalProcessingSnapshot _retrievalProcessingFromPayload(

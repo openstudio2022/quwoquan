@@ -4,6 +4,17 @@
   "defaultTimeScope": "latest",
   "defaultFreshnessHoursMax": 1,
   "authorityRequired": true,
+  "defaultGeoPolicy": {
+    "defaultGeoScope": "city",
+    "fallbackAllowed": true,
+    "fallbackSources": [
+      "available_geo.city",
+      "available_geo.region",
+      "available_geo.country"
+    ],
+    "marketTemplate": "",
+    "marketOverrides": {}
+  },
   "allowedTimeScopes": ["latest", "today", "last_7d", "custom", "unspecified"],
   "authorityDomains": [
     "weather.com.cn",
@@ -18,5 +29,14 @@
     "优先返回实时天气关键指标",
     "必须覆盖温度湿度风速和体感温度",
     "若无法获取实时指标需明确说明并给出重试策略"
+  ],
+  "negativeKeywords": [
+    "40天",
+    "40d",
+    "15天",
+    "15日",
+    "未来40天",
+    "未来15天",
+    "weather40d"
   ]
 }

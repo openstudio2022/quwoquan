@@ -6,7 +6,6 @@ import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/react_planner.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_execution_guard.dart';
@@ -355,22 +354,6 @@ class ReactRuntime {
       if (phaseHint.isNotEmpty) {
         messages.add(<String, String>{'role': 'system', 'content': phaseHint});
       }
-
-      pushTrace(
-        AssistantTraceEvent(
-          type: AssistantTraceEventType.thinkingProgress,
-          message: _seedThinkingProgressMessage(currentPhase, state.goal),
-          visibility: TraceVisibility.internal,
-          timestamp: DateTime.now(),
-          runId: runId,
-          traceId: traceId,
-          data: <String, dynamic>{
-            'phase': currentPhase,
-            'iteration': state.iteration,
-            'extracted': true,
-          },
-        ),
-      );
       final wrappedOnDelta = onDelta != null
           ? (String delta) {
               if (delta.trim().isEmpty) return;
@@ -1665,11 +1648,7 @@ class ReactRuntime {
         final turn = tryParseAssistantTurnOutput(payload);
         final rs = turn?.reasonShort.trim() ?? '';
         if (rs.isNotEmpty) {
-          return _normalizeStructuredThinking(
-            raw: rs,
-            currentPhase: currentPhase,
-            turn: turn,
-          );
+          return rs;
         }
         final um =
             turn?.userMarkdown.trim() ??
@@ -1703,92 +1682,6 @@ class ReactRuntime {
     return '';
   }
 
-  String _normalizeStructuredThinking({
-    required String raw,
-    required String currentPhase,
-    AssistantTurnOutput? turn,
-  }) {
-    final text = raw.trim();
-    if (text.isEmpty) return '';
-    final intentSummary =
-        turn?.understandingSnapshot.intentSummary.trim() ?? '';
-    final userGoal = turn?.intentGraph?.userGoal.trim() ?? '';
-    final topic = _normalizeThinkingTopic(
-      intentSummary.isNotEmpty ? intentSummary : userGoal,
-    );
-    final internalNarration =
-        AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
-          text,
-        );
-    final needsTopicEnrichment =
-        topic.isNotEmpty &&
-        !text.contains(topic) &&
-        _looksLikeGenericThinkingText(text);
-    if (!internalNarration && !needsTopicEnrichment) {
-      return text;
-    }
-    switch (currentPhase) {
-      case 'understanding':
-        if (topic.isNotEmpty) {
-          return '我先确认你想知道的重点是$topic，再核对最新信息。';
-        }
-        return '我先确认你最关心的重点，再核对最新信息。';
-      case 'search':
-        if (topic.isNotEmpty) {
-          return '我先把和$topic最相关的几路信息拆开核对。';
-        }
-        return '我先把最影响结论的几路信息拆开核对。';
-      case 'answering':
-        if (topic.isNotEmpty) {
-          return '我已经把$topic的关键信息核对好了，开始整理结论。';
-        }
-        return '我已经把关键信息核对好了，开始整理结论。';
-      default:
-        return text;
-    }
-  }
-
-  String _normalizeThinkingTopic(String raw) {
-    var topic = raw.trim();
-    if (topic.isEmpty) return '';
-    topic = topic
-        .replaceFirst(RegExp(r'^(用户)?(?:想|要)?(?:了解|知道|确认|判断|查询)'), '')
-        .replaceFirst(RegExp(r'^(一下|当前|现在|一下子)'), '')
-        .trim();
-    return topic;
-  }
-
-  String _seedThinkingProgressMessage(String currentPhase, String goal) {
-    final topic = _normalizeThinkingTopic(goal);
-    switch (currentPhase) {
-      case 'understanding':
-        if (topic.isNotEmpty) {
-          return '我先确认你想知道的重点是$topic。';
-        }
-        return '我先确认你最关心的重点。';
-      case 'answering':
-        if (topic.isNotEmpty) {
-          return '我开始整理$topic的关键信息。';
-        }
-        return '我开始整理已经核对好的关键信息。';
-      case 'search':
-        if (topic.isNotEmpty) {
-          return '我先把和$topic最相关的几路信息拆开核对。';
-        }
-        return '我先把最影响结论的几路信息拆开核对。';
-      default:
-        return '理解问题';
-    }
-  }
-
-  bool _looksLikeGenericThinkingText(String text) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) return false;
-    if (normalized.runes.length <= 16) return true;
-    return RegExp(
-      r'(问题焦点|组织执行|开始处理|开始整理|聚焦问题主线|进入理解阶段|进入检索准备|进入回答阶段)',
-    ).hasMatch(normalized);
-  }
 }
 
 class _RuntimeExecutionShell {

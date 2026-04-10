@@ -380,6 +380,9 @@ class IosSelectionBottomBar extends StatelessWidget {
     this.cancelButtonKey,
     this.confirmEnabled = true,
     this.confirmLoading = false,
+    /// When false, omits bottom safe area inset from media query — use when the
+    /// parent sheet already applies `MediaQuery.viewPadding` on the panel.
+    this.includeViewPaddingBottom = true,
   });
 
   final VoidCallback onConfirm;
@@ -390,6 +393,7 @@ class IosSelectionBottomBar extends StatelessWidget {
   final Key? cancelButtonKey;
   final bool confirmEnabled;
   final bool confirmLoading;
+  final bool includeViewPaddingBottom;
 
   @override
   Widget build(BuildContext context) {
@@ -399,12 +403,15 @@ class IosSelectionBottomBar extends StatelessWidget {
     ).withValues(alpha: 0.94);
     final separator = AppColors.iosSeparator(context).withValues(alpha: 0.12);
 
+    final bottomInset = includeViewPaddingBottom
+        ? MediaQuery.viewPaddingOf(context).bottom
+        : 0.0;
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.containerMd,
         AppSpacing.containerSm,
         AppSpacing.containerMd,
-        MediaQuery.viewPaddingOf(context).bottom + AppSpacing.containerMd,
+        bottomInset + AppSpacing.containerMd,
       ),
       decoration: BoxDecoration(
         color: background,

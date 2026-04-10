@@ -103,32 +103,28 @@ AssistantProcessDisplayState _resolveProcessDisplayState({
   final activeStepId = explicit.activeStepId != ProcessStepId.unknown
       ? explicit.activeStepId
       : _resolveActiveStepId(processTimeline);
-  if (explicitBlocks.isNotEmpty || explicitSummary.isNotEmpty) {
-    return AssistantProcessDisplayState(
-      activeStepId: activeStepId,
-      summary: explicitSummary.isNotEmpty
-          ? explicitSummary
-          : _resolveProcessSummary(
-              explicitBlocks: explicitBlocks,
-              processTimeline: processTimeline,
-            ),
-      blocks: explicitBlocks,
-      finalAnswerReady: explicit.finalAnswerReady || finalAnswerReady,
-    );
-  }
   final derivedBlocks = <AssistantProcessDisplayBlock>[
     ..._buildUnderstandingBlocks(processTimeline, understandingSnapshot),
-    ..._buildRetrievalBlocks(processTimeline, retrievalProcessing),
+    ..._buildRetrievalBlocks(
+      processTimeline,
+      retrievalProcessing,
+      understandingSnapshot,
+    ),
     ..._buildAnswerOrganizationBlocks(processTimeline, answerProcessing),
   ];
+  final mergedBlocks = _mergeProcessBlocks(
+    preferred: explicitBlocks,
+    fallback: derivedBlocks,
+  );
   return AssistantProcessDisplayState(
     activeStepId: activeStepId,
     summary: _resolveProcessSummary(
-      explicitBlocks: derivedBlocks,
+      explicitBlocks: mergedBlocks,
       processTimeline: processTimeline,
+      fallbackSummary: explicitSummary,
     ),
-    blocks: derivedBlocks,
-    finalAnswerReady: finalAnswerReady,
+    blocks: mergedBlocks,
+    finalAnswerReady: explicit.finalAnswerReady || finalAnswerReady,
   );
 }
 
@@ -141,13 +137,34 @@ AssistantAnswerDisplayState _resolveAnswerDisplayState({
   final explicitBlocks = explicit.blocks
       .where(_hasVisibleAnswerBlock)
       .toList(growable: false);
+  final markdown = _normalizeMarkdownLeaf(answerMarkdown);
   if (explicitBlocks.isNotEmpty || explicit.summary.trim().isNotEmpty) {
+    final explicitVisibleText = _normalizePlainText(
+      <String>[
+        explicit.summary.trim(),
+        renderAnswerBlocksToPlainText(explicitBlocks),
+      ].where((item) => item.trim().isNotEmpty).join('\n\n'),
+    );
+    final shouldAppendMarkdownFallback =
+        markdown.isNotEmpty &&
+        _containsExplicitDateAnchor(markdown) &&
+        !_containsExplicitDateAnchor(explicitVisibleText);
     return AssistantAnswerDisplayState(
-      summary: explicit.summary.trim(),
-      blocks: explicitBlocks,
+      summary: explicit.summary.trim().isNotEmpty
+          ? explicit.summary.trim()
+          : answerSummary.trim(),
+      blocks: shouldAppendMarkdownFallback
+          ? <AssistantAnswerDisplayBlock>[
+              ...explicitBlocks,
+              AssistantAnswerDisplayBlock(
+                blockId: 'answer_markdown_fallback',
+                kind: DisplayBlockKind.markdown,
+                body: markdown,
+              ),
+            ]
+          : explicitBlocks,
     );
   }
-  final markdown = _normalizeMarkdownLeaf(answerMarkdown);
   if (markdown.isNotEmpty) {
     return AssistantAnswerDisplayState(
       summary: answerSummary.trim(),
@@ -183,23 +200,59 @@ List<AssistantProcessDisplayBlock> _buildUnderstandingBlocks(
   final frame = _frameForStep(processTimeline, ProcessStepId.understanding);
   final status = frame?.status ?? JourneyStageStatus.pending;
   final summary = snapshot.userFacingSummary.trim();
-  if (summary.isEmpty) {
+  final resolutionItems = snapshot.resolutionItems
+      .where(
+        (item) =>
+            item.visibleInUnderstanding &&
+            (item.detail.trim().isNotEmpty ||
+                item.resolvedValue.trim().isNotEmpty),
+      )
+      .toList(growable: false);
+  if (summary.isEmpty && resolutionItems.isEmpty) {
     return const <AssistantProcessDisplayBlock>[];
   }
-  return <AssistantProcessDisplayBlock>[
-    AssistantProcessDisplayBlock(
-      blockId: 'understanding_summary',
-      stepId: ProcessStepId.understanding,
-      status: status,
-      kind: ProcessDisplayBlockKind.summary,
-      title: summary,
-    ),
-  ];
+  final blocks = <AssistantProcessDisplayBlock>[];
+  if (summary.isNotEmpty) {
+    blocks.add(
+      AssistantProcessDisplayBlock(
+        blockId: 'understanding_summary',
+        stepId: ProcessStepId.understanding,
+        status: status,
+        kind: ProcessDisplayBlockKind.summary,
+        title: summary,
+      ),
+    );
+  }
+  if (resolutionItems.isNotEmpty) {
+    blocks.add(
+      AssistantProcessDisplayBlock(
+        blockId: 'understanding_resolution_items',
+        stepId: ProcessStepId.understanding,
+        status: status,
+        kind: ProcessDisplayBlockKind.points,
+        items: resolutionItems
+            .asMap()
+            .entries
+            .map(
+              (entry) => AssistantDisplayItem(
+                itemId: 'understanding_resolution_${entry.key}',
+                title: entry.value.title.trim(),
+                body: entry.value.detail.trim().isNotEmpty
+                    ? entry.value.detail.trim()
+                    : entry.value.resolvedValue.trim(),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+  return blocks;
 }
 
 List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   List<ProcessTimelineFrame> processTimeline,
   RetrievalProcessingSnapshot snapshot,
+  RunArtifactsUnderstandingSnapshot understandingSnapshot,
 ) {
   final frame = _frameForStep(
     processTimeline,
@@ -227,6 +280,21 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
       ),
     );
   }
+  final queryDesignItems = _buildRetrievalQueryDesignItems(
+    understandingSnapshot,
+    retrievalSummary: summary,
+  );
+  if (queryDesignItems.isNotEmpty) {
+    blocks.add(
+      AssistantProcessDisplayBlock(
+        blockId: 'retrieval_query_design',
+        stepId: ProcessStepId.retrievalProcessing,
+        status: status,
+        kind: ProcessDisplayBlockKind.points,
+        items: queryDesignItems,
+      ),
+    );
+  }
   if (refs.isNotEmpty) {
     blocks.add(
       AssistantProcessDisplayBlock(
@@ -239,6 +307,59 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
     );
   }
   return blocks;
+}
+
+List<AssistantDisplayItem> _buildRetrievalQueryDesignItems(
+  RunArtifactsUnderstandingSnapshot snapshot, {
+  String retrievalSummary = '',
+}) {
+  final preferredSummary = snapshot.queryDesignSummary.trim();
+  if (preferredSummary.isEmpty) {
+    return const <AssistantDisplayItem>[];
+  }
+  if (_isDuplicateQueryDesignText(
+    preferredSummary,
+    existing: <String>[retrievalSummary, snapshot.userFacingSummary.trim()],
+  )) {
+    return const <AssistantDisplayItem>[];
+  }
+  return <AssistantDisplayItem>[
+    AssistantDisplayItem(
+      itemId: 'retrieval_query_design_summary',
+      title: '检索设计',
+      body: preferredSummary,
+    ),
+  ];
+}
+
+bool _isDuplicateQueryDesignText(
+  String candidate, {
+  required Iterable<String> existing,
+}) {
+  final normalizedCandidate = _normalizeProcessTextKey(candidate);
+  if (normalizedCandidate.isEmpty) {
+    return true;
+  }
+  for (final text in existing) {
+    final normalizedExisting = _normalizeProcessTextKey(text);
+    if (normalizedExisting.isEmpty) {
+      continue;
+    }
+    if (normalizedCandidate == normalizedExisting ||
+        normalizedCandidate.contains(normalizedExisting) ||
+        normalizedExisting.contains(normalizedCandidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+String _normalizeProcessTextKey(String raw) {
+  return raw
+      .replaceAll(RegExp(r'^(我会先|我先|先)'), '')
+      .replaceAll(RegExp(r'[\s，,。；;：:、/]+'), '')
+      .trim()
+      .toLowerCase();
 }
 
 String _resolveRetrievalSummary({
@@ -325,7 +446,11 @@ ProcessStepId _resolveActiveStepId(List<ProcessTimelineFrame> processTimeline) {
 String _resolveProcessSummary({
   required List<AssistantProcessDisplayBlock> explicitBlocks,
   required List<ProcessTimelineFrame> processTimeline,
+  String fallbackSummary = '',
 }) {
+  if (fallbackSummary.trim().isNotEmpty) {
+    return fallbackSummary.trim();
+  }
   for (final block in explicitBlocks) {
     if (block.title.trim().isNotEmpty) {
       return block.title.trim();
@@ -348,6 +473,36 @@ String _resolveProcessSummary({
   return '';
 }
 
+List<AssistantProcessDisplayBlock> _mergeProcessBlocks({
+  required List<AssistantProcessDisplayBlock> preferred,
+  required List<AssistantProcessDisplayBlock> fallback,
+}) {
+  final merged = <AssistantProcessDisplayBlock>[];
+  final seen = <String>{};
+
+  String blockKey(AssistantProcessDisplayBlock block) {
+    final blockId = block.blockId.trim();
+    if (blockId.isNotEmpty) {
+      return blockId;
+    }
+    return '${block.stepId.name}:${block.kind.name}:${block.title.trim()}';
+  }
+
+  for (final block in preferred) {
+    final key = blockKey(block);
+    if (_hasVisibleProcessBlock(block) && seen.add(key)) {
+      merged.add(block);
+    }
+  }
+  for (final block in fallback) {
+    final key = blockKey(block);
+    if (_hasVisibleProcessBlock(block) && seen.add(key)) {
+      merged.add(block);
+    }
+  }
+  return merged;
+}
+
 bool _hasVisibleProcessBlock(AssistantProcessDisplayBlock block) {
   return block.title.trim().isNotEmpty ||
       block.body.trim().isNotEmpty ||
@@ -368,6 +523,16 @@ bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
       block.items.any(
         (item) => item.title.trim().isNotEmpty || item.body.trim().isNotEmpty,
       );
+}
+
+bool _containsExplicitDateAnchor(String raw) {
+  final text = raw.replaceAll(RegExp(r'\s+'), '');
+  if (text.isEmpty) {
+    return false;
+  }
+  return RegExp(r'20\d{2}-\d{2}-\d{2}').hasMatch(text) ||
+      RegExp(r'20\d{2}年\d{1,2}月\d{1,2}日').hasMatch(text) ||
+      RegExp(r'\d{1,2}月\d{1,2}日').hasMatch(text);
 }
 
 String _renderAnswerBlockToMarkdown(AssistantAnswerDisplayBlock block) {

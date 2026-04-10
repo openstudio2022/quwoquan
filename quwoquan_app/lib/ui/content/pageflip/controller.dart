@@ -76,6 +76,7 @@ class StPageFlipController {
     int initialPage = 0,
     this.flippingTimeMs = 1000,
     this.maxShadowOpacity = 1.0,
+    this.useForwardMirroredBackwardPath = false,
   }) : _spreadModel = spreadModel,
        _layout = layout {
     setCurrentPage(initialPage);
@@ -83,6 +84,7 @@ class StPageFlipController {
 
   final int flippingTimeMs;
   final double maxShadowOpacity;
+  final bool useForwardMirroredBackwardPath;
   StPageFlipSpreadModel _spreadModel;
   StPageFlipLayout _layout;
   StPageFlipCalculation? _calculation;
@@ -398,8 +400,13 @@ class StPageFlipController {
   void applyAnimationFrame(
     Offset localPagePoint, {
     ReverseFlipPose? reversePose,
+    Offset? renderLocalPagePoint,
   }) {
-    _applyPagePosition(localPagePoint, reversePose: reversePose);
+    _applyPagePosition(
+      localPagePoint,
+      reversePose: reversePose,
+      renderLocalPagePoint: renderLocalPagePoint,
+    );
   }
 
   void completeAnimation(StPageFlipAnimationPlan plan) {
@@ -462,6 +469,7 @@ class StPageFlipController {
   void _applyPagePosition(
     Offset localPagePoint, {
     ReverseFlipPose? reversePose,
+    Offset? renderLocalPagePoint,
   }) {
     if (_calculation == null) {
       return;
@@ -501,7 +509,7 @@ class StPageFlipController {
       );
       _renderFrame = _buildRenderFrame(
         calculation: calculation,
-        localPagePoint: localPagePoint,
+        localPagePoint: renderLocalPagePoint ?? localPagePoint,
         reversePose: resolvedReversePose,
       );
     }
@@ -642,7 +650,14 @@ class StPageFlipController {
   }
 
   bool _usesThreeStageBackflow(StPageFlipDirection direction) {
-    return direction == StPageFlipDirection.back &&
+    return !useForwardMirroredBackwardPath &&
+        direction == StPageFlipDirection.back &&
+        _layout.orientation == StPageFlipOrientation.portrait;
+  }
+
+  bool _usesCanonicalMirroredBackwardPath(StPageFlipDirection direction) {
+    return useForwardMirroredBackwardPath &&
+        direction == StPageFlipDirection.back &&
         _layout.orientation == StPageFlipOrientation.portrait;
   }
 
@@ -650,6 +665,14 @@ class StPageFlipController {
     required StPageFlipDirection direction,
     required StPageFlipCorner corner,
   }) {
+    if (_usesCanonicalMirroredBackwardPath(direction)) {
+      return StPageFlipCalculation(
+        direction: StPageFlipDirection.forward,
+        corner: corner,
+        pageWidth: _layout.bounds.pageWidth,
+        pageHeight: _layout.bounds.height,
+      );
+    }
     if (_usesThreeStageBackflow(direction)) {
       return ReverseCurlCalculation(
         corner: corner,
@@ -675,6 +698,14 @@ class StPageFlipController {
     final progress = (calculation.getFlippingProgress() / 100)
         .clamp(0.0, 1.0)
         .toDouble();
+    if (_usesCanonicalMirroredBackwardPath(direction)) {
+      return _buildCanonicalBackwardRenderFrame(
+        calculation: calculation,
+        logicalLocalPagePoint: localPagePoint,
+        progress: progress,
+        corner: corner,
+      );
+    }
     final renderDirection = resolvePageFlipRenderDirection(
       direction: direction,
       orientation: _layout.orientation,
@@ -706,6 +737,80 @@ class StPageFlipController {
         reversePose: reversePose,
       ),
       reversePose: reversePose,
+      backwardLeafFrame: resolveArticlePageBackwardLeafFrame(
+        direction: direction,
+        progress: progress,
+        reversePose: reversePose,
+      ),
     );
+  }
+
+  StPageFlipRenderFrame _buildCanonicalBackwardRenderFrame({
+    required StPageFlipCalculation calculation,
+    required Offset logicalLocalPagePoint,
+    required double progress,
+    required StPageFlipCorner corner,
+  }) {
+    final pageSize = Size(_layout.bounds.pageWidth, _layout.bounds.height);
+    final mirroredLocalPagePoint = _mirrorPointHorizontally(
+      _canonicalLocalPagePointForBackward(logicalLocalPagePoint),
+    );
+    return StPageFlipRenderFrame(
+      localPagePoint: mirroredLocalPagePoint,
+      progress: progress,
+      direction: StPageFlipDirection.back,
+      renderDirection: StPageFlipDirection.back,
+      corner: corner,
+      flippingClipArea: List<Offset>.unmodifiable(
+        _mirrorOffsetsHorizontally(calculation.getFlippingClipArea()),
+      ),
+      bottomClipArea: List<Offset>.unmodifiable(
+        _mirrorOffsetsHorizontally(calculation.getBottomClipArea()),
+      ),
+      flippingAnchor: _mirrorPointHorizontally(calculation.getActiveCorner()),
+      bottomAnchor: _mirrorPointHorizontally(
+        calculation.getBottomPagePosition(),
+      ),
+      angle: _mirrorAngleHorizontally(calculation.getAngle()),
+      shadow: _shadow,
+      timeline: resolvePageCurlTimeline(
+        direction: StPageFlipDirection.back,
+        renderDirection: StPageFlipDirection.back,
+        progress: progress,
+        localPagePoint: mirroredLocalPagePoint,
+        pageSize: pageSize,
+        corner: corner,
+      ),
+      reversePose: null,
+      // Canonical backward mesh must consume the mirrored-forward timeline
+      // directly; keep backwardLeafFrame available only for soft/fallback paths.
+      backwardLeafFrame: null,
+    );
+  }
+
+  Offset _canonicalLocalPagePointForBackward(Offset logicalLocalPagePoint) {
+    return Offset(
+      (logicalLocalPagePoint.dx - _layout.bounds.pageWidth)
+          .clamp(0.0, _layout.bounds.pageWidth)
+          .toDouble(),
+      logicalLocalPagePoint.dy,
+    );
+  }
+
+  Offset _mirrorPointHorizontally(Offset point) {
+    return Offset(
+      (_layout.bounds.pageWidth - point.dx)
+          .clamp(0.0, _layout.bounds.pageWidth)
+          .toDouble(),
+      point.dy,
+    );
+  }
+
+  List<Offset> _mirrorOffsetsHorizontally(List<Offset> points) {
+    return points.map(_mirrorPointHorizontally).toList(growable: false);
+  }
+
+  double _mirrorAngleHorizontally(double angle) {
+    return -angle;
   }
 }

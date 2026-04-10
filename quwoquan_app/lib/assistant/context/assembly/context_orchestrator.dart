@@ -10,6 +10,8 @@ import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver
 import 'package:quwoquan_app/assistant/context/assembly/continuity_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_gap_planner.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
+import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 
 class PersonalAssistantContextOrchestrator {
   const PersonalAssistantContextOrchestrator();
@@ -21,9 +23,13 @@ class PersonalAssistantContextOrchestrator {
   ContextContinuityPolicy buildContinuityPolicy({
     required String query,
     required List<Map<String, dynamic>> sessionHistory,
+    int recentRoundsLimit = defaultRecentDialogueRoundsLimit,
   }) {
     query.trim();
-    final referenceQueries = _recentUserQueries(sessionHistory);
+    final referenceQueries = _recentUserQueries(
+      sessionHistory,
+      limit: recentRoundsLimit,
+    );
     final typedHints = _continuityHintsFromHistory(sessionHistory);
     final continuityMode = parseContextContinuityMode(
       (typedHints['continuityMode'] as String?)?.trim() ?? '',
@@ -76,6 +82,13 @@ class PersonalAssistantContextOrchestrator {
       gpsLocation['locationTimestamp'] ?? contextScopeHint['locationTimestamp'],
     );
     final allowGpsSignals = continuityPolicy.allowLocationHints;
+    final availableGeoContext = buildAvailableGeoContext(
+      gpsLocation: _sanitizedGeoSignalsForAvailability(
+        gpsLocation: gpsLocation,
+        allowPreciseSignals: allowGpsSignals,
+      ),
+      scopeHint: contextScopeHint,
+    );
     final historySnippet = continuityPolicy.allowHistorySummary
         ? _truncateHistorySummary(historySummary)
         : '';
@@ -179,6 +192,7 @@ class PersonalAssistantContextOrchestrator {
         'requiresRealtimeEvidence': hasRealtimeNeed,
         'requiresLongtermMemory': hasLongtermNeed,
       },
+      'availableGeoContext': availableGeoContext.toJson(),
       if (continuityOverrideSlots.isNotEmpty)
         'continuityOverrideSlots': continuityOverrideSlots,
       'deviceProfile': <String, dynamic>{
@@ -248,6 +262,7 @@ class PersonalAssistantContextOrchestrator {
         '- realtimeNeed: $hasRealtimeNeed\n'
         '- longtermNeed: $hasLongtermNeed\n'
         '- continuityMode: ${continuityPolicy.continuityMode.wireName}\n'
+        '- availableGeo: ${availableGeoContext.cityLabel.isNotEmpty ? availableGeoContext.cityLabel : (availableGeoContext.countryLabel.isNotEmpty ? availableGeoContext.countryLabel : 'none')}\n'
         '- missingSlots: ${missingSlots.isEmpty ? 'none' : missingSlots.join(', ')}';
     return ContextAssemblyResult(
       contextEnvelope: contextEnvelope,
@@ -256,6 +271,7 @@ class PersonalAssistantContextOrchestrator {
       summaryText: summaryText,
       hasRealtimeNeed: hasRealtimeNeed,
       hasLongtermNeed: hasLongtermNeed,
+      availableGeoContext: availableGeoContext,
     );
   }
 
@@ -296,12 +312,24 @@ class PersonalAssistantContextOrchestrator {
       );
     }
     final evaluation = evidenceEvaluation;
+    if (evaluation != null && evaluation.status == EvidenceStatus.retry) {
+      final reason = evaluation.summary.trim().isNotEmpty
+          ? evaluation.summary.trim()
+          : (policy.summary.isNotEmpty ? policy.summary : '外部证据仍需继续补齐。');
+      return SynthesisReadinessResult(
+        ready: false,
+        reason: reason,
+        replanTask: _buildEvidenceReplanTask(
+          query: query,
+          generatedQueryConditions: generatedQueryConditions,
+          policy: policy,
+        ),
+      );
+    }
     if (policy.evidenceRequired) {
-      final hasUsableEvidence = evaluation != null &&
-          evaluation.entries.isNotEmpty &&
-          (evaluation.passed ||
-              evaluation.status == EvidenceStatus.bounded ||
-              !evaluation.evidenceRequired);
+      final hasUsableEvidence =
+          hasToolResult ||
+          (evaluation != null && evaluation.entries.isNotEmpty);
       if (!hasUsableEvidence) {
         final reason = (evaluation?.summary.trim().isNotEmpty ?? false)
             ? evaluation!.summary.trim()
@@ -348,14 +376,12 @@ class PersonalAssistantContextOrchestrator {
       final slotId = snapshot.slotId.trim().isNotEmpty
           ? snapshot.slotId.trim()
           : fallbackSlotId;
-      final mergedEvidenceIds = _mergeEvidenceIds(
-        snapshot.evidenceIds,
-        <String>[
-          ...(evidenceIdsBySlot[slotId] ?? const <String>[]),
-          if (fallbackSlotId.isNotEmpty && fallbackSlotId != slotId)
-            ...(evidenceIdsBySlot[fallbackSlotId] ?? const <String>[]),
-        ],
-      );
+      final mergedEvidenceIds =
+          _mergeEvidenceIds(snapshot.evidenceIds, <String>[
+            ...(evidenceIdsBySlot[slotId] ?? const <String>[]),
+            if (fallbackSlotId.isNotEmpty && fallbackSlotId != slotId)
+              ...(evidenceIdsBySlot[fallbackSlotId] ?? const <String>[]),
+          ]);
       final normalizedSnapshot =
           slotId != snapshot.slotId.trim() ||
               !_sameStringList(snapshot.evidenceIds, mergedEvidenceIds)
@@ -390,10 +416,7 @@ class PersonalAssistantContextOrchestrator {
     );
   }
 
-  List<String> _mergeEvidenceIds(
-    List<String> existing,
-    List<String> incoming,
-  ) {
+  List<String> _mergeEvidenceIds(List<String> existing, List<String> incoming) {
     final merged = <String>[];
     final seen = <String>{};
     for (final raw in <String>[...existing, ...incoming]) {
@@ -421,7 +444,15 @@ class PersonalAssistantContextOrchestrator {
     return double.tryParse(text);
   }
 
-  List<String> _recentUserQueries(List<Map<String, dynamic>> sessionHistory) {
+  List<String> _recentUserQueries(
+    List<Map<String, dynamic>> sessionHistory, {
+    required int limit,
+  }) {
+    final rounds = buildRecentDialogueRounds(sessionHistory, limit: limit);
+    final fromRounds = recentUserQueriesFromRounds(rounds);
+    if (fromRounds.isNotEmpty) {
+      return fromRounds;
+    }
     final result = <String>[];
     for (final item in sessionHistory.reversed) {
       final role = _strValue(item['role']);
@@ -429,7 +460,7 @@ class PersonalAssistantContextOrchestrator {
       final content = _strValue(item['content']);
       if (content.isEmpty) continue;
       result.add(content);
-      if (result.length >= 3) break;
+      if (result.length >= limit) break;
     }
     return result;
   }
@@ -453,6 +484,32 @@ class PersonalAssistantContextOrchestrator {
       'normalizeCrossLingualValues': true,
       'missingSlotAction': 'ask_user',
     };
+  }
+
+  Map<String, dynamic> _sanitizedGeoSignalsForAvailability({
+    required Map<String, dynamic> gpsLocation,
+    required bool allowPreciseSignals,
+  }) {
+    final sanitized = Map<String, dynamic>.from(gpsLocation);
+    if (allowPreciseSignals) {
+      return sanitized;
+    }
+    sanitized.remove('lat');
+    sanitized.remove('lng');
+    final nested = (sanitized['location'] as Map?)?.cast<String, dynamic>();
+    if (nested != null && nested.isNotEmpty) {
+      sanitized['location'] = <String, dynamic>{
+        ...nested,
+      }..removeWhere(
+          (key, _) =>
+              key == 'lat' ||
+              key == 'lng' ||
+              key == 'latitude' ||
+              key == 'longitude' ||
+              key == 'lon',
+        );
+    }
+    return sanitized;
   }
 
   Map<String, dynamic> _continuityHintsFromHistory(

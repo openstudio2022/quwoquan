@@ -1,10 +1,12 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 
 const String assistantJourneyField = 'journey';
 const String assistantProcessTimelineField = 'processTimeline';
@@ -136,6 +138,88 @@ AssistantDisplayState resolvePersistedAssistantDisplayState(
   } catch (_) {
     return const AssistantDisplayState();
   }
+}
+
+RunArtifactsUnderstandingSnapshot resolvePersistedAssistantUnderstandingSnapshot(
+  Map<String, dynamic> message,
+) {
+  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
+    return const RunArtifactsUnderstandingSnapshot();
+  }
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantUnderstandingSnapshotField,
+  );
+  if (raw.isEmpty) {
+    return const RunArtifactsUnderstandingSnapshot();
+  }
+  return parseRunArtifactsUnderstandingSnapshotFromMap(raw);
+}
+
+RunArtifactsAnswerProcessing resolvePersistedAssistantAnswerProcessing(
+  Map<String, dynamic> message,
+) {
+  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
+    return const RunArtifactsAnswerProcessing();
+  }
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantAnswerProcessingField,
+  );
+  if (raw.isEmpty) {
+    return const RunArtifactsAnswerProcessing();
+  }
+  return RunArtifactsAnswerProcessing.fromJson(raw);
+}
+
+RunArtifactsHistoricalThinkingSnapshot
+resolvePersistedAssistantHistoricalThinkingSnapshot(
+  Map<String, dynamic> message,
+) {
+  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
+    return const RunArtifactsHistoricalThinkingSnapshot();
+  }
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantHistoricalThinkingSnapshotField,
+  );
+  if (raw.isEmpty) {
+    return const RunArtifactsHistoricalThinkingSnapshot();
+  }
+  return RunArtifactsHistoricalThinkingSnapshot.fromJson(raw);
+}
+
+RetrievalProcessingSnapshot resolvePersistedAssistantRetrievalProcessing(
+  Map<String, dynamic> message,
+) {
+  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
+    return const RetrievalProcessingSnapshot();
+  }
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantRetrievalProcessingField,
+  );
+  if (raw.isEmpty) {
+    return const RetrievalProcessingSnapshot();
+  }
+  return RetrievalProcessingSnapshot.fromJson(raw);
+}
+
+IntentGraph? resolvePersistedAssistantIntentGraph(Map<String, dynamic> message) {
+  final direct = (message['intentGraph'] as Map?)?.cast<String, dynamic>();
+  if (direct != null && direct.isNotEmpty) {
+    try {
+      return IntentGraph.fromJson(direct);
+    } catch (_) {}
+  }
+  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  final nested = (runArtifacts?['intentGraph'] as Map?)?.cast<String, dynamic>();
+  if (nested != null && nested.isNotEmpty) {
+    try {
+      return IntentGraph.fromJson(nested);
+    } catch (_) {}
+  }
+  return null;
 }
 
 AssistantJourney resolveAssistantJourneyFromRunResponse(
@@ -446,7 +530,7 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
   final persistedProcessTimeline = hasStructuredProcessTimeline(processTimeline)
       ? normalizeProcessTimeline(processTimeline)
       : buildProcessTimelineFromSnapshots(
-          understandingSnapshot: RunArtifactsUnderstandingSnapshot.fromJson(
+          understandingSnapshot: parseRunArtifactsUnderstandingSnapshotFromMap(
             understandingSnapshot,
           ),
           retrievalProcessing: RetrievalProcessingSnapshot.fromJson(
@@ -535,7 +619,8 @@ bool isCanonicalPersistedAssistantTurnMessage(Map<String, dynamic> message) {
       allowJsonExtraction: false,
     ),
   ];
-  return answerSignals.any((item) => item.trim().isNotEmpty);
+  return answerSignals.any((item) => item.trim().isNotEmpty) ||
+      _hasReplayableAssistantTurnState(message);
 }
 
 Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
@@ -617,6 +702,36 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
       ..remove('machineEnvelope');
   }
   return normalized;
+}
+
+bool _hasReplayableAssistantTurnState(Map<String, dynamic> message) {
+  final journey = resolvePersistedAssistantJourney(message);
+  if (!journey.isEmpty) {
+    return true;
+  }
+  if (resolvePersistedAssistantProcessTimeline(message).isNotEmpty) {
+    return true;
+  }
+  if (hasAssistantDisplayState(
+    resolvePersistedAssistantDisplayState(message),
+  )) {
+    return true;
+  }
+  return _hasStructuredContent(
+        _resolvePersistedStructuredMap(
+          message,
+          assistantUnderstandingSnapshotField,
+        ),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(message, assistantAnswerProcessingField),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(
+          message,
+          assistantRetrievalProcessingField,
+        ),
+      );
 }
 
 AssistantJourneyStage _normalizeStageForTimeline({

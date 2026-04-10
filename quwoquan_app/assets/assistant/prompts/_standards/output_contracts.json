@@ -5,18 +5,15 @@
         "contractId",
         "decision",
         "messageKind",
-        "userMarkdown",
         "phaseId",
         "actionCode",
-        "reasonCode",
-        "result",
-        "selfCheck",
-        "diagnostics"
+        "reasonCode"
       ],
       "decisionNextActionEnum": [
         "tool_call",
         "answer",
         "ask_user",
+        "replan",
         "retry",
         "abort"
       ],

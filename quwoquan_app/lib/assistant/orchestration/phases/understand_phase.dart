@@ -1,12 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
@@ -19,10 +23,17 @@ import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
 import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/baseline_kernel.dart';
+import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
+import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
+
+const RelativeTimeResolver _relativeTimeResolver = RelativeTimeResolver();
 
 /// Understand: intent graph, domain selection, dialogue round script.
 class UnderstandPhase implements Phase {
@@ -30,6 +41,8 @@ class UnderstandPhase implements Phase {
     this.domainRouter,
     this.dialogueStateRuntime,
     this.modeDecider = const ModeDecider(),
+    this.kernel = const BaselineKernel(),
+    this.answerBoundaryResolver = const AnswerBoundaryResolver(),
     this.runtime,
     this.templateCatalogRuntime,
   });
@@ -37,6 +50,8 @@ class UnderstandPhase implements Phase {
   final AssistantDomainRouter? domainRouter;
   final DialogueStateRuntime? dialogueStateRuntime;
   final ModeDecider modeDecider;
+  final BaselineKernel kernel;
+  final AnswerBoundaryResolver answerBoundaryResolver;
   final ReactRuntime? runtime;
   final TemplateCatalogRuntime? templateCatalogRuntime;
 
@@ -52,6 +67,12 @@ class UnderstandPhase implements Phase {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
         : '';
+    final temporalReference = _relativeTimeResolver.resolveReferenceContext(
+      referenceNowIso:
+          (request.contextScopeHint['referenceNowIso'] as String?)?.trim() ??
+          '',
+      timezone: (request.contextScopeHint['timezone'] as String?)?.trim() ?? '',
+    );
     final inlinePlanningOwnsUnderstanding =
         request.contextScopeHint['inlinePlanningOwnsUnderstanding'] == true;
     final mergedScopeHint = _mergedScopeHint(
@@ -59,6 +80,8 @@ class UnderstandPhase implements Phase {
       bootstrapContext: bootstrapContext,
       allowLocationHints:
           bootstrapContext?.contextContinuityPolicy.allowLocationHints ?? false,
+      referenceNowIso: temporalReference.referenceNowIso,
+      timezone: temporalReference.timezone,
     );
     if (latestUserQuery.isEmpty) {
       return PhaseOutput(state: input.state);
@@ -83,8 +106,27 @@ class UnderstandPhase implements Phase {
           bootstrapContext: bootstrapContext,
           previousRunArtifacts: input.state.previousRunArtifacts,
         );
-        final domainId = normalizedIntent.primarySkill.trim().isNotEmpty
-            ? normalizedIntent.primarySkill.trim()
+        final geoResolvedIntent = await _resolveIntentGraphGeoContext(
+          request: request,
+          bootstrapContext: bootstrapContext,
+          contextAssembly: input.state.contextAssembly,
+          intentGraph: normalizedIntent,
+          latestUserQuery: latestUserQuery,
+        );
+        final plannedIntent = _withPlannedQueryTasks(
+          latestUserQuery: latestUserQuery,
+          intentGraph: geoResolvedIntent,
+          contextEnvelope:
+              input.state.contextAssembly?.contextEnvelope ??
+              const <String, dynamic>{},
+          availableTools:
+              runtime?.listAvailableToolNames() ??
+              const <String>['search', 'web_search'],
+          referenceNowIso: temporalReference.referenceNowIso,
+          timezone: temporalReference.timezone,
+        );
+        final domainId = plannedIntent.primarySkill.trim().isNotEmpty
+            ? plannedIntent.primarySkill.trim()
             : _domainRouter.fallbackDomainId;
         final dialogueRoundScript = await _dialogueStateRuntime
             .buildRoundScript(
@@ -95,12 +137,20 @@ class UnderstandPhase implements Phase {
                   bootstrapContext?.forceRefreshCatalog ?? false,
             );
         final modeDecision = modeDecider.decide(
-          intentGraph: normalizedIntent,
+          intentGraph: plannedIntent,
           recallResult: bootstrapContext?.recallResult,
         );
-        final understandingSnapshot = _fallbackUnderstandingSnapshot(
-          intentGraph: normalizedIntent,
+        final understandingSnapshot = _normalizeUnderstandingSnapshot(
+          snapshot: _fallbackUnderstandingSnapshot(
+            intentGraph: plannedIntent,
+            latestUserQuery: latestUserQuery,
+          ),
+          intentGraph: plannedIntent,
           latestUserQuery: latestUserQuery,
+          availableGeoContext:
+              input.state.contextAssembly?.availableGeoContext ??
+              const AvailableGeoContext(),
+          previousIntentGraph: bootstrapContext?.previousIntentGraph,
         );
         _emitUnderstandingSnapshot(
           input: input,
@@ -108,9 +158,9 @@ class UnderstandPhase implements Phase {
         );
         return PhaseOutput(
           state: input.state.copyWith(
-            intentGraph: normalizedIntent,
+            intentGraph: plannedIntent,
             understandingSnapshot: understandingSnapshot,
-            queryTasks: normalizedIntent.queryTasks,
+            queryTasks: plannedIntent.queryTasks,
             dialogueRoundScript: dialogueRoundScript,
             executionPreparation: AssistantExecutionPreparation(
               domainId: domainId,
@@ -127,8 +177,10 @@ class UnderstandPhase implements Phase {
       final modelUnderstanding = await _resolveIntentGraphWithModel(
         request: request,
         bootstrapContext: bootstrapContext,
+        contextAssembly: input.state.contextAssembly,
         latestUserQuery: latestUserQuery,
         previousRunArtifacts: input.state.previousRunArtifacts,
+        temporalReference: temporalReference,
         runId: input.runId,
         traceId: input.traceId,
         onTraceEvent: input.onTraceEvent,
@@ -150,8 +202,27 @@ class UnderstandPhase implements Phase {
           bootstrapContext: bootstrapContext,
           previousRunArtifacts: input.state.previousRunArtifacts,
         );
-        final domainId = normalizedIntent.primarySkill.trim().isNotEmpty
-            ? normalizedIntent.primarySkill.trim()
+        final geoResolvedIntent = await _resolveIntentGraphGeoContext(
+          request: request,
+          bootstrapContext: bootstrapContext,
+          contextAssembly: input.state.contextAssembly,
+          intentGraph: normalizedIntent,
+          latestUserQuery: latestUserQuery,
+        );
+        final plannedIntent = _withPlannedQueryTasks(
+          latestUserQuery: latestUserQuery,
+          intentGraph: geoResolvedIntent,
+          contextEnvelope:
+              input.state.contextAssembly?.contextEnvelope ??
+              const <String, dynamic>{},
+          availableTools:
+              runtime?.listAvailableToolNames() ??
+              const <String>['search', 'web_search'],
+          referenceNowIso: temporalReference.referenceNowIso,
+          timezone: temporalReference.timezone,
+        );
+        final domainId = plannedIntent.primarySkill.trim().isNotEmpty
+            ? plannedIntent.primarySkill.trim()
             : _domainRouter.fallbackDomainId;
         final dialogueRoundScript = await _dialogueStateRuntime
             .buildRoundScript(
@@ -162,16 +233,27 @@ class UnderstandPhase implements Phase {
                   bootstrapContext?.forceRefreshCatalog ?? false,
             );
         final modeDecision = modeDecider.decide(
-          intentGraph: normalizedIntent,
+          intentGraph: plannedIntent,
           recallResult: bootstrapContext?.recallResult,
         );
-        final understandingSnapshot = modelUnderstanding.understandingSnapshot;
-        _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
+        final understandingSnapshot = _normalizeUnderstandingSnapshot(
+          snapshot: modelUnderstanding.understandingSnapshot,
+          intentGraph: plannedIntent,
+          latestUserQuery: latestUserQuery,
+          availableGeoContext:
+              input.state.contextAssembly?.availableGeoContext ??
+              const AvailableGeoContext(),
+          previousIntentGraph: bootstrapContext?.previousIntentGraph,
+        );
+        _emitUnderstandingSnapshot(
+          input: input,
+          snapshot: understandingSnapshot,
+        );
         return PhaseOutput(
           state: input.state.copyWith(
-            intentGraph: normalizedIntent,
+            intentGraph: plannedIntent,
             understandingSnapshot: understandingSnapshot,
-            queryTasks: normalizedIntent.queryTasks,
+            queryTasks: plannedIntent.queryTasks,
             dialogueRoundScript: dialogueRoundScript,
             executionPreparation: AssistantExecutionPreparation(
               domainId: domainId,
@@ -190,8 +272,27 @@ class UnderstandPhase implements Phase {
       recallResult: bootstrapContext?.recallResult,
       previousRunArtifacts: input.state.previousRunArtifacts,
     );
-    final domainId = intentGraph.primarySkill.trim().isNotEmpty
-        ? intentGraph.primarySkill.trim()
+    final geoResolvedIntent = await _resolveIntentGraphGeoContext(
+      request: request,
+      bootstrapContext: bootstrapContext,
+      contextAssembly: input.state.contextAssembly,
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+    );
+    final plannedIntent = _withPlannedQueryTasks(
+      latestUserQuery: latestUserQuery,
+      intentGraph: geoResolvedIntent,
+      contextEnvelope:
+          input.state.contextAssembly?.contextEnvelope ??
+          const <String, dynamic>{},
+      availableTools:
+          runtime?.listAvailableToolNames() ??
+          const <String>['search', 'web_search'],
+      referenceNowIso: temporalReference.referenceNowIso,
+      timezone: temporalReference.timezone,
+    );
+    final domainId = plannedIntent.primarySkill.trim().isNotEmpty
+        ? plannedIntent.primarySkill.trim()
         : _domainRouter.fallbackDomainId;
     final dialogueRoundScript = await _dialogueStateRuntime.buildRoundScript(
       domainId: domainId,
@@ -200,20 +301,28 @@ class UnderstandPhase implements Phase {
       forceRefreshCatalog: bootstrapContext?.forceRefreshCatalog ?? false,
     );
     final modeDecision = modeDecider.decide(
-      intentGraph: intentGraph,
+      intentGraph: plannedIntent,
       recallResult: bootstrapContext?.recallResult,
     );
-    final understandingSnapshot = _fallbackUnderstandingSnapshot(
-      intentGraph: intentGraph,
+    final understandingSnapshot = _normalizeUnderstandingSnapshot(
+      snapshot: _fallbackUnderstandingSnapshot(
+        intentGraph: plannedIntent,
+        latestUserQuery: latestUserQuery,
+      ),
+      intentGraph: plannedIntent,
       latestUserQuery: latestUserQuery,
+      availableGeoContext:
+          input.state.contextAssembly?.availableGeoContext ??
+          const AvailableGeoContext(),
+      previousIntentGraph: bootstrapContext?.previousIntentGraph,
     );
     _emitUnderstandingSnapshot(input: input, snapshot: understandingSnapshot);
 
     return PhaseOutput(
       state: input.state.copyWith(
-        intentGraph: intentGraph,
+        intentGraph: plannedIntent,
         understandingSnapshot: understandingSnapshot,
-        queryTasks: intentGraph.queryTasks,
+        queryTasks: plannedIntent.queryTasks,
         dialogueRoundScript: dialogueRoundScript,
         executionPreparation: AssistantExecutionPreparation(
           domainId: domainId,
@@ -363,6 +472,119 @@ class UnderstandPhase implements Phase {
       recallResult: recallResult,
       authorityDomains: effectiveAuthorityDomains,
       freshnessHoursMax: effectiveFreshnessHoursMax,
+      resolvedGeoScope: hasResolvedGeoScope(intentGraph.resolvedGeoScope)
+          ? intentGraph.resolvedGeoScope
+          : (continuationActive && previousIntentGraph != null
+                ? previousIntentGraph.resolvedGeoScope
+                : const ResolvedGeoScope()),
+    );
+  }
+
+  IntentGraph _withPlannedQueryTasks({
+    required String latestUserQuery,
+    required IntentGraph intentGraph,
+    required Map<String, dynamic> contextEnvelope,
+    required List<String> availableTools,
+    required String referenceNowIso,
+    required String timezone,
+  }) {
+    final temporalizedIntent = _applyResolvedGeoNormalization(
+      intentGraph: _applyRelativeTimeNormalization(
+        intentGraph: intentGraph,
+        latestUserQuery: latestUserQuery,
+        referenceNowIso: referenceNowIso,
+        timezone: timezone,
+      ),
+    );
+    if (temporalizedIntent.queryTasks.isNotEmpty) {
+      return temporalizedIntent;
+    }
+    final needsQueryPlan = answerBoundaryResolver.requiresQueryTaskDesign(
+      intentGraph: temporalizedIntent,
+      contextEnvelope: contextEnvelope,
+    );
+    if (!needsQueryPlan) {
+      return temporalizedIntent;
+    }
+    final plan = kernel.buildRetrievalPlan(
+      latestUserQuery,
+      availableTools.isNotEmpty
+          ? availableTools
+          : const <String>['search', 'web_search'],
+      intentPayload: <String, dynamic>{
+        'primaryDomainId': temporalizedIntent.primarySkill.trim(),
+        'secondaryDomains': temporalizedIntent.secondarySkills,
+        'problemClass': temporalizedIntent.problemClassWireName,
+        'inferredMotive': temporalizedIntent.inferredMotive,
+        'targetObject': temporalizedIntent.targetObject,
+        'userJobToBeDone': temporalizedIntent.userJobToBeDone,
+        'hardConstraints': temporalizedIntent.hardConstraints,
+        'softConstraints': temporalizedIntent.softConstraints,
+        'excludedScopes': temporalizedIntent.excludedScopes,
+        'freshnessNeed': temporalizedIntent.freshnessNeedWireName,
+        'answerShape': temporalizedIntent.answerShapeWireName,
+        'requiresExternalEvidence': temporalizedIntent.requiresExternalEvidence,
+        'entityAnchors': temporalizedIntent.entityAnchors,
+        'negativeKeywords': temporalizedIntent.negativeKeywords,
+        'queryNormalization': temporalizedIntent.queryNormalization.toJson(),
+        'resolvedGeoScope': temporalizedIntent.resolvedGeoScope.toJson(),
+      },
+    );
+    final queryTasks = QueryTask.normalizeList(
+      QueryTask.toJsonList(plan?.queryTasks ?? const <QueryTask>[]),
+    );
+    if (queryTasks.isEmpty) {
+      return temporalizedIntent;
+    }
+    return _applyResolvedGeoNormalization(
+      intentGraph: _applyRelativeTimeNormalization(
+        latestUserQuery: latestUserQuery,
+        referenceNowIso: referenceNowIso,
+        timezone: timezone,
+        intentGraph: IntentGraph(
+          userGoal: temporalizedIntent.userGoal,
+          problemShape: temporalizedIntent.problemShape,
+          primarySkill: temporalizedIntent.primarySkill,
+          problemClass: temporalizedIntent.problemClass,
+          inferredMotive: temporalizedIntent.inferredMotive,
+          secondarySkills: temporalizedIntent.secondarySkills,
+          targetObject: temporalizedIntent.targetObject,
+          userJobToBeDone: temporalizedIntent.userJobToBeDone,
+          hardConstraints: temporalizedIntent.hardConstraints,
+          softConstraints: temporalizedIntent.softConstraints,
+          excludedScopes: temporalizedIntent.excludedScopes,
+          freshnessNeed: temporalizedIntent.freshnessNeed,
+          answerShape: temporalizedIntent.answerShape,
+          mustVerifyClaims: temporalizedIntent.mustVerifyClaims,
+          requiresExternalEvidence: temporalizedIntent.requiresExternalEvidence,
+          entityAnchors: temporalizedIntent.entityAnchors,
+          negativeKeywords: temporalizedIntent.negativeKeywords,
+          queryNormalization: temporalizedIntent.queryNormalization,
+          queryTasks: queryTasks,
+          searchIterationState: temporalizedIntent.searchIterationState,
+          contextSlots: temporalizedIntent.contextSlots,
+          globalConstraints: temporalizedIntent.globalConstraints,
+          clarificationNeeded: temporalizedIntent.clarificationNeeded,
+          recallResult: temporalizedIntent.recallResult,
+          authorityDomains: temporalizedIntent.authorityDomains,
+          freshnessHoursMax: temporalizedIntent.freshnessHoursMax,
+          resolvedGeoScope: temporalizedIntent.resolvedGeoScope,
+        ),
+      ),
+    );
+  }
+
+  IntentGraph _applyRelativeTimeNormalization({
+    required IntentGraph intentGraph,
+    required String latestUserQuery,
+    required String referenceNowIso,
+    required String timezone,
+  }) {
+    return _relativeTimeResolver.applyToIntentGraph(
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+      referenceNowIso: referenceNowIso,
+      timezone: timezone,
     );
   }
 
@@ -398,8 +620,10 @@ class UnderstandPhase implements Phase {
   Future<_ResolvedUnderstanding?> _resolveIntentGraphWithModel({
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
+    required ContextAssemblyResult? contextAssembly,
     required String latestUserQuery,
     required RunArtifacts? previousRunArtifacts,
+    required TemporalReferenceContext temporalReference,
     required String runId,
     required String traceId,
     void Function(dynamic event)? onTraceEvent,
@@ -419,6 +643,17 @@ class UnderstandPhase implements Phase {
         bootstrapContext?.contextContinuityPolicy.continuityMode.wireName ?? '';
     final problemClass =
         bootstrapContext?.contextContinuityPolicy.problemClass.trim() ?? '';
+    final searchIterationState = _plannerSearchIterationState(
+      request: request,
+      bootstrapContext: bootstrapContext,
+    );
+    final recentDialogueRounds = bootstrapContext?.recentDialogueRounds ??
+        coerceRecentDialogueRounds(
+          request.contextScopeHint['recentDialogueRounds'],
+        );
+    final recentDialogueRoundsLimit =
+        bootstrapContext?.recentDialogueRoundsLimit ??
+        resolveRecentDialogueRoundsLimit(request.contextScopeHint);
     final conversationSpineJson = jsonEncode(
       buildConversationSpine(
         stageId: 'understanding',
@@ -428,7 +663,8 @@ class UnderstandPhase implements Phase {
           policy:
               bootstrapContext?.contextContinuityPolicy ??
               const ContextContinuityPolicy(),
-          overrideSlots: bootstrapContext?.continuityOverrideSlots ??
+          overrideSlots:
+              bootstrapContext?.continuityOverrideSlots ??
               const <String, dynamic>{},
         ),
         stageState: <String, dynamic>{
@@ -440,8 +676,10 @@ class UnderstandPhase implements Phase {
     final sharedContextJson = jsonEncode(
       _plannerSharedContextPayload(
         bootstrapContext: bootstrapContext,
+        contextAssembly: contextAssembly,
         request: request,
         previousRunArtifacts: previousRunArtifacts,
+        temporalReference: temporalReference,
       ),
     );
     final currentRuntimeStateJson = jsonEncode(
@@ -451,6 +689,8 @@ class UnderstandPhase implements Phase {
         previousRunArtifacts: previousRunArtifacts,
         continuityMode: continuityMode,
         problemClass: problemClass,
+        temporalReference: temporalReference,
+        searchIterationState: searchIterationState,
       ),
     );
     final dialogueContinuityJson = jsonEncode(
@@ -467,6 +707,8 @@ class UnderstandPhase implements Phase {
       bootstrapContext: bootstrapContext,
       allowLocationHints:
           bootstrapContext?.contextContinuityPolicy.allowLocationHints ?? false,
+      referenceNowIso: temporalReference.referenceNowIso,
+      timezone: temporalReference.timezone,
     );
     final plannerMessages = _plannerMessages(
       request: request,
@@ -490,6 +732,13 @@ class UnderstandPhase implements Phase {
       'sharedContext': sharedContextJson,
       'currentRuntimeState': currentRuntimeStateJson,
       'dialogueContinuity': dialogueContinuityJson,
+      'recentDialogueRounds': jsonEncode(recentDialogueRounds),
+      'searchIterationState': jsonEncode(searchIterationState.toJson()),
+      'temporalReference': jsonEncode(<String, dynamic>{
+        'referenceNowIso': temporalReference.referenceNowIso,
+        'timezone': temporalReference.timezone,
+      }),
+      'recentDialogueRoundsLimit': recentDialogueRoundsLimit,
     };
     var streamedUserFacingSummary = '';
     void forwardTrace(AssistantTraceEvent event) {
@@ -571,7 +820,7 @@ class UnderstandPhase implements Phase {
     );
     if (intentGraph == null) return null;
     final parsedSnapshot = parsed['understandingSnapshot'] is Map
-        ? RunArtifactsUnderstandingSnapshot.fromJson(
+        ? parseRunArtifactsUnderstandingSnapshotFromMap(
             (parsed['understandingSnapshot'] as Map).cast<String, dynamic>(),
           )
         : const RunArtifactsUnderstandingSnapshot();
@@ -585,6 +834,7 @@ class UnderstandPhase implements Phase {
       emotionSignal: parsedSnapshot.emotionSignal,
       queryDesignSummary: parsedSnapshot.queryDesignSummary,
       queryGroups: parsedSnapshot.queryGroups,
+      resolutionItems: parsedSnapshot.resolutionItems,
       assumptions: parsedSnapshot.assumptions,
       mismatchSignal: parsedSnapshot.mismatchSignal,
       carryForwardFacts: parsedSnapshot.carryForwardFacts,
@@ -596,6 +846,9 @@ class UnderstandPhase implements Phase {
         snapshot: stabilizedSnapshot,
         intentGraph: intentGraph,
         latestUserQuery: latestUserQuery,
+        availableGeoContext:
+            contextAssembly?.availableGeoContext ?? const AvailableGeoContext(),
+        previousIntentGraph: bootstrapContext?.previousIntentGraph,
       ),
     );
   }
@@ -604,36 +857,44 @@ class UnderstandPhase implements Phase {
     required IntentGraph intentGraph,
     required String latestUserQuery,
   }) {
+    final fallbackIntentSummary = intentGraph.userGoal.trim().isNotEmpty
+        ? intentGraph.userGoal.trim()
+        : latestUserQuery;
     final concernPoints = <String>[
       ...intentGraph.hardConstraints.map((item) => item.trim()),
       ...intentGraph.softConstraints.map((item) => item.trim()),
     ].where((item) => item.isNotEmpty).take(3).toList(growable: false);
-    final queryDesignSummary = buildUnderstandingQueryDesignSummary(
-      concernPoints: concernPoints,
-      queryTasks: intentGraph.queryTasks,
-    );
     return RunArtifactsUnderstandingSnapshot(
-      intentSummary: intentGraph.userGoal.trim().isNotEmpty
-          ? intentGraph.userGoal.trim()
-          : latestUserQuery,
-      userFacingSummary: buildUnderstandingUserFacingSummary(
-        intentSummary: intentGraph.userGoal.trim().isNotEmpty
-            ? intentGraph.userGoal.trim()
-            : latestUserQuery,
-        concernPoints: concernPoints,
-        queryDesignSummary: queryDesignSummary,
-      ),
+      intentSummary: fallbackIntentSummary,
+      userFacingSummary: fallbackIntentSummary,
       concernPoints: concernPoints,
       emotionSignal: 'neutral',
-      queryDesignSummary: queryDesignSummary,
+      queryDesignSummary: '',
       queryGroups: _buildUnderstandingQueryGroups(intentGraph.queryTasks),
     );
+  }
+
+  String _currentCountryDefault(String countryLabel, String resolvedText) {
+    final normalizedCountry = countryLabel.trim();
+    final normalizedResolvedText = resolvedText.trim();
+    if (normalizedCountry.isEmpty) {
+      return normalizedResolvedText;
+    }
+    if (normalizedResolvedText.contains(normalizedCountry)) {
+      return normalizedResolvedText;
+    }
+    if (normalizedResolvedText.isEmpty) {
+      return normalizedCountry;
+    }
+    return '$normalizedCountry $normalizedResolvedText';
   }
 
   RunArtifactsUnderstandingSnapshot _normalizeUnderstandingSnapshot({
     required RunArtifactsUnderstandingSnapshot snapshot,
     required IntentGraph intentGraph,
     required String latestUserQuery,
+    AvailableGeoContext? availableGeoContext,
+    IntentGraph? previousIntentGraph,
   }) {
     final normalizedIntent = snapshot.intentSummary.trim().isNotEmpty
         ? snapshot.intentSummary.trim()
@@ -645,32 +906,236 @@ class UnderstandPhase implements Phase {
         .where((item) => item.isNotEmpty)
         .take(3)
         .toList(growable: false);
-    final normalizedQueryDesign = snapshot.queryDesignSummary.trim().isNotEmpty
-        ? snapshot.queryDesignSummary.trim()
-        : _fallbackUnderstandingSnapshot(
-            intentGraph: intentGraph,
-            latestUserQuery: latestUserQuery,
-          ).queryDesignSummary;
-    final normalizedQueryGroups = snapshot.queryGroups.isNotEmpty
-        ? snapshot.queryGroups
-        : _buildUnderstandingQueryGroups(intentGraph.queryTasks);
+    final normalizedQueryDesign = snapshot.queryDesignSummary.trim();
+    final normalizedQueryGroups = _resolveUnderstandingQueryGroups(
+      snapshot: snapshot,
+      intentGraph: intentGraph,
+    );
+    final normalizedResolutionItems = _normalizeResolutionItems(
+      snapshot: snapshot,
+      intentGraph: intentGraph,
+      availableGeoContext: availableGeoContext ?? const AvailableGeoContext(),
+      previousIntentGraph: previousIntentGraph,
+    );
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: normalizedIntent,
       userFacingSummary: snapshot.userFacingSummary.trim().isNotEmpty
           ? snapshot.userFacingSummary.trim()
-          : buildUnderstandingUserFacingSummary(
-              intentSummary: normalizedIntent,
-              concernPoints: normalizedConcernPoints,
-              queryDesignSummary: normalizedQueryDesign,
-            ),
+          : normalizedIntent,
       concernPoints: normalizedConcernPoints,
       emotionSignal: snapshot.emotionSignal,
       queryDesignSummary: normalizedQueryDesign,
       queryGroups: normalizedQueryGroups,
+      resolutionItems: normalizedResolutionItems,
       assumptions: snapshot.assumptions,
       mismatchSignal: snapshot.mismatchSignal,
       carryForwardFacts: snapshot.carryForwardFacts,
       discardedAssumptions: snapshot.discardedAssumptions,
+    );
+  }
+
+  List<RunArtifactsUnderstandingQueryGroup> _resolveUnderstandingQueryGroups({
+    required RunArtifactsUnderstandingSnapshot snapshot,
+    required IntentGraph intentGraph,
+  }) {
+    final canonical = _buildUnderstandingQueryGroups(intentGraph.queryTasks);
+    if (canonical.isNotEmpty) {
+      return canonical;
+    }
+    return snapshot.queryGroups.isNotEmpty ? snapshot.queryGroups : canonical;
+  }
+
+  List<RunArtifactsUnderstandingResolutionItem> _normalizeResolutionItems({
+    required RunArtifactsUnderstandingSnapshot snapshot,
+    required IntentGraph intentGraph,
+    required AvailableGeoContext availableGeoContext,
+    required IntentGraph? previousIntentGraph,
+  }) {
+    final explicitItems = snapshot.resolutionItems
+        .where(
+          (item) =>
+              item.detail.trim().isNotEmpty ||
+              item.resolvedValue.trim().isNotEmpty ||
+              item.title.trim().isNotEmpty,
+        )
+        .toList(growable: true);
+    if (explicitItems.isNotEmpty) {
+      return explicitItems.toList(growable: false);
+    }
+    final derivedItems = <RunArtifactsUnderstandingResolutionItem>[
+      ...() sync* {
+        final geoItem = _buildGeoResolutionItem(
+          resolvedGeoScope: intentGraph.resolvedGeoScope,
+          availableGeoContext: availableGeoContext,
+          previousIntentGraph: previousIntentGraph,
+        );
+        if (geoItem != null) {
+          yield geoItem;
+        } else {
+          final clarificationItem = _buildGeoClarificationItem(
+            intentGraph: intentGraph,
+          );
+          if (clarificationItem != null) {
+            yield clarificationItem;
+          }
+        }
+      }(),
+      ...() sync* {
+        final temporalItem = _buildTemporalResolutionItem(
+          queryNormalization: intentGraph.queryNormalization,
+        );
+        if (temporalItem != null) {
+          yield temporalItem;
+        }
+      }(),
+    ];
+    for (final derived in derivedItems) {
+      final alreadyPresent = explicitItems.any(
+        (item) =>
+            item.kind.trim() == derived.kind.trim() &&
+            item.resolvedValue.trim() == derived.resolvedValue.trim(),
+      );
+      if (!alreadyPresent) {
+        explicitItems.add(derived);
+      }
+    }
+    return explicitItems.toList(growable: false);
+  }
+
+  RunArtifactsUnderstandingResolutionItem? _buildGeoResolutionItem({
+    required ResolvedGeoScope resolvedGeoScope,
+    required AvailableGeoContext availableGeoContext,
+    required IntentGraph? previousIntentGraph,
+  }) {
+    if (!hasResolvedGeoScope(resolvedGeoScope)) {
+      return null;
+    }
+    final resolvedText = resolvedGeoScope.resolvedText.trim().isNotEmpty
+        ? resolvedGeoScope.resolvedText.trim()
+        : (resolvedGeoScope.marketLabel.trim().isNotEmpty
+              ? resolvedGeoScope.marketLabel.trim()
+              : resolvedGeoScope.cityLabel.trim());
+    if (resolvedText.isEmpty) {
+      return null;
+    }
+    final source = resolvedGeoScope.source.trim();
+    if (source == 'followup_carried') {
+      return RunArtifactsUnderstandingResolutionItem(
+        kind: 'followup_carry',
+        title: '沿用上一轮地理范围',
+        detail: '这轮没有改地点或市场，我继续按$resolvedText理解并检索。',
+        source: 'followup_carried',
+        originalValue: previousIntentGraph?.resolvedGeoScope.resolvedText ?? '',
+        resolvedValue: resolvedText,
+        defaultApplied: resolvedGeoScope.defaultApplied,
+        visibleInUnderstanding: true,
+      );
+    }
+    if (source == 'user_explicit') {
+      final title = resolvedGeoScope.geoKind.trim() == 'market'
+          ? '已识别明确市场'
+          : '已识别明确地点';
+      return RunArtifactsUnderstandingResolutionItem(
+        kind: 'geo_explicit',
+        title: title,
+        detail: '你明确提到了$resolvedText，我会按这个范围检索。',
+        source: 'user_explicit',
+        originalValue: resolvedText,
+        resolvedValue: resolvedText,
+        defaultApplied: false,
+        visibleInUnderstanding: true,
+      );
+    }
+    if (resolvedGeoScope.defaultApplied) {
+      if (resolvedGeoScope.geoKind.trim() == 'market') {
+        final countryLabel = availableGeoContext.countryLabel.trim().isNotEmpty
+            ? availableGeoContext.countryLabel.trim()
+            : resolvedGeoScope.countryLabel.trim();
+        return RunArtifactsUnderstandingResolutionItem(
+          kind: 'market_default',
+          title: '已采用默认市场',
+          detail: countryLabel.isNotEmpty
+              ? '你没有指定市场，我先按${_currentCountryDefault(countryLabel, resolvedText)}理解并检索。'
+              : '你没有指定市场，我先按$resolvedText理解并检索。',
+          source: source.isNotEmpty ? source : 'available_geo_default',
+          originalValue: '',
+          resolvedValue: resolvedText,
+          defaultApplied: true,
+          visibleInUnderstanding: true,
+        );
+      }
+      final title = resolvedGeoScope.geoKind.trim() == 'city'
+          ? '已采用默认城市'
+          : '已采用默认地区';
+      final detail = resolvedGeoScope.geoKind.trim() == 'city'
+          ? '你没有指定城市，我先按$resolvedText理解并检索。'
+          : '你没有指定地点，我先按$resolvedText这个范围理解并检索。';
+      return RunArtifactsUnderstandingResolutionItem(
+        kind: 'geo_default',
+        title: title,
+        detail: detail,
+        source: source.isNotEmpty ? source : 'available_geo_default',
+        originalValue: '',
+        resolvedValue: resolvedText,
+        defaultApplied: true,
+        visibleInUnderstanding: true,
+      );
+    }
+    return null;
+  }
+
+  RunArtifactsUnderstandingResolutionItem? _buildTemporalResolutionItem({
+    required QueryNormalization queryNormalization,
+  }) {
+    for (final hint in queryNormalization.resolvedTemporalHints) {
+      final parts = hint.split('->');
+      if (parts.length != 2) {
+        continue;
+      }
+      final originalValue = parts.first.trim();
+      final resolvedValue = parts.last.trim();
+      if (originalValue.isEmpty ||
+          resolvedValue.isEmpty ||
+          resolvedValue.startsWith('scope:')) {
+        continue;
+      }
+      final detail = resolvedValue.contains('..')
+          ? '你说$originalValue，我会按${resolvedValue.replaceAll('..', ' 至 ')}这个时间范围检索。'
+          : '你说$originalValue，我会按$resolvedValue这个日期检索。';
+      return RunArtifactsUnderstandingResolutionItem(
+        kind: 'temporal_resolution',
+        title: '已固定查询时间',
+        detail: detail,
+        source: 'query_normalization',
+        originalValue: originalValue,
+        resolvedValue: resolvedValue,
+        defaultApplied: false,
+        visibleInUnderstanding: true,
+      );
+    }
+    return null;
+  }
+
+  RunArtifactsUnderstandingResolutionItem? _buildGeoClarificationItem({
+    required IntentGraph intentGraph,
+  }) {
+    final reason =
+        (intentGraph.contextSlots['geoClarificationReason'] as String?)
+            ?.trim() ??
+        '';
+    if (!intentGraph.clarificationNeeded || reason.isEmpty) {
+      return null;
+    }
+    final target = reason.contains('market') ? '市场范围' : '地点范围';
+    return RunArtifactsUnderstandingResolutionItem(
+      kind: 'clarification_needed',
+      title: '需要补充地理范围',
+      detail: '这个问题需要先确认$target，我再继续检索，避免搜到错城市或错市场。',
+      source: 'query_normalization',
+      originalValue: '',
+      resolvedValue: '',
+      defaultApplied: false,
+      visibleInUnderstanding: true,
     );
   }
 
@@ -738,21 +1203,24 @@ class UnderstandPhase implements Phase {
     for (final task in queryTasks) {
       final dimension = task.dimensionLabel.trim().isNotEmpty
           ? task.dimensionLabel.trim()
-          : (task.effectiveLabel.trim().isNotEmpty
-                ? task.effectiveLabel.trim()
+          : (deriveQueryTaskFocusLabel(task).trim().isNotEmpty
+                ? deriveQueryTaskFocusLabel(task).trim()
                 : '综合');
       final query = task.query.trim();
       if (query.isEmpty) {
         continue;
       }
       grouped.putIfAbsent(dimension, () => <String>[]).add(query);
-      reasons[dimension] = task.label.trim();
+      final reason = deriveQueryTaskFocusReason(task).trim();
+      if (reason.isNotEmpty) {
+        reasons[dimension] = reason;
+      }
     }
     return grouped.entries
         .map(
           (entry) => RunArtifactsUnderstandingQueryGroup(
             dimension: entry.key,
-            queries: entry.value.toSet().toList(growable: false),
+            queries: entry.value.toSet().take(2).toList(growable: false),
             why: reasons[entry.key]?.trim() ?? '',
           ),
         )
@@ -763,7 +1231,6 @@ class UnderstandPhase implements Phase {
     required PhaseInput input,
     required RunArtifactsUnderstandingSnapshot snapshot,
   }) {
-    final detail = buildUnderstandingDetail(snapshot.concernPoints);
     ProcessTimelineEmitter(
       runId: input.runId,
       traceId: input.traceId,
@@ -772,7 +1239,7 @@ class UnderstandPhase implements Phase {
       stepId: ProcessStepId.understanding,
       scope: UserEventScope.root,
       headline: snapshot.userFacingSummary.trim(),
-      detail: detail,
+      detail: '',
       phaseId: 'understanding',
       actionCode: 'frame_problem',
       reasonCode: 'align_goal',
@@ -786,6 +1253,7 @@ class UnderstandPhase implements Phase {
   Map<String, dynamic> inputSafeContextEnvelope(
     AssistantBootstrapContext? bootstrapContext,
     AssistantRunRequest request,
+    ContextAssemblyResult? contextAssembly,
     RunArtifacts? previousRunArtifacts,
   ) {
     final continuityPolicy =
@@ -806,21 +1274,42 @@ class UnderstandPhase implements Phase {
       'gpsLocation': continuityPolicy.allowLocationHints
           ? request.gpsLocation
           : const <String, dynamic>{},
+      'availableGeoContext':
+          contextAssembly != null &&
+              hasAvailableGeoContext(contextAssembly.availableGeoContext)
+          ? contextAssembly.availableGeoContext.toJson()
+          : const <String, dynamic>{},
       'contextScopeHint': sanitizedScopeHint,
     };
   }
 
   Map<String, dynamic> _plannerSharedContextPayload({
     required AssistantBootstrapContext? bootstrapContext,
+    required ContextAssemblyResult? contextAssembly,
     required AssistantRunRequest request,
     required RunArtifacts? previousRunArtifacts,
+    required TemporalReferenceContext temporalReference,
   }) {
+    final calendarContext = _relativeTimeResolver.buildCalendarContext(
+      reference: temporalReference,
+    );
     return <String, dynamic>{
       'contextEnvelope': inputSafeContextEnvelope(
         bootstrapContext,
         request,
+        contextAssembly,
         previousRunArtifacts,
       ),
+      'recentDialogueRounds':
+          bootstrapContext?.recentDialogueRounds ??
+          coerceRecentDialogueRounds(
+            request.contextScopeHint['recentDialogueRounds'],
+          ),
+      'temporalReference': <String, dynamic>{
+        'referenceNowIso': temporalReference.referenceNowIso,
+        'timezone': temporalReference.timezone,
+        'calendarContext': calendarContext,
+      },
       'userProfileSnapshot': request.userProfileSnapshot,
       'historicalRetrievalFeedback':
           (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
@@ -839,11 +1328,16 @@ class UnderstandPhase implements Phase {
     required RunArtifacts? previousRunArtifacts,
     required String continuityMode,
     required String problemClass,
+    required TemporalReferenceContext temporalReference,
+    required SearchIterationState searchIterationState,
   }) {
     final continuationActive = _isContinuationContext(bootstrapContext);
     final previousIntentGraph = continuationActive
         ? bootstrapContext?.previousIntentGraph
         : null;
+    final calendarContext = _relativeTimeResolver.buildCalendarContext(
+      reference: temporalReference,
+    );
     return <String, dynamic>{
       'dialogueState': <String, dynamic>{
         'continuityMode': continuityMode,
@@ -851,6 +1345,10 @@ class UnderstandPhase implements Phase {
         'continuationActive': continuationActive,
         'sessionId':
             bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
+        'referenceNowIso': temporalReference.referenceNowIso,
+        'timezone': temporalReference.timezone,
+        'calendarContext': calendarContext,
+        'searchIterationState': searchIterationState.toJson(),
       },
       'slotStateSnapshot': continuationActive
           ? previousRunArtifacts?.slotState.toJson() ??
@@ -865,6 +1363,39 @@ class UnderstandPhase implements Phase {
           : const <String, dynamic>{},
       'skillExecutionShell': const SkillExecutionShell().toJson(),
     };
+  }
+
+  SearchIterationState _plannerSearchIterationState({
+    required AssistantRunRequest request,
+    required AssistantBootstrapContext? bootstrapContext,
+  }) {
+    final scopedStateRaw =
+        (request.contextScopeHint['searchIterationState'] as Map?)
+            ?.cast<String, dynamic>();
+    if (scopedStateRaw != null && scopedStateRaw.isNotEmpty) {
+      return SearchIterationState.fromJson(scopedStateRaw);
+    }
+    final previousState =
+        bootstrapContext?.previousIntentGraph?.searchIterationState ??
+        const SearchIterationState();
+    if (previousState.currentIteration > 0 ||
+        previousState.maxIterations > 0 ||
+        previousState.rounds.isNotEmpty) {
+      return SearchIterationState(
+        maxIterations: previousState.maxIterations > 0
+            ? previousState.maxIterations
+            : request.maxIterations,
+        currentIteration: previousState.currentIteration > 0
+            ? previousState.currentIteration
+            : 1,
+        rounds: previousState.rounds,
+      );
+    }
+    return SearchIterationState(
+      maxIterations: request.maxIterations,
+      currentIteration: 1,
+      rounds: const <SearchIterationRound>[],
+    );
   }
 
   Map<String, dynamic> _plannerDialogueContinuityPayload({
@@ -905,6 +1436,11 @@ class UnderstandPhase implements Phase {
     return <String, dynamic>{
       'continuityMode': continuityMode,
       'problemClassHint': problemClass,
+      'recentDialogueRounds':
+          bootstrapContext?.recentDialogueRounds ??
+          coerceRecentDialogueRounds(
+            request.contextScopeHint['recentDialogueRounds'],
+          ),
       'historySummary': allowHistorySummary
           ? bootstrapContext?.historySummary ?? ''
           : '',
@@ -936,21 +1472,160 @@ class UnderstandPhase implements Phase {
       '请先把 conversation_spine 当作当前轮唯一主线，再参考 shared_context / current_runtime_state / dialogue_continuity。',
       if (continuityMode.isNotEmpty) '连续性判断：$continuityMode',
       if (problemClass.isNotEmpty) '已知问题类型提示：$problemClass',
+      '如果问题带时间约束，请直接把明确时间表达写进 queryTasks.query，不要把时间语义留给运行时再改写。',
       '如果本轮是在纠正上一轮理解，优先修正旧假设。',
       '请直接输出 assistant_turn JSON，并把结构化意图完整放入 intentGraph。',
     ].join('\n');
+  }
+
+  Future<IntentGraph> _resolveIntentGraphGeoContext({
+    required AssistantRunRequest request,
+    required AssistantBootstrapContext? bootstrapContext,
+    required ContextAssemblyResult? contextAssembly,
+    required IntentGraph intentGraph,
+    required String latestUserQuery,
+  }) async {
+    final domainId = intentGraph.primarySkill.trim().isNotEmpty
+        ? intentGraph.primarySkill.trim()
+        : _domainRouter.fallbackDomainId;
+    final retrievalPolicy = await _loadDomainRetrievalPolicy(domainId);
+    final defaultGeoPolicy = parseDefaultGeoPolicy(retrievalPolicy);
+    final availableGeoContext =
+        contextAssembly != null &&
+            hasAvailableGeoContext(contextAssembly.availableGeoContext)
+        ? contextAssembly.availableGeoContext
+        : buildAvailableGeoContext(
+            gpsLocation: request.gpsLocation,
+            scopeHint: request.contextScopeHint,
+          );
+    final previousGeoScope = _isContinuationContext(bootstrapContext)
+        ? bootstrapContext?.previousIntentGraph?.resolvedGeoScope ??
+              const ResolvedGeoScope()
+        : const ResolvedGeoScope();
+    final resolvedGeoScope = resolveGeoScope(
+      userQuery: latestUserQuery,
+      domainId: domainId,
+      availableGeoContext: availableGeoContext,
+      current: intentGraph.resolvedGeoScope,
+      previous: previousGeoScope,
+      geoPolicy: defaultGeoPolicy,
+    );
+    final needsGeoClarification =
+        !hasResolvedGeoScope(resolvedGeoScope) &&
+        defaultGeoPolicy.fallbackAllowed &&
+        defaultGeoPolicy.defaultGeoScope.trim().isNotEmpty &&
+        defaultGeoPolicy.defaultGeoScope.trim().toLowerCase() != 'none';
+    return _applyResolvedGeoNormalization(
+      intentGraph: IntentGraph.fromJson(<String, dynamic>{
+        ...intentGraph.toJson(),
+        'resolvedGeoScope': resolvedGeoScope.toJson(),
+        'clarificationNeeded':
+            intentGraph.clarificationNeeded || needsGeoClarification,
+        'contextSlots': <String, dynamic>{
+          ...intentGraph.contextSlots,
+          if (hasAvailableGeoContext(availableGeoContext))
+            'availableGeoContext': availableGeoContext.toJson(),
+          if (hasResolvedGeoScope(resolvedGeoScope))
+            'resolvedGeoScope': resolvedGeoScope.toJson(),
+          if (needsGeoClarification)
+            'geoClarificationReason':
+                'missing_geo_context_for_${defaultGeoPolicy.defaultGeoScope}',
+        },
+      }),
+    );
+  }
+
+  IntentGraph _applyResolvedGeoNormalization({
+    required IntentGraph intentGraph,
+  }) {
+    if (!hasResolvedGeoScope(intentGraph.resolvedGeoScope)) {
+      return intentGraph;
+    }
+    final mergedEntityAnchors = mergeGeoAnchors(
+      intentGraph.entityAnchors,
+      intentGraph.resolvedGeoScope,
+    );
+    final queryNormalization = QueryNormalization(
+      normalizedQuery: intentGraph.queryNormalization.normalizedQuery,
+      rewrittenQuery: applyResolvedGeoToQuery(
+        intentGraph.queryNormalization.rewrittenQuery.trim().isNotEmpty
+            ? intentGraph.queryNormalization.rewrittenQuery
+            : intentGraph.queryNormalization.normalizedQuery,
+        intentGraph.resolvedGeoScope,
+      ),
+      issues: intentGraph.queryNormalization.issues,
+      language: intentGraph.queryNormalization.language,
+      hints: intentGraph.queryNormalization.hints,
+      referenceNowIso: intentGraph.queryNormalization.referenceNowIso,
+      timezone: intentGraph.queryNormalization.timezone,
+      resolvedTemporalHints:
+          intentGraph.queryNormalization.resolvedTemporalHints,
+      timeScope: intentGraph.queryNormalization.timeScope,
+      timeRangeStart: intentGraph.queryNormalization.timeRangeStart,
+      timeRangeEnd: intentGraph.queryNormalization.timeRangeEnd,
+      timePoint: intentGraph.queryNormalization.timePoint,
+    );
+    final queryTasks = intentGraph.queryTasks
+        .map(
+          (task) => task.copyWith(
+            query: applyResolvedGeoToQuery(
+              task.query,
+              intentGraph.resolvedGeoScope,
+            ),
+            entityAnchors: mergeGeoAnchors(
+              task.entityAnchors.isNotEmpty
+                  ? task.entityAnchors
+                  : mergedEntityAnchors,
+              intentGraph.resolvedGeoScope,
+            ),
+          ),
+        )
+        .toList(growable: false);
+    return IntentGraph(
+      userGoal: intentGraph.userGoal,
+      problemShape: intentGraph.problemShape,
+      primarySkill: intentGraph.primarySkill,
+      problemClass: intentGraph.problemClass,
+      inferredMotive: intentGraph.inferredMotive,
+      secondarySkills: intentGraph.secondarySkills,
+      targetObject: intentGraph.targetObject,
+      userJobToBeDone: intentGraph.userJobToBeDone,
+      hardConstraints: intentGraph.hardConstraints,
+      softConstraints: intentGraph.softConstraints,
+      excludedScopes: intentGraph.excludedScopes,
+      freshnessNeed: intentGraph.freshnessNeed,
+      answerShape: intentGraph.answerShape,
+      mustVerifyClaims: intentGraph.mustVerifyClaims,
+      requiresExternalEvidence: intentGraph.requiresExternalEvidence,
+      entityAnchors: mergedEntityAnchors,
+      negativeKeywords: intentGraph.negativeKeywords,
+      queryNormalization: queryNormalization,
+      queryTasks: queryTasks,
+      searchIterationState: intentGraph.searchIterationState,
+      contextSlots: intentGraph.contextSlots,
+      globalConstraints: intentGraph.globalConstraints,
+      clarificationNeeded: intentGraph.clarificationNeeded,
+      recallResult: intentGraph.recallResult,
+      authorityDomains: intentGraph.authorityDomains,
+      freshnessHoursMax: intentGraph.freshnessHoursMax,
+      resolvedGeoScope: intentGraph.resolvedGeoScope,
+    );
   }
 
   Map<String, dynamic> _mergedScopeHint({
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
     required bool allowLocationHints,
+    required String referenceNowIso,
+    required String timezone,
   }) {
     return <String, dynamic>{
       ..._sanitizePlannerScopeHint(
         request.contextScopeHint,
         allowLocationHints: allowLocationHints,
       ),
+      if (referenceNowIso.trim().isNotEmpty) 'referenceNowIso': referenceNowIso,
+      if (timezone.trim().isNotEmpty) 'timezone': timezone,
       if (bootstrapContext?.providerReasoningContinuation.trim().isNotEmpty ==
           true)
         'providerReasoningContinuation': bootstrapContext!
@@ -965,14 +1640,9 @@ class UnderstandPhase implements Phase {
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
   }) {
-    final continuationActive = _isContinuationContext(bootstrapContext);
-    if (continuationActive) {
-      return request.messages;
-    }
-    if (request.messages.isEmpty) {
-      return const <AssistantRunMessage>[];
-    }
-    return <AssistantRunMessage>[request.messages.last];
+    final limit = bootstrapContext?.recentDialogueRoundsLimit ??
+        resolveRecentDialogueRoundsLimit(request.contextScopeHint);
+    return trimMessagesToRecentRounds(request.messages, limit: limit);
   }
 
   bool _hasStructuredContent(Map<String, dynamic> value) {
@@ -1048,7 +1718,8 @@ class UnderstandPhase implements Phase {
               ? previousIntentGraph.problemClass
               : ProblemClass.general)
         : hintedProblemClass;
-    final recalledPrimarySkill = recallResult?.topK
+    final recalledPrimarySkill =
+        recallResult?.topK
             .map((item) => item.domainId.trim())
             .firstWhere(
               (item) => item.isNotEmpty && item != fallbackDomainId,
@@ -1137,6 +1808,9 @@ class UnderstandPhase implements Phase {
         bootstrapContext: bootstrapContext,
         continuationActive: continuationActive,
       ),
+      resolvedGeoScope: continuationActive && previousIntentGraph != null
+          ? previousIntentGraph.resolvedGeoScope
+          : const ResolvedGeoScope(),
     );
   }
 
@@ -1146,6 +1820,43 @@ class UnderstandPhase implements Phase {
         ContextContinuityMode.unknown;
     return continuityMode != ContextContinuityMode.unknown &&
         continuityMode != ContextContinuityMode.freshTopic;
+  }
+
+  Future<Map<String, dynamic>> _loadDomainRetrievalPolicy(
+    String domainId,
+  ) async {
+    final normalized = domainId.trim();
+    if (normalized.isEmpty) {
+      return const <String, dynamic>{};
+    }
+    final path =
+        'assets/assistant/skills/$normalized/config/retrieval_policy.json';
+    try {
+      final content = await rootBundle.loadString(path);
+      final decoded = jsonDecode(content);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {
+      final file = File(path);
+      if (await file.exists()) {
+        try {
+          final decoded = jsonDecode(await file.readAsString());
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+          if (decoded is Map) {
+            return decoded.cast<String, dynamic>();
+          }
+        } catch (_) {
+          return const <String, dynamic>{};
+        }
+      }
+    }
+    return const <String, dynamic>{};
   }
 
   List<String> _hintedAuthorityDomains({

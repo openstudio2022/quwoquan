@@ -881,6 +881,63 @@ class RunArtifactsUnderstandingQueryGroupFields {
   static const String why = 'why';
 }
 
+class RunArtifactsUnderstandingResolutionItem {
+  const RunArtifactsUnderstandingResolutionItem({
+    this.kind = "",
+    this.title = "",
+    this.detail = "",
+    this.source = "",
+    this.originalValue = "",
+    this.resolvedValue = "",
+    this.defaultApplied = false,
+    this.visibleInUnderstanding = true,
+  });
+
+  final String kind;
+  final String title;
+  final String detail;
+  final String source;
+  final String originalValue;
+  final String resolvedValue;
+  final bool defaultApplied;
+  final bool visibleInUnderstanding;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'kind': kind,
+        'title': title,
+        'detail': detail,
+        'source': source,
+        'originalValue': originalValue,
+        'resolvedValue': resolvedValue,
+        'defaultApplied': defaultApplied,
+        'visibleInUnderstanding': visibleInUnderstanding,
+      };
+
+  factory RunArtifactsUnderstandingResolutionItem.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsUnderstandingResolutionItem(
+      kind: (json['kind'] as String?)?.trim() ?? "",
+      title: (json['title'] as String?)?.trim() ?? "",
+      detail: (json['detail'] as String?)?.trim() ?? "",
+      source: (json['source'] as String?)?.trim() ?? "",
+      originalValue: (json['originalValue'] as String?)?.trim() ?? "",
+      resolvedValue: (json['resolvedValue'] as String?)?.trim() ?? "",
+      defaultApplied: json['defaultApplied'] == true,
+      visibleInUnderstanding: json['visibleInUnderstanding'] != false,
+    );
+  }
+}
+
+class RunArtifactsUnderstandingResolutionItemFields {
+  static const String kind = 'kind';
+  static const String title = 'title';
+  static const String detail = 'detail';
+  static const String source = 'source';
+  static const String originalValue = 'originalValue';
+  static const String resolvedValue = 'resolvedValue';
+  static const String defaultApplied = 'defaultApplied';
+  static const String visibleInUnderstanding = 'visibleInUnderstanding';
+}
+
 class RunArtifactsUnderstandingSnapshot {
   const RunArtifactsUnderstandingSnapshot({
     this.intentSummary = "",
@@ -889,6 +946,7 @@ class RunArtifactsUnderstandingSnapshot {
     this.emotionSignal = "",
     this.queryDesignSummary = "",
     this.queryGroups = const <RunArtifactsUnderstandingQueryGroup>[],
+    this.resolutionItems = const <RunArtifactsUnderstandingResolutionItem>[],
     this.assumptions = const <String>[],
     this.mismatchSignal = "",
     this.carryForwardFacts = const <String>[],
@@ -901,6 +959,7 @@ class RunArtifactsUnderstandingSnapshot {
   final String emotionSignal;
   final String queryDesignSummary;
   final List<RunArtifactsUnderstandingQueryGroup> queryGroups;
+  final List<RunArtifactsUnderstandingResolutionItem> resolutionItems;
   final List<String> assumptions;
   final String mismatchSignal;
   final List<String> carryForwardFacts;
@@ -913,6 +972,7 @@ class RunArtifactsUnderstandingSnapshot {
         'emotionSignal': emotionSignal,
         'queryDesignSummary': queryDesignSummary,
         'queryGroups': queryGroups.map((item) => item.toJson()).toList(growable: false),
+        'resolutionItems': resolutionItems.map((item) => item.toJson()).toList(growable: false),
         'assumptions': assumptions,
         'mismatchSignal': mismatchSignal,
         'carryForwardFacts': carryForwardFacts,
@@ -927,6 +987,7 @@ class RunArtifactsUnderstandingSnapshot {
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
       queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
       queryGroups: (json['queryGroups'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingQueryGroup.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingQueryGroup>[],
+      resolutionItems: (json['resolutionItems'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingResolutionItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingResolutionItem>[],
       assumptions: _assistantStringList(json['assumptions']),
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
       carryForwardFacts: _assistantStringList(json['carryForwardFacts']),
@@ -949,6 +1010,7 @@ class RunArtifactsUnderstandingSnapshotFields {
   static const String emotionSignal = 'emotionSignal';
   static const String queryDesignSummary = 'queryDesignSummary';
   static const String queryGroups = 'queryGroups';
+  static const String resolutionItems = 'resolutionItems';
   static const String assumptions = 'assumptions';
   static const String mismatchSignal = 'mismatchSignal';
   static const String carryForwardFacts = 'carryForwardFacts';

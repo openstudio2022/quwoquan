@@ -238,7 +238,7 @@ class _AssistantConversationPageState
   }
 
   Future<List<ChatInputAttachment>> _pickChatFiles(int remaining) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowMultiple: remaining > 1,
       withData: false,
     );
@@ -370,9 +370,14 @@ class _AssistantConversationPageState
       journey: resolveAssistantJourneyFromMessage(message),
       processTimeline: resolveAssistantProcessTimelineFromMessage(message),
       isRunning: isRunning,
+      displayState: resolvePersistedAssistantDisplayState(message),
+      understandingSnapshot: resolveAssistantUnderstandingSnapshotFromMessage(
+        message,
+      ),
       retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
         message,
       ),
+      answerProcessing: resolveAssistantAnswerProcessingFromMessage(message),
       usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(usageMap),
       elapsedMs: ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
     );
@@ -776,10 +781,7 @@ class _AssistantConversationPageState
       modelSwitched: true,
       userTags: const <String>['model_switch'],
     );
-    await _sendAssistantRewrite(
-      row: row,
-      option: RegenerateOption.regenerate,
-    );
+    await _sendAssistantRewrite(row: row, option: RegenerateOption.regenerate);
   }
 
   Future<void> _onAssistantReferenceTap(
@@ -1074,295 +1076,300 @@ class _AssistantConversationPageState
 
     final bodyContent = Column(
       children: [
-          Expanded(
-            child: ConversationTimeline(
-              controller: _scrollController,
-              backgroundColor: chatListBg,
-              padding: timelinePadding,
-              itemCount: displayRows.length,
-              overlays: timelineOverlays,
-              itemBuilder: (context, index) {
-                final row = displayRows[index];
-                final prevTime =
-                    index > 0 ? _rowTimestamp(displayRows[index - 1]) : null;
-                final rowTs = _rowTimestamp(row);
-                final showTime = index == 0 || rowTs != prevTime;
-                final timeStr = _formatAssistantChatTime(rowTs);
-                final isUserRow = row is UserTranscriptTimelineRow;
-                final isAssistantAnswerRow = row is AssistantAnswerTranscriptRow;
-                final isErrorRow = row is ErrorTranscriptTimelineRow;
-                final isAssistantMessage =
-                    isAssistantAnswerRow || isErrorRow;
-                final answerRow =
-                    isAssistantAnswerRow ? row : null;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showTime && timeStr.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom:
-                              AppSpacing.semantic[DesignSemanticConstants
-                                  .intraGroup]?[DesignSemanticConstants.sm] ??
-                              AppSpacing.intraGroupSm,
-                        ),
-                        child: Center(
-                          child: Text(
-                            timeStr,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: fgPrimary.withValues(alpha: 0.5),
-                            ),
+        Expanded(
+          child: ConversationTimeline(
+            controller: _scrollController,
+            backgroundColor: chatListBg,
+            padding: timelinePadding,
+            itemCount: displayRows.length,
+            overlays: timelineOverlays,
+            itemBuilder: (context, index) {
+              final row = displayRows[index];
+              final prevTime = index > 0
+                  ? _rowTimestamp(displayRows[index - 1])
+                  : null;
+              final rowTs = _rowTimestamp(row);
+              final showTime = index == 0 || rowTs != prevTime;
+              final timeStr = _formatAssistantChatTime(rowTs);
+              final isUserRow = row is UserTranscriptTimelineRow;
+              final isAssistantAnswerRow = row is AssistantAnswerTranscriptRow;
+              final isErrorRow = row is ErrorTranscriptTimelineRow;
+              final isAssistantMessage = isAssistantAnswerRow || isErrorRow;
+              final answerRow = isAssistantAnswerRow ? row : null;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showTime && timeStr.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom:
+                            AppSpacing.semantic[DesignSemanticConstants
+                                .intraGroup]?[DesignSemanticConstants.sm] ??
+                            AppSpacing.intraGroupSm,
+                      ),
+                      child: Center(
+                        child: Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: fgPrimary.withValues(alpha: 0.5),
                           ),
                         ),
                       ),
-                    AssistantMessageBubble(
-                      transcriptRow: row,
-                      isRight: isUserRow,
-                      bubbleColor:
-                          isUserRow ? bubbleSelf : bubbleOther,
-                      textColor: isUserRow ? AppColors.white : fgPrimary,
-                      isSelectionMode: _isSelectionMode,
-                      isSelected: _selectedIds.contains(row.id),
-                      onLongPressStart: (details) =>
-                          _onLongPressMessage(row, details.globalPosition),
-                      onTap: _isSelectionMode
-                          ? () => _toggleSelect(row.id)
-                          : null,
-                      hideAvatarAndName: true,
-                      useFullWidth: true,
-                      renderSelfTextWithoutBubble: true,
-                      journeyViewModel:
-                          index == displayRows.length - 1 &&
-                              isAssistantMessage &&
-                              _controller.assistantResponding
-                          ? _controller.buildJourneyViewModel(
-                              journey: _controller.currentJourney,
-                              processTimeline:
-                                  _controller.currentProcessTimeline,
-                              isRunning: true,
-                              retrievalProcessing:
-                                  _controller.currentRetrievalProcessing,
-                              elapsedMs: _controller.currentJourneyElapsedMs,
-                            )
-                          : (isAssistantMessage
-                                ? _journeyViewModelFromRow(row)
-                                : null),
-                      answerGateOpen:
-                          !_controller.assistantResponding ||
-                          index != displayRows.length - 1 ||
-                          !isAssistantMessage ||
-                          _controller.answerGateOpen,
-                      isAssistantRunning:
-                          _controller.assistantResponding &&
-                          index == displayRows.length - 1 &&
-                          isAssistantMessage,
-                      expandProcessByDefault:
-                          isAssistantMessage &&
-                          index == displayRows.length - 1,
-                      runningStatusLabel:
-                          _controller.assistantResponding &&
-                              index == displayRows.length - 1 &&
-                              isAssistantMessage
-                          ? (_controller.assistantPhaseLabel.isNotEmpty
-                                ? _controller.assistantPhaseLabel
-                                : UITextConstants.assistantPhaseUnderstanding)
-                          : null,
-                      showFeedbackActions:
-                          answerRow != null &&
-                          !_controller.assistantResponding &&
-                          !_isSelectionMode &&
-                          answerRow.type == 'text' &&
-                          answerRow.id == latestAssistantTextMessageId,
-                      feedbackStatus:
-                          _controller.feedbackStatusByMessageId[row.id] ?? '',
-                      onFeedbackHelpful: answerRow != null
-                          ? () => _submitAssistantFeedback(
+                    ),
+                  AssistantMessageBubble(
+                    transcriptRow: row,
+                    isRight: isUserRow,
+                    bubbleColor: isUserRow ? bubbleSelf : bubbleOther,
+                    textColor: isUserRow ? AppColors.white : fgPrimary,
+                    isSelectionMode: _isSelectionMode,
+                    isSelected: _selectedIds.contains(row.id),
+                    onLongPressStart: (details) =>
+                        _onLongPressMessage(row, details.globalPosition),
+                    onTap: _isSelectionMode
+                        ? () => _toggleSelect(row.id)
+                        : null,
+                    hideAvatarAndName: true,
+                    useFullWidth: true,
+                    renderSelfTextWithoutBubble: true,
+                    journeyViewModel:
+                        index == displayRows.length - 1 &&
+                            isAssistantMessage &&
+                            _controller.assistantResponding
+                        ? _controller.buildJourneyViewModel(
+                            journey: _controller.currentJourney,
+                            processTimeline: _controller.currentProcessTimeline,
+                            isRunning: true,
+                            displayState: resolvePersistedAssistantDisplayState(
+                              PersistedTimelineTurnCodec.encode(row),
+                            ),
+                            understandingSnapshot:
+                                _controller.currentUnderstandingSnapshot,
+                            retrievalProcessing:
+                                _controller.currentRetrievalProcessing,
+                            answerProcessing:
+                                resolveAssistantAnswerProcessingFromMessage(
+                                  PersistedTimelineTurnCodec.encode(row),
+                                ),
+                            elapsedMs: _controller.currentJourneyElapsedMs,
+                          )
+                        : (isAssistantMessage
+                              ? _journeyViewModelFromRow(row)
+                              : null),
+                    answerGateOpen:
+                        !_controller.assistantResponding ||
+                        index != displayRows.length - 1 ||
+                        !isAssistantMessage ||
+                        _controller.answerGateOpen,
+                    isAssistantRunning:
+                        _controller.assistantResponding &&
+                        index == displayRows.length - 1 &&
+                        isAssistantMessage,
+                    expandProcessByDefault:
+                        isAssistantMessage && index == displayRows.length - 1,
+                    runningStatusLabel:
+                        _controller.assistantResponding &&
+                            index == displayRows.length - 1 &&
+                            isAssistantMessage
+                        ? (_controller.assistantPhaseLabel.isNotEmpty
+                              ? _controller.assistantPhaseLabel
+                              : UITextConstants.assistantPhaseUnderstanding)
+                        : null,
+                    showFeedbackActions:
+                        answerRow != null &&
+                        !_controller.assistantResponding &&
+                        !_isSelectionMode &&
+                        answerRow.type == 'text' &&
+                        answerRow.id == latestAssistantTextMessageId,
+                    feedbackStatus:
+                        _controller.feedbackStatusByMessageId[row.id] ?? '',
+                    onFeedbackHelpful: answerRow != null
+                        ? () => _submitAssistantFeedback(
+                            target: AssistantFeedbackTarget.fromAssistantRow(
+                              answerRow,
+                            ),
+                            explicitThumb: 'up',
+                            reasonCodes: const <String>[],
+                          )
+                        : null,
+                    onFeedbackUnhelpful: answerRow != null
+                        ? () => _showAssistantNegativeFeedbackSheet(answerRow)
+                        : null,
+                    onFeedbackCorrect: answerRow != null
+                        ? () => _showAssistantCorrectionSheet(answerRow)
+                        : null,
+                    onCopyAnswer: answerRow != null
+                        ? () async {
+                            final content = answerRow.content;
+                            if (content.isEmpty) return;
+                            await Clipboard.setData(
+                              ClipboardData(text: content),
+                            );
+                            _showAssistantToast(
+                              UITextConstants.copiedToClipboard,
+                            );
+                            await _recordAssistantImplicitFeedback(
                               target: AssistantFeedbackTarget.fromAssistantRow(
                                 answerRow,
                               ),
-                              explicitThumb: 'up',
-                              reasonCodes: const <String>[],
-                            )
-                          : null,
-                      onFeedbackUnhelpful: answerRow != null
-                          ? () => _showAssistantNegativeFeedbackSheet(answerRow)
-                          : null,
-                      onFeedbackCorrect: answerRow != null
-                          ? () => _showAssistantCorrectionSheet(answerRow)
-                          : null,
-                      onCopyAnswer: answerRow != null
-                          ? () async {
-                              final content = answerRow.content;
-                              if (content.isEmpty) return;
-                              await Clipboard.setData(
-                                ClipboardData(text: content),
-                              );
-                              _showAssistantToast(
-                                UITextConstants.copiedToClipboard,
-                              );
-                              await _recordAssistantImplicitFeedback(
-                                target: AssistantFeedbackTarget.fromAssistantRow(
-                                  answerRow,
-                                ),
-                                copiedAnswer: true,
+                              copiedAnswer: true,
+                            );
+                          }
+                        : null,
+                    onShareAnswer: answerRow != null
+                        ? () async {
+                            final content = answerRow.content;
+                            if (content.isNotEmpty) {
+                              await SharePlus.instance.share(
+                                ShareParams(text: content),
                               );
                             }
-                          : null,
-                      onShareAnswer: answerRow != null
-                          ? () async {
-                              final content = answerRow.content;
-                              if (content.isNotEmpty) {
-                                await SharePlus.instance.share(
-                                  ShareParams(text: content),
-                                );
-                              }
-                              await _recordAssistantImplicitFeedback(
-                                target: AssistantFeedbackTarget.fromAssistantRow(
-                                  answerRow,
-                                ),
-                                sharedAnswer: true,
-                              );
-                            }
-                          : null,
-                      onFavoriteAnswer: answerRow != null
-                          ? () async {
-                              await _recordAssistantImplicitFeedback(
-                                target: AssistantFeedbackTarget.fromAssistantRow(
-                                  answerRow,
-                                ),
-                                favoritedAnswer: true,
-                              );
-                              _showAssistantToast(
-                                UITextConstants.assistantBookmarked,
-                              );
-                            }
-                          : null,
-                      onRegenerateAnswer: answerRow != null
-                          ? () => _sendAssistantRewrite(
-                              row: answerRow,
-                              option: RegenerateOption.regenerate,
-                            )
-                          : null,
-                      onRegenerateOptionSelected: answerRow != null
-                          ? (option) => _sendAssistantRewrite(
-                              row: answerRow,
-                              option: option,
-                            )
-                          : null,
-                      onBriefAnswer: answerRow != null
-                          ? () => _sendAssistantRewrite(
-                              row: answerRow,
-                              option: RegenerateOption.concise,
-                            )
-                          : null,
-                      onDetailedAnswer: answerRow != null
-                          ? () => _sendAssistantRewrite(
-                              row: answerRow,
-                              option: RegenerateOption.detailed,
-                            )
-                          : null,
-                      onSwitchModelAnswer: answerRow != null
-                          ? () => _switchAssistantModelAndRegenerate(answerRow)
-                          : null,
-                      onActionHintTap: answerRow != null
-                          ? (hint) async {
-                              _inputController.text = hint;
-                              await _sendMessage();
-                            }
-                          : null,
-                      onReferenceTap: answerRow != null
-                          ? (refItem) =>
+                            await _recordAssistantImplicitFeedback(
+                              target: AssistantFeedbackTarget.fromAssistantRow(
+                                answerRow,
+                              ),
+                              sharedAnswer: true,
+                            );
+                          }
+                        : null,
+                    onFavoriteAnswer: answerRow != null
+                        ? () async {
+                            await _recordAssistantImplicitFeedback(
+                              target: AssistantFeedbackTarget.fromAssistantRow(
+                                answerRow,
+                              ),
+                              favoritedAnswer: true,
+                            );
+                            _showAssistantToast(
+                              UITextConstants.assistantBookmarked,
+                            );
+                          }
+                        : null,
+                    onRegenerateAnswer: answerRow != null
+                        ? () => _sendAssistantRewrite(
+                            row: answerRow,
+                            option: RegenerateOption.regenerate,
+                          )
+                        : null,
+                    onRegenerateOptionSelected: answerRow != null
+                        ? (option) => _sendAssistantRewrite(
+                            row: answerRow,
+                            option: option,
+                          )
+                        : null,
+                    onBriefAnswer: answerRow != null
+                        ? () => _sendAssistantRewrite(
+                            row: answerRow,
+                            option: RegenerateOption.concise,
+                          )
+                        : null,
+                    onDetailedAnswer: answerRow != null
+                        ? () => _sendAssistantRewrite(
+                            row: answerRow,
+                            option: RegenerateOption.detailed,
+                          )
+                        : null,
+                    onSwitchModelAnswer: answerRow != null
+                        ? () => _switchAssistantModelAndRegenerate(answerRow)
+                        : null,
+                    onActionHintTap: answerRow != null
+                        ? (hint) async {
+                            _inputController.text = hint;
+                            await _sendMessage();
+                          }
+                        : null,
+                    onReferenceTap: answerRow != null
+                        ? (refItem) =>
                               _onAssistantReferenceTap(answerRow, refItem)
-                          : null,
-                      onAvatarTap: isAssistantMessage
-                          ? () {
-                              final target = VisitTarget.page('chat');
-                              final service = ref.read(
-                                visitRecorderServiceProvider,
-                              );
-                              final ctx = AssistantOpenContext(
-                                source: AssistantSource.chat,
-                                visitTarget: target,
-                                experienceLevel: service.getExperience(target),
-                              );
-                              AssistantHalfSheet.show(context, ctx);
-                            }
-                          : () {
-                              final senderId = switch (row) {
-                                UserTranscriptTimelineRow r => r.senderId,
-                                AssistantAnswerTranscriptRow r => r.senderId,
-                                ErrorTranscriptTimelineRow r => r.senderId,
-                              };
-                              if (isUserRow) {
-                                final currentUser = ref.read(userDataProvider);
-                                final userId =
-                                    currentUser?.username ?? currentUser?.id;
-                                if (userId != null && userId.isNotEmpty) {
-                                  context.push(
-                                    AppRoutePaths.userProfile(username: userId),
-                                  );
-                                }
-                              } else if (senderId.isNotEmpty) {
+                        : null,
+                    onAvatarTap: isAssistantMessage
+                        ? () {
+                            final target = VisitTarget.page('chat');
+                            final service = ref.read(
+                              visitRecorderServiceProvider,
+                            );
+                            final ctx = AssistantOpenContext(
+                              source: AssistantSource.chat,
+                              visitTarget: target,
+                              experienceLevel: service.getExperience(target),
+                            );
+                            AssistantHalfSheet.show(context, ctx);
+                          }
+                        : () {
+                            final senderId = switch (row) {
+                              UserTranscriptTimelineRow r => r.senderId,
+                              AssistantAnswerTranscriptRow r => r.senderId,
+                              ErrorTranscriptTimelineRow r => r.senderId,
+                            };
+                            if (isUserRow) {
+                              final currentUser = ref.read(userDataProvider);
+                              final userId =
+                                  currentUser?.username ?? currentUser?.id;
+                              if (userId != null && userId.isNotEmpty) {
                                 context.push(
-                                  AppRoutePaths.userProfile(username: senderId),
-                                  extra: UserProfileRouteExtra(
-                                    profileSubjectId: senderId,
-                                  ),
+                                  AppRoutePaths.userProfile(username: userId),
                                 );
                               }
-                            },
-                      showAssistantAvatar: false,
-                    ),
-                  ],
-                );
-              },
-            ),
+                            } else if (senderId.isNotEmpty) {
+                              context.push(
+                                AppRoutePaths.userProfile(username: senderId),
+                                extra: UserProfileRouteExtra(
+                                  profileSubjectId: senderId,
+                                ),
+                              );
+                            }
+                          },
+                    showAssistantAvatar: false,
+                  ),
+                ],
+              );
+            },
           ),
-          ColoredBox(
-            color: isDark ? bgColor : AppColors.chatToolbarBackground,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.semantic[DesignSemanticConstants
-                          .container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                  AppSpacing.sm,
-                  AppSpacing.semantic[DesignSemanticConstants
-                          .container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                  AppSpacing.sm,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CustomizableChatInputBar(
-                      controller: _inputController,
-                      focusNode: _inputFocusNode,
-                      textFieldKey: TestKeys.assistantChatInputField,
-                      hintText: UITextConstants.assistantAskPlaceholder,
-                      maxTextLength: 5000,
-                      maxVisibleLines: 5,
-                      onPickImages: _pickChatImages,
-                      onCapturePhoto: _captureChatPhoto,
-                      onPickFiles: _pickChatFiles,
-                      onRequestMicPermission: _requestMicPermissionForChat,
-                      onStartRecord: _startVoiceRecordForChat,
-                      onStopRecord: _stopVoiceRecordForChat,
-                      onVoiceAsrTransform: _voiceAsrForChat,
-                      onSend: _submitChatInput,
-                      sendButtonKey: TestKeys.assistantSendButton,
-                      showEmojiButton: true,
-                      extraPanelItems: const <ChatInputExtraPanelItem>[],
-                    ),
-                  ],
-                ),
+        ),
+        ColoredBox(
+          color: isDark ? bgColor : AppColors.chatToolbarBackground,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.semantic[DesignSemanticConstants
+                        .container]?[DesignSemanticConstants.sm] ??
+                    AppSpacing.containerSm,
+                AppSpacing.sm,
+                AppSpacing.semantic[DesignSemanticConstants
+                        .container]?[DesignSemanticConstants.sm] ??
+                    AppSpacing.containerSm,
+                AppSpacing.sm,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CustomizableChatInputBar(
+                    controller: _inputController,
+                    focusNode: _inputFocusNode,
+                    textFieldKey: TestKeys.assistantChatInputField,
+                    hintText: UITextConstants.assistantAskPlaceholder,
+                    maxTextLength: 5000,
+                    maxVisibleLines: 5,
+                    onPickImages: _pickChatImages,
+                    onCapturePhoto: _captureChatPhoto,
+                    onPickFiles: _pickChatFiles,
+                    onRequestMicPermission: _requestMicPermissionForChat,
+                    onStartRecord: _startVoiceRecordForChat,
+                    onStopRecord: _stopVoiceRecordForChat,
+                    onVoiceAsrTransform: _voiceAsrForChat,
+                    onSend: _submitChatInput,
+                    sendButtonKey: TestKeys.assistantSendButton,
+                    showEmojiButton: true,
+                    extraPanelItems: const <ChatInputExtraPanelItem>[],
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+      ],
     );
 
     return ConversationPageScaffold(
@@ -1376,8 +1383,7 @@ class _AssistantConversationPageState
                 icon: _isSelectionMode
                     ? CupertinoIcons.xmark
                     : CupertinoIcons.back,
-                onPressed:
-                    _isSelectionMode ? _cancelSelection : widget.onBack,
+                onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
               ),
               middle: Text(
                 _isSelectionMode
@@ -1390,9 +1396,7 @@ class _AssistantConversationPageState
                       padding: EdgeInsets.zero,
                       onPressed: () async {
                         final selectedRows = _controller.transcriptRows
-                            .where(
-                              (item) => _selectedIds.contains(item.id),
-                            )
+                            .where((item) => _selectedIds.contains(item.id))
                             .toList(growable: false);
                         await _shareRows(selectedRows);
                         _cancelSelection();

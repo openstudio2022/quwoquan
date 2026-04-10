@@ -233,6 +233,22 @@ class ReactPolicy {
           'proxy',
         ],
       ),
+      ReactSuppressRule(
+        toolName: 'web_fetch',
+        errorCodes: <String>[
+          'unsupportedTarget',
+          'networkUnavailable',
+          'rateLimited',
+          'executionFailed',
+        ],
+        messageKeywords: <String>[
+          'unsupported content type',
+          'application/pdf',
+          'timeout',
+          '403',
+          '429',
+        ],
+      ),
     ],
     toolStatusRules: <ReactToolStatusRule>[
       ReactToolStatusRule(

@@ -13,6 +13,13 @@ class QueryNormalization {
     this.issues = const <String>[],
     this.language = "",
     this.hints = const <String>[],
+    this.referenceNowIso = "",
+    this.timezone = "",
+    this.resolvedTemporalHints = const <String>[],
+    this.timeScope = "",
+    this.timeRangeStart = "",
+    this.timeRangeEnd = "",
+    this.timePoint = "",
   });
 
   final String normalizedQuery;
@@ -20,6 +27,13 @@ class QueryNormalization {
   final List<String> issues;
   final String language;
   final List<String> hints;
+  final String referenceNowIso;
+  final String timezone;
+  final List<String> resolvedTemporalHints;
+  final String timeScope;
+  final String timeRangeStart;
+  final String timeRangeEnd;
+  final String timePoint;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'normalizedQuery': normalizedQuery,
@@ -27,6 +41,13 @@ class QueryNormalization {
         'issues': issues,
         'language': language,
         'hints': hints,
+        'referenceNowIso': referenceNowIso,
+        'timezone': timezone,
+        'resolvedTemporalHints': resolvedTemporalHints,
+        'timeScope': timeScope,
+        'timeRangeStart': timeRangeStart,
+        'timeRangeEnd': timeRangeEnd,
+        'timePoint': timePoint,
       };
 
   factory QueryNormalization.fromJson(Map<String, dynamic> json) {
@@ -36,6 +57,13 @@ class QueryNormalization {
       issues: _assistantStringList(json['issues']),
       language: (json['language'] as String?)?.trim() ?? "",
       hints: _assistantStringList(json['hints']),
+      referenceNowIso: (json['referenceNowIso'] as String?)?.trim() ?? "",
+      timezone: (json['timezone'] as String?)?.trim() ?? "",
+      resolvedTemporalHints: _assistantStringList(json['resolvedTemporalHints']),
+      timeScope: (json['timeScope'] as String?)?.trim() ?? "",
+      timeRangeStart: (json['timeRangeStart'] as String?)?.trim() ?? "",
+      timeRangeEnd: (json['timeRangeEnd'] as String?)?.trim() ?? "",
+      timePoint: (json['timePoint'] as String?)?.trim() ?? "",
     );
   }
 
@@ -53,6 +81,181 @@ class QueryNormalizationFields {
   static const String issues = 'issues';
   static const String language = 'language';
   static const String hints = 'hints';
+  static const String referenceNowIso = 'referenceNowIso';
+  static const String timezone = 'timezone';
+  static const String resolvedTemporalHints = 'resolvedTemporalHints';
+  static const String timeScope = 'timeScope';
+  static const String timeRangeStart = 'timeRangeStart';
+  static const String timeRangeEnd = 'timeRangeEnd';
+  static const String timePoint = 'timePoint';
+}
+
+class ResolvedGeoScope {
+  const ResolvedGeoScope({
+    this.geoKind = "none",
+    this.countryCode = "",
+    this.countryLabel = "",
+    this.regionLabel = "",
+    this.cityLabel = "",
+    this.marketCode = "",
+    this.marketLabel = "",
+    this.resolvedText = "",
+    this.source = "",
+    this.defaultApplied = false,
+    this.reason = "",
+  });
+
+  final String geoKind;
+  final String countryCode;
+  final String countryLabel;
+  final String regionLabel;
+  final String cityLabel;
+  final String marketCode;
+  final String marketLabel;
+  final String resolvedText;
+  final String source;
+  final bool defaultApplied;
+  final String reason;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'geoKind': geoKind,
+        'countryCode': countryCode,
+        'countryLabel': countryLabel,
+        'regionLabel': regionLabel,
+        'cityLabel': cityLabel,
+        'marketCode': marketCode,
+        'marketLabel': marketLabel,
+        'resolvedText': resolvedText,
+        'source': source,
+        'defaultApplied': defaultApplied,
+        'reason': reason,
+      };
+
+  factory ResolvedGeoScope.fromJson(Map<String, dynamic> json) {
+    return ResolvedGeoScope(
+      geoKind: (json['geoKind'] as String?)?.trim() ?? "none",
+      countryCode: (json['countryCode'] as String?)?.trim() ?? "",
+      countryLabel: (json['countryLabel'] as String?)?.trim() ?? "",
+      regionLabel: (json['regionLabel'] as String?)?.trim() ?? "",
+      cityLabel: (json['cityLabel'] as String?)?.trim() ?? "",
+      marketCode: (json['marketCode'] as String?)?.trim() ?? "",
+      marketLabel: (json['marketLabel'] as String?)?.trim() ?? "",
+      resolvedText: (json['resolvedText'] as String?)?.trim() ?? "",
+      source: (json['source'] as String?)?.trim() ?? "",
+      defaultApplied: json['defaultApplied'] == true,
+      reason: (json['reason'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class ResolvedGeoScopeFields {
+  static const String geoKind = 'geoKind';
+  static const String countryCode = 'countryCode';
+  static const String countryLabel = 'countryLabel';
+  static const String regionLabel = 'regionLabel';
+  static const String cityLabel = 'cityLabel';
+  static const String marketCode = 'marketCode';
+  static const String marketLabel = 'marketLabel';
+  static const String resolvedText = 'resolvedText';
+  static const String source = 'source';
+  static const String defaultApplied = 'defaultApplied';
+  static const String reason = 'reason';
+}
+
+class SearchIterationRound {
+  const SearchIterationRound({
+    this.iteration = 0,
+    this.triggerReason = "",
+    this.plannerInputSummary = "",
+    this.plannerOutputSummary = "",
+    this.queryTasks = const <QueryTask>[],
+    this.acceptedEvidenceCount = 0,
+    this.missingDimensions = const <String>[],
+    this.convergenceStatus = SearchIterationConvergenceStatus.unknown,
+  });
+
+  final int iteration;
+  final String triggerReason;
+  final String plannerInputSummary;
+  final String plannerOutputSummary;
+  final List<QueryTask> queryTasks;
+  final int acceptedEvidenceCount;
+  final List<String> missingDimensions;
+  final SearchIterationConvergenceStatus convergenceStatus;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'iteration': iteration,
+        'triggerReason': triggerReason,
+        'plannerInputSummary': plannerInputSummary,
+        'plannerOutputSummary': plannerOutputSummary,
+        'queryTasks': queryTasks.map((item) => item.toJson()).toList(growable: false),
+        'acceptedEvidenceCount': acceptedEvidenceCount,
+        'missingDimensions': missingDimensions,
+        'convergenceStatus': convergenceStatus.wireName,
+      };
+
+  factory SearchIterationRound.fromJson(Map<String, dynamic> json) {
+    return SearchIterationRound(
+      iteration: (json['iteration'] as num?)?.toInt() ?? 0,
+      triggerReason: (json['triggerReason'] as String?)?.trim() ?? "",
+      plannerInputSummary: (json['plannerInputSummary'] as String?)?.trim() ?? "",
+      plannerOutputSummary: (json['plannerOutputSummary'] as String?)?.trim() ?? "",
+      queryTasks: (json['queryTasks'] as List?)?.whereType<Map>().map((item) => QueryTask.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <QueryTask>[],
+      acceptedEvidenceCount: (json['acceptedEvidenceCount'] as num?)?.toInt() ?? 0,
+      missingDimensions: _assistantStringList(json['missingDimensions']),
+      convergenceStatus: parseSearchIterationConvergenceStatus((json['convergenceStatus'] as String?)?.trim() ?? ""),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class SearchIterationRoundFields {
+  static const String iteration = 'iteration';
+  static const String triggerReason = 'triggerReason';
+  static const String plannerInputSummary = 'plannerInputSummary';
+  static const String plannerOutputSummary = 'plannerOutputSummary';
+  static const String queryTasks = 'queryTasks';
+  static const String acceptedEvidenceCount = 'acceptedEvidenceCount';
+  static const String missingDimensions = 'missingDimensions';
+  static const String convergenceStatus = 'convergenceStatus';
+}
+
+class SearchIterationState {
+  const SearchIterationState({
+    this.maxIterations = 0,
+    this.currentIteration = 0,
+    this.rounds = const <SearchIterationRound>[],
+  });
+
+  final int maxIterations;
+  final int currentIteration;
+  final List<SearchIterationRound> rounds;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'maxIterations': maxIterations,
+        'currentIteration': currentIteration,
+        'rounds': rounds.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory SearchIterationState.fromJson(Map<String, dynamic> json) {
+    return SearchIterationState(
+      maxIterations: (json['maxIterations'] as num?)?.toInt() ?? 0,
+      currentIteration: (json['currentIteration'] as num?)?.toInt() ?? 0,
+      rounds: (json['rounds'] as List?)?.whereType<Map>().map((item) => SearchIterationRound.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SearchIterationRound>[],
+    );
+  }
+}
+
+class SearchIterationStateFields {
+  static const String maxIterations = 'maxIterations';
+  static const String currentIteration = 'currentIteration';
+  static const String rounds = 'rounds';
 }
 
 class IntentGraph {
@@ -76,12 +279,14 @@ class IntentGraph {
     this.negativeKeywords = const <String>[],
     this.queryNormalization = const QueryNormalization(),
     this.queryTasks = const <QueryTask>[],
+    this.searchIterationState = const SearchIterationState(),
     this.contextSlots = const <String, dynamic>{},
     this.globalConstraints = const <String, dynamic>{},
     this.clarificationNeeded = false,
     this.recallResult,
     this.authorityDomains = const <String>[],
     this.freshnessHoursMax = 0,
+    this.resolvedGeoScope = const ResolvedGeoScope(),
   });
 
   final String userGoal;
@@ -103,12 +308,14 @@ class IntentGraph {
   final List<String> negativeKeywords;
   final QueryNormalization queryNormalization;
   final List<QueryTask> queryTasks;
+  final SearchIterationState searchIterationState;
   final Map<String, dynamic> contextSlots;
   final Map<String, dynamic> globalConstraints;
   final bool clarificationNeeded;
   final RecallResult? recallResult;
   final List<String> authorityDomains;
   final int freshnessHoursMax;
+  final ResolvedGeoScope resolvedGeoScope;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'userGoal': userGoal,
@@ -130,12 +337,14 @@ class IntentGraph {
         'negativeKeywords': negativeKeywords,
         'queryNormalization': queryNormalization.toJson(),
         'queryTasks': queryTasks.map((item) => item.toJson()).toList(growable: false),
+        'searchIterationState': searchIterationState.toJson(),
         'contextSlots': contextSlots,
         'globalConstraints': globalConstraints,
         'clarificationNeeded': clarificationNeeded,
         'recallResult': recallResult?.toJson(),
         'authorityDomains': authorityDomains,
         'freshnessHoursMax': freshnessHoursMax,
+        'resolvedGeoScope': resolvedGeoScope.toJson(),
       };
 
   factory IntentGraph.fromJson(Map<String, dynamic> json) {
@@ -159,12 +368,14 @@ class IntentGraph {
       negativeKeywords: _assistantStringList(json['negativeKeywords']),
       queryNormalization: json['queryNormalization'] is Map ? QueryNormalization.fromJson((json['queryNormalization'] as Map).cast<String, dynamic>()) : const QueryNormalization(),
       queryTasks: (json['queryTasks'] as List?)?.whereType<Map>().map((item) => QueryTask.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <QueryTask>[],
+      searchIterationState: json['searchIterationState'] is Map ? SearchIterationState.fromJson((json['searchIterationState'] as Map).cast<String, dynamic>()) : const SearchIterationState(),
       contextSlots: (json['contextSlots'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       globalConstraints: (json['globalConstraints'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       clarificationNeeded: json['clarificationNeeded'] == true,
       recallResult: json['recallResult'] is Map ? RecallResult.fromJson((json['recallResult'] as Map).cast<String, dynamic>()) : null,
       authorityDomains: _assistantStringList(json['authorityDomains']),
       freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 0,
+      resolvedGeoScope: json['resolvedGeoScope'] is Map ? ResolvedGeoScope.fromJson((json['resolvedGeoScope'] as Map).cast<String, dynamic>()) : const ResolvedGeoScope(),
     );
   }
 
@@ -196,10 +407,12 @@ class IntentGraphFields {
   static const String negativeKeywords = 'negativeKeywords';
   static const String queryNormalization = 'queryNormalization';
   static const String queryTasks = 'queryTasks';
+  static const String searchIterationState = 'searchIterationState';
   static const String contextSlots = 'contextSlots';
   static const String globalConstraints = 'globalConstraints';
   static const String clarificationNeeded = 'clarificationNeeded';
   static const String recallResult = 'recallResult';
   static const String authorityDomains = 'authorityDomains';
   static const String freshnessHoursMax = 'freshnessHoursMax';
+  static const String resolvedGeoScope = 'resolvedGeoScope';
 }

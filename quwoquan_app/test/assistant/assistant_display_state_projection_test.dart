@@ -27,6 +27,24 @@ void main() {
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
           userFacingSummary: '我先确认你的核心问题和约束。',
           concernPoints: <String>['先看事实', '再看建议'],
+          queryDesignSummary: '我会先按关键信号拆开检索。',
+          resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'geo_default',
+              title: '已采用默认城市',
+              detail: '你没有指定城市，我先按深圳理解并检索。',
+              resolvedValue: '深圳',
+              defaultApplied: true,
+              visibleInUnderstanding: true,
+            ),
+          ],
+          queryGroups: <RunArtifactsUnderstandingQueryGroup>[
+            RunArtifactsUnderstandingQueryGroup(
+              dimension: '市场异动',
+              queries: <String>['昨天A股 大涨 原因', '昨日 A股 涨停 板块'],
+              why: '先确认对应交易日的主线和板块扩散。',
+            ),
+          ],
         ),
         retrievalProcessing: const RetrievalProcessingSnapshot(
           processedDocumentCount: 4,
@@ -50,13 +68,33 @@ void main() {
       );
 
       expect(state.process.activeStepId, ProcessStepId.answerOrganization);
-      expect(state.process.blocks.length, 4);
+      expect(state.process.blocks.length, 6);
       expect(state.process.blocks.first.title, '我先确认你的核心问题和约束。');
+      expect(
+        state.process.blocks.any(
+          (block) =>
+              block.blockId == 'understanding_resolution_items' &&
+              block.items.any((item) => item.body.contains('深圳')),
+        ),
+        isTrue,
+      );
+      expect(
+        state.process.blocks.any(
+          (block) =>
+              block.kind == ProcessDisplayBlockKind.points &&
+              block.stepId == ProcessStepId.retrievalProcessing &&
+              block.items.any(
+                (item) =>
+                    item.title == '检索设计' && item.body.contains('我会先按关键信号拆开检索。'),
+              ),
+        ),
+        isTrue,
+      );
       expect(
         state.process.blocks.any(
           (block) => block.kind == ProcessDisplayBlockKind.points,
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         state.process.blocks.any(
@@ -113,6 +151,152 @@ void main() {
       expect(
         renderAnswerBlocksToPlainText(state.answer.blocks),
         contains('晚点出门更稳妥'),
+      );
+    });
+
+    test('显式 answer blocks 缺少 summary 时，会回填 answerProcessing 的 bounded 提示', () {
+      final state = buildAssistantDisplayState(
+        explicitState: const AssistantDisplayState(
+          answer: AssistantAnswerDisplayState(
+            blocks: <AssistantAnswerDisplayBlock>[
+              AssistantAnswerDisplayBlock(
+                blockId: 'bounded_answer',
+                kind: DisplayBlockKind.paragraph,
+                body: '先给你一版受限答案。',
+              ),
+            ],
+          ),
+        ),
+        answerProcessing: const RunArtifactsAnswerProcessing(
+          readinessSummary: '当前证据还不够稳定，这版先作为 bounded answer 展示。',
+        ),
+      );
+
+      expect(
+        state.answer.summary,
+        equals('当前证据还不够稳定，这版先作为 bounded answer 展示。'),
+      );
+      expect(
+        renderAnswerBlocksToMarkdown(state.answer.blocks),
+        contains('受限答案'),
+      );
+    });
+
+    test('显式 answer blocks 缺少日期锚点时，会补回 markdown 成答内容', () {
+      final state = buildAssistantDisplayState(
+        explicitState: const AssistantDisplayState(
+          answer: AssistantAnswerDisplayState(
+            summary: '天气结论已整理',
+            blocks: <AssistantAnswerDisplayBlock>[
+              AssistantAnswerDisplayBlock(
+                blockId: 'summary',
+                kind: DisplayBlockKind.paragraph,
+                body: '深圳明天有雨，建议带伞。',
+              ),
+            ],
+          ),
+        ),
+        answerMarkdown: '2026-04-10 深圳有雨，建议带伞。',
+      );
+
+      expect(state.answer.blocks.length, 2);
+      expect(
+        renderAnswerBlocksToPlainText(state.answer.blocks),
+        contains('2026-04-10'),
+      );
+    });
+
+    test('显式 process blocks 只有局部时，不再从 queryGroups 回填 retrieval query design', () {
+      final state = buildAssistantDisplayState(
+        explicitState: const AssistantDisplayState(
+          process: AssistantProcessDisplayState(
+            blocks: <AssistantProcessDisplayBlock>[
+              AssistantProcessDisplayBlock(
+                blockId: 'retrieval_summary',
+                stepId: ProcessStepId.retrievalProcessing,
+                status: JourneyStageStatus.completed,
+                kind: ProcessDisplayBlockKind.summary,
+                title: '我先锁定对应交易日，再核对市场主线。',
+              ),
+            ],
+          ),
+        ),
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'r',
+            stepId: ProcessStepId.retrievalProcessing,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          queryGroups: <RunArtifactsUnderstandingQueryGroup>[
+            RunArtifactsUnderstandingQueryGroup(
+              dimension: '交易日确认',
+              queries: <String>['2026-04-07 A股 大涨 原因'],
+              why: '先把相对时间落成具体日期。',
+            ),
+          ],
+        ),
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processingSummary: '已经把可用结果筛过一轮。',
+        ),
+      );
+
+      expect(
+        state.process.blocks.any(
+          (block) =>
+              block.blockId == 'retrieval_summary' &&
+              block.title.contains('对应交易日'),
+        ),
+        isTrue,
+      );
+      expect(
+        state.process.blocks.any(
+          (block) =>
+              block.blockId == 'retrieval_query_design' &&
+              block.items.any(
+                (item) =>
+                    item.title == '检索设计' &&
+                    item.body.contains('2026-04-07 A股 大涨 原因'),
+              ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('query design 与已有总结重复时会跳过额外展示块', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'r',
+            stepId: ProcessStepId.retrievalProcessing,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '我会先锁定对应交易日，再核对市场主线。',
+          queryDesignSummary: '我会先锁定对应交易日，再核对市场主线。',
+        ),
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processingSummary: '我会先锁定对应交易日，再核对市场主线。',
+        ),
+      );
+
+      expect(
+        state.process.blocks.where(
+          (block) => block.blockId == 'retrieval_query_design',
+        ),
+        isEmpty,
       );
     });
   });

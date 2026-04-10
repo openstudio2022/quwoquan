@@ -3703,6 +3703,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **' 回复 '**
   String get replyToPrefix;
+
+  /// Toast when user exceeds max image count on create flow
+  ///
+  /// In zh, this message translates to:
+  /// **'最多添加 {count} 张图片'**
+  String createMaxImagesToastTemplate(int count);
+
+  /// Publish preview chip label for image-only posts
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 张图片'**
+  String createPublishPreviewImageCountTemplate(int count);
 }
 
 class _AppLocalizationsDelegate

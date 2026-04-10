@@ -229,8 +229,8 @@ String pageNameFromRouteLocation(String location) {
       return 'create_publish_settings';
     case PageAccessInternalRoutes.createPagePublishConfirm:
       return 'create_publish_confirm';
-    case PageAccessInternalRoutes.createPageArticlePreview:
-      return 'create_article_preview';
+    case PageAccessInternalRoutes.createPageArticleTypography:
+      return 'create_article_typography';
     case PageAccessInternalRoutes.createPageLocationPicker:
       return 'create_location_picker';
     case PageAccessInternalRoutes.createPagePublishCircleSelect:

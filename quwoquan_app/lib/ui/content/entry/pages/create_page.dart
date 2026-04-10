@@ -22,9 +22,8 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/article_preview_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/article_typography_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
@@ -34,8 +33,6 @@ import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storag
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/article_typography_thumbnail_raster.dart';
-import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
@@ -60,17 +57,9 @@ class CreatePage extends ConsumerStatefulWidget {
   ConsumerState<CreatePage> createState() => _CreatePageState();
 }
 
-enum _TypographyToolbarTab { paper, font }
-
 class _CreatePageState extends ConsumerState<CreatePage> {
   static const int _kMaxMediaImages = 20;
   static const int _kMaxBodyLength = 5000;
-  static const double _typographyPickThumbWidth = AppSpacing.largeAvatarSize;
-
-  double _typographyPickPanelScrollHeight(double pageAspectRatio) =>
-      _typographyPickThumbWidth / pageAspectRatio +
-      AppSpacing.intraGroupXs +
-      AppSpacing.md;
 
   final CreateLocationService _locationService = CreateLocationService();
   final CreateCircleService _circleService = const CreateCircleService();
@@ -93,9 +82,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   final Map<String, GlobalKey> _mediaTileBoundsKeys = <String, GlobalKey>{};
   List<CreateDraft> _savedDrafts = <CreateDraft>[];
   String? _currentDraftId;
-
-  /// 沉浸文章：编辑（纵向 Word 式）/ 预览（横向沉浸翻页）。
-  ArticleEditorSurfaceMode _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
 
   /// 非 null 时 [ArticleEditor] 在该页展开文内图工具栏（如新插入图片后）。
   final ValueNotifier<String?> _revealArticleImageToolbarForPageId =
@@ -305,6 +291,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   String _pageTitleForState(CreateEditorState state) {
+    if (_useImmersiveArticleExperience(state)) {
+      return UITextConstants.createArticleSurfaceLongEdit;
+    }
     return '创作';
   }
 
@@ -1149,10 +1138,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       final proceed = await Navigator.of(context).push<bool>(
         CupertinoPageRoute<bool>(
           settings: const RouteSettings(
-            name: PageAccessInternalRoutes.createPageArticlePreview,
+            name: PageAccessInternalRoutes.createPageArticleTypography,
           ),
           fullscreenDialog: true,
-          builder: (_) => const ArticlePreviewPage(),
+          builder: (_) => const ArticleTypographyPage(),
         ),
       );
       if (proceed != true) {
@@ -1298,36 +1287,15 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Widget _buildImmersiveArticlePage(CreateEditorState state) {
-    final isPreview =
-        _articleSurfaceMode == ArticleEditorSurfaceMode.preview;
-    // 与 [WorksImmersiveViewer] 舞台一致：深色沉浸底，避免纸张 stage 色在书页外呈「浅灰留白」。
-    final background = isPreview
-        ? AppColors.worksBackground
-        : CupertinoColors.systemBackground.resolveFrom(context);
-    final foreground = isPreview
-        ? AppColors.white
-        : CupertinoColors.label.resolveFrom(context);
-
-    // 排版模式下使用沉浸式黑色状态栏
-    if (isPreview) {
-      SystemChrome.setSystemUIOverlayStyle(
-        const SystemUiOverlayStyle(
-          statusBarBrightness: Brightness.dark,
-          statusBarIconBrightness: Brightness.light,
-        ),
-      );
-    } else {
-      SystemChrome.setSystemUIOverlayStyle(
-        SystemUiOverlayStyle(
-          statusBarBrightness:
-              CupertinoTheme.of(context).brightness ?? Brightness.light,
-          statusBarIconBrightness:
-              CupertinoTheme.of(context).brightness == Brightness.dark
-                  ? Brightness.light
-                  : Brightness.dark,
-        ),
-      );
-    }
+    final background = CupertinoColors.systemBackground.resolveFrom(context);
+    final brightness = CupertinoTheme.of(context).brightness ?? Brightness.light;
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarBrightness: brightness,
+        statusBarIconBrightness:
+            brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+      ),
+    );
 
     return PopScope(
       canPop: false,
@@ -1352,18 +1320,29 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                 bottom: false,
                 child: Column(
                   children: <Widget>[
-                    _buildImmersiveArticleTopBar(
-                      foreground: foreground,
-                      immersiveDark: isPreview,
-                    ),
+                    _buildImmersiveArticleTopBar(state: state),
                     Expanded(
-                      child: AnimatedPadding(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        padding: EdgeInsets.only(
-                          top: isPreview ? 0 : AppSpacing.containerSm,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: AppSpacing.containerSm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            if (!_unifiedCreateEditorEnabled) ...<Widget>[
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.containerMd,
+                                ),
+                                child: _buildRollbackBanner(
+                                  CupertinoColors.secondaryLabel.resolveFrom(
+                                    context,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: AppSpacing.interGroupSm),
+                            ],
+                            Expanded(child: _buildTextEditor(state)),
+                          ],
                         ),
-                        child: _buildImmersiveArticleStage(state),
                       ),
                     ),
                   ],
@@ -1373,358 +1352,6 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildImmersiveArticleStage(CreateEditorState state) {
-    if (_articleSurfaceMode == ArticleEditorSurfaceMode.preview) {
-      return _buildImmersiveArticlePreview(state);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        if (!_unifiedCreateEditorEnabled) ...<Widget>[
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-            child: _buildRollbackBanner(
-              CupertinoColors.secondaryLabel.resolveFrom(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.interGroupSm),
-        ],
-        Expanded(child: _buildTextEditor(state)),
-      ],
-    );
-  }
-
-  /// 排版模式下当前选中的工具栏 tab。
-  _TypographyToolbarTab _typographyTab = _TypographyToolbarTab.paper;
-
-  Widget _buildImmersiveArticlePreview(CreateEditorState state) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final metrics = resolveArticleCanvasMetrics(
-          context,
-          constraints,
-          variant: ArticleCanvasVariant.preview,
-        );
-        final pages = resolvePaginatedArticlePages(
-          context: context,
-          constraints: constraints,
-          document: state.articleDocument,
-          template: state.articleTemplate,
-          fontPreset: state.articleFontPreset,
-          fallbackPages: state.articlePages,
-          variant: ArticleCanvasVariant.preview,
-          paperTexture: state.articlePaperTexture,
-        );
-        final idx =
-            pages.indexWhere((p) => p.id == state.activeArticlePageId);
-        final enablePageCurl = ref.watch(
-          contentFeatureFlagProvider('enable_article_page_curl'),
-        );
-        return Column(
-          children: <Widget>[
-            Expanded(
-              child: ColoredBox(
-                color: AppColors.worksBackground,
-                child: ArticleReadOnlyBookDeck(
-                  pages: pages,
-                  template: state.articleTemplate,
-                  fontPreset: state.articleFontPreset,
-                  metrics: metrics,
-                  coverUrl: state.articleCoverImagePath,
-                  paperTexture: state.articlePaperTexture,
-                  initialPage: idx < 0 ? 0 : idx,
-                  enablePageCurl: enablePageCurl,
-                  pagePadding: EdgeInsets.zero,
-                  showFooterPageLabel: false,
-                  onPageChanged: (int i) {
-                    if (i >= 0 && i < pages.length) {
-                      ref
-                          .read(createEditorProvider.notifier)
-                          .setActiveArticlePage(pages[i].id);
-                    }
-                  },
-                  onFallbackResolved: (reason) {
-                    debugPrint(
-                      'ArticlePreview fallback: ${reason.name}',
-                    );
-                  },
-                ),
-              ),
-            ),
-            _buildTypographyToolbar(state, constraints, metrics),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTypographyToolbar(
-    CreateEditorState state,
-    BoxConstraints layoutConstraints,
-    ArticleCanvasMetrics metrics,
-  ) {
-    // 沉浸式黑色面板，与滤镜编辑器一致
-    const panelBg = AppColors.black;
-    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(
-      true,
-      ColorType.foregroundSecondary,
-    );
-    final separatorOpaque = AppColorsFunctional.getColor(
-      true,
-      ColorType.separatorOpaque,
-    );
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-    final pageAspect = metrics.aspectRatio;
-    final panelListHeight = _typographyPickPanelScrollHeight(pageAspect);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: panelBg,
-        border: Border(
-          top: BorderSide(
-            color: separatorOpaque,
-            width: AppSpacing.hairline,
-          ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.containerMd,
-                vertical: AppSpacing.intraGroupSm,
-              ),
-              child: Row(
-                children: <Widget>[
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      setState(() {
-                        _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
-                      });
-                    },
-                    child: SizedBox(
-                      width: AppSpacing.minInteractiveSize,
-                      height: AppSpacing.minInteractiveSize,
-                      child: Center(
-                        child: Icon(
-                          CupertinoIcons.xmark_circle_fill,
-                          size: AppSpacing.iconMedium,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.containerLg),
-                  _buildTypographyTabItem(
-                    label: '纸张',
-                    selected: _typographyTab == _TypographyToolbarTab.paper,
-                    labelColor: fg,
-                    secondaryColor: fgSecondary,
-                    onTap: () => setState(
-                      () => _typographyTab = _TypographyToolbarTab.paper,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.containerLg),
-                  _buildTypographyTabItem(
-                    label: '字体',
-                    selected: _typographyTab == _TypographyToolbarTab.font,
-                    labelColor: fg,
-                    secondaryColor: fgSecondary,
-                    onTap: () => setState(
-                      () => _typographyTab = _TypographyToolbarTab.font,
-                    ),
-                  ),
-                  const Spacer(),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: panelListHeight,
-              child: ArticleTypographyThumbnailStrip(
-                editorState: state,
-                layoutConstraints: layoutConstraints,
-                metrics: metrics,
-                coverUrl: state.articleCoverImagePath,
-                activeTab: _typographyTab == _TypographyToolbarTab.paper
-                    ? ArticleTypographyThumbnailTab.paper
-                    : ArticleTypographyThumbnailTab.font,
-                child: _typographyTab == _TypographyToolbarTab.paper
-                    ? _buildPaperTextureList(state, pageAspect)
-                    : _buildFontPresetList(state, pageAspect),
-              ),
-            ),
-            SizedBox(height: bottomPad > 0 ? 0 : AppSpacing.intraGroupSm),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTypographyTabItem({
-    required String label,
-    required bool selected,
-    required Color labelColor,
-    required Color secondaryColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: AppSpacing.minInteractiveSize,
-          minHeight: AppSpacing.minInteractiveSize,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  fontWeight: selected
-                      ? AppTypography.semiBold
-                      : AppTypography.regular,
-                  color: selected ? labelColor : secondaryColor,
-                ),
-              ),
-              SizedBox(height: AppSpacing.three),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: selected ? AppSpacing.twenty : 0,
-                height: AppSpacing.two,
-                decoration: BoxDecoration(
-                  color: selected ? labelColor : labelColor.withValues(alpha: 0),
-                  borderRadius: BorderRadius.circular(AppSpacing.one),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaperTextureList(
-    CreateEditorState state,
-    double pageAspectRatio,
-  ) {
-    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(
-      true,
-      ColorType.foregroundSecondary,
-    );
-    final thumbH = _typographyPickThumbWidth / pageAspectRatio;
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      itemCount: ArticlePaperTexture.values.length,
-      separatorBuilder: (_, _) => SizedBox(width: AppSpacing.containerSm),
-      itemBuilder: (context, index) {
-        final texture = ArticlePaperTexture.values[index];
-        final isSelected = texture == state.articlePaperTexture;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            ref.read(createEditorProvider.notifier).setArticlePaperTexture(texture);
-          },
-          child: SizedBox(
-            width: _typographyPickThumbWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ArticleTypographyRasterCell(
-                  paper: texture,
-                  font: state.articleFontPreset,
-                  width: _typographyPickThumbWidth,
-                  height: thumbH,
-                  isSelected: isSelected,
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  texture.label,
-                  style: TextStyle(
-                    fontSize: AppTypography.xxs,
-                    fontWeight: isSelected
-                        ? AppTypography.semiBold
-                        : AppTypography.regular,
-                    color: isSelected ? fg : fgSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFontPresetList(
-    CreateEditorState state,
-    double pageAspectRatio,
-  ) {
-    final fg = AppColorsFunctional.getColor(true, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(
-      true,
-      ColorType.foregroundSecondary,
-    );
-    final thumbH = _typographyPickThumbWidth / pageAspectRatio;
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      itemCount: ArticleFontPreset.values.length,
-      separatorBuilder: (_, _) => SizedBox(width: AppSpacing.containerSm),
-      itemBuilder: (context, index) {
-        final preset = ArticleFontPreset.values[index];
-        final isSelected = preset == state.articleFontPreset;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            ref.read(createEditorProvider.notifier).setArticleFontPreset(preset);
-          },
-          child: SizedBox(
-            width: _typographyPickThumbWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ArticleTypographyRasterCell(
-                  paper: state.articlePaperTexture,
-                  font: preset,
-                  width: _typographyPickThumbWidth,
-                  height: thumbH,
-                  isSelected: isSelected,
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  preset.label,
-                  style: TextStyle(
-                    fontSize: AppTypography.xxs,
-                    fontWeight: isSelected
-                        ? AppTypography.semiBold
-                        : AppTypography.regular,
-                    color: isSelected ? fg : fgSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -1784,136 +1411,44 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  Widget _buildPillTab({
-    required String label,
-    required bool selected,
-    required Color foreground,
-    required VoidCallback onTap,
-  }) {
-    final isImmersiveDark =
-        _articleSurfaceMode == ArticleEditorSurfaceMode.preview;
-    final bg = selected
-        ? (isImmersiveDark
-            ? AppColors.white.withValues(alpha: 0.16)
-            : CupertinoColors.tertiarySystemFill.resolveFrom(context))
-        : AppColors.transparent;
-    final textColor = selected
-        ? (isImmersiveDark
-            ? AppColors.white
-            : CupertinoColors.label.resolveFrom(context))
-        : (isImmersiveDark
-            ? AppColors.white.withValues(alpha: 0.6)
-            : CupertinoColors.secondaryLabel.resolveFrom(context));
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.base,
-            fontWeight: selected ? AppTypography.semiBold : AppTypography.regular,
-            color: textColor,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildImmersiveArticleTopBar({
-    required Color foreground,
-    bool immersiveDark = false,
+    required CreateEditorState state,
   }) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final onAccentLabel = AppColorsFunctional.getColor(
       isDark,
       ColorType.badgeForeground,
     );
-    final state = ref.read(createEditorProvider);
-    final pages = state.articlePages;
-    final activeIdx = pages.indexWhere((p) => p.id == state.activeArticlePageId);
-    final pageLabel = _articleSurfaceMode == ArticleEditorSurfaceMode.preview &&
-            pages.length > 1 &&
-            activeIdx >= 0
-        ? '${activeIdx + 1}/${pages.length}'
-        : null;
+    final title = _pageTitleForState(state);
+    final titleColor = AppNavigationSemanticConstants.barTitleColor(isDark);
 
     return _buildCreateTopChromeBar(
       collapseProgress: 1,
-      immersiveDark: immersiveDark,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          // 返回按钮
           KeyedSubtree(
             key: TestKeys.createCloseButton,
             child: AppNavigationBarIconButton(
               icon: CupertinoIcons.back,
-              color: immersiveDark ? AppColors.white : null,
               onPressed: _onCloseRequest,
             ),
           ),
-          // 页码（紧跟返回按钮）
-          if (pageLabel != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 2),
+          Expanded(
+            child: Center(
               child: Text(
-                pageLabel,
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  fontWeight: AppTypography.medium,
-                  color: immersiveDark
-                      ? AppColors.white.withValues(alpha: 0.6)
-                      : CupertinoColors.secondaryLabel.resolveFrom(context),
+                  color: titleColor,
+                  fontSize: AppTypography.iosNavTitle,
+                  fontWeight: AppTypography.regular,
                 ),
               ),
             ),
-          // 中间弹性空间 + 编辑/排版标签
-          Expanded(
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _buildPillTab(
-                    label: '编辑',
-                    selected:
-                        _articleSurfaceMode == ArticleEditorSurfaceMode.edit,
-                    foreground: foreground,
-                    onTap: () {
-                      setState(() {
-                        _articleSurfaceMode = ArticleEditorSurfaceMode.edit;
-                      });
-                      final st = ref.read(createEditorProvider);
-                      if (st.articlePages.isNotEmpty) {
-                        ref
-                            .read(createEditorProvider.notifier)
-                            .setActiveArticlePage(st.articlePages.first.id);
-                      }
-                    },
-                  ),
-                  SizedBox(width: AppSpacing.sm),
-                  _buildPillTab(
-                    label: '排版',
-                    selected:
-                        _articleSurfaceMode == ArticleEditorSurfaceMode.preview,
-                    foreground: foreground,
-                    onTap: () {
-                      setState(() {
-                        _articleSurfaceMode = ArticleEditorSurfaceMode.preview;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
           ),
-          // 发布按钮
           CupertinoButton(
             key: TestKeys.createPublishButton,
             padding: EdgeInsets.symmetric(

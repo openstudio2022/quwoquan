@@ -6,6 +6,7 @@ import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_light_model.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
+import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
@@ -43,6 +44,34 @@ void main() {
     expect(
       resolveBookPageRect(layout, isRightPage: true).left,
       closeTo(700, 0.001),
+    );
+  });
+
+  test('BookLayout 支持显式覆盖 single 与 spread 语义布局', () {
+    final forcedSingle = computeStPageFlipLayout(
+      viewportSize: const Size(1400, 900),
+      pageWidth: 1240,
+      pageHeight: 778,
+      usePortrait: false,
+      orientationOverride: StPageFlipOrientation.portrait,
+    );
+    final forcedSpread = computeStPageFlipLayout(
+      viewportSize: const Size(430, 900),
+      pageWidth: 191,
+      pageHeight: 553,
+      usePortrait: true,
+      orientationOverride: StPageFlipOrientation.landscape,
+    );
+
+    expect(forcedSingle.orientation, StPageFlipOrientation.portrait);
+    expect(
+      resolveBookPageRect(forcedSingle, isRightPage: true).center.dx,
+      closeTo(700, 0.001),
+    );
+    expect(forcedSpread.orientation, StPageFlipOrientation.landscape);
+    expect(
+      resolveBookPageRect(forcedSpread, isRightPage: false).left,
+      lessThan(resolveBookPageRect(forcedSpread, isRightPage: true).left),
     );
   });
 
@@ -190,6 +219,116 @@ void main() {
     // 新方案：回翻复用前翻 timeline（时间反转+镜像），
     // cylinderProgress/unfoldProgress 不再独立使用。
     expect(frame.timeline.mirrored, isTrue);
+  });
+
+  test('FlipController 可选地让 portrait 回翻复用前翻镜像软路径', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+      useForwardMirroredBackwardPath: true,
+    );
+
+    expect(controller.start(const Offset(18, 650)), isTrue);
+    controller.applyAnimationFrame(const Offset(120, 510));
+
+    final frame = controller.scene.renderFrame;
+    expect(frame, isNotNull);
+    expect(controller.scene.calculation, isA<StPageFlipCalculation>());
+    expect(controller.scene.calculation, isNot(isA<ReverseCurlCalculation>()));
+    expect(frame!.direction, StPageFlipDirection.back);
+    expect(frame.renderDirection, StPageFlipDirection.back);
+    expect(frame.reversePose, isNull);
+    expect(frame.timeline.mirrored, isTrue);
+    expect(frame.backwardLeafFrame, isNull);
+    expect(frame.flippingClipArea, isNotEmpty);
+    expect(frame.bottomClipArea, isNotEmpty);
+  });
+
+  test(
+    'CurlMeshBuilder 会优先消费 canonical backward render frame 的镜像 timeline',
+    () {
+      final controller = StPageFlipController(
+        spreadModel: StPageFlipSpreadModel(pageCount: 3),
+        layout: computeStPageFlipLayout(
+          viewportSize: const Size(430, 900),
+          pageWidth: 398,
+          pageHeight: 553,
+          usePortrait: true,
+        ),
+        initialPage: 1,
+        useForwardMirroredBackwardPath: true,
+      );
+
+      expect(controller.start(const Offset(18, 650)), isTrue);
+      controller.applyAnimationFrame(const Offset(120, 510));
+
+      final renderFrame = controller.scene.renderFrame;
+      expect(renderFrame, isNotNull);
+      expect(renderFrame!.timeline.mirrored, isTrue);
+      expect(renderFrame.backwardLeafFrame, isNull);
+
+      final builder = ArticlePageCurlMeshBuilder();
+      final meshFrame = builder.build(
+        pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+        pageSize: const Size(398, 553),
+        dragPoint: renderFrame.localPagePoint,
+        progress: renderFrame.progress,
+        direction: renderFrame.direction,
+        corner: renderFrame.corner,
+        renderFrame: renderFrame,
+      );
+
+      expect(meshFrame.frontSurface, isNotNull);
+      expect(meshFrame.backSurface, isNotNull);
+      expect(
+        meshFrame.rollProgress,
+        closeTo(renderFrame.timeline.rollProgress, 0.0001),
+      );
+      expect(
+        meshFrame.cylinderProgress,
+        closeTo(renderFrame.timeline.cylinderProgress, 0.0001),
+      );
+      expect(
+        meshFrame.unfoldProgress,
+        closeTo(renderFrame.timeline.unfoldProgress, 0.0001),
+      );
+    },
+  );
+
+  test('FlipController 的前翻不会被 backward mirrored 开关污染', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 0,
+      useForwardMirroredBackwardPath: true,
+    );
+
+    expect(controller.start(const Offset(400, 650)), isTrue);
+    controller.fold(const Offset(300, 620));
+
+    final frame = controller.scene.renderFrame;
+    expect(frame, isNotNull);
+    expect(controller.scene.calculation, isA<StPageFlipCalculation>());
+    expect(controller.scene.calculation, isNot(isA<ReverseCurlCalculation>()));
+    expect(frame!.direction, StPageFlipDirection.forward);
+    expect(frame.renderDirection, StPageFlipDirection.forward);
+    expect(frame.reversePose, isNull);
+
+    final plan = controller.flipNext(StPageFlipCorner.bottom);
+    expect(plan, isNotNull);
+    expect(plan!.direction, StPageFlipDirection.forward);
+    expect(plan.reversePoses, isNull);
   });
 
   test('FlipController 的前翻与回翻轨迹保持正确入场与出场边缘', () {
@@ -351,6 +490,90 @@ void main() {
     expect(backwardBinding!.rectoPageIndex, 2);
     expect(backwardBinding.versoPageIndex, 3);
     expect(backwardBinding.bottomPageIndex, 3);
+  });
+
+  test('BackwardPageSurfaceBinding 会区分 covered current 与 previous leaf', () {
+    final binding = resolveArticleBackwardPageSurfaceBinding(
+      direction: StPageFlipDirection.back,
+      flippingPageIndex: 2,
+      currentPageIndex: 3,
+    );
+
+    expect(binding, isNotNull);
+    expect(binding!.coveredPageIndex, equals(3));
+    expect(binding.leafPageIndex, equals(2));
+    expect(binding.leafRectoPageIndex, equals(2));
+    expect(binding.leafVersoPageIndex, equals(3));
+    expect(binding.requiredPageIndices, equals(<int>{2, 3}));
+  });
+
+  test('BackwardLeafFrame 会从卷出推进到铺平', () {
+    final early = resolveArticlePageBackwardLeafFrame(
+      direction: StPageFlipDirection.back,
+      progress: 0.08,
+    );
+    final middle = resolveArticlePageBackwardLeafFrame(
+      direction: StPageFlipDirection.back,
+      progress: 0.48,
+    );
+    final late = resolveArticlePageBackwardLeafFrame(
+      direction: StPageFlipDirection.back,
+      progress: 0.96,
+    );
+
+    expect(early, isNotNull);
+    expect(middle, isNotNull);
+    expect(late, isNotNull);
+    expect(early!.phase, equals(ArticlePageBackwardLeafPhase.emerge));
+    expect(middle!.phase, equals(ArticlePageBackwardLeafPhase.unroll));
+    expect(late!.phase, equals(ArticlePageBackwardLeafPhase.settle));
+    expect(
+      middle.laidDownWidthNormalized,
+      greaterThan(early.laidDownWidthNormalized),
+    );
+    expect(
+      late.laidDownWidthNormalized,
+      greaterThan(middle.laidDownWidthNormalized),
+    );
+    expect(
+      middle.coveredWidthNormalized,
+      greaterThan(early.coveredWidthNormalized),
+    );
+    expect(late.coveredWidthNormalized, closeTo(1.0, 0.08));
+    expect(late.curlWidthNormalized, lessThan(middle.curlWidthNormalized));
+    expect(middle.rectoRevealWidthNormalized, greaterThan(0));
+  });
+
+  test('BackwardPageTextureBundle 会映射为 HF curl textures', () async {
+    final coveredImage = await _createTestImage();
+    final leafRectoImage = await _createTestImage();
+    final leafVersoImage = await _createTestImage();
+    addTearDown(coveredImage.dispose);
+    addTearDown(leafRectoImage.dispose);
+    addTearDown(leafVersoImage.dispose);
+
+    final bundle = ArticleBackwardPageTextureBundle(
+      covered: ArticlePageTextureSnapshot(
+        image: coveredImage,
+        logicalSize: const Size(1, 1),
+        pixelRatio: 1,
+      ),
+      leafRecto: ArticlePageTextureSnapshot(
+        image: leafRectoImage,
+        logicalSize: const Size(1, 1),
+        pixelRatio: 1,
+      ),
+      leafVerso: ArticlePageTextureSnapshot(
+        image: leafVersoImage,
+        logicalSize: const Size(1, 1),
+        pixelRatio: 1,
+      ),
+    );
+
+    final curlBundle = bundle.toCurlTextureBundle();
+    expect(curlBundle.bottom.image, same(coveredImage));
+    expect(curlBundle.recto.image, same(leafRectoImage));
+    expect(curlBundle.verso.image, same(leafVersoImage));
   });
 
   test('PageTextureSession 会在纹理补齐后激活并在冻结期保持原绑定', () async {
@@ -612,9 +835,10 @@ void main() {
 
     expect(meshFrame.frontSurface, isNotNull);
     expect(meshFrame.backSurface, isNotNull);
-    // 新方案：回翻复用前翻 timeline（时间反转+镜像），
-    // rollProgress 来自前翻的 invertedProgress，cylinderProgress/unfoldProgress 为 0。
     expect(meshFrame.rollProgress, greaterThanOrEqualTo(0));
+    expect(meshFrame.cylinderProgress, greaterThanOrEqualTo(0));
+    expect(meshFrame.unfoldProgress, greaterThanOrEqualTo(0));
+    expect(meshFrame.curlLift, greaterThan(0));
   });
 
   test('CurlLightModel 会随卷曲进度增强投影与背页调制', () {
@@ -842,8 +1066,7 @@ void main() {
 
     final angle = calc.getAngle();
     // 新方案：回翻角度固定为 0
-    expect(angle, equals(0),
-        reason: '回翻不旋转，角度固定为 0');
+    expect(angle, equals(0), reason: '回翻不旋转，角度固定为 0');
   });
 
   test('ReverseCurlCalculation 在 cylinder 阶段产出非矩形 clip area', () {
@@ -864,8 +1087,7 @@ void main() {
 
     final clipArea = calc.getFlippingClipArea();
     // 新方案：回翻 clip area 始终是 4 点矩形（从左边缘到 coveredWidth）。
-    expect(clipArea.length, equals(4),
-        reason: '回翻 clip area 始终是 4 点矩形');
+    expect(clipArea.length, equals(4), reason: '回翻 clip area 始终是 4 点矩形');
   });
 
   test('ReverseCurlCalculation 的 getAngle 在 unroll 阶段趋近于零', () {
@@ -886,8 +1108,7 @@ void main() {
 
     final angle = calc.getAngle();
     // unroll 末期角度应该很小（页面几乎摊平）
-    expect(angle.abs(), lessThan(0.3),
-        reason: 'unroll 末期角度应趋近于零');
+    expect(angle.abs(), lessThan(0.3), reason: 'unroll 末期角度应趋近于零');
   });
 }
 
@@ -940,6 +1161,11 @@ StPageFlipRenderFrame _threeStageBackRenderFrame({
     shadow: null,
     timeline: timeline,
     reversePose: reversePose,
+    backwardLeafFrame: resolveArticlePageBackwardLeafFrame(
+      direction: StPageFlipDirection.back,
+      progress: progress,
+      reversePose: reversePose,
+    ),
   );
 }
 

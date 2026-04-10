@@ -92,7 +92,8 @@ class WebFetchTool implements AssistantTool {
         return AssistantToolResult(
           success: false,
           message: 'Unsupported content type: $contentType',
-          errorCode: AssistantErrorCode.executionFailed,
+          errorCode: AssistantErrorCode.unsupportedTarget,
+          degraded: true,
           data: <String, dynamic>{'contentType': contentType},
         );
       }

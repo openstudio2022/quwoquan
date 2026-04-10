@@ -13,3 +13,21 @@ fields:
   - { name: summaryText, type: string, default: '' }
   - { name: hasRealtimeNeed, type: bool, default: false }
   - { name: hasLongtermNeed, type: bool, default: false }
+  - { name: availableGeoContext, type: object, ref: available_geo_context, default: {} }
+subcontracts:
+  available_geo_context:
+    class_name: AvailableGeoContext
+    fields:
+      - { name: countryCode, type: string, default: '' }
+      - { name: countryLabel, type: string, default: '' }
+      - { name: regionCode, type: string, default: '' }
+      - { name: regionLabel, type: string, default: '' }
+      - { name: cityLabel, type: string, default: '' }
+      - { name: districtLabel, type: string, default: '' }
+      - { name: lat, type: double, default: 0.0 }
+      - { name: lng, type: double, default: 0.0 }
+      - { name: timezone, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: capturedAt, type: string, default: '' }
+      - { name: privacyTier, type: string, default: '' }

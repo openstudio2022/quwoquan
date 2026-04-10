@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/components/pageflip_book/pageflip_book.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -450,6 +451,129 @@ void main() {
     expect(find.text('第二页正文'), findsOneWidget);
   });
 
+  testWidgets('book deck 在 typography backward flags 开启时前翻仍保持可用', (
+    tester,
+  ) async {
+    final commits = <ArticleReaderPageFlipCommit>[];
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                preferSoftBackwardFlip: true,
+                useForwardMirroredBackwardPath: true,
+                metrics: const ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+                onPageFlipCommitted: commits.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('第二页正文'), findsOneWidget);
+    expect(commits, isNotEmpty);
+    expect(commits.last.direction, equals('forward'));
+    expect(commits.last.fromPage, equals(0));
+    expect(commits.last.toPage, equals(1));
+  });
+
+  testWidgets(
+    'book deck 在 typography backward flags 开启时回翻仍保持 staged curl layer',
+    (tester) async {
+      const pages = <ArticlePageData>[
+        ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+        ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+        ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+      ];
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CupertinoPageScaffold(
+            child: SafeArea(
+              child: SizedBox(
+                width: 430,
+                height: 900,
+                child: ArticleReadOnlyBookDeck(
+                  pages: pages,
+                  template: ArticleTemplatePreset.journal,
+                  fontPreset: ArticleFontPreset.clean,
+                  preferSoftBackwardFlip: true,
+                  useForwardMirroredBackwardPath: true,
+                  metrics: ArticleCanvasMetrics(
+                    aspectRatio: 0.72,
+                    outerPadding: EdgeInsets.all(8),
+                    contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                    headerReservedHeight: 0,
+                    footerReservedHeight: 0,
+                    wrapImageGap: 12,
+                    wrapImageMaxWidth: 132,
+                    fullWidthImageAspectRatio: 4 / 3,
+                    journalImageAspectRatio: 1,
+                    inlineImageSpacing: 8,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.dragFrom(
+        tester.getCenter(
+          find.byKey(TestKeys.articlePageCurlHotzoneBottomRight),
+        ),
+        const Offset(-260, -40),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      );
+      await tester.pump(const Duration(milliseconds: 32));
+      await gesture.moveBy(const Offset(88, -18));
+      await tester.pump(const Duration(milliseconds: 64));
+
+      expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+      expect(find.byType(PageView), findsNothing);
+      expect(find.text('第一页正文'), findsWidgets);
+      expect(find.text('第二页正文'), findsWidgets);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets(
     'book deck records backward commit after returning to previous page',
     (tester) async {
@@ -576,122 +700,488 @@ void main() {
     },
   );
 
-  testWidgets(
-    'book deck 在 maxPageCurlPages 边界仍使用 curl',
-    (tester) async {
-      final pages = List<ArticlePageData>.generate(
-        ArticleReadOnlyBookDeck.maxPageCurlPages,
-        (i) => ArticlePageData(
-          id: 'page_$i',
-          title: '标题$i',
-          body: '正文$i',
-        ),
-      );
+  testWidgets('book deck 在 maxPageCurlPages 边界仍使用 curl', (tester) async {
+    final pages = List<ArticlePageData>.generate(
+      ArticleReadOnlyBookDeck.maxPageCurlPages,
+      (i) => ArticlePageData(id: 'page_$i', title: '标题$i', body: '正文$i'),
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CupertinoPageScaffold(
-            child: SafeArea(
-              child: SizedBox(
-                width: 430,
-                height: 900,
-                child: ArticleReadOnlyBookDeck(
-                  pages: pages,
-                  template: ArticleTemplatePreset.journal,
-                  fontPreset: ArticleFontPreset.clean,
-                  metrics: const ArticleCanvasMetrics(
-                    aspectRatio: 0.72,
-                    outerPadding: EdgeInsets.all(8),
-                    contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
-                    headerReservedHeight: 0,
-                    footerReservedHeight: 0,
-                    wrapImageGap: 12,
-                    wrapImageMaxWidth: 132,
-                    fullWidthImageAspectRatio: 4 / 3,
-                    journalImageAspectRatio: 1,
-                    inlineImageSpacing: 8,
-                  ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                metrics: const ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
                 ),
               ),
             ),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
-      expect(find.byKey(TestKeys.articleBookStylePager), findsNothing);
-    },
-  );
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+    expect(find.byKey(TestKeys.articleBookStylePager), findsNothing);
+  });
 
-  testWidgets(
-    'book deck 超过 maxPageCurlPages 降级为 pager',
-    (tester) async {
-      final pages = List<ArticlePageData>.generate(
-        ArticleReadOnlyBookDeck.maxPageCurlPages + 1,
-        (i) => ArticlePageData(
-          id: 'page_$i',
-          title: '标题$i',
-          body: '正文$i',
-        ),
-      );
+  testWidgets('book deck 超过 maxPageCurlPages 降级为 pager', (tester) async {
+    final pages = List<ArticlePageData>.generate(
+      ArticleReadOnlyBookDeck.maxPageCurlPages + 1,
+      (i) => ArticlePageData(id: 'page_$i', title: '标题$i', body: '正文$i'),
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CupertinoPageScaffold(
-            child: SafeArea(
-              child: SizedBox(
-                width: 430,
-                height: 900,
-                child: ArticleReadOnlyBookDeck(
-                  pages: pages,
-                  template: ArticleTemplatePreset.journal,
-                  fontPreset: ArticleFontPreset.clean,
-                  metrics: const ArticleCanvasMetrics(
-                    aspectRatio: 0.72,
-                    outerPadding: EdgeInsets.all(8),
-                    contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
-                    headerReservedHeight: 0,
-                    footerReservedHeight: 0,
-                    wrapImageGap: 12,
-                    wrapImageMaxWidth: 132,
-                    fullWidthImageAspectRatio: 4 / 3,
-                    journalImageAspectRatio: 1,
-                    inlineImageSpacing: 8,
-                  ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                metrics: const ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
                 ),
               ),
             ),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
-      expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
-    },
-  );
+    expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+  });
 
-  testWidgets(
-    'book deck 在 forceDegradedPager 时使用 PageView',
-    (tester) async {
-      const pages = <ArticlePageData>[
-        ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
-        ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
-      ];
+  testWidgets('book deck 在 forceDegradedPager 时使用 PageView', (tester) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+    ];
 
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                forceDegradedPager: true,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+  });
+
+  testWidgets('book deck 在 enablePageCurl=false 时使用 PageView', (tester) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                enablePageCurl: false,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+  });
+
+  testWidgets('book deck 回翻 abort 记录 backward direction', (tester) async {
+    ArticleReaderPageCurlAbort? aborted;
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                metrics: const ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+                onPageCurlAborted: (event) => aborted = event,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 先前翻到第 2 页
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页正文'), findsOneWidget);
+
+    // 从左下角热区向右做极小拖拽（回翻方向），不足以 commit
+    final hotzone = find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft);
+    final gesture2 = await tester.startGesture(
+      tester.getBottomLeft(hotzone) + const Offset(6, -6),
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+    await gesture2.moveBy(const Offset(20, -4));
+    await gesture2.up();
+    await tester.pumpAndSettle();
+
+    // 仍在第 2 页（abort 回弹）
+    expect(find.text('第二页正文'), findsOneWidget);
+    expect(aborted, isNotNull);
+    expect(aborted!.direction, equals('backward'));
+    expect(aborted!.corner, contains('left'));
+  });
+
+  testWidgets('book deck typography 回翻镜像软路径在短拖拽时保持当前页', (tester) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                preferSoftBackwardFlip: true,
+                useForwardMirroredBackwardPath: true,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页正文'), findsOneWidget);
+
+    final hotzone = find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft);
+    final gesture = await tester.startGesture(
+      tester.getBottomLeft(hotzone) + const Offset(6, -6),
+    );
+    await tester.pump(const Duration(milliseconds: 32));
+    await gesture.moveBy(const Offset(88, -18));
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+    expect(find.text('第一页正文'), findsWidgets);
+    expect(find.text('第二页正文'), findsWidgets);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('第二页正文'), findsOneWidget);
+    expect(find.text('第一页正文'), findsNothing);
+  });
+
+  testWidgets('book deck typography 回翻中途保持连续 curl layer 可见', (tester) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                preferSoftBackwardFlip: true,
+                useForwardMirroredBackwardPath: true,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页正文'), findsOneWidget);
+
+    final hotzone = find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft);
+    final gesture = await tester.startGesture(
+      tester.getBottomLeft(hotzone) + const Offset(6, -6),
+    );
+    await tester.pump(const Duration(milliseconds: 32));
+    await gesture.moveBy(const Offset(136, -24));
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+    expect(find.text('第一页正文'), findsWidgets);
+    expect(find.text('第二页正文'), findsWidgets);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('book deck typography 左侧点击通过 single backward runtime 返回上一页', (
+    tester,
+  ) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox(
+              width: 430,
+              height: 900,
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                preferSoftBackwardFlip: true,
+                useForwardMirroredBackwardPath: true,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页正文'), findsOneWidget);
+
+    final hotzone = find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft);
+    await tester.tapAt(tester.getBottomLeft(hotzone) + const Offset(40, -16));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第一页正文'), findsOneWidget);
+    expect(find.text('第二页正文'), findsNothing);
+  });
+
+  testWidgets('book deck 在窄横屏下保持 single，不提前切到 spread', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CupertinoPageScaffold(
+          child: SafeArea(
+            child: SizedBox.expand(
+              child: ArticleReadOnlyBookDeck(
+                pages: pages,
+                template: ArticleTemplatePreset.journal,
+                fontPreset: ArticleFontPreset.clean,
+                metrics: ArticleCanvasMetrics(
+                  aspectRatio: 0.72,
+                  outerPadding: EdgeInsets.all(8),
+                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  headerReservedHeight: 0,
+                  footerReservedHeight: 0,
+                  wrapImageGap: 12,
+                  wrapImageMaxWidth: 132,
+                  fullWidthImageAspectRatio: 4 / 3,
+                  journalImageAspectRatio: 1,
+                  inlineImageSpacing: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('第一页正文'), findsOneWidget);
+    expect(find.text('第二页正文'), findsNothing);
+  });
+
+  testWidgets('book deck resize 时保持当前逻辑页可见并在 single/spread 间稳定切换', (
+    tester,
+  ) async {
+    const pages = <ArticlePageData>[
+      ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
+      ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
+      ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
+      ArticlePageData(id: 'page_4', title: '第四页标题', body: '第四页正文'),
+    ];
+
+    Future<void> pumpDeck(Size size) async {
+      await tester.binding.setSurfaceSize(size);
       await tester.pumpWidget(
         const MaterialApp(
           home: CupertinoPageScaffold(
             child: SafeArea(
-              child: SizedBox(
-                width: 430,
-                height: 900,
+              child: SizedBox.expand(
                 child: ArticleReadOnlyBookDeck(
                   pages: pages,
+                  initialPage: 2,
                   template: ArticleTemplatePreset.journal,
                   fontPreset: ArticleFontPreset.clean,
-                  forceDegradedPager: true,
                   metrics: ArticleCanvasMetrics(
                     aspectRatio: 0.72,
                     outerPadding: EdgeInsets.all(8),
@@ -711,124 +1201,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+    }
 
-      expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
-      expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
-    },
-  );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-  testWidgets(
-    'book deck 在 enablePageCurl=false 时使用 PageView',
-    (tester) async {
-      const pages = <ArticlePageData>[
-        ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
-        ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
-      ];
+    await pumpDeck(const Size(430, 900));
+    expect(find.text('第三页正文'), findsOneWidget);
+    expect(find.text('第四页正文'), findsNothing);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: CupertinoPageScaffold(
-            child: SafeArea(
-              child: SizedBox(
-                width: 430,
-                height: 900,
-                child: ArticleReadOnlyBookDeck(
-                  pages: pages,
-                  template: ArticleTemplatePreset.journal,
-                  fontPreset: ArticleFontPreset.clean,
-                  enablePageCurl: false,
-                  metrics: ArticleCanvasMetrics(
-                    aspectRatio: 0.72,
-                    outerPadding: EdgeInsets.all(8),
-                    contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
-                    headerReservedHeight: 0,
-                    footerReservedHeight: 0,
-                    wrapImageGap: 12,
-                    wrapImageMaxWidth: 132,
-                    fullWidthImageAspectRatio: 4 / 3,
-                    journalImageAspectRatio: 1,
-                    inlineImageSpacing: 8,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    await pumpDeck(const Size(1400, 900));
+    expect(find.text('第三页正文'), findsOneWidget);
+    expect(find.text('第四页正文'), findsOneWidget);
 
-      expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
-      expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'book deck 回翻 abort 记录 backward direction',
-    (tester) async {
-      ArticleReaderPageCurlAbort? aborted;
-      const pages = <ArticlePageData>[
-        ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
-        ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
-        ArticlePageData(id: 'page_3', title: '第三页标题', body: '第三页正文'),
-      ];
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CupertinoPageScaffold(
-            child: SafeArea(
-              child: SizedBox(
-                width: 430,
-                height: 900,
-                child: ArticleReadOnlyBookDeck(
-                  pages: pages,
-                  template: ArticleTemplatePreset.journal,
-                  fontPreset: ArticleFontPreset.clean,
-                  metrics: const ArticleCanvasMetrics(
-                    aspectRatio: 0.72,
-                    outerPadding: EdgeInsets.all(8),
-                    contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 16),
-                    headerReservedHeight: 0,
-                    footerReservedHeight: 0,
-                    wrapImageGap: 12,
-                    wrapImageMaxWidth: 132,
-                    fullWidthImageAspectRatio: 4 / 3,
-                    journalImageAspectRatio: 1,
-                    inlineImageSpacing: 8,
-                  ),
-                  onPageCurlAborted: (event) => aborted = event,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // 先前翻到第 2 页
-      await tester.dragFrom(
-        tester.getCenter(
-          find.byKey(TestKeys.articlePageCurlHotzoneBottomRight),
-        ),
-        const Offset(-260, -40),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('第二页正文'), findsOneWidget);
-
-      // 从左下角热区向右做极小拖拽（回翻方向），不足以 commit
-      final hotzone = find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft);
-      final gesture2 = await tester.startGesture(
-        tester.getBottomLeft(hotzone) + const Offset(6, -6),
-      );
-      await tester.pump(const Duration(milliseconds: 320));
-      await gesture2.moveBy(const Offset(20, -4));
-      await gesture2.up();
-      await tester.pumpAndSettle();
-
-      // 仍在第 2 页（abort 回弹）
-      expect(find.text('第二页正文'), findsOneWidget);
-      expect(aborted, isNotNull);
-      expect(aborted!.direction, equals('backward'));
-      expect(aborted!.corner, contains('left'));
-    },
-  );
+    await pumpDeck(const Size(430, 900));
+    expect(find.text('第三页正文'), findsOneWidget);
+    expect(find.text('第四页正文'), findsNothing);
+  });
 }

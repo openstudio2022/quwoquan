@@ -688,8 +688,8 @@ class UITextConstants {
   static const String createPageTitle = '创作';
   /// 沉浸文章顶栏分段：纵向长文编辑态
   static const String createArticleSurfaceLongEdit = '长文编辑';
-  /// 沉浸文章顶栏分段：横向翻页预览态
-  static const String createArticleSurfacePreview = '预览';
+  /// 沉浸文章第二步：独立长文排版页
+  static const String createArticleSurfaceTypography = '排版';
   /// 创作顶栏短标签（与「草稿箱」全局面板入口区分）
   static const String createToolbarDraftShort = '草稿';
   static const String publishSettingsTitle = '发布设置';
@@ -699,6 +699,8 @@ class UITextConstants {
   static const String whoCanSeeLabel = '谁可以看';
   static const String visibilityPublic = '公开';
   static const String visibilityPrivate = '私密';
+  /// 发布可见性：仅作者本人（与 [visibilityPrivate]「私密」展示口径区分）
+  static const String visibilitySelfOnly = '仅自己可见';
   static const String isPublicLabel = '是否公开';
   static const String attachHomepageTitle = '关联主页';
   static const String attachHomepageNone = '未关联主页';
@@ -766,6 +768,44 @@ class UITextConstants {
   static const String locationSearchTitle = '搜索位置';
   static const String locationSearchEmpty = '未找到相关位置';
   static const String circleSelectTitle = '选择圈子';
+
+  /// 发布设置：私密态下关联主页/圈子的禁用说明
+  static const String createPublishHomepagePublicOnlyHint = '仅公开内容可关联';
+  static const String createPublishCirclesPublicOnlyHint = '仅公开内容可选';
+  static const String createPublishNoCirclesSelected = '未选圈子';
+  static const String createPublishConfirmButton = '确认发布';
+  static const String createPublishPreviewVideoKind = '视频内容';
+  static const String createPublishPreviewTextKind = '文字内容';
+  static const String createPublishPreviewOverviewTitle = '内容概览';
+  static const String createPublishPreviewExpandFull = '展开全文';
+  static const String createPublishNeedContentToast = '先写点内容';
+  static const String createPublishPersonaContextNotReady =
+      '当前分身上下文未就绪，请稍后重试';
+
+  /// 媒体区提示与操作
+  static const String createMediaHintVideoCover = '轻点视频编辑，可设置封面';
+  static const String createMediaHintAddFirst = '先添加图片或视频';
+  static const String createMediaHintDragReorder = '拖拽排序，轻点编辑';
+  static const String createDeleteVideoBeforeImages = '请先删除当前视频，再改为图片';
+  static const String createClearImagesBeforeVideo = '请先删空图片，再改为视频';
+  static const String createTextEditorVideoNotSupported = '写文字编辑器暂不支持视频';
+  static const String createAddMediaSheetTitle = '添加媒体';
+  static const String createCaptureVideoLabel = '拍摄视频';
+  static const String createReplaceVideoLabel = '更换视频';
+  static const String createAddVideoLabel = '添加视频';
+  static const String createAddShortLabel = '添加';
+  static const String createEditorRollbackBanner =
+      '当前处于编辑器回退模式，保留双编辑器骨架并关闭增强提示。';
+  static const String createMediaSingleVideoCaption = '仅 1 个视频';
+  static const String createMediaBodySectionLabel = '正文';
+  static const String createMediaBodyPlaceholder = '补一段配文，让内容更完整';
+  static const String createVideoEditFeaturesHint =
+      '轻点视频编辑，支持裁切、静音和精细选帧';
+  static const String createVideoBadgeEditLabel = '编辑视频';
+  static const String createVideoKindBadgeLabel = '视频';
+  static const String createAddTitleWithOptional = '添加标题（可选）';
+  static const String createFieldOptionalTag = '可选';
+  static const String createTitleSummaryPlaceholder = '补一个能概括内容的标题';
 
   /// 图片选择/编辑（微趣、美图、文章共用）
   static const String addCover = '添加封面';

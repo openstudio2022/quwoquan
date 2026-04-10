@@ -405,8 +405,11 @@ class SettingsSemanticConstants {
   /// 固定底部 Tab 栏高度（微趣/美图/视频/文章）
   static double get toolbarHeightFixed => 48.0;
 
-  /// 工具栏与下方面板间距（键盘之上工具栏 ↔ emoji 面板）
-  static double get toolbarToPanelSpacing => 0;
+  /// 键盘之上工具栏下沿 ↔ 面板内容区（样式 / 表情）首行间距；与 [emojiGridSpacing] 等同源组内 sm。
+  static double get toolbarToPanelSpacing =>
+      AppSpacing.semantic[DesignSemanticConstants
+          .intraGroup]?[DesignSemanticConstants.sm] ??
+      AppSpacing.intraGroupSm;
 
   /// emoji 面板高度（与系统键盘同高，便于切换体验一致）
   static double get emojiPanelHeight => 280.0;

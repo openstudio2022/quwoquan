@@ -1,4 +1,6 @@
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 
 class ProblemFrame {
   const ProblemFrame({
@@ -21,6 +23,14 @@ class ProblemFrame {
     this.requiresExternalEvidence = false,
     this.entityAnchors = const <String>[],
     this.negativeKeywords = const <String>[],
+    this.referenceNowIso = '',
+    this.timezone = '',
+    this.timeScope = '',
+    this.timeRangeStart = '',
+    this.timeRangeEnd = '',
+    this.timePoint = '',
+    this.resolvedTemporalHints = const <String>[],
+    this.resolvedGeoScope = const ResolvedGeoScope(),
   });
 
   final String query;
@@ -42,6 +52,14 @@ class ProblemFrame {
   final bool requiresExternalEvidence;
   final List<String> entityAnchors;
   final List<String> negativeKeywords;
+  final String referenceNowIso;
+  final String timezone;
+  final String timeScope;
+  final String timeRangeStart;
+  final String timeRangeEnd;
+  final String timePoint;
+  final List<String> resolvedTemporalHints;
+  final ResolvedGeoScope resolvedGeoScope;
 
   ProblemClass get problemClassKind => parseProblemClass(problemClass);
   QueryIntent get queryIntentKind => parseQueryIntent(queryIntent);
@@ -73,8 +91,17 @@ class ProblemFrame {
       'negativeKeywords': negativeKeywords,
       'answerShape': answerShape,
       'freshnessNeed': freshnessNeed,
+      if (referenceNowIso.isNotEmpty) 'referenceNowIso': referenceNowIso,
+      if (timezone.isNotEmpty) 'timezone': timezone,
+      if (resolvedTemporalHints.isNotEmpty)
+        'resolvedTemporalHints': resolvedTemporalHints,
+      if (timeScope.isNotEmpty) 'timeScope': timeScope,
+      if (timeRangeStart.isNotEmpty) 'timeRangeStart': timeRangeStart,
+      if (timeRangeEnd.isNotEmpty) 'timeRangeEnd': timeRangeEnd,
+      if (timePoint.isNotEmpty) 'timePoint': timePoint,
       if (city.isNotEmpty) 'city': city,
     },
+    'resolvedGeoScope': resolvedGeoScope.toJson(),
   };
 }
 
@@ -87,11 +114,26 @@ class DefaultProblemFramer {
     String query, {
     Map<String, dynamic> intentPayload = const <String, dynamic>{},
   }) {
-    final normalized = _normalizeQuery(query);
     final queryNormalization =
         (intentPayload['queryNormalization'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final normalizedSeed =
+        _stringValue(queryNormalization['normalizedQuery']).isNotEmpty
+        ? _stringValue(queryNormalization['normalizedQuery'])
+        : query;
+    final normalized = _normalizeQuery(normalizedSeed);
+    final rawNormalization = QueryNormalization.fromJson(queryNormalization);
+    final resolvedGeoScope =
+        intentPayload['resolvedGeoScope'] is Map
+        ? ResolvedGeoScope.fromJson(
+            (intentPayload['resolvedGeoScope'] as Map).cast<String, dynamic>(),
+          )
+        : const ResolvedGeoScope();
+    final effectiveNormalizedQuery =
+        rawNormalization.normalizedQuery.trim().isNotEmpty
+        ? rawNormalization.normalizedQuery.trim()
+        : normalized;
     final queryIntent = _stringValue(intentPayload['queryIntent']);
     final problemClass = _stringValue(intentPayload['problemClass']).isNotEmpty
         ? _stringValue(intentPayload['problemClass'])
@@ -102,17 +144,19 @@ class DefaultProblemFramer {
         : 'fallback_general_search';
     final targetObject = _stringValue(intentPayload['targetObject']).isNotEmpty
         ? _stringValue(intentPayload['targetObject'])
-        : _inferTargetObject(normalized);
+        : _inferTargetObject(effectiveNormalizedQuery);
     final answerShape = _stringValue(intentPayload['answerShape']);
     final excludedScopes =
         _stringList(intentPayload['excludedScopes']).isNotEmpty
         ? _stringList(intentPayload['excludedScopes'])
-        : _extractExcludedScopes(normalized);
+        : _extractExcludedScopes(effectiveNormalizedQuery);
     final requiresExternalEvidence =
         intentPayload['requiresExternalEvidence'] == true;
-    final location = extractCity(normalized);
+    final location = resolvedGeoScope.cityLabel.trim().isNotEmpty
+        ? resolvedGeoScope.cityLabel.trim()
+        : extractCity(effectiveNormalizedQuery);
     final entityAnchors = _extractEntityAnchors(
-      normalized,
+      effectiveNormalizedQuery,
       targetObject: targetObject,
       location: location,
     );
@@ -125,7 +169,7 @@ class DefaultProblemFramer {
     final freshnessNeed = _stringValue(intentPayload['freshnessNeed']);
     return ProblemFrame(
       query: query,
-      normalizedQuery: normalized,
+      normalizedQuery: effectiveNormalizedQuery,
       primaryDomainId: primaryDomainId,
       problemClass: problemClass,
       queryIntent: queryIntent,
@@ -146,9 +190,20 @@ class DefaultProblemFramer {
       answerShape: answerShape,
       requiresExternalEvidence: requiresExternalEvidence,
       entityAnchors: _stringList(intentPayload['entityAnchors']).isNotEmpty
-          ? _stringList(intentPayload['entityAnchors'])
-          : entityAnchors,
+          ? mergeGeoAnchors(
+              _stringList(intentPayload['entityAnchors']),
+              resolvedGeoScope,
+            )
+          : mergeGeoAnchors(entityAnchors, resolvedGeoScope),
       negativeKeywords: negativeKeywords,
+      referenceNowIso: rawNormalization.referenceNowIso,
+      timezone: rawNormalization.timezone,
+      timeScope: rawNormalization.timeScope,
+      timeRangeStart: rawNormalization.timeRangeStart,
+      timeRangeEnd: rawNormalization.timeRangeEnd,
+      timePoint: rawNormalization.timePoint,
+      resolvedTemporalHints: rawNormalization.resolvedTemporalHints,
+      resolvedGeoScope: resolvedGeoScope,
     );
   }
 

@@ -14,11 +14,15 @@ import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/reasoning/geo/geo_resolution_catalog.dart';
+import 'package:quwoquan_app/assistant/tool/impl/device/local_context_tool.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/assistant_transcript_row_patch.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/replay/assistant_replay_record.dart';
@@ -46,6 +50,9 @@ class AssistantConversationController extends ChangeNotifier {
   final AssistantOpenContext? openContext;
   final AssistantStreamingAnswerDecoder _streamingAnswerDecoder =
       AssistantStreamingAnswerDecoder();
+  final LocalContextTool _localContextTool = LocalContextTool(
+    MethodChannelAdapter(),
+  );
 
   final Map<String, AssistantReplayRecord> _assistantReplayByMessageId =
       <String, AssistantReplayRecord>{};
@@ -53,6 +60,7 @@ class AssistantConversationController extends ChangeNotifier {
       <AssistantReplayRecord>[];
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
+  _AssistantGeoRuntimeContext? _cachedGeoRuntimeContext;
 
   List<AssistantTranscriptTimelineRow> _transcriptRows =
       <AssistantTranscriptTimelineRow>[];
@@ -88,6 +96,8 @@ class AssistantConversationController extends ChangeNotifier {
       _currentProcessTimeline;
   RetrievalProcessingSnapshot get currentRetrievalProcessing =>
       _currentRetrievalProcessing;
+  RunArtifactsUnderstandingSnapshot get currentUnderstandingSnapshot =>
+      _currentUnderstandingSnapshot;
   String get assistantPhaseLabel => _assistantPhaseLabel;
   String? get activeAssistantStreamingMessageId =>
       _activeAssistantStreamingMessageId;
@@ -114,8 +124,7 @@ class AssistantConversationController extends ChangeNotifier {
   AssistantTranscriptTimelineRow _patchRow(
     AssistantTranscriptTimelineRow row,
     Map<String, dynamic> patch,
-  ) =>
-      patchTranscriptRowWithMapMerge(row, patch);
+  ) => patchTranscriptRowWithMapMerge(row, patch);
 
   bool _rowEligibleForAssistantRun(AssistantTranscriptTimelineRow r) {
     final m = _rowToMap(r);
@@ -142,7 +151,9 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   void _ensureTranscriptRowsGrowable() {
-    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(_transcriptRows);
+    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(
+      _transcriptRows,
+    );
   }
 
   String get effectiveAssistantSessionId {
@@ -226,12 +237,12 @@ class AssistantConversationController extends ChangeNotifier {
     );
     final olderChunk = _assistantHiddenHistory.sublist(splitIndex);
     final remainingHidden = _assistantHiddenHistory.sublist(0, splitIndex);
-    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(<AssistantTranscriptTimelineRow>[
-      ...olderChunk,
-      ..._transcriptRows,
-    ]);
-    _assistantHiddenHistory =
-        List<AssistantTranscriptTimelineRow>.from(remainingHidden);
+    _transcriptRows = List<AssistantTranscriptTimelineRow>.from(
+      <AssistantTranscriptTimelineRow>[...olderChunk, ..._transcriptRows],
+    );
+    _assistantHiddenHistory = List<AssistantTranscriptTimelineRow>.from(
+      remainingHidden,
+    );
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = remainingHidden.isNotEmpty;
     _notify();
@@ -327,8 +338,7 @@ class AssistantConversationController extends ChangeNotifier {
         .toList(growable: false);
     _assistantLoadingOlderHistory = false;
     _showAssistantHistoryPeek = hiddenHistory.isNotEmpty;
-    _transcriptRows =
-        visibleMessages.map(_mapToRow).toList(growable: false);
+    _transcriptRows = visibleMessages.map(_mapToRow).toList(growable: false);
     final topic = (detail['topicTitle'] as String?)?.trim();
     if (topic != null && topic.isNotEmpty) {
       _assistantTopicTitle = topic;
@@ -449,9 +459,13 @@ class AssistantConversationController extends ChangeNotifier {
           .map(_rowAsRunMessage)
           .whereType<AssistantRunMessage>()
           .toList(growable: false);
-      final contextScope = _withActivePersonaContextScope(
-        buildContextScope(),
-        activeContext: activeContext,
+      final geoRuntimeContext = await _resolveAssistantGeoRuntimeContext();
+      final contextScope = _withGeoRuntimeContextScope(
+        _withActivePersonaContextScope(
+          buildContextScope(),
+          activeContext: activeContext,
+        ),
+        geoRuntimeContext,
       );
       final sourceQueryHint =
           openContext?.hints['sourceQuery']?.toString().trim() ?? '';
@@ -471,6 +485,7 @@ class AssistantConversationController extends ChangeNotifier {
         deviceProfile: deviceProfile,
         channel: 'app',
         capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
+        gpsLocation: geoRuntimeContext.gpsLocation,
         contextScopeHint: contextScope,
         privacyProfile: 'default',
         privacyPolicy:
@@ -544,6 +559,7 @@ class AssistantConversationController extends ChangeNotifier {
         traces: <AssistantTraceEvent>[],
       );
       final runResponse = response;
+      final finalAnswerReady = _responseMarksFinalAnswerReady(runResponse);
       final displayText = _resolveAssistantDisplayText(runResponse);
       final displayPlainText = _resolveAssistantDisplayPlainText(runResponse);
       final artifactMarkdown = _responseArtifactDisplayMarkdown(runResponse);
@@ -592,75 +608,55 @@ class AssistantConversationController extends ChangeNotifier {
         excludeMessageId: streamingAssistantMessageId,
       );
       final resolvedJourney = resolveAssistantJourneyFromResponse(runResponse);
-      final resolvedCanonicalProcessTimeline =
-          resolveAssistantProcessTimelineFromRunResponse(runResponse);
-      final resolvedProcessTimeline = buildVisibleProcessTimeline(
-        resolvedCanonicalProcessTimeline,
-      );
       final effectiveJourney = _persistableAssistantJourney(
         response: runResponse,
         journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
-      );
-      final retrievalProcessing =
-          resolveAssistantRetrievalProcessingFromResponse(runResponse);
-      final understandingSnapshot =
-          (runResponse.structuredResponse[assistantUnderstandingSnapshotField]
-                  as Map?)
-              ?.cast<String, dynamic>();
-      if (_disposed) return;
-      _currentJourney = effectiveJourney;
-      _currentCanonicalProcessTimeline =
-          resolvedCanonicalProcessTimeline.isNotEmpty
-          ? resolvedCanonicalProcessTimeline
-          : _currentCanonicalProcessTimeline;
-      _currentProcessTimeline = resolvedProcessTimeline.isNotEmpty
-          ? resolvedProcessTimeline
-          : _currentProcessTimeline;
-      _currentRetrievalProcessing = retrievalProcessing;
-      _currentUnderstandingSnapshot =
-          understandingSnapshot != null && understandingSnapshot.isNotEmpty
-          ? RunArtifactsUnderstandingSnapshot.fromJson(understandingSnapshot)
-          : _understandingSnapshotFromTimeline(
-              _currentCanonicalProcessTimeline,
-            );
-      _currentJourneyElapsedMs = elapsedMs;
-      final persistedTurnFields = _buildAssistantPersistedTurnFieldsForResponse(
-        response: runResponse,
-        journey: effectiveJourney,
-        processTimeline: _currentCanonicalProcessTimeline,
-        displayMarkdown: displayMarkdown,
-        displayPlainText: displayPlainText,
-        elapsedMs: elapsedMs,
       );
       _ensureTranscriptRowsGrowable();
       final existingIndex = _findStreamingAssistantMessageIndex(
         streamingAssistantMessageId,
       );
+      final clearedRow = existingIndex >= 0
+          ? _clearStreamingAnswerState(_transcriptRows[existingIndex])
+          : null;
+      final completedDisplayState = resolveAssistantDisplayStateFromRunResponse(
+        runResponse,
+      );
+      final completedCanonicalState = _resolveCompletedCanonicalState(
+        response: runResponse,
+        journey: effectiveJourney,
+        completedDisplayState: completedDisplayState,
+        incomingCanonicalProcessTimeline:
+            resolveAssistantProcessTimelineFromRunResponse(runResponse),
+        incomingAnswerProcessing: _answerProcessingFromResponse(runResponse),
+        existingRow: clearedRow,
+        finalAnswerReady: finalAnswerReady,
+        displayMarkdown: displayMarkdown,
+      );
+      if (_disposed) return;
+      _currentJourney = completedCanonicalState.journey;
+      _currentCanonicalProcessTimeline =
+          completedCanonicalState.canonicalProcessTimeline;
+      _currentProcessTimeline = completedCanonicalState.visibleProcessTimeline;
+      _currentRetrievalProcessing = completedCanonicalState.retrievalProcessing;
+      _currentUnderstandingSnapshot =
+          completedCanonicalState.understandingSnapshot;
+      _currentJourneyElapsedMs = elapsedMs;
+      final persistedTurnFields = _buildAssistantPersistedTurnFieldsForResponse(
+        response: runResponse,
+        journey: completedCanonicalState.journey,
+        processTimeline: _currentCanonicalProcessTimeline,
+        displayMarkdown: displayMarkdown,
+        displayPlainText: displayPlainText,
+        elapsedMs: elapsedMs,
+        displayState: completedCanonicalState.displayState,
+        understandingSnapshot: completedCanonicalState.understandingSnapshot,
+        retrievalProcessing: completedCanonicalState.retrievalProcessing,
+        answerProcessing: completedCanonicalState.answerProcessing,
+      );
       if (existingIndex >= 0) {
-        final clearedRow = _clearStreamingAnswerState(
-          _transcriptRows[existingIndex],
-        );
-        final completedDisplayState =
-            resolveAssistantDisplayStateFromRunResponse(runResponse);
-        final responseDisplayState = AssistantDisplayState(
-          process: buildAssistantDisplayState(
-            explicitState: AssistantDisplayState(
-              answer: completedDisplayState.answer,
-            ),
-            processTimeline: _currentCanonicalProcessTimeline,
-            understandingSnapshot: _currentUnderstandingSnapshot,
-            retrievalProcessing: _currentRetrievalProcessing,
-            answerProcessing: _answerProcessingFromResponse(runResponse),
-            finalAnswerReady: true,
-          ).process,
-          answer: _resolvedCompletedAnswerState(
-            completedDisplayState: completedDisplayState,
-            displayMarkdown: displayMarkdown,
-            existingRow: clearedRow,
-          ),
-        );
         _transcriptRows[existingIndex] = _mapToRow({
-          ..._rowToMap(clearedRow),
+          ..._rowToMap(clearedRow!),
           'content': displayMarkdown,
           'timestamp': replyTime,
           'runId': runResponse.runId ?? '',
@@ -688,7 +684,13 @@ class AssistantConversationController extends ChangeNotifier {
             _responseRunArtifactsMap(runResponse),
             displayMarkdown: displayMarkdown,
             displayPlainText: displayPlainText,
-            displayState: responseDisplayState,
+            displayState: completedCanonicalState.displayState,
+            journey: completedCanonicalState.journey,
+            processTimeline: completedCanonicalState.canonicalProcessTimeline,
+            understandingSnapshot:
+                completedCanonicalState.understandingSnapshot,
+            retrievalProcessing: completedCanonicalState.retrievalProcessing,
+            answerProcessing: completedCanonicalState.answerProcessing,
           ),
           'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
           'dialogueState': dialogueRuntime,
@@ -698,29 +700,12 @@ class AssistantConversationController extends ChangeNotifier {
           ...persistedTurnFields,
           assistantDisplayMarkdownField: displayMarkdown,
           assistantDisplayPlainTextField: displayPlainText,
-          assistantDisplayStateField: responseDisplayState.toJson(),
+          assistantDisplayStateField: completedCanonicalState.displayState
+              .toJson(),
           'streamFinalAnswer': '',
           'streaming': false,
         });
       } else {
-        final completedDisplayState =
-            resolveAssistantDisplayStateFromRunResponse(runResponse);
-        final responseDisplayState = AssistantDisplayState(
-          process: buildAssistantDisplayState(
-            explicitState: AssistantDisplayState(
-              answer: completedDisplayState.answer,
-            ),
-            processTimeline: _currentCanonicalProcessTimeline,
-            understandingSnapshot: _currentUnderstandingSnapshot,
-            retrievalProcessing: _currentRetrievalProcessing,
-            answerProcessing: _answerProcessingFromResponse(runResponse),
-            finalAnswerReady: true,
-          ).process,
-          answer: _resolvedCompletedAnswerState(
-            completedDisplayState: completedDisplayState,
-            displayMarkdown: displayMarkdown,
-          ),
-        );
         _transcriptRows.add(
           _mapToRow({
             'id': assistantMessageId,
@@ -758,7 +743,13 @@ class AssistantConversationController extends ChangeNotifier {
               _responseRunArtifactsMap(runResponse),
               displayMarkdown: displayMarkdown,
               displayPlainText: displayPlainText,
-              displayState: responseDisplayState,
+              displayState: completedCanonicalState.displayState,
+              journey: completedCanonicalState.journey,
+              processTimeline: completedCanonicalState.canonicalProcessTimeline,
+              understandingSnapshot:
+                  completedCanonicalState.understandingSnapshot,
+              retrievalProcessing: completedCanonicalState.retrievalProcessing,
+              answerProcessing: completedCanonicalState.answerProcessing,
             ),
             'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
             'dialogueState': dialogueRuntime,
@@ -768,14 +759,15 @@ class AssistantConversationController extends ChangeNotifier {
             ...persistedTurnFields,
             assistantDisplayMarkdownField: displayMarkdown,
             assistantDisplayPlainTextField: displayPlainText,
-            assistantDisplayStateField: responseDisplayState.toJson(),
+            assistantDisplayStateField: completedCanonicalState.displayState
+                .toJson(),
           }),
         );
       }
       _assistantResponding = false;
       _assistantPhaseLabel = '';
       _activeAssistantStreamingMessageId = null;
-      _answerGateOpen = true;
+      _answerGateOpen = finalAnswerReady;
       if (activeSessionId.isNotEmpty) {
         _assistantRuntimeSessionId = activeSessionId;
       }
@@ -856,9 +848,13 @@ class AssistantConversationController extends ChangeNotifier {
         timestamp: ts,
       ),
     );
-    final contextScope = _withActivePersonaContextScope(
-      buildContextScope(),
-      activeContext: activeContext,
+    final geoRuntimeContext = await _resolveAssistantGeoRuntimeContext();
+    final contextScope = _withGeoRuntimeContextScope(
+      _withActivePersonaContextScope(
+        buildContextScope(),
+        activeContext: activeContext,
+      ),
+      geoRuntimeContext,
     );
     final request = AssistantRunRequest(
       messages: <AssistantRunMessage>[
@@ -871,6 +867,7 @@ class AssistantConversationController extends ChangeNotifier {
       personaContextVersion: activeContext.personaContextVersion,
       maxIterations: rewrite.mode == RewriteMode.deepThink ? 6 : 1,
       capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
+      gpsLocation: geoRuntimeContext.gpsLocation,
       contextScopeHint: contextScope,
       rewriteInstruction: rewrite,
     );
@@ -939,6 +936,7 @@ class AssistantConversationController extends ChangeNotifier {
       }
       if (response != null && !_disposed) {
         final finalResponse = response;
+        final finalAnswerReady = _responseMarksFinalAnswerReady(finalResponse);
         final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
               (finalResponse.structuredResponse['uiUsageStats'] as Map?)
@@ -948,11 +946,6 @@ class AssistantConversationController extends ChangeNotifier {
         );
         final resolvedJourney = resolveAssistantJourneyFromResponse(
           finalResponse,
-        );
-        final resolvedCanonicalProcessTimeline =
-            resolveAssistantProcessTimelineFromRunResponse(finalResponse);
-        final resolvedProcessTimeline = buildVisibleProcessTimeline(
-          resolvedCanonicalProcessTimeline,
         );
         final effectiveJourney = _persistableAssistantJourney(
           response: finalResponse,
@@ -971,61 +964,54 @@ class AssistantConversationController extends ChangeNotifier {
               allowJsonExtraction: false,
             );
         _resetStreamingAnswerDecoder();
-        _currentJourney = effectiveJourney;
-        _currentCanonicalProcessTimeline =
-            resolvedCanonicalProcessTimeline.isNotEmpty
-            ? resolvedCanonicalProcessTimeline
-            : _currentCanonicalProcessTimeline;
-        _currentProcessTimeline = resolvedProcessTimeline.isNotEmpty
-            ? resolvedProcessTimeline
-            : _currentProcessTimeline;
-        final understandingSnapshot =
-            (finalResponse
-                        .structuredResponse[assistantUnderstandingSnapshotField]
-                    as Map?)
-                ?.cast<String, dynamic>();
-        _currentUnderstandingSnapshot =
-            understandingSnapshot != null && understandingSnapshot.isNotEmpty
-            ? RunArtifactsUnderstandingSnapshot.fromJson(understandingSnapshot)
-            : _understandingSnapshotFromTimeline(
-                _currentCanonicalProcessTimeline,
-              );
-        final persistedTurnFields =
-            _buildAssistantPersistedTurnFieldsForResponse(
-              response: finalResponse,
-              journey: effectiveJourney,
-              processTimeline: _currentCanonicalProcessTimeline,
-              displayMarkdown: displayMarkdown,
-              displayPlainText: displayPlainText,
-              elapsedMs: _currentJourneyElapsedMs,
-            );
         _ensureTranscriptRowsGrowable();
         final idx = _findStreamingAssistantMessageIndex(
           streamingAssistantMessageId,
         );
-        if (idx >= 0) {
-          final clearedRow = _clearStreamingAnswerState(_transcriptRows[idx]);
-          final completedDisplayState =
-              resolveAssistantDisplayStateFromRunResponse(finalResponse);
-          final responseDisplayState = AssistantDisplayState(
-            process: buildAssistantDisplayState(
-              explicitState: AssistantDisplayState(
-                answer: completedDisplayState.answer,
-              ),
+        final clearedRow = idx >= 0
+            ? _clearStreamingAnswerState(_transcriptRows[idx])
+            : null;
+        final completedDisplayState =
+            resolveAssistantDisplayStateFromRunResponse(finalResponse);
+        final completedCanonicalState = _resolveCompletedCanonicalState(
+          response: finalResponse,
+          journey: effectiveJourney,
+          completedDisplayState: completedDisplayState,
+          incomingCanonicalProcessTimeline:
+              resolveAssistantProcessTimelineFromRunResponse(finalResponse),
+          incomingAnswerProcessing: _answerProcessingFromResponse(
+            finalResponse,
+          ),
+          existingRow: clearedRow,
+          finalAnswerReady: finalAnswerReady,
+          displayMarkdown: displayMarkdown,
+        );
+        _currentJourney = completedCanonicalState.journey;
+        _currentCanonicalProcessTimeline =
+            completedCanonicalState.canonicalProcessTimeline;
+        _currentProcessTimeline =
+            completedCanonicalState.visibleProcessTimeline;
+        _currentRetrievalProcessing =
+            completedCanonicalState.retrievalProcessing;
+        _currentUnderstandingSnapshot =
+            completedCanonicalState.understandingSnapshot;
+        final persistedTurnFields =
+            _buildAssistantPersistedTurnFieldsForResponse(
+              response: finalResponse,
+              journey: completedCanonicalState.journey,
               processTimeline: _currentCanonicalProcessTimeline,
-              understandingSnapshot: _currentUnderstandingSnapshot,
-              retrievalProcessing: _currentRetrievalProcessing,
-              answerProcessing: _answerProcessingFromResponse(finalResponse),
-              finalAnswerReady: true,
-            ).process,
-            answer: _resolvedCompletedAnswerState(
-              completedDisplayState: completedDisplayState,
               displayMarkdown: displayMarkdown,
-              existingRow: clearedRow,
-            ),
-          );
+              displayPlainText: displayPlainText,
+              elapsedMs: _currentJourneyElapsedMs,
+              displayState: completedCanonicalState.displayState,
+              understandingSnapshot:
+                  completedCanonicalState.understandingSnapshot,
+              retrievalProcessing: completedCanonicalState.retrievalProcessing,
+              answerProcessing: completedCanonicalState.answerProcessing,
+            );
+        if (idx >= 0) {
           _transcriptRows[idx] = _mapToRow({
-            ..._rowToMap(clearedRow),
+            ..._rowToMap(clearedRow!),
             'content': displayMarkdown,
             'streamFinalAnswer': '',
             'streaming': false,
@@ -1052,15 +1038,23 @@ class AssistantConversationController extends ChangeNotifier {
               _responseRunArtifactsMap(finalResponse),
               displayMarkdown: displayMarkdown,
               displayPlainText: displayPlainText,
-              displayState: responseDisplayState,
+              displayState: completedCanonicalState.displayState,
+              journey: completedCanonicalState.journey,
+              processTimeline: completedCanonicalState.canonicalProcessTimeline,
+              understandingSnapshot:
+                  completedCanonicalState.understandingSnapshot,
+              retrievalProcessing: completedCanonicalState.retrievalProcessing,
+              answerProcessing: completedCanonicalState.answerProcessing,
             ),
             'uiUsageStats': uiUsageStats,
             ...persistedTurnFields,
             assistantDisplayMarkdownField: displayMarkdown,
             assistantDisplayPlainTextField: displayPlainText,
-            assistantDisplayStateField: responseDisplayState.toJson(),
+            assistantDisplayStateField: completedCanonicalState.displayState
+                .toJson(),
           });
         }
+        _answerGateOpen = finalAnswerReady;
       }
     } catch (_) {
       // Preserve streamed fallback content when rewrite fails midway.
@@ -1364,6 +1358,140 @@ class AssistantConversationController extends ChangeNotifier {
     return _withActivePersonaContextScope(scope);
   }
 
+  Map<String, dynamic> _withGeoRuntimeContextScope(
+    Map<String, dynamic> scope,
+    _AssistantGeoRuntimeContext geoRuntimeContext,
+  ) {
+    if (geoRuntimeContext.availableGeoContext.isEmpty) {
+      return scope;
+    }
+    return <String, dynamic>{
+      ...scope,
+      'availableGeoContext': geoRuntimeContext.availableGeoContext,
+      if (geoRuntimeContext.availableGeoContext['cityLabel']
+              ?.toString()
+              .trim()
+              .isNotEmpty ==
+          true)
+        'city': geoRuntimeContext.availableGeoContext['cityLabel'],
+      if (geoRuntimeContext.availableGeoContext['countryCode']
+              ?.toString()
+              .trim()
+              .isNotEmpty ==
+          true)
+        'countryCode': geoRuntimeContext.availableGeoContext['countryCode'],
+      if (geoRuntimeContext.availableGeoContext['countryLabel']
+              ?.toString()
+              .trim()
+              .isNotEmpty ==
+          true)
+        'countryLabel': geoRuntimeContext.availableGeoContext['countryLabel'],
+      if (geoRuntimeContext.availableGeoContext['timezone']
+              ?.toString()
+              .trim()
+              .isNotEmpty ==
+          true)
+        'timezone': geoRuntimeContext.availableGeoContext['timezone'],
+    };
+  }
+
+  Future<_AssistantGeoRuntimeContext>
+  _resolveAssistantGeoRuntimeContext() async {
+    if (_cachedGeoRuntimeContext != null) {
+      return _cachedGeoRuntimeContext!;
+    }
+    try {
+      final result = await _localContextTool.execute(const <String, dynamic>{});
+      final data = result.data ?? const <String, dynamic>{};
+      final geoCatalog = await GeoResolutionCatalog.load();
+      final resolved = _AssistantGeoRuntimeContext(
+        gpsLocation: _buildGpsLocationFromLocalContext(data),
+        availableGeoContext: _buildAvailableGeoContextFromLocalContext(
+          data,
+          geoCatalog: geoCatalog,
+        ),
+      );
+      _cachedGeoRuntimeContext = resolved;
+      return resolved;
+    } catch (_) {
+      const empty = _AssistantGeoRuntimeContext();
+      _cachedGeoRuntimeContext = empty;
+      return empty;
+    }
+  }
+
+  Map<String, dynamic> _buildGpsLocationFromLocalContext(
+    Map<String, dynamic> data,
+  ) {
+    final location =
+        (data['location'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final city = (data['city'] as String?)?.trim().isNotEmpty == true
+        ? (data['city'] as String).trim()
+        : (location['city'] as String?)?.trim() ?? '';
+    final latitude = _numValue(location['latitude']);
+    final longitude = _numValue(location['longitude']);
+    final accuracy = _numValue(location['accuracyM']);
+    return <String, dynamic>{
+      if (city.isNotEmpty) 'city': city,
+      if (latitude != null) 'lat': latitude,
+      if (longitude != null) 'lng': longitude,
+      if (accuracy != null)
+        'locationPrecision': accuracy <= 500 ? 'coarse' : 'approximate',
+      'locationTimestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> _buildAvailableGeoContextFromLocalContext(
+    Map<String, dynamic> data, {
+    required GeoResolutionCatalog geoCatalog,
+  }) {
+    final location =
+        (data['location'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final device =
+        (data['device'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final city = (data['city'] as String?)?.trim().isNotEmpty == true
+        ? (data['city'] as String).trim()
+        : (location['city'] as String?)?.trim() ?? '';
+    final timezone = (device['timezone'] as String?)?.trim() ?? '';
+    final locale = (device['locale'] as String?)?.trim() ?? '';
+    final countryCode = geoCatalog.resolveCountryCode(
+      locale: locale,
+      timezone: timezone,
+    );
+    final latitude = _numValue(location['latitude']);
+    final longitude = _numValue(location['longitude']);
+    if (city.isEmpty &&
+        countryCode.isEmpty &&
+        timezone.isEmpty &&
+        latitude == null &&
+        longitude == null) {
+      return const <String, dynamic>{};
+    }
+    return <String, dynamic>{
+      if (countryCode.isNotEmpty) 'countryCode': countryCode,
+      if (countryCode.isNotEmpty)
+        'countryLabel': geoCatalog.countryLabelFor(countryCode),
+      if (city.isNotEmpty) 'cityLabel': city,
+      if (latitude != null) 'lat': latitude,
+      if (longitude != null) 'lng': longitude,
+      if (timezone.isNotEmpty) 'timezone': timezone,
+      'source': city.isNotEmpty ? 'device_gps' : 'device_locale',
+      'confidence': city.isNotEmpty ? 0.82 : 0.68,
+      'capturedAt': DateTime.now().toIso8601String(),
+      'privacyTier': city.isNotEmpty ? 'city' : 'region_only',
+    };
+  }
+
+  double? _numValue(Object? raw) {
+    if (raw is num) {
+      return raw.toDouble();
+    }
+    return double.tryParse(raw?.toString().trim() ?? '');
+  }
+
   AssistantJourneyViewModel buildJourneyViewModel({
     required AssistantJourney journey,
     List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
@@ -1372,8 +1500,12 @@ class AssistantConversationController extends ChangeNotifier {
         AssistantUiUsageStatsViewData.empty,
     int? elapsedMs,
     AssistantDisplayState displayState = const AssistantDisplayState(),
+    RunArtifactsUnderstandingSnapshot understandingSnapshot =
+        const RunArtifactsUnderstandingSnapshot(),
     RetrievalProcessingSnapshot retrievalProcessing =
         const RetrievalProcessingSnapshot(),
+    RunArtifactsAnswerProcessing answerProcessing =
+        const RunArtifactsAnswerProcessing(),
   }) {
     return buildAssistantJourneyViewModel(
       journey: journey,
@@ -1381,7 +1513,9 @@ class AssistantConversationController extends ChangeNotifier {
       isRunning: isRunning,
       allowAnswerStage: !isRunning || _answerGateOpen,
       displayState: displayState,
+      understandingSnapshot: understandingSnapshot,
       retrievalProcessing: retrievalProcessing,
+      answerProcessing: answerProcessing,
       usageStats: usageStats,
       elapsedMs: elapsedMs ?? _currentJourneyElapsedMs,
     );
@@ -1622,7 +1756,28 @@ class AssistantConversationController extends ChangeNotifier {
   bool _hasStructuredUnderstandingSummary(
     RunArtifactsUnderstandingSnapshot snapshot,
   ) {
-    return snapshot.userFacingSummary.trim().isNotEmpty;
+    return snapshot.userFacingSummary.trim().isNotEmpty ||
+        snapshot.queryDesignSummary.trim().isNotEmpty ||
+        snapshot.queryGroups.any(
+          (group) =>
+              group.dimension.trim().isNotEmpty ||
+              group.queries.any((query) => query.trim().isNotEmpty) ||
+              group.why.trim().isNotEmpty,
+        ) ||
+        snapshot.concernPoints.any((item) => item.trim().isNotEmpty) ||
+        snapshot.resolutionItems.any(
+          (item) =>
+              item.visibleInUnderstanding &&
+              (item.detail.trim().isNotEmpty ||
+                  item.resolvedValue.trim().isNotEmpty),
+        );
+  }
+
+  bool _hasStructuredAnswerProcessing(RunArtifactsAnswerProcessing snapshot) {
+    return snapshot.readinessSummary.trim().isNotEmpty ||
+        snapshot.keyFacts.isNotEmpty ||
+        snapshot.missingDimensions.isNotEmpty ||
+        snapshot.retrieveMoreReason.trim().isNotEmpty;
   }
 
   RunArtifactsAnswerProcessing _answerProcessingFromResponse(
@@ -1638,6 +1793,466 @@ class AssistantConversationController extends ChangeNotifier {
         const RunArtifactsAnswerProcessing();
   }
 
+  RunArtifactsAnswerProcessing _answerProcessingFromTimeline(
+    List<ProcessTimelineFrame> processTimeline,
+  ) {
+    for (final frame in processTimeline) {
+      if (frame.stepId != ProcessStepId.answerOrganization) {
+        continue;
+      }
+      if (_hasStructuredAnswerProcessing(frame.answerProcessing)) {
+        return frame.answerProcessing;
+      }
+    }
+    return const RunArtifactsAnswerProcessing();
+  }
+
+  _CompletedAssistantCanonicalState _resolveCompletedCanonicalState({
+    required AssistantRunResponse response,
+    required AssistantJourney journey,
+    required AssistantDisplayState completedDisplayState,
+    required List<ProcessTimelineFrame> incomingCanonicalProcessTimeline,
+    required RunArtifactsAnswerProcessing incomingAnswerProcessing,
+    required AssistantTranscriptTimelineRow? existingRow,
+    required bool finalAnswerReady,
+    required String displayMarkdown,
+  }) {
+    final existingMessage = existingRow == null ? null : _rowToMap(existingRow);
+    final carriedProcessTimeline = existingMessage == null
+        ? const <ProcessTimelineFrame>[]
+        : resolveAssistantProcessTimelineFromMessage(existingMessage);
+    final carriedUnderstandingSnapshot = existingMessage == null
+        ? const RunArtifactsUnderstandingSnapshot()
+        : resolveAssistantUnderstandingSnapshotFromMessage(existingMessage);
+    final carriedRetrievalProcessing = existingMessage == null
+        ? const RetrievalProcessingSnapshot()
+        : resolveAssistantRetrievalProcessingFromMessage(existingMessage);
+    final carriedAnswerProcessing = existingMessage == null
+        ? const RunArtifactsAnswerProcessing()
+        : resolveAssistantAnswerProcessingFromMessage(existingMessage);
+    final responseUnderstandingSnapshot =
+        (response.structuredResponse[assistantUnderstandingSnapshotField]
+                as Map?)
+            ?.cast<String, dynamic>();
+    final mergedUnderstandingSnapshot =
+        _mergeUnderstandingSnapshots(<RunArtifactsUnderstandingSnapshot>[
+          carriedUnderstandingSnapshot,
+          _currentUnderstandingSnapshot,
+          _understandingSnapshotFromTimeline(_currentCanonicalProcessTimeline),
+          if (responseUnderstandingSnapshot != null &&
+              responseUnderstandingSnapshot.isNotEmpty)
+            parseRunArtifactsUnderstandingSnapshotFromMap(
+              responseUnderstandingSnapshot,
+            ),
+          _understandingSnapshotFromTimeline(incomingCanonicalProcessTimeline),
+        ]);
+    final mergedRetrievalProcessing =
+        _mergeRetrievalProcessingSnapshots(<RetrievalProcessingSnapshot>[
+          carriedRetrievalProcessing,
+          _currentRetrievalProcessing,
+          _retrievalProcessingFromTimeline(_currentCanonicalProcessTimeline),
+          resolveAssistantRetrievalProcessingFromResponse(response),
+          _retrievalProcessingFromTimeline(incomingCanonicalProcessTimeline),
+        ]);
+    final mergedAnswerProcessing =
+        _mergeAnswerProcessingSnapshots(<RunArtifactsAnswerProcessing>[
+          carriedAnswerProcessing,
+          _answerProcessingFromTimeline(_currentCanonicalProcessTimeline),
+          incomingAnswerProcessing,
+          _answerProcessingFromTimeline(incomingCanonicalProcessTimeline),
+        ]);
+    final mergedCanonicalProcessTimeline =
+        _mergeCompletedCanonicalProcessTimeline(
+          carriedProcessTimeline: carriedProcessTimeline,
+          currentProcessTimeline: _currentCanonicalProcessTimeline,
+          incomingProcessTimeline: incomingCanonicalProcessTimeline,
+          understandingSnapshot: mergedUnderstandingSnapshot,
+          retrievalProcessing: mergedRetrievalProcessing,
+          answerProcessing: mergedAnswerProcessing,
+        );
+    final carriedDisplayState = existingMessage == null
+        ? const AssistantDisplayState()
+        : resolvePersistedAssistantDisplayState(existingMessage);
+    final mergedDisplayState = AssistantDisplayState(
+      process: buildAssistantDisplayState(
+        explicitState: AssistantDisplayState(
+          process: carriedDisplayState.process,
+        ),
+        processTimeline: mergedCanonicalProcessTimeline,
+        understandingSnapshot: mergedUnderstandingSnapshot,
+        retrievalProcessing: mergedRetrievalProcessing,
+        answerProcessing: mergedAnswerProcessing,
+        finalAnswerReady: finalAnswerReady,
+      ).process,
+      answer: _resolvedCompletedAnswerState(
+        completedDisplayState: completedDisplayState,
+        displayMarkdown: displayMarkdown,
+        existingRow: existingRow,
+        fallbackSummary: mergedAnswerProcessing.readinessSummary,
+      ),
+    );
+    return _CompletedAssistantCanonicalState(
+      journey: journey,
+      canonicalProcessTimeline: mergedCanonicalProcessTimeline,
+      visibleProcessTimeline: buildVisibleProcessTimeline(
+        mergedCanonicalProcessTimeline,
+      ),
+      understandingSnapshot: mergedUnderstandingSnapshot,
+      retrievalProcessing: mergedRetrievalProcessing,
+      answerProcessing: mergedAnswerProcessing,
+      displayState: mergedDisplayState,
+    );
+  }
+
+  List<ProcessTimelineFrame> _mergeCompletedCanonicalProcessTimeline({
+    required List<ProcessTimelineFrame> carriedProcessTimeline,
+    required List<ProcessTimelineFrame> currentProcessTimeline,
+    required List<ProcessTimelineFrame> incomingProcessTimeline,
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required RetrievalProcessingSnapshot retrievalProcessing,
+    required RunArtifactsAnswerProcessing answerProcessing,
+  }) {
+    final mergedByStep = <ProcessStepId, ProcessTimelineFrame>{};
+
+    void absorb(List<ProcessTimelineFrame> timeline) {
+      for (final frame in normalizeProcessTimeline(timeline)) {
+        final existing = mergedByStep[frame.stepId];
+        mergedByStep[frame.stepId] = existing == null
+            ? frame
+            : _mergeCompletedProcessFrame(existing: existing, incoming: frame);
+      }
+    }
+
+    absorb(carriedProcessTimeline);
+    absorb(currentProcessTimeline);
+    absorb(incomingProcessTimeline);
+    return buildProcessTimelineFromSnapshots(
+      processTimeline: mergedByStep.values.toList(growable: false),
+      understandingSnapshot: understandingSnapshot,
+      retrievalProcessing: retrievalProcessing,
+      answerProcessing: answerProcessing,
+    );
+  }
+
+  ProcessTimelineFrame _mergeCompletedProcessFrame({
+    required ProcessTimelineFrame existing,
+    required ProcessTimelineFrame incoming,
+  }) {
+    return existing.copyWith(
+      status: _mergeCompletedProcessStatus(existing.status, incoming.status),
+      headline: _preferRicherText(existing.headline, incoming.headline),
+      detail: _preferRicherText(existing.detail, incoming.detail),
+      references: _mergeRetrievalReferences(
+        existing.references,
+        incoming.references,
+      ),
+      understandingSnapshot: _mergeUnderstandingSnapshots(
+        <RunArtifactsUnderstandingSnapshot>[
+          existing.understandingSnapshot,
+          incoming.understandingSnapshot,
+        ],
+      ),
+      retrievalProcessing: _mergeRetrievalProcessingSnapshots(
+        <RetrievalProcessingSnapshot>[
+          existing.retrievalProcessing,
+          incoming.retrievalProcessing,
+        ],
+      ),
+      answerProcessing: _mergeAnswerProcessingSnapshots(
+        <RunArtifactsAnswerProcessing>[
+          existing.answerProcessing,
+          incoming.answerProcessing,
+        ],
+      ),
+    );
+  }
+
+  JourneyStageStatus _mergeCompletedProcessStatus(
+    JourneyStageStatus existing,
+    JourneyStageStatus incoming,
+  ) {
+    if (incoming == JourneyStageStatus.unknown ||
+        incoming == JourneyStageStatus.pending) {
+      return existing;
+    }
+    if (existing == JourneyStageStatus.completed ||
+        existing == JourneyStageStatus.blocked) {
+      return existing;
+    }
+    if (incoming == JourneyStageStatus.completed ||
+        incoming == JourneyStageStatus.blocked) {
+      return incoming;
+    }
+    if (existing == JourneyStageStatus.pending) {
+      return incoming;
+    }
+    return existing == JourneyStageStatus.active ? existing : incoming;
+  }
+
+  RunArtifactsUnderstandingSnapshot _mergeUnderstandingSnapshots(
+    Iterable<RunArtifactsUnderstandingSnapshot> candidates,
+  ) {
+    var merged = const RunArtifactsUnderstandingSnapshot();
+    for (final candidate in candidates) {
+      if (!_hasStructuredUnderstandingSummary(candidate)) {
+        continue;
+      }
+      if (!_hasStructuredUnderstandingSummary(merged)) {
+        merged = candidate;
+        continue;
+      }
+      merged = RunArtifactsUnderstandingSnapshot(
+        intentSummary: _preferRicherText(
+          merged.intentSummary,
+          candidate.intentSummary,
+        ),
+        userFacingSummary: _preferRicherText(
+          merged.userFacingSummary,
+          candidate.userFacingSummary,
+        ),
+        concernPoints: _mergeStringList(
+          merged.concernPoints,
+          candidate.concernPoints,
+        ),
+        emotionSignal: _preferRicherText(
+          merged.emotionSignal,
+          candidate.emotionSignal,
+        ),
+        queryDesignSummary: _preferRicherText(
+          merged.queryDesignSummary,
+          candidate.queryDesignSummary,
+        ),
+        queryGroups: _mergeUnderstandingQueryGroups(
+          merged.queryGroups,
+          candidate.queryGroups,
+        ),
+        resolutionItems: _mergeUnderstandingResolutionItems(
+          merged.resolutionItems,
+          candidate.resolutionItems,
+        ),
+        assumptions: _mergeStringList(
+          merged.assumptions,
+          candidate.assumptions,
+        ),
+        mismatchSignal: _preferRicherText(
+          merged.mismatchSignal,
+          candidate.mismatchSignal,
+          preferIncoming: true,
+        ),
+        carryForwardFacts: _mergeStringList(
+          merged.carryForwardFacts,
+          candidate.carryForwardFacts,
+        ),
+        discardedAssumptions: _mergeStringList(
+          merged.discardedAssumptions,
+          candidate.discardedAssumptions,
+        ),
+      );
+    }
+    return merged;
+  }
+
+  RetrievalProcessingSnapshot _mergeRetrievalProcessingSnapshots(
+    Iterable<RetrievalProcessingSnapshot> candidates,
+  ) {
+    var merged = const RetrievalProcessingSnapshot();
+    for (final candidate in candidates) {
+      if (!_hasStructuredRetrievalProcessing(candidate)) {
+        continue;
+      }
+      if (!_hasStructuredRetrievalProcessing(merged)) {
+        merged = candidate;
+        continue;
+      }
+      merged = RetrievalProcessingSnapshot(
+        processedDocumentCount: math.max(
+          merged.processedDocumentCount,
+          candidate.processedDocumentCount,
+        ),
+        acceptedDocumentCount: math.max(
+          merged.acceptedDocumentCount,
+          candidate.acceptedDocumentCount,
+        ),
+        processingSummary: _preferRicherText(
+          merged.processingSummary,
+          candidate.processingSummary,
+          preferIncoming: true,
+        ),
+        selectedKeyPoints: _mergeStringList(
+          merged.selectedKeyPoints,
+          candidate.selectedKeyPoints,
+        ),
+        expansionReason: _preferRicherText(
+          merged.expansionReason,
+          candidate.expansionReason,
+          preferIncoming: true,
+        ),
+        acceptedReferences: _mergeRetrievalReferences(
+          merged.acceptedReferences,
+          candidate.acceptedReferences,
+        ),
+      );
+    }
+    return merged;
+  }
+
+  RunArtifactsAnswerProcessing _mergeAnswerProcessingSnapshots(
+    Iterable<RunArtifactsAnswerProcessing> candidates,
+  ) {
+    var merged = const RunArtifactsAnswerProcessing();
+    for (final candidate in candidates) {
+      if (!_hasStructuredAnswerProcessing(candidate)) {
+        continue;
+      }
+      if (!_hasStructuredAnswerProcessing(merged)) {
+        merged = candidate;
+        continue;
+      }
+      merged = RunArtifactsAnswerProcessing(
+        readinessSummary: _preferRicherText(
+          merged.readinessSummary,
+          candidate.readinessSummary,
+          preferIncoming: true,
+        ),
+        keyFacts: _mergeStringList(merged.keyFacts, candidate.keyFacts),
+        missingDimensions: _mergeStringList(
+          merged.missingDimensions,
+          candidate.missingDimensions,
+        ),
+        retrieveMoreReason: _preferRicherText(
+          merged.retrieveMoreReason,
+          candidate.retrieveMoreReason,
+          preferIncoming: true,
+        ),
+      );
+    }
+    return merged;
+  }
+
+  List<RunArtifactsUnderstandingQueryGroup> _mergeUnderstandingQueryGroups(
+    List<RunArtifactsUnderstandingQueryGroup> existing,
+    List<RunArtifactsUnderstandingQueryGroup> incoming,
+  ) {
+    final merged = <String, RunArtifactsUnderstandingQueryGroup>{};
+    for (final group in <RunArtifactsUnderstandingQueryGroup>[
+      ...existing,
+      ...incoming,
+    ]) {
+      final key = group.dimension.trim().isNotEmpty
+          ? group.dimension.trim()
+          : group.queries.map((item) => item.trim()).join('|');
+      if (key.isEmpty) {
+        continue;
+      }
+      final current = merged[key];
+      if (current == null) {
+        merged[key] = group;
+        continue;
+      }
+      merged[key] = RunArtifactsUnderstandingQueryGroup(
+        dimension: _preferRicherText(current.dimension, group.dimension),
+        queries: _mergeStringList(current.queries, group.queries),
+        why: _preferRicherText(current.why, group.why),
+      );
+    }
+    return merged.values.toList(growable: false);
+  }
+
+  List<RunArtifactsUnderstandingResolutionItem>
+  _mergeUnderstandingResolutionItems(
+    List<RunArtifactsUnderstandingResolutionItem> existing,
+    List<RunArtifactsUnderstandingResolutionItem> incoming,
+  ) {
+    final merged = <String, RunArtifactsUnderstandingResolutionItem>{};
+    for (final item in <RunArtifactsUnderstandingResolutionItem>[
+      ...existing,
+      ...incoming,
+    ]) {
+      final key = <String>[
+        item.kind.trim(),
+        item.title.trim(),
+        item.resolvedValue.trim(),
+        item.detail.trim(),
+      ].where((part) => part.isNotEmpty).join('|');
+      if (key.isEmpty) {
+        continue;
+      }
+      final current = merged[key];
+      if (current == null) {
+        merged[key] = item;
+        continue;
+      }
+      merged[key] = RunArtifactsUnderstandingResolutionItem(
+        kind: _preferRicherText(current.kind, item.kind),
+        title: _preferRicherText(current.title, item.title),
+        detail: _preferRicherText(
+          current.detail,
+          item.detail,
+          preferIncoming: true,
+        ),
+        source: _preferRicherText(current.source, item.source),
+        originalValue: _preferRicherText(
+          current.originalValue,
+          item.originalValue,
+        ),
+        resolvedValue: _preferRicherText(
+          current.resolvedValue,
+          item.resolvedValue,
+        ),
+        defaultApplied: current.defaultApplied || item.defaultApplied,
+        visibleInUnderstanding:
+            current.visibleInUnderstanding || item.visibleInUnderstanding,
+      );
+    }
+    return merged.values.toList(growable: false);
+  }
+
+  List<RetrievalProcessingReference> _mergeRetrievalReferences(
+    List<RetrievalProcessingReference> existing,
+    List<RetrievalProcessingReference> incoming,
+  ) {
+    final merged = <String, RetrievalProcessingReference>{};
+    for (final reference in <RetrievalProcessingReference>[
+      ...existing,
+      ...incoming,
+    ]) {
+      final key = reference.url.trim().isNotEmpty
+          ? reference.url.trim()
+          : '${reference.source.trim()}:${reference.title.trim()}';
+      if (key.trim().isEmpty || merged.containsKey(key)) {
+        continue;
+      }
+      merged[key] = reference;
+    }
+    return merged.values.toList(growable: false);
+  }
+
+  List<String> _mergeStringList(List<String> existing, List<String> incoming) {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final item in <String>[...existing, ...incoming]) {
+      final normalized = item.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      out.add(normalized);
+    }
+    return out;
+  }
+
+  String _preferRicherText(
+    String existing,
+    String incoming, {
+    bool preferIncoming = false,
+  }) {
+    final current = existing.trim();
+    final next = incoming.trim();
+    if (current.isEmpty) return next;
+    if (next.isEmpty) return current;
+    if (preferIncoming) return next;
+    return next.length >= current.length ? next : current;
+  }
+
   void _resetStreamingAnswerDecoder() {
     _streamingAnswerDecoder.reset();
   }
@@ -1648,7 +2263,9 @@ class AssistantConversationController extends ChangeNotifier {
 
   int _findStreamingAssistantMessageIndex(String messageId) {
     if (messageId.isEmpty) return -1;
-    final exactIndex = _transcriptRows.indexWhere((item) => item.id == messageId);
+    final exactIndex = _transcriptRows.indexWhere(
+      (item) => item.id == messageId,
+    );
     if (exactIndex >= 0) return exactIndex;
     for (var index = _transcriptRows.length - 1; index >= 0; index--) {
       final row = _transcriptRows[index];
@@ -1701,9 +2318,9 @@ class AssistantConversationController extends ChangeNotifier {
         streamedAnswerDelta: value,
       );
       final prevMarkdown = renderAnswerBlocksToMarkdown(
-        resolvePersistedAssistantDisplayState(_rowToMap(existingRow))
-            .answer
-            .blocks,
+        resolvePersistedAssistantDisplayState(
+          _rowToMap(existingRow),
+        ).answer.blocks,
       );
       final nextMarkdown = renderAnswerBlocksToMarkdown(
         mergedDisplayState.answer.blocks,
@@ -1711,10 +2328,9 @@ class AssistantConversationController extends ChangeNotifier {
       if (nextMarkdown == prevMarkdown) {
         return;
       }
-      _transcriptRows[existingIndex] = _patchRow(
-        existingRow,
-        {assistantDisplayStateField: mergedDisplayState.toJson()},
-      );
+      _transcriptRows[existingIndex] = _patchRow(existingRow, {
+        assistantDisplayStateField: mergedDisplayState.toJson(),
+      });
     } else {
       final initialDisplayState = _streamingAnswerDisplayState(value);
       _transcriptRows.add(
@@ -1736,8 +2352,7 @@ class AssistantConversationController extends ChangeNotifier {
         }),
       );
     }
-    if (value.trim().isNotEmpty ||
-        _shouldOpenAnswerGateForJourney(_currentJourney)) {
+    if (_shouldOpenAnswerGateForJourney(_currentJourney)) {
       _answerGateOpen = true;
     }
     _notify();
@@ -1778,19 +2393,38 @@ class AssistantConversationController extends ChangeNotifier {
             previous: currentMarkdown,
             incoming: streamedAnswerDelta,
           );
+    final carriedUnderstandingSnapshot =
+        resolveAssistantUnderstandingSnapshotFromMessage(message);
     final effectiveUnderstandingSnapshot =
-        understandingSnapshot ??
-        (_hasStructuredUnderstandingSummary(_currentUnderstandingSnapshot)
-            ? _currentUnderstandingSnapshot
-            : resolveAssistantUnderstandingSnapshotFromMessage(message));
+        _mergeUnderstandingSnapshots(<RunArtifactsUnderstandingSnapshot>[
+          carriedUnderstandingSnapshot,
+          if (_hasStructuredUnderstandingSummary(_currentUnderstandingSnapshot))
+            _currentUnderstandingSnapshot,
+          if (understandingSnapshot != null) understandingSnapshot,
+        ]);
+    final effectiveProcessTimeline = _currentCanonicalProcessTimeline.isNotEmpty
+        ? _currentCanonicalProcessTimeline
+        : resolveAssistantProcessTimelineFromMessage(message);
+    final effectiveRetrievalProcessing =
+        _mergeRetrievalProcessingSnapshots(<RetrievalProcessingSnapshot>[
+          resolveAssistantRetrievalProcessingFromMessage(message),
+          if (_hasStructuredRetrievalProcessing(_currentRetrievalProcessing))
+            _currentRetrievalProcessing,
+        ]);
     final answerState = _streamingAnswerDisplayState(mergedMarkdown).answer;
+    final carriedProcess = AssistantProcessDisplayState(
+      summary: current.process.summary,
+      blocks: current.process.blocks,
+      finalAnswerReady: current.process.finalAnswerReady,
+    );
     final mergedProcess = buildAssistantDisplayState(
-      explicitState: AssistantDisplayState(answer: current.answer),
-      processTimeline: resolveAssistantProcessTimelineFromMessage(message),
-      understandingSnapshot: effectiveUnderstandingSnapshot,
-      retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
-        message,
+      explicitState: AssistantDisplayState(
+        process: carriedProcess,
+        answer: current.answer,
       ),
+      processTimeline: effectiveProcessTimeline,
+      understandingSnapshot: effectiveUnderstandingSnapshot,
+      retrievalProcessing: effectiveRetrievalProcessing,
       answerProcessing: resolveAssistantAnswerProcessingFromMessage(message),
       finalAnswerReady: false,
     ).process;
@@ -1801,36 +2435,54 @@ class AssistantConversationController extends ChangeNotifier {
     required AssistantDisplayState completedDisplayState,
     required String displayMarkdown,
     AssistantTranscriptTimelineRow? existingRow,
+    String fallbackSummary = '',
   }) {
+    final completedSummary = completedDisplayState.answer.summary.trim();
     if (completedDisplayState.answer.blocks.isNotEmpty) {
-      return completedDisplayState.answer;
+      return AssistantAnswerDisplayState(
+        summary: completedSummary.isNotEmpty
+            ? completedSummary
+            : fallbackSummary.trim(),
+        blocks: completedDisplayState.answer.blocks,
+      );
     }
     final carriedAnswer = existingRow == null
         ? const AssistantAnswerDisplayState()
         : resolvePersistedAssistantDisplayState(_rowToMap(existingRow)).answer;
+    final carriedSummary = carriedAnswer.summary.trim();
+    final resolvedSummary = completedSummary.isNotEmpty
+        ? completedSummary
+        : (carriedSummary.isNotEmpty ? carriedSummary : fallbackSummary.trim());
     if (carriedAnswer.blocks.isNotEmpty) {
       return AssistantAnswerDisplayState(
-        summary: completedDisplayState.answer.summary,
+        summary: resolvedSummary,
         blocks: carriedAnswer.blocks,
       );
     }
     final fallback = _streamingAnswerDisplayState(displayMarkdown).answer;
     return AssistantAnswerDisplayState(
-      summary: completedDisplayState.answer.summary,
+      summary: resolvedSummary,
       blocks: fallback.blocks,
     );
   }
 
   AssistantTranscriptTimelineRow _clearStreamingAnswerState(
     AssistantTranscriptTimelineRow row,
-  ) =>
-      _patchRow(row, {'streamFinalAnswer': ''});
+  ) => _patchRow(row, {'streamFinalAnswer': ''});
 
   Map<String, dynamic> _withDisplayOverrides(
     Map<String, dynamic> runArtifacts, {
     required String displayMarkdown,
     required String displayPlainText,
     AssistantDisplayState displayState = const AssistantDisplayState(),
+    AssistantJourney journey = const AssistantJourney(),
+    List<ProcessTimelineFrame> processTimeline = const <ProcessTimelineFrame>[],
+    RunArtifactsUnderstandingSnapshot understandingSnapshot =
+        const RunArtifactsUnderstandingSnapshot(),
+    RetrievalProcessingSnapshot retrievalProcessing =
+        const RetrievalProcessingSnapshot(),
+    RunArtifactsAnswerProcessing answerProcessing =
+        const RunArtifactsAnswerProcessing(),
   }) {
     return <String, dynamic>{
       ...runArtifacts,
@@ -1844,6 +2496,17 @@ class AssistantConversationController extends ChangeNotifier {
             displayPlainText,
             allowJsonExtraction: false,
           ),
+      if (!journey.isEmpty) assistantJourneyField: journey.toJson(),
+      if (processTimeline.isNotEmpty)
+        assistantProcessTimelineField: processTimeline
+            .map((item) => item.toJson())
+            .toList(growable: false),
+      if (_hasStructuredUnderstandingSummary(understandingSnapshot))
+        assistantUnderstandingSnapshotField: understandingSnapshot.toJson(),
+      if (_hasStructuredRetrievalProcessing(retrievalProcessing))
+        assistantRetrievalProcessingField: retrievalProcessing.toJson(),
+      if (_hasStructuredAnswerProcessing(answerProcessing))
+        assistantAnswerProcessingField: answerProcessing.toJson(),
       if (hasAssistantDisplayState(displayState))
         assistantDisplayStateField: displayState.toJson(),
     };
@@ -2254,41 +2917,50 @@ class AssistantConversationController extends ChangeNotifier {
     required String displayMarkdown,
     required String displayPlainText,
     required int elapsedMs,
+    AssistantDisplayState? displayState,
+    RunArtifactsUnderstandingSnapshot? understandingSnapshot,
+    RetrievalProcessingSnapshot? retrievalProcessing,
+    RunArtifactsAnswerProcessing? answerProcessing,
   }) {
     final runArtifacts = response.runArtifacts;
-    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
+    final resolvedDisplayState =
+        displayState ?? resolveAssistantDisplayStateFromRunResponse(response);
+    final directUnderstandingSnapshot =
+        (response.structuredResponse[assistantUnderstandingSnapshotField]
+                as Map?)
+            ?.cast<String, dynamic>();
+    final resolvedUnderstandingSnapshot =
+        understandingSnapshot ??
+        (directUnderstandingSnapshot != null &&
+                directUnderstandingSnapshot.isNotEmpty
+            ? parseRunArtifactsUnderstandingSnapshotFromMap(
+                directUnderstandingSnapshot,
+              )
+            : (runArtifacts?.understandingSnapshot ??
+                  const RunArtifactsUnderstandingSnapshot()));
+    final resolvedRetrievalProcessing =
+        retrievalProcessing ??
+        resolveAssistantRetrievalProcessingFromResponse(response);
+    final resolvedAnswerProcessing =
+        answerProcessing ?? _answerProcessingFromResponse(response);
     return buildPersistedAssistantTurnFields(
       journey: journey,
       processTimeline: processTimeline,
       displayMarkdown: displayMarkdown,
       displayPlainText: displayPlainText,
-      displayState: displayState.toJson(),
+      displayState: resolvedDisplayState.toJson(),
       followupPrompt: resolveAssistantFollowupPromptFromResponse(response),
       actionHints: resolveAssistantActionHintsFromResponse(response),
       elapsedMs: elapsedMs,
-      understandingSnapshot:
-          (response.structuredResponse[assistantUnderstandingSnapshotField]
-                  as Map?)
-              ?.cast<String, dynamic>() ??
-          runArtifacts?.understandingSnapshot.toJson() ??
-          const <String, dynamic>{},
-      answerProcessing:
-          (response.structuredResponse[assistantAnswerProcessingField] as Map?)
-              ?.cast<String, dynamic>() ??
-          runArtifacts?.answerProcessing.toJson() ??
-          const <String, dynamic>{},
+      understandingSnapshot: resolvedUnderstandingSnapshot.toJson(),
+      answerProcessing: resolvedAnswerProcessing.toJson(),
       historicalThinkingSnapshot:
           (response.structuredResponse[assistantHistoricalThinkingSnapshotField]
                   as Map?)
               ?.cast<String, dynamic>() ??
           runArtifacts?.historicalThinkingSnapshot.toJson() ??
           const <String, dynamic>{},
-      retrievalProcessing:
-          (response.structuredResponse[assistantRetrievalProcessingField]
-                  as Map?)
-              ?.cast<String, dynamic>() ??
-          runArtifacts?.retrievalProcessing.toJson() ??
-          const <String, dynamic>{},
+      retrievalProcessing: resolvedRetrievalProcessing.toJson(),
       providerReasoningContinuation:
           (response.structuredResponse[assistantProviderReasoningContinuationField]
                   as String?)
@@ -2301,9 +2973,17 @@ class AssistantConversationController extends ChangeNotifier {
     required AssistantRunResponse response,
     required AssistantJourney journey,
   }) {
+    final gate = response.answerGateDecision;
     final readiness = journey.readiness;
-    if (readiness.finalAnswerReady ||
-        !_responseMarksFinalAnswerReady(response)) {
+    final resolvedNextAction = gate.nextAction.trim().isNotEmpty
+        ? parseAssistantNextAction(gate.nextAction)
+        : readiness.nextAction;
+    final resolvedEligibility = gate.answerEligibility.trim().isNotEmpty
+        ? parseAnswerEligibility(gate.answerEligibility)
+        : readiness.answerEligibility;
+    if (readiness.finalAnswerReady == gate.finalAnswerReady &&
+        readiness.nextAction == resolvedNextAction &&
+        readiness.answerEligibility == resolvedEligibility) {
       return journey;
     }
     return AssistantJourney(
@@ -2312,10 +2992,10 @@ class AssistantConversationController extends ChangeNotifier {
       summary: journey.summary,
       referenceSummary: journey.referenceSummary,
       readiness: AssistantJourneyReadiness(
-        nextAction: readiness.nextAction,
+        nextAction: resolvedNextAction,
         finalAnswerMode: readiness.finalAnswerMode,
-        answerEligibility: readiness.answerEligibility,
-        finalAnswerReady: true,
+        answerEligibility: resolvedEligibility,
+        finalAnswerReady: gate.finalAnswerReady,
         clarificationNeeded: readiness.clarificationNeeded,
         needExpansion: readiness.needExpansion,
       ),
@@ -2323,22 +3003,7 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   bool _responseMarksFinalAnswerReady(AssistantRunResponse response) {
-    if (response.degraded) return false;
-    final answerDecision =
-        response.runArtifacts?.answerDecision ?? const <String, dynamic>{};
-    final conversationDecision =
-        (response.structuredResponse['conversationStateDecision'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final nextActionCandidates = <String>[
-      (answerDecision['nextAction'] as String?)?.trim() ?? '',
-      (conversationDecision['nextAction'] as String?)?.trim() ?? '',
-    ];
-    if (nextActionCandidates.any((item) => item == 'answer')) {
-      return true;
-    }
-    final visibleText = _resolveAssistantDisplayText(response).trim();
-    return visibleText.isNotEmpty && visibleText != '助手未生成有效回答，请重试。';
+    return response.answerGateDecision.finalAnswerReady;
   }
 
   bool _isInternalChunk(String value) {
@@ -2463,4 +3128,34 @@ class AssistantConversationController extends ChangeNotifier {
         return '请进行深度思考并重新回答';
     }
   }
+}
+
+class _AssistantGeoRuntimeContext {
+  const _AssistantGeoRuntimeContext({
+    this.gpsLocation = const <String, dynamic>{},
+    this.availableGeoContext = const <String, dynamic>{},
+  });
+
+  final Map<String, dynamic> gpsLocation;
+  final Map<String, dynamic> availableGeoContext;
+}
+
+class _CompletedAssistantCanonicalState {
+  const _CompletedAssistantCanonicalState({
+    required this.journey,
+    required this.canonicalProcessTimeline,
+    required this.visibleProcessTimeline,
+    required this.understandingSnapshot,
+    required this.retrievalProcessing,
+    required this.answerProcessing,
+    required this.displayState,
+  });
+
+  final AssistantJourney journey;
+  final List<ProcessTimelineFrame> canonicalProcessTimeline;
+  final List<ProcessTimelineFrame> visibleProcessTimeline;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
+  final RetrievalProcessingSnapshot retrievalProcessing;
+  final RunArtifactsAnswerProcessing answerProcessing;
+  final AssistantDisplayState displayState;
 }

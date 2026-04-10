@@ -14,6 +14,7 @@
 - `processingSummary` 是阶段 2 唯一主展示字段，必须用面向用户的自然中文说清“这批结果里真正可用的是什么”
 - 运行时会直接抽取 `processingSummary` 做流式展示；这段文字必须从开头就可直接给用户阅读，不要先写空泛口号，再整体改写成另一版
 - `processingSummary` 首句必须承接 `understandingSnapshot.userFacingSummary` 已确认的目标或判断维度，让用户感觉还是同一个人在继续往下说
+- 如果 `dialogue_continuity.recentDialogueRounds` 非空，优先参考最近一轮已经确认的锚点与待重查事实，避免把多轮问题当成全新问题重写
 - 不要复述查询动作、工具动作、检索路径或内部事件；禁止写“我调用了”“我检索了”“我处理了 x 篇”“我交叉核对了 x 条”
 - 如果 `conversation_spine.historyAssessment.needsRecheckFacts` 仍有未坐实内容，要在 `processingSummary` 或 `expansionReason` 中明确哪些点还需要继续核实
 - `selectedKeyPoints` 必须是已经能支撑后续回答的短句事实或判断点，不写过程句，不照抄长网页内容，不带营销口号、联系方式或导流文案

@@ -1,15 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_perf_probe.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 
 typedef ObservabilityPayloadBuilder =
     Map<String, dynamic> Function({
@@ -49,16 +51,84 @@ class FinalizeRunner {
         request.traceId ??
         runId;
     final completedArtifact = response.runArtifacts;
-    if (completedArtifact == null) {
-      return response;
-    }
-    final displayMarkdown = completedArtifact.displayMarkdown.trim();
-    final displayPlainText = completedArtifact.displayPlainText.trim();
+    final structuredResponse = response.structuredResponse;
+    final structuredRunArtifacts =
+        (structuredResponse['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final canonicalDisplayState = resolveAssistantDisplayStateFromRunResponse(
+      response,
+    );
+    final canonicalProcessTimeline =
+        resolveAssistantProcessTimelineFromRunResponse(response);
+    final persistedJourney = resolveAssistantJourneyFromRunResponse(response);
+    final understandingSnapshot =
+        normalizeRunArtifactsUnderstandingSnapshotJson(
+          _resolvedStructuredMap(
+            structuredResponse[assistantUnderstandingSnapshotField],
+            _resolvedStructuredMap(
+              structuredRunArtifacts[assistantUnderstandingSnapshotField],
+              completedArtifact?.understandingSnapshot.toJson() ??
+                  const <String, dynamic>{},
+            ),
+          ),
+        );
+    final answerProcessing = _resolvedStructuredMap(
+      structuredResponse[assistantAnswerProcessingField],
+      _resolvedStructuredMap(
+        structuredRunArtifacts[assistantAnswerProcessingField],
+        completedArtifact?.answerProcessing.toJson() ??
+            const <String, dynamic>{},
+      ),
+    );
+    final historicalThinkingSnapshot = _resolvedStructuredMap(
+      structuredResponse[assistantHistoricalThinkingSnapshotField],
+      _resolvedStructuredMap(
+        structuredRunArtifacts[assistantHistoricalThinkingSnapshotField],
+        completedArtifact?.historicalThinkingSnapshot.toJson() ??
+            const <String, dynamic>{},
+      ),
+    );
+    final retrievalProcessing = _resolvedStructuredMap(
+      structuredResponse[assistantRetrievalProcessingField],
+      _resolvedStructuredMap(
+        structuredRunArtifacts[assistantRetrievalProcessingField],
+        completedArtifact?.retrievalProcessing.toJson() ??
+            const <String, dynamic>{},
+      ),
+    );
+    final displayMarkdown = canonicalDisplayState.answer.blocks.isNotEmpty
+        ? renderAnswerBlocksToMarkdown(
+            canonicalDisplayState.answer.blocks,
+          ).trim()
+        : _resolvedStructuredText(
+            structuredResponse[assistantDisplayMarkdownField],
+            _resolvedStructuredText(
+              structuredRunArtifacts[assistantDisplayMarkdownField],
+              _resolvedStructuredText(
+                structuredResponse['userMarkdown'],
+                completedArtifact?.displayMarkdown ?? response.finalText,
+              ),
+            ),
+          );
+    final displayPlainText = canonicalDisplayState.answer.blocks.isNotEmpty
+        ? renderAnswerBlocksToPlainText(
+            canonicalDisplayState.answer.blocks,
+          ).trim()
+        : _resolvedStructuredText(
+            structuredResponse[assistantDisplayPlainTextField],
+            _resolvedStructuredText(
+              structuredRunArtifacts[assistantDisplayPlainTextField],
+              _resolvedStructuredText(
+                structuredResponse['result'] is Map
+                    ? ((structuredResponse['result'] as Map)['text'] as String?)
+                    : null,
+                completedArtifact?.displayPlainText ?? displayMarkdown,
+              ),
+            ),
+          );
     final displayTextForSession = displayMarkdown.isNotEmpty
         ? displayMarkdown
         : displayPlainText;
-    final persistedJourney = resolveAssistantJourneyFromRunResponse(response);
-    final structuredResponse = response.structuredResponse;
     final persistedTurnFields = buildPersistedAssistantTurnFields(
       journey: persistedJourney,
       displayMarkdown: displayMarkdown,
@@ -68,33 +138,18 @@ class FinalizeRunner {
       elapsedMs: executionSnapshot['elapsedMs'] is num
           ? (executionSnapshot['elapsedMs'] as num).toInt()
           : 0,
-      processTimeline: completedArtifact.processTimeline,
-      understandingSnapshot:
-          (structuredResponse[assistantUnderstandingSnapshotField] as Map?)
-              ?.cast<String, dynamic>() ??
-          completedArtifact.understandingSnapshot.toJson(),
-      answerProcessing:
-          (structuredResponse[assistantAnswerProcessingField] as Map?)
-              ?.cast<String, dynamic>() ??
-          completedArtifact.answerProcessing.toJson(),
-      historicalThinkingSnapshot:
-          (structuredResponse[assistantHistoricalThinkingSnapshotField]
-                  as Map?)
-              ?.cast<String, dynamic>() ??
-          completedArtifact.historicalThinkingSnapshot.toJson(),
-      retrievalProcessing:
-          (structuredResponse[assistantRetrievalProcessingField] as Map?)
-              ?.cast<String, dynamic>() ??
-          completedArtifact.retrievalProcessing.toJson(),
+      displayState: canonicalDisplayState.toJson(),
+      processTimeline: canonicalProcessTimeline,
+      understandingSnapshot: understandingSnapshot,
+      answerProcessing: answerProcessing,
+      historicalThinkingSnapshot: historicalThinkingSnapshot,
+      retrievalProcessing: retrievalProcessing,
       providerReasoningContinuation:
           (structuredResponse[assistantProviderReasoningContinuationField]
                   as String?)
               ?.trim() ??
           '',
     );
-    final isDegradedReply =
-        response.degraded ||
-        AssistantContentFilters.isDegradedText(response.finalText);
     sessionManager.updateSessionTopicSummary(
       sessionId: sessionId,
       latestUserQuery: latestUserQuery,
@@ -115,15 +170,28 @@ class FinalizeRunner {
         },
       );
     }
-    if (!isDegradedReply &&
-        (displayTextForSession.isNotEmpty || !persistedJourney.isEmpty)) {
+    if (displayTextForSession.isNotEmpty ||
+        !persistedJourney.isEmpty ||
+        canonicalProcessTimeline.isNotEmpty ||
+        hasAssistantDisplayState(canonicalDisplayState)) {
       sessionManager.appendMessage(
         sessionId: sessionId,
         role: 'assistant',
         content: displayTextForSession,
         metadata: <String, dynamic>{
           ...persistedTurnFields,
-          'runArtifacts': completedArtifact.toJson(),
+          'runArtifacts': _buildPersistedRunArtifactsPayload(
+            response: response,
+            journey: persistedJourney,
+            displayMarkdown: displayMarkdown,
+            displayPlainText: displayPlainText,
+            displayState: canonicalDisplayState,
+            processTimeline: canonicalProcessTimeline,
+            understandingSnapshot: understandingSnapshot,
+            answerProcessing: answerProcessing,
+            historicalThinkingSnapshot: historicalThinkingSnapshot,
+            retrievalProcessing: retrievalProcessing,
+          ),
           'uiUsageStats':
               (structuredResponse['uiUsageStats'] as Map?) ??
               const <String, dynamic>{},
@@ -191,6 +259,61 @@ class FinalizeRunner {
       },
     );
     return response;
+  }
+
+  Map<String, dynamic> _buildPersistedRunArtifactsPayload({
+    required AssistantRunResponse response,
+    required AssistantJourney journey,
+    required String displayMarkdown,
+    required String displayPlainText,
+    required AssistantDisplayState displayState,
+    required List<ProcessTimelineFrame> processTimeline,
+    required Map<String, dynamic> understandingSnapshot,
+    required Map<String, dynamic> answerProcessing,
+    required Map<String, dynamic> historicalThinkingSnapshot,
+    required Map<String, dynamic> retrievalProcessing,
+  }) {
+    final runArtifacts = response.runArtifacts?.toJson() ?? <String, dynamic>{};
+    return <String, dynamic>{
+      ...runArtifacts,
+      assistantDisplayMarkdownField: displayMarkdown,
+      assistantDisplayPlainTextField: displayPlainText,
+      if (!journey.isEmpty) assistantJourneyField: journey.toJson(),
+      if (processTimeline.isNotEmpty)
+        assistantProcessTimelineField: processTimeline
+            .map((item) => item.toJson())
+            .toList(growable: false),
+      if (understandingSnapshot.isNotEmpty)
+        assistantUnderstandingSnapshotField: understandingSnapshot,
+      if (answerProcessing.isNotEmpty)
+        assistantAnswerProcessingField: answerProcessing,
+      if (historicalThinkingSnapshot.isNotEmpty)
+        assistantHistoricalThinkingSnapshotField: historicalThinkingSnapshot,
+      if (retrievalProcessing.isNotEmpty)
+        assistantRetrievalProcessingField: retrievalProcessing,
+      if (hasAssistantDisplayState(displayState))
+        assistantDisplayStateField: displayState.toJson(),
+    };
+  }
+
+  Map<String, dynamic> _resolvedStructuredMap(
+    Object? raw,
+    Map<String, dynamic> fallback,
+  ) {
+    if (raw is Map) {
+      final direct = raw.cast<String, dynamic>();
+      if (direct.isNotEmpty) {
+        return direct;
+      }
+    }
+    return fallback;
+  }
+
+  String _resolvedStructuredText(Object? raw, String fallback) {
+    if (raw is String && raw.trim().isNotEmpty) {
+      return raw.trim();
+    }
+    return fallback.trim();
   }
 
   Future<void> _persistLearningTags({

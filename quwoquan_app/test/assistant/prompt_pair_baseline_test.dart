@@ -8,7 +8,8 @@ void main() {
 
   group('Two prompt baseline', () {
     test('planner.global_plan 与 synthesizer.final_answer 通过模板校验', () {
-      const plannerPath = 'assets/assistant/prompts/global/planner.global_plan.md';
+      const plannerPath =
+          'assets/assistant/prompts/global/planner.global_plan.md';
       const synthPath =
           'assets/assistant/prompts/global/synthesizer.final_answer.md';
 
@@ -27,7 +28,8 @@ void main() {
       expect(
         plannerResult.isValid,
         isTrue,
-        reason: 'planner.global_plan 应通过 TemplateValidator: ${plannerResult.errors}',
+        reason:
+            'planner.global_plan 应通过 TemplateValidator: ${plannerResult.errors}',
       );
       expect(
         synthResult.isValid,
@@ -38,7 +40,8 @@ void main() {
     });
 
     test('主 prompt 保留稳定主展示字段并去除历史噪音', () {
-      const plannerPath = 'assets/assistant/prompts/global/planner.global_plan.md';
+      const plannerPath =
+          'assets/assistant/prompts/global/planner.global_plan.md';
       const synthPath =
           'assets/assistant/prompts/global/synthesizer.final_answer.md';
 
@@ -46,9 +49,12 @@ void main() {
       final synth = File(synthPath).readAsStringSync();
 
       expect(planner, contains('understandingSnapshot.userFacingSummary'));
-      expect(planner, contains('不存在单独的“历史判定”模型轮次'));
+      expect(planner, contains('search_iteration_state'));
+      expect(planner, contains('intentGraph.queryTasks[*].query'));
+      expect(planner, contains('calendarContext'));
       expect(synth, contains('retrievalProcessing.processingSummary'));
       expect(synth, contains('answerProcessing.readinessSummary'));
+      expect(synth, contains('answerGateAssessment'));
       expect(planner, isNot(contains('understanding.streamText')));
       expect(synth, isNot(contains('answerProcessing.streamText')));
       expect(planner, isNot(contains('uiProcessTimelineV2')));
@@ -65,10 +71,12 @@ void main() {
       final phaseAnswer = File(phaseAnswerPath).readAsStringSync();
 
       expect(phasePlan, contains('reasonShort'));
-      expect(phasePlan, contains('主展示只来自 `understandingSnapshot.userFacingSummary`'));
+      expect(phasePlan, contains('understandingSnapshot.userFacingSummary'));
+      expect(phasePlan, contains('queryTasks.query'));
       expect(phasePlan, isNot(contains('understanding.streamText')));
       expect(phaseAnswer, contains('retrievalProcessing.processingSummary'));
       expect(phaseAnswer, contains('answerProcessing.readinessSummary'));
+      expect(phaseAnswer, contains('answerGateAssessment'));
       expect(phaseAnswer, isNot(contains('answerProcessing.streamText')));
       expect(phaseAnswer, contains('userMarkdown'));
     });

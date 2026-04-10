@@ -700,5 +700,19 @@
   "replyToPrefix": " 回复 ",
   "@replyToPrefix": {
     "description": "Reply-to prefix between usernames in comment thread (with spaces)"
+  },
+  "createMaxImagesToastTemplate": "最多添加 {count} 张图片",
+  "@createMaxImagesToastTemplate": {
+    "description": "Toast when user exceeds max image count on create flow",
+    "placeholders": {
+      "count": { "type": "int", "example": "9" }
+    }
+  },
+  "createPublishPreviewImageCountTemplate": "{count} 张图片",
+  "@createPublishPreviewImageCountTemplate": {
+    "description": "Publish preview chip label for image-only posts",
+    "placeholders": {
+      "count": { "type": "int", "example": "3" }
+    }
   }
 }

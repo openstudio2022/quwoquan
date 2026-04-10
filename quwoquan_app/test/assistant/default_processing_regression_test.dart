@@ -1,10 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/retrieval_planner.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 
 void main() {
   group('Default processing regression', () {
@@ -186,6 +190,33 @@ void main() {
       expect(decision.finalAnswerMode, FinalAnswerMode.boundedAnswer);
       expect(decision.finalAnswerReady, isTrue);
       expect(decision.answerEligibility, AnswerEligibility.eligible);
+    });
+
+    test('bounded_answer 展示不再复用阻塞式 freshness 文案', () {
+      const resolver = AnswerGateResolver();
+      final decision = resolver.resolve(
+        retrievalOutcome: const RetrievalOutcome(
+          evidenceRequired: true,
+          authorityRequired: true,
+          freshnessRequired: true,
+          hasToolResult: true,
+          referenceCount: 2,
+          authoritySatisfied: true,
+          freshnessKnown: true,
+          freshnessSatisfied: false,
+          terminalPayloadComplete: true,
+        ),
+        conversationStateDecision: const ConversationStateDecision(
+          nextAction: AssistantNextAction.answer,
+          finalAnswerMode: FinalAnswerMode.boundedAnswer,
+          answerEligibility: AnswerEligibility.blocked,
+          finalAnswerReady: false,
+        ),
+        renderableAnswer: true,
+      );
+
+      expect(decision.reasonCode, equals('freshness_unsatisfied'));
+      expect(decision.reason, equals('已基于当前可确认信息整理答案，如需补齐最新变化可继续补查。'));
     });
   });
 }

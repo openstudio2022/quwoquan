@@ -327,6 +327,41 @@ extension StopPolicyX on StopPolicy {
   }
 }
 
+enum SearchIterationConvergenceStatus {
+  unknown,
+  improving,
+  flat,
+  saturated,
+}
+
+SearchIterationConvergenceStatus parseSearchIterationConvergenceStatus(String raw) {
+  switch (raw.trim()) {
+    case "improving":
+      return SearchIterationConvergenceStatus.improving;
+    case "flat":
+      return SearchIterationConvergenceStatus.flat;
+    case "saturated":
+      return SearchIterationConvergenceStatus.saturated;
+    default:
+      return SearchIterationConvergenceStatus.unknown;
+  }
+}
+
+extension SearchIterationConvergenceStatusX on SearchIterationConvergenceStatus {
+  String get wireName {
+    switch (this) {
+      case SearchIterationConvergenceStatus.unknown:
+        return "";
+      case SearchIterationConvergenceStatus.improving:
+        return "improving";
+      case SearchIterationConvergenceStatus.flat:
+        return "flat";
+      case SearchIterationConvergenceStatus.saturated:
+        return "saturated";
+    }
+  }
+}
+
 enum FinalAnswerMode {
   full,
   boundedAnswer,

@@ -57,6 +57,7 @@ class StPageFlipRenderFrame {
     required this.shadow,
     required this.timeline,
     this.reversePose,
+    this.backwardLeafFrame,
   });
 
   final ui.Offset localPagePoint;
@@ -72,11 +73,118 @@ class StPageFlipRenderFrame {
   final StPageFlipShadowData? shadow;
   final StPageFlipTimeline timeline;
   final ReverseFlipPose? reversePose;
+  final ArticlePageBackwardLeafFrame? backwardLeafFrame;
 
   bool get usesThreeStageBackflow =>
       direction == StPageFlipDirection.back &&
       renderDirection == StPageFlipDirection.forward &&
       reversePose != null;
+}
+
+enum ArticlePageBackwardLeafPhase { emerge, unroll, settle }
+
+@immutable
+class ArticlePageBackwardLeafFrame {
+  const ArticlePageBackwardLeafFrame({
+    required this.phase,
+    required this.emergenceProgress,
+    required this.unrollProgress,
+    required this.settleProgress,
+    required this.coveredWidthNormalized,
+    required this.laidDownWidthNormalized,
+    required this.curlWidthNormalized,
+    required this.rectoRevealWidthNormalized,
+    required this.curlPivotNormalized,
+    required this.edgeLift,
+  });
+
+  final ArticlePageBackwardLeafPhase phase;
+  final double emergenceProgress;
+  final double unrollProgress;
+  final double settleProgress;
+  final double coveredWidthNormalized;
+  final double laidDownWidthNormalized;
+  final double curlWidthNormalized;
+  final double rectoRevealWidthNormalized;
+  final double curlPivotNormalized;
+  final double edgeLift;
+}
+
+ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
+  required StPageFlipDirection direction,
+  required double progress,
+  ReverseFlipPose? reversePose,
+}) {
+  if (direction != StPageFlipDirection.back) {
+    return null;
+  }
+  final settledProgress = progress.clamp(0.0, 1.0).toDouble();
+  final emergenceProgress = reversePose == null
+      ? Curves.easeOutCubic.transform((settledProgress / 0.28).clamp(0.0, 1.0))
+      : reversePose.emergenceProgress.clamp(0.0, 1.0).toDouble();
+  final unrollProgress = reversePose == null
+      ? Curves.easeInOutCubic.transform(
+          ((settledProgress - 0.18) / 0.58).clamp(0.0, 1.0),
+        )
+      : reversePose.unrollProgress.clamp(0.0, 1.0).toDouble();
+  final settleProgress = Curves.easeOutCubic.transform(
+    ((settledProgress - 0.82) / 0.18).clamp(0.0, 1.0),
+  );
+  final emergedCurlWidth =
+      (ui.lerpDouble(0.032, 0.22, emergenceProgress) ?? 0.09)
+          .clamp(0.032, 0.26)
+          .toDouble();
+  final rollingCurlWidth =
+      (ui.lerpDouble(emergedCurlWidth, 0.16, unrollProgress) ??
+              emergedCurlWidth)
+          .clamp(0.04, 0.24)
+          .toDouble();
+  final curlWidth = (ui.lerpDouble(rollingCurlWidth, 0.0, settleProgress) ??
+          rollingCurlWidth)
+      .clamp(0.0, 0.26)
+      .toDouble();
+  final laidDownBeforeSettle =
+      (ui.lerpDouble(0.0, 0.76, unrollProgress) ?? 0.0)
+          .clamp(0.0, 0.82)
+          .toDouble();
+  final laidDownWidth =
+      (ui.lerpDouble(
+                laidDownBeforeSettle,
+                math.max(0.0, 1.0 - curlWidth),
+                settleProgress,
+              ) ??
+              laidDownBeforeSettle)
+          .clamp(0.0, 1.0)
+          .toDouble();
+  final coveredWidth = math.min(1.0, laidDownWidth + curlWidth * 0.92);
+  final rectoRevealWidth = math.min(
+    curlWidth * (0.18 + unrollProgress * 0.28),
+    curlWidth * 0.42,
+  );
+  final curlPivotNormalized =
+      (laidDownWidth + curlWidth * 0.5).clamp(0.0, 1.0).toDouble();
+  final edgeLift =
+      ((ui.lerpDouble(0.12, 0.34, emergenceProgress) ?? 0.18) *
+              (1 - settleProgress * 0.55))
+          .clamp(0.08, 0.36)
+          .toDouble();
+  final phase = settleProgress > 0.001
+      ? ArticlePageBackwardLeafPhase.settle
+      : unrollProgress > 0.001
+      ? ArticlePageBackwardLeafPhase.unroll
+      : ArticlePageBackwardLeafPhase.emerge;
+  return ArticlePageBackwardLeafFrame(
+    phase: phase,
+    emergenceProgress: emergenceProgress,
+    unrollProgress: unrollProgress,
+    settleProgress: settleProgress,
+    coveredWidthNormalized: coveredWidth,
+    laidDownWidthNormalized: laidDownWidth,
+    curlWidthNormalized: curlWidth,
+    rectoRevealWidthNormalized: rectoRevealWidth,
+    curlPivotNormalized: curlPivotNormalized,
+    edgeLift: edgeLift,
+  );
 }
 
 StPageFlipDirection resolvePageFlipRenderDirection({

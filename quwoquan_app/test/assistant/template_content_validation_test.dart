@@ -135,8 +135,8 @@ void main() {
 
       expect(
         planner,
-        contains('运行时会直接抽取 `understandingSnapshot.userFacingSummary`'),
-        reason: 'planner.global_plan 应明确声明阶段1主展示字段会被运行时直接抽取',
+        contains('`understandingSnapshot.userFacingSummary` 是阶段 1 唯一主展示字段'),
+        reason: 'planner.global_plan 应明确声明阶段1主展示字段',
       );
       expect(
         planner,
@@ -144,15 +144,32 @@ void main() {
         reason: 'planner.global_plan 应明确要求理解阶段把判断维度并入用户主叙事',
       );
       expect(
+        planner,
+        contains('calendarContext'),
+        reason: 'planner.global_plan 应明确要求周几类时间锚点参考日历上下文',
+      );
+      expect(
+        planner,
+        contains('禁止保留 `最近`、`最新`、`近期`、`未来`'),
+        reason: 'planner.global_plan 应明确禁止 query literal 残留模糊时间词',
+      );
+      expect(
         synth,
         contains(
-          '运行时会直接抽取 `retrievalProcessing.processingSummary`、`answerProcessing.readinessSummary` 与 `userMarkdown`',
+          '`retrievalProcessing.processingSummary`、`answerProcessing.readinessSummary`、`userMarkdown` 都会被直接流式展示',
         ),
         reason: 'synthesizer.final_answer 应明确声明阶段3字段会被运行时直接抽取',
       );
       expect(
         synth,
-        contains('处理了多少资料、接纳了多少资料及其列表'),
+        contains('calendarContext'),
+        reason: 'synthesizer.final_answer 应明确要求回答阶段沿用同一份时间锚点',
+      );
+      expect(
+        synth,
+        contains(
+          '`processedDocumentCount`、`acceptedDocumentCount`、`acceptedReferences`',
+        ),
         reason: 'synthesizer.final_answer 应明确保留检索资料计数与引用列表，但不混入主叙事',
       );
       expect(
@@ -191,23 +208,27 @@ void main() {
         contains('reasonShort'),
         reason: '规划阶段 contract 仍需兼容当前 reasonShort 流式读取',
       );
-      expect(phasePlan, contains('最小稳定优先字段'));
-      expect(phasePlan, contains('唯一推荐保留的历史评估字段'));
-      expect(phasePlan, contains('不能假设运行时还会再开一个独立“历史判定”模型轮次'));
+      expect(phasePlan, contains('`queryTasks.query` 必须是最终可执行检索词'));
+      expect(phasePlan, contains('`search_iteration_state`'));
       expect(
         phasePlan,
-        contains('规划阶段主展示只来自 `understandingSnapshot.userFacingSummary`'),
+        contains('`understandingSnapshot.userFacingSummary` 是阶段 1 唯一主展示字段'),
         reason: '规划阶段 contract 应明确声明主展示字段会被直接抽取流式展示',
       );
       expect(
         phasePlan,
-        contains('后续回答阶段默认不得回写或覆盖 `understandingSnapshot`'),
-        reason: '规划阶段 contract 应冻结普通两轮链路里的理解快照',
+        contains('时间表达必须直接写进 `queryTasks.query`'),
+        reason: '规划阶段 contract 应明确要求模型直接输出带时间锚点的检索词',
+      );
+      expect(
+        phasePlan,
+        contains('禁止保留 `最近 / 最新 / 近期 / 未来`'),
+        reason: '规划阶段 contract 应明确禁止 query literal 残留模糊时间词',
       );
       expect(
         phaseAnswer,
         contains(
-          '运行时会直接抽取 `retrievalProcessing.processingSummary`、`answerProcessing.readinessSummary` 与 `userMarkdown`',
+          '`retrievalProcessing.processingSummary`、`answerProcessing.readinessSummary`、`userMarkdown` 都会被直接流式展示',
         ),
         reason: '回答阶段 contract 应明确声明主展示字段会被直接抽取流式展示',
       );
@@ -226,10 +247,9 @@ void main() {
         contains('userMarkdown'),
         reason: '回答阶段 contract 仍需约束最终成答字段 userMarkdown',
       );
-      expect(phaseAnswer, contains('唯一建议保留的历史评估字段'));
-      expect(phaseAnswer, contains('`userMarkdown` 必须是自然最终答案'));
-      expect(phaseAnswer, contains('处理了多少资料、接纳了多少资料及其列表'));
-      expect(phaseAnswer, contains('不得重写第一轮已经确认的 `understandingSnapshot`'));
+      expect(phaseAnswer, contains('answerGateAssessment'));
+      expect(phaseAnswer, contains('`search_iteration_state`'));
+      expect(phaseAnswer, contains('证据不足时'));
     });
 
     test('回答阶段 prompt 改为自然成答并注册 evidence_digest 模板', () {
@@ -258,29 +278,33 @@ void main() {
         isNot(contains('planner.continuity_resolution.meta.json')),
       );
       expect(manifest, isNot(contains('planner.continuity_resolution.md')));
-      expect(phaseAnswer, contains('`retrievalProcessing`'));
-      expect(phaseAnswer, contains('普通问题默认只保留两轮模型交互'));
-      expect(phaseAnswer, contains('`userMarkdown` 只能承载最终答案'));
-      expect(phaseAnswer, contains('最小稳定优先字段'));
-      expect(phaseAnswer, contains('historicalThinkingSnapshot'));
+      expect(phaseAnswer, contains('`retrievalProcessing.processingSummary`'));
+      expect(phaseAnswer, contains('`search_iteration_state`'));
+      expect(phaseAnswer, contains('`answerGateAssessment`'));
+      expect(phaseAnswer, contains('`userMarkdown`'));
+      expect(phaseAnswer, contains('`answerMode` 只允许'));
       expect(phaseAnswer, isNot(contains('## 问题理解')));
       expect(phaseAnswer, isNot(contains('## 关键观点')));
       expect(phaseAnswer, isNot(contains('## 回答概要')));
-      expect(synth, contains('`<conversation_spine>` 是本轮主线'));
       expect(synth, contains('普通问题默认只保留两轮模型交互'));
       expect(synth, contains('retrievalProcessing.processingSummary'));
-      expect(synth, contains('答案会围绕哪些重点收束'));
-      expect(synth, contains('优先依据 `problemClass + answerShape` 选择答案形态'));
-      expect(synth, contains('如果用户没有明确索取联系方式'));
-      expect(synth, contains('不要使用 Markdown heading 语法'));
-      expect(synth, contains('最小稳定合同'));
-      expect(planner, contains('needsRecheckFacts'));
+      expect(synth, contains('answerGateAssessment'));
+      expect(synth, contains('bounded_answer'));
+      expect(
+        synth,
+        contains(
+          '`processedDocumentCount`、`acceptedDocumentCount`、`acceptedReferences`',
+        ),
+      );
+      expect(planner, contains('search_iteration_state'));
       expect(planner, contains('queryDesignSummary'));
-      expect(planner, contains('不存在单独的“历史判定”模型轮次'));
       expect(
         planner,
-        contains('后续回答阶段默认不得重写本轮 `understandingSnapshot.userFacingSummary`'),
+        contains(
+          '`intentGraph.queryTasks[*].query` 必须是可直接发送给搜索 provider 的最终自然语言检索词',
+        ),
       );
+      expect(planner, contains('最近 / 最新 / 近期'));
       expect(synth, isNot(contains('## 问题理解')));
       expect(synth, isNot(contains('## 关键观点')));
       expect(synth, isNot(contains('## 回答概要')));

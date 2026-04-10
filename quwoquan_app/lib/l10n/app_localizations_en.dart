@@ -1854,4 +1854,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get replyToPrefix => ' replied to ';
+
+  @override
+  String createMaxImagesToastTemplate(int count) {
+    return 'You can add at most $count photos';
+  }
+
+  @override
+  String createPublishPreviewImageCountTemplate(int count) {
+    return '$count photos';
+  }
 }

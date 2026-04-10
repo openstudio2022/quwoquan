@@ -152,6 +152,7 @@ subcontracts:
       - { name: emotionSignal, type: string, default: '' }
       - { name: queryDesignSummary, type: string, default: '' }
       - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
+      - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }
       - { name: assumptions, type: list<string>, default: [] }
       - { name: mismatchSignal, type: string, default: '' }
       - { name: carryForwardFacts, type: list<string>, default: [] }
@@ -162,6 +163,17 @@ subcontracts:
       - { name: dimension, type: string, default: '' }
       - { name: queries, type: list<string>, default: [] }
       - { name: why, type: string, default: '' }
+  understanding_resolution_item:
+    class_name: RunArtifactsUnderstandingResolutionItem
+    fields:
+      - { name: kind, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: originalValue, type: string, default: '' }
+      - { name: resolvedValue, type: string, default: '' }
+      - { name: defaultApplied, type: bool, default: false }
+      - { name: visibleInUnderstanding, type: bool, default: true }
   answer_processing:
     class_name: RunArtifactsAnswerProcessing
     fields:

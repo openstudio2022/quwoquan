@@ -1670,6 +1670,141 @@ void main() {
       expect(diagnostics['allowPhaseOneContractRepair'], isTrue);
     });
 
+    test('synthesis phase 会注入 recent rounds 且仅携带最近 user turns 消息窗口', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'assistant_synthesis_recent_rounds_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final llm = _RecordingSynthesisRecentRoundsLlm();
+      final loop = phase_owner.LocalPhaseExecutionOwner(
+        ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+        ),
+      );
+      final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
+      final prepared = AssistantExecutionPreparation(
+        domainId: fallbackDomainId,
+        modeDecision: const ModeDecision(
+          mode: AgentMode.singleAgent,
+          reason: 'synthesis_recent_rounds_test',
+        ),
+        skillName: 'General Follow-up Answer',
+        skillInstructionMarkdown: '结合最近多轮上下文给出最终回答。',
+        executionShell: const SkillExecutionShell(
+          problemClass: 'simple_qa',
+          maxIterations: 1,
+          toolBudget: 0,
+          variantBudget: 0,
+          reflectionBudget: 0,
+          freshnessHoursMax: 72,
+        ),
+        plannerTemplateVersion: 'recent_rounds_planner_v1',
+        postcheckTemplateVersion: 'recent_rounds_postcheck_v1',
+        synthTemplateVersion: 'recent_rounds_synth_v1',
+        fusionSynthTemplateVersion: 'recent_rounds_fusion_v1',
+      );
+      final request = AssistantRunRequest(
+        sessionId: 'synthesis_recent_rounds_owner',
+        messages: const <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '第一问'),
+          AssistantRunMessage(role: 'assistant', content: '第一答'),
+          AssistantRunMessage(role: 'user', content: '第二问'),
+          AssistantRunMessage(role: 'assistant', content: '第二答'),
+          AssistantRunMessage(role: 'user', content: '第三问'),
+          AssistantRunMessage(role: 'assistant', content: '第三答'),
+          AssistantRunMessage(role: 'user', content: '第四问'),
+        ],
+        contextScopeHint: <String, dynamic>{
+          'recentDialogueRoundsLimit': 2,
+          'precomputedBootstrap': <String, dynamic>{
+            'sessionId': 'synthesis_recent_rounds_owner',
+            'latestUserQuery': '第四问',
+            'historySummary': '最近两轮都在追问同一个主题。',
+            'recentDialogueRoundsLimit': 2,
+            'recentDialogueRounds': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'turnId': 'turn_3',
+                'userQuery': '第三问',
+                'assistantSummary': '第三答摘要',
+              },
+              <String, dynamic>{
+                'turnId': 'turn_2',
+                'userQuery': '第二问',
+                'assistantSummary': '第二答摘要',
+              },
+            ],
+            'contextContinuityPolicy': const <String, dynamic>{
+              'continuityMode': 'explicit_follow_up',
+              'explicitContinuation': true,
+              'referenceQueries': <String>['第三问', '第二问'],
+            },
+          },
+          'precomputedIntentGraph': <String, dynamic>{
+            ...const IntentGraph(
+              userGoal: '沿着最近两轮继续回答',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+            ).toJson(),
+          },
+          'precomputedExecutionPreparation': prepared.toJson(),
+        },
+      );
+
+      final snapshot = await loop.executeBridge(
+        request,
+        runId: 'run_synthesis_recent_rounds_owner',
+        traceId: 'trace_synthesis_recent_rounds_owner',
+      );
+      final result = await SynthesisPhase(loop).run(
+        PhaseInput(
+          request: request,
+          state: AgentExecutionState(executionBridgeSnapshot: snapshot),
+          runId: 'run_synthesis_recent_rounds_owner',
+          traceId: 'trace_synthesis_recent_rounds_owner',
+        ),
+      );
+
+      expect(result.state!.pendingResponse, isNotNull);
+      expect(llm.synthesisCallCount, 1);
+      expect(
+        llm.capturedSynthesisMessages
+            .where(
+              (item) =>
+                  item['role'] == 'user' || item['role'] == 'assistant',
+            )
+            .map((item) => '${item['role']}:${item['content']}')
+            .toList(growable: false),
+        equals(const <String>[
+          'user:第三问',
+          'assistant:第三答',
+          'user:第四问',
+          'user:第四问',
+        ]),
+      );
+      final recentRounds = (jsonDecode(
+            llm.capturedSynthesisTemplateVariables['recentDialogueRounds']
+                    as String? ??
+                '[]',
+          ) as List)
+          .cast<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+      expect(recentRounds, hasLength(2));
+      expect(recentRounds.first['turnId'], 'turn_3');
+      expect(recentRounds.last['turnId'], 'turn_2');
+    });
+
     test(
       'synthesis phase 应允许 direct-answer shortcut 覆盖 derived secondary-skill subagent fallback',
       () async {
@@ -3574,6 +3709,50 @@ class _PhaseOneSubagentFusionLlm implements AssistantLlmProvider {
           'parseStatus': '',
         },
       }),
+    );
+  }
+}
+
+class _RecordingSynthesisRecentRoundsLlm implements AssistantLlmProvider {
+  int plannerCallCount = 0;
+  int synthesisCallCount = 0;
+  List<Map<String, dynamic>> capturedSynthesisMessages =
+      const <Map<String, dynamic>>[];
+  Map<String, dynamic> capturedSynthesisTemplateVariables =
+      const <String, dynamic>{};
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
+    if (isSynthesisCall) {
+      synthesisCallCount += 1;
+      capturedSynthesisMessages = messages
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false);
+      capturedSynthesisTemplateVariables = Map<String, dynamic>.from(
+        templateVariables,
+      );
+      return const AssistantModelOutput(
+        text:
+            '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","decision":{"nextAction":"answer"},"userMarkdown":"我会沿着最近两轮继续回答。","result":{"text":"我会沿着最近两轮继续回答。","summary":"沿着最近两轮继续回答"}}',
+      );
+    }
+    plannerCallCount += 1;
+    return const AssistantModelOutput(
+      text:
+          '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","decision":{"nextAction":"answer"},"userMarkdown":"phase one answer","result":{"text":"phase one answer","summary":"phase one answer"}}',
     );
   }
 }

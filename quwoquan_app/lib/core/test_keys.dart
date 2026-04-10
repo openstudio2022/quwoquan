@@ -332,6 +332,15 @@ class TestKeys {
   static const articlePageCurlLayer = ValueKey<String>(
     'article_page_curl_layer',
   );
+  static const articlePageCurlHighFidelityPending = ValueKey<String>(
+    'article_page_curl_high_fidelity_pending',
+  );
+  static const articlePageCurlHighFidelityBlocked = ValueKey<String>(
+    'article_page_curl_high_fidelity_blocked',
+  );
+  static const articlePageCurlDiagnosticsBadge = ValueKey<String>(
+    'article_page_curl_diagnostics_badge',
+  );
   static const articleBookStylePager = ValueKey<String>(
     'article_book_style_pager',
   );

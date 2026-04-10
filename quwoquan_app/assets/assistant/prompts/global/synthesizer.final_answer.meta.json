@@ -12,7 +12,8 @@
     "sharedContext",
     "currentRuntimeState",
     "dialogueContinuity",
-    "evidenceContext"
+    "evidenceContext",
+    "searchIterationState"
   ],
   "outputContract": "assistant_turn",
   "selfCheckRules": [

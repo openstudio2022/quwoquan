@@ -1,9 +1,16 @@
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
 class AssistantRunResponse {
+  static const RetrievalOutcomeResolver _retrievalOutcomeResolver =
+      RetrievalOutcomeResolver();
+  static const AnswerGateResolver _answerGateResolver = AnswerGateResolver();
+
   const AssistantRunResponse({
     required this.finalText,
     required this.traces,
@@ -29,6 +36,22 @@ class AssistantRunResponse {
         ?.cast<String, dynamic>();
     if (raw == null) return null;
     return parseRunArtifacts(raw);
+  }
+
+  RetrievalOutcome get retrievalOutcome {
+    return _retrievalOutcomeResolver.resolveFromStructured(
+      structured: structuredResponse,
+      runArtifacts: runArtifacts,
+      degraded: degraded,
+    );
+  }
+
+  AnswerGateDecision get answerGateDecision {
+    return _answerGateResolver.resolveFromStructured(
+      structured: structuredResponse,
+      runArtifacts: runArtifacts,
+      degraded: degraded,
+    );
   }
 
   String get machineEnvelope {

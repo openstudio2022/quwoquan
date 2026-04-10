@@ -1840,4 +1840,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get replyToPrefix => ' 回复 ';
+
+  @override
+  String createMaxImagesToastTemplate(int count) {
+    return '最多添加 $count 张图片';
+  }
+
+  @override
+  String createPublishPreviewImageCountTemplate(int count) {
+    return '$count 张图片';
+  }
 }

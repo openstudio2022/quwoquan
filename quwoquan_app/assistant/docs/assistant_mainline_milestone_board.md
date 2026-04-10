@@ -42,6 +42,7 @@ evidence change.
 | `followup-continuity` | `in_progress` | continuity inputs, previous intent carryover, and follow-up answer repair are guarded by `orchestration_phase_owner_test.dart` | Re-run `integration_test/assistant_manual_replay_test.dart` after owner refactors and confirm no replay regression |
 | `multi-dimensional-retrieval` | `in_progress` | typed `queryTasks`, continuity-aware retrieval, and runtime consumption of phase-provided tasks are covered by `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, and `react_runtime_tool_observation_contract_test.dart` | Remove remaining execution-time fallback logic outside phase/retrieval owner paths |
 | `one-pass-answer-optimization` | `completed` | phase-one direct answer shortcut, repair, gap-fill retry, and bounded-answer readiness are covered by owner and full-pipeline tests | Maintain direct-answer path as default convergence path |
+| `m0-replay-baseline` | `in_progress` | `integration_test/assistant_manual_replay_test.dart` now emits fixed case corpus, baseline pack, repeat-run stability verdict, reload recovery verdict, and `reportData` summary; `integration_test/support/assistant_replay_baseline.dart` defines the pack schema; `test/assistant/replay_record_factory_test.dart` guards shared replay payload extraction | Close only after the selected M0 corpus is repeat-stable and each case is eligible for M1 entry without degraded / tool-progress / missing-query-design signatures |
 | `replay-regression-upgrade` | `in_progress` | replay-related cleanup is covered by full-pipeline regression tests and the manual replay test file exists | Re-run manual replay integration on iOS after the current refactor set |
 | `live-weather-e2e-milestone` | `pending` | live test entry exists in `test/assistant/minimax_live_weather_fortune_test.dart` | Produce one successful live weather run with non-degraded answer evidence |
 | `fallback-dependency-burn-down-milestone` | `in_progress` | active owner path no longer depends on legacy `_resolveIntentGraph()` or ad hoc `problemClass` fallback; remaining work is dead-code and legacy-marker cleanup around phase owner/runtime edges | Remove dead helpers and duplicate owner-era resolvers from the remaining phase owner/runtime files |
@@ -104,6 +105,7 @@ Status: `in_progress`
 Required exit:
 
 - `assistant_manual_replay_test.dart` passes after the latest refactor set
+- M0 replay corpus produces repeat-stable baseline packs and all selected cases are M1-eligible
 
 ### M5 Live Provider Closure
 

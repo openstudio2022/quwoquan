@@ -25,6 +25,13 @@
 - rewrittenQuery_2：**扩大召回**——放宽约束，只保留核心主题词，去掉所有限定
 - rewrittenQuery_3：**权威定向**——使用 `site:` 限定到一个权威域名（从 authorityDomains 中选）
 
+## geography 纠偏规则
+- 当结果 geography 与 `resolvedGeoScope` 不一致时，优先重写 query，把 `resolvedGeoScope.resolvedText` 写回 query
+- 当 `failureReason=missing_geo_context` 时：
+  - 如果已有 `resolvedGeoScope`，必须优先补回该 geography，而不是继续泛搜
+  - 如果没有 `resolvedGeoScope`，但存在 `availableGeoContext` 且域策略允许 fallback，可按默认 geography / 默认市场补足
+  - 如果两者都没有，应该建议 `ask_user`，不要继续生成错城市或错市场的泛查询
+
 ## 执行要求
 - 输出 JSON，必须包含 `failureReason`、`rewrittenQueries`（数组，3条）、`retryProvider`。
 - 禁止输出自然语言包裹。

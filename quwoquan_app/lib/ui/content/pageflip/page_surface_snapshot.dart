@@ -91,6 +91,57 @@ class ArticlePageTextureBinding {
 }
 
 @immutable
+class ArticleBackwardPageSurfaceBinding {
+  const ArticleBackwardPageSurfaceBinding({
+    required this.coveredPageIndex,
+    required this.leafPageIndex,
+  });
+
+  final int coveredPageIndex;
+  final int leafPageIndex;
+
+  int get leafRectoPageIndex => leafPageIndex;
+
+  int get leafVersoPageIndex => coveredPageIndex;
+
+  List<int> get prioritizedPageIndices {
+    final indices = <int>[coveredPageIndex];
+    if (!indices.contains(leafPageIndex)) {
+      indices.add(leafPageIndex);
+    }
+    return indices;
+  }
+
+  Set<int> get requiredPageIndices => <int>{coveredPageIndex, leafPageIndex};
+
+  bool matches(ArticleBackwardPageSurfaceBinding other) {
+    return coveredPageIndex == other.coveredPageIndex &&
+        leafPageIndex == other.leafPageIndex;
+  }
+}
+
+@immutable
+class ArticleBackwardPageTextureBundle {
+  const ArticleBackwardPageTextureBundle({
+    required this.covered,
+    required this.leafRecto,
+    required this.leafVerso,
+  });
+
+  final ArticlePageTextureSnapshot covered;
+  final ArticlePageTextureSnapshot leafRecto;
+  final ArticlePageTextureSnapshot leafVerso;
+
+  ArticlePageTextureBundle toCurlTextureBundle() {
+    return ArticlePageTextureBundle(
+      recto: leafRecto,
+      verso: leafVerso,
+      bottom: covered,
+    );
+  }
+}
+
+@immutable
 class ArticlePageTextureSession {
   const ArticlePageTextureSession({
     required this.binding,
@@ -163,6 +214,20 @@ ArticlePageTextureSession? resolveArticlePageTextureSession({
     binding: existing.binding,
     preferHighFidelity: preferHighFidelity,
     bundle: stickyBundle,
+  );
+}
+
+ArticleBackwardPageSurfaceBinding? resolveArticleBackwardPageSurfaceBinding({
+  required StPageFlipDirection? direction,
+  required int? flippingPageIndex,
+  required int currentPageIndex,
+}) {
+  if (direction != StPageFlipDirection.back || flippingPageIndex == null) {
+    return null;
+  }
+  return ArticleBackwardPageSurfaceBinding(
+    coveredPageIndex: currentPageIndex,
+    leafPageIndex: flippingPageIndex,
   );
 }
 

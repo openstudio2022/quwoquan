@@ -217,7 +217,12 @@ class AssistantMessageBubble extends StatelessWidget {
                 processTimeline: resolvedProcessTimeline,
                 isRunning: isAssistantRunning,
                 displayState: resolvedDisplayState,
+                understandingSnapshot:
+                    resolveAssistantUnderstandingSnapshotFromMessage(message),
                 retrievalProcessing: resolvedRetrievalProcessing,
+                answerProcessing: resolveAssistantAnswerProcessingFromMessage(
+                  message,
+                ),
                 usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
                   (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
                       const <String, dynamic>{},
@@ -382,10 +387,7 @@ class AssistantMessageBubble extends StatelessWidget {
           ),
           child: SelectableText(
             answerText,
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              color: textColor,
-            ),
+            style: TextStyle(fontSize: AppTypography.lg, color: textColor),
           ),
         ),
       );

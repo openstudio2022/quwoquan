@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_stream_projector.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
@@ -277,13 +278,13 @@ class RemoteAssistantEntry {
         AssistantTraceEvent(
           type: AssistantTraceEventType.lifecycleEnd,
           message:
-              'remote stream completed without terminal payload; synthesized response from streamed answer',
+              'remote stream completed without terminal payload; keep streamed answer as degraded incomplete output',
           timestamp: DateTime.now(),
           runId: request.traceId,
           traceId: request.traceId,
           data: <String, dynamic>{
             'source': 'remote_stream_terminal_payload_missing',
-            'synthesized': true,
+            'terminalPayloadComplete': false,
             'streamedAnswerLength': finalText.length,
             'rawStreamedAnswerLength': rawStreamedAnswer.length,
             'visibleStreamedAnswerLength': visibleStreamedAnswer.length,
@@ -299,6 +300,8 @@ class RemoteAssistantEntry {
           'decisionParseSuccess': false,
           'hardCutSource': 'remote_stream_terminal_payload_missing',
           'remoteStreamSynthesized': true,
+          'answerGateReady': false,
+          'answerGateReasonCode': 'missing_terminal_payload',
         },
         'runArtifacts': <String, dynamic>{
           'displayMarkdown': markdown.isNotEmpty ? markdown : finalText,
@@ -381,7 +384,8 @@ class RemoteAssistantEntry {
         debugPrint(stackTrace.toString());
       }
     }
-    return AssistantRunResponse(
+    return _ensureCanonicalGate(
+      AssistantRunResponse(
       finalText: '远端助手执行异常，请重试。（$source）',
       degraded: true,
       errorCode: 'remote_entry_failure',
@@ -404,6 +408,9 @@ class RemoteAssistantEntry {
           'hardCutSource': source,
         },
       },
+      ),
+      reasonCode: 'degraded_response',
+      reason: '远端助手当前未形成稳定终态，先不按成功完成处理。',
     );
   }
 
@@ -507,6 +514,104 @@ class RemoteAssistantEntry {
           ? normalizedPlainText
           : ((rawRunArtifacts['displayPlainText'] as String?)?.trim() ??
                 response.finalText),
+    };
+    final normalizedResponse = AssistantRunResponse(
+      finalText: response.finalText,
+      traces: response.traces,
+      runId: response.runId,
+      traceId: response.traceId,
+      degraded: response.degraded,
+      errorCode: response.errorCode,
+      structuredResponse: structured,
+      profileUpdateProposal: response.profileUpdateProposal,
+    );
+    if (response.degraded) {
+      return _ensureCanonicalGate(
+        normalizedResponse,
+        reasonCode: response.errorCode == 'remote_stream_terminal_payload_missing'
+            ? 'missing_terminal_payload'
+            : 'degraded_response',
+        reason: response.errorCode == 'remote_stream_terminal_payload_missing'
+            ? '远端流式结果缺少终态 payload，当前只保留可见增量，不按成功完成处理。'
+            : '远端结果处于降级态，当前不按成功完成处理。',
+        terminalPayloadComplete:
+            response.errorCode != 'remote_stream_terminal_payload_missing',
+      );
+    }
+    return normalizedResponse;
+  }
+
+  AssistantRunResponse _ensureCanonicalGate(
+    AssistantRunResponse response, {
+    required String reasonCode,
+    required String reason,
+    bool terminalPayloadComplete = false,
+  }) {
+    final structured = <String, dynamic>{...response.structuredResponse};
+    if (structured[assistantAnswerGateDecisionField] is Map &&
+        structured[assistantRetrievalOutcomeField] is Map) {
+      return response;
+    }
+    final rawRunArtifacts =
+        (structured['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final rawAnswerDecision =
+        (rawRunArtifacts['answerDecision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final hasRenderableAnswer =
+        ((rawRunArtifacts['displayMarkdown'] as String?)?.trim().isNotEmpty ==
+            true) ||
+        ((rawRunArtifacts['displayPlainText'] as String?)?.trim().isNotEmpty ==
+            true);
+    structured[assistantAnswerGateDecisionField] = <String, dynamic>{
+      'eligible': false,
+      'finalAnswerReady': false,
+      'reasonCode': reasonCode,
+      'reason': reason,
+      'nextAction': 'abort',
+      'answerEligibility': 'blocked',
+      'renderable': hasRenderableAnswer,
+      'retrievalReady': false,
+      'terminalPayloadComplete': terminalPayloadComplete,
+      'degraded': true,
+      'incomplete': !terminalPayloadComplete,
+    };
+    structured[assistantRetrievalOutcomeField] = <String, dynamic>{
+      'status': terminalPayloadComplete ? 'degraded' : 'incomplete',
+      'summary': reason,
+      'terminalPayloadComplete': terminalPayloadComplete,
+      'degraded': true,
+      'retrievalProcessing':
+          (rawRunArtifacts['retrievalProcessing'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    };
+    structured['conversationStateDecision'] = <String, dynamic>{
+      'nextAction': 'abort',
+      'answerEligibility': 'blocked',
+      'finalAnswerReady': false,
+    };
+    structured['qualityMetrics'] = <String, dynamic>{
+      ...((structured['qualityMetrics'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{}),
+      'answerGateReady': false,
+      'answerGateReasonCode': reasonCode,
+      'hardCutSource':
+          ((structured['qualityMetrics'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{})['hardCutSource'] ??
+          response.errorCode ??
+          reasonCode,
+    };
+    structured['runArtifacts'] = <String, dynamic>{
+      ...rawRunArtifacts,
+      'answerDecision': <String, dynamic>{
+        ...rawAnswerDecision,
+        'nextAction': 'abort',
+        'answerEligibility': 'blocked',
+        'finalAnswerReady': false,
+        'reasonCode': reasonCode,
+        'reason': reason,
+        'terminalPayloadComplete': terminalPayloadComplete,
+      },
     };
     return AssistantRunResponse(
       finalText: response.finalText,

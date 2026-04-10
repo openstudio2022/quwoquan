@@ -166,6 +166,10 @@ class ConversationStateKernel {
         explicitAskUserPayload.slotId.trim().isNotEmpty ||
         explicitAskUserPayload.prompt.trim().isNotEmpty ||
         explicitAskUserPayload.suggestions.isNotEmpty;
+    final modelGateAssessment = _parseAnswerGateAssessment(
+      parsedTurn?.answerGateAssessment.toJson() ??
+          answerPayload['answerGateAssessment'],
+    );
     final evidenceStatusType =
         evidenceEvaluation.status != EvidenceStatus.unknown
         ? evidenceEvaluation.status
@@ -182,6 +186,19 @@ class ConversationStateKernel {
     if (missingCriticalSlots.isNotEmpty || explicitAskUser) {
       nextActionType = AssistantNextAction.askUser;
       finalAnswerModeType = FinalAnswerMode.clarify;
+    } else if (_hasExplicitAnswerGateAssessment(modelGateAssessment)) {
+      final explicitMode = _normalizedAnswerMode(modelGateAssessment!);
+      if (explicitMode == 'replan' && modelGateAssessment.replanNeeded) {
+        nextActionType = AssistantNextAction.replan;
+        finalAnswerModeType = FinalAnswerMode.replan;
+      } else if (explicitMode == 'bounded_answer' ||
+          explicitMode == 'fallback') {
+        nextActionType = AssistantNextAction.answer;
+        finalAnswerModeType = FinalAnswerMode.boundedAnswer;
+      } else {
+        nextActionType = AssistantNextAction.answer;
+        finalAnswerModeType = FinalAnswerMode.full;
+      }
     } else if (evidenceStatusType == EvidenceStatus.full ||
         evidenceStatusType == EvidenceStatus.notRequired) {
       nextActionType = AssistantNextAction.answer;
@@ -260,6 +277,42 @@ class ConversationStateKernel {
       qualityGates: qualityGates,
       finalAnswerReady: finalAnswerReady,
     );
+  }
+
+  AssistantTurnAnswerGateAssessment? _parseAnswerGateAssessment(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return AssistantTurnAnswerGateAssessment.fromJson(
+        raw.cast<String, dynamic>(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _hasExplicitAnswerGateAssessment(
+    AssistantTurnAnswerGateAssessment? assessment,
+  ) {
+    if (assessment == null) {
+      return false;
+    }
+    return assessment.answerMode.trim().isNotEmpty ||
+        assessment.canAnswerNow ||
+        assessment.replanNeeded ||
+        assessment.replanReason.trim().isNotEmpty ||
+        assessment.attemptsUsed > 0 ||
+        assessment.maxAttempts > 0;
+  }
+
+  String _normalizedAnswerMode(AssistantTurnAnswerGateAssessment assessment) {
+    final raw = assessment.answerMode.trim().toLowerCase();
+    if (raw.isEmpty) {
+      if (assessment.replanNeeded) {
+        return 'replan';
+      }
+      return assessment.canAnswerNow ? 'answer' : 'fallback';
+    }
+    return raw;
   }
 
   SlotValueSnapshot _normalizePayloadSlot(String slotId, Object? raw) {

@@ -211,7 +211,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<List<ChatInputAttachment>> _pickChatFiles(int remaining) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: false,
     );

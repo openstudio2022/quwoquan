@@ -279,6 +279,48 @@ void main() {
     expect(summary.contains('{{'), isFalse);
   });
 
+  test('Rule-5b: summarizeRecent(roundsLimit) 会优先输出结构化 recent rounds transcript', () async {
+    final sm = await _loadFrom(tempDir, {
+      'version': assistantHistoryStorageVersion,
+      'activeSessionId': 'assistant',
+      'sessions': {
+        'assistant': [
+          {'role': 'user', 'content': '第一问'},
+          {
+            ..._canonicalAssistantMessage(content: '第一答'),
+            'id': 'turn_1',
+            'runArtifacts': {
+              ...((_canonicalAssistantMessage(content: '第一答')['runArtifacts']
+                      as Map<String, dynamic>)),
+              'understandingSnapshot': const <String, dynamic>{
+                'userFacingSummary': '第一轮理解摘要',
+              },
+            },
+          },
+          {'role': 'user', 'content': '第二问'},
+          {
+            ..._canonicalAssistantMessage(content: '第二答'),
+            'id': 'turn_2',
+            'runArtifacts': {
+              ...((_canonicalAssistantMessage(content: '第二答')['runArtifacts']
+                      as Map<String, dynamic>)),
+              'understandingSnapshot': const <String, dynamic>{
+                'userFacingSummary': '第二轮理解摘要',
+              },
+            },
+          },
+        ],
+      },
+      'metadata': {},
+    });
+
+    final summary = sm.summarizeRecent('assistant', roundsLimit: 1);
+    expect(summary, contains('user: 第二问'));
+    expect(summary, contains('understanding: 第二轮理解摘要'));
+    expect(summary, contains('assistant: 第二答'));
+    expect(summary, isNot(contains('第一问')));
+  });
+
   test('Rule-6: root-level 旧历史格式不再兼容，load() 后直接清空', () async {
     final sm = await _loadFrom(tempDir, {
       'assistant': [
