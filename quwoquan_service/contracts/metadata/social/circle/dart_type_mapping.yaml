@@ -1,0 +1,30 @@
+# Dart 侧与 contracts/metadata 对齐的约定（供后续 codegen / 人工维护对照）。
+# 云侧 Go 模型：`make codegen-circle-service` → services/circle-service/internal/domain/circle/model/circle.go
+version: 1
+domain: circle
+
+codegen_strategy:
+  # 长期：与 Go 相同输入（runtime/registry LoadFromDirectory）生成 Dart entity DTO。
+  preferred: shared_registry_emit
+  # 当前：Circle 聚合 DTO / Wire 类仍多为手写；以下已由 tools/codegen_app_metadata 从 metadata 生成：
+  # - circle_write_wire_writable_keys.g.dart（CreateCircle / CreateCircleGroup writable_fields + 声明序 List）
+  # - ui_category_tabs.yaml → App asset，CircleCategoryTabsLoader 运行时解析
+  # 修改 social/circle/service.yaml 的 writable_fields 后请执行：
+  #   cd quwoquan_service && go run ./tools/codegen_app_metadata -metadata-dir contracts/metadata -app-dir ../quwoquan_app
+  interim: hybrid_hand_written_plus_codegen_app_metadata
+
+wire_to_dart:
+  ObjectId: String
+  string: String
+  int: int
+  int64: int
+  boolean: bool
+  timestamp: DateTime
+  "[]string": List<String>
+
+# 与 CircleDto.fromMap 等兼容层一致（非 metadata 字段名本身）。
+json_decode_aliases:
+  circle_aggregate:
+    id: [_id, id]
+    category: [category, categoryId]
+    coverUrl: [coverUrl, cover]

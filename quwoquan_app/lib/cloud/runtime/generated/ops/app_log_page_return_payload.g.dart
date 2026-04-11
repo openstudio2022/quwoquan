@@ -7,11 +7,11 @@ class AppLogPageReturnPayload {
   final String pageName;
   final int durationMs;
 
-  const AppLogPageReturnPayload({
-    required this.event,
-    required this.route,
-    required this.pageName,
-    required this.durationMs,
+  AppLogPageReturnPayload({
+    this.event = 'return',
+    this.route = '',
+    this.pageName = '',
+    this.durationMs = 0,
   });
 
   factory AppLogPageReturnPayload.fromMap(Map<String, dynamic> m) {

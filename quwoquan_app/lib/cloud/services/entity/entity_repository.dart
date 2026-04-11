@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -70,14 +71,21 @@ abstract class HomepageRepository {
 }
 
 class MockHomepageRepository implements HomepageRepository {
-  MockHomepageRepository()
-    : _homepages = HomepageMockData.homepages
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList(growable: true);
+  MockHomepageRepository() : _homepages = HomepageMockData.cloneHomepageSeeds();
 
-  final List<Map<String, dynamic>> _homepages;
-  final List<Map<String, dynamic>> _claimRequests = <Map<String, dynamic>>[];
-  final List<Map<String, dynamic>> _statusReports = <Map<String, dynamic>>[];
+  final List<HomepageDetail> _homepages;
+  final List<HomepageClaimRequestRecord> _claimRequests =
+      <HomepageClaimRequestRecord>[];
+  final List<HomepageStatusReportRecord> _statusReports =
+      <HomepageStatusReportRecord>[];
+
+  void _putHomepage(HomepageDetail next) {
+    final i = _homepages.indexWhere((h) => h.id == next.id);
+    if (i < 0) {
+      throw StateError('homepage not found: ${next.id}');
+    }
+    _homepages[i] = next;
+  }
 
   @override
   Future<List<HomepageSummary>> searchHomepages({
@@ -92,20 +100,19 @@ class MockHomepageRepository implements HomepageRepository {
     final normalizedCity = _normalize(city);
     final normalizedStatus = _normalize(status);
     final items = _homepages
-        .where((item) {
+        .where((h) {
           if (normalizedType.isNotEmpty &&
-              _normalize(item['homepageType']?.toString()) != normalizedType) {
+              _normalize(h.homepageType) != normalizedType) {
             return false;
           }
-          if (normalizedCity.isNotEmpty &&
-              _normalize(item['city']?.toString()) != normalizedCity) {
+          if (normalizedCity.isNotEmpty && _normalize(h.city) != normalizedCity) {
             return false;
           }
           if (normalizedStatus.isNotEmpty) {
-            if (_normalize(item['status']?.toString()) != normalizedStatus) {
+            if (_normalize(h.status) != normalizedStatus) {
               return false;
             }
-          } else if (_normalize(item['status']?.toString()) != 'published') {
+          } else if (_normalize(h.status) != 'published') {
             return false;
           }
           if (normalizedQuery.isEmpty) {
@@ -113,13 +120,11 @@ class MockHomepageRepository implements HomepageRepository {
           }
           final haystack = _normalize(
             <String>[
-              item['title']?.toString() ?? '',
-              item['subtitle']?.toString() ?? '',
-              item['address']?.toString() ?? '',
-              item['city']?.toString() ?? '',
-              ...(item['categoryTags'] as List? ?? const <String>[]).map(
-                (tag) => tag.toString(),
-              ),
+              h.title,
+              h.subtitle ?? '',
+              h.address ?? '',
+              h.city ?? '',
+              ...h.categoryTags,
             ].join(' '),
           );
           return haystack.contains(normalizedQuery);
@@ -127,25 +132,25 @@ class MockHomepageRepository implements HomepageRepository {
         .take(limit)
         .toList(growable: false);
     return items
-        .map((item) => HomepageSummary.fromMap(item))
+        .map(HomepageSummary.fromDetail)
         .toList(growable: false);
   }
 
   @override
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
-    return HomepageDetail.fromMap(_requireHomepage(homepageId));
+    return _requireHomepage(homepageId);
   }
 
   @override
   Future<HomepageShellData> getHomepageShell(String homepageId) async {
     final homepage = _requireHomepage(homepageId);
-    return HomepageShellData.fromMap(<String, dynamic>{
-      'homepage': homepage,
-      'reviewSummary': homepage['reviewSummary'],
-      'contentPreview': homepage['contentPreview'],
-      'questionPreview': homepage['questionPreview'],
-      'relatedGroups': homepage['relatedGroups'],
-    });
+    return HomepageShellData(
+      homepage: homepage,
+      reviewSummary: homepage.reviewSummary,
+      contentPreview: homepage.contentPreview,
+      questionPreview: homepage.questionPreview,
+      relatedGroups: homepage.relatedGroups,
+    );
   }
 
   @override
@@ -153,11 +158,11 @@ class MockHomepageRepository implements HomepageRepository {
     String homepageId,
   ) async {
     final homepage = _requireHomepage(homepageId);
-    return HomepageReviewSummaryData.fromMap(
-      Map<String, dynamic>.from(
-        homepage['reviewSummary'] as Map? ?? const <String, dynamic>{},
-      ),
-    );
+    final rs = homepage.reviewSummary;
+    if (rs != null) {
+      return rs;
+    }
+    return HomepageReviewSummaryData();
   }
 
   @override
@@ -165,13 +170,7 @@ class MockHomepageRepository implements HomepageRepository {
     String homepageId,
   ) async {
     final homepage = _requireHomepage(homepageId);
-    return (homepage['relatedGroups'] as List? ?? const <dynamic>[])
-        .whereType<Map>()
-        .map(
-          (item) =>
-              HomepageRelatedGroupSummary.fromMap(item.cast<String, dynamic>()),
-        )
-        .toList(growable: false);
+    return List<HomepageRelatedGroupSummary>.from(homepage.relatedGroups);
   }
 
   @override
@@ -180,7 +179,7 @@ class MockHomepageRepository implements HomepageRepository {
   }) async {
     final item = _createCandidateFromDraft(draft, sourceType: 'owner_created');
     _homepages.add(item);
-    return HomepageDetail.fromMap(item);
+    return item;
   }
 
   @override
@@ -189,21 +188,30 @@ class MockHomepageRepository implements HomepageRepository {
   }) async {
     final item = _createCandidateFromDraft(draft, sourceType: 'user_suggested');
     _homepages.add(item);
-    return HomepageDetail.fromMap(item);
+    return item;
   }
 
   @override
   Future<HomepageDetail> publishHomepageCandidate(String homepageId) async {
-    final item = _requireHomepage(homepageId);
-    final now = DateTime.now().toUtc().toIso8601String();
-    item['status'] = 'published';
-    item['updatedAt'] = now;
-    item['publishedAt'] = now;
-    item.putIfAbsent('reviewSummary', () => _defaultReviewSummary(item));
-    item.putIfAbsent('contentPreview', () => _defaultContentPreview(item));
-    item.putIfAbsent('questionPreview', () => _defaultQuestionPreview(item));
-    item.putIfAbsent('relatedGroups', () => _defaultRelatedGroups(item));
-    return HomepageDetail.fromMap(item);
+    final h = _requireHomepage(homepageId);
+    final now = DateTime.now().toUtc();
+    final published = h.copyWith(
+      status: 'published',
+      updatedAt: now,
+      publishedAt: now,
+      reviewSummary: h.reviewSummary ?? _mockDefaultReviewSummary(h),
+      contentPreview: h.contentPreview.isNotEmpty
+          ? h.contentPreview
+          : _mockDefaultContentPreview(h),
+      questionPreview: h.questionPreview.isNotEmpty
+          ? h.questionPreview
+          : _mockDefaultQuestionPreview(h),
+      relatedGroups: h.relatedGroups.isNotEmpty
+          ? h.relatedGroups
+          : _mockDefaultRelatedGroups(h),
+    );
+    _putHomepage(published);
+    return published;
   }
 
   @override
@@ -212,26 +220,22 @@ class MockHomepageRepository implements HomepageRepository {
     required HomepageClaimRequestDraft draft,
   }) async {
     final homepage = _requireHomepage(homepageId);
-    final now = DateTime.now().toUtc().toIso8601String();
-    final item = <String, dynamic>{
-      '_id': 'claim_${_claimRequests.length + 1}',
-      'homepageId': homepageId,
-      'requesterUserId': draft.requesterUserId.trim().isEmpty
+    final now = DateTime.now().toUtc();
+    final record = HomepageClaimRequestRecord(
+      id: 'claim_${_claimRequests.length + 1}',
+      homepageId: homepageId,
+      requesterUserId: draft.requesterUserId.trim().isEmpty
           ? 'mock-user'
           : draft.requesterUserId.trim(),
-      'claimTier': draft.claimTier,
-      'contactPhone': draft.contactPhone,
-      'businessLicenseUrl': draft.businessLicenseUrl,
-      'identityCardFrontUrl': draft.identityCardFrontUrl,
-      'identityCardBackUrl': draft.identityCardBackUrl,
-      'note': draft.note,
-      'status': 'pending_review',
-      'createdAt': now,
-    };
-    _claimRequests.add(item);
-    homepage['claimStatus'] = 'pending_review';
-    homepage['updatedAt'] = now;
-    return HomepageClaimRequestRecord.fromMap(item);
+      claimTier: draft.claimTier,
+      status: 'pending_review',
+      createdAt: now,
+    );
+    _claimRequests.add(record);
+    _putHomepage(
+      homepage.copyWith(claimStatus: 'pending_review', updatedAt: now),
+    );
+    return record;
   }
 
   @override
@@ -242,21 +246,34 @@ class MockHomepageRepository implements HomepageRepository {
     String? reviewNote,
   }) async {
     final homepage = _requireHomepage(homepageId);
-    final item = _claimRequests.firstWhere(
-      (request) =>
-          request['_id']?.toString() == claimRequestId &&
-          request['homepageId']?.toString() == homepageId,
+    final idx = _claimRequests.indexWhere(
+      (r) => r.id == claimRequestId && r.homepageId == homepageId,
     );
-    final now = DateTime.now().toUtc().toIso8601String();
-    item['status'] = status;
-    item['reviewNote'] = reviewNote;
-    item['reviewedAt'] = now;
-    homepage['claimStatus'] = status == 'approved' ? 'claimed' : 'rejected';
-    if (status == 'approved') {
-      homepage['ownerUserId'] = item['requesterUserId'];
+    if (idx < 0) {
+      throw StateError('claim request not found: $claimRequestId');
     }
-    homepage['updatedAt'] = now;
-    return HomepageClaimRequestRecord.fromMap(item);
+    final old = _claimRequests[idx];
+    final now = DateTime.now().toUtc();
+    final next = HomepageClaimRequestRecord(
+      id: old.id,
+      homepageId: old.homepageId,
+      requesterUserId: old.requesterUserId,
+      claimTier: old.claimTier,
+      status: status,
+      reviewNote: reviewNote,
+      createdAt: old.createdAt,
+      reviewedAt: now,
+    );
+    _claimRequests[idx] = next;
+    final claimStatus = status == 'approved' ? 'claimed' : 'rejected';
+    _putHomepage(
+      homepage.copyWith(
+        claimStatus: claimStatus,
+        ownerUserId: status == 'approved' ? old.requesterUserId : homepage.ownerUserId,
+        updatedAt: now,
+      ),
+    );
+    return next;
   }
 
   @override
@@ -265,12 +282,9 @@ class MockHomepageRepository implements HomepageRepository {
     required HomepageBasicDraft draft,
   }) async {
     final item = _requireHomepage(homepageId);
-    final payload = draft.toMap();
-    payload.forEach((key, value) {
-      item[key] = value;
-    });
-    item['updatedAt'] = DateTime.now().toUtc().toIso8601String();
-    return HomepageDetail.fromMap(item);
+    final next = _mergeBasicDraft(item, draft);
+    _putHomepage(next);
+    return next;
   }
 
   @override
@@ -279,20 +293,22 @@ class MockHomepageRepository implements HomepageRepository {
     required HomepageStatusReportDraft draft,
   }) async {
     _requireHomepage(homepageId);
-    final item = <String, dynamic>{
-      '_id': 'report_${_statusReports.length + 1}',
-      'homepageId': homepageId,
-      'reporterUserId': draft.reporterUserId.trim().isEmpty
+    final now = DateTime.now().toUtc();
+    final record = HomepageStatusReportRecord(
+      id: 'report_${_statusReports.length + 1}',
+      homepageId: homepageId,
+      reporterUserId: draft.reporterUserId.trim().isEmpty
           ? 'mock-user'
           : draft.reporterUserId.trim(),
-      'reason': draft.reason,
-      'description': draft.description,
-      'evidenceUrls': draft.evidenceUrls,
-      'status': 'pending_review',
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-    };
-    _statusReports.add(item);
-    return HomepageStatusReportRecord.fromMap(item);
+      reason: draft.reason,
+      status: 'pending_review',
+      description:
+          draft.description.trim().isEmpty ? null : draft.description.trim(),
+      evidenceUrls: List<String>.from(draft.evidenceUrls),
+      createdAt: now,
+    );
+    _statusReports.add(record);
+    return record;
   }
 
   @override
@@ -303,103 +319,162 @@ class MockHomepageRepository implements HomepageRepository {
     String? reviewNote,
   }) async {
     final homepage = _requireHomepage(homepageId);
-    final item = _statusReports.firstWhere(
-      (report) =>
-          report['_id']?.toString() == reportId &&
-          report['homepageId']?.toString() == homepageId,
+    final idx = _statusReports.indexWhere(
+      (r) => r.id == reportId && r.homepageId == homepageId,
     );
-    final now = DateTime.now().toUtc().toIso8601String();
-    item['status'] = status;
-    item['reviewNote'] = reviewNote;
-    item['reviewedAt'] = now;
-    if (status == 'confirmed_offline') {
-      homepage['status'] = 'offline';
-      homepage['offlineAt'] = now;
-      homepage['updatedAt'] = now;
+    if (idx < 0) {
+      throw StateError('status report not found: $reportId');
     }
-    return HomepageStatusReportRecord.fromMap(item);
+    final old = _statusReports[idx];
+    final now = DateTime.now().toUtc();
+    final next = HomepageStatusReportRecord(
+      id: old.id,
+      homepageId: old.homepageId,
+      reporterUserId: old.reporterUserId,
+      reason: old.reason,
+      status: status,
+      description: old.description,
+      evidenceUrls: old.evidenceUrls,
+      reviewNote: reviewNote,
+      createdAt: old.createdAt,
+      reviewedAt: now,
+    );
+    _statusReports[idx] = next;
+    if (status == 'confirmed_offline') {
+      _putHomepage(
+        homepage.copyWith(
+          status: 'offline',
+          offlineAt: now,
+          updatedAt: now,
+        ),
+      );
+    }
+    return next;
   }
 
-  Map<String, dynamic> _requireHomepage(String homepageId) {
+  HomepageDetail _requireHomepage(String homepageId) {
     return _homepages.firstWhere(
-      (item) => item['_id']?.toString() == homepageId,
+      (h) => h.id == homepageId,
       orElse: () => throw StateError('homepage not found: $homepageId'),
     );
   }
 
-  Map<String, dynamic> _createCandidateFromDraft(
+  HomepageDetail _createCandidateFromDraft(
     HomepageSuggestionDraft draft, {
     required String sourceType,
   }) {
-    final now = DateTime.now().toUtc().toIso8601String();
-    return <String, dynamic>{
-      '_id': 'homepage_candidate_${_homepages.length + 1}',
-      ...draft.toMap(),
-      'status': 'candidate',
-      'sourceType': sourceType,
-      'claimStatus': 'unclaimed',
-      'createdAt': now,
-      'updatedAt': now,
-    };
+    final now = DateTime.now().toUtc();
+    return HomepageDetail(
+      id: 'homepage_candidate_${_homepages.length + 1}',
+      homepageType: draft.homepageType,
+      title: draft.title,
+      subtitle: draft.subtitle.trim().isEmpty ? null : draft.subtitle.trim(),
+      coverUrl: draft.coverUrl.trim().isEmpty ? null : draft.coverUrl.trim(),
+      categoryTags: List<String>.from(draft.categoryTags),
+      address: draft.address.trim().isEmpty ? null : draft.address.trim(),
+      city: draft.city.trim().isEmpty ? null : draft.city.trim(),
+      location: draft.location,
+      status: 'candidate',
+      sourceType: sourceType,
+      claimStatus: 'unclaimed',
+      createdAt: now,
+      updatedAt: now,
+    );
   }
+}
 
-  Map<String, dynamic> _defaultReviewSummary(Map<String, dynamic> homepage) {
-    return <String, dynamic>{
-      'averageRating': homepage['averageRating'] ?? 4.6,
-      'ratingCount': homepage['ratingCount'] ?? 18,
-      'highlightTags':
-          homepage['categoryTags'] ?? const <String>['体验稳定', '适合沉淀口碑'],
-      'dimensionScores': <Map<String, dynamic>>[
-        <String, dynamic>{'label': '环境', 'score': 4.6},
-        <String, dynamic>{'label': '体验', 'score': 4.5},
-        <String, dynamic>{'label': '推荐度', 'score': 4.7},
-      ],
-    };
-  }
+HomepageReviewSummaryData _mockDefaultReviewSummary(HomepageDetail homepage) {
+  return HomepageReviewSummaryData(
+    averageRating: homepage.averageRating ?? 4.6,
+    ratingCount: homepage.ratingCount != 0 ? homepage.ratingCount : 18,
+    highlightTags: homepage.categoryTags.isNotEmpty
+        ? List<String>.from(homepage.categoryTags)
+        : const <String>['体验稳定', '适合沉淀口碑'],
+    dimensionScores: <HomepageReviewDimensionScore>[
+      HomepageReviewDimensionScore(label: '环境', score: 4.6),
+      HomepageReviewDimensionScore(label: '体验', score: 4.5),
+      HomepageReviewDimensionScore(label: '推荐度', score: 4.7),
+    ],
+  );
+}
 
-  List<Map<String, dynamic>> _defaultContentPreview(
-    Map<String, dynamic> homepage,
-  ) {
-    final title = homepage['title']?.toString() ?? '';
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
-        'postId': '${homepage['_id']}_post_1',
-        'title': '$title 的体验笔记',
-        'summary': '从主页上下文进入内容挂载后的聚合。',
-        'contentType': 'article',
-        'coverUrl': homepage['coverUrl'],
-      },
-    ];
-  }
+List<HomepageContentPreview> _mockDefaultContentPreview(HomepageDetail homepage) {
+  final title = homepage.title;
+  return <HomepageContentPreview>[
+    HomepageContentPreview(
+      postId: '${homepage.id}_post_1',
+      title: '$title 的体验笔记',
+      summary: '从主页上下文进入内容挂载后的聚合。',
+      contentType: 'article',
+      coverUrl: homepage.coverUrl,
+    ),
+  ];
+}
 
-  List<Map<String, dynamic>> _defaultQuestionPreview(
-    Map<String, dynamic> homepage,
-  ) {
-    final title = homepage['title']?.toString() ?? '';
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
-        'postId': '${homepage['_id']}_question_1',
-        'title': '$title 值得什么时候去？',
-        'summary': '候选主页发布后也会得到基础问答壳层。',
-      },
-    ];
-  }
+List<HomepageQuestionPreview> _mockDefaultQuestionPreview(HomepageDetail homepage) {
+  final title = homepage.title;
+  return <HomepageQuestionPreview>[
+    HomepageQuestionPreview(
+      postId: '${homepage.id}_question_1',
+      title: '$title 值得什么时候去？',
+      summary: '候选主页发布后也会得到基础问答壳层。',
+    ),
+  ];
+}
 
-  List<Map<String, dynamic>> _defaultRelatedGroups(
-    Map<String, dynamic> homepage,
-  ) {
-    final title = homepage['title']?.toString() ?? '';
-    final id = homepage['_id']?.toString() ?? '';
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
-        'circleId': '${id}_group_1',
-        'name': '$title 讨论群',
-        'memberCount': 12,
-        'linkedHomepageId': id,
-        'linkedHomepageTitle': title,
-      },
-    ];
-  }
+List<HomepageRelatedGroupSummary> _mockDefaultRelatedGroups(
+  HomepageDetail homepage,
+) {
+  final title = homepage.title;
+  final id = homepage.id;
+  return <HomepageRelatedGroupSummary>[
+    HomepageRelatedGroupSummary(
+      circleId: '${id}_group_1',
+      name: '$title 讨论群',
+      memberCount: 12,
+      linkedHomepageId: id,
+      linkedHomepageTitle: title,
+    ),
+  ];
+}
+
+HomepageDetail _mergeBasicDraft(HomepageDetail h, HomepageBasicDraft d) {
+  final now = DateTime.now().toUtc();
+  return HomepageDetail(
+    id: h.id,
+    homepageType: h.homepageType,
+    title: d.title != null && d.title!.trim().isNotEmpty
+        ? d.title!.trim()
+        : h.title,
+    subtitle: d.subtitle != null
+        ? (d.subtitle!.trim().isEmpty ? null : d.subtitle!.trim())
+        : h.subtitle,
+    coverUrl: d.coverUrl != null && d.coverUrl!.trim().isNotEmpty
+        ? d.coverUrl!.trim()
+        : h.coverUrl,
+    status: h.status,
+    sourceType: h.sourceType,
+    claimStatus: h.claimStatus,
+    categoryTags: d.categoryTags ?? h.categoryTags,
+    address: d.address != null && d.address!.trim().isNotEmpty
+        ? d.address!.trim()
+        : h.address,
+    city: d.city != null && d.city!.trim().isNotEmpty
+        ? d.city!.trim()
+        : h.city,
+    location: d.location ?? h.location,
+    ownerUserId: h.ownerUserId,
+    averageRating: h.averageRating,
+    ratingCount: h.ratingCount,
+    reviewSummary: h.reviewSummary,
+    contentPreview: h.contentPreview,
+    questionPreview: h.questionPreview,
+    relatedGroups: h.relatedGroups,
+    createdAt: h.createdAt,
+    updatedAt: now,
+    publishedAt: h.publishedAt,
+    offlineAt: h.offlineAt,
+  );
 }
 
 class RemoteHomepageRepository implements HomepageRepository {
@@ -472,9 +547,7 @@ class RemoteHomepageRepository implements HomepageRepository {
         operationId: EntityApiMetadata.searchHomepagesOperation,
       ),
     );
-    return page.items
-        .map((item) => HomepageSummary.fromMap(item))
-        .toList(growable: false);
+    return page.items.map(HomepageSummary.fromMap).toList(growable: false);
   }
 
   @override
@@ -565,12 +638,12 @@ class RemoteHomepageRepository implements HomepageRepository {
         operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
       ),
     );
-    return (object['groups'] as List? ?? const <dynamic>[])
-        .whereType<Map>()
-        .map(
-          (item) =>
-              HomepageRelatedGroupSummary.fromMap(item.cast<String, dynamic>()),
-        )
+    final rows = CloudResponseDecoder.mapListFirstPresent(
+      object,
+      const <String>['groups', 'relatedGroups'],
+    );
+    return rows
+        .map(HomepageRelatedGroupSummary.fromMap)
         .toList(growable: false);
   }
 
@@ -633,7 +706,7 @@ class RemoteHomepageRepository implements HomepageRepository {
         operationId: EntityApiMetadata.publishHomepageCandidateOperation,
         clientPageId: EntityRequestPageIds.publishHomepageCandidate,
       ),
-      body: const <String, dynamic>{},
+      body: PublishHomepageCandidateWire().toWire(),
     );
     return HomepageDetail.fromMap(
       CloudResponseDecoder.asObject(
@@ -694,11 +767,12 @@ class RemoteHomepageRepository implements HomepageRepository {
         operationId: EntityApiMetadata.reviewHomepageClaimRequestOperation,
         clientPageId: EntityRequestPageIds.reviewHomepageClaimRequest,
       ),
-      body: <String, dynamic>{
-        'status': status,
-        if (reviewNote != null && reviewNote.isNotEmpty)
-          'reviewNote': reviewNote,
-      },
+      body: ReviewHomepageClaimRequestWire(
+        status: status,
+        reviewNote: (reviewNote != null && reviewNote.isNotEmpty)
+            ? reviewNote
+            : null,
+      ).toWire(),
     );
     return HomepageClaimRequestRecord.fromMap(
       CloudResponseDecoder.asObject(
@@ -788,11 +862,12 @@ class RemoteHomepageRepository implements HomepageRepository {
         operationId: EntityApiMetadata.reviewHomepageStatusReportOperation,
         clientPageId: EntityRequestPageIds.reviewHomepageStatusReport,
       ),
-      body: <String, dynamic>{
-        'status': status,
-        if (reviewNote != null && reviewNote.isNotEmpty)
-          'reviewNote': reviewNote,
-      },
+      body: ReviewHomepageStatusReportWire(
+        status: status,
+        reviewNote: (reviewNote != null && reviewNote.isNotEmpty)
+            ? reviewNote
+            : null,
+      ).toWire(),
     );
     return HomepageStatusReportRecord.fromMap(
       CloudResponseDecoder.asObject(

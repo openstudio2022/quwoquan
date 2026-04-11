@@ -6,9 +6,11 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
 
 /// 首页圈子发现流单次拉取上限（产品约定，非 [CloudApiDefaults.pageLimit]）。
 const int _kHomeCircleDiscoveryFeedDefaultLimit = 200;
@@ -27,12 +29,52 @@ String? _normalizeCircleFeedType(String? type) {
   }
 }
 
+List<PostBaseDto> _decodeCircleFeedMaps(Iterable<Map<String, dynamic>> items) {
+  final out = <PostBaseDto>[];
+  for (final m in items) {
+    try {
+      out.add(postBaseDtoFromMap(Map<String, dynamic>.from(m)));
+    } catch (_) {
+      // 跳过无法映射为 PostBaseDto 的 wire 行（与旧版尽力解析一致）
+    }
+  }
+  return out;
+}
+
+/// Mock 详情 wire：在 [CircleDto.toMap] 上补齐 UI/Mock 仍消费的别名键与主圈视角字段。
+Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
+  final w = Map<String, dynamic>.from(d.toMap());
+  w['categoryId'] = d.category;
+  final cover = (d.coverUrl ?? '').trim();
+  if (cover.isNotEmpty) {
+    w['cover'] = cover;
+    w['avatar'] = cover;
+    w['avatarUrl'] = cover;
+  }
+  if (d.description != null && d.description!.isNotEmpty) {
+    w['desc'] = d.description;
+  }
+  if (d.id == CircleMockData.primaryCircleId) {
+    final p = CircleMockData.circleInfo;
+    w['stats'] = p['stats'];
+    w['hasNewMessages'] = p['hasNewMessages'];
+    w['role'] = p['role'];
+    w['joinStatus'] = p['joinStatus'];
+    w['isFollowed'] = p['isFollowed'];
+  } else {
+    w.putIfAbsent('role', () => 'member');
+    w.putIfAbsent('joinStatus', () => 'none');
+    w.putIfAbsent('isFollowed', () => false);
+  }
+  return w;
+}
+
 /// Circle 域 Repository（三层模式：Abstract + Mock + Remote）。
 ///
 /// Mock：使用 [CircleMockData]（canonical 字段数据），不发 HTTP。
 /// Remote：对接云侧 REST 契约，使用 [CloudRuntimeConfig] + [CloudRequestHeaders]。
 abstract class CircleRepository {
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? subCategory,
     String? domainId,
@@ -51,11 +93,11 @@ abstract class CircleRepository {
 
   Future<CircleDetailPayload> getCircle(String circleId);
 
-  Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data);
+  Future<CircleDto> createCircle(CircleCreateWireDto data);
 
-  Future<Map<String, dynamic>> updateCircle(
+  Future<CircleDto> updateCircle(
     String circleId,
-    Map<String, dynamic> data,
+    CircleUpdateWireDto data,
   );
 
   Future<void> archiveCircle(String circleId);
@@ -64,7 +106,7 @@ abstract class CircleRepository {
 
   Future<void> leaveCircle(String circleId);
 
-  Future<List<Map<String, dynamic>>> listMembers(
+  Future<List<CircleMemberRosterItemDto>> listMembers(
     String circleId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -72,7 +114,7 @@ abstract class CircleRepository {
 
   Future<void> updateMemberRole(String circleId, String userId, String role);
 
-  Future<List<Map<String, dynamic>>> listCircleGroups(
+  Future<List<CircleGroupDto>> listCircleGroups(
     String circleId, {
     String? groupType,
     String? visibility,
@@ -82,7 +124,7 @@ abstract class CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<Map<String, dynamic>>> searchCircleGroups(
+  Future<List<CircleGroupDto>> searchCircleGroups(
     String circleId, {
     required String query,
     String? visibility,
@@ -90,22 +132,22 @@ abstract class CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> getCircleGroup(String circleId, String groupId);
+  Future<CircleGroupDto> getCircleGroup(String circleId, String groupId);
 
-  Future<Map<String, dynamic>> createCircleGroup(
+  Future<CircleGroupDto> createCircleGroup(
     String circleId,
-    Map<String, dynamic> data,
+    CircleGroupCreateWireDto data,
   );
 
-  Future<Map<String, dynamic>> updateCircleGroup(
+  Future<CircleGroupDto> updateCircleGroup(
     String circleId,
     String groupId,
-    Map<String, dynamic> data,
+    CircleGroupUpdateWireDto data,
   );
 
   Future<void> applyJoinCircleGroup(String circleId, String groupId);
 
-  Future<List<Map<String, dynamic>>> listCircleGroupMembers(
+  Future<List<CircleGroupMemberDto>> listCircleGroupMembers(
     String circleId,
     String groupId, {
     String? status,
@@ -125,7 +167,7 @@ abstract class CircleRepository {
     String userId,
   );
 
-  Future<List<Map<String, dynamic>>> getCircleFeed(
+  Future<List<PostBaseDto>> getCircleFeed(
     String circleId, {
     String? identity,
     String? type,
@@ -142,9 +184,9 @@ abstract class CircleRepository {
     required bool featured,
   });
 
-  Future<Map<String, dynamic>> getCircleStats(String circleId);
+  Future<CircleStatsWireDto> getCircleStats(String circleId);
 
-  Future<List<Map<String, dynamic>>> listFiles(
+  Future<List<CircleFileDto>> listFiles(
     String circleId, {
     String? parentId,
     String? sort,
@@ -152,41 +194,41 @@ abstract class CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> createFile(
+  Future<CircleFileDto> createFile(
     String circleId,
-    Map<String, dynamic> data,
+    CircleFileCreateWireDto data,
   );
 
-  Future<Map<String, dynamic>> getFile(String circleId, String fileId);
+  Future<CircleFileDto> getFile(String circleId, String fileId);
 
-  Future<Map<String, dynamic>> updateFile(
+  Future<CircleFileDto> updateFile(
     String circleId,
     String fileId,
-    Map<String, dynamic> data,
+    CircleFileUpdateWireDto data,
   );
 
   Future<void> deleteFile(String circleId, String fileId);
 
   Future<void> updateSections(
     String circleId,
-    List<Map<String, dynamic>> sections,
+    List<CircleSectionConfigDto> sections,
   );
 
-  Future<void> reportBehavior(Map<String, dynamic> report);
+  Future<void> reportBehavior(CircleBehaviorReportWireDto report);
 
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   /// 首页圈子发现流（Mock：`CircleMockData.circleFeedItems`；Remote：空列表）。
-  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
   });
 
-  /// 圈子分类 Tab 配置（Mock：`categoryConfig`；Remote：仅 `all`）。
-  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig();
+  /// 圈子分类 Tab 配置（Mock/Remote 均从 `ui_category_tabs.yaml` asset 加载；失败时回退仅 `all`）。
+  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig();
 }
 
 // ---------------------------------------------------------------------------
@@ -194,86 +236,80 @@ abstract class CircleRepository {
 // ---------------------------------------------------------------------------
 
 class MockCircleRepository implements CircleRepository {
-  MockCircleRepository() : _circles = _buildInitialCircles();
+  MockCircleRepository()
+    : _circles = CircleMockData.buildRepositorySeedCircleDtos();
 
-  final List<Map<String, dynamic>> _circles;
-  final Map<String, List<Map<String, dynamic>>> _groupCache = {};
-  final Map<String, List<Map<String, dynamic>>> _groupMembersCache = {};
+  final List<CircleDto> _circles;
+  final Map<String, List<CircleGroupDto>> _groupCache = {};
+  final Map<String, List<CircleGroupMemberDto>> _groupMembersCache = {};
 
-  static List<Map<String, dynamic>> _buildInitialCircles() {
-    final source = <Map<String, dynamic>>[
-      CircleMockData.circleInfo,
-      ...CircleMockData.circles,
-    ];
-    final circlesById = <String, Map<String, dynamic>>{};
-    for (final circle in source) {
-      final id = (circle['id'] ?? circle['_id'] ?? '').toString();
-      if (id.isEmpty) {
-        continue;
-      }
-      circlesById[id] = Map<String, dynamic>.from(circle);
+  List<CircleDto> _copyCircleDtos() {
+    return List<CircleDto>.from(_circles, growable: false);
+  }
+
+  CircleDto? _findCircle(String circleId) {
+    for (final c in _circles) {
+      if (c.id == circleId) return c;
     }
-    return circlesById.values.toList(growable: true);
+    return null;
   }
 
-  List<Map<String, dynamic>> _copyCircles() {
-    return _circles
-        .map((circle) => Map<String, dynamic>.from(circle))
-        .toList(growable: false);
-  }
-
-  List<Map<String, dynamic>> _ensureGroupCache(String circleId) {
+  List<CircleGroupDto> _ensureGroupCache(String circleId) {
     final existing = _groupCache[circleId];
     if (existing != null) {
       return existing;
     }
-    final circle = _circles.firstWhere(
-      (item) => item['id'] == circleId || item['_id'] == circleId,
-      orElse: () => <String, dynamic>{},
-    );
+    final circle = _findCircle(circleId);
+    if (circle == null) {
+      _groupCache[circleId] = <CircleGroupDto>[];
+      return _groupCache[circleId]!;
+    }
     final now = DateTime.now().toIso8601String();
-    final circleName = (circle['name'] ?? '群组').toString().trim();
-    final description = (circle['description'] ?? '').toString().trim();
-    final ownerUserId = (circle['ownerId'] ?? 'owner_user').toString().trim();
-    final groups = <Map<String, dynamic>>[
-      _normalizedCircleGroup(
-        <String, dynamic>{
-          'name': '$circleName主群',
-          'description': description.isEmpty ? '默认公共群' : '$description · 默认公共群',
-          'groupType': 'public_group',
-          'visibility': 'public',
-          'joinPolicy': 'apply_only',
-          'ownerUserId': ownerUserId,
-          'memberCount': (circle['memberCount'] as num?)?.toInt() ?? 0,
-          'conversationId': circle['conversationId']?.toString(),
-          'isDefaultPublicGroup': true,
-          'lastActiveAt': circle['updatedAt'] ?? now,
-        },
-        circleId: circleId,
-        groupId: '${circleId}_group_default',
-        fallbackUpdatedAt: now,
-      ),
-    ];
-    final displaySubjectType = (circle['displaySubjectType'] ?? 'circle')
-        .toString()
-        .trim();
-    if (displaySubjectType != 'circle') {
-      groups.add(
+    final circleName = circle.name.trim().isEmpty ? '群组' : circle.name.trim();
+    final description = (circle.description ?? '').trim();
+    final ownerUserId =
+        circle.ownerId.trim().isEmpty ? 'owner_user' : circle.ownerId.trim();
+    final groups = <CircleGroupDto>[
+      CircleGroupDto.fromMap(
         _normalizedCircleGroup(
           <String, dynamic>{
-            'name': circleName,
-            'description': description,
-            'groupType': 'org_node',
-            'nodeType': 'generic',
+            'name': '$circleName主群',
+            'description': description.isEmpty ? '默认公共群' : '$description · 默认公共群',
+            'groupType': 'public_group',
             'visibility': 'public',
             'joinPolicy': 'apply_only',
             'ownerUserId': ownerUserId,
-            'memberCount': (circle['memberCount'] as num?)?.toInt() ?? 0,
-            'lastActiveAt': circle['updatedAt'] ?? now,
+            'memberCount': circle.memberCount,
+            'conversationId': circle.conversationId,
+            'isDefaultPublicGroup': true,
+            'lastActiveAt': circle.updatedAt.toIso8601String(),
           },
           circleId: circleId,
-          groupId: '${circleId}_node_root',
+          groupId: '${circleId}_group_default',
           fallbackUpdatedAt: now,
+        ),
+      ),
+    ];
+    final displaySubjectType = circle.displaySubjectType.trim();
+    if (displaySubjectType != 'circle') {
+      groups.add(
+        CircleGroupDto.fromMap(
+          _normalizedCircleGroup(
+            <String, dynamic>{
+              'name': circleName,
+              'description': description,
+              'groupType': 'org_node',
+              'nodeType': 'generic',
+              'visibility': 'public',
+              'joinPolicy': 'apply_only',
+              'ownerUserId': ownerUserId,
+              'memberCount': circle.memberCount,
+              'lastActiveAt': circle.updatedAt.toIso8601String(),
+            },
+            circleId: circleId,
+            groupId: '${circleId}_node_root',
+            fallbackUpdatedAt: now,
+          ),
         ),
       );
     }
@@ -281,7 +317,7 @@ class MockCircleRepository implements CircleRepository {
     return groups;
   }
 
-  List<Map<String, dynamic>> _ensureGroupMembersCache(
+  List<CircleGroupMemberDto> _ensureGroupMembersCache(
     String circleId,
     String groupId,
   ) {
@@ -290,16 +326,23 @@ class MockCircleRepository implements CircleRepository {
     if (existing != null) {
       return existing;
     }
-    final group = _ensureGroupCache(circleId).firstWhere(
-      (item) => item['id'] == groupId || item['_id'] == groupId,
-      orElse: () => <String, dynamic>{},
-    );
-    final ownerUserId = (group['ownerUserId'] ?? 'owner_user')
-        .toString()
-        .trim();
+    CircleGroupDto? group;
+    for (final g in _ensureGroupCache(circleId)) {
+      if (g.id == groupId) {
+        group = g;
+        break;
+      }
+    }
+    if (group == null) {
+      _groupMembersCache[key] = <CircleGroupMemberDto>[];
+      return _groupMembersCache[key]!;
+    }
+    final ownerUserId = group.ownerUserId.trim().isEmpty
+        ? 'owner_user'
+        : group.ownerUserId.trim();
     final now = DateTime.now().toIso8601String();
-    final members = <Map<String, dynamic>>[
-      <String, dynamic>{
+    final members = <CircleGroupMemberDto>[
+      CircleGroupMemberDto.fromMap(<String, dynamic>{
         '_id': '${groupId}_$ownerUserId',
         'id': '${groupId}_$ownerUserId',
         'groupId': groupId,
@@ -310,7 +353,7 @@ class MockCircleRepository implements CircleRepository {
         'joinedAt': now,
         'createdAt': now,
         'updatedAt': now,
-      },
+      }),
     ];
     _groupMembersCache[key] = members;
     return members;
@@ -402,7 +445,7 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? subCategory,
     String? domainId,
@@ -411,20 +454,20 @@ class MockCircleRepository implements CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
     String? sort,
   }) async {
-    var result = _copyCircles();
+    var result = _copyCircleDtos();
     if (category != null) {
       result = result
-          .where((c) => c['categoryId'] == category)
+          .where((c) => c.category == category)
           .toList(growable: false);
     }
     if (subCategory != null) {
       result = result
-          .where((c) => c['subCategory'] == subCategory)
+          .where((c) => c.subCategory == subCategory)
           .toList(growable: false);
     }
     if (domainId != null) {
       result = result
-          .where((c) => c['domainId'] == domainId)
+          .where((c) => c.domainId == domainId)
           .toList(growable: false);
     }
     return result.take(limit).toList(growable: false);
@@ -441,22 +484,20 @@ class MockCircleRepository implements CircleRepository {
     if (normalizedQuery.isEmpty) {
       return const CircleSearchResultView();
     }
-    final filtered = _copyCircles()
+    final filtered = _copyCircleDtos()
         .where((circle) {
           if (categoryId != null &&
               categoryId.isNotEmpty &&
-              circle['categoryId']?.toString() != categoryId) {
+              circle.category != categoryId) {
             return false;
           }
           if (subCategory != null &&
               subCategory.isNotEmpty &&
-              circle['subCategory']?.toString() != subCategory) {
+              circle.subCategory != subCategory) {
             return false;
           }
-          final name = (circle['name'] ?? '').toString().toLowerCase();
-          final description = (circle['description'] ?? '')
-              .toString()
-              .toLowerCase();
+          final name = circle.name.toLowerCase();
+          final description = (circle.description ?? '').toLowerCase();
           return name.contains(normalizedQuery) ||
               description.contains(normalizedQuery);
         })
@@ -464,10 +505,11 @@ class MockCircleRepository implements CircleRepository {
     final items = filtered
         .take(limit)
         .map((circle) {
-          final name = (circle['name'] ?? '').toString();
+          final name = circle.name;
           return CircleSearchItemView.fromMap(<String, dynamic>{
-            ...circle,
-            'circleId': circle['circleId'] ?? circle['id'],
+            ...circle.toMap(),
+            'categoryId': circle.category,
+            'circleId': circle.id,
             'highlightText': name,
             'matchedField': 'name',
           });
@@ -475,9 +517,7 @@ class MockCircleRepository implements CircleRepository {
         .toList(growable: false);
     final facetCounts = <String, int>{};
     for (final circle in filtered) {
-      final key = (circle['subCategory'] ?? circle['categoryId'] ?? '')
-          .toString()
-          .trim();
+      final key = (circle.subCategory ?? circle.category ?? '').trim();
       if (key.isEmpty) {
         continue;
       }
@@ -486,12 +526,10 @@ class MockCircleRepository implements CircleRepository {
     final facetBuckets = filtered
         .map(
           (circle) => <String, dynamic>{
-            'facetKey': (circle['subCategory'] ?? circle['categoryId'] ?? '')
-                .toString(),
-            'label': (circle['subCategory'] ?? circle['categoryId'] ?? '')
-                .toString(),
-            'categoryId': circle['categoryId']?.toString(),
-            'subCategory': circle['subCategory']?.toString(),
+            'facetKey': (circle.subCategory ?? circle.category ?? '').toString(),
+            'label': (circle.subCategory ?? circle.category ?? '').toString(),
+            'categoryId': circle.category,
+            'subCategory': circle.subCategory,
           },
         )
         .where((facet) => (facet['facetKey'] ?? '').toString().isNotEmpty)
@@ -516,46 +554,46 @@ class MockCircleRepository implements CircleRepository {
 
   @override
   Future<CircleDetailPayload> getCircle(String circleId) async {
-    final match = _circles.firstWhere(
-      (c) => c['id'] == circleId,
-      orElse: () => <String, dynamic>{},
-    );
-    if (match.isEmpty) {
+    final match = _findCircle(circleId);
+    if (match == null) {
       return Future.error(Exception('Circle $circleId not found'));
     }
-    return CircleDetailPayload.fromWire(Map<String, dynamic>.from(match));
+    return CircleDetailPayload.fromWire(_mockCircleDetailWireFromDto(match));
   }
 
   @override
-  Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data) async {
-    final circleId = (data['id']?.toString().trim().isNotEmpty ?? false)
-        ? data['id'].toString().trim()
+  Future<CircleDto> createCircle(CircleCreateWireDto data) async {
+    final merge = data.toMockMergeMap();
+    final circleId = (merge['id']?.toString().trim().isNotEmpty ?? false)
+        ? merge['id'].toString().trim()
         : 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final created = _normalizedCircle(data, circleId: circleId);
-    _circles.removeWhere((circle) => circle['id'] == circleId);
-    _circles.insert(0, created);
-    return Map<String, dynamic>.from(created);
+    final created = _normalizedCircle(merge, circleId: circleId);
+    final dto = CircleDto.fromMap(created);
+    _circles.removeWhere((circle) => circle.id == circleId);
+    _circles.insert(0, dto);
+    return dto;
   }
 
   @override
-  Future<Map<String, dynamic>> updateCircle(
+  Future<CircleDto> updateCircle(
     String circleId,
-    Map<String, dynamic> data,
+    CircleUpdateWireDto data,
   ) async {
     final existing = (await getCircle(circleId)).repositoryMergeBase();
     final updatedAt = DateTime.now().toIso8601String();
     final merged = _normalizedCircle(
-      <String, dynamic>{...existing, ...data, 'updatedAt': updatedAt},
+      <String, dynamic>{...existing, ...data.toMap(), 'updatedAt': updatedAt},
       circleId: circleId,
       fallbackUpdatedAt: updatedAt,
     );
-    final index = _circles.indexWhere((circle) => circle['id'] == circleId);
+    final dto = CircleDto.fromMap(merged);
+    final index = _circles.indexWhere((circle) => circle.id == circleId);
     if (index >= 0) {
-      _circles[index] = merged;
+      _circles[index] = dto;
     } else {
-      _circles.insert(0, merged);
+      _circles.insert(0, dto);
     }
-    return Map<String, dynamic>.from(merged);
+    return dto;
   }
 
   @override
@@ -568,12 +606,20 @@ class MockCircleRepository implements CircleRepository {
   Future<void> leaveCircle(String circleId) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listMembers(
+  Future<List<CircleMemberRosterItemDto>> listMembers(
     String circleId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return CircleMockData.members.take(limit).toList(growable: false);
+    return CircleMockData.members
+        .take(limit)
+        .map(
+          (m) => CircleMemberRosterItemDto.fromMap(
+            Map<String, dynamic>.from(m),
+            circleId: circleId,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -584,7 +630,7 @@ class MockCircleRepository implements CircleRepository {
   ) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listCircleGroups(
+  Future<List<CircleGroupDto>> listCircleGroups(
     String circleId, {
     String? groupType,
     String? visibility,
@@ -596,32 +642,29 @@ class MockCircleRepository implements CircleRepository {
     var groups = _ensureGroupCache(circleId);
     if (groupType != null && groupType.isNotEmpty) {
       groups = groups
-          .where((group) => group['groupType']?.toString() == groupType)
+          .where((g) => g.groupType == groupType)
           .toList(growable: false);
     }
     if (visibility != null && visibility.isNotEmpty) {
       groups = groups
-          .where((group) => group['visibility']?.toString() == visibility)
+          .where((g) => g.visibility == visibility)
           .toList(growable: false);
     }
     if (parentGroupId != null && parentGroupId.isNotEmpty) {
       groups = groups
-          .where((group) => group['parentGroupId']?.toString() == parentGroupId)
+          .where((g) => g.parentGroupId == parentGroupId)
           .toList(growable: false);
     }
     if (nodeType != null && nodeType.isNotEmpty) {
       groups = groups
-          .where((group) => group['nodeType']?.toString() == nodeType)
+          .where((g) => g.nodeType == nodeType)
           .toList(growable: false);
     }
-    return groups
-        .take(limit)
-        .map((group) => Map<String, dynamic>.from(group))
-        .toList(growable: false);
+    return groups.take(limit).toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> searchCircleGroups(
+  Future<List<CircleGroupDto>> searchCircleGroups(
     String circleId, {
     required String query,
     String? visibility,
@@ -630,7 +673,7 @@ class MockCircleRepository implements CircleRepository {
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
     if (normalizedQuery.isEmpty) {
-      return const <Map<String, dynamic>>[];
+      return const <CircleGroupDto>[];
     }
     final groups = await listCircleGroups(
       circleId,
@@ -640,10 +683,8 @@ class MockCircleRepository implements CircleRepository {
     );
     return groups
         .where((group) {
-          final name = (group['name'] ?? '').toString().toLowerCase();
-          final description = (group['description'] ?? '')
-              .toString()
-              .toLowerCase();
+          final name = group.name.toLowerCase();
+          final description = (group.description ?? '').toLowerCase();
           return name.contains(normalizedQuery) ||
               description.contains(normalizedQuery);
         })
@@ -652,81 +693,77 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getCircleGroup(
+  Future<CircleGroupDto> getCircleGroup(
     String circleId,
     String groupId,
   ) async {
-    final group = _ensureGroupCache(circleId).firstWhere(
-      (item) => item['id'] == groupId || item['_id'] == groupId,
-      orElse: () => <String, dynamic>{},
-    );
-    if (group.isEmpty) {
-      return Future.error(Exception('Circle group $groupId not found'));
+    for (final g in _ensureGroupCache(circleId)) {
+      if (g.id == groupId) return g;
     }
-    return Map<String, dynamic>.from(group);
+    return Future.error(Exception('Circle group $groupId not found'));
   }
 
   @override
-  Future<Map<String, dynamic>> createCircleGroup(
+  Future<CircleGroupDto> createCircleGroup(
     String circleId,
-    Map<String, dynamic> data,
+    CircleGroupCreateWireDto data,
   ) async {
+    final d = data.toMap();
     final now = DateTime.now().toIso8601String();
-    final groupId = (data['id']?.toString().trim().isNotEmpty ?? false)
-        ? data['id'].toString().trim()
+    final groupId = (d['id']?.toString().trim().isNotEmpty ?? false)
+        ? d['id'].toString().trim()
         : 'local_group_${DateTime.now().millisecondsSinceEpoch}';
-    final group = _normalizedCircleGroup(
-      <String, dynamic>{...data, 'createdAt': now, 'updatedAt': now},
+    final groupWire = _normalizedCircleGroup(
+      <String, dynamic>{...d, 'createdAt': now, 'updatedAt': now},
       circleId: circleId,
       groupId: groupId,
       fallbackUpdatedAt: now,
     );
+    final group = CircleGroupDto.fromMap(groupWire);
     final groups = _ensureGroupCache(circleId);
-    groups.removeWhere(
-      (item) => item['id'] == groupId || item['_id'] == groupId,
-    );
+    groups.removeWhere((g) => g.id == groupId);
     groups.insert(0, group);
-    _groupMembersCache['$circleId::$groupId'] = <Map<String, dynamic>>[
-      <String, dynamic>{
-        '_id': '${groupId}_${group['ownerUserId']}',
-        'id': '${groupId}_${group['ownerUserId']}',
+    final ownerId = group.ownerUserId;
+    _groupMembersCache['$circleId::$groupId'] = <CircleGroupMemberDto>[
+      CircleGroupMemberDto.fromMap(<String, dynamic>{
+        '_id': '${groupId}_$ownerId',
+        'id': '${groupId}_$ownerId',
         'groupId': groupId,
         'circleId': circleId,
-        'userId': group['ownerUserId'],
+        'userId': ownerId,
         'role': 'owner',
         'status': 'joined',
         'joinedAt': now,
         'createdAt': now,
         'updatedAt': now,
-      },
+      }),
     ];
-    return Map<String, dynamic>.from(group);
+    return group;
   }
 
   @override
-  Future<Map<String, dynamic>> updateCircleGroup(
+  Future<CircleGroupDto> updateCircleGroup(
     String circleId,
     String groupId,
-    Map<String, dynamic> data,
+    CircleGroupUpdateWireDto data,
   ) async {
-    final existing = await getCircleGroup(circleId, groupId);
+    final existing = (await getCircleGroup(circleId, groupId)).toMap();
     final now = DateTime.now().toIso8601String();
-    final merged = _normalizedCircleGroup(
-      <String, dynamic>{...existing, ...data, 'updatedAt': now},
+    final mergedWire = _normalizedCircleGroup(
+      <String, dynamic>{...existing, ...data.toMap(), 'updatedAt': now},
       circleId: circleId,
       groupId: groupId,
       fallbackUpdatedAt: now,
     );
+    final merged = CircleGroupDto.fromMap(mergedWire);
     final groups = _ensureGroupCache(circleId);
-    final index = groups.indexWhere(
-      (item) => item['id'] == groupId || item['_id'] == groupId,
-    );
+    final index = groups.indexWhere((g) => g.id == groupId);
     if (index >= 0) {
       groups[index] = merged;
     } else {
       groups.insert(0, merged);
     }
-    return Map<String, dynamic>.from(merged);
+    return merged;
   }
 
   @override
@@ -734,10 +771,8 @@ class MockCircleRepository implements CircleRepository {
     const currentUserId = 'current_user';
     final members = _ensureGroupMembersCache(circleId, groupId);
     final now = DateTime.now().toIso8601String();
-    final index = members.indexWhere(
-      (item) => item['userId']?.toString() == currentUserId,
-    );
-    final pendingMember = <String, dynamic>{
+    final index = members.indexWhere((m) => m.userId == currentUserId);
+    final pendingWire = <String, dynamic>{
       '_id': '${groupId}_$currentUserId',
       'id': '${groupId}_$currentUserId',
       'groupId': groupId,
@@ -749,14 +784,17 @@ class MockCircleRepository implements CircleRepository {
       'updatedAt': now,
     };
     if (index >= 0) {
-      members[index] = <String, dynamic>{...members[index], ...pendingMember};
+      members[index] = CircleGroupMemberDto.fromMap(<String, dynamic>{
+        ...members[index].toMap(),
+        ...pendingWire,
+      });
     } else {
-      members.add(pendingMember);
+      members.add(CircleGroupMemberDto.fromMap(pendingWire));
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listCircleGroupMembers(
+  Future<List<CircleGroupMemberDto>> listCircleGroupMembers(
     String circleId,
     String groupId, {
     String? status,
@@ -766,13 +804,10 @@ class MockCircleRepository implements CircleRepository {
     var members = _ensureGroupMembersCache(circleId, groupId);
     if (status != null && status.isNotEmpty) {
       members = members
-          .where((member) => member['status']?.toString() == status)
+          .where((m) => m.status == status)
           .toList(growable: false);
     }
-    return members
-        .take(limit)
-        .map((member) => Map<String, dynamic>.from(member))
-        .toList(growable: false);
+    return members.take(limit).toList(growable: false);
   }
 
   @override
@@ -782,36 +817,40 @@ class MockCircleRepository implements CircleRepository {
     String userId,
   ) async {
     final members = _ensureGroupMembersCache(circleId, groupId);
-    final index = members.indexWhere(
-      (member) => member['userId']?.toString() == userId,
-    );
+    final index = members.indexWhere((m) => m.userId == userId);
     if (index < 0) {
       return;
     }
     final now = DateTime.now().toIso8601String();
-    final wasJoined = members[index]['status']?.toString() == 'joined';
-    members[index] = <String, dynamic>{
-      ...members[index],
+    final prev = members[index];
+    final wasJoined = prev.status == 'joined';
+    members[index] = CircleGroupMemberDto.fromMap(<String, dynamic>{
+      ...prev.toMap(),
       'status': 'joined',
-      'joinedAt': members[index]['joinedAt'] ?? now,
+      'joinedAt': prev.joinedAt?.toIso8601String() ?? now,
       'decidedAt': now,
       'updatedAt': now,
-    };
+    });
     if (wasJoined) {
       return;
     }
     final groups = _ensureGroupCache(circleId);
-    final groupIndex = groups.indexWhere(
-      (group) => group['id'] == groupId || group['_id'] == groupId,
-    );
+    final groupIndex = groups.indexWhere((g) => g.id == groupId);
     if (groupIndex >= 0) {
-      groups[groupIndex] = <String, dynamic>{
-        ...groups[groupIndex],
-        'memberCount':
-            ((groups[groupIndex]['memberCount'] as num?)?.toInt() ?? 0) + 1,
-        'lastActiveAt': now,
-        'updatedAt': now,
-      };
+      final g = groups[groupIndex];
+      groups[groupIndex] = CircleGroupDto.fromMap(
+        _normalizedCircleGroup(
+          <String, dynamic>{
+            ...g.toMap(),
+            'memberCount': g.memberCount + 1,
+            'lastActiveAt': now,
+            'updatedAt': now,
+          },
+          circleId: circleId,
+          groupId: groupId,
+          fallbackUpdatedAt: now,
+        ),
+      );
     }
   }
 
@@ -822,23 +861,22 @@ class MockCircleRepository implements CircleRepository {
     String userId,
   ) async {
     final members = _ensureGroupMembersCache(circleId, groupId);
-    final index = members.indexWhere(
-      (member) => member['userId']?.toString() == userId,
-    );
+    final index = members.indexWhere((m) => m.userId == userId);
     if (index < 0) {
       return;
     }
     final now = DateTime.now().toIso8601String();
-    members[index] = <String, dynamic>{
-      ...members[index],
+    final prev = members[index];
+    members[index] = CircleGroupMemberDto.fromMap(<String, dynamic>{
+      ...prev.toMap(),
       'status': 'rejected',
       'decidedAt': now,
       'updatedAt': now,
-    };
+    });
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getCircleFeed(
+  Future<List<PostBaseDto>> getCircleFeed(
     String circleId, {
     String? identity,
     String? type,
@@ -847,7 +885,7 @@ class MockCircleRepository implements CircleRepository {
     String sort = 'latest',
   }) async {
     final normalizedType = _normalizeCircleFeedType(type);
-    return CircleMockData.circleFeedItems
+    final maps = CircleMockData.circleFeedItems
         .where((item) => item['circleId'] == circleId)
         .where((item) {
           if (identity != null && identity.isNotEmpty) {
@@ -866,6 +904,7 @@ class MockCircleRepository implements CircleRepository {
         .take(limit)
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
+    return _decodeCircleFeedMaps(maps);
   }
 
   @override
@@ -883,12 +922,12 @@ class MockCircleRepository implements CircleRepository {
   }) async {}
 
   @override
-  Future<Map<String, dynamic>> getCircleStats(String circleId) async {
-    return CircleMockData.stats;
+  Future<CircleStatsWireDto> getCircleStats(String circleId) async {
+    return CircleMockData.catalogCircleStatsWire;
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFiles(
+  Future<List<CircleFileDto>> listFiles(
     String circleId, {
     String? parentId,
     String? sort,
@@ -901,23 +940,41 @@ class MockCircleRepository implements CircleRepository {
           .where((f) => f['parentId'] == parentId)
           .toList(growable: false);
     }
-    return result.take(limit).toList(growable: false);
+    return result
+        .take(limit)
+        .map(
+          (f) => CircleFileDto.fromMap({
+            ...Map<String, dynamic>.from(f),
+            'circleId': circleId,
+          }),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> createFile(
+  Future<CircleFileDto> createFile(
     String circleId,
-    Map<String, dynamic> data,
+    CircleFileCreateWireDto data,
   ) async {
-    return <String, dynamic>{
-      ...data,
+    final now = DateTime.now().toIso8601String();
+    final d = data.toMap();
+    final wire = <String, dynamic>{
+      ...d,
       'id': 'f_${DateTime.now().millisecondsSinceEpoch}',
-      'createdAt': DateTime.now().toIso8601String(),
+      'circleId': circleId,
+      'createdAt': now,
+      'updatedAt': now,
+      'uploaderId': (d['uploaderId'] ?? 'u1').toString(),
+      'status': (d['status'] ?? 'active').toString(),
+      'sizeBytes': (d['sizeBytes'] as num?)?.toInt() ?? 0,
+      'name': (d['name'] ?? '').toString(),
+      'fileType': (d['fileType'] ?? 'file').toString(),
     };
+    return CircleFileDto.fromMap(wire);
   }
 
   @override
-  Future<Map<String, dynamic>> getFile(String circleId, String fileId) async {
+  Future<CircleFileDto> getFile(String circleId, String fileId) async {
     final match = CircleMockData.files.firstWhere(
       (f) => f['id'] == fileId,
       orElse: () => <String, dynamic>{},
@@ -925,17 +982,24 @@ class MockCircleRepository implements CircleRepository {
     if (match.isEmpty) {
       return Future.error(Exception('File $fileId not found'));
     }
-    return match;
+    return CircleFileDto.fromMap({
+      ...Map<String, dynamic>.from(match),
+      'circleId': circleId,
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> updateFile(
+  Future<CircleFileDto> updateFile(
     String circleId,
     String fileId,
-    Map<String, dynamic> data,
+    CircleFileUpdateWireDto data,
   ) async {
     final existing = await getFile(circleId, fileId);
-    return <String, dynamic>{...existing, ...data};
+    return CircleFileDto.fromMap({
+      ...existing.toMap(),
+      ...data.toMap(),
+      'circleId': circleId,
+    });
   }
 
   @override
@@ -944,38 +1008,35 @@ class MockCircleRepository implements CircleRepository {
   @override
   Future<void> updateSections(
     String circleId,
-    List<Map<String, dynamic>> sections,
+    List<CircleSectionConfigDto> sections,
   ) async {}
 
   @override
-  Future<void> reportBehavior(Map<String, dynamic> report) async {}
+  Future<void> reportBehavior(CircleBehaviorReportWireDto report) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _copyCircles().take(limit).toList(growable: false);
+    return _copyCircleDtos().take(limit).toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
-    return CircleMockData.circleFeedItems
-        .take(limit)
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList(growable: false);
+    return _decodeCircleFeedMaps(
+      CircleMockData.circleFeedItems
+          .take(limit)
+          .map((e) => Map<String, dynamic>.from(e)),
+    );
   }
 
   @override
-  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig() async {
-    return Map<String, Map<String, dynamic>>.fromEntries(
-      CircleMockData.categoryConfig.entries.map(
-        (e) => MapEntry(e.key, Map<String, dynamic>.from(e.value)),
-      ),
-    );
+  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+    return CircleCategoryTabsLoader.loadFromAsset();
   }
 }
 
@@ -1000,7 +1061,7 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Circles ---------------------------------------------------------------
 
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? subCategory,
     String? domainId,
@@ -1022,7 +1083,9 @@ class RemoteCircleRepository implements CircleRepository {
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(CircleDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
@@ -1060,7 +1123,7 @@ class RemoteCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data) async {
+  Future<CircleDto> createCircle(CircleCreateWireDto data) async {
     final uri = _uri(CircleApiMetadata.createCirclePath);
     final resp = await _client.post(
       uri,
@@ -1068,15 +1131,15 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircle),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toRequestMap()),
     );
-    return _decodeObject(resp);
+    return CircleDto.fromMap(_decodeObject(resp));
   }
 
   @override
-  Future<Map<String, dynamic>> updateCircle(
+  Future<CircleDto> updateCircle(
     String circleId,
-    Map<String, dynamic> data,
+    CircleUpdateWireDto data,
   ) async {
     final uri = _uri(CircleApiMetadata.updateCirclePath(circleId: circleId));
     final resp = await _client.patch(
@@ -1085,9 +1148,9 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircle),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toMap()),
     );
-    return _decodeObject(resp);
+    return CircleDto.fromMap(_decodeObject(resp));
   }
 
   @override
@@ -1123,7 +1186,7 @@ class RemoteCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listMembers(
+  Future<List<CircleMemberRosterItemDto>> listMembers(
     String circleId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1141,7 +1204,9 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleMembers,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map((m) => CircleMemberRosterItemDto.fromMap(m, circleId: circleId))
+        .toList(growable: false);
   }
 
   @override
@@ -1170,7 +1235,7 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Circle Groups ----------------------------------------------------------
 
   @override
-  Future<List<Map<String, dynamic>>> listCircleGroups(
+  Future<List<CircleGroupDto>> listCircleGroups(
     String circleId, {
     String? groupType,
     String? visibility,
@@ -1201,11 +1266,13 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleGroups,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(CircleGroupDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> searchCircleGroups(
+  Future<List<CircleGroupDto>> searchCircleGroups(
     String circleId, {
     required String query,
     String? visibility,
@@ -1228,11 +1295,13 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.searchCircleGroups,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(CircleGroupDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> getCircleGroup(
+  Future<CircleGroupDto> getCircleGroup(
     String circleId,
     String groupId,
   ) async {
@@ -1246,13 +1315,13 @@ class RemoteCircleRepository implements CircleRepository {
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleGroup),
     );
-    return _decodeObject(resp);
+    return CircleGroupDto.fromMap(_decodeObject(resp));
   }
 
   @override
-  Future<Map<String, dynamic>> createCircleGroup(
+  Future<CircleGroupDto> createCircleGroup(
     String circleId,
-    Map<String, dynamic> data,
+    CircleGroupCreateWireDto data,
   ) async {
     final uri = _uri(
       CircleApiMetadata.createCircleGroupPath(circleId: circleId),
@@ -1263,16 +1332,16 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleGroup),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toMap()),
     );
-    return _decodeObject(resp);
+    return CircleGroupDto.fromMap(_decodeObject(resp));
   }
 
   @override
-  Future<Map<String, dynamic>> updateCircleGroup(
+  Future<CircleGroupDto> updateCircleGroup(
     String circleId,
     String groupId,
-    Map<String, dynamic> data,
+    CircleGroupUpdateWireDto data,
   ) async {
     final uri = _uri(
       CircleApiMetadata.updateCircleGroupPath(
@@ -1286,9 +1355,9 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleGroup),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toMap()),
     );
-    return _decodeObject(resp);
+    return CircleGroupDto.fromMap(_decodeObject(resp));
   }
 
   @override
@@ -1309,7 +1378,7 @@ class RemoteCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listCircleGroupMembers(
+  Future<List<CircleGroupMemberDto>> listCircleGroupMembers(
     String circleId,
     String groupId, {
     String? status,
@@ -1332,7 +1401,9 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleGroupMembers,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(CircleGroupMemberDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
@@ -1382,7 +1453,7 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Feed ------------------------------------------------------------------
 
   @override
-  Future<List<Map<String, dynamic>>> getCircleFeed(
+  Future<List<PostBaseDto>> getCircleFeed(
     String circleId, {
     String? identity,
     String? type,
@@ -1406,7 +1477,7 @@ class RemoteCircleRepository implements CircleRepository {
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFeed),
     );
-    return _decodeList(resp);
+    return _decodeCircleFeedMaps(_decodeList(resp));
   }
 
   @override
@@ -1455,19 +1526,19 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Stats -----------------------------------------------------------------
 
   @override
-  Future<Map<String, dynamic>> getCircleStats(String circleId) async {
+  Future<CircleStatsWireDto> getCircleStats(String circleId) async {
     final uri = _uri(CircleApiMetadata.getCircleStatsPath(circleId: circleId));
     final resp = await _client.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleStats),
     );
-    return _decodeObject(resp);
+    return CircleStatsWireDto.fromMap(_decodeObject(resp));
   }
 
   // -- Files -----------------------------------------------------------------
 
   @override
-  Future<List<Map<String, dynamic>>> listFiles(
+  Future<List<CircleFileDto>> listFiles(
     String circleId, {
     String? parentId,
     String? sort,
@@ -1489,13 +1560,20 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleFiles,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(
+          (m) => CircleFileDto.fromMap({
+            ...m,
+            'circleId': circleId,
+          }),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> createFile(
+  Future<CircleFileDto> createFile(
     String circleId,
-    Map<String, dynamic> data,
+    CircleFileCreateWireDto data,
   ) async {
     final uri = _uri(
       CircleApiMetadata.createCircleFilePath(circleId: circleId),
@@ -1506,13 +1584,16 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleFile),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toMap()),
     );
-    return _decodeObject(resp);
+    return CircleFileDto.fromMap({
+      ..._decodeObject(resp),
+      'circleId': circleId,
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> getFile(String circleId, String fileId) async {
+  Future<CircleFileDto> getFile(String circleId, String fileId) async {
     final uri = _uri(
       CircleApiMetadata.getCircleFilePath(circleId: circleId, fileId: fileId),
     );
@@ -1520,14 +1601,17 @@ class RemoteCircleRepository implements CircleRepository {
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFile),
     );
-    return _decodeObject(resp);
+    return CircleFileDto.fromMap({
+      ..._decodeObject(resp),
+      'circleId': circleId,
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> updateFile(
+  Future<CircleFileDto> updateFile(
     String circleId,
     String fileId,
-    Map<String, dynamic> data,
+    CircleFileUpdateWireDto data,
   ) async {
     final uri = _uri(
       CircleApiMetadata.updateCircleFilePath(
@@ -1541,9 +1625,12 @@ class RemoteCircleRepository implements CircleRepository {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleFile),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toMap()),
     );
-    return _decodeObject(resp);
+    return CircleFileDto.fromMap({
+      ..._decodeObject(resp),
+      'circleId': circleId,
+    });
   }
 
   @override
@@ -1568,11 +1655,12 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<void> updateSections(
     String circleId,
-    List<Map<String, dynamic>> sections,
+    List<CircleSectionConfigDto> sections,
   ) async {
     final uri = _uri(
       CircleApiMetadata.updateCircleSectionsPath(circleId: circleId),
     );
+    final payload = sections.map((s) => s.toMap()).toList(growable: false);
     final resp = await _client.patch(
       uri,
       headers: {
@@ -1581,7 +1669,7 @@ class RemoteCircleRepository implements CircleRepository {
         ),
         'Content-Type': 'application/json',
       },
-      body: json.encode({'sections': sections}),
+      body: json.encode({'sections': payload}),
     );
     _ensureSuccess(resp);
   }
@@ -1589,7 +1677,7 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Behavior --------------------------------------------------------------
 
   @override
-  Future<void> reportBehavior(Map<String, dynamic> report) async {
+  Future<void> reportBehavior(CircleBehaviorReportWireDto report) async {
     final uri = _uri(CircleApiMetadata.reportCircleBehaviorPath);
     final resp = await _client.post(
       uri,
@@ -1599,29 +1687,27 @@ class RemoteCircleRepository implements CircleRepository {
         ),
         'Content-Type': 'application/json',
       },
-      body: json.encode(report),
+      body: json.encode(report.toMap()),
     );
     _ensureSuccess(resp);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listHomeCircleDiscoveryFeed({
+  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = _kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
     return const [];
   }
 
   @override
-  Future<Map<String, Map<String, dynamic>>> getCircleCategoryConfig() async {
-    return const {
-      'all': {'label': '推荐'},
-    };
+  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+    return CircleCategoryTabsLoader.loadFromAsset();
   }
 
   // -- User Circles ----------------------------------------------------------
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1639,7 +1725,9 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listUserCircles,
       ),
     );
-    return _decodeList(resp);
+    return _decodeList(resp)
+        .map(CircleDto.fromMap)
+        .toList(growable: false);
   }
 
   // -- Helpers ---------------------------------------------------------------

@@ -12,6 +12,7 @@ class CallParticipantPickerRouteExtra {
   final String? conversationId;
   final bool defaultSelectAll;
 
+  /// [raw] 来自 `go_router` 的 [GoRouterState.extra]（框架 API 为 [Object?]，此处为唯一收口点）。
   static CallParticipantPickerRouteExtra fromRouter(Object? raw) {
     if (raw is CallParticipantPickerRouteExtra) {
       return raw;

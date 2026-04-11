@@ -1,8 +1,103 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 时间轴协议 Map 与 persisted turn 键空间（与 Codec 对齐）。
+
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+
+/// 将时间轴行编码为与 [resolvePersistedAssistantDisplayState] 等协议解析器兼容的扁平 Map。
+///
+/// UI 层应优先调用本文件中带 `FromTranscriptRow` 后缀的解析函数，避免在 Widget 中持有 Map。
+Map<String, dynamic> assistantTranscriptRowToProtocolMap(
+  AssistantTranscriptTimelineRow row,
+) {
+  return PersistedTimelineTurnCodec.encode(row);
+}
+
+AssistantJourney resolveAssistantJourneyFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolvePersistedAssistantJourneyForDisplay(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+List<ProcessTimelineFrame> resolveAssistantProcessTimelineFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolvePersistedAssistantVisibleProcessTimeline(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+RetrievalProcessingSnapshot
+resolveAssistantRetrievalProcessingFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolveAssistantRetrievalProcessingFromMessage(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+RunArtifactsUnderstandingSnapshot
+resolveAssistantUnderstandingSnapshotFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolveAssistantUnderstandingSnapshotFromMessage(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+RunArtifactsAnswerProcessing resolveAssistantAnswerProcessingFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolveAssistantAnswerProcessingFromMessage(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+AssistantDisplayState resolvePersistedAssistantDisplayStateFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolvePersistedAssistantDisplayState(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+String resolvePersistedAssistantDisplayMarkdownFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolvePersistedAssistantDisplayMarkdown(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+String resolvePersistedAssistantDisplayPlainTextFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolvePersistedAssistantDisplayPlainText(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+String resolveAssistantFollowupPromptFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolveAssistantFollowupPromptFromMessage(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
+
+List<String> resolveAssistantActionHintsFromTranscriptRow(
+  AssistantTranscriptTimelineRow row,
+) {
+  return resolveAssistantActionHintsFromMessage(
+    assistantTranscriptRowToProtocolMap(row),
+  );
+}
 
 AssistantJourney resolveAssistantJourneyFromMessage(
   Map<String, dynamic> message,

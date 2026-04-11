@@ -1,6 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show setEquals;
 
+export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
+export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
+
 /// 与集合迭代顺序无关的稳定 hash（用于 [SearchObjectSelection.hashCode]）。
 int _enumIndexSetHash<T extends Enum>(Set<T> values) {
   if (values.isEmpty) {
@@ -363,83 +370,6 @@ class SearchConversationAnchorContext {
   final String? sourceQuery;
 }
 
-class PostSearchItemView {
-  const PostSearchItemView({
-    required this.postId,
-    required this.contentType,
-    this.contentIdentity,
-    this.title,
-    this.summary,
-    this.coverUrl,
-    this.authorProfileSubjectId,
-    this.authorDisplayName,
-    this.authorAvatarUrl,
-    this.circleId,
-    this.circleName,
-    this.categoryId,
-    this.subCategory,
-    this.likeCount = 0,
-    this.highlightText,
-    this.matchedField,
-    this.publishedAt,
-  });
-
-  final String postId;
-  final String contentType;
-  final String? contentIdentity;
-  final String? title;
-  final String? summary;
-  final String? coverUrl;
-  final String? authorProfileSubjectId;
-  final String? authorDisplayName;
-  final String? authorAvatarUrl;
-  final String? circleId;
-  final String? circleName;
-  final String? categoryId;
-  final String? subCategory;
-  final int likeCount;
-  final String? highlightText;
-  final String? matchedField;
-  final DateTime? publishedAt;
-
-  factory PostSearchItemView.fromMap(Map<String, dynamic> map) {
-    return PostSearchItemView(
-      postId: (map['postId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
-      contentType: (map['contentType'] ?? map['type'] ?? 'image')
-          .toString()
-          .trim(),
-      contentIdentity: map['contentIdentity']?.toString(),
-      title: map['title']?.toString(),
-      summary: (map['summary'] ?? map['body'] ?? map['highlightText'])
-          ?.toString(),
-      coverUrl: (map['coverUrl'] ?? map['thumbnailUrl'])?.toString(),
-      authorProfileSubjectId:
-          (map['authorProfileSubjectId'] ?? map['profileSubjectId'])
-              ?.toString(),
-      authorDisplayName:
-          (map['authorDisplayName'] ??
-                  map['authorDisplayNameSnapshot'] ??
-                  map['displayName'])
-              ?.toString(),
-      authorAvatarUrl:
-          (map['authorAvatarUrl'] ??
-                  map['authorAvatarUrlSnapshot'] ??
-                  map['avatarUrl'])
-              ?.toString(),
-      circleId: map['circleId']?.toString(),
-      circleName: map['circleName']?.toString(),
-      categoryId: map['categoryId']?.toString(),
-      subCategory: map['subCategory']?.toString(),
-      likeCount: _parseInt(map['likeCount']) ?? 0,
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-      publishedAt: _parseDateTime(map['publishedAt']),
-    );
-  }
-}
-
 class SocialRelationshipCapabilityView {
   const SocialRelationshipCapabilityView({
     required this.relationState,
@@ -457,16 +387,22 @@ class SocialRelationshipCapabilityView {
   final bool canStartVoiceCall;
   final bool canStartVideoCall;
 
-  factory SocialRelationshipCapabilityView.fromMap(Map<String, dynamic> map) {
+  factory SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
+    SocialRelationshipCapabilityWireDto w,
+  ) {
     return SocialRelationshipCapabilityView(
-      relationState: (map['relationState'] ?? 'not_following')
-          .toString()
-          .trim(),
-      canFollow: map['canFollow'] == true,
-      canUnfollow: map['canUnfollow'] == true,
-      canOpenConversation: map['canOpenConversation'] == true,
-      canStartVoiceCall: map['canStartVoiceCall'] == true,
-      canStartVideoCall: map['canStartVideoCall'] == true,
+      relationState: w.relationState,
+      canFollow: w.canFollow,
+      canUnfollow: w.canUnfollow,
+      canOpenConversation: w.canOpenConversation,
+      canStartVoiceCall: w.canStartVoiceCall,
+      canStartVideoCall: w.canStartVideoCall,
+    );
+  }
+
+  factory SocialRelationshipCapabilityView.fromMap(Map<String, dynamic> map) {
+    return SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
+      SocialRelationshipCapabilityWireDto.fromMap(map),
     );
   }
 }
@@ -490,44 +426,47 @@ class SocialRelationSearchItemView {
   final bool chatAvailable;
   final SocialRelationshipCapabilityView relationshipCapability;
 
-  factory SocialRelationSearchItemView.fromMap(Map<String, dynamic> map) {
-    final capabilityMap =
-        (map['relationshipCapability'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{
-          'relationState':
-              (map['relationState'] ??
-                      map['relationshipState'] ??
-                      'not_following')
-                  .toString(),
-          'canFollow': map['canFollow'] == true,
-          'canUnfollow': map['canUnfollow'] == true,
-          'canOpenConversation':
-              map['canOpenConversation'] == true ||
-              map['chatAvailable'] == true,
-          'canStartVoiceCall': map['canStartVoiceCall'] == true,
-          'canStartVideoCall': map['canStartVideoCall'] == true,
-        };
-    final profileSubjectId = (map['profileSubjectId'] ?? map['userId'] ?? '')
-        .toString()
-        .trim();
-    final displayName =
-        (map['displayName'] ?? map['nickname'] ?? profileSubjectId)
-            .toString()
-            .trim();
+  /// [row] 为整行 JSON（与 [SocialRelationSearchItemWireDto.fromMap] 同源），用于 capability 嵌套缺失时回退。
+  factory SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+    SocialRelationSearchItemWireDto w,
+    Map<String, dynamic> row,
+  ) {
+    final profileSubjectId = w.profileSubjectId;
+    final displayName = w.displayName.isNotEmpty
+        ? w.displayName
+        : profileSubjectId;
+    final username =
+        w.username.isNotEmpty ? w.username : profileSubjectId;
+    final nested = w.relationshipCapability;
+    final Map<String, dynamic> effectiveCap =
+        (nested != null && nested.isNotEmpty)
+            ? Map<String, dynamic>.from(nested)
+            : row;
+    final cap = SocialRelationshipCapabilityWireDto.fromMap(effectiveCap);
+    final canOpen = cap.canOpenConversation || w.chatAvailable;
+    final capView = SocialRelationshipCapabilityView(
+      relationState: cap.relationState,
+      canFollow: cap.canFollow,
+      canUnfollow: cap.canUnfollow,
+      canOpenConversation: canOpen,
+      canStartVoiceCall: cap.canStartVoiceCall,
+      canStartVideoCall: cap.canStartVideoCall,
+    );
     return SocialRelationSearchItemView(
       profileSubjectId: profileSubjectId,
-      username: (map['username'] ?? map['subAccountId'] ?? profileSubjectId)
-          .toString()
-          .trim(),
+      username: username,
       displayName: displayName,
-      avatarUrl: map['avatarUrl']?.toString(),
-      headline: (map['headline'] ?? map['bio'])?.toString(),
-      chatAvailable:
-          map['chatAvailable'] == true ||
-          capabilityMap['canOpenConversation'] == true,
-      relationshipCapability: SocialRelationshipCapabilityView.fromMap(
-        capabilityMap,
-      ),
+      avatarUrl: w.avatarUrl,
+      headline: w.headline,
+      chatAvailable: w.chatAvailable || capView.canOpenConversation,
+      relationshipCapability: capView,
+    );
+  }
+
+  factory SocialRelationSearchItemView.fromMap(Map<String, dynamic> map) {
+    return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+      SocialRelationSearchItemWireDto.fromMap(map),
+      map,
     );
   }
 }
@@ -649,125 +588,6 @@ class MessageSearchItemView {
   }
 }
 
-class CircleSearchItemView {
-  const CircleSearchItemView({
-    required this.circleId,
-    required this.name,
-    this.description,
-    this.coverUrl,
-    this.categoryId,
-    this.subCategory,
-    this.domainId,
-    this.kind,
-    this.displaySubjectType,
-    required this.memberCount,
-    required this.postCount,
-    this.highlightText,
-    this.matchedField,
-    this.circleName,
-  });
-
-  final String circleId;
-  final String name;
-  final String? description;
-  final String? coverUrl;
-  final String? categoryId;
-  final String? subCategory;
-  final String? domainId;
-  final String? kind;
-  final String? displaySubjectType;
-  final int memberCount;
-  final int postCount;
-  final String? highlightText;
-  final String? matchedField;
-  /// 群组结果场景下父圈子展示名（wire：`circleName` / `circle_name`）。
-  final String? circleName;
-
-  factory CircleSearchItemView.fromMap(Map<String, dynamic> map) {
-    return CircleSearchItemView(
-      circleId: (map['circleId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
-      name: (map['name'] ?? '').toString().trim(),
-      description: map['description']?.toString(),
-      coverUrl: (map['coverUrl'] ?? map['cover'])?.toString(),
-      categoryId: (map['categoryId'] ?? map['category'])?.toString(),
-      subCategory: map['subCategory']?.toString(),
-      domainId: map['domainId']?.toString(),
-      kind: map['kind']?.toString(),
-      displaySubjectType: map['displaySubjectType']?.toString(),
-      memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
-      postCount: (map['postCount'] as num?)?.toInt() ?? 0,
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-      circleName:
-          map['circleName']?.toString() ?? map['circle_name']?.toString(),
-    );
-  }
-}
-
-class CircleFacetBucketView {
-  const CircleFacetBucketView({
-    required this.facetKey,
-    required this.label,
-    this.categoryId,
-    this.subCategory,
-    required this.facetCount,
-  });
-
-  final String facetKey;
-  final String label;
-  final String? categoryId;
-  final String? subCategory;
-  final int facetCount;
-
-  factory CircleFacetBucketView.fromMap(Map<String, dynamic> map) {
-    return CircleFacetBucketView(
-      facetKey:
-          (map['facetKey'] ?? map['subCategory'] ?? map['categoryId'] ?? '')
-              .toString()
-              .trim(),
-      label: (map['label'] ?? map['subCategory'] ?? map['categoryId'] ?? '')
-          .toString()
-          .trim(),
-      categoryId: map['categoryId']?.toString(),
-      subCategory: map['subCategory']?.toString(),
-      facetCount: (map['facetCount'] as num?)?.toInt() ?? 0,
-    );
-  }
-}
-
-class CircleSearchResultView {
-  const CircleSearchResultView({
-    this.items = const <CircleSearchItemView>[],
-    this.facetBuckets = const <CircleFacetBucketView>[],
-  });
-
-  final List<CircleSearchItemView> items;
-  final List<CircleFacetBucketView> facetBuckets;
-
-  factory CircleSearchResultView.fromMap(Map<String, dynamic> map) {
-    final itemMaps =
-        (map['items'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    final facetMaps =
-        (map['facetBuckets'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    return CircleSearchResultView(
-      items: itemMaps.map(CircleSearchItemView.fromMap).toList(growable: false),
-      facetBuckets: facetMaps
-          .map(CircleFacetBucketView.fromMap)
-          .toList(growable: false),
-    );
-  }
-}
-
 class RecentSearchEntryView {
   const RecentSearchEntryView({
     required this.entryId,
@@ -795,20 +615,31 @@ class RecentSearchEntryView {
     );
   }
 
-  factory RecentSearchEntryView.fromMap(Map<String, dynamic> map) {
-    final query = (map['query'] ?? '').toString().trim();
-    final scope = SearchScope.fromWire(map['scope']?.toString());
-    final facet = map['facet']?.toString();
+  factory RecentSearchEntryView.fromRecentSearchEntryWire(
+    RecentSearchEntryWireDto w,
+  ) {
+    final query = w.query.trim();
+    final scope = SearchScope.fromWire(w.scope);
+    final facetRaw = w.facet;
+    final facetTrim = facetRaw?.trim();
     return RecentSearchEntryView(
-      entryId:
-          (map['entryId'] ??
-                  buildEntryId(query: query, scope: scope, facet: facet))
-              .toString()
-              .trim(),
+      entryId: w.entryId.trim().isNotEmpty
+          ? w.entryId.trim()
+          : buildEntryId(
+              query: query,
+              scope: scope,
+              facet: facetTrim,
+            ),
       query: query,
       scope: scope,
-      facet: facet?.trim().isEmpty == true ? null : facet,
-      updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
+      facet: facetTrim?.isEmpty == true ? null : facetTrim,
+      updatedAt: w.updatedAt ?? DateTime.now(),
+    );
+  }
+
+  factory RecentSearchEntryView.fromMap(Map<String, dynamic> map) {
+    return RecentSearchEntryView.fromRecentSearchEntryWire(
+      RecentSearchEntryWireDto.fromMap(map),
     );
   }
 
@@ -1097,7 +928,7 @@ class SearchSessionState {
   }
 }
 
-DateTime? _parseDateTime(dynamic value) {
+DateTime? _parseDateTime(Object? value) {
   if (value is DateTime) {
     return value;
   }
@@ -1107,20 +938,7 @@ DateTime? _parseDateTime(dynamic value) {
   return null;
 }
 
-int? _parseInt(dynamic value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  if (value is String && value.trim().isNotEmpty) {
-    return int.tryParse(value);
-  }
-  return null;
-}
-
-List<String>? _parseStringList(dynamic value) {
+List<String>? _parseStringList(Object? value) {
   if (value is List) {
     return value.map((item) => item.toString()).toList(growable: false);
   }

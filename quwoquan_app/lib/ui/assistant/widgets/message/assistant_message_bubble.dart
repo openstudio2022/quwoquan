@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
@@ -13,6 +12,7 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_legacy_bubble_envelope.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_content.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_toolbar.dart';
@@ -38,21 +38,22 @@ String _sanitizeAssistantTimelineText(String text) {
   return normalized;
 }
 
-String _resolveAssistantVisibleAnswerText({
-  required Map<String, dynamic> message,
+String _resolveAssistantVisibleAnswerTextFromTranscriptRow({
+  required AssistantTranscriptTimelineRow row,
   required String previewAnswer,
   required String content,
   required bool isStreaming,
 }) {
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
+  if (row is! AssistantAnswerTranscriptRow) return content;
+  final answerRow = row;
+  final runArtifacts = answerRow.runArtifacts;
   final candidates = isStreaming
       ? <String>[previewAnswer]
       : <String>[
-          (message['displayMarkdown'] as String?) ?? '',
-          (message['displayPlainText'] as String?) ?? '',
-          (runArtifacts?['displayMarkdown'] as String?) ?? '',
-          (runArtifacts?['displayPlainText'] as String?) ?? '',
+          answerRow.persisted.displayMarkdown,
+          answerRow.persisted.displayPlainText,
+          (runArtifacts['displayMarkdown'] as String?) ?? '',
+          (runArtifacts['displayPlainText'] as String?) ?? '',
           content,
         ];
   for (final candidate in candidates) {
@@ -144,7 +145,42 @@ class AssistantMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = PersistedTimelineTurnCodec.encode(transcriptRow);
+    final row = transcriptRow;
+    final type = switch (row) {
+      UserTranscriptTimelineRow r => r.type,
+      AssistantAnswerTranscriptRow r => r.type,
+      ErrorTranscriptTimelineRow _ => 'text',
+    };
+    final content = switch (row) {
+      UserTranscriptTimelineRow r => r.content,
+      AssistantAnswerTranscriptRow r => r.content,
+      ErrorTranscriptTimelineRow r => r.content,
+    };
+    final senderName = switch (row) {
+      UserTranscriptTimelineRow r => r.senderName,
+      AssistantAnswerTranscriptRow r => r.senderName,
+      ErrorTranscriptTimelineRow r => r.senderName,
+    };
+    final avatar = switch (row) {
+      UserTranscriptTimelineRow r =>
+        r.senderAvatar.isNotEmpty ? r.senderAvatar : null,
+      AssistantAnswerTranscriptRow r =>
+        r.senderAvatar.isNotEmpty ? r.senderAvatar : null,
+      ErrorTranscriptTimelineRow r =>
+        r.senderAvatar.isNotEmpty ? r.senderAvatar : null,
+    };
+    final isAssistantMessage = switch (row) {
+      AssistantAnswerTranscriptRow r =>
+        r.senderId == AppConceptConstants.assistantSenderId,
+      _ => false,
+    };
+    final legacyEnvelope = (type == 'task_card' ||
+            type == 'image' ||
+            type == 'audio')
+        ? AssistantLegacyBubbleEnvelope.fromCodecMap(
+            PersistedTimelineTurnCodec.encode(row),
+          )
+        : null;
     final viewportWidth = MediaQuery.of(context).size.width;
     const horizontalPadding = 24.0;
     final effectiveMaxWidth = useFullWidth
@@ -153,51 +189,47 @@ class AssistantMessageBubble extends StatelessWidget {
             assistantBubbleMaxWidth,
             viewportWidth * assistantBubbleWidthFactor,
           );
-    final type = message['type'] as String? ?? 'text';
-    final content = message['content'] as String? ?? '';
-    final senderName = message['senderName'] as String? ?? '';
-    final avatar = message['senderAvatar'] as String?;
-    final isAssistantMessage =
-        (message['senderId'] as String?) ==
-        AppConceptConstants.assistantSenderId;
     final persistedDisplayState = isAssistantMessage
-        ? resolvePersistedAssistantDisplayState(message)
+        ? resolvePersistedAssistantDisplayStateFromTranscriptRow(row)
         : const AssistantDisplayState();
     final fallbackAnswerText = isAssistantMessage
-        ? _resolveAssistantVisibleAnswerText(
-            message: message,
+        ? _resolveAssistantVisibleAnswerTextFromTranscriptRow(
+            row: row,
             previewAnswer: '',
             content: content,
             isStreaming: isAssistantRunning,
           )
         : content;
     final resolvedProcessTimeline = isAssistantMessage
-        ? resolveAssistantProcessTimelineFromMessage(message)
+        ? resolveAssistantProcessTimelineFromTranscriptRow(row)
         : const <ProcessTimelineFrame>[];
     final resolvedRetrievalProcessing = isAssistantMessage
-        ? resolveAssistantRetrievalProcessingFromMessage(message)
+        ? resolveAssistantRetrievalProcessingFromTranscriptRow(row)
         : const RetrievalProcessingSnapshot();
+    final displayMarkdownForBuild = isAssistantMessage
+        ? resolvePersistedAssistantDisplayMarkdownFromTranscriptRow(row)
+        : '';
+    final displayPlainTextForBuild = isAssistantMessage
+        ? resolvePersistedAssistantDisplayPlainTextFromTranscriptRow(row)
+        : '';
     final resolvedDisplayState = isAssistantMessage
         ? buildAssistantDisplayState(
             explicitState: persistedDisplayState,
             processTimeline: resolvedProcessTimeline,
             understandingSnapshot:
-                resolveAssistantUnderstandingSnapshotFromMessage(message),
+                resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
             retrievalProcessing: resolvedRetrievalProcessing,
-            answerProcessing: resolveAssistantAnswerProcessingFromMessage(
-              message,
-            ),
+            answerProcessing:
+                resolveAssistantAnswerProcessingFromTranscriptRow(row),
             answerMarkdown:
                 persistedDisplayState.answer.blocks.isEmpty &&
-                    resolvePersistedAssistantDisplayMarkdown(message).isNotEmpty
-                ? resolvePersistedAssistantDisplayMarkdown(message)
+                    displayMarkdownForBuild.isNotEmpty
+                ? displayMarkdownForBuild
                 : fallbackAnswerText,
             answerPlainText:
                 persistedDisplayState.answer.blocks.isEmpty &&
-                    resolvePersistedAssistantDisplayPlainText(
-                      message,
-                    ).isNotEmpty
-                ? resolvePersistedAssistantDisplayPlainText(message)
+                    displayPlainTextForBuild.isNotEmpty
+                ? displayPlainTextForBuild
                 : fallbackAnswerText,
             finalAnswerReady: !isAssistantRunning,
           )
@@ -213,28 +245,33 @@ class AssistantMessageBubble extends StatelessWidget {
     final resolvedJourneyViewModel = isAssistantMessage
         ? (journeyViewModel ??
               buildAssistantJourneyViewModel(
-                journey: resolveAssistantJourneyFromMessage(message),
+                journey: resolveAssistantJourneyFromTranscriptRow(row),
                 processTimeline: resolvedProcessTimeline,
                 isRunning: isAssistantRunning,
                 displayState: resolvedDisplayState,
                 understandingSnapshot:
-                    resolveAssistantUnderstandingSnapshotFromMessage(message),
+                    resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
                 retrievalProcessing: resolvedRetrievalProcessing,
-                answerProcessing: resolveAssistantAnswerProcessingFromMessage(
-                  message,
-                ),
+                answerProcessing:
+                    resolveAssistantAnswerProcessingFromTranscriptRow(row),
                 usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
-                  (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
-                      const <String, dynamic>{},
+                  switch (row) {
+                    AssistantAnswerTranscriptRow r => r.uiUsageStats,
+                    _ => const <String, dynamic>{},
+                  },
                 ),
-                elapsedMs:
-                    ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
+                elapsedMs: switch (row) {
+                  AssistantAnswerTranscriptRow r =>
+                    r.persisted.assistantElapsedMs,
+                  _ => 0,
+                },
               ))
         : const AssistantJourneyViewModel();
 
     Widget contentWidget;
     if (type == 'task_card') {
-      final tasks = message['tasks'] as List<dynamic>? ?? [];
+      final envelope = legacyEnvelope!;
+      final tasks = envelope.taskItems;
       contentWidget = Container(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
         decoration: BoxDecoration(
@@ -255,10 +292,7 @@ class AssistantMessageBubble extends StatelessWidget {
               ),
             ),
             SizedBox(height: AppSpacing.sm),
-            ...tasks.map<Widget>((t) {
-              final map = t is Map
-                  ? t as Map<String, dynamic>
-                  : <String, dynamic>{};
+            ...tasks.map<Widget>((map) {
               final title = map['title'] as String? ?? '';
               final time = map['time'] as String? ?? '';
               final status = map['status'] as String? ?? 'pending';
@@ -291,10 +325,8 @@ class AssistantMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'image') {
-      final imageUrl =
-          message['imageUrl'] as String? ??
-          message['thumbnailUrl'] as String? ??
-          '';
+      final envelope = legacyEnvelope!;
+      final imageUrl = envelope.imageUrl;
       contentWidget = ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: Image.network(
@@ -311,27 +343,15 @@ class AssistantMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'audio') {
-      final media = message['media'] is Map
-          ? (message['media'] as Map).cast<String, dynamic>()
-          : <String, dynamic>{};
-      final mediaUrl =
-          (media['url'] as String?) ?? (message['mediaUrl'] as String?) ?? '';
-      final durationMs = (media['durationMs'] as num?)?.toInt() ?? 0;
-      final waveformRaw = media['waveform'];
-      final waveform = waveformRaw is List
-          ? waveformRaw.map((e) => (e as num).toDouble()).toList()
-          : <double>[];
-      final msgId = (message['_id'] ?? message['id'] ?? '') as String;
-      final msgStatus =
-          (message['messageStatus'] ?? message['status'] ?? 'sent') as String;
+      final envelope = legacyEnvelope!;
       contentWidget = VoiceMessageBubble(
-        messageId: msgId,
-        mediaUrl: mediaUrl,
-        durationMs: durationMs,
-        waveform: waveform,
+        messageId: envelope.audioMessageId,
+        mediaUrl: envelope.audioMediaUrl,
+        durationMs: envelope.audioDurationMs,
+        waveform: envelope.audioWaveform,
         isOutgoing: isRight,
-        isRead: message['isRead'] == true,
-        messageStatus: msgStatus,
+        isRead: envelope.audioIsRead,
+        messageStatus: envelope.audioMessageStatus,
       );
     } else if (isAssistantMessage) {
       contentWidget = Container(
@@ -409,8 +429,8 @@ class AssistantMessageBubble extends StatelessWidget {
         showAnswerPreview ||
         showFinalAnswer ||
         (!showProcessDrawer && answerText.trim().isNotEmpty);
-    final followupPrompt = resolveAssistantFollowupPrompt(message);
-    final actionHints = resolveAssistantActionHints(message);
+    final followupPrompt = resolveAssistantFollowupPromptFromTranscriptRow(row);
+    final actionHints = resolveAssistantActionHintsFromTranscriptRow(row);
     Widget? avatarWidget;
     if (!hideAvatarAndName) {
       final chatAvatarSize = AppSpacing.avatarUserMd;

@@ -33,11 +33,14 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        client_dart_name: id
+        json_keys: [id, _id, callId]
 
       - name: callType
         type: enum
         enum_ref: CallType
         constraints: [NOT_NULL]
+        client_default: audio
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -48,6 +51,7 @@ entities:
         type: enum
         enum_ref: CallStatus
         constraints: [NOT_NULL]
+        client_default: initiated
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -57,6 +61,7 @@ entities:
       - name: initiatorId
         type: string
         constraints: [NOT_NULL]
+        client_default: ""
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -93,6 +98,7 @@ entities:
       - name: roomId
         type: string
         constraints: [NOT_NULL]
+        client_default: ""
         classification: INTERNAL
         log_policy: allow
         api_exposure: read
@@ -102,6 +108,7 @@ entities:
       - name: maxParticipants
         type: int
         constraints: [NOT_NULL]
+        client_default: "32"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -111,15 +118,27 @@ entities:
       - name: participantCount
         type: int
         constraints: [NOT_NULL]
+        client_default: "0"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
         description: 当前参与人数
 
+      - name: participants
+        type: embedded_list
+        item_entity: CallParticipant
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: API JSON 嵌入参与者列表（非存储字段，客户端 DTO 合成）
+
       - name: isRecording
         type: bool
         constraints: [NOT_NULL]
+        client_default: "false"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -138,6 +157,7 @@ entities:
       - name: isScreenSharing
         type: bool
         constraints: [NOT_NULL]
+        client_default: "false"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -212,6 +232,7 @@ entities:
       - name: userId
         type: string
         constraints: [NOT_NULL]
+        client_default: ""
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -221,6 +242,7 @@ entities:
         type: enum
         enum_ref: ParticipantRole
         constraints: [NOT_NULL]
+        client_default: invitee
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -231,6 +253,7 @@ entities:
         type: enum
         enum_ref: ParticipantStatus
         constraints: [NOT_NULL]
+        client_default: invited
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -240,6 +263,7 @@ entities:
       - name: isMuted
         type: bool
         constraints: [NOT_NULL]
+        client_default: "false"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -248,6 +272,7 @@ entities:
       - name: isCameraOn
         type: bool
         constraints: [NOT_NULL]
+        client_default: "true"
         classification: PUBLIC
         log_policy: allow
         api_exposure: read

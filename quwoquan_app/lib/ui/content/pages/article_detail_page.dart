@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -30,6 +32,7 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   ArticleDetailView? _article;
+  PostReadUiBundle? _postReadBundle;
   bool _isLoading = true;
   Object? _loadError;
   bool _isLiked = false;
@@ -69,9 +72,15 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         detail.wireForArticleProjection,
         fallbackArticleId: widget.articleId,
       );
+      final readBundle = PostReadUiBundle.fromPost(
+        detail.post,
+        PostReadSurfaceId.detailArticle,
+        wire: detail.wireForArticleProjection,
+      );
       if (!mounted) return;
       setState(() {
         _article = article;
+        _postReadBundle = readBundle;
         _likesCount = article.stats.likes;
         _commentsCount = article.stats.comments;
         _isLoading = false;
@@ -83,6 +92,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
+        _postReadBundle = null;
         _isLoading = false;
         _loadError = e;
       });
@@ -164,7 +174,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
               context.canPop() ? context.pop() : context.go(AppRoutePaths.home),
         ),
         middle: Text(
-          article.title,
+          article.title.trim().isNotEmpty
+              ? article.title
+              : (_postReadBundle?.presentation.title ?? ''),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_wire_normalize.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -77,7 +78,11 @@ class LocalCircleGroupSnapshotStore {
     final batch = database.batch();
     final now = DateTime.now().toIso8601String();
     for (final group in groups) {
-      final normalized = _normalizeGroup(group, fallbackUpdatedAt: now);
+      final normalized = normalizeCircleGroupWireMap(
+        Map<String, dynamic>.from(group),
+        shape: CircleGroupWireShape.localSnapshotPersist,
+        fallbackUpdatedAt: now,
+      );
       final groupId = _string(normalized['groupId']);
       final circleId = _string(normalized['circleId']);
       if (groupId.isEmpty || circleId.isEmpty) {
@@ -161,11 +166,11 @@ class LocalCircleGroupSnapshotStore {
     final circles = await circleRepository.listCircles(limit: circleLimit);
     final snapshots = <Map<String, dynamic>>[];
     for (final circle in circles) {
-      final circleId = _string(circle['id'] ?? circle['_id']);
+      final circleId = _string(circle.id);
       if (circleId.isEmpty) {
         continue;
       }
-      final circleName = _string(circle['name']);
+      final circleName = _string(circle.name);
       try {
         final groups = await circleRepository.listCircleGroups(
           circleId,
@@ -173,7 +178,7 @@ class LocalCircleGroupSnapshotStore {
         );
         for (final group in groups) {
           snapshots.add(<String, dynamic>{
-            ...group,
+            ...group.toMap(),
             'circleId': circleId,
             if (circleName.isNotEmpty) 'circleName': circleName,
           });
@@ -181,40 +186,6 @@ class LocalCircleGroupSnapshotStore {
       } catch (_) {}
     }
     await upsertGroups(namespace: namespace, groups: snapshots);
-  }
-
-  Map<String, dynamic> _normalizeGroup(
-    Map<String, dynamic> raw, {
-    required String fallbackUpdatedAt,
-  }) {
-    final circleId = _string(raw['circleId']);
-    final groupId = _firstNonEmpty(<Object?>[
-      raw['groupId'],
-      raw['id'],
-      raw['_id'],
-      raw['circleGroupId'],
-    ]);
-    final name = _firstNonEmpty(<Object?>[raw['name'], raw['title'], groupId]);
-    return <String, dynamic>{
-      ...raw,
-      'circleId': circleId,
-      'groupId': groupId,
-      'name': name,
-      'description': _string(raw['description']),
-      'circleName': _firstNonEmpty(<Object?>[
-        raw['circleName'],
-        raw['circleDisplayName'],
-      ]),
-      'groupType': _firstNonEmpty(<Object?>[raw['groupType'], raw['kind']]),
-      'visibility': _string(raw['visibility']),
-      'conversationId': _string(raw['conversationId']),
-      'memberCount': (raw['memberCount'] as num?)?.toInt() ?? 0,
-      'updatedAt': _firstNonEmpty(<Object?>[
-        raw['updatedAt'],
-        raw['lastActiveAt'],
-        fallbackUpdatedAt,
-      ]),
-    };
   }
 
   Map<String, dynamic> _decodePayload(Object? rawJson) {

@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: LLM_RAW | EXTENSION_MAP — 远端流式与 RunArtifacts 投影；边界后使用 codegen 类型。
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';

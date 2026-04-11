@@ -1,0 +1,41 @@
+version: 1
+read_model: ContentMediaInitUploadResponse
+
+description: |
+  POST /v1/content/media/uploads:init 响应 wire（端侧 Mock/Remote 与 MediaUploadManager 对齐）。
+
+source_entities:
+  - MediaAsset
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentMediaInitUploadResponseDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_media_init_upload_response_dto.g.dart
+  fields:
+    - name: sessionId
+      dart_type: String
+      nullable: false
+      source: sessionId
+      aliases: [sessionId]
+      default: "''"
+
+    - name: mediaId
+      dart_type: String
+      nullable: true
+      source: mediaId
+      aliases: [mediaId, assetId, id]
+
+    - name: uploadUrl
+      dart_type: String
+      nullable: true
+      source: uploadUrl
+      aliases: [uploadUrl]
+
+    - name: presignUrl
+      dart_type: String
+      nullable: true
+      source: presignUrl
+      aliases: [presignUrl, uploadUrl]

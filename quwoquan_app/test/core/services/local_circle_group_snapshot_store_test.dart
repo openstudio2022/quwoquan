@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
@@ -141,7 +142,7 @@ class _CountingCircleRepository extends MockCircleRepository {
   int listCirclesCalls = 0;
 
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? subCategory,
     String? domainId,

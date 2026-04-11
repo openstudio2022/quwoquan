@@ -146,6 +146,36 @@ class LlmResponseParser {
   }
 }
 
+/// 解析成功后对 canonical assistant JSON 的只读投影（便于收窄调用方对 `Map` 的依赖）。
+class LlmAssistantOutputJsonView {
+  const LlmAssistantOutputJsonView(this._json);
+
+  final Map<String, dynamic> _json;
+
+  String get explicitUserMarkdown {
+    final um = (_json['userMarkdown'] as String?)?.trim() ?? '';
+    if (um.isNotEmpty) return um;
+    return '';
+  }
+
+  String get resultText {
+    final result = _json['result'];
+    if (result is Map) {
+      return (result['text'] as String?)?.trim() ?? '';
+    }
+    if (result is String) return result.trim();
+    return '';
+  }
+
+  String get nextAction {
+    final decision = _json['decision'];
+    if (decision is Map) {
+      return (decision['nextAction'] as String?)?.trim() ?? '';
+    }
+    return '';
+  }
+}
+
 /// LLM 响应解析结果。
 class LlmParseResult {
   const LlmParseResult._({
@@ -177,33 +207,25 @@ class LlmParseResult {
   /// 仅提取显式用户轨 Markdown，不回退到 result.text。
   String get explicitUserMarkdown {
     if (!ok || json == null) return '';
-    final payload = json!;
-    final um = (payload['userMarkdown'] as String?)?.trim() ?? '';
-    if (um.isNotEmpty) return um;
-    return '';
+    return LlmAssistantOutputJsonView(json!).explicitUserMarkdown;
   }
 
   /// 兼容 canonical result.text / result 字符串。
   String get resultText {
     if (!ok || json == null) return '';
-    final payload = json!;
-    final result = payload['result'];
-    if (result is Map) {
-      return (result['text'] as String?)?.trim() ?? '';
-    }
-    if (result is String) return result.trim();
-    return '';
+    return LlmAssistantOutputJsonView(json!).resultText;
   }
 
   /// 从解析结果中提取 decision.nextAction
   String get nextAction {
     if (!ok || json == null) return '';
-    final payload = json!;
-    final decision = payload['decision'];
-    if (decision is Map) {
-      return (decision['nextAction'] as String?)?.trim() ?? '';
-    }
-    return '';
+    return LlmAssistantOutputJsonView(json!).nextAction;
+  }
+
+  /// 解析成功后的结构化投影（与 [json] 同源）。
+  LlmAssistantOutputJsonView? get assistantOutputView {
+    if (!ok || json == null) return null;
+    return LlmAssistantOutputJsonView(json!);
   }
 
   /// 是否为非最终答案（tool_call / ask_user 等中间态）

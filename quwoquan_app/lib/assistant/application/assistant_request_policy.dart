@@ -76,6 +76,7 @@ class AssistantRequestPolicy {
       sourceQuery: request.sourceQuery,
       fromGlobalSearch: request.fromGlobalSearch,
       rewriteInstruction: request.rewriteInstruction,
+      jsonExtension: request.jsonExtension,
     );
   }
 

@@ -13,17 +13,17 @@ class RemoteAssistantSyncAdapter implements AssistantSyncAdapter {
   Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   }) async {
-    final payload = await _repository.getPolicySnapshot(
+    final snapshot = await _repository.getPolicySnapshot(
       policyVersionHint: policyVersionHint,
     );
     return AssistantSyncResult(
-      success: payload.isNotEmpty,
+      success: snapshot.version.trim().isNotEmpty,
       mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.policy,
       message: 'Remote assistant policy loaded.',
       payload: <String, dynamic>{
         'policyVersionHint': policyVersionHint,
-        'snapshot': payload,
+        'snapshot': snapshot.toJson(),
       },
     );
   }
@@ -32,13 +32,17 @@ class RemoteAssistantSyncAdapter implements AssistantSyncAdapter {
   Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   }) async {
-    final payload = await _repository.reportInteractionEvents(events: events);
+    final ack = await _repository.reportInteractionEvents(
+      events: events
+          .map((m) => InteractionEvent.fromJson(m.cast<String, dynamic>()))
+          .toList(growable: false),
+    );
     return AssistantSyncResult(
-      success: payload['accepted'] != false,
+      success: ack.accepted,
       mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.interactionEvents,
       message: 'Remote assistant interaction events synced.',
-      payload: payload,
+      payload: ack.toJson(),
     );
   }
 
@@ -46,13 +50,17 @@ class RemoteAssistantSyncAdapter implements AssistantSyncAdapter {
   Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   }) async {
-    final payload = await _repository.reportScorecards(scorecards: scorecards);
+    final ack = await _repository.reportScorecards(
+      scorecards: scorecards
+          .map((m) => Scorecard.fromJson(m.cast<String, dynamic>()))
+          .toList(growable: false),
+    );
     return AssistantSyncResult(
-      success: payload['accepted'] != false,
+      success: ack.accepted,
       mode: AssistantSyncMode.remote,
       resource: AssistantSyncResource.scorecards,
       message: 'Remote assistant scorecards synced.',
-      payload: payload,
+      payload: ack.toJson(),
     );
   }
 

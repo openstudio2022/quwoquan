@@ -83,6 +83,11 @@ func (r *EntityRegistry) loadSharedTypes(metadataDir string) error {
 }
 
 func (r *EntityRegistry) loadBusinessObject(dir, dirName string) error {
+	// JSON wire fixtures only; same convention as tools/verify_metadata (skip test_fixtures).
+	if filepath.Base(dir) == "test_fixtures" || dirName == "test_fixtures" {
+		return nil
+	}
+
 	aggPath := filepath.Join(dir, "aggregate.yaml")
 	entPath := filepath.Join(dir, "entity.yaml")
 	schemaPath := filepath.Join(dir, "schema.yaml")

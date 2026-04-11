@@ -5,6 +5,10 @@
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
 /// 发现页 / 作者主页 / 圈子页等各页面 mock 数据，与原型 TSX 逐字段一致。
+///
+/// **与内容域 canonical 数据**：发现区 Feed wire 已以 [ContentMockData]（`discovery_*`）为单一真相；
+/// [MockAppContentRepository.articleById] 已委托 [ContentMockData.articleWireByPostId]；本类仍保留 TSX 1:1
+/// `discovery*` 切片供非内容域原型使用。
 class PrototypeMockData {
   PrototypeMockData._();
 
@@ -214,7 +218,7 @@ class PrototypeMockData {
     ];
   }
 
-  /// 根据 id 获取单篇文章（用于文章详情页），来自 discoveryArticleData
+  /// 历史文章 mock（TSX 形状）；应用内文章详情 mock 请用 [ContentMockData.articleWireByPostId]。
   static Map<String, dynamic>? articleById(String id) {
     try {
       return discoveryArticleData.firstWhere((a) => a['id'] == id);

@@ -1,4 +1,21 @@
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_member_roster_item_dto.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
+
+CircleStatsMemberRowViewData circleStatsMemberRowFromRosterItem(
+  CircleMemberRosterItemDto r,
+) {
+  final id = r.userId.isNotEmpty ? r.userId : r.membershipId;
+  return CircleStatsMemberRowViewData(
+    id: id.isNotEmpty ? id : 'unknown',
+    name: (r.displayName ?? id).toString(),
+    avatarUrl: (r.avatarUrl ?? '').toString(),
+    worksCountLabel: (r.worksCountLabel ?? '—').toString(),
+    fansCountLabel: (r.fansCountLabel ?? '—').toString(),
+    likesCountLabel: (r.likesCountLabel ?? '—').toString(),
+    isFollowed: r.isFollowed,
+  );
+}
 
 CircleStatsMemberRowViewData circleStatsMemberRowFromWireMap(
   Map<String, Object?> m,
@@ -22,14 +39,14 @@ CircleStatsGroupRowViewData circleStatsGroupRowFromWireMap(
   Map<String, Object?> m,
 ) {
   final dm = Map<String, dynamic>.from(m);
-  final id = (dm['_id'] ?? dm['id'] ?? '').toString();
-  final mc = dm['memberCount'];
-  final label = mc is num
-      ? mc.toString()
-      : (dm['memberCountLabel'] ?? '—').toString();
+  return circleStatsGroupRowFromGroupDto(CircleGroupDto.fromMap(dm));
+}
+
+CircleStatsGroupRowViewData circleStatsGroupRowFromGroupDto(CircleGroupDto g) {
+  final label = g.memberCount.toString();
   return CircleStatsGroupRowViewData(
-    id: id.isNotEmpty ? id : 'g_unknown',
-    name: (dm['name'] ?? '').toString(),
+    id: g.id.isNotEmpty ? g.id : 'g_unknown',
+    name: g.name,
     memberCountLabel: label,
   );
 }

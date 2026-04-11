@@ -1,0 +1,26 @@
+{
+  "qualityMetrics": {
+    "decisionParseSuccess": true,
+    "renderFallback": "",
+    "heuristicFallbackUsed": false,
+    "evidenceSufficient": true,
+    "freshnessSatisfied": true,
+    "criticalSlotsResolved": true,
+    "answerGateReady": true,
+    "answerGateReasonCode": "ok",
+    "_fixtureExtension": "retained"
+  },
+  "dialogueRuntime": {
+    "domainId": "fixture.domain",
+    "enabled": true
+  },
+  "uiReferences": [
+    {
+      "url": "https://example.com",
+      "title": "Example",
+      "source": "web",
+      "snippet": "hello",
+      "label": "来源1"
+    }
+  ]
+}

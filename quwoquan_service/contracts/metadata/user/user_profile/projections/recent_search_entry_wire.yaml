@@ -1,0 +1,51 @@
+version: 1
+read_model: RecentSearchEntryWire
+
+description: |
+  最近搜索条目 wire（ListRecentSearches / UpsertRecentSearch 响应体）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: RecentSearchEntryWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart
+  fields:
+    - name: entryId
+      dart_type: String
+      nullable: false
+      source: entryId
+      aliases: [entryId]
+      default: "''"
+
+    - name: query
+      dart_type: String
+      nullable: false
+      source: query
+      aliases: [query]
+      default: "''"
+
+    - name: scope
+      dart_type: String
+      nullable: false
+      source: scope
+      aliases: [scope]
+      default: "'all'"
+
+    - name: facet
+      dart_type: String
+      nullable: true
+      source: facet
+      aliases: [facet]
+      default: "null"
+
+    - name: updatedAt
+      dart_type: DateTime
+      nullable: true
+      source: updatedAt
+      aliases: [updatedAt]
+      default: "null"

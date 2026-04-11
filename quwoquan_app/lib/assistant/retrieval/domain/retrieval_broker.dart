@@ -119,6 +119,34 @@ class RetrievalSearchResult {
       );
 }
 
+/// Typed read surface for `web_search` entries in [RetrievalSearchResult.data]
+/// (broker → tool boundary; keeps downstream off raw `data[...]` indexing).
+class BrokerWebSearchResultDataView {
+  BrokerWebSearchResultDataView(Map<String, dynamic> data)
+    : _data = Map<String, dynamic>.from(data);
+
+  final Map<String, dynamic> _data;
+
+  /// Raw map for mutation paths that still merge keys into tool payloads.
+  Map<String, dynamic> get raw => _data;
+
+  String valueOf(String key) =>
+      (_data[key] as Object?)?.toString().trim() ?? '';
+
+  List<Map<String, dynamic>> get embeddedReferences =>
+      (_data['references'] as List?)
+          ?.whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false) ??
+      const <Map<String, dynamic>>[];
+
+  String get summaryOrSnippet {
+    final summary = valueOf('summary');
+    if (summary.isNotEmpty) return summary;
+    return valueOf('snippet');
+  }
+}
+
 class RetrievalFetchResult {
   const RetrievalFetchResult({
     required this.success,

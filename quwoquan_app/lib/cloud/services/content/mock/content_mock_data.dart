@@ -1,5 +1,7 @@
 // ignore_for_file: prefer_single_quotes
+import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 
 /// 内容域 mock 数据（canonical 字段，与 FeedItemDto schema 严格对齐）。
 ///
@@ -15,8 +17,8 @@ class ContentMockData {
   ContentMockData._();
 
   static final Map<String, String> _circleNameById = {
-    for (final circle in CircleMockData.circles)
-      circle['id']?.toString() ?? '': circle['name']?.toString() ?? '',
+    CircleMockData.primaryCircleDto.id: CircleMockData.primaryCircleDto.name,
+    for (final circle in CircleMockData.catalogCircleDtos) circle.id: circle.name,
   };
 
   static const Map<String, List<String>> _circleIdsByPostId = {
@@ -51,7 +53,7 @@ class ContentMockData {
     'journal_plain_body_only': ['c2'],
   };
 
-  static List<Map<String, dynamic>> _withCircleContext(
+  static List<FeedItemDto> _withCircleContext(
     List<Map<String, dynamic>> items,
   ) {
     return items
@@ -59,13 +61,13 @@ class ContentMockData {
           final postId = item['postId']?.toString() ?? '';
           final configuredCircleIds = _circleIdsByPostId[postId];
           if (configuredCircleIds == null || configuredCircleIds.isEmpty) {
-            return item;
+            return FeedItemDto.fromMap(item);
           }
           final circleNames = configuredCircleIds
               .map((id) => _circleNameById[id] ?? '')
               .where((name) => name.isNotEmpty)
               .toList(growable: false);
-          return <String, dynamic>{
+          return FeedItemDto.fromMap(<String, dynamic>{
             ...item,
             'circleIds': configuredCircleIds,
             'circleNames': circleNames,
@@ -81,7 +83,7 @@ class ContentMockData {
             if (configuredCircleIds.isNotEmpty)
               'circleId': configuredCircleIds.first,
             if (circleNames.isNotEmpty) 'circleName': circleNames.first,
-          };
+          });
         })
         .toList(growable: false);
   }
@@ -132,6 +134,22 @@ class ContentMockData {
             ],
       'blocks': blocks,
     };
+  }
+
+  /// 单篇文章详情 mock（与 [discoveryArticleData] / [getPost] 同源，按 postId 查找）。
+  static Map<String, dynamic>? articleWireByPostId(String id) {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final row = discoveryArticleData.firstWhere((a) => a.id == trimmed);
+      return <String, dynamic>{
+        ...row.toDiscoveryWireMap(),
+        'id': row.id,
+        'type': 'article',
+      };
+    } catch (_) {
+      return null;
+    }
   }
 
   static Map<String, dynamic> _buildArticlePost({
@@ -185,8 +203,7 @@ class ContentMockData {
   // width/height：主图尺寸（px），用于前端直接计算宽高比，无需请求图片元数据。
   // 比例来源于 Unsplash 图片的真实宽高比。
   // authorBackgroundUrl：作者主页背景图，每个作者 ID 固定一张。
-  static List<Map<String, dynamic>>
-  get discoveryPhotoData => _withCircleContext([
+  static List<FeedItemDto> get discoveryPhotoData => _withCircleContext([
     {
       'postId': 'd1',
       'contentType': 'image',
@@ -436,8 +453,7 @@ class ContentMockData {
   // width/height：视频分辨率（px），处理管道写入。
   // 竖屏短视频通常为 1080×1920，横屏为 1920×1080。
 
-  static List<Map<String, dynamic>>
-  get discoveryVideoData => _withCircleContext([
+  static List<FeedItemDto> get discoveryVideoData => _withCircleContext([
     {
       'postId': 'v1',
       'contentType': 'video',
@@ -517,8 +533,7 @@ class ContentMockData {
 
   // ─── Moment feed（微趣 tab）───────────────────────────────────────────────
 
-  static List<Map<String, dynamic>>
-  get discoveryMomentData => _withCircleContext([
+  static List<FeedItemDto> get discoveryMomentData => _withCircleContext([
     {
       'postId': 'm4',
       'contentType': 'micro',
@@ -603,8 +618,7 @@ class ContentMockData {
 
   // ─── Article feed（文章 tab）──────────────────────────────────────────────
 
-  static List<Map<String, dynamic>>
-  get discoveryArticleData => _withCircleContext([
+  static List<FeedItemDto> get discoveryArticleData => _withCircleContext([
     _buildArticlePost(
       postId: 'web-dev',
       authorId: 'tech_daily',

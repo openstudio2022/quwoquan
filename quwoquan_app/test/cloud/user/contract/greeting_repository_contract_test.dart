@@ -154,10 +154,9 @@ void main() {
       expect(inbox, isEmpty);
     });
 
-    test('replyGreeting 返回包含 conversationId 的 Map', () async {
+    test('replyGreeting 返回含 conversationId 的 DTO', () async {
       final result = await repo.replyGreeting('gr_001');
-      expect(result.containsKey('conversationId'), true);
-      expect(result['conversationId'], isNotEmpty);
+      expect(result.conversationId, isNotEmpty);
     });
 
     test('cancelGreeting 返回 cancelled 状态 DTO', () async {

@@ -127,8 +127,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     if (_resolvedTitle != null) return;
     try {
       final repo = ref.read(chatRepositoryProvider);
-      final conv = await repo.getConversation(widget.conversationId);
-      final dto = ConversationDto.fromMap(conv);
+      final dto = await repo.getConversation(widget.conversationId);
       if (!mounted) return;
       setState(() {
         _resolvedTitle = dto.title ?? widget.conversationId;

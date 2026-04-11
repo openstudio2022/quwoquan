@@ -1,0 +1,131 @@
+version: 1
+read_model: ContentPostDetailWire
+
+description: |
+  GET post 响应中 PostBaseDto 之外的扩展子树（详情页 / 文章投射 / 沉浸器共享）。
+  与 ArticleDetailWireKeys、ContentPostImmersiveWireKeys 对齐；完整 JSON 回声仍由
+  ContentPostDetailPayload 保留供 forward-compat。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentPostDetailWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_post_detail_wire_dto.g.dart
+  fields:
+    - name: cards
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: cards
+      aliases: [cards]
+      default: "null"
+
+    - name: isOfficial
+      dart_type: bool
+      nullable: true
+      source: isOfficial
+      aliases: [isOfficial]
+      default: "null"
+
+    - name: badge
+      dart_type: String
+      nullable: true
+      source: badge
+      aliases: [badge]
+      default: "null"
+
+    - name: articleTemplate
+      dart_type: String
+      nullable: true
+      source: articleTemplate
+      aliases: [articleTemplate]
+      default: "null"
+
+    - name: articleFontPreset
+      dart_type: String
+      nullable: true
+      source: articleFontPreset
+      aliases: [articleFontPreset]
+      default: "null"
+
+    - name: articleDocument
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: articleDocument
+      aliases: [articleDocument]
+      default: "null"
+
+    - name: articleBlocks
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: articleBlocks
+      aliases: [articleBlocks]
+      default: "null"
+
+    - name: articlePages
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: articlePages
+      aliases: [articlePages]
+      default: "null"
+
+    - name: coverUrlWire
+      dart_type: String
+      nullable: true
+      source: coverUrl
+      aliases: [coverUrl]
+      default: "null"
+      description: wire 顶层 coverUrl（与 PostBaseDto.coverUrl 并存时的覆盖）
+
+    - name: circleSummaries
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: circleSummaries
+      aliases: [circleSummaries]
+      default: "null"
+
+    - name: circleIds
+      dart_type: List<String>
+      nullable: true
+      source: circleIds
+      aliases: [circleIds]
+      default: "null"
+
+    - name: circleNames
+      dart_type: List<String>
+      nullable: true
+      source: circleNames
+      aliases: [circleNames]
+      default: "null"
+
+    - name: circleId
+      dart_type: String
+      nullable: true
+      source: circleId
+      aliases: [circleId]
+      default: "null"
+
+    - name: circleName
+      dart_type: String
+      nullable: true
+      source: circleName
+      aliases: [circleName]
+      default: "null"
+
+    - name: tags
+      dart_type: List<String>
+      nullable: true
+      source: tags
+      aliases: [tags]
+      default: "null"
+
+    - name: visibility
+      dart_type: String
+      nullable: true
+      source: visibility
+      aliases: [visibility]
+      default: "null"

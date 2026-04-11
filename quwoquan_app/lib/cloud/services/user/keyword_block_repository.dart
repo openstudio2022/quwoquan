@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/privacy_settings_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -53,12 +55,15 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.getPrivacySettings),
     );
-    final map = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
-    final raw = map['blockedKeywords'];
-    if (raw is List) {
-      return raw.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
-    }
-    return <String>[];
+    final map = CloudResponseDecoder.asObject(
+      decoded,
+      context: UserRequestPageIds.getPrivacySettings,
+    );
+    final wire = PrivacySettingsWireDto.fromMap(map);
+    return wire.blockedKeywords
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
   }
 
   @override

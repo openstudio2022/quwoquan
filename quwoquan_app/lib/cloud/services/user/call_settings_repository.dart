@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/call_settings_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
@@ -19,14 +21,18 @@ class CallSettingsDto {
   final bool enableCallVibration;
   final bool enableGroupCallRing;
 
-  factory CallSettingsDto.fromMap(Map<String, dynamic> map) {
+  factory CallSettingsDto.fromCallSettingsWire(CallSettingsWireDto w) {
     return CallSettingsDto(
-      defaultIncomingCallRingtoneId:
-          map['defaultIncomingCallRingtoneId'] as String?,
-      allowCallerRingtoneOverride:
-          (map['allowCallerRingtoneOverride'] as bool?) ?? true,
-      enableCallVibration: (map['enableCallVibration'] as bool?) ?? true,
-      enableGroupCallRing: (map['enableGroupCallRing'] as bool?) ?? true,
+      defaultIncomingCallRingtoneId: w.defaultIncomingCallRingtoneId,
+      allowCallerRingtoneOverride: w.allowCallerRingtoneOverride,
+      enableCallVibration: w.enableCallVibration,
+      enableGroupCallRing: w.enableGroupCallRing,
+    );
+  }
+
+  factory CallSettingsDto.fromMap(Map<String, dynamic> map) {
+    return CallSettingsDto.fromCallSettingsWire(
+      CallSettingsWireDto.fromMap(map),
     );
   }
 
@@ -157,7 +163,10 @@ class RemoteCallSettingsRepository implements CallSettingsRepository {
     );
     if (resp.statusCode == 200) {
       return CallSettingsDto.fromMap(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.getCallSettings,
+        ),
       );
     }
     throw Exception('GetCallSettings failed: ${resp.statusCode}');
@@ -176,7 +185,10 @@ class RemoteCallSettingsRepository implements CallSettingsRepository {
     );
     if (resp.statusCode == 200) {
       return CallSettingsDto.fromMap(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.updateCallSettings,
+        ),
       );
     }
     throw Exception('UpdateCallSettings failed: ${resp.statusCode}');

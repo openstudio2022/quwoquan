@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart'
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_app_config_client_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -186,29 +187,28 @@ class UserDataNotifier extends Notifier<User?> {
     try {
       final repo = ref.read(userProfileRepositoryProvider);
       final profile = await repo.getUserProfile(userId);
-      final avatarUrl = profile['avatarUrl']?.toString();
-      final profileSubjectId =
-          profile['profileSubjectId']?.toString() ??
-          profile['userId']?.toString() ??
-          userId;
+      final avatarUrl =
+          profile.avatarUrl.isNotEmpty ? profile.avatarUrl : null;
+      final profileSubjectId = profile.profileSubjectId.isNotEmpty
+          ? profile.profileSubjectId
+          : userId;
       state = User(
         id: profileSubjectId,
         username:
-            profile['username']?.toString() ??
-            profile['nickname']?.toString() ??
-            userId,
-        displayName:
-            profile['displayName']?.toString() ??
-            profile['nickname']?.toString(),
+            profile.username.isNotEmpty ? profile.username : userId,
+        displayName: profile.displayName.isNotEmpty
+            ? profile.displayName
+            : null,
         avatarUrl: avatarUrl,
         avatar: avatarUrl,
-        bio: profile['bio']?.toString(),
-        backgroundImage: profile['backgroundUrl']?.toString(),
+        bio: profile.bio.isNotEmpty ? profile.bio : null,
+        backgroundImage: profile.backgroundUrl.isNotEmpty
+            ? profile.backgroundUrl
+            : null,
         metadata: <String, dynamic>{
-          'ownerUserId': profile['ownerUserId']?.toString(),
-          'subAccountId': profile['subAccountId']?.toString(),
-          'subjectType': profile['subjectType']?.toString(),
-          'personaContextVersion': profile['personaContextVersion']?.toString(),
+          'ownerUserId': profile.ownerUserId,
+          'subAccountId': profile.subAccountId,
+          'subjectType': profile.subjectType,
         },
       );
     } catch (_) {
@@ -489,55 +489,41 @@ class ContentRuntimeConfigState {
     Map<String, dynamic> config, {
     required ContentRuntimeConfigState fallback,
   }) {
-    final content =
-        (config['content'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final rawFlags =
-        (content['feature_flags'] as Map?)?.cast<String, dynamic>() ??
-        (content['featureFlags'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final mergedFlags = <String, bool>{...fallback.featureFlags};
-    for (final entry in rawFlags.entries) {
-      final value = entry.value;
-      if (value is bool) {
-        mergedFlags[entry.key] = value;
-      }
-    }
-    final grayRelease =
-        (content['gray_release'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final rawStages =
-        (grayRelease['canary_matrix'] as List?)
-            ?.whereType<Map>()
-            .map(
-              (item) =>
-                  ContentCanaryStage.fromMap(item.cast<String, dynamic>()),
-            )
-            .where((stage) => stage.stage.isNotEmpty)
-            .toList(growable: false) ??
-        fallback.canaryStages;
-    final experimentBucket =
-        (grayRelease['experiment_bucket'] ?? fallback.experimentBucket)
-            .toString()
-            .trim();
-    final currentCanaryStage =
-        (grayRelease['current_stage'] ?? fallback.currentCanaryStage)
-            .toString()
-            .trim();
-    final rawClientStateSync =
-        (content['client_state_sync'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    return ContentRuntimeConfigState.fromClientParsed(
+      ContentAppConfigClientParsed.fromRootMap(config),
+      fallback: fallback,
+    );
+  }
+
+  factory ContentRuntimeConfigState.fromClientParsed(
+    ContentAppConfigClientParsed parsed, {
+    required ContentRuntimeConfigState fallback,
+  }) {
+    final mergedFlags = <String, bool>{
+      ...fallback.featureFlags,
+      ...parsed.featureFlagOverrides,
+    };
+    final gray = parsed.grayRelease;
+    final rawStages = gray.canaryMatrix
+        .map(
+          (w) => ContentCanaryStage(
+            stage: w.stage,
+            rolloutPercent: w.rolloutPercent,
+          ),
+        )
+        .toList(growable: false);
+    final experimentBucket = gray.experimentBucket.trim();
+    final currentCanaryStage = gray.currentStage.trim();
     return ContentRuntimeConfigState(
       featureFlags: mergedFlags,
-      experimentBucket: experimentBucket.isEmpty
-          ? fallback.experimentBucket
-          : experimentBucket,
+      experimentBucket:
+          experimentBucket.isEmpty ? fallback.experimentBucket : experimentBucket,
       currentCanaryStage: currentCanaryStage.isEmpty
           ? fallback.currentCanaryStage
           : currentCanaryStage,
       canaryStages: rawStages.isEmpty ? fallback.canaryStages : rawStages,
       clientStateSync: ClientStateSyncConfig.fromMap(
-        rawClientStateSync,
+        parsed.clientStateSyncMap,
         fallback: fallback.clientStateSync,
       ),
     );
@@ -566,8 +552,8 @@ class ContentRuntimeConfigNotifier extends Notifier<ContentRuntimeConfigState> {
       final remoteConfig = await ref
           .read(contentRepositoryProvider)
           .getAppConfig();
-      state = ContentRuntimeConfigState.fromAppConfig(
-        remoteConfig,
+      state = ContentRuntimeConfigState.fromClientParsed(
+        remoteConfig.clientParsed,
         fallback: fallback,
       );
     } catch (_) {

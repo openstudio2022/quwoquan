@@ -1,3 +1,9 @@
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
@@ -8,7 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dar
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
-import 'package:quwoquan_app/core/mock/prototype_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 class MockChatRepository implements ChatRepository {
@@ -90,18 +96,22 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final rows = _conversationCache
         .where((conversation) => conversation['status'] == 'active')
-        .map((conversation) => Map<String, dynamic>.from(conversation))
+        .map((conversation) {
+          final conversationId = _conversationIdOf(conversation);
+          final override = _inboxOverrides[conversationId] ?? const {};
+          return <String, dynamic>{...conversation, ...override};
+        })
         .toList(growable: false);
-    if (limit > 0 && limit < rows.length) {
-      return rows.take(limit).toList(growable: false);
-    }
-    return rows;
+    final capped = limit > 0 && limit < rows.length
+        ? rows.take(limit).toList(growable: false)
+        : rows;
+    return capped.map(ChatInboxDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -198,13 +208,14 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getConversation(String conversationId) async {
-    return Map<String, dynamic>.from(
+  Future<ConversationDto> getConversation(String conversationId) async {
+    final raw = Map<String, dynamic>.from(
       _conversationCache.firstWhere(
         (conversation) => _conversationIdOf(conversation) == conversationId,
         orElse: () => _conversationCache.first,
       ),
     );
+    return ConversationDto.fromMap(raw);
   }
 
   @override
@@ -292,7 +303,7 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> sendMessage({
+  Future<SendMessageResponse> sendMessage({
     required String conversationId,
     required String type,
     required String content,
@@ -307,11 +318,11 @@ class MockChatRepository implements ChatRepository {
     required String clientMsgId,
   }) async {
     _seqCounter++;
-    return {
+    return SendMessageResponse.fromMap({
       'messageId': 'msg_mock_${DateTime.now().millisecondsSinceEpoch}',
       'seq': _seqCounter,
       'timestamp': DateTime.now().toIso8601String(),
-    };
+    });
   }
 
   @override
@@ -321,13 +332,16 @@ class MockChatRepository implements ChatRepository {
   }) async {}
 
   @override
-  Future<Map<String, dynamic>> syncMessages({
+  Future<SyncResponse> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
     final msgs = ChatMockData.messagesFor(conversationId);
-    return {'messages': msgs, 'hasMore': false};
+    return SyncResponse.fromMap(<String, dynamic>{
+      'messages': msgs,
+      'hasMore': false,
+    });
   }
 
   @override
@@ -337,11 +351,11 @@ class MockChatRepository implements ChatRepository {
   }) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> getReceipts({
+  Future<List<ChatMessageReceiptDto>> getReceipts({
     required String conversationId,
     required String messageId,
   }) async {
-    return [];
+    return const [];
   }
 
   @override
@@ -436,29 +450,28 @@ class MockChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return PrototypeMockData.chatMockContacts
-        .map(ChatContactRowDto.fromMap)
+    return AppContentPrototypeBundle.instance.chatMockContacts
         .take(limit)
         .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listContactTabCircles({
+  Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.contactTabCircles
         .take(limit)
-        .map((e) => Map<String, dynamic>.from(e))
+        .map((e) => ChatContactTabCircleRowDto.fromMap(e))
         .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listContactTabFunGroups({
+  Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.contactTabFunGroups
         .take(limit)
-        .map((e) => Map<String, dynamic>.from(e))
+        .map((e) => ChatContactTabFunGroupRowDto.fromMap(e))
         .toList(growable: false);
   }
 
@@ -476,17 +489,13 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
-    return PrototypeMockData.chatMockContacts
+    return AppContentPrototypeBundle.instance.chatMockContacts
         .where(
-          (c) =>
-              (c['displayName'] as String?)?.toLowerCase().contains(
-                normalizedQuery,
-              ) ??
-              false,
+          (c) => c.displayName.toLowerCase().contains(normalizedQuery),
         )
         .take(limit)
         .map((contact) {
-          final displayName = (contact['displayName'] ?? '').toString();
+          final displayName = contact.displayName;
           final matchedConversation = ChatMockData.conversations.firstWhere(
             (conversation) =>
                 (conversation['type'] == 'direct' ||
@@ -495,8 +504,8 @@ class MockChatRepository implements ChatRepository {
             orElse: () => <String, dynamic>{},
           );
           return ChatContactSearchItemDto.fromMap(<String, dynamic>{
-            ...contact,
-            'contactId': contact['userId'],
+            ...contact.toMap(),
+            'contactId': contact.userId,
             'conversationId':
                 matchedConversation['_id'] ?? matchedConversation['id'] ?? '',
             'conversationType': matchedConversation['type'] ?? 'direct',
@@ -509,32 +518,33 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
     return _conversationCache
         .where((conversation) => conversation['status'] == 'active')
         .map((c) {
-          return {
+          return ChatConversationTimestampDto.fromMap(<String, dynamic>{
             'id': c['_id'] ?? c['id'],
             'updatedAt': c['updatedAt'] ?? DateTime.now().toIso8601String(),
             'type': c['type'] ?? 'direct',
-          };
+          });
         })
         .toList();
   }
 
   @override
-  Future<List<Map<String, dynamic>>> batchGetConversations(
+  Future<List<ConversationDto>> batchGetConversations(
     List<String> ids,
   ) async {
     return _conversationCache
         .where((c) => ids.contains(c['_id'] ?? c['id']))
+        .map((c) => ConversationDto.fromMap(Map<String, dynamic>.from(c)))
         .toList();
   }
 
   @override
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
     final conversation = await getConversation(conversationId);
-    final merged = Map<String, dynamic>.from(conversation)
+    final merged = Map<String, dynamic>.from(conversation.toMap())
       ..addAll(_settingsCache[conversationId] ?? _defaultSettings);
     return ChatGroupSettingsDto.fromMap(merged);
   }

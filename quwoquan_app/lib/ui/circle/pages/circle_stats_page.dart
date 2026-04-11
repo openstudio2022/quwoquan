@@ -77,17 +77,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     try {
       switch (_type) {
         case 'groups':
-          final raw = await repo.listCircleGroups(widget.circleId, limit: 200);
+          final groups = await repo.listCircleGroups(widget.circleId, limit: 200);
           if (!mounted) {
             return;
           }
           setState(() {
-            _groups = raw
-                .map(
-                  (g) => circleStatsGroupRowFromWireMap(
-                    Map<String, Object?>.from(g),
-                  ),
-                )
+            _groups = groups
+                .map(circleStatsGroupRowFromGroupDto)
                 .toList(growable: false);
           });
           break;
@@ -100,18 +96,14 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         case 'members':
         case 'fans':
         default:
-          final raw = await repo.listMembers(widget.circleId, limit: 200);
+          final roster = await repo.listMembers(widget.circleId, limit: 200);
           if (!mounted) {
             return;
           }
           setState(() {
-            _users = raw
-                .map(
-                  (m) => circleStatsMemberRowFromWireMap(
-                    Map<String, Object?>.from(m),
-                  ),
-                )
-                .toList(growable: false);
+            _users = roster.map(circleStatsMemberRowFromRosterItem).toList(
+                  growable: false,
+                );
           });
       }
     } catch (_) {

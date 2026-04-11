@@ -7,11 +7,11 @@ class AppLogSkillCenterPackageTogglePayload {
   final bool enabled;
   final int skillCount;
 
-  const AppLogSkillCenterPackageTogglePayload({
-    required this.event,
-    required this.action,
-    required this.enabled,
-    required this.skillCount,
+  AppLogSkillCenterPackageTogglePayload({
+    this.event = 'skill_center_action',
+    this.action = 'package_toggle',
+    this.enabled = false,
+    this.skillCount = 0,
   });
 
   factory AppLogSkillCenterPackageTogglePayload.fromMap(Map<String, dynamic> m) {

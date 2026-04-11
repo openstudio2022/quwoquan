@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -10,31 +11,38 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   int unfollowCalls = 0;
 
   @override
-  Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    return {
-      'profileSubjectId': userId,
-      'ownerUserId': 'owner-1',
-      'subjectType': 'sub_account',
-      'subAccountId': userId,
-      'username': 'user_name',
-      'displayName': '展示名',
-      'avatarUrl': '',
-      'backgroundUrl': '',
-      'bio': '',
-      'followerCount': 0,
-      'followingCount': 0,
-      'postCount': 0,
-      'circleCount': 0,
-      'likeCount': 0,
-      'profileVisibility': 'public',
-      'inheritsFromOwner': true,
-      'overriddenFields': const <String>[],
-    };
+  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+    return ProfileSubjectViewData(
+      profileSubjectId: userId,
+      ownerUserId: 'owner-1',
+      subjectType: 'sub_account',
+      subAccountId: userId,
+      username: 'user_name',
+      displayName: '展示名',
+      avatarUrl: '',
+      backgroundUrl: '',
+      bio: '',
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+      circleCount: 0,
+      likeCount: 0,
+      profileVisibility: 'public',
+      inheritsFromOwner: true,
+      overriddenFields: const <String>[],
+      updatedAt: null,
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> getUserStats(String userId) async {
-    return const <String, dynamic>{};
+  Future<UserProfileStatsViewData> getUserStats(String userId) async {
+    return const UserProfileStatsViewData(
+      followingCount: 0,
+      circleCount: 0,
+      followerCount: 0,
+      likeCount: 0,
+      postCount: 0,
+    );
   }
 
   @override

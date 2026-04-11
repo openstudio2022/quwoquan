@@ -96,7 +96,7 @@ class ModeDecider {
       );
     }
 
-    if (intentGraph.problemClassType == ProblemClass.complexReasoning &&
+    if (intentGraph.problemClass == ProblemClass.complexReasoning &&
         intentGraph.secondarySkills.isNotEmpty) {
       return ModeDecision(
         mode: AgentMode.multiAgent,

@@ -71,7 +71,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       final currentUserId = ref.read(currentUserIdProvider);
       final inbox = await chatRepo.listInbox(limit: 50);
       final contacts = await chatRepo.listContacts(limit: 200);
-      final circleMaps = await userRepo.listUserCircles(
+      final circleSummaries = await userRepo.listUserCircles(
         currentUserId,
         limit: 50,
       );
@@ -95,8 +95,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               .where((row) => row.type == 'circle' && row.circleId.isNotEmpty)
               .map((row) => row.circleId)
               .toSet();
-          _circles = circleMaps
-              .map(CircleDto.fromMap)
+          _circles = circleSummaries
               .where((circle) => activeCircleIds.contains(circle.id))
               .toList(growable: false);
           _existingMemberIds
@@ -282,7 +281,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           final members = await ref
               .read(circleRepositoryProvider)
               .listMembers(circle.id, limit: 500);
-          final selectableMembers = selectableFromCircleWireMaps(
+          final selectableMembers = selectableFromCircleRosterItems(
             members,
             existingMemberIds: _existingMemberIds,
             mutualContactIds: _mutualContactIds,

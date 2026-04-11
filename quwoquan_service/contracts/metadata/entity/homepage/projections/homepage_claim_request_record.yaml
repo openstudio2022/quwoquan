@@ -1,0 +1,69 @@
+version: 1
+read_model: HomepageClaimRequestRecord
+
+description: |
+  主页认领申请记录 wire（读路径）；_id / id 兼容。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageClaimRequestRecord
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_claim_request_record.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: _id
+      aliases: [_id, id]
+      default: "''"
+
+    - name: homepageId
+      dart_type: String
+      nullable: false
+      source: homepageId
+      aliases: [homepageId]
+      default: "''"
+
+    - name: requesterUserId
+      dart_type: String
+      nullable: false
+      source: requesterUserId
+      aliases: [requesterUserId]
+      default: "''"
+
+    - name: claimTier
+      dart_type: String
+      nullable: false
+      source: claimTier
+      aliases: [claimTier]
+      default: "''"
+
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status]
+      default: "''"
+
+    - name: reviewNote
+      dart_type: String
+      nullable: true
+      source: reviewNote
+      aliases: [reviewNote]
+
+    - name: createdAt
+      dart_type: DateTime
+      nullable: true
+      source: createdAt
+      aliases: [createdAt]
+
+    - name: reviewedAt
+      dart_type: DateTime
+      nullable: true
+      source: reviewedAt
+      aliases: [reviewedAt]

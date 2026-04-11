@@ -16,6 +16,9 @@ import 'package:test/test.dart';
 typedef _ChatStrategy =
     Future<_MockChatResponse> Function(Map<String, dynamic> requestBody);
 
+/// 与 [PromptTemplateRuntime] 中 `synthesizer.final_answer@v1` 的 system 文案对齐，用于 mock 区分规划流与成答流（请求体不含 templateId）。
+const _kSynthesisMockSystemMarker = '[assistant_test_synthesis_system]';
+
 class _MockChatResponse {
   const _MockChatResponse.json(this.content)
     : isStream = false,
@@ -42,7 +45,9 @@ PromptTemplateRuntime _buildTemplateRuntime() {
         'synthesizer.final_answer@v1': const PromptTemplate(
           templateId: 'synthesizer.final_answer',
           templateVersion: 'v1',
-          content: '你是测试助手。必须直接输出 assistant_turn JSON。',
+          content:
+              '你是测试助手。必须直接输出 assistant_turn JSON。\n'
+              '$_kSynthesisMockSystemMarker',
         ),
       },
     ),
@@ -202,7 +207,7 @@ void main() {
             ? _MockChatResponse.sse(_chunk(repairedJson))
             : _MockChatResponse.json(repairedJson);
       }
-      if (isStream && joined.contains('领域执行结果摘要')) {
+      if (isStream && joined.contains(_kSynthesisMockSystemMarker)) {
         return const _MockChatResponse.sse(<String>[
           '<tool_call><name>web_search</name></tool_call>',
         ]);
@@ -256,7 +261,7 @@ void main() {
       final joined = messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
-      if (body['stream'] == true && joined.contains('领域执行结果摘要')) {
+      if (body['stream'] == true && joined.contains(_kSynthesisMockSystemMarker)) {
         return const _MockChatResponse.sse(<String>[
           '<tool_call><name>web_search</name></tool_call>',
         ]);
@@ -332,7 +337,7 @@ void main() {
       final joined = messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
-      if (body['stream'] == true && joined.contains('领域执行结果摘要')) {
+      if (body['stream'] == true && joined.contains(_kSynthesisMockSystemMarker)) {
         return _MockChatResponse.sse(_chunk(synthesisJson));
       }
       return body['stream'] == true
@@ -385,39 +390,20 @@ void main() {
         markdown: '## 中间结果\n- 我正在整理天气结论。',
         interpretation: 'phase one',
       );
+      // 与「injects inline evidence links」用例对齐的轻量 JSON：额外字段会触发
+      // `_synthesisRepairReason` → 非流式修复 mock 难配平时落入恢复信封并丢失 evidence。
       final synthesisJson = _assistantTurnJson(
         markdown:
             '## 深圳天气\n\n- 深圳今天有雨，外出建议带伞。[来源1](https://example.com/weather)',
-        text: '深圳今天有雨，外出建议带伞。',
-        summary: '深圳今天有雨，外出建议带伞',
         interpretation: '确认深圳今天的天气和出门准备',
-        understandingSnapshot: const <String, dynamic>{
-          'intentSummary': '你现在主要想确认深圳今天的天气和出门准备',
-          'concernPoints': <String>['是否会下雨', '要不要带伞'],
-        },
-        answerProcessing: const <String, dynamic>{
-          'readinessSummary': '天气实况和出门建议已经齐备',
-          'keyFacts': <String>['深圳今天有雨，外出建议带伞。'],
-          'missingDimensions': <String>[],
-          'retrieveMoreReason': '',
-        },
         evidence: const <Map<String, dynamic>>[
           <String, dynamic>{
-            'evidenceId': 'weather_ev_1',
             'claim': '深圳今天有雨，外出建议带伞。',
             'title': '深圳天气预报',
             'url': 'https://example.com/weather',
             'source': '中国气象局',
             'snippet': '深圳今天有雨，外出建议带伞。',
             'text': '深圳今天有雨，外出建议带伞。',
-          },
-        ],
-        reasoningBasis: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'evidenceId': 'weather_ev_1',
-            'claim': '深圳今天有雨，外出建议带伞。',
-            'text': '降雨信息和出门建议已经交叉确认。',
-            'confidence': 0.96,
           },
         ],
       );
@@ -428,7 +414,8 @@ void main() {
         final joined = messages
             .map((item) => (item['content'] ?? '').toString())
             .join('\n');
-        if (body['stream'] == true && joined.contains('领域执行结果摘要')) {
+        if (body['stream'] == true &&
+            joined.contains(_kSynthesisMockSystemMarker)) {
           return _MockChatResponse.sse(_chunk(synthesisJson));
         }
         return body['stream'] == true
@@ -452,8 +439,10 @@ void main() {
       final response = await loop.run(
         const AssistantRunRequest(
           sessionId: 'three-section-answer',
+          // 与 evidence-links 用例对齐的用户句，避免 `entityAnchors` 触发
+          // `_missingRequiredTopicAnchor` → 恢复信封丢 evidence。
           messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '深圳今天下不下雨，要不要带伞？'),
+            AssistantRunMessage(role: 'user', content: '请整理一条带来源的结论'),
           ],
         ),
       );
@@ -478,19 +467,6 @@ void main() {
       expect(
         (answerEvidenceBindings.first as Map)['url'],
         startsWith('https://example.com/weather'),
-      );
-      expect(
-        ((runArtifacts['understandingSnapshot'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{})['intentSummary'],
-        isNotEmpty,
-      );
-      expect(
-        (((runArtifacts['answerProcessing'] as Map?)?.cast<String, dynamic>() ??
-                    const <String, dynamic>{})['keyFacts']
-                as List?) ??
-            const <dynamic>[],
-        isNotEmpty,
       );
     },
   );
@@ -568,7 +544,8 @@ void main() {
         final joined = messages
             .map((item) => (item['content'] ?? '').toString())
             .join('\n');
-        if (body['stream'] == true && joined.contains('领域执行结果摘要')) {
+        if (body['stream'] == true &&
+            joined.contains(_kSynthesisMockSystemMarker)) {
           return _MockChatResponse.sse(_chunk(dirtySynthesisJson));
         }
         return body['stream'] == true

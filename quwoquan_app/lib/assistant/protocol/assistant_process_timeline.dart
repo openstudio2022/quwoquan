@@ -128,6 +128,8 @@ List<ProcessTimelineFrame> buildProcessTimelineFramesFromJourneyFallback(
   if (processingHeadline.isNotEmpty ||
       processingDetail.isNotEmpty ||
       processingRefs.isNotEmpty) {
+    // 不在帧快照里重复 headline：否则 _resolveRetrievalProcessing 会优先采用帧内
+    // processingSummary，与 headline 相同后触发去重把整条 headline 剥空（读侧 journey 恢复）。
     final rpSnapshot = RetrievalProcessingSnapshot(
       processedDocumentCount: processingRefs.isNotEmpty
           ? processingRefs.length
@@ -135,7 +137,7 @@ List<ProcessTimelineFrame> buildProcessTimelineFramesFromJourneyFallback(
       acceptedDocumentCount: processingRefs.isNotEmpty
           ? processingRefs.length
           : 0,
-      processingSummary: processingHeadline,
+      processingSummary: '',
       selectedKeyPoints: _detailToKeyPoints(processingDetail),
       acceptedReferences: processingRefs,
     );

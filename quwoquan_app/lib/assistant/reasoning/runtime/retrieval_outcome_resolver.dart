@@ -1,6 +1,9 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 工具结果 Map 链；优先 AssistantToolResultRowView 与结构化契约字段。
+
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row_view.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
@@ -40,13 +43,18 @@ class RetrievalOutcomeResolver {
         evidenceEvaluation.entries.isNotEmpty ||
         processedDocumentCount > 0 ||
         acceptedDocumentCount > 0;
+    final temporalAnchor = _temporalAnchorFromToolResults(
+      toolResults,
+      referenceNowIso: referenceNowIso,
+      timezone: timezone,
+    );
     final temporalAssessment = _resolveTemporalAssessment(
       policy: policy,
       queryTasks: queryTasks,
       toolResults: toolResults,
       evidenceEvaluation: evidenceEvaluation,
-      referenceNowIso: referenceNowIso,
-      timezone: timezone,
+      referenceNowIso: temporalAnchor.referenceNowIso,
+      timezone: temporalAnchor.timezone,
     );
     final authoritySatisfied = !policy.authorityRequired
         ? true
@@ -336,6 +344,35 @@ class RetrievalOutcomeResolver {
         <String, dynamic>{'data': resultData},
       ],
     );
+  }
+
+  /// 工具层 timeConstraint 常带 referenceNowIso（与 query 语义一致）；优先于调用方未传的墙钟缺省。
+  ({String referenceNowIso, String timezone}) _temporalAnchorFromToolResults(
+    List<Map<String, dynamic>> toolResults, {
+    required String referenceNowIso,
+    required String timezone,
+  }) {
+    var mergedRef = referenceNowIso.trim();
+    var mergedTz = timezone.trim();
+    for (final item in toolResults) {
+      final data =
+          (item['data'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final tc =
+          (data['timeConstraint'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final iso = (tc['referenceNowIso'] as String?)?.trim() ?? '';
+      if (iso.isEmpty) {
+        continue;
+      }
+      mergedRef = iso;
+      final tz = (tc['timezone'] as String?)?.trim() ?? '';
+      if (tz.isNotEmpty) {
+        mergedTz = tz;
+      }
+      break;
+    }
+    return (referenceNowIso: mergedRef, timezone: mergedTz);
   }
 
   _TemporalAssessment _resolveTemporalAssessment({
@@ -668,9 +705,7 @@ class RetrievalOutcomeResolver {
     String key,
   ) {
     for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final data = AssistantToolResultRowView(item).dataPayload;
       if (data[key] == true) return true;
     }
     return false;
@@ -682,9 +717,7 @@ class RetrievalOutcomeResolver {
   ) {
     var maxValue = 0;
     for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final data = AssistantToolResultRowView(item).dataPayload;
       final candidate = (data[key] as num?)?.toInt() ?? 0;
       if (candidate > maxValue) {
         maxValue = candidate;

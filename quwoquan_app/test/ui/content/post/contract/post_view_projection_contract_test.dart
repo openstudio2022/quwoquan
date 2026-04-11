@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
@@ -327,76 +328,79 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView mock 数据全量投射', () {
     test('所有 Photo mock 投射后均有非空 id / authorId / images / likesCount', () {
-      for (final raw in ContentMockData.discoveryPhotoData) {
+      for (final item in ContentMockData.discoveryPhotoData) {
+        final raw = item.toDiscoveryWireMap();
         final r = projectPostMap(raw);
         expect(
           r.id,
           isNotEmpty,
-          reason: 'photo postId=${raw['postId']} 的 id 不得为空',
+          reason: 'photo postId=${item.id} 的 id 不得为空',
         );
         expect(
           r.authorId,
           isNotEmpty,
-          reason: 'photo postId=${raw['postId']} 的 authorId 不得为空',
+          reason: 'photo postId=${item.id} 的 authorId 不得为空',
         );
         expect(
           r.images,
           isNotNull,
-          reason: 'photo postId=${raw['postId']} 应有 images 字段',
+          reason: 'photo postId=${item.id} 应有 images 字段',
         );
-        final rawLikes = (raw['likeCount'] as num?)?.toInt() ?? 0;
+        final rawLikes = item.likeCount;
         expect(
           r.likesCount,
           equals(rawLikes),
           reason:
-              'photo postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）',
+              'photo postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
         );
       }
     });
 
     test('所有 Video mock 投射后均有 videoUrl / thumbnailUrl', () {
-      for (final raw in ContentMockData.discoveryVideoData) {
+      for (final item in ContentMockData.discoveryVideoData) {
+        final raw = item.toDiscoveryWireMap();
         final r = projectPostMap(raw);
         expect(
           r.videoUrl,
           isNotNull,
-          reason: 'video postId=${raw['postId']} 应有 videoUrl',
+          reason: 'video postId=${item.id} 应有 videoUrl',
         );
         expect(
           r.thumbnailUrl,
           isNotNull,
-          reason: 'video postId=${raw['postId']} 应有 thumbnailUrl',
+          reason: 'video postId=${item.id} 应有 thumbnailUrl',
         );
-        final rawLikes = (raw['likeCount'] as num?)?.toInt() ?? 0;
+        final rawLikes = item.likeCount;
         expect(
           r.likesCount,
           equals(rawLikes),
           reason:
-              'video postId=${raw['postId']} 的 likesCount 与原始数据不一致（0→1 bug）',
+              'video postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
         );
       }
     });
 
     test('所有 Article mock 投射后均有 body，title 保持 mock 语义', () {
-      for (final raw in ContentMockData.discoveryArticleData) {
+      for (final item in ContentMockData.discoveryArticleData) {
+        final raw = item.toDiscoveryWireMap();
         final r = projectPostMap(raw);
         expect(
           r.body,
           isNotEmpty,
-          reason: 'article postId=${raw['postId']} 应有非空 body',
+          reason: 'article postId=${item.id} 应有非空 body',
         );
-        final rawTitle = (raw['title'] ?? '').toString().trim();
+        final rawTitle = (item.title ?? '').trim();
         if (rawTitle.isNotEmpty) {
           expect(
             r.title,
             isNotEmpty,
-            reason: 'article postId=${raw['postId']} 应保留显式标题',
+            reason: 'article postId=${item.id} 应保留显式标题',
           );
         } else {
           expect(
             (r.title ?? '').trim(),
             isEmpty,
-            reason: 'article postId=${raw['postId']} 的无标题语义不应被强行补标题',
+            reason: 'article postId=${item.id} 的无标题语义不应被强行补标题',
           );
         }
       }
@@ -596,6 +600,25 @@ void main() {
       );
     });
 
+    test('cards 使用 ArticleDetailWireKeys + ArticleCardWireKeys 构造仍可投射', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..[ArticleDetailWireKeys.cards] = <Map<String, dynamic>>[
+          {
+            ArticleCardWireKeys.title: 'SSOT 小节',
+            ArticleCardWireKeys.body: 'SSOT 正文',
+            ArticleCardWireKeys.imageUrl: 'https://example.com/ssot-card.jpg',
+          },
+        ];
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_cards_keys');
+      expect(r.contentBlocks, hasLength(1));
+      expect(r.contentBlocks.first.type, equals('section'));
+      expect(r.contentBlocks.first.title, equals('SSOT 小节'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/ssot-card.jpg'),
+      );
+    });
+
     test('articleDocument canonical 优先投射为连续内容块与分页首页', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['title'] = '旧标题'
@@ -781,14 +804,44 @@ void main() {
         isNotEmpty,
         reason: 'mock discovery moment data must not be empty',
       );
-      for (final raw in mockMoments) {
-        final dto = postBaseDtoFromMap(raw);
+      for (final item in mockMoments) {
+        final dto = postBaseDtoFromMap(item.toDiscoveryWireMap());
         expect(
           dto,
           isA<MomentPostDto>(),
           reason: 'All mock micro data must dispatch to MomentPostDto',
         );
       }
+    });
+  });
+
+  group('PostReadSurfaceId + readPresentation（P2 表面）', () {
+    test('detailPhoto 写入 surfaceId 且 readPresentation.postId 对齐', () {
+      final r = projectPostMap(
+        minPhoto,
+        surfaceId: PostReadSurfaceId.detailPhoto,
+      );
+      expect(r.surfaceId, PostReadSurfaceId.detailPhoto);
+      expect(r.readPresentation.postId, r.id);
+    });
+
+    test('searchCard 经 wire 透出 articleTemplate', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..[ArticleDetailWireKeys.articleTemplate] = 'customTpl';
+      final r = projectPostMap(raw, surfaceId: PostReadSurfaceId.searchCard);
+      expect(r.surfaceId, PostReadSurfaceId.searchCard);
+      expect(r.readPresentation.articleTemplate, 'customTpl');
+    });
+
+    test('draftPreview 经 PostSummaryView.fromDto 保留表面', () {
+      final dto = postBaseDtoFromMap(minVideo);
+      final r = PostSummaryView.fromDto(
+        dto,
+        surfaceId: PostReadSurfaceId.draftPreview,
+        wire: Map<String, dynamic>.from(minVideo),
+      );
+      expect(r.surfaceId, PostReadSurfaceId.draftPreview);
+      expect(r.readPresentation.contentType, r.type);
     });
   });
 }

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_typography_thumbnail_raster.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 enum _TypographyTab { paper, font }
 
 /// 长文排版页：书页预览 + 底部排版面板（纸张/字体），顶部工具栏含返回、页码、标题、下一步。
+/// 导航标题优先 [postReadPreviewBundleFromCreateEditorState] 的只读投影标题（draftPreview 表面）。
 class ArticleTypographyPage extends ConsumerStatefulWidget {
   const ArticleTypographyPage({super.key});
 
@@ -174,6 +176,10 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
   Widget _buildTopBar(CreateEditorState state) {
     final fg = AppColors.white;
     final fgSecondary = AppColors.white.withValues(alpha: 0.6);
+    final draftRead = postReadPreviewBundleFromCreateEditorState(state);
+    final barTitle = draftRead.presentation.title.trim().isNotEmpty
+        ? draftRead.presentation.title
+        : '长文排版';
     final pages = state.articlePages;
     final activeIdx = pages.indexWhere(
       (p) => p.id == state.activeArticlePageId,
@@ -231,7 +237,9 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                 Expanded(
                   child: Center(
                     child: Text(
-                      '长文排版',
+                      barTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: fg,
                         fontSize: AppTypography.iosNavTitle,

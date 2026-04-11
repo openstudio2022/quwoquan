@@ -1,0 +1,59 @@
+version: 1
+read_model: PersonaCreateRequest
+
+description: |
+  POST /v1/user/personas（CreatePersona）请求体 wire。
+  与 user_profile/service.yaml CreatePersona 的 request_fields 一致。
+
+source_entities:
+  - Persona
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: PersonaCreateRequestDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/persona_create_request_dto.g.dart
+  fields:
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: true
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "null"
+
+    - name: backgroundUrl
+      dart_type: String
+      nullable: true
+      source: backgroundUrl
+      aliases: [backgroundUrl]
+      default: "null"
+
+    - name: bio
+      dart_type: String
+      nullable: true
+      source: bio
+      aliases: [bio]
+      default: "null"
+
+    - name: isolationLevel
+      dart_type: String
+      nullable: true
+      source: isolationLevel
+      aliases: [isolationLevel]
+      default: "null"
+
+    - name: purposeHint
+      dart_type: String
+      nullable: true
+      source: purposeHint
+      aliases: [purposeHint]
+      default: "null"

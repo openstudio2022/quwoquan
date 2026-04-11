@@ -61,20 +61,21 @@ class LocalChatSearchSyncService {
       final needFetchIds = <String>[];
 
       for (final timestamp in timestamps) {
-        final conversationId = _conversationId(timestamp);
+        final conversationId = _conversationId(timestamp.toMap());
         if (conversationId.isEmpty) {
           continue;
         }
         cloudIds.add(conversationId);
         final localConversation =
             _conversationCache.get(conversationId) ?? localById[conversationId];
+        final tsMap = timestamp.toMap();
         final cloudSettingsUpdatedAt = _firstNonEmpty(<Object?>[
-          timestamp['settingsUpdatedAt'],
-          timestamp['updatedAt'],
+          tsMap['settingsUpdatedAt'],
+          tsMap['updatedAt'],
         ]);
         final cloudLastMessageAt = _firstNonEmpty(<Object?>[
-          timestamp['lastMessageAt'],
-          timestamp['lastMessageTime'],
+          tsMap['lastMessageAt'],
+          tsMap['lastMessageTime'],
         ]);
         final localSettingsUpdatedAt = _firstNonEmpty(<Object?>[
           localConversation?['settingsUpdatedAt'],
@@ -114,12 +115,14 @@ class LocalChatSearchSyncService {
           final conversations = await _chatRepository.batchGetConversations(
             batchIds,
           );
-          _conversationCache.putAll(conversations);
+          final convMaps =
+              conversations.map((c) => c.toMap()).toList(growable: false);
+          _conversationCache.putAll(convMaps);
           await _store.upsertConversations(
             namespace: namespace,
-            conversations: conversations,
+            conversations: convMaps,
           );
-          for (final conversation in conversations) {
+          for (final conversation in convMaps) {
             await _syncConversationMessages(
               namespace: namespace,
               conversation: conversation,
@@ -158,9 +161,10 @@ class LocalChatSearchSyncService {
         return;
       }
       _activateNamespace(namespace);
-      final conversation = await _chatRepository.getConversation(
+      final conversationDto = await _chatRepository.getConversation(
         conversationId,
       );
+      final conversation = conversationDto.toMap();
       _conversationCache.put(conversationId, conversation);
       await _store.upsertConversations(
         namespace: namespace,
@@ -189,7 +193,8 @@ class LocalChatSearchSyncService {
       );
       if (conversation == null) {
         try {
-          conversation = await _chatRepository.getConversation(conversationId);
+          final dto = await _chatRepository.getConversation(conversationId);
+          conversation = dto.toMap();
           _conversationCache.put(conversationId, conversation);
           await _store.upsertConversations(
             namespace: namespace,
@@ -308,7 +313,7 @@ class LocalChatSearchSyncService {
         lastSeq: lastSeq,
         limit: 200,
       );
-      final messages = _extractMessages(delta);
+      final messages = _extractMessages(delta.toMap());
       if (messages.isEmpty) {
         hasMore = false;
         break;
@@ -320,7 +325,7 @@ class LocalChatSearchSyncService {
         break;
       }
       lastSeq = nextSeq;
-      hasMore = delta['hasMore'] == true;
+      hasMore = delta.hasMore;
     }
     if (aggregatedMessages.isEmpty && forceFull) {
       final fallbackMessages = await _chatRepository.listMessages(

@@ -273,7 +273,15 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     final initialIndex = filtered
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
-    final postViews = filtered.map(PostSummaryView.fromDto).toList();
+    final postViews = filtered
+        .map(
+          (dto) => PostSummaryView.fromDto(
+            dto,
+            surfaceId: PostReadSurfaceId.profileWorks,
+            wire: dto.toMap(),
+          ),
+        )
+        .toList();
     final isMoment = post.identity == 'moment';
 
     if (post.displayFormat == 'video') {

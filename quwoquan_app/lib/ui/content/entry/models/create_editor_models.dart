@@ -982,14 +982,14 @@ class CreateDraft {
     final storedDocumentMap = Map<String, dynamic>.from(
       map['articleDocument'] as Map? ?? const <String, dynamic>{},
     );
-    final articlePages = ((map['articlePages'] as List?) ?? const <dynamic>[])
+    final articlePages = ((map['articlePages'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
           (entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)),
         )
         .where((page) => page.id.trim().isNotEmpty)
         .toList(growable: false);
-    final articleBlocks = ((map['articleBlocks'] as List?) ?? const <dynamic>[])
+    final articleBlocks = ((map['articleBlocks'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
           (entry) => CreateTextBlock.fromMap(Map<String, dynamic>.from(entry)),

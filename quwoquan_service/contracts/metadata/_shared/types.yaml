@@ -40,7 +40,8 @@ enums:
   CircleStatus: [active, archived, deleted]
   CircleMemberRole: [owner, admin, member]
   CircleVisibility: [public, private, invite_only]
-  CircleJoinPolicy: [open, approval, invite]
+  # Wire / BSON 与 Flutter CircleDto 一致，使用 invite_only（非 invite）
+  CircleJoinPolicy: [open, approval, invite_only]
   CircleKind: [interest, organization]
   CircleDisplaySubjectType: [circle, school, college, grade, classroom, company, department, team]
   CircleGroupType: [public_group, self_built, org_node]

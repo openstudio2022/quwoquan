@@ -13,7 +13,6 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/transcript/assistant_feedback_target.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
@@ -361,25 +360,28 @@ class _AssistantConversationPageState
     AssistantTranscriptTimelineRow row, {
     bool isRunning = false,
   }) {
-    final message = PersistedTimelineTurnCodec.encode(row);
     final usageMap = switch (row) {
       AssistantAnswerTranscriptRow r => r.uiUsageStats,
-      _ => assistantUiUsageStatsMapFromMessageField(message['uiUsageStats']),
+      _ => assistantUiUsageStatsMapFromMessageField(
+          assistantTranscriptRowToProtocolMap(row)['uiUsageStats'],
+        ),
+    };
+    final elapsedMs = switch (row) {
+      AssistantAnswerTranscriptRow r => r.persisted.assistantElapsedMs,
+      _ => 0,
     };
     return _controller.buildJourneyViewModel(
-      journey: resolveAssistantJourneyFromMessage(message),
-      processTimeline: resolveAssistantProcessTimelineFromMessage(message),
+      journey: resolveAssistantJourneyFromTranscriptRow(row),
+      processTimeline: resolveAssistantProcessTimelineFromTranscriptRow(row),
       isRunning: isRunning,
-      displayState: resolvePersistedAssistantDisplayState(message),
-      understandingSnapshot: resolveAssistantUnderstandingSnapshotFromMessage(
-        message,
-      ),
-      retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
-        message,
-      ),
-      answerProcessing: resolveAssistantAnswerProcessingFromMessage(message),
+      displayState: resolvePersistedAssistantDisplayStateFromTranscriptRow(row),
+      understandingSnapshot:
+          resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
+      retrievalProcessing:
+          resolveAssistantRetrievalProcessingFromTranscriptRow(row),
+      answerProcessing: resolveAssistantAnswerProcessingFromTranscriptRow(row),
       usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(usageMap),
-      elapsedMs: ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
+      elapsedMs: elapsedMs,
     );
   }
 
@@ -712,12 +714,11 @@ class _AssistantConversationPageState
     required AssistantAnswerTranscriptRow row,
     required RegenerateOption option,
   }) async {
-    final message = PersistedTimelineTurnCodec.encode(row);
     final originalQuery = row.anchor.sourceQuery.trim();
     if (originalQuery.isEmpty) return;
     final previousAnswer = <String>[
-      resolvePersistedAssistantDisplayPlainText(message),
-      resolvePersistedAssistantDisplayMarkdown(message),
+      resolvePersistedAssistantDisplayPlainTextFromTranscriptRow(row),
+      resolvePersistedAssistantDisplayMarkdownFromTranscriptRow(row),
       row.content.trim(),
     ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
     final rewriteMode = switch (option) {
@@ -1141,17 +1142,18 @@ class _AssistantConversationPageState
                             journey: _controller.currentJourney,
                             processTimeline: _controller.currentProcessTimeline,
                             isRunning: true,
-                            displayState: resolvePersistedAssistantDisplayState(
-                              PersistedTimelineTurnCodec.encode(row),
+                            displayState:
+                                resolvePersistedAssistantDisplayStateFromTranscriptRow(
+                              row,
                             ),
                             understandingSnapshot:
                                 _controller.currentUnderstandingSnapshot,
                             retrievalProcessing:
                                 _controller.currentRetrievalProcessing,
                             answerProcessing:
-                                resolveAssistantAnswerProcessingFromMessage(
-                                  PersistedTimelineTurnCodec.encode(row),
-                                ),
+                                resolveAssistantAnswerProcessingFromTranscriptRow(
+                              row,
+                            ),
                             elapsedMs: _controller.currentJourneyElapsedMs,
                           )
                         : (isAssistantMessage

@@ -1,0 +1,20 @@
+{
+  "answerDecision": {
+    "nextAction": "answer",
+    "finalAnswerReady": true,
+    "answerEligibility": "answer",
+    "evidenceSummary": "fixture summary",
+    "synthesisReady": true,
+    "synthesisReason": "fixture",
+    "_fixtureExtension": { "keep": true }
+  },
+  "diagnostics": {
+    "domainId": "fixture.domain",
+    "renderMode": "typed_display_state",
+    "evidencePassed": true,
+    "finalAnswerMode": "full",
+    "synthesisReady": true,
+    "heuristicFallbackUsed": false,
+    "_fixtureDiagExtension": "retained"
+  }
+}

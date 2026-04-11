@@ -1,24 +1,49 @@
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+
+export 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
+export 'package:quwoquan_app/cloud/runtime/generated/content/comment_dto.g.dart';
+export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 
 const String kFeedSortRecommend = 'recommend';
 
+PostBaseDto _postBaseDtoFromContentWire(Map<String, dynamic> obj) {
+  final nested = obj['post'];
+  if (nested is Map) {
+    return postBaseDtoFromMap(Map<String, dynamic>.from(nested));
+  }
+  return postBaseDtoFromMap(obj);
+}
+
+CommentDto _commentDtoFromContentWire(Map<String, dynamic> obj) {
+  final nested = obj['comment'];
+  if (nested is Map) {
+    return CommentDto.fromMap(Map<String, dynamic>.from(nested));
+  }
+  return CommentDto.fromMap(obj);
+}
+
 /// Content 域 Repository（端侧按业务对象组织的统一入口）。
 ///
-/// 输出统一为 [PostBaseDto] 子类（codegen 产物，DO NOT EDIT）：
+/// 输出统一为 [PostBaseDto] 子类与 [CommentDto] / [PostSearchItemView]（codegen 产物，DO NOT EDIT）：
 /// - photo → [PhotoPostDto]（含 width/height）
 /// - video → [VideoPostDto]（含 width/height 分辨率）
 /// - article → [ArticlePostDto]
@@ -26,6 +51,11 @@ const String kFeedSortRecommend = 'recommend';
 ///
 /// Mock：使用 [ContentMockData]（canonical 字段，与各 DTO schema 严格对齐）。
 /// Remote：对接云侧 REST 契约，响应经 [postBaseDtoFromMap] 规范化。
+///
+/// 媒体 / 摘要 / 推荐等 wire 响应为 metadata `client_projection` 生成的 DTO（见
+/// `contracts/metadata/content/post/projections/content_*_*.yaml`）。
+///
+/// 仍为 `Map` / 弱类型的边界：[reportBehaviors] 的 `events`（行为埋点）；[ContentAppConfigWire] 内层 raw JSON。
 abstract class ContentRepository {
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
@@ -58,60 +88,66 @@ abstract class ContentRepository {
 
   Future<ContentPostDetailPayload> getPost({required String postId});
 
-  Future<Map<String, dynamic>> createPost({
-    required Map<String, dynamic> payload,
+  Future<PostBaseDto> createPost({
+    required CreatePostRequestWire body,
   });
 
-  Future<Map<String, dynamic>> updatePost({
+  Future<PostBaseDto> updatePost({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostRequestWire body,
   });
   Future<void> deletePost({required String postId});
-  Future<Map<String, dynamic>> publishPost({
+  Future<PostBaseDto> publishPost({
     required String postId,
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    PublishPostRequestWire? body,
   });
-  Future<Map<String, dynamic>> updatePostSettings({
+  Future<PostBaseDto> updatePostSettings({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostSettingsRequestWire body,
   });
-  Future<Map<String, dynamic>> promotePostToWork({
+  Future<PostBaseDto> promotePostToWork({
     required String postId,
-    required Map<String, dynamic> payload,
+    required PromotePostToWorkRequestWire body,
   });
 
-  Future<Map<String, dynamic>> updatePostCircles({
+  Future<PostBaseDto> updatePostCircles({
     required String postId,
     List<String> add = const [],
     List<String> remove = const [],
   });
-  Future<Map<String, dynamic>> repostToCircle({
+  Future<PostBaseDto> repostToCircle({
     required String postId,
     required String circleId,
   });
-  Future<Map<String, dynamic>> quoteToCircle({
+  Future<PostBaseDto> quoteToCircle({
     required String postId,
     required String circleId,
     String quoteText = '',
   });
 
-  Future<Map<String, dynamic>> initMediaUpload({String mediaType = 'image'});
-  Future<Map<String, dynamic>> completeMediaUpload({required String sessionId});
+  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
+    String mediaType = 'image',
+  });
+  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
+    required String sessionId,
+  });
   Future<void> abortMediaUpload({required String sessionId});
-  Future<Map<String, dynamic>> getMediaAsset({required String mediaId});
+  Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId});
 
-  Future<Map<String, dynamic>> selectAutoVideoCover({required String mediaId});
-  Future<Map<String, dynamic>> selectManualVideoCover({
+  Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
+    required String mediaId,
+  });
+  Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
   });
 
-  Future<Map<String, dynamic>> generateArticleSummary({
+  Future<ContentArticleSummaryGenerateResponseDto> generateArticleSummary({
     required String title,
     required String body,
   });
 
-  Future<Map<String, dynamic>> getRecommendation({
+  Future<ContentRecommendationResponseDto> getRecommendation({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -128,14 +164,14 @@ abstract class ContentRepository {
   Future<void> unlikePost({required String postId});
   Future<void> favoritePost({required String postId});
   Future<void> unfavoritePost({required String postId});
-  Future<Map<String, dynamic>> getReactionState({required String postId});
+  Future<ContentReactionState> getReactionState({required String postId});
   Future<CommentPage> listComments({
     required String postId,
     String? cursor,
     String sort = 'latest',
     int limit = CloudApiDefaults.pageLimit,
   });
-  Future<Map<String, dynamic>> createComment({
+  Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
@@ -157,108 +193,11 @@ abstract class ContentRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
-  Future<Map<String, dynamic>> getAppConfig();
-  Future<void> reportBehaviors({required List<Map<String, dynamic>> events});
-  Future<Map<String, dynamic>> getCounters({required String postId});
-}
-
-class CommentDto {
-  final String id;
-  final String postId;
-  final String authorId;
-  final String? personaId;
-  final String? displayName;
-  final String? avatarUrl;
-  final String content;
-  final String? replyToCommentId;
-  final String? replyToUserId;
-  final String? replyToDisplayName;
-  final int replyCount;
-  final int likeCount;
-  final String status;
-  final bool isAuthor;
-  final DateTime createdAt;
-
-  const CommentDto({
-    required this.id,
-    required this.postId,
-    required this.authorId,
-    this.personaId,
-    this.displayName,
-    this.avatarUrl,
-    required this.content,
-    this.replyToCommentId,
-    this.replyToUserId,
-    this.replyToDisplayName,
-    this.replyCount = 0,
-    this.likeCount = 0,
-    this.status = 'visible',
-    this.isAuthor = false,
-    required this.createdAt,
+  Future<ContentAppConfigWire> getAppConfig();
+  Future<void> reportBehaviors({
+    required List<ContentBehaviorBatchEventDto> events,
   });
-
-  factory CommentDto.fromMap(Map<String, dynamic> m) {
-    return CommentDto(
-      id: (m['_id'] ?? m['id'] ?? '').toString(),
-      postId: (m['postId'] ?? '').toString(),
-      authorId: (m['profileSubjectId'] ?? m['authorId'] ?? '').toString(),
-      personaId: (m['personaId'] ?? m['subAccountId'])?.toString(),
-      displayName: (m['authorDisplayNameSnapshot'] ?? m['displayName'])
-          ?.toString(),
-      avatarUrl: (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
-      content: (m['content'] ?? '').toString(),
-      replyToCommentId: m['replyToCommentId']?.toString(),
-      replyToUserId: m['replyToUserId']?.toString(),
-      replyToDisplayName: m['replyToDisplayName']?.toString(),
-      replyCount: (m['replyCount'] as num?)?.toInt() ?? 0,
-      likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
-      status: (m['status'] ?? 'visible').toString(),
-      isAuthor: m['isAuthor'] == true,
-      createdAt:
-          DateTime.tryParse(m['createdAt']?.toString() ?? '') ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'postId': postId,
-    'authorId': authorId,
-    'profileSubjectId': authorId,
-    'personaId': personaId,
-    'displayName': displayName,
-    'authorDisplayNameSnapshot': displayName,
-    'avatarUrl': avatarUrl,
-    'authorAvatarUrlSnapshot': avatarUrl,
-    'content': content,
-    'replyToCommentId': replyToCommentId,
-    'replyToUserId': replyToUserId,
-    'replyToDisplayName': replyToDisplayName,
-    'replyCount': replyCount,
-    'likeCount': likeCount,
-    'status': status,
-    'isAuthor': isAuthor,
-    'createdAt': createdAt.toIso8601String(),
-  };
-
-  CommentDto copyWith({int? replyCount, int? likeCount, String? status}) {
-    return CommentDto(
-      id: id,
-      postId: postId,
-      authorId: authorId,
-      personaId: personaId,
-      displayName: displayName,
-      avatarUrl: avatarUrl,
-      content: content,
-      replyToCommentId: replyToCommentId,
-      replyToUserId: replyToUserId,
-      replyToDisplayName: replyToDisplayName,
-      replyCount: replyCount ?? this.replyCount,
-      likeCount: likeCount ?? this.likeCount,
-      status: status ?? this.status,
-      isAuthor: isAuthor,
-      createdAt: createdAt,
-    );
-  }
+  Future<PostEngagementCounters> getCounters({required String postId});
 }
 
 class CommentPage {
@@ -282,6 +221,42 @@ class MockContentRepository implements ContentRepository {
   List<Map<String, dynamic>> commentsStub = [];
   int countersStubLikeCount = 0;
   int countersStubCommentCount = 0;
+
+  Map<String, dynamic> _mockPostWire(
+    String postId, {
+    required Map<String, dynamic> payloadMerge,
+  }) {
+    final merged = <String, dynamic>{
+      'postId': postId,
+      '_id': postId,
+      'id': postId,
+      'authorId': 'mock_user',
+      'displayName': 'Mock User',
+      'authorAvatarUrl': 'https://example.com/avatar.jpg',
+      'body': '',
+      'mediaUrls': <String>[],
+      'likeCount': 0,
+      'commentCount': 0,
+      'favoriteCount': 0,
+      'shareCount': 0,
+      'publishedAt': DateTime.now().toUtc().toIso8601String(),
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+      'assistantUsePolicy': 'inherit',
+      ...payloadMerge,
+    };
+    final rawType =
+        (merged['contentType'] ?? merged['type'] ?? 'micro').toString();
+    final normalizedType = rawType == 'moment' ? 'micro' : rawType;
+    merged['contentType'] = normalizedType;
+    if (normalizedType == 'micro') {
+      merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
+      merged['identity'] = merged['identity'] ?? 'moment';
+    } else {
+      merged['contentIdentity'] = merged['contentIdentity'] ?? 'work';
+      merged['identity'] = merged['identity'] ?? 'work';
+    }
+    return merged;
+  }
 
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
@@ -341,12 +316,12 @@ class MockContentRepository implements ContentRepository {
     final expectedType = (type ?? '').trim().toLowerCase();
     final expectedCategoryId = (categoryId ?? '').trim().toLowerCase();
     final expectedSubCategory = (subCategory ?? '').trim().toLowerCase();
-    final allRaw = <Map<String, dynamic>>[
-      ...ContentMockData.discoveryPhotoData,
-      ...ContentMockData.discoveryVideoData,
-      ...ContentMockData.discoveryMomentData,
-      ...ContentMockData.discoveryArticleData,
-    ];
+    final allRaw = aggregateDiscoveryWireSlices(
+      photo: ContentMockData.discoveryPhotoData,
+      video: ContentMockData.discoveryVideoData,
+      moment: ContentMockData.discoveryMomentData,
+      article: ContentMockData.discoveryArticleData,
+    );
     final results = <PostSearchItemView>[];
     for (final item in allRaw) {
       final circleIds = <String>{
@@ -358,35 +333,23 @@ class MockContentRepository implements ContentRepository {
             const <String>[]),
       };
       final associatedCircles = circleIds
-          .map<Map<String, dynamic>?>(
-            (id) =>
-                CircleMockData.circles.cast<Map<String, dynamic>?>().firstWhere(
-                  (candidate) =>
-                      (candidate?['id'] ?? candidate?['circleId'])
-                          ?.toString()
-                          .trim() ==
-                      id,
-                  orElse: () => null,
-                ),
-          )
-          .whereType<Map<String, dynamic>>()
+          .map(CircleMockData.tryResolveCircleDto)
+          .whereType<CircleDto>()
           .toList(growable: false);
-      final matchedCircle = associatedCircles
+      final matchedCategory = associatedCircles
           .where(
             (circle) =>
                 (expectedCategoryId.isEmpty ||
-                    (circle['categoryId'] ?? '').toString().toLowerCase() ==
+                    (circle.category ?? '').toLowerCase() ==
                         expectedCategoryId) &&
                 (expectedSubCategory.isEmpty ||
-                    (circle['subCategory'] ?? '').toString().toLowerCase() ==
+                    (circle.subCategory ?? '').toLowerCase() ==
                         expectedSubCategory),
           )
-          .cast<Map<String, dynamic>?>()
-          .firstWhere(
-            (_) => true,
-            orElse: () =>
-                associatedCircles.isEmpty ? null : associatedCircles.first,
-          );
+          .toList(growable: false);
+      final matchedCircle = matchedCategory.isNotEmpty
+          ? matchedCategory.first
+          : (associatedCircles.isEmpty ? null : associatedCircles.first);
       final itemIdentity =
           (item['contentIdentity'] ??
                   (item['contentType'] == 'micro' ? 'moment' : 'work'))
@@ -396,11 +359,11 @@ class MockContentRepository implements ContentRepository {
           .toString()
           .toLowerCase();
       final itemCategoryId =
-          (item['categoryId'] ?? matchedCircle?['categoryId'] ?? '')
+          (item['categoryId'] ?? matchedCircle?.category ?? '')
               .toString()
               .toLowerCase();
       final itemSubCategory =
-          (item['subCategory'] ?? matchedCircle?['subCategory'] ?? '')
+          (item['subCategory'] ?? matchedCircle?.subCategory ?? '')
               .toString()
               .toLowerCase();
       if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
@@ -434,8 +397,8 @@ class MockContentRepository implements ContentRepository {
       results.add(
         PostSearchItemView.fromMap(<String, dynamic>{
           ...item,
-          'categoryId': item['categoryId'] ?? matchedCircle?['categoryId'],
-          'subCategory': item['subCategory'] ?? matchedCircle?['subCategory'],
+          'categoryId': item['categoryId'] ?? matchedCircle?.category,
+          'subCategory': item['subCategory'] ?? matchedCircle?.subCategory,
           'highlightText': matched,
           'matchedField': matched == (item['title']?.toString() ?? '')
               ? 'title'
@@ -459,12 +422,12 @@ class MockContentRepository implements ContentRepository {
 
   @override
   Future<ContentPostDetailPayload> getPost({required String postId}) async {
-    final allRaw = [
-      ...ContentMockData.discoveryPhotoData,
-      ...ContentMockData.discoveryVideoData,
-      ...ContentMockData.discoveryMomentData,
-      ...ContentMockData.discoveryArticleData,
-    ];
+    final allRaw = aggregateDiscoveryWireSlices(
+      photo: ContentMockData.discoveryPhotoData,
+      video: ContentMockData.discoveryVideoData,
+      moment: ContentMockData.discoveryMomentData,
+      article: ContentMockData.discoveryArticleData,
+    );
     final raw = allRaw.firstWhere(
       (m) => m['postId']?.toString() == postId,
       orElse: () => <String, dynamic>{},
@@ -474,19 +437,13 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> createPost({
-    required Map<String, dynamic> payload,
+  Future<PostBaseDto> createPost({
+    required CreatePostRequestWire body,
   }) async {
     final postId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final type = (payload['type'] ?? payload['contentType'] ?? '')
-        .toString()
-        .trim();
-    return <String, dynamic>{
-      ...payload,
-      'id': postId,
-      'postId': postId,
-      if (type.isNotEmpty) 'type': type,
-    };
+    return postBaseDtoFromMap(
+      _mockPostWire(postId, payloadMerge: body.toWire()),
+    );
   }
 
   @override
@@ -511,10 +468,13 @@ class MockContentRepository implements ContentRepository {
   Future<void> unfavoritePost({required String postId}) async {}
 
   @override
-  Future<Map<String, dynamic>> getReactionState({
+  Future<ContentReactionState> getReactionState({
     required String postId,
   }) async {
-    return reactionStateStub;
+    return ContentReactionState.fromMap({
+      ...reactionStateStub,
+      'postId': postId,
+    });
   }
 
   @override
@@ -529,7 +489,7 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> createComment({
+  Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
@@ -560,7 +520,7 @@ class MockContentRepository implements ContentRepository {
     }
     commentsStub = [...commentsStub, comment];
     countersStubCommentCount++;
-    return comment;
+    return CommentDto.fromMap(comment);
   }
 
   @override
@@ -594,8 +554,8 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getAppConfig() async {
-    return {
+  Future<ContentAppConfigWire> getAppConfig() async {
+    return ContentAppConfigWire.fromResponseObject({
       'content': {
         'comment': {
           'max_length': 500,
@@ -625,163 +585,205 @@ class MockContentRepository implements ContentRepository {
           ],
         },
       },
-    };
+    });
   }
 
   @override
   Future<void> reportBehaviors({
-    required List<Map<String, dynamic>> events,
+    required List<ContentBehaviorBatchEventDto> events,
   }) async {}
 
   @override
-  Future<Map<String, dynamic>> getCounters({required String postId}) async {
-    return {
-      'likeCount': countersStubLikeCount,
-      'commentCount': countersStubCommentCount,
-    };
+  Future<PostEngagementCounters> getCounters({required String postId}) async {
+    return PostEngagementCounters(
+      likeCount: countersStubLikeCount,
+      commentCount: countersStubCommentCount,
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> updatePost({
+  Future<PostBaseDto> updatePost({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostRequestWire body,
   }) async {
-    return <String, dynamic>{'postId': postId, ...payload};
+    return postBaseDtoFromMap(
+      _mockPostWire(postId, payloadMerge: {...body.toWire(), 'postId': postId}),
+    );
   }
 
   @override
   Future<void> deletePost({required String postId}) async {}
 
   @override
-  Future<Map<String, dynamic>> publishPost({
+  Future<PostBaseDto> publishPost({
     required String postId,
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    PublishPostRequestWire? body,
   }) async {
-    return {'postId': postId, 'status': 'published', ...payload};
+    final wire = body ?? PublishPostRequestWire();
+    return postBaseDtoFromMap(
+      _mockPostWire(
+        postId,
+        payloadMerge: {
+          ...wire.toWire(),
+          'postId': postId,
+          'status': 'published',
+        },
+      ),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> updatePostSettings({
+  Future<PostBaseDto> updatePostSettings({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostSettingsRequestWire body,
   }) async {
-    return {'postId': postId, ...payload};
+    return postBaseDtoFromMap(
+      _mockPostWire(
+        postId,
+        payloadMerge: {...body.toWire(), 'postId': postId},
+      ),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> promotePostToWork({
+  Future<PostBaseDto> promotePostToWork({
     required String postId,
-    required Map<String, dynamic> payload,
+    required PromotePostToWorkRequestWire body,
   }) async {
-    return {
-      'postId': postId,
-      'contentIdentity': 'work',
-      'status': 'published',
-      ...payload,
-    };
+    return postBaseDtoFromMap(
+      _mockPostWire(postId, payloadMerge: {
+        ...body.toWire(),
+        'postId': postId,
+        'contentIdentity': 'work',
+        'identity': 'work',
+        'status': 'published',
+      }),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> updatePostCircles({
+  Future<PostBaseDto> updatePostCircles({
     required String postId,
     List<String> add = const [],
     List<String> remove = const [],
   }) async {
-    return {'postId': postId, 'circleIds': add};
+    return postBaseDtoFromMap(
+      _mockPostWire(
+        postId,
+        payloadMerge: {'postId': postId, 'circleIds': add},
+      ),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> repostToCircle({
+  Future<PostBaseDto> repostToCircle({
     required String postId,
     required String circleId,
   }) async {
-    return {'postId': postId, 'circleId': circleId, 'type': 'moment'};
+    final newId = 'local_repost_${DateTime.now().millisecondsSinceEpoch}';
+    return postBaseDtoFromMap(
+      _mockPostWire(newId, payloadMerge: {
+        'circleId': circleId,
+        'sourcePostId': postId,
+      }),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> quoteToCircle({
+  Future<PostBaseDto> quoteToCircle({
     required String postId,
     required String circleId,
     String quoteText = '',
   }) async {
-    return {
-      'postId': postId,
-      'circleId': circleId,
-      'sourceType': 'quote',
-      'quoteText': quoteText,
-    };
+    final newId = 'local_quote_${DateTime.now().millisecondsSinceEpoch}';
+    return postBaseDtoFromMap(
+      _mockPostWire(newId, payloadMerge: {
+        'body': quoteText,
+        'circleId': circleId,
+        'sourcePostId': postId,
+      }),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> initMediaUpload({
+  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
   }) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    return {
-      'sessionId': 'mock_upload_$ts',
-      'mediaId': 'mock_media_$ts',
-      'uploadUrl': 'https://origin.example/upload/mock_media_$ts',
-    };
+    return ContentMediaInitUploadResponseDto(
+      sessionId: 'mock_upload_$ts',
+      mediaId: 'mock_media_$ts',
+      uploadUrl: 'https://origin.example/upload/mock_media_$ts',
+      presignUrl: 'https://origin.example/upload/mock_media_$ts',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> completeMediaUpload({
+  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
     required String sessionId,
   }) async {
-    return {
-      'sessionId': sessionId,
-      'status': 'ready',
-      'cdnUrl': 'https://cdn.example/media/mock',
-    };
+    return ContentMediaCompleteUploadResponseDto(
+      sessionId: sessionId,
+      status: 'ready',
+      cdnUrl: 'https://cdn.example/media/mock',
+      assetId: 'mock_media_$sessionId',
+    );
   }
 
   @override
   Future<void> abortMediaUpload({required String sessionId}) async {}
 
   @override
-  Future<Map<String, dynamic>> getMediaAsset({required String mediaId}) async {
-    return {
-      'mediaId': mediaId,
-      'status': 'ready',
-      'type': 'image',
-      'cdnUrl': 'https://cdn.example/media/$mediaId',
-    };
+  Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId}) async {
+    return ContentMediaAssetWireDto(
+      id: mediaId,
+      status: 'ready',
+      type: 'image',
+      cdnUrl: 'https://cdn.example/media/$mediaId',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> selectAutoVideoCover({
+  Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
     required String mediaId,
   }) async {
-    return {'mediaId': mediaId, 'coverStrategy': 'first_frame'};
+    return ContentVideoCoverSelectionWireDto(
+      mediaId: mediaId,
+      coverStrategy: 'first_frame',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> selectManualVideoCover({
+  Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
   }) async {
-    return {
-      'mediaId': mediaId,
-      'coverStrategy': 'manual',
-      'manualCoverAssetId': coverAssetId,
-    };
+    return ContentVideoCoverSelectionWireDto(
+      mediaId: mediaId,
+      coverStrategy: 'manual',
+      manualCoverAssetId: coverAssetId,
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> generateArticleSummary({
+  Future<ContentArticleSummaryGenerateResponseDto> generateArticleSummary({
     required String title,
     required String body,
   }) async {
     final preview = body.length > 100 ? body.substring(0, 100) : body;
-    return {'summary': '$title：$preview'};
+    return ContentArticleSummaryGenerateResponseDto(
+      summary: '$title：$preview',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> getRecommendation({
+  Future<ContentRecommendationResponseDto> getRecommendation({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return {'items': [], 'nextCursor': null};
+    return ContentRecommendationResponseDto(
+      items: <Map<String, dynamic>>[],
+    );
   }
 
   @override
@@ -804,12 +806,12 @@ class MockContentRepository implements ContentRepository {
   }
 
   List<Map<String, dynamic>> _allRawPosts() {
-    return <Map<String, dynamic>>[
-      ...ContentMockData.discoveryPhotoData,
-      ...ContentMockData.discoveryVideoData,
-      ...ContentMockData.discoveryMomentData,
-      ...ContentMockData.discoveryArticleData,
-    ];
+    return aggregateDiscoveryWireSlices(
+      photo: ContentMockData.discoveryPhotoData,
+      video: ContentMockData.discoveryVideoData,
+      moment: ContentMockData.discoveryMomentData,
+      article: ContentMockData.discoveryArticleData,
+    );
   }
 
   List<Map<String, dynamic>> _resolveDiscoveryRaw({
@@ -1012,19 +1014,20 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> createPost({
-    required Map<String, dynamic> payload,
+  Future<PostBaseDto> createPost({
+    required CreatePostRequestWire body,
   }) async {
     final uri = _uri(ContentApiMetadata.createPostPath);
     final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createPost),
-      body: payload,
+      body: body.toWire(),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.createPost,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
@@ -1068,7 +1071,7 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getReactionState({
+  Future<ContentReactionState> getReactionState({
     required String postId,
   }) async {
     final uri = _uri(ContentApiMetadata.getReactionStatePath(postId: postId));
@@ -1078,10 +1081,11 @@ class RemoteContentRepository implements ContentRepository {
         ContentRequestPageIds.getReactionState,
       ),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.getReactionState,
     );
+    return ContentReactionState.fromMap(obj);
   }
 
   @override
@@ -1113,7 +1117,7 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> createComment({
+  Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
@@ -1134,10 +1138,11 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createComment),
       body: body,
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.createComment,
     );
+    return _commentDtoFromContentWire(obj);
   }
 
   @override
@@ -1235,21 +1240,23 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getAppConfig() async {
+  Future<ContentAppConfigWire> getAppConfig() async {
     final uri = _uri(ContentApiMetadata.getAppConfigPath);
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getAppConfig),
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.getAppConfig,
+    return ContentAppConfigWire.fromResponseObject(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.getAppConfig,
+      ),
     );
   }
 
   @override
   Future<void> reportBehaviors({
-    required List<Map<String, dynamic>> events,
+    required List<ContentBehaviorBatchEventDto> events,
   }) async {
     final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
     await _httpClient.postJson(
@@ -1257,38 +1264,42 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.reportBehaviors,
       ),
-      body: {'events': events},
+      body: <String, dynamic>{
+        'events': events.map((e) => e.toRequestMap()).toList(growable: false),
+      },
     );
   }
 
   @override
-  Future<Map<String, dynamic>> getCounters({required String postId}) async {
+  Future<PostEngagementCounters> getCounters({required String postId}) async {
     final uri = _uri(ContentApiMetadata.getCountersPath(postId: postId));
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getCounters),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.getCounters,
     );
+    return PostEngagementCounters.fromMap(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> updatePost({
+  Future<PostBaseDto> updatePost({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostRequestWire body,
   }) async {
     final uri = _uri(ContentApiMetadata.updatePostPath(postId: postId));
     final decoded = await _httpClient.patchJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.updatePost),
-      body: payload,
+      body: body.toWire(),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.updatePost,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
@@ -1301,26 +1312,28 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> publishPost({
+  Future<PostBaseDto> publishPost({
     required String postId,
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    PublishPostRequestWire? body,
   }) async {
     final uri = _uri(ContentApiMetadata.publishPostPath(postId: postId));
+    final wire = body ?? PublishPostRequestWire();
     final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.publishPost),
-      body: payload,
+      body: wire.toWire(),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.publishPost,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> updatePostSettings({
+  Future<PostBaseDto> updatePostSettings({
     required String postId,
-    required Map<String, dynamic> payload,
+    required UpdatePostSettingsRequestWire body,
   }) async {
     final uri = _uri(ContentApiMetadata.updatePostSettingsPath(postId: postId));
     final decoded = await _httpClient.patchJson(
@@ -1328,18 +1341,19 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.updatePostSettings,
       ),
-      body: payload,
+      body: body.toWire(),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.updatePostSettings,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> promotePostToWork({
+  Future<PostBaseDto> promotePostToWork({
     required String postId,
-    required Map<String, dynamic> payload,
+    required PromotePostToWorkRequestWire body,
   }) async {
     final uri = _uri(ContentApiMetadata.promotePostToWorkPath(postId: postId));
     final decoded = await _httpClient.postJson(
@@ -1347,16 +1361,17 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.promotePostToWork,
       ),
-      body: payload,
+      body: body.toWire(),
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.promotePostToWork,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> updatePostCircles({
+  Future<PostBaseDto> updatePostCircles({
     required String postId,
     List<String> add = const [],
     List<String> remove = const [],
@@ -1369,14 +1384,15 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {'add': add, 'remove': remove},
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.updatePostCircles,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> repostToCircle({
+  Future<PostBaseDto> repostToCircle({
     required String postId,
     required String circleId,
   }) async {
@@ -1388,14 +1404,15 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {'circleId': circleId},
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.repostToCircle,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> quoteToCircle({
+  Future<PostBaseDto> quoteToCircle({
     required String postId,
     required String circleId,
     String quoteText = '',
@@ -1406,14 +1423,15 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.quoteToCircle),
       body: {'circleId': circleId, 'quoteText': quoteText},
     );
-    return CloudResponseDecoder.asObject(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.quoteToCircle,
     );
+    return _postBaseDtoFromContentWire(obj);
   }
 
   @override
-  Future<Map<String, dynamic>> initMediaUpload({
+  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
   }) async {
     final uri = _uri(ContentApiMetadata.initMediaUploadPath);
@@ -1424,14 +1442,16 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {'mediaType': mediaType},
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.initMediaUpload,
+    return ContentMediaInitUploadResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.initMediaUpload,
+      ),
     );
   }
 
   @override
-  Future<Map<String, dynamic>> completeMediaUpload({
+  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
     required String sessionId,
   }) async {
     final uri = _uri(
@@ -1444,9 +1464,11 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {},
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.completeMediaUpload,
+    return ContentMediaCompleteUploadResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.completeMediaUpload,
+      ),
     );
   }
 
@@ -1465,20 +1487,22 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getMediaAsset({required String mediaId}) async {
+  Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId}) async {
     final uri = _uri(ContentApiMetadata.getMediaAssetPath(mediaId: mediaId));
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getMediaAsset),
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.getMediaAsset,
+    return ContentMediaAssetWireDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.getMediaAsset,
+      ),
     );
   }
 
   @override
-  Future<Map<String, dynamic>> selectAutoVideoCover({
+  Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
     required String mediaId,
   }) async {
     final uri = _uri(
@@ -1491,14 +1515,16 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {},
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.selectAutoVideoCover,
+    return ContentVideoCoverSelectionWireDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.selectAutoVideoCover,
+      ),
     );
   }
 
   @override
-  Future<Map<String, dynamic>> selectManualVideoCover({
+  Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
   }) async {
@@ -1512,14 +1538,16 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {'coverAssetId': coverAssetId},
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.selectManualVideoCover,
+    return ContentVideoCoverSelectionWireDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.selectManualVideoCover,
+      ),
     );
   }
 
   @override
-  Future<Map<String, dynamic>> generateArticleSummary({
+  Future<ContentArticleSummaryGenerateResponseDto> generateArticleSummary({
     required String title,
     required String body,
   }) async {
@@ -1531,28 +1559,36 @@ class RemoteContentRepository implements ContentRepository {
       ),
       body: {'title': title, 'body': body},
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.generateArticleSummary,
+    return ContentArticleSummaryGenerateResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.generateArticleSummary,
+      ),
     );
   }
 
   @override
-  Future<Map<String, dynamic>> getRecommendation({
+  Future<ContentRecommendationResponseDto> getRecommendation({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final uri = _uri(ContentApiMetadata.getRecommendationPath);
+    final body = <String, dynamic>{'limit': limit};
+    if (cursor != null && cursor.isNotEmpty) {
+      body['cursor'] = cursor;
+    }
     final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.getRecommendation,
       ),
-      body: {'limit': limit, 'cursor': ?cursor},
+      body: body,
     );
-    return CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.getRecommendation,
+    return ContentRecommendationResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ContentRequestPageIds.getRecommendation,
+      ),
     );
   }
 

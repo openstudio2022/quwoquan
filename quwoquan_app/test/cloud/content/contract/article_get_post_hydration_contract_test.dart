@@ -4,19 +4,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 
 void main() {
   group('Article getPost hydration contract', () {
+    test('Mock getPost 暴露 ContentPostDetailWireDto 文章扩展字段', () async {
+      final mockRepo = MockContentRepository();
+      final detail = await mockRepo.getPost(postId: 'web-dev');
+      expect(detail.detailWire.articleTemplate, isNotNull);
+      expect(detail.detailWire.articleDocument, isNotNull);
+      expect(detail.detailWire.articleDocument, isNotEmpty);
+    });
+
     test('Mock getPost 与 Remote getPost 投射结果保持一致', () async {
-      final rawFixture = Map<String, dynamic>.from(
-        ContentMockData.discoveryArticleData.firstWhere((item) {
-          final articleDocument = item['articleDocument'];
-          return articleDocument is Map && articleDocument.isNotEmpty;
-        }),
-      );
+      final dtoFixture = ContentMockData.discoveryArticleData.firstWhere((item) {
+        final doc = item.articleDocument;
+        return doc != null && doc.isNotEmpty;
+      });
+      final rawFixture = Map<String, dynamic>.from(dtoFixture.toDiscoveryWireMap());
       final postId =
           rawFixture['postId']?.toString() ?? 'article_contract_post';
       final mockRepo = MockContentRepository();

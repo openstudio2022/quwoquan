@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -19,6 +21,10 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart' as c
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
 abstract class MediaPostCard extends ConsumerStatefulWidget {
   final PostBaseDto post;
+  /// 可选覆盖；默认由 [presentation] 从 [post] 机械映射。
+  final PostReadPresentation? readPresentation;
+  /// 本卡片所服务的只读表面（见 `post-projection-pipeline-inventory`）。
+  final PostReadSurfaceId surfaceId;
   final void Function(PostBaseDto, int) onPostTap;
   final void Function(String) onUserTap;
   final void Function(PostBaseDto)? onLike;
@@ -31,6 +37,8 @@ abstract class MediaPostCard extends ConsumerStatefulWidget {
   const MediaPostCard({
     super.key,
     required this.post,
+    this.readPresentation,
+    this.surfaceId = PostReadSurfaceId.feedCard,
     required this.onPostTap,
     required this.onUserTap,
     this.onLike,
@@ -40,6 +48,10 @@ abstract class MediaPostCard extends ConsumerStatefulWidget {
     this.onMore,
     this.isFirstPost = false,
   });
+
+  /// Feed 等列表卡片的默认只读投影。
+  PostReadPresentation get presentation =>
+      readPresentation ?? PostReadPresentation.fromPostBase(post);
 
   @override
   ConsumerState<MediaPostCard> createState() => _MediaPostCardState();
@@ -316,10 +328,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               child: CircleAvatar(
                 radius: (AppSpacing.avatarSize / 2).r,
                 backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-                backgroundImage: widget.post.avatarUrl.isNotEmpty
-                    ? NetworkImage(widget.post.avatarUrl)
+                backgroundImage: widget.presentation.avatarUrl.isNotEmpty
+                    ? NetworkImage(widget.presentation.avatarUrl)
                     : null,
-                child: widget.post.avatarUrl.isEmpty
+                child: widget.presentation.avatarUrl.isEmpty
                     ? Icon(Icons.person,
                         size: AppSpacing.iconMedium, // 使用语义标签
                         color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary))
@@ -343,8 +355,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     GestureDetector(
                       onTap: () => widget.onUserTap(widget.post.authorProfileSubjectId),
                       child: Text(
-                        widget.post.displayName.isNotEmpty
-                            ? widget.post.displayName
+                        widget.presentation.displayName.isNotEmpty
+                            ? widget.presentation.displayName
                             : UITextConstants.unknownUser,
                         style: TextStyle(
                           fontWeight: AppTypography.medium,
@@ -367,7 +379,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     ),
                     SizedBox(width: AppSpacing.smallBorderRadius.w),
                     Text(
-                      _formatTimeAgo(widget.post.createdAt),
+                      _formatTimeAgo(widget.presentation.createdAt),
                       style: TextStyle(
                         fontSize: AppTypography.sm, // 使用语义标签
                         color: isDark
@@ -662,7 +674,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 构建帖子标题
   Widget _buildPostCaption(BuildContext context, bool isDark) {
-    final caption = widget.post.normalizedBody;
+    final caption = widget.presentation.body;
     if (caption.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -674,8 +686,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
         text: TextSpan(
           children: [
             TextSpan(
-              text: widget.post.displayName.isNotEmpty
-                  ? widget.post.displayName
+              text: widget.presentation.displayName.isNotEmpty
+                  ? widget.presentation.displayName
                   : 'Unknown User',
               style: TextStyle(
                 fontWeight: AppTypography.medium,

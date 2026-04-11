@@ -100,6 +100,7 @@ class AssistantRunRequest {
     this.sourceSurfaceId,
     this.sourceQuery,
     this.fromGlobalSearch = false,
+    this.jsonExtension = const <String, dynamic>{},
   });
 
   final List<AssistantRunMessage> messages;
@@ -125,13 +126,17 @@ class AssistantRunRequest {
   final String? sourceQuery;
   final bool fromGlobalSearch;
 
+  /// Keys not modeled on [AssistantRunRequest] (e.g. local HTTP gateway experiments).
+  /// Serialized after known fields via [toJson] without overwriting known keys.
+  final Map<String, dynamic> jsonExtension;
+
   bool get isRewrite => rewriteInstruction != null;
 
   bool get shouldSkipSearch =>
       isRewrite && rewriteInstruction!.mode != RewriteMode.deepThink;
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{
+    final out = <String, dynamic>{
       'messages': messages.map((m) => m.toJson()).toList(growable: false),
       'sessionId': sessionId,
       'userId': userId,
@@ -156,12 +161,58 @@ class AssistantRunRequest {
       if (rewriteInstruction != null)
         'rewriteInstruction': rewriteInstruction!.toJson(),
     };
+    if (jsonExtension.isNotEmpty) {
+      for (final e in jsonExtension.entries) {
+        out.putIfAbsent(e.key, () => e.value);
+      }
+    }
+    return out;
   }
 
-  factory AssistantRunRequest.fromJson(Map<String, dynamic> json) {
-    final rawMessages = (json['messages'] as List?) ?? const <dynamic>[];
+  static const Set<String> _jsonFieldKeys = <String>{
+    'messages',
+    'sessionId',
+    'userId',
+    'profileSubjectId',
+    'subAccountId',
+    'personaContextVersion',
+    'deviceProfile',
+    'deviceModel',
+    'deviceOs',
+    'gpsLocation',
+    'channel',
+    'traceId',
+    'maxIterations',
+    'capabilityCatalog',
+    'contextScopeHint',
+    'privacyProfile',
+    'privacyPolicy',
+    'userProfileSnapshot',
+    'rewriteInstruction',
+    'sourceSurfaceId',
+    'sourceQuery',
+    'fromGlobalSearch',
+  };
+
+  /// HTTP 网关等入口：与 [fromJson] 一致，默认 [maxIterations] 为 8（与本地网关历史行为对齐）。
+  factory AssistantRunRequest.fromGatewayBody(Map<String, dynamic> payload) {
+    return AssistantRunRequest.fromJson(payload, defaultMaxIterations: 8);
+  }
+
+  factory AssistantRunRequest.fromJson(
+    Map<String, dynamic> json, {
+    int defaultMaxIterations = 6,
+  }) {
+    final ext = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!_jsonFieldKeys.contains(e.key)) {
+        ext[e.key] = e.value;
+      }
+    }
+    final messagesRaw = json['messages'];
+    final messageList = messagesRaw is List ? messagesRaw : const <Object?>[];
     return AssistantRunRequest(
-      messages: rawMessages
+      messages: messageList
           .whereType<Map>()
           .map((m) => AssistantRunMessage.fromJson(m.cast<String, dynamic>()))
           .toList(growable: false),
@@ -183,7 +234,7 @@ class AssistantRunRequest {
           ? (json['channel'] as String).trim()
           : 'app',
       traceId: (json['traceId'] as String?)?.trim(),
-      maxIterations: (json['maxIterations'] as int?) ?? 6,
+      maxIterations: (json['maxIterations'] as int?) ?? defaultMaxIterations,
       capabilityCatalog:
           (json['capabilityCatalog'] as List?)
               ?.whereType<String>()
@@ -212,6 +263,9 @@ class AssistantRunRequest {
               (json['rewriteInstruction'] as Map).cast<String, dynamic>(),
             )
           : null,
+      jsonExtension: ext.isEmpty
+          ? const <String, dynamic>{}
+          : Map<String, dynamic>.from(ext),
     );
   }
 }

@@ -103,7 +103,7 @@ void main() {
       final payload = PublishSettings(
         isPublic: false,
         locationName: '成都',
-        locationPoi: const LocationPoiDto(
+        locationPoi: LocationPoiDto(
           id: 't_poi',
           name: '',
           latitude: 30.6,

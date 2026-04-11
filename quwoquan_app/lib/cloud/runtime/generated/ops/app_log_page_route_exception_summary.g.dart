@@ -6,10 +6,10 @@ class AppLogPageRouteExceptionSummaryPayload {
   final String route;
   final String source;
 
-  const AppLogPageRouteExceptionSummaryPayload({
-    required this.event,
-    required this.route,
-    required this.source,
+  AppLogPageRouteExceptionSummaryPayload({
+    this.event = 'exception',
+    this.route = 'app',
+    this.source = '',
   });
 
   factory AppLogPageRouteExceptionSummaryPayload.fromMap(Map<String, dynamic> m) {

@@ -12,7 +12,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 enum CallKitAction { accept, decline, end, timeout }
 
 class CallKitService {
-  StreamSubscription<dynamic>? _eventSub;
+  StreamSubscription<CallEvent?>? _eventSub;
   final _actions = StreamController<CallKitAction>.broadcast();
 
   Stream<CallKitAction> get actions => _actions.stream;
@@ -42,8 +42,9 @@ class CallKitService {
       duration: 30000,
       textAccept: UITextConstants.callAccept,
       textDecline: UITextConstants.callReject,
+      // CallKitParams.extra / headers 类型由 flutter_callkit_incoming 固定为 Map<String, dynamic>?
       extra: <String, dynamic>{'callId': callId},
-      headers: <String, dynamic>{},
+      headers: const <String, dynamic>{},
       android: AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,

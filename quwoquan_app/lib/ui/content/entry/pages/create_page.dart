@@ -28,6 +28,7 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
+import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
@@ -37,6 +38,7 @@ import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
 /// 创作入口主面；草稿 [CreateEditorState]（清单 ContentPublishDraftComposite）+ [PublishSettings]（强类型 POI）。
+/// 发布确认摘要的帖子只读投影经 [postReadPreviewBundleFromPublishConfirmSummary]（draftPreview 表面）。
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({
     super.key,
@@ -161,10 +163,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       await reportCreateEditorSurfaceEvent(
         ref,
         'create_editor_ready',
-        <String, Object?>{
-          'editorKind': ref.read(createEditorProvider).editorKind.name,
-          'flag': _unifiedCreateEditorEnabled,
-        },
+        createEditorSurfaceExtrasReady(
+          editorKind: ref.read(createEditorProvider).editorKind,
+          unifiedCreateEditorEnabled: _unifiedCreateEditorEnabled,
+        ),
       );
     });
   }
@@ -477,7 +479,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_draft_saved',
-      <String, Object?>{'editorKind': nextDraft.state.editorKind.name},
+      createEditorSurfaceExtrasEditorKind(nextDraft.state.editorKind),
     );
     if (!silent && mounted) {
       AppToast.show(context, UITextConstants.saveDraft);
@@ -509,7 +511,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_draft_restored',
-      <String, Object?>{'editorKind': draft.state.editorKind.name},
+      createEditorSurfaceExtrasEditorKind(draft.state.editorKind),
     );
     if (draft.state.editorKind == CreateEditorKind.text) {
       _focusBodyField();
@@ -633,10 +635,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_media_images_selected',
-      <String, Object?>{
-        'count': paths.length,
-        'editorKind': state.editorKind.name,
-      },
+      createEditorSurfaceExtrasMediaBatch(
+        count: paths.length,
+        editorKind: state.editorKind,
+      ),
     );
   }
 
@@ -674,10 +676,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_media_images_selected',
-      <String, Object?>{
-        'count': paths.length,
-        'editorKind': state.editorKind.name,
-      },
+      createEditorSurfaceExtrasMediaBatch(
+        count: paths.length,
+        editorKind: state.editorKind,
+      ),
     );
   }
 
@@ -728,10 +730,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       await reportCreateEditorSurfaceEvent(
         ref,
         'create_media_images_selected',
-        <String, Object?>{
-          'count': paths.length,
-          'editorKind': state.editorKind.name,
-        },
+        createEditorSurfaceExtrasMediaBatch(
+          count: paths.length,
+          editorKind: state.editorKind,
+        ),
       );
       return;
     }
@@ -741,10 +743,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_media_images_selected',
-      <String, Object?>{
-        'count': paths.length,
-        'editorKind': state.editorKind.name,
-      },
+      createEditorSurfaceExtrasMediaBatch(
+        count: paths.length,
+        editorKind: state.editorKind,
+      ),
     );
   }
 
@@ -958,11 +960,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     await reportCreateEditorSurfaceEvent(
       ref,
       'create_media_video_edited',
-      <String, Object?>{
-        'muted': result.muted,
-        'trimStartMs': result.trimStartMs,
-        'trimEndMs': result.trimEndMs,
-      },
+      createEditorSurfaceExtrasVideoEdited(
+        muted: result.muted,
+        trimStartMs: result.trimStartMs,
+        trimEndMs: result.trimEndMs,
+      ),
     );
   }
 
@@ -1163,7 +1165,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         buildCreatePostPayloadMap(publishState),
       );
       final created = await repositoryCreatePost(repository, payload);
-      final postId = extractCreatedPostId(created);
+      final postId = created.id;
       if (postId.isEmpty) {
         throw StateError('missing post id');
       }
@@ -1176,7 +1178,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       await reportCreateEditorSurfaceEvent(
         ref,
         'create_publish_success',
-        <String, Object?>{'contentType': payload['contentType']},
+        createEditorSurfaceExtrasPublishSuccess(payload),
       );
       if (!mounted) {
         return;
@@ -2715,6 +2717,19 @@ class _CreatePublishConfirmSheetState
 
   Widget _buildPreviewCard(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final readBundle = postReadPreviewBundleFromPublishConfirmSummary(
+      contentIdentity: widget.contentIdentity,
+      title: widget.title,
+      body: widget.body,
+      hasVideo: widget.hasVideo,
+      imageCount: widget.imageCount,
+    );
+    final headline = readBundle.presentation.title.trim().isNotEmpty
+        ? readBundle.presentation.title
+        : widget.title;
+    final prose = readBundle.presentation.body.trim().isNotEmpty
+        ? readBundle.presentation.body
+        : widget.body;
     final metaLabel = widget.hasVideo
         ? '视频内容'
         : widget.imageCount > 0
@@ -2791,21 +2806,20 @@ class _CreatePublishConfirmSheetState
               ],
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
-            if (widget.title.isNotEmpty) ...<Widget>[
+            if (headline.isNotEmpty) ...<Widget>[
               Text(
-                widget.title,
+                headline,
                 style: const TextStyle(
                   fontSize: AppTypography.xl,
                   fontWeight: AppTypography.semiBold,
                   height: AppTypography.lineHeightTight,
                 ),
               ),
-              if (widget.body.isNotEmpty)
-                SizedBox(height: AppSpacing.intraGroupXs),
+              if (prose.isNotEmpty) SizedBox(height: AppSpacing.intraGroupXs),
             ],
-            if (widget.body.isNotEmpty)
+            if (prose.isNotEmpty)
               _ExpandablePreviewText(
-                text: widget.body,
+                text: prose,
                 expanded: _bodyExpanded,
                 onToggle: () {
                   setState(() {

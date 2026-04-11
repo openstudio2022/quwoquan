@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -27,22 +28,41 @@ class _TrackingContentRepository extends MockContentRepository {
   Map<String, dynamic>? lastPublishPayload;
 
   @override
-  Future<Map<String, dynamic>> createPost({
-    required Map<String, dynamic> payload,
+  Future<PostBaseDto> createPost({
+    required CreatePostRequestWire body,
   }) async {
     createCallCount += 1;
-    lastCreatePayload = Map<String, dynamic>.from(payload);
-    return <String, dynamic>{'_id': 'post_test_1', ...payload};
+    lastCreatePayload = Map<String, dynamic>.from(body.toWire());
+    const postId = 'post_test_1';
+    return postBaseDtoFromMap(<String, dynamic>{
+      '_id': postId,
+      'postId': postId,
+      ...lastCreatePayload!,
+      'authorId': 'test_author',
+      'displayName': 'Test',
+      'authorAvatarUrl': 'https://example.com/a.jpg',
+      'publishedAt': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> publishPost({
+  Future<PostBaseDto> publishPost({
     required String postId,
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    PublishPostRequestWire? body,
   }) async {
     publishCallCount += 1;
-    lastPublishPayload = Map<String, dynamic>.from(payload);
-    return <String, dynamic>{'postId': postId, ...payload};
+    final wire = body ?? PublishPostRequestWire();
+    lastPublishPayload = Map<String, dynamic>.from(wire.toWire());
+    return postBaseDtoFromMap(<String, dynamic>{
+      'postId': postId,
+      ...wire.toWire(),
+      'authorId': 'test_author',
+      'displayName': 'Test',
+      'authorAvatarUrl': 'https://example.com/a.jpg',
+      'contentType': 'micro',
+      'body': '',
+      'publishedAt': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 }
 

@@ -22,6 +22,14 @@ class PersistedTimelineTurnCodec {
     return out;
   }
 
+  static List<Map<String, dynamic>> _decodeUiReferencesList(dynamic refs) {
+    if (refs is! List) return const <Map<String, dynamic>>[];
+    return refs
+        .whereType<Map>()
+        .map((e) => e.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
   static dynamic _cloneJson(dynamic v) {
     if (v is Map) {
       return v.map((k, val) => MapEntry(k.toString(), _cloneJson(val)));
@@ -77,7 +85,6 @@ class PersistedTimelineTurnCodec {
       heuristicFallbackUsed: m['heuristicFallbackUsed'] as bool? ?? false,
       domainId: (m['domainId'] as String?) ?? '',
     );
-    final refs = m['uiReferences'];
     final uiActionsRaw = m['uiActions'];
     final uiActionsList = uiActionsRaw is List
         ? uiActionsRaw
@@ -104,7 +111,7 @@ class PersistedTimelineTurnCodec {
       dialogueState:
           (m['dialogueState'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{},
-      uiReferences: refs is List ? List<dynamic>.from(refs) : const <dynamic>[],
+      uiReferences: _decodeUiReferencesList(m['uiReferences']),
       uiActions: uiActionsList,
       runArtifacts:
           (m['runArtifacts'] as Map?)?.cast<String, dynamic>() ??

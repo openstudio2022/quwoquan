@@ -749,7 +749,7 @@ class _AssistantSkillCenterPageState
       setState(() {
         _recentSessions = sessions
             .take(5)
-            .map(AssistantLocalSessionSummaryView.fromMap)
+            .map(AssistantLocalSessionSummaryView.fromDescriptor)
             .toList(growable: false);
       });
     } catch (_) {

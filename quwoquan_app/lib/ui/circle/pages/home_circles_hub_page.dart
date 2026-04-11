@@ -7,9 +7,12 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
@@ -90,9 +93,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   List<String>? _selectedCategoryIds;
   final GlobalKey _categoryBarKey = GlobalKey();
   late List<CircleHubFeedPostEntry> _circleFeedItems;
-  Map<String, Map<String, Object?>> _categoryConfig = const {
-    'all': {'label': '推荐'},
-  };
+  Map<String, CircleCategoryTabConfigDto> _categoryConfig =
+      CircleCategoryTabDefaults.remoteStyleFallback;
   List<CircleDto> _hubCircleDtos = [];
 
   @override
@@ -107,33 +109,54 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final repo = ref.read(circleRepositoryProvider);
     try {
       final feed = await repo.listHomeCircleDiscoveryFeed(limit: 200);
-      final cfg = await repo.getCircleCategoryConfig();
-      final circlesMaps = await repo.listCircles(limit: 500);
       if (!mounted) {
         return;
       }
       setState(() {
-        _categoryConfig = {
-          for (final e in cfg.entries)
-            e.key: Map<String, Object?>.from(e.value),
-        };
         _circleFeedItems =
-            feed.map(CircleHubFeedPostEntry.fromMap).toList(growable: true);
-        _hubCircleDtos = circlesMaps
-            .map(
-              (m) => circleDtoFromHubMockMap(Map<String, Object?>.from(m)),
-            )
-            .toList(growable: true);
+            feed.map(CircleHubFeedPostEntry.fromPostDto).toList(growable: true);
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _categoryConfig = const <String, Map<String, Object?>>{
-          'all': {'label': '推荐'},
-        };
         _circleFeedItems = [];
+      });
+    }
+
+    try {
+      final cfg = await repo.getCircleCategoryConfig();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(cfg);
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
+          CircleCategoryTabDefaults.remoteStyleFallback,
+        );
+      });
+    }
+
+    try {
+      final circlesMaps = await repo.listCircles(limit: 500);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _hubCircleDtos = List<CircleDto>.from(circlesMaps);
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
         _hubCircleDtos = [];
       });
     }
@@ -149,10 +172,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       list.add({'id': id, 'label': label});
     }
 
-    addCategory('all', (config['all']?['label'] as String?) ?? '推荐');
+    addCategory('all', config['all']?.label ?? '推荐');
     for (final entry in config.entries) {
       if (_fixedCategoryOrder.contains(entry.key)) continue;
-      addCategory(entry.key, entry.value['label']?.toString() ?? entry.key);
+      addCategory(
+        entry.key,
+        entry.value.label.isNotEmpty ? entry.value.label : entry.key,
+      );
     }
     return list;
   }
@@ -216,7 +242,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         .toList(growable: false);
   }
 
-  List<MapEntry<String, Map<String, Object?>>> get _visibleCategories {
+  List<MapEntry<String, CircleCategoryTabConfigDto>> get _visibleCategories {
     final config = _categoryConfig;
     return _visibleCategoryIds
         .where(config.containsKey)
@@ -379,14 +405,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         _filteredLevelOnePosts(tab, categoryId, fallbackToAllWhenEmpty: true)
             .map((entry) {
               final item = entry.raw;
-              final circleId = item['circleId']?.toString() ?? '';
+              final circleId = entry.wireCircleId;
               final sourceCircle = circleById[circleId];
               final circleName = sourceCircle?.name ?? '';
-              final mergedRaw = mergeCircleStoryRaw(
+              final feedEntry = mergeCircleStoryEntry(
                 Map<String, Object?>.from(item),
                 circleName,
               );
-              final feedEntry = CircleHubFeedPostEntry.fromMap(mergedRaw);
               final title =
                   item['title']?.toString() ??
                   item['body']?.toString() ??
@@ -405,7 +430,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                     '',
                 circleId: circleId,
                 categoryId: sourceCircle?.category ?? 'all',
-                typeLabel: hubCircleStoryTypeLabel(mergedRaw),
+                typeLabel: hubCircleStoryTypeLabel(feedEntry.raw),
                 isMine: _isMyCircleId(circleId),
                 feedEntry: feedEntry,
               );
@@ -439,7 +464,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final modeFiltered = _circleFeedItems
         .where((entry) {
-          final circleId = entry.raw['circleId']?.toString() ?? '';
+          final circleId = entry.wireCircleId;
           return isMineMode
               ? _isMyCircleId(circleId)
               : !_isMyCircleId(circleId);
@@ -450,7 +475,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     }
     final categoryFiltered = modeFiltered
         .where((entry) {
-          final circleId = entry.raw['circleId']?.toString() ?? '';
+          final circleId = entry.wireCircleId;
           final circle = circleById[circleId];
           return circle?.category == categoryId;
         })
@@ -475,18 +500,17 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     List<CircleHubFeedPostEntry> sourceItems,
   ) async {
     final viewerEntries = sourceItems
-        .map((item) {
-          final dto = item.dto ?? hubTryParsePostBaseDto(item.raw);
-          return (raw: item.raw, dto: dto);
-        })
-        .where((entry) => entry.dto != null && _supportsViewer(entry.dto!))
+        .map((item) => (hubEntry: item, dto: item.tryResolveDto()))
+        .where((e) => e.dto != null && _supportsViewer(e.dto!))
+        .map((e) => (hubEntry: e.hubEntry, dto: e.dto!))
         .toList(growable: false);
     if (viewerEntries.isEmpty) return;
-    final tappedDto = tapped.dto ?? hubTryParsePostBaseDto(tapped.raw);
+    final tappedDto = tapped.tryResolveDto();
     if (tappedDto == null || !_supportsViewer(tappedDto)) return;
     final viewerDtos = viewerEntries
-        .map((entry) => entry.dto!)
+        .map((e) => e.dto)
         .toList(growable: false);
+    final mediaRaws = circleHubMediaViewerRawsByPostId(viewerEntries);
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
@@ -500,16 +524,21 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
               index: '$initialIndex',
             ),
       extra: MediaViewerExtra(
-        posts: viewerDtos.map(PostSummaryView.fromDto).toList(growable: false),
+        posts: viewerDtos
+            .map(
+              (dto) => PostSummaryView.fromDto(
+                dto,
+                surfaceId: PostReadSurfaceId.immersive,
+                wire: mediaRaws[dto.id]?.toDynamicMap() ?? dto.toMap(),
+              ),
+            )
+            .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
         category: 'circle',
         source: 'circle',
-        circleId: tapped.raw['circleId']?.toString(),
-        rawPostsById: <String, Map<String, Object?>>{
-          for (final entry in viewerEntries)
-            entry.dto!.id: Map<String, Object?>.from(entry.raw),
-        },
+        circleId: tapped.wireCircleId.isEmpty ? null : tapped.wireCircleId,
+        rawPostsById: mediaRaws,
         interactionSnapshot: MediaViewerInteractionSnapshot(
           followingUsers: Set<String>.from(
             relationshipState.followingProfileIds,
@@ -517,31 +546,24 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           likedPosts: Set<String>.from(postInteractionState.likedPostIds),
           savedPosts: Set<String>.from(postInteractionState.savedPostIds),
           postLikesCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.likeCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['likeCount'] as num?)?.toInt() ??
-                    entry.dto!.likeCount,
+            for (final e in viewerEntries)
+              e.dto.id: postInteractionState.likeCountFor(
+                e.dto.id,
+                fallback: e.hubEntry.wireLikeCount,
               ),
           },
           postBookmarksCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.bookmarkCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['favoriteCount'] as num?)?.toInt() ??
-                    (entry.raw['bookmarkCount'] as num?)?.toInt() ??
-                    entry.dto!.favoriteCount,
+            for (final e in viewerEntries)
+              e.dto.id: postInteractionState.bookmarkCountFor(
+                e.dto.id,
+                fallback: e.hubEntry.wireBookmarkCount,
               ),
           },
           postSharesCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.shareCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['shareCount'] as num?)?.toInt() ??
-                    entry.dto!.shareCount,
+            for (final e in viewerEntries)
+              e.dto.id: postInteractionState.shareCountFor(
+                e.dto.id,
+                fallback: e.hubEntry.wireShareCount,
               ),
           },
         ),
@@ -655,14 +677,10 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                 posts: levelOnePosts,
                 onPostTap: (tapped, sourceItems) =>
                     _openCircleFeedViewer(context, tapped, sourceItems),
-                label:
-                    activeCategory.value['label']?.toString() ??
-                    effectiveActiveCategoryId,
-                subCategories:
-                    (activeCategory.value['subCategories'] as List<Object?>? ??
-                            const <Object?>[])
-                        .map((item) => item.toString())
-                        .toList(growable: false),
+                label: activeCategory.value.label.isNotEmpty
+                    ? activeCategory.value.label
+                    : effectiveActiveCategoryId,
+                subCategories: activeCategory.value.subCategories,
               ),
             ],
           ),
@@ -806,7 +824,8 @@ class _CirclesGlobalHeader extends StatelessWidget {
             height: _circleRailHeight(context),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: circles.isEmpty ? 0 : circles.length + 1,
+              // 即使暂无推荐圈子也保留「查看全部」卡，避免空轨导致测试/首屏无法触达广场入口。
+              itemCount: circles.length + 1,
               separatorBuilder: (context, index) =>
                   SizedBox(width: AppSpacing.intraGroupMd),
               itemBuilder: (context, index) {
@@ -874,7 +893,7 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
 
   final Key? tabBarKey;
   final bool isDark;
-  final List<MapEntry<String, Map<String, Object?>>> categories;
+  final List<MapEntry<String, CircleCategoryTabConfigDto>> categories;
   final String activeCategoryId;
   final ValueChanged<int> onCategoryTap;
   final GestureDragEndCallback? onHorizontalDragEnd;
@@ -883,7 +902,10 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabs = categories
-        .map((entry) => entry.value['label']?.toString() ?? entry.key)
+        .map(
+          (entry) =>
+              entry.value.label.isNotEmpty ? entry.value.label : entry.key,
+        )
         .toList(growable: false);
     final activeIndex = categories.indexWhere(
       (entry) => entry.key == activeCategoryId,

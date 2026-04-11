@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
@@ -17,6 +18,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/search/services/search_network_results_media_wiring.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
 
 class SearchNetworkResultsPage extends ConsumerStatefulWidget {
@@ -190,12 +192,12 @@ class _SearchNetworkResultsPageState
       }
       final extra = <_SearchNetworkTab>[];
       for (final entry in cfg.entries) {
-        final value = entry.value;
+        final CircleCategoryTabConfigDto value = entry.value;
         extra.add(
           _SearchNetworkTab(
             id: entry.key,
-            label: value['label']?.toString() ?? entry.key,
-            description: value['desc']?.toString() ?? '',
+            label: value.label.isNotEmpty ? value.label : entry.key,
+            description: value.desc ?? '',
           ),
         );
       }
@@ -235,7 +237,7 @@ class _SearchNetworkResultsPageState
           _StatusMessage(text: '小趣搜正在整理网络结果', isDark: isDark, loading: true)
         else if (_errorText != null)
           _StatusMessage(text: _errorText!, isDark: isDark)
-        else if ((_xiaoquResult?.citations.length ?? 0) == 0)
+        else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
           _StatusMessage(text: '暂时没有找到可引用的网络结果', isDark: isDark)
         else
           ..._buildXiaoquCitationTiles(
@@ -710,16 +712,20 @@ class _SearchNetworkResultsPageState
       await context.push<Object?>(
         route,
         extra: MediaViewerExtra(
-          posts: <PostSummaryView>[PostSummaryView.fromDto(dto)],
+          posts: <PostSummaryView>[
+            PostSummaryView.fromDto(
+              dto,
+              surfaceId: PostReadSurfaceId.searchCard,
+              wire: raw,
+            ),
+          ],
           dtoPosts: <PostBaseDto>[dto],
           initialIndex: 0,
           category: dto.isVideoLike
               ? 'video'
               : (dto.identity == 'moment' ? 'moment' : 'photo'),
           source: 'global-search-network',
-          rawPostsById: <String, Map<String, Object?>>{
-            dto.id: Map<String, Object?>.from(raw),
-          },
+          rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
         ),
       );
     } catch (_) {
@@ -853,10 +859,10 @@ class _XiaoquSummaryCard extends StatelessWidget {
                 color: fgSecondary,
               ),
             ),
-            if ((result?.citations.length ?? 0) > 0) ...[
+            if ((result?.citations?.length ?? 0) > 0) ...[
               SizedBox(height: AppSpacing.containerSm),
               Text(
-                '已整理 ${result!.citations.length} 条可继续查看的引用线索',
+                '已整理 ${result!.citations!.length} 条可继续查看的引用线索',
                 style: TextStyle(
                   fontSize: AppTypography.iosCaption1,
                   color: fgSecondary,

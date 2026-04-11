@@ -1,0 +1,41 @@
+version: 1
+read_model: ContentMediaCompleteUploadResponse
+
+description: |
+  POST /v1/content/media/uploads/{sessionId}:complete 响应 wire。
+
+source_entities:
+  - MediaAsset
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentMediaCompleteUploadResponseDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_media_complete_upload_response_dto.g.dart
+  fields:
+    - name: sessionId
+      dart_type: String
+      nullable: true
+      source: sessionId
+      aliases: [sessionId]
+
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status]
+      default: "''"
+
+    - name: cdnUrl
+      dart_type: String
+      nullable: true
+      source: cdnUrl
+      aliases: [cdnUrl]
+
+    - name: assetId
+      dart_type: String
+      nullable: true
+      source: assetId
+      aliases: [assetId, mediaId]

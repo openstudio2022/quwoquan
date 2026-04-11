@@ -1,0 +1,52 @@
+version: 1
+read_model: AuthLoginResult
+
+description: |
+  Owner 登录（phone/wechat/apple）响应 wire，与 user_profile/service.yaml
+  LoginWith* 的 response_fields 对齐。供 App AuthRepository.login 强类型解析。
+
+source_entities:
+  - OwnerAccount
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: AuthLoginResultDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/auth_login_result_dto.g.dart
+  fields:
+    - name: accessToken
+      dart_type: String
+      nullable: false
+      source: accessToken
+      aliases: [accessToken]
+      default: "''"
+
+    - name: refreshToken
+      dart_type: String
+      nullable: false
+      source: refreshToken
+      aliases: [refreshToken]
+      default: "''"
+
+    - name: ownerId
+      dart_type: String
+      nullable: false
+      source: ownerId
+      aliases: [ownerId, ownerAccountId]
+      default: "''"
+
+    - name: activeSub
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: activeSub
+      aliases: [activeSub]
+      default: "null"
+
+    - name: subAccountCount
+      dart_type: int
+      nullable: false
+      source: subAccountCount
+      aliases: [subAccountCount]
+      default: "0"

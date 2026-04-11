@@ -22,23 +22,23 @@ class ChatMessageDto {
   final Map<String, dynamic>? metadata;
   final DateTime? timestamp;
 
-  const ChatMessageDto({
-    required this.id,
-    required this.conversationId,
-    required this.seq,
-    required this.clientMsgId,
-    required this.senderId,
+  ChatMessageDto({
+    this.id = '',
+    this.conversationId = '',
+    this.seq = 0,
+    this.clientMsgId = '',
+    this.senderId = '',
     this.senderName,
     this.senderAvatar,
     this.senderPersonaId,
-    required this.type,
+    this.type = 'text',
     this.content,
     this.mediaUrl,
     this.media,
     this.cardPayload,
     this.replyToMessageId,
     this.mentions,
-    required this.status,
+    this.status = 'sent',
     this.recalledAt,
     this.metadata,
     this.timestamp,

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -72,13 +73,19 @@ class _StubUserRepository implements UserRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getNotificationSettings() async {
-    return <String, dynamic>{'enablePush': true};
+  Future<UserSettingDto> getNotificationSettings() async {
+    return UserSettingDto.fromJson(<String, dynamic>{
+      'userId': '',
+      'enablePush': true,
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> getPrivacySettings() async {
-    return <String, dynamic>{'profileVisibility': 'public'};
+  Future<UserSettingDto> getPrivacySettings() async {
+    return UserSettingDto.fromJson(<String, dynamic>{
+      'userId': '',
+      'profileVisibility': 'public',
+    });
   }
 
   @override

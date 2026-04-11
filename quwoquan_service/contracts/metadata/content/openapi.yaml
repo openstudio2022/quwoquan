@@ -282,9 +282,21 @@ components:
         createdAt: { type: string }
         counters:
           $ref: "#/components/schemas/Counters"
+        width:
+          type: integer
+          nullable: true
+          description: |
+            主媒体宽度（px）。与 App `FeedItemDto` / `discovery_feed.yaml` client_projection 可选字段对齐。
+        height:
+          type: integer
+          nullable: true
+          description: |
+            主媒体高度（px）。与 App `FeedItemDto` / `discovery_feed.yaml` client_projection 可选字段对齐。
         metadata:
           type: object
           additionalProperties: true
+          description: |
+            圈子/tags/visibility/articleDocument 等扩展可放此对象；亦允许与扁平 FeedItemDto 字段并存（见 discovery_feed projection）。
     BehaviorEvent:
       type: object
       required: [contentId, eventType, timestamp]
@@ -369,6 +381,11 @@ components:
       properties:
         content:
           type: object
+          description: |
+            内容域远程配置。除 comment 外，App 运行时消费（SSOT：post/projections/content_app_config_client.yaml）：
+            feature_flags 或 featureFlags（bool 映射，与本地 ContentUIConfig 合并）；
+            gray_release 或 grayRelease（experiment_bucket/current_stage/canary_matrix）；
+            client_state_sync 或 clientStateSync（JSON 对象，由 ClientStateSyncConfig 解析）。
           properties:
             comment:
               type: object
@@ -376,6 +393,42 @@ components:
                 max_length: { type: integer }
                 reply_preview_count: { type: integer }
                 fold_line_count: { type: integer }
+            feature_flags:
+              type: object
+              additionalProperties: { type: boolean }
+            featureFlags:
+              type: object
+              additionalProperties: { type: boolean }
+            gray_release:
+              $ref: "#/components/schemas/AppConfigGrayRelease"
+            grayRelease:
+              $ref: "#/components/schemas/AppConfigGrayRelease"
+            client_state_sync:
+              type: object
+              additionalProperties: true
+            clientStateSync:
+              type: object
+              additionalProperties: true
+    AppConfigGrayRelease:
+      type: object
+      description: 灰度桶与阶段矩阵（snake_case 与 camelCase 别名并存）。
+      properties:
+        experiment_bucket: { type: string }
+        experimentBucket: { type: string }
+        current_stage: { type: string }
+        currentStage: { type: string }
+        canary_matrix:
+          type: array
+          items:
+            type: object
+            properties:
+              stage: { type: string }
+              rolloutPercent: { type: integer }
+        canaryMatrix:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     ReactionState:
       type: object
       properties:

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -14,7 +15,8 @@ class _RuntimeConfigRepository extends MockContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getAppConfig() async => _config;
+  Future<ContentAppConfigWire> getAppConfig() async =>
+      ContentAppConfigWire.fromResponseObject(_config);
 }
 
 void main() {

@@ -1,0 +1,37 @@
+version: 1
+read_model: PrivacySettingsWire
+
+description: |
+  隐私设置 JSON wire（含 blockedKeywords），与 openapi PrivacySettings 对齐。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: PrivacySettingsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/privacy_settings_wire_dto.g.dart
+  fields:
+    - name: allowStrangerMessage
+      dart_type: bool
+      nullable: true
+      source: allowStrangerMessage
+      aliases: [allowStrangerMessage]
+      default: "null"
+
+    - name: profileVisibility
+      dart_type: String
+      nullable: true
+      source: profileVisibility
+      aliases: [profileVisibility]
+      default: "null"
+
+    - name: blockedKeywords
+      dart_type: List<String>
+      nullable: false
+      source: blockedKeywords
+      aliases: [blockedKeywords]
+      default: "<String>[]"

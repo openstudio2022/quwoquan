@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -133,17 +134,12 @@ class AssistantAgentLoop {
     return _owner.classifyDomain(query, contextScopeHint);
   }
 
-  Future<List<Map<String, dynamic>>> listSessions() async {
-    final sessions = await _owner.listSessions();
-    return sessions
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
+  Future<List<AssistantSessionDescriptor>> listSessions() async {
+    return _owner.listSessions();
   }
 
-  Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
-    final detail = await _owner.sessionDetail(sessionId);
-    if (detail == null) return null;
-    return Map<String, dynamic>.from(detail);
+  Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) async {
+    return _owner.sessionDetail(sessionId);
   }
 
   Future<void> switchSession(String sessionId) {

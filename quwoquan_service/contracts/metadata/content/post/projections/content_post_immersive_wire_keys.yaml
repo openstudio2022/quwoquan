@@ -1,0 +1,27 @@
+# 沉浸浏览 / MediaViewer raw 并行路径仍消费的 wire 扩展键（与 ArticleDetailWireKeys 互补）。
+version: 1
+dart_class: ContentPostImmersiveWireKeys
+description: "沉浸器与详情并行 raw Map 扩展键名 SSOT"
+keys:
+  - const_name: circleSummaries
+    json_key: circleSummaries
+  - const_name: circleIds
+    json_key: circleIds
+  - const_name: circleNames
+    json_key: circleNames
+  - const_name: circleId
+    json_key: circleId
+  - const_name: circleName
+    json_key: circleName
+  - const_name: tags
+    json_key: tags
+  - const_name: visibility
+    json_key: visibility
+  - const_name: description
+    json_key: description
+  - const_name: content
+    json_key: content
+  - const_name: caption
+    json_key: caption
+  - const_name: shareCount
+    json_key: shareCount

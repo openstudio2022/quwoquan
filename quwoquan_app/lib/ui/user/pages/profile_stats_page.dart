@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -41,10 +42,11 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   String get _userId => widget.userId;
   String _searchQuery = '';
 
-  List<ProfileCircleViewData>? _circles;
+  List<CircleDto>? _circles;
   List<ProfileSocialRelationRowViewData>? _users;
   bool _loading = true;
-  Object? _error;
+  /// 非 null 表示加载失败（展示固定文案，不保留裸 Object?）。
+  String? _loadErrorMessage;
 
   @override
   void initState() {
@@ -66,6 +68,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         _circles = [];
         _users = [];
         _loading = false;
+        _loadErrorMessage = null;
       });
       return;
     }
@@ -78,21 +81,18 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           setState(() {
             _circles = list;
             _loading = false;
-            _error = null;
+            _loadErrorMessage = null;
           });
         }
       } else {
-        final raw = _type == 'following'
+        final list = _type == 'following'
             ? await repo.listFollowing(_userId)
             : await repo.listFollowers(_userId);
-        final list = raw
-            .map(ProfileSocialRelationRowViewData.fromMap)
-            .toList(growable: false);
         if (mounted) {
           setState(() {
             _users = list;
             _loading = false;
-            _error = null;
+            _loadErrorMessage = null;
           });
         }
       }
@@ -102,12 +102,12 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           _circles = null;
           _users = null;
           _loading = false;
-          _error = e;
+          _loadErrorMessage = e.toString();
         });
     }
   }
 
-  List<ProfileCircleViewData> get _filteredCircles {
+  List<CircleDto> get _filteredCircles {
     final list = _circles ?? [];
     if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
@@ -188,7 +188,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           Expanded(
             child: _loading
                 ? Center(child: CupertinoActivityIndicator())
-                : _error != null
+                : _loadErrorMessage != null
                 ? Center(
                     child: Text(
                       '加载失败',
@@ -233,7 +233,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         final c = list[i];
         final id = c.id;
         final name = c.name;
-        final coverUrl = c.coverUrl;
+        final coverUrl = c.coverUrl ?? '';
         final postCount = c.postCount;
         return CupertinoButton(
           padding: EdgeInsets.zero,

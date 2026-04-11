@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show ProfileCircleViewData, ProfileSubjectViewData, UserLifeItem, UserWorkItem;
+    show ProfileSubjectViewData, UserLifeItem, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -34,7 +35,7 @@ class ProfileState {
   final InteractionDirection interactionDirection;
   final LifestyleSubTab lifestyleSubTab;
   final List<PostBaseDto> creations;
-  final List<ProfileCircleViewData> circles;
+  final List<CircleDto> circles;
   final List<UserLifeItem> lifeItems;
   final List<UserWorkItem> works;
   final bool isLoading;
@@ -52,7 +53,7 @@ class ProfileState {
     InteractionDirection? interactionDirection,
     LifestyleSubTab? lifestyleSubTab,
     List<PostBaseDto>? creations,
-    List<ProfileCircleViewData>? circles,
+    List<CircleDto>? circles,
     List<UserLifeItem>? lifeItems,
     List<UserWorkItem>? works,
     bool? isLoading,

@@ -166,6 +166,22 @@ client_projection:
       default: "null"
       description: "视频时长（毫秒）；图片帖子为 null"
 
+    - name: width
+      dart_type: int
+      nullable: true
+      source: width
+      aliases: [width, imageWidth, image_width, w]
+      default: "null"
+      description: "主媒体宽度（px）；Mock/沉浸布局用，可为空"
+
+    - name: height
+      dart_type: int
+      nullable: true
+      source: height
+      aliases: [height, imageHeight, image_height, h]
+      default: "null"
+      description: "主媒体高度（px）；Mock/沉浸布局用，可为空"
+
     - name: likeCount
       dart_type: int
       nullable: false
@@ -200,3 +216,102 @@ client_projection:
       source: publishedAt
       aliases: [publishedAt, createdAt, created_at]
       default: "DateTime(0)"
+
+    # Mock / 沉浸器扩展（OpenAPI FeedItem.metadata 可承载；此处为 App 强类型投影）
+    - name: circleSummaries
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: circleSummaries
+      aliases: [circleSummaries]
+      default: "null"
+
+    - name: circleIds
+      dart_type: List<String>
+      nullable: true
+      source: circleIds
+      aliases: [circleIds]
+      default: "null"
+
+    - name: circleNames
+      dart_type: List<String>
+      nullable: true
+      source: circleNames
+      aliases: [circleNames]
+      default: "null"
+
+    - name: circleId
+      dart_type: String
+      nullable: true
+      source: circleId
+      aliases: [circleId]
+      default: "null"
+
+    - name: circleName
+      dart_type: String
+      nullable: true
+      source: circleName
+      aliases: [circleName]
+      default: "null"
+
+    - name: tags
+      dart_type: List<String>
+      nullable: true
+      source: tags
+      aliases: [tags]
+      default: "null"
+
+    - name: visibility
+      dart_type: String
+      nullable: true
+      source: visibility
+      aliases: [visibility]
+      default: "null"
+
+    - name: summary
+      dart_type: String
+      nullable: true
+      source: summary
+      aliases: [summary, highlightText]
+      default: "null"
+
+    - name: authorBackgroundUrl
+      dart_type: String
+      nullable: true
+      source: authorBackgroundUrl
+      aliases: [authorBackgroundUrl]
+      default: "null"
+
+    - name: articleTemplate
+      dart_type: String
+      nullable: true
+      source: articleTemplate
+      aliases: [articleTemplate]
+      default: "null"
+
+    - name: articleFontPreset
+      dart_type: String
+      nullable: true
+      source: articleFontPreset
+      aliases: [articleFontPreset]
+      default: "null"
+
+    - name: articleDocument
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: articleDocument
+      aliases: [articleDocument]
+      default: "null"
+
+    - name: cards
+      dart_type: List<Map<String, dynamic>>
+      nullable: true
+      source: cards
+      aliases: [cards]
+      default: "null"
+
+    - name: articlePresentationVersion
+      dart_type: int
+      nullable: true
+      source: articlePresentationVersion
+      aliases: [articlePresentationVersion]
+      default: "null"

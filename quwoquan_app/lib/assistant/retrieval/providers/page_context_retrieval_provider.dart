@@ -132,15 +132,15 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
       case 'circles':
         final circles = await _circleRepository.listCircles(limit: 3);
         for (final circle in circles) {
-          final name = circle['name']?.toString() ?? '';
-          final desc = circle['description']?.toString() ?? '';
+          final name = circle.name;
+          final desc = circle.description ?? '';
           final text = _firstNonEmpty('$name $desc', name);
           if (text.isEmpty) continue;
           results.add(
             AssistantRetrievalItem(
               content: text,
               sourceType: 'page.circles',
-              sourceId: circle['id']?.toString() ?? 'circle_item',
+              sourceId: circle.id,
               relevance: _relevance(text, query),
             ),
           );

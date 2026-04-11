@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — 工具元数据 JSON 资产加载；运行时 Map 仅作注册表索引。
+
 import 'dart:convert';
 import 'dart:io';
 

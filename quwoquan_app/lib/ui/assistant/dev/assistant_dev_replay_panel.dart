@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — Dev 回放面板消费的 JSON 快照。
+
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';

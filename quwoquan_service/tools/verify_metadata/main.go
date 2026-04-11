@@ -954,6 +954,12 @@ func (v *validator) validateObject(dirName string) {
 }
 
 func (v *validator) validateObjectAt(dirName, dir string) {
+	// Wire JSON / hand-authored fixtures only (no aggregate/entity/service graph).
+	if filepath.Base(dir) == "test_fixtures" {
+		fmt.Printf("  skip %s/ (fixtures only)\n", dirName)
+		return
+	}
+
 	fmt.Printf("  checking %s/ ...\n", dirName)
 
 	aggFile := filepath.Join(dir, "aggregate.yaml")

@@ -8,12 +8,12 @@ class ChatGroupSettingsDto {
   final bool privacyShieldAdminOnly;
   final String conversationType;
 
-  const ChatGroupSettingsDto({
-    required this.qrCodeJoinEnabled,
-    required this.joinRequiresApproval,
-    required this.nameEditableByAdminOnly,
-    required this.privacyShieldAdminOnly,
-    required this.conversationType,
+  ChatGroupSettingsDto({
+    this.qrCodeJoinEnabled = true,
+    this.joinRequiresApproval = false,
+    this.nameEditableByAdminOnly = false,
+    this.privacyShieldAdminOnly = false,
+    this.conversationType = 'group',
   });
 
   factory ChatGroupSettingsDto.fromMap(Map<String, dynamic> m) {

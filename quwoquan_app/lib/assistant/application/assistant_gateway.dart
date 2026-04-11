@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/observability/logging/app_log_exporter.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -68,11 +69,11 @@ class AssistantGateway {
 
   bool switchModel(String modelRef) => _runtime.switchModel(modelRef);
 
-  Future<List<Map<String, dynamic>>> listSessions() async {
+  Future<List<AssistantSessionDescriptor>> listSessions() async {
     return _runtime.listSessions();
   }
 
-  Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
+  Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) async {
     return _runtime.sessionDetail(sessionId);
   }
 

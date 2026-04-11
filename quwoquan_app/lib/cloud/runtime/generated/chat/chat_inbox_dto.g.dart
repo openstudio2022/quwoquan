@@ -17,21 +17,21 @@ class ChatInboxDto {
   final bool pinned;
   final String circleId;
 
-  const ChatInboxDto({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.avatarUrl,
-    required this.avatarCompositeUrls,
-    required this.lastMessagePreview,
-    required this.lastMessageType,
+  ChatInboxDto({
+    this.id = '',
+    this.type = '',
+    this.title = '',
+    this.avatarUrl = '',
+    this.avatarCompositeUrls = const <String>[],
+    this.lastMessagePreview = '',
+    this.lastMessageType = 'text',
     this.lastMessageTime,
-    required this.lastSeq,
-    required this.unreadCount,
-    required this.mentionUnreadCount,
-    required this.muted,
-    required this.pinned,
-    required this.circleId,
+    this.lastSeq = 0,
+    this.unreadCount = 0,
+    this.mentionUnreadCount = 0,
+    this.muted = false,
+    this.pinned = false,
+    this.circleId = '',
   });
 
   factory ChatInboxDto.fromMap(Map<String, dynamic> m) {

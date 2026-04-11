@@ -1,0 +1,14 @@
+# 详情 API 中与 Circle 聚合根并列返回的「当前用户视角」字段（wire 顶层）。
+# Dart: CircleDetailWireDto.fromViewerWire
+version: 1
+projection: CircleDetailViewerWire
+description: GetCircle 等响应中 role / joinStatus / isFollowed / categoryId 等视角键
+fields:
+  - name: role
+    type: string
+  - name: joinStatus
+    type: string
+  - name: isFollowed
+    type: bool
+  - name: categoryId
+    type: string

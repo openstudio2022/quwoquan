@@ -11,9 +11,9 @@ class ChatContactSearchItemDto {
   final String? highlightText;
   final String? matchedField;
 
-  const ChatContactSearchItemDto({
-    required this.contactId,
-    required this.displayName,
+  ChatContactSearchItemDto({
+    this.contactId = '',
+    this.displayName = '',
     this.avatarUrl,
     this.conversationId,
     this.conversationType,

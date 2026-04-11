@@ -1,0 +1,36 @@
+version: 1
+read_model: ContentVideoCoverSelectionWire
+
+description: |
+  视频封面 auto/manual 操作响应 wire（合并为单一 DTO，manual 时含 manualCoverAssetId）。
+
+source_entities:
+  - MediaAsset
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentVideoCoverSelectionWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_video_cover_selection_wire_dto.g.dart
+  fields:
+    - name: mediaId
+      dart_type: String
+      nullable: false
+      source: mediaId
+      aliases: [mediaId]
+      default: "''"
+
+    - name: coverStrategy
+      dart_type: String
+      nullable: false
+      source: coverStrategy
+      aliases: [coverStrategy]
+      default: "''"
+
+    - name: manualCoverAssetId
+      dart_type: String
+      nullable: true
+      source: manualCoverAssetId
+      aliases: [manualCoverAssetId]

@@ -7,11 +7,11 @@ class AppLogAppExceptionPayload {
   final String exception;
   final String stack;
 
-  const AppLogAppExceptionPayload({
-    required this.kind,
-    required this.source,
-    required this.exception,
-    required this.stack,
+  AppLogAppExceptionPayload({
+    this.kind = 'app_exception',
+    this.source = '',
+    this.exception = '',
+    this.stack = '',
   });
 
   factory AppLogAppExceptionPayload.fromMap(Map<String, dynamic> m) {

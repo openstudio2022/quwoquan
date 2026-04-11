@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -14,9 +15,10 @@ typedef AssistantRunHandler =
     });
 typedef AssistantClassifyDomainHandler =
     Future<String> Function(String query, Map<String, dynamic> contextScopeHint);
-typedef AssistantListSessionsHandler = Future<List<Map<String, dynamic>>> Function();
+typedef AssistantListSessionsHandler =
+    Future<List<AssistantSessionDescriptor>> Function();
 typedef AssistantSessionDetailHandler =
-    Future<Map<String, dynamic>?> Function(String sessionId);
+    Future<AssistantSessionWireDetail?> Function(String sessionId);
 typedef AssistantSwitchSessionHandler = Future<void> Function(String sessionId);
 typedef AssistantInvokeSkillHandler =
     Future<AssistantToolResult> Function({
@@ -101,11 +103,11 @@ class AssistantRuntime {
     return _classifyDomainHandler(query, contextScopeHint);
   }
 
-  Future<List<Map<String, dynamic>>> listSessions() {
+  Future<List<AssistantSessionDescriptor>> listSessions() {
     return _listSessionsHandler();
   }
 
-  Future<Map<String, dynamic>?> sessionDetail(String sessionId) {
+  Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) {
     return _sessionDetailHandler(sessionId);
   }
 

@@ -1,4 +1,5 @@
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -17,6 +18,7 @@ void main() {
       final conversations = await repo.listConversations();
       expect(conversations, isList);
       expect(conversations, isNotEmpty);
+      expect(conversations.first, isA<ChatInboxDto>());
     });
 
     test('listInbox 返回强类型收件箱列表', () async {
@@ -36,14 +38,12 @@ void main() {
       expect(first.avatarCompositeUrls, isA<List<String>>());
     });
 
-    test('listConversations 包含必要字段', () async {
+    test('listConversations 与 listInbox 同为 ChatInboxDto', () async {
       final conversations = await repo.listConversations();
       expect(conversations, isNotEmpty);
       final first = conversations.first;
-      expect(first.containsKey('_id'), isTrue);
-      expect(first.containsKey('type'), isTrue);
-      expect(first.containsKey('title'), isTrue);
-      expect(first.containsKey('status'), isTrue);
+      expect(first.id, isNotEmpty);
+      expect(first.type, isNotEmpty);
     });
 
     test('createConversation 返回强类型会话 id', () async {
@@ -51,38 +51,38 @@ void main() {
       expect(conv, isA<ChatConversationCreatedDto>());
       expect(conv.conversationId, isNotEmpty);
       final full = await repo.getConversation(conv.conversationId);
-      expect(full['type'], 'group');
-      expect(full['status'], 'active');
+      expect(full.type, 'group');
+      expect(full.status, 'active');
     });
 
     test('getConversation 返回指定会话', () async {
       final conversations = await repo.listConversations();
-      final firstId = conversations.first['_id'] as String;
+      final firstId = conversations.first.id;
       final conv = await repo.getConversation(firstId);
-      expect(conv['_id'], firstId);
+      expect(conv.id, firstId);
     });
 
     // ── 消息 ──────────────────────────────────────────────────────────────
 
     test('listMessages 返回消息列表', () async {
       final conversations = await repo.listConversations();
-      final convId = conversations.first['_id'] as String;
+      final convId = conversations.first.id;
       final messages = await repo.listMessages(conversationId: convId);
       expect(messages, isList);
     });
 
     test('sendMessage 返回 messageId 和 seq', () async {
       final conversations = await repo.listConversations();
-      final convId = conversations.first['_id'] as String;
+      final convId = conversations.first.id;
       final result = await repo.sendMessage(
         conversationId: convId,
         type: 'text',
         content: '测试消息',
         clientMsgId: 'test-client-uuid-001',
       );
-      expect(result['messageId'], isNotNull);
-      expect(result['seq'], isNotNull);
-      expect(result['timestamp'], isNotNull);
+      expect(result.id, isNotEmpty);
+      expect(result.seq, greaterThan(0));
+      expect(result.timestamp, isNotNull);
     });
 
     test('recallMessage 不抛出异常', () async {
@@ -94,13 +94,13 @@ void main() {
 
     test('syncMessages 返回 messages 和 hasMore', () async {
       final conversations = await repo.listConversations();
-      final convId = conversations.first['_id'] as String;
+      final convId = conversations.first.id;
       final result = await repo.syncMessages(
         conversationId: convId,
         lastSeq: 0,
       );
-      expect(result.containsKey('messages'), isTrue);
-      expect(result.containsKey('hasMore'), isTrue);
+      expect(result.messages, isA<List>());
+      expect(result.hasMore, isA<bool>());
     });
 
     // ── 已读回执 ────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ void main() {
       expect(id, isNotEmpty);
       await repo.addMembers(conversationId: id, userIds: ['user_099']);
       final after = await repo.getConversation(id);
-      expect(after['membersRosterRevision'], 2);
+      expect(after.membersRosterRevision, 2);
     });
 
     test('addMembers 不抛出异常', () async {
@@ -212,12 +212,14 @@ void main() {
     test('listContactTabCircles Mock 返回圈子占位行', () async {
       final rows = await repo.listContactTabCircles();
       expect(rows, isNotEmpty);
-      expect(rows.first['circleId'], isNotNull);
+      expect(rows.first, isA<ChatContactTabCircleRowDto>());
+      expect(rows.first.circleId, isNotEmpty);
     });
 
     test('listContactTabFunGroups Mock 返回趣群占位行', () async {
       final rows = await repo.listContactTabFunGroups();
       expect(rows, isNotEmpty);
+      expect(rows.first, isA<ChatContactTabFunGroupRowDto>());
     });
 
     test('listMemberUserIds 解析 conv_001 成员', () async {
@@ -234,25 +236,14 @@ void main() {
       repo = MockChatRepository();
     });
 
-    test('listConversations 响应字段不缩减', () async {
+    test('listConversations ChatInboxDto 含列表必要语义', () async {
       final convs = await repo.listConversations();
       expect(convs, isNotEmpty);
       final conv = convs.first;
-      final requiredFields = [
-        '_id',
-        'type',
-        'title',
-        'status',
-        'lastMessagePreview',
-        'lastMessageTime',
-      ];
-      for (final field in requiredFields) {
-        expect(
-          conv.containsKey(field),
-          isTrue,
-          reason: 'missing field: $field',
-        );
-      }
+      final wire = conv.toMap();
+      expect(wire['id'], isNotEmpty);
+      expect(wire['type'], isNotEmpty);
+      expect(wire['title'], isNotEmpty);
     });
 
     test('listMembers 包含 displayName 和 avatarUrl', () async {

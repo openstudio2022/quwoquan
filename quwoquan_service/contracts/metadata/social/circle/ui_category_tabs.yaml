@@ -1,0 +1,44 @@
+# UI-only：圈子发现维度 Tab（App 以 asset 加载本文件为运行时 SSOT）。
+version: 1
+description: 维度 id → 展示 label / 子频道文案 / 描述
+tabs:
+  - id: all
+    label: 推荐
+    subCategories: [综合, 热门, 新锐, 同城]
+    desc: 智能聚合全站精彩内容
+  - id: meet
+    label: 遇见
+    subCategories: [寻友, 婚恋, 同城, 树洞, 搭子]
+    desc: 高效破冰，真实连接，遇见对的人
+  - id: campus
+    label: 校园
+    subCategories: [母校, 院系, 年级, 校友会, 职场互助]
+    desc: 连接校友关系，从学号到职场终身互助
+  - id: car
+    label: 车友
+    subCategories: [品牌, 车型, 自驾, 改装, 同城车会]
+    desc: 发现同款生活方式，开启座驾新旅程
+  - id: humanity
+    label: 人文
+    subCategories: [艺术, 影像, 文学, 历史, 设计]
+    desc: 探讨人类文明的极致美学
+  - id: life
+    label: 生活
+    subCategories: [穿搭, 家居, 萌宠, 情感, 亲子]
+    desc: 分享日常，发现生活中的小确幸
+  - id: sports
+    label: 运动
+    subCategories: [健身, 户外, 球类, 养生, 竞技]
+    desc: 挑战自我，享受流汗的快感
+  - id: tech
+    label: 科技
+    subCategories: [数码, AI, 编程, 智能, 航天]
+    desc: 追踪前沿趋势，探索未来可能
+  - id: travel
+    label: 旅行
+    subCategories: [城市, 露营, 异域, 攻略, 徒步]
+    desc: 看世界，见众生，在路上发现真我
+  - id: food
+    label: 美食
+    subCategories: [探店, 烹饪, 茶酒, 咖啡, 烘焙]
+    desc: 唯美食不可辜负，分享味蕾惊喜

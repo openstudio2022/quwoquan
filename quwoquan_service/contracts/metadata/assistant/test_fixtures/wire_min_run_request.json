@@ -1,0 +1,9 @@
+{
+  "messages": [
+    { "role": "user", "content": "fixture hello" }
+  ],
+  "sessionId": "fixture_session",
+  "maxIterations": 6,
+  "contextScopeHint": {},
+  "_fixtureExtension": true
+}

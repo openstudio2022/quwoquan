@@ -1,0 +1,29 @@
+version: 1
+read_model: ContentRecommendationResponse
+
+description: |
+  POST /v1/content/recommend 响应 wire；items 为帖子 wire 行列表，由调用方再映射为 PostBaseDto。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentRecommendationResponseDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_recommendation_response_dto.g.dart
+  fields:
+    - name: nextCursor
+      dart_type: String
+      nullable: true
+      source: nextCursor
+      aliases: [nextCursor, cursor]
+
+    - name: items
+      dart_type: List<Map<String, dynamic>>
+      nullable: false
+      source: items
+      aliases: [items]
+      default: "const <Map<String, dynamic>>[]"

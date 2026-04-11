@@ -6,10 +6,10 @@ class AppLogPageReturnSummaryPayload {
   final String route;
   final int durationMs;
 
-  const AppLogPageReturnSummaryPayload({
-    required this.event,
-    required this.route,
-    required this.durationMs,
+  AppLogPageReturnSummaryPayload({
+    this.event = 'return',
+    this.route = '',
+    this.durationMs = 0,
   });
 
   factory AppLogPageReturnSummaryPayload.fromMap(Map<String, dynamic> m) {

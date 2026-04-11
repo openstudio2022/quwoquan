@@ -1,4 +1,15 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guard_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
 
 @immutable
 class ProfileSubjectViewData {
@@ -42,49 +53,51 @@ class ProfileSubjectViewData {
   final List<String> overriddenFields;
   final DateTime? updatedAt;
 
-  factory ProfileSubjectViewData.fromMap(Map<String, dynamic> map) {
-    final subjectId =
-        _string(map['profileSubjectId']) ??
-        _string(map['subAccountId']) ??
-        _string(map['userId']) ??
-        '';
-    final ownerUserId = _string(map['ownerUserId']) ?? _string(map['userId']) ?? '';
-    final subAccountId = _string(map['subAccountId']) ?? '';
-    final nickname = _string(map['nickname']) ?? '';
-    final displayName =
-        _string(map['displayName']) ??
-        (nickname.isNotEmpty ? nickname : null) ??
-        subjectId;
+  /// Wire DTO 解码在 [ProfileSubjectWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
+  factory ProfileSubjectViewData.fromProfileSubjectWire(
+    ProfileSubjectWireDto w,
+  ) {
+    final subjectId = w.profileSubjectId;
+    final nickname = w.nickname;
+    final displayName = w.displayName.isNotEmpty
+        ? w.displayName
+        : (nickname.isNotEmpty ? nickname : subjectId);
+    final subAccountId = w.subAccountId;
+    final subjectType = w.subjectType.isNotEmpty
+        ? w.subjectType
+        : (subAccountId.isNotEmpty ? 'sub_account' : 'owner');
+    final username = w.username.isNotEmpty
+        ? w.username
+        : (nickname.isNotEmpty ? nickname : subjectId);
     return ProfileSubjectViewData(
       profileSubjectId: subjectId,
-      ownerUserId: ownerUserId,
-      subjectType:
-          _string(map['subjectType']) ??
-          (subAccountId.isNotEmpty ? 'sub_account' : 'owner'),
+      ownerUserId: w.ownerUserId,
+      subjectType: subjectType,
       subAccountId: subAccountId,
-      username:
-          _string(map['username']) ??
-          (nickname.isNotEmpty ? nickname : subjectId),
+      username: username,
       displayName: displayName,
-      avatarUrl: _string(map['avatarUrl']) ?? '',
-      backgroundUrl:
-          _string(map['backgroundUrl']) ??
-          _string(map['backgroundImage']) ??
-          '',
-      bio: _string(map['bio']) ?? '',
-      followerCount: _int(map['followerCount']),
-      followingCount: _int(map['followingCount']),
-      postCount: _int(map['postCount']),
-      circleCount: _int(map['circleCount']),
-      likeCount: _int(map['likeCount']),
-      profileVisibility: _string(map['profileVisibility']) ?? 'public',
-      inheritsFromOwner: _bool(map['inheritsFromOwner']),
-      overriddenFields: _stringList(map['overriddenFields']),
-      updatedAt: _dateTime(map['updatedAt']),
+      avatarUrl: w.avatarUrl,
+      backgroundUrl: w.backgroundUrl,
+      bio: w.bio,
+      followerCount: w.followerCount,
+      followingCount: w.followingCount,
+      postCount: w.postCount,
+      circleCount: w.circleCount,
+      likeCount: w.likeCount,
+      profileVisibility: w.profileVisibility,
+      inheritsFromOwner: w.inheritsFromOwner,
+      overriddenFields: w.overriddenFields ?? const <String>[],
+      updatedAt: w.updatedAt,
     );
   }
 
-  ProfileSubjectViewData mergeStats(Map<String, dynamic> stats) {
+  factory ProfileSubjectViewData.fromMap(Map<String, dynamic> map) {
+    return ProfileSubjectViewData.fromProfileSubjectWire(
+      ProfileSubjectWireDto.fromMap(map),
+    );
+  }
+
+  ProfileSubjectViewData mergeStats(UserProfileStatsViewData stats) {
     return ProfileSubjectViewData(
       profileSubjectId: profileSubjectId,
       ownerUserId: ownerUserId,
@@ -95,11 +108,11 @@ class ProfileSubjectViewData {
       avatarUrl: avatarUrl,
       backgroundUrl: backgroundUrl,
       bio: bio,
-      followerCount: _int(stats['followerCount'], fallback: followerCount),
-      followingCount: _int(stats['followingCount'], fallback: followingCount),
-      postCount: _int(stats['postCount'], fallback: postCount),
-      circleCount: _int(stats['circleCount'], fallback: circleCount),
-      likeCount: _int(stats['likeCount'], fallback: likeCount),
+      followerCount: stats.followerCount,
+      followingCount: stats.followingCount,
+      postCount: stats.postCount,
+      circleCount: stats.circleCount,
+      likeCount: stats.likeCount,
       profileVisibility: profileVisibility,
       inheritsFromOwner: inheritsFromOwner,
       overriddenFields: overriddenFields,
@@ -108,29 +121,120 @@ class ProfileSubjectViewData {
   }
 }
 
+/// 用户主页统计计数（[UserProfileRepository.getUserStats] / 与档案合并）。
 @immutable
-class ProfileCircleViewData {
-  const ProfileCircleViewData({
-    required this.id,
-    required this.name,
-    required this.coverUrl,
-    required this.memberCount,
+class UserProfileStatsViewData {
+  const UserProfileStatsViewData({
+    required this.followingCount,
+    required this.circleCount,
+    required this.followerCount,
+    required this.likeCount,
     required this.postCount,
   });
 
-  final String id;
-  final String name;
-  final String coverUrl;
-  final int memberCount;
+  final int followingCount;
+  final int circleCount;
+  final int followerCount;
+  final int likeCount;
   final int postCount;
 
-  factory ProfileCircleViewData.fromMap(Map<String, dynamic> map) {
-    return ProfileCircleViewData(
-      id: _string(map['id']) ?? '',
-      name: _string(map['name']) ?? '',
-      coverUrl: _string(map['coverUrl']) ?? '',
-      memberCount: _int(map['memberCount']),
-      postCount: _int(map['postCount']),
+  factory UserProfileStatsViewData.fromUserProfileStatsWire(
+    UserProfileStatsWireDto w,
+  ) {
+    return UserProfileStatsViewData(
+      followingCount: w.followingCount,
+      circleCount: w.circleCount,
+      followerCount: w.followerCount,
+      likeCount: w.likeCount,
+      postCount: w.postCount,
+    );
+  }
+
+  factory UserProfileStatsViewData.fromMap(Map<String, dynamic> m) {
+    return UserProfileStatsViewData.fromUserProfileStatsWire(
+      UserProfileStatsWireDto.fromMap(m),
+    );
+  }
+
+  factory UserProfileStatsViewData.fromProfile(ProfileSubjectViewData p) {
+    return UserProfileStatsViewData(
+      followingCount: p.followingCount,
+      circleCount: p.circleCount,
+      followerCount: p.followerCount,
+      likeCount: p.likeCount,
+      postCount: p.postCount,
+    );
+  }
+}
+
+/// 关注关系查询视图（[UserProfileRepository.getRelationship] wire 归一化后）。
+@immutable
+class RelationshipViewData {
+  const RelationshipViewData({
+    required this.relationState,
+    required this.isFollowing,
+    required this.isFollowedBy,
+    required this.isMutual,
+  });
+
+  final String relationState;
+  final bool isFollowing;
+  final bool isFollowedBy;
+  final bool isMutual;
+
+  factory RelationshipViewData.fromRelationshipNormalizedWire(
+    RelationshipNormalizedWireDto w,
+  ) {
+    return RelationshipViewData(
+      relationState: w.relationState,
+      isFollowing: w.isFollowing,
+      isFollowedBy: w.isFollowedBy,
+      isMutual: w.isMutual,
+    );
+  }
+
+  factory RelationshipViewData.fromNormalizedMap(Map<String, dynamic> m) {
+    return RelationshipViewData.fromRelationshipNormalizedWire(
+      RelationshipNormalizedWireDto.fromMap(m),
+    );
+  }
+}
+
+/// 主页「获赞」列表行（[UserProfileRepository.listUserLikes]）。
+@immutable
+class ProfileUserLikeRowViewData {
+  const ProfileUserLikeRowViewData({
+    required this.postId,
+    required this.title,
+    required this.coverUrl,
+    required this.likerNickname,
+    required this.likerAvatarUrl,
+    this.likedAt,
+  });
+
+  final String postId;
+  final String title;
+  final String coverUrl;
+  final String likerNickname;
+  final String likerAvatarUrl;
+  final DateTime? likedAt;
+
+  factory ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+    ProfileUserLikeRowWireDto w,
+  ) {
+    return ProfileUserLikeRowViewData(
+      postId: w.postId,
+      title: w.title,
+      coverUrl: w.coverUrl,
+      likerNickname: w.likerNickname,
+      likerAvatarUrl: w.likerAvatarUrl,
+      likedAt: w.likedAt,
+    );
+  }
+
+  factory ProfileUserLikeRowViewData.fromMap(Map<String, dynamic> m) {
+    return ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+      ProfileUserLikeRowWireDto.fromMap(m),
     );
   }
 }
@@ -150,20 +254,22 @@ class ProfileSocialRelationRowViewData {
   final String avatarUrl;
   final bool isFollowing;
 
-  factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
-    final id =
-        _string(map['profileSubjectId']) ??
-        _string(map['userId']) ??
-        '';
-    final String name =
-        _string(map['displayName']) ??
-        _string(map['nickname']) ??
-        (id.isEmpty ? '' : id);
+  factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+    ProfileSocialRelationRowWireDto w,
+  ) {
+    final id = w.profileSubjectId;
+    final name = w.displayName.isNotEmpty ? w.displayName : id;
     return ProfileSocialRelationRowViewData(
       profileSubjectId: id,
       displayName: name,
-      avatarUrl: _string(map['avatarUrl']) ?? '',
-      isFollowing: _bool(map['isFollowing']),
+      avatarUrl: w.avatarUrl,
+      isFollowing: w.isFollowing,
+    );
+  }
+
+  factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
+    return ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+      ProfileSocialRelationRowWireDto.fromMap(map),
     );
   }
 }
@@ -202,37 +308,35 @@ class ProfileInteractionActivityViewData {
   final String targetContentSummary;
   final DateTime? createdAt;
 
-  factory ProfileInteractionActivityViewData.fromMap(Map<String, dynamic> map) {
-    final actorProfileSubjectId =
-        _string(map['actorProfileSubjectId']) ?? _string(map['userId']) ?? '';
-    final activityType =
-        _string(map['activityType']) ?? _string(map['contentType']) ?? '';
+  factory ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+    ProfileInteractionActivityWireDto w,
+  ) {
+    var activityId = w.activityId;
+    if (activityId.isEmpty) {
+      final prefix = w.activityType.isEmpty ? 'activity' : w.activityType;
+      activityId = '$prefix:${w.actorProfileSubjectId}';
+    }
+    final actorDisplayName = w.actorDisplayName.isNotEmpty
+        ? w.actorDisplayName
+        : w.actorProfileSubjectId;
     return ProfileInteractionActivityViewData(
-      activityId:
-          _string(map['activityId']) ??
-          _string(map['id']) ??
-          '${activityType.isEmpty ? 'activity' : activityType}:$actorProfileSubjectId',
-      activityType: activityType,
-      direction: _string(map['direction']) ?? 'received',
-      actorProfileSubjectId: actorProfileSubjectId,
-      actorDisplayName:
-          _string(map['actorDisplayName']) ??
-          _string(map['nickname']) ??
-          _string(map['displayName']) ??
-          actorProfileSubjectId,
-      actorAvatarUrl:
-          _string(map['actorAvatarUrl']) ?? _string(map['avatarUrl']) ?? '',
-      targetProfileSubjectId:
-          _string(map['targetProfileSubjectId']) ?? _string(map['targetUserId']) ?? '',
-      targetContentId:
-          _string(map['targetContentId']) ?? _string(map['postId']) ?? '',
-      targetContentType:
-          _string(map['targetContentType']) ?? _string(map['contentType']) ?? '',
-      targetContentSummary:
-          _string(map['targetContentSummary']) ??
-          _string(map['targetTitle']) ??
-          '',
-      createdAt: _dateTime(map['createdAt']),
+      activityId: activityId,
+      activityType: w.activityType,
+      direction: w.direction,
+      actorProfileSubjectId: w.actorProfileSubjectId,
+      actorDisplayName: actorDisplayName,
+      actorAvatarUrl: w.actorAvatarUrl,
+      targetProfileSubjectId: w.targetProfileSubjectId,
+      targetContentId: w.targetContentId,
+      targetContentType: w.targetContentType,
+      targetContentSummary: w.targetContentSummary,
+      createdAt: w.createdAt,
+    );
+  }
+
+  factory ProfileInteractionActivityViewData.fromMap(Map<String, dynamic> map) {
+    return ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+      ProfileInteractionActivityWireDto.fromMap(map),
     );
   }
 }
@@ -263,39 +367,34 @@ class ActivePersonaContextViewData {
 
   bool get hasSubAccount => subAccountId.isNotEmpty;
 
-  factory ActivePersonaContextViewData.fromMap(Map<String, dynamic> map) {
-    final profileSubjectId =
-        _string(map['profileSubjectId']) ??
-        _string(map['subAccountId']) ??
-        _string(map['userId']) ??
-        '';
-    final ownerUserId =
-        _string(map['ownerUserId']) ??
-        _string(map['userId']) ??
-        profileSubjectId;
-    final subAccountId = _string(map['subAccountId']) ?? '';
-    final displayName =
-        _string(map['displayName']) ??
-        _string(map['nickname']) ??
-        profileSubjectId;
+  factory ActivePersonaContextViewData.fromActivePersonaContextWire(
+    ActivePersonaContextWireDto w,
+  ) {
+    final profileSubjectId = w.profileSubjectId;
+    var ownerUserId = w.ownerUserId;
+    if (ownerUserId.isEmpty) {
+      ownerUserId = profileSubjectId;
+    }
+    final subAccountId = w.subAccountId;
+    final displayName = w.displayName.isNotEmpty ? w.displayName : profileSubjectId;
+    final subjectType = w.subjectType.isNotEmpty
+        ? w.subjectType
+        : (subAccountId.isNotEmpty ? 'sub_account' : 'owner');
     return ActivePersonaContextViewData(
       profileSubjectId: profileSubjectId,
       ownerUserId: ownerUserId,
       subAccountId: subAccountId,
-      subjectType:
-          _string(map['subjectType']) ??
-          (subAccountId.isNotEmpty ? 'sub_account' : 'owner'),
+      subjectType: subjectType,
       displayName: displayName,
-      avatarUrl:
-          _string(map['avatarUrl']) ??
-          _string(map['avatar']) ??
-          _string(map['avatarUrlSnapshot']) ??
-          '',
-      personaContextVersion:
-          _string(map['personaContextVersion']) ??
-          _string(map['contextVersion']) ??
-          '',
-      isPrimary: _bool(map['isPrimary']),
+      avatarUrl: w.avatarUrl,
+      personaContextVersion: w.personaContextVersion,
+      isPrimary: w.isPrimary,
+    );
+  }
+
+  factory ActivePersonaContextViewData.fromMap(Map<String, dynamic> map) {
+    return ActivePersonaContextViewData.fromActivePersonaContextWire(
+      ActivePersonaContextWireDto.fromMap(map),
     );
   }
 
@@ -349,34 +448,37 @@ class PersonaManagementItemViewData {
   final bool hasPublishedContent;
   final String subjectType;
 
-  factory PersonaManagementItemViewData.fromMap(Map<String, dynamic> map) {
-    final subAccountId =
-        _string(map['subAccountId']) ??
-        _string(map['personaId']) ??
-        _string(map['id']) ??
-        '';
+  /// 纠正 wire 默认 `subjectType: sub_account`：无 `subAccountId` 时视为 owner 主行。
+  factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
+    PersonaManagementItemWireDto w,
+  ) {
     final profileSubjectId =
-        _string(map['profileSubjectId']) ?? subAccountId;
+        w.profileSubjectId.isNotEmpty ? w.profileSubjectId : w.subAccountId;
+    final displayName =
+        w.displayName.isNotEmpty ? w.displayName : profileSubjectId;
+    final subjectType = w.subAccountId.isEmpty
+        ? (w.subjectType.isEmpty || w.subjectType == 'sub_account'
+              ? 'owner'
+              : w.subjectType)
+        : (w.subjectType.isNotEmpty ? w.subjectType : 'sub_account');
     return PersonaManagementItemViewData(
-      subAccountId: subAccountId,
+      subAccountId: w.subAccountId,
       profileSubjectId: profileSubjectId,
-      displayName:
-          _string(map['displayName']) ??
-          _string(map['nickname']) ??
-          profileSubjectId,
-      avatarUrl:
-          _string(map['avatarUrl']) ??
-          _string(map['avatar']) ??
-          '',
-      isolationLevel: _string(map['isolationLevel']) ?? 'open',
-      profileVisibility: _string(map['profileVisibility']) ?? 'public',
-      isPrimary: _bool(map['isPrimary']),
-      isActive: _bool(map['isActive']),
-      hasAttributedHistory: _bool(map['hasAttributedHistory']),
-      hasPublishedContent: _bool(map['hasPublishedContent']),
-      subjectType:
-          _string(map['subjectType']) ??
-          (subAccountId.isNotEmpty ? 'sub_account' : 'owner'),
+      displayName: displayName,
+      avatarUrl: w.avatarUrl,
+      isolationLevel: w.isolationLevel,
+      profileVisibility: w.profileVisibility,
+      isPrimary: w.isPrimary,
+      isActive: w.isActive,
+      hasAttributedHistory: w.hasAttributedHistory,
+      hasPublishedContent: w.hasPublishedContent,
+      subjectType: subjectType,
+    );
+  }
+
+  factory PersonaManagementItemViewData.fromMap(Map<String, dynamic> map) {
+    return PersonaManagementItemViewData.fromPersonaManagementItemWire(
+      PersonaManagementItemWireDto.fromMap(map),
     );
   }
 }
@@ -398,14 +500,20 @@ class PersonaManagementQuotaViewData {
 
   bool get quotaReached => usedSubAccounts >= maxSubAccounts;
 
-  factory PersonaManagementQuotaViewData.fromMap(Map<String, dynamic> map) {
-    final maxSubAccounts =
-        _int(map['maxSubAccounts'], fallback: _int(map['maxPersonas'], fallback: 5));
-    final usedSubAccounts =
-        _int(map['usedSubAccounts'], fallback: _int(map['usedPersonas']));
+  factory PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
+    PersonaManagementQuotaWireDto w,
+  ) {
+    var max = w.maxSubAccounts;
+    if (max <= 0) max = 5;
     return PersonaManagementQuotaViewData(
-      maxSubAccounts: maxSubAccounts <= 0 ? 5 : maxSubAccounts,
-      usedSubAccounts: usedSubAccounts,
+      maxSubAccounts: max,
+      usedSubAccounts: w.usedSubAccounts,
+    );
+  }
+
+  factory PersonaManagementQuotaViewData.fromMap(Map<String, dynamic> map) {
+    return PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
+      PersonaManagementQuotaWireDto.fromMap(map),
     );
   }
 }
@@ -428,28 +536,22 @@ class PersonaLifecycleGuardViewData {
   final String reasonCode;
   final String message;
 
-  factory PersonaLifecycleGuardViewData.fromMap(Map<String, dynamic> map) {
+  factory PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
+    PersonaLifecycleGuardWireDto w,
+  ) {
     return PersonaLifecycleGuardViewData(
-      subAccountId:
-          _string(map['subAccountId']) ??
-          _string(map['personaId']) ??
-          _string(map['id']) ??
-          '',
-      canDelete: _bool(map['canDelete']),
-      canRetire: _bool(map['canRetire']),
-      requiredAction:
-          _string(map['requiredAction']) ??
-          _string(map['lifecycleAction']) ??
-          '',
-      reasonCode:
-          _string(map['reasonCode']) ??
-          _string(map['guardReason']) ??
-          '',
-      message:
-          _string(map['message']) ??
-          _string(map['userMessage']) ??
-          _string(map['reasonMessage']) ??
-          '',
+      subAccountId: w.subAccountId,
+      canDelete: w.canDelete,
+      canRetire: w.canRetire,
+      requiredAction: w.requiredAction,
+      reasonCode: w.reasonCode,
+      message: w.message,
+    );
+  }
+
+  factory PersonaLifecycleGuardViewData.fromMap(Map<String, dynamic> map) {
+    return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
+      PersonaLifecycleGuardWireDto.fromMap(map),
     );
   }
 }
@@ -466,67 +568,40 @@ class PersonaManagementSummaryViewData {
   final PersonaManagementQuotaViewData quota;
   final ActivePersonaContextViewData? activeContext;
 
-  factory PersonaManagementSummaryViewData.fromMap(Map<String, dynamic> map) {
-    final rawItems =
-        (map['items'] as List?) ??
-        (map['subAccounts'] as List?) ??
-        (map['personas'] as List?) ??
-        const <dynamic>[];
-    final quotaMap =
-        (map['quota'] as Map?)?.cast<String, dynamic>() ??
+  factory PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
+    PersonaManagementSummaryWireDto w,
+  ) {
+    final items = w.items
+        .map(
+          (m) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
+            PersonaManagementItemWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
+    final quotaMap = w.quota ??
         <String, dynamic>{
-          'usedSubAccounts': rawItems.length,
-          'maxSubAccounts': map['maxSubAccounts'] ?? map['maxPersonas'] ?? 5,
+          'usedSubAccounts': items.length,
+          'maxSubAccounts': 5,
         };
-    final activeContextMap =
-        (map['activeContext'] as Map?)?.cast<String, dynamic>() ??
-        (map['activePersonaContext'] as Map?)?.cast<String, dynamic>();
+    final activeMap = w.activeContext;
     return PersonaManagementSummaryViewData(
-      items: rawItems
-          .whereType<Map>()
-          .map(
-            (item) => PersonaManagementItemViewData.fromMap(
-              item.cast<String, dynamic>(),
-            ),
-          )
-          .toList(growable: false),
-      quota: PersonaManagementQuotaViewData.fromMap(quotaMap),
-      activeContext: activeContextMap == null
+      items: items,
+      quota: PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
+        PersonaManagementQuotaWireDto.fromMap(quotaMap),
+      ),
+      activeContext: activeMap == null
           ? null
-          : ActivePersonaContextViewData.fromMap(activeContextMap),
+          : ActivePersonaContextViewData.fromActivePersonaContextWire(
+              ActivePersonaContextWireDto.fromMap(activeMap),
+            ),
     );
   }
-}
 
-String? _string(Object? value) {
-  final result = value?.toString().trim();
-  if (result == null || result.isEmpty) return null;
-  return result;
-}
-
-int _int(Object? value, {int fallback = 0}) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return int.tryParse(value?.toString() ?? '') ?? fallback;
-}
-
-bool _bool(Object? value) {
-  if (value is bool) return value;
-  if (value is String) return value.toLowerCase() == 'true';
-  return false;
-}
-
-List<String> _stringList(Object? value) {
-  if (value is List) {
-    return value.map((item) => item.toString()).where((item) => item.isNotEmpty).toList();
+  factory PersonaManagementSummaryViewData.fromMap(Map<String, dynamic> map) {
+    return PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
+      PersonaManagementSummaryWireDto.fromMap(map),
+    );
   }
-  return const [];
-}
-
-DateTime? _dateTime(Object? value) {
-  final raw = value?.toString();
-  if (raw == null || raw.isEmpty) return null;
-  return DateTime.tryParse(raw);
 }
 
 // ─── 主页 Tab 行模型（与 mock 数据字段对齐；待 service.yaml codegen 收敛）────────

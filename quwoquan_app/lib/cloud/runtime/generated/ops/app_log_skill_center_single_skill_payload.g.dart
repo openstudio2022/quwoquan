@@ -7,11 +7,11 @@ class AppLogSkillCenterSingleSkillPayload {
   final String skillId;
   final bool enabled;
 
-  const AppLogSkillCenterSingleSkillPayload({
-    required this.event,
-    required this.action,
-    required this.skillId,
-    required this.enabled,
+  AppLogSkillCenterSingleSkillPayload({
+    this.event = 'skill_center_action',
+    this.action = 'single_skill_toggle',
+    this.skillId = '',
+    this.enabled = false,
   });
 
   factory AppLogSkillCenterSingleSkillPayload.fromMap(Map<String, dynamic> m) {

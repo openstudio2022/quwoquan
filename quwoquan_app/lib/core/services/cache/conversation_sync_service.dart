@@ -37,14 +37,15 @@ class ConversationSyncService {
       var hasChanges = false;
 
       for (final ts in timestamps) {
-        final id = ts['id'] as String? ?? '';
+        final m = ts.toMap();
+        final id = m['id'] as String? ?? '';
         if (id.isEmpty) continue;
         cloudIds.add(id);
 
         final cloudSettingsUpdatedAt =
-            ts['settingsUpdatedAt'] as String? ?? ts['updatedAt'] as String? ?? '';
+            m['settingsUpdatedAt'] as String? ?? m['updatedAt'] as String? ?? '';
         final cloudLastMessageAt =
-            ts['lastMessageAt'] as String? ?? '';
+            m['lastMessageAt'] as String? ?? '';
         final localSettingsTs = cache.getSettingsTimestamp(id);
         final localMessageTs = cache.getMessageTimestamp(id);
 
@@ -54,9 +55,9 @@ class ConversationSyncService {
         } else if (localMessageTs != cloudLastMessageAt) {
           cache.updateListFields(
             id,
-            lastMessagePreview: ts['lastMessagePreview'] as String?,
+            lastMessagePreview: m['lastMessagePreview'] as String?,
             lastMessageAt: cloudLastMessageAt,
-            unreadCount: ts['unreadCount'] as int?,
+            unreadCount: m['unreadCount'] as int?,
           );
           hasChanges = true;
         }
@@ -81,7 +82,9 @@ class ConversationSyncService {
                 : i + batchSize,
           );
           final conversations = await repo.batchGetConversations(batch);
-          cache.putAll(conversations);
+          cache.putAll(
+            conversations.map((c) => c.toMap()).toList(growable: false),
+          );
         }
       }
 

@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/appearance_settings_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
@@ -92,25 +94,28 @@ class AppearanceSettingsSnapshot {
   final DateTime updatedAt;
   final bool pendingSync;
 
-  factory AppearanceSettingsSnapshot.fromJson(Map<String, dynamic> json) {
+  factory AppearanceSettingsSnapshot.fromAppearanceSettingsWire(
+    AppearanceSettingsWireDto w,
+  ) {
     return AppearanceSettingsSnapshot(
-      themeMode: AppearanceThemeMode.fromWire(json['themeMode'] as String?),
-      fontSizePreset: AppearanceFontSizePreset.fromWire(
-        json['fontSizePreset'] as String?,
-      ),
-      source: AppearanceSettingsSource.fromWire(json['source'] as String?),
+      themeMode: AppearanceThemeMode.fromWire(w.themeMode),
+      fontSizePreset: AppearanceFontSizePreset.fromWire(w.fontSizePreset),
+      source: AppearanceSettingsSource.fromWire(w.source),
       ownerDefaultThemeMode: AppearanceThemeMode.fromWire(
-        json['ownerDefaultThemeMode'] as String?,
+        w.ownerDefaultThemeMode,
       ),
       ownerDefaultFontSizePreset: AppearanceFontSizePreset.fromWire(
-        json['ownerDefaultFontSizePreset'] as String?,
+        w.ownerDefaultFontSizePreset,
       ),
-      hasSubAccountOverride:
-          json['hasSubAccountOverride'] as bool? ?? false,
-      version: json['version'] as int? ?? 0,
-      updatedAt:
-          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      hasSubAccountOverride: w.hasSubAccountOverride,
+      version: w.version,
+      updatedAt: w.updatedAt,
+    );
+  }
+
+  factory AppearanceSettingsSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppearanceSettingsSnapshot.fromAppearanceSettingsWire(
+      AppearanceSettingsWireDto.fromMap(json),
     );
   }
 
@@ -265,7 +270,10 @@ class RemoteAppearanceSettingsRepository
     );
     if (resp.statusCode == 200) {
       return AppearanceSettingsSnapshot.fromJson(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.getAppearanceSettings,
+        ),
       );
     }
     throw Exception('GetAppearanceSettings failed: ${resp.statusCode}');
@@ -282,7 +290,10 @@ class RemoteAppearanceSettingsRepository
     );
     if (resp.statusCode == 200) {
       return AppearanceSettingsSnapshot.fromJson(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.updateAppearanceSettings,
+        ),
       );
     }
     throw Exception('UpdateAppearanceSettings failed: ${resp.statusCode}');

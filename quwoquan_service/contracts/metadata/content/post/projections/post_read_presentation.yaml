@@ -1,0 +1,47 @@
+# Post 只读投影数据类字段（与 PostBaseDto + 文章扩展 wire 键对齐）。
+# 生成 post_read_presentation.g.dart；UI 优先消费本类型而非手写 Map 键。
+version: 1
+dart_class: PostReadPresentation
+fields:
+  - name: postId
+    dart_type: String
+    post_base: id
+  - name: contentType
+    dart_type: String
+    post_base: type
+  - name: contentIdentity
+    dart_type: String
+    post_base: identity
+  - name: displayName
+    dart_type: String
+    post_base: displayName
+  - name: avatarUrl
+    dart_type: String
+    post_base: avatarUrl
+  - name: title
+    dart_type: String
+    post_base: normalizedTitle
+  - name: body
+    dart_type: String
+    post_base: normalizedBody
+  - name: coverUrl
+    dart_type: String
+    post_base: mediaCoverUrl
+  - name: likeCount
+    dart_type: int
+    post_base: likeCount
+  - name: commentCount
+    dart_type: int
+    post_base: commentCount
+  - name: shareCount
+    dart_type: int
+    post_base: shareCount
+  - name: createdAt
+    dart_type: DateTime
+    post_base: createdAt
+  - name: articleTemplate
+    dart_type: String
+    wire_key: articleTemplate
+  - name: articleFontPreset
+    dart_type: String
+    wire_key: articleFontPreset

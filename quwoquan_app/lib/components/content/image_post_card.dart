@@ -19,6 +19,8 @@ class ImagePostCard extends MediaPostCard {
   const ImagePostCard({
     super.key,
     required super.post,
+    super.readPresentation,
+    super.surfaceId,
     required super.onPostTap,
     required super.onUserTap,
     super.onLike,
@@ -50,8 +52,8 @@ class ImagePostCard extends MediaPostCard {
 
   /// 构建图片的标题和配文
   Widget _buildImageCaption(BuildContext context, bool isDark) {
-    final title = post.normalizedTitle;
-    final content = post.normalizedBody;
+    final title = presentation.title;
+    final content = presentation.body;
     
     // 如果标题和配文都为空，不显示
     if (title.isEmpty && content.isEmpty) {

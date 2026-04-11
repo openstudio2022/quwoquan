@@ -1,0 +1,47 @@
+version: 1
+read_model: UserProfileStatsWire
+
+description: |
+  用户主页统计计数 wire（独立 stats 响应或与 profile 合并字段）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: UserProfileStatsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart
+  fields:
+    - name: followingCount
+      dart_type: int
+      nullable: false
+      source: followingCount
+      aliases: [followingCount]
+      default: "0"
+    - name: circleCount
+      dart_type: int
+      nullable: false
+      source: circleCount
+      aliases: [circleCount]
+      default: "0"
+    - name: followerCount
+      dart_type: int
+      nullable: false
+      source: followerCount
+      aliases: [followerCount]
+      default: "0"
+    - name: likeCount
+      dart_type: int
+      nullable: false
+      source: likeCount
+      aliases: [likeCount]
+      default: "0"
+    - name: postCount
+      dart_type: int
+      nullable: false
+      source: postCount
+      aliases: [postCount]
+      default: "0"

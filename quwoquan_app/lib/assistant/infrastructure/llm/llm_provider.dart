@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: LLM_RAW — 模型 HTTP/流式与多供应商容错；解析完成后用 LlmParseResult/AssistantTurnOutput。
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -45,6 +47,23 @@ class AssistantModelOutput {
   final List<Map<String, dynamic>> usageEntries;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
+
+  /// 将 [text] 解析为助手 JSON 契约（与 [LlmResponseParser.parse] 一致）。
+  ///
+  /// 调用方若需 [assistantOutputViewIfParsed] 与 [assistantTurnOutputIfValid] 等投影，
+  /// 应对返回值做局部缓存，避免重复解析。
+  LlmParseResult parseAssistantText() => LlmResponseParser.parse(text);
+
+  /// 解析成功后的只读投影；非 JSON / 解析失败则为 `null`。
+  LlmAssistantOutputJsonView? get assistantOutputViewIfParsed =>
+      parseAssistantText().assistantOutputView;
+
+  /// 解析成功且满足 canonical `assistant_turn` 时的强类型；否则 `null`。
+  AssistantTurnOutput? get assistantTurnOutputIfValid {
+    final parsed = parseAssistantText();
+    if (!parsed.ok || parsed.json == null) return null;
+    return tryParseAssistantTurnOutput(parsed.json!);
+  }
 
   AssistantModelOutput copyWith({
     String? text,

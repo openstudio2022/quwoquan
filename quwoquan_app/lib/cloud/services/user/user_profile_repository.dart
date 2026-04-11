@@ -1,19 +1,49 @@
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+PersonaDto _personaDtoFromWire(Map<String, dynamic> json) {
+  final m = Map<String, dynamic>.from(json);
+  m.putIfAbsent('id', () => '');
+  m.putIfAbsent('userId', () => '');
+  m.putIfAbsent('displayName', () => '');
+  m.putIfAbsent('createdAt', () => '');
+  m.putIfAbsent('updatedAt', () => '');
+  return PersonaDto.fromJson(m);
+}
+
+/// JSON 编码前去掉 null，避免 PATCH 误传「显式 null」覆盖服务端字段。
+Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
+  return Map<String, dynamic>.fromEntries(
+    source.entries.where((e) => e.value != null),
+  );
+}
 
 /// 用户主页 Repository。
 ///
@@ -23,8 +53,8 @@ abstract class UserProfileRepository {
   const UserProfileRepository();
 
   // ── 档案 ──────────────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> getUserProfile(String userId);
-  Future<void> updateProfile(Map<String, dynamic> data);
+  Future<ProfileSubjectViewData> getUserProfile(String userId);
+  Future<void> updateProfile(ProfileEditUpdatePayload data);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
   Future<List<PostBaseDto>> listUserPosts(
@@ -33,11 +63,11 @@ abstract class UserProfileRepository {
   });
   Future<List<UserWorkItem>> listUserWorks(String userId);
   Future<List<UserLifeItem>> listUserLifeItems(String userId);
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   });
-  Future<Map<String, dynamic>> getUserStats(String userId);
+  Future<UserProfileStatsViewData> getUserStats(String userId);
 
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
@@ -59,54 +89,53 @@ abstract class UserProfileRepository {
   // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────
   Future<void> followUser(String targetUserId);
   Future<void> unfollowUser(String targetUserId);
-  Future<List<Map<String, dynamic>>> listFollowing(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
-  Future<List<Map<String, dynamic>>> listFollowers(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
-  Future<Map<String, dynamic>> getRelationship(String userId);
-  Future<List<Map<String, dynamic>>> listUserLikes(
+  Future<RelationshipViewData> getRelationship(String userId);
+  Future<List<ProfileUserLikeRowViewData>> listUserLikes(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   // ── 互动（收到/发出）──────────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionReceived(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
-  Future<List<Map<String, dynamic>>> listUserInteractionSent(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionSent(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   // ── 分身 ──────────────────────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> listPersonas();
-  Future<Map<String, dynamic>> createPersona(Map<String, dynamic> data);
-  Future<void> updatePersona(String personaId, Map<String, dynamic> data);
+  Future<List<PersonaDto>> listPersonas();
+  Future<PersonaDto> createPersona(PersonaCreateRequestDto request);
+  Future<void> updatePersona(String personaId, PersonaUpdateRequestDto request);
   Future<void> deletePersona(String personaId);
   Future<void> activatePersona(String personaId);
 
   Future<ProfileSubjectViewData> getProfileSubject(String userId) async {
     final profile = await getUserProfile(userId);
     final stats = await getUserStats(userId);
-    return ProfileSubjectViewData.fromMap(profile).mergeStats(stats);
+    return profile.mergeStats(stats);
   }
 
-  Future<List<ProfileCircleViewData>> listProfileCircles(
+  Future<List<CircleDto>> listProfileCircles(
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
-    final items = await listUserCircles(userId, limit: limit);
-    return items.map(ProfileCircleViewData.fromMap).toList(growable: false);
+    return listUserCircles(userId, limit: limit);
   }
 
   Future<List<ProfileInteractionActivityViewData>>
@@ -115,14 +144,11 @@ abstract class UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final items = await listUserInteractionReceived(
+    return listUserInteractionReceived(
       userId,
       cursor: cursor,
       limit: limit,
     );
-    return items
-        .map(ProfileInteractionActivityViewData.fromMap)
-        .toList(growable: false);
   }
 
   Future<List<ProfileInteractionActivityViewData>>
@@ -131,16 +157,124 @@ abstract class UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final items = await listUserInteractionSent(
+    return listUserInteractionSent(
       userId,
       cursor: cursor,
       limit: limit,
     );
-    return items
-        .map(ProfileInteractionActivityViewData.fromMap)
-        .toList(growable: false);
   }
 }
+
+/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [ProfileSubjectWireDto]。
+const String _kBundledMockUserProfilesJson = r'''
+{
+  "user_001": {
+    "userId": "user_001",
+    "nickname": "趣我圈用户",
+    "avatarUrl": "https://i.pravatar.cc/150?u=user_001",
+    "bio": "关心时事、关注新闻、思考人生、思索生命",
+    "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
+    "followerCount": 120,
+    "followingCount": 85,
+    "postCount": 30,
+    "circleCount": 3,
+    "likeCount": 480
+  },
+  "nature_photographer": {
+    "userId": "nature_photographer",
+    "nickname": "自然摄影师",
+    "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100",
+    "bio": "用镜头记录自然之美",
+    "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
+    "followerCount": 1200,
+    "followingCount": 284,
+    "postCount": 156,
+    "circleCount": 8,
+    "likeCount": 4800
+  },
+  "travel_photographer": {
+    "userId": "travel_photographer",
+    "nickname": "旅行摄影师",
+    "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
+    "bio": "在路上，遇见世界",
+    "backgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200",
+    "followerCount": 890,
+    "followingCount": 156,
+    "postCount": 89,
+    "circleCount": 5,
+    "likeCount": 3200
+  },
+  "a1": {
+    "userId": "a1",
+    "nickname": "楹语小筑",
+    "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
+    "bio": "分享美好生活",
+    "backgroundUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200",
+    "followerCount": 2400,
+    "followingCount": 320,
+    "postCount": 230,
+    "circleCount": 12,
+    "likeCount": 9600
+  }
+}
+''';
+
+Map<String, Map<String, dynamic>> _decodeBundledMockUserProfiles(String raw) {
+  final root = CloudResponseDecoder.asObject(
+    json.decode(raw),
+    context: UserRequestPageIds.getUserProfile,
+  );
+  return root.map(
+    (k, v) => MapEntry(
+      k,
+      CloudResponseDecoder.asObject(v, context: UserRequestPageIds.getUserProfile),
+    ),
+  );
+}
+
+List<Map<String, dynamic>> _decodeJsonObjectList(String raw) {
+  final decoded = json.decode(raw);
+  if (decoded is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+  return decoded
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
+}
+
+const String _kMockRelationUsersJson = r'''
+[
+  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","bio":"美食探索者","isFollowing":true},
+  {"userId":"u2","nickname":"仅分组可见","avatarUrl":"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100","bio":"设计师","isFollowing":false},
+  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","bio":"数码爱好者","isFollowing":true},
+  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","bio":"产品经理","isFollowing":false}
+]
+''';
+
+const String _kMockInteractionsJson = r'''
+[
+  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","activityType":"like","contentType":"like","targetTitle":"赞了你的《川西秘境摄影集》","createdAt":"2025-12-21T10:00:00Z"},
+  {"userId":"u2","nickname":"王小明","avatarUrl":"https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100","activityType":"comment","contentType":"comment","targetTitle":"评论了你的《摄影器材交流区》","createdAt":"2025-12-20T10:05:00Z"},
+  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","activityType":"share","contentType":"share","targetTitle":"转发了你的《森林的呼吸》","createdAt":"2025-12-20T08:00:00Z"},
+  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","activityType":"like","contentType":"like","targetTitle":"赞了你的《光影的节奏》","createdAt":"2025-12-19T16:00:00Z"}
+]
+''';
+
+const String _kMockInteractionsSentJson = r'''
+[
+  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","activityType":"comment","contentType":"comment","targetTitle":"你评论了《森林的呼吸》","createdAt":"2025-12-19T14:00:00Z"},
+  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","activityType":"share","contentType":"share","targetTitle":"你转发了《川西秘境摄影集》","createdAt":"2025-12-18T20:00:00Z"},
+  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","activityType":"like","contentType":"like","targetTitle":"你赞了《光影的节奏》","createdAt":"2025-12-17T18:30:00Z"}
+]
+''';
+
+const String _kMockLikesJson = r'''
+[
+  {"postId":"p1","title":"光影的节奏","coverUrl":"https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400","likerNickname":"你的皮炎有点辣","likerAvatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","likedAt":"2025-12-21T10:00:00Z"},
+  {"postId":"p2","title":"森林的呼吸","coverUrl":"https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400","likerNickname":"原价帝吧","likerAvatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","likedAt":"2025-12-20T15:00:00Z"}
+]
+''';
 
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
 
@@ -151,12 +285,15 @@ class MockUserProfileRepository extends UserProfileRepository {
       <Map<String, dynamic>>[];
 
   @override
-  Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    return _mockProfiles[userId] ?? _defaultProfile(userId);
+  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+    final raw = _mockProfiles[userId] ?? _defaultProfile(userId);
+    return ProfileSubjectViewData.fromProfileSubjectWire(
+      ProfileSubjectWireDto.fromMap(raw),
+    );
   }
 
   @override
-  Future<void> updateProfile(Map<String, dynamic> data) async {}
+  Future<void> updateProfile(ProfileEditUpdatePayload data) async {}
 
   @override
   Future<List<PostBaseDto>> listUserPosts(
@@ -178,16 +315,17 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
-    return [
+    final raw = <Map<String, dynamic>>[
       {
         'id': 'c1',
         'name': '极简摄影俱乐部',
         'coverUrl':
             'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+        'ownerId': userId,
         'memberCount': 2340,
         'postCount': 128,
       },
@@ -196,6 +334,7 @@ class MockUserProfileRepository extends UserProfileRepository {
         'name': '旅行手账',
         'coverUrl':
             'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+        'ownerId': userId,
         'memberCount': 1280,
         'postCount': 56,
       },
@@ -204,20 +343,18 @@ class MockUserProfileRepository extends UserProfileRepository {
         'name': '咖啡品鉴',
         'coverUrl':
             'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+        'ownerId': userId,
         'memberCount': 890,
         'postCount': 34,
       },
     ].take(limit).toList();
+    return raw.map(CircleDto.fromMap).toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> getUserStats(String userId) async {
-    return {
-      'followingCount': 284,
-      'circleCount': 8,
-      'followerCount': 1200,
-      'likeCount': 4800,
-    };
+  Future<UserProfileStatsViewData> getUserStats(String userId) async {
+    final profile = await getUserProfile(userId);
+    return UserProfileStatsViewData.fromProfile(profile);
   }
 
   @override
@@ -249,7 +386,7 @@ class MockUserProfileRepository extends UserProfileRepository {
           final isFollowing = UserProfileMockData.viewerFollowsTarget(
             profileSubjectId,
           );
-          return SocialRelationSearchItemView.fromMap(<String, dynamic>{
+          final row = <String, dynamic>{
             ...user,
             'profileSubjectId': profileSubjectId,
             'username': user['username'] ?? user['nickname'],
@@ -262,7 +399,11 @@ class MockUserProfileRepository extends UserProfileRepository {
               'canUnfollow': isFollowing,
               'canOpenConversation': relationState == 'mutual',
             },
-          });
+          };
+          return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+            SocialRelationSearchItemWireDto.fromMap(row),
+            row,
+          );
         })
         .toList(growable: false);
   }
@@ -270,7 +411,11 @@ class MockUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<RecentSearchEntryView>> listRecentSearches() async {
     return _recentSearchEntries
-        .map(RecentSearchEntryView.fromMap)
+        .map(
+          (e) => RecentSearchEntryView.fromRecentSearchEntryWire(
+            RecentSearchEntryWireDto.fromMap(e),
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -292,7 +437,9 @@ class MockUserProfileRepository extends UserProfileRepository {
       'updatedAt': DateTime.now().toIso8601String(),
     };
     _recentSearchEntries.insert(0, entry);
-    return RecentSearchEntryView.fromMap(entry);
+    return RecentSearchEntryView.fromRecentSearchEntryWire(
+      RecentSearchEntryWireDto.fromMap(entry),
+    );
   }
 
   @override
@@ -312,7 +459,7 @@ class MockUserProfileRepository extends UserProfileRepository {
   Future<void> unfollowUser(String targetUserId) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowing(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -325,11 +472,16 @@ class MockUserProfileRepository extends UserProfileRepository {
         )
         .map(_withMockRelationship)
         .take(limit)
+        .map(
+          (m) => ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+            ProfileSocialRelationRowWireDto.fromMap(m),
+          ),
+        )
         .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowers(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -342,68 +494,100 @@ class MockUserProfileRepository extends UserProfileRepository {
         )
         .map(_withMockRelationship)
         .take(limit)
+        .map(
+          (m) => ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+            ProfileSocialRelationRowWireDto.fromMap(m),
+          ),
+        )
         .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> getRelationship(String userId) async {
+  Future<RelationshipViewData> getRelationship(String userId) async {
     final relationState = UserProfileMockData.relationStateValueFor(userId);
     final isFollowing = UserProfileMockData.viewerFollowsTarget(userId);
     final isFollowedBy = UserProfileMockData.targetFollowsViewer(userId);
-    return <String, dynamic>{
-      'relationState': relationState,
-      'isFollowing': isFollowing,
-      'isFollowedBy': isFollowedBy,
-      'isMutual': relationState == 'mutual',
-    };
+    return RelationshipViewData.fromRelationshipNormalizedWire(
+      RelationshipNormalizedWireDto.fromMap(<String, dynamic>{
+        'relationState': relationState,
+        'isFollowing': isFollowing,
+        'isFollowedBy': isFollowedBy,
+        'isMutual': relationState == 'mutual',
+      }),
+    );
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserLikes(
+  Future<List<ProfileUserLikeRowViewData>> listUserLikes(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockLikes.take(limit).toList();
+    return _mockLikes
+        .take(limit)
+        .map(
+          (m) => ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+            ProfileUserLikeRowWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionReceived(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockInteractions.take(limit).toList();
+    return _mockInteractions
+        .take(limit)
+        .map(
+          (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserInteractionSent(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionSent(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockInteractionsSent.take(limit).toList();
+    return _mockInteractionsSent
+        .take(limit)
+        .map(
+          (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listPersonas() async {
-    return _mockPersonas;
+  Future<List<PersonaDto>> listPersonas() async {
+    return _mockPersonas.map(_personaDtoFromWire).toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> createPersona(Map<String, dynamic> data) async {
-    return {
+  Future<PersonaDto> createPersona(PersonaCreateRequestDto request) async {
+    final wire = _omitNullMapValues(request.toMap());
+    final isolation = request.isolationLevel;
+    final isPrivate = isolation == 'strict';
+    return _personaDtoFromWire(<String, dynamic>{
       'id': 'new_persona_1',
-      ...data,
+      ...wire,
       'isActive': false,
       'isPrimary': false,
-    };
+      'isPrivate': isPrivate,
+    });
   }
 
   @override
   Future<void> updatePersona(
     String personaId,
-    Map<String, dynamic> data,
+    PersonaUpdateRequestDto request,
   ) async {}
 
   @override
@@ -432,216 +616,46 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static final Map<String, Map<String, dynamic>> _mockProfiles = {
-    'user_001': {
-      'userId': 'user_001',
-      'nickname': '趣我圈用户',
-      'avatarUrl': ChatMockData.avatarFor('user_001'),
-      'bio': '关心时事、关注新闻、思考人生、思索生命',
-      'backgroundUrl':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
-      'followerCount': 120,
-      'followingCount': 85,
-      'postCount': 30,
-      'circleCount': 3,
-      'likeCount': 480,
-    },
-    'nature_photographer': {
-      'userId': 'nature_photographer',
-      'nickname': '自然摄影师',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
-      'bio': '用镜头记录自然之美',
-      'backgroundUrl':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
-      'followerCount': 1200,
-      'followingCount': 284,
-      'postCount': 156,
-      'circleCount': 8,
-      'likeCount': 4800,
-    },
-    'travel_photographer': {
-      'userId': 'travel_photographer',
-      'nickname': '旅行摄影师',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'bio': '在路上，遇见世界',
-      'backgroundUrl':
-          'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
-      'followerCount': 890,
-      'followingCount': 156,
-      'postCount': 89,
-      'circleCount': 5,
-      'likeCount': 3200,
-    },
-    'a1': {
-      'userId': 'a1',
-      'nickname': '楹语小筑',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-      'bio': '分享美好生活',
-      'backgroundUrl':
-          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
-      'followerCount': 2400,
-      'followingCount': 320,
-      'postCount': 230,
-      'circleCount': 12,
-      'likeCount': 9600,
-    },
-  };
+  static final Map<String, Map<String, dynamic>> _mockProfiles =
+      _decodeBundledMockUserProfiles(_kBundledMockUserProfilesJson);
 
-  static final List<Map<String, dynamic>> _mockRelationUsers = [
-    {
-      'userId': 'u1',
-      'nickname': '你的皮炎有点辣',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'bio': '美食探索者',
-      'isFollowing': true,
-    },
-    {
-      'userId': 'u2',
-      'nickname': '仅分组可见',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-      'bio': '设计师',
-      'isFollowing': false,
-    },
-    {
-      'userId': 'u3',
-      'nickname': '原价帝吧',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'bio': '数码爱好者',
-      'isFollowing': true,
-    },
-    {
-      'userId': 'u4',
-      'nickname': '李想',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      'bio': '产品经理',
-      'isFollowing': false,
-    },
-  ];
+  static final List<Map<String, dynamic>> _mockRelationUsers =
+      _decodeJsonObjectList(_kMockRelationUsersJson);
 
-  static final List<Map<String, dynamic>> _mockInteractions = [
-    {
-      'userId': 'u1',
-      'nickname': '你的皮炎有点辣',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'activityType': 'like',
-      'contentType': 'like',
-      'targetTitle': '赞了你的《川西秘境摄影集》',
-      'createdAt': '2025-12-21T10:00:00Z',
-    },
-    {
-      'userId': 'u2',
-      'nickname': '王小明',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100',
-      'activityType': 'comment',
-      'contentType': 'comment',
-      'targetTitle': '评论了你的《摄影器材交流区》',
-      'createdAt': '2025-12-20T10:05:00Z',
-    },
-    {
-      'userId': 'u3',
-      'nickname': '原价帝吧',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'activityType': 'share',
-      'contentType': 'share',
-      'targetTitle': '转发了你的《森林的呼吸》',
-      'createdAt': '2025-12-20T08:00:00Z',
-    },
-    {
-      'userId': 'u4',
-      'nickname': '李想',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      'activityType': 'like',
-      'contentType': 'like',
-      'targetTitle': '赞了你的《光影的节奏》',
-      'createdAt': '2025-12-19T16:00:00Z',
-    },
-  ];
+  static final List<Map<String, dynamic>> _mockInteractions =
+      _decodeJsonObjectList(_kMockInteractionsJson);
 
-  static final List<Map<String, dynamic>> _mockInteractionsSent = [
-    {
-      'userId': 'u3',
-      'nickname': '原价帝吧',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'activityType': 'comment',
-      'contentType': 'comment',
-      'targetTitle': '你评论了《森林的呼吸》',
-      'createdAt': '2025-12-19T14:00:00Z',
-    },
-    {
-      'userId': 'u1',
-      'nickname': '你的皮炎有点辣',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'activityType': 'share',
-      'contentType': 'share',
-      'targetTitle': '你转发了《川西秘境摄影集》',
-      'createdAt': '2025-12-18T20:00:00Z',
-    },
-    {
-      'userId': 'u4',
-      'nickname': '李想',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      'activityType': 'like',
-      'contentType': 'like',
-      'targetTitle': '你赞了《光影的节奏》',
-      'createdAt': '2025-12-17T18:30:00Z',
-    },
-  ];
+  static final List<Map<String, dynamic>> _mockInteractionsSent =
+      _decodeJsonObjectList(_kMockInteractionsSentJson);
 
-  static final List<Map<String, dynamic>> _mockLikes = [
-    {
-      'postId': 'p1',
-      'title': '光影的节奏',
-      'coverUrl':
-          'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
-      'likerNickname': '你的皮炎有点辣',
-      'likerAvatarUrl':
-          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'likedAt': '2025-12-21T10:00:00Z',
-    },
-    {
-      'postId': 'p2',
-      'title': '森林的呼吸',
-      'coverUrl':
-          'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
-      'likerNickname': '原价帝吧',
-      'likerAvatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'likedAt': '2025-12-20T15:00:00Z',
-    },
-  ];
+  static final List<Map<String, dynamic>> _mockLikes =
+      _decodeJsonObjectList(_kMockLikesJson);
 
+  /// Wire 键与 [PersonaDto] / user_profile `ListPersonas` 响应字段对齐（见 contracts/metadata/user/user_profile）。
   static final List<Map<String, dynamic>> _mockPersonas = [
     {
       'id': 'persona_primary',
+      'userId': 'user_persona_primary',
       'displayName': '主身份',
       'avatarUrl':
           'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
       'isPrimary': true,
       'isPrivate': false,
       'isActive': true,
+      'createdAt': '2025-01-01T00:00:00Z',
+      'updatedAt': '2025-01-01T00:00:00Z',
     },
     {
       'id': 'persona_anon',
+      'userId': 'user_persona_anon',
       'displayName': '匿名身份',
       'avatarUrl':
           'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
       'isPrimary': false,
       'isPrivate': true,
       'isActive': false,
+      'createdAt': '2025-01-01T00:00:00Z',
+      'updatedAt': '2025-01-01T00:00:00Z',
     },
   ];
 
@@ -681,21 +695,28 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     ).replace(queryParameters: queryParameters);
   }
 
-  List<Map<String, dynamic>> _decodeItems(http.Response resp) {
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+  List<Map<String, dynamic>> _decodeItems(http.Response resp, String context) {
+    final decoded = json.decode(resp.body);
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: context,
+    );
+    return CloudResponseDecoder.mapList(obj, 'items');
   }
 
-  Map<String, dynamic> _decodeObject(http.Response resp) {
-    final data = json.decode(resp.body);
-    if (data is Map<String, dynamic>) {
-      final payload = data['data'];
-      if (payload is Map<String, dynamic>) {
-        return payload;
-      }
-      return data;
+  Map<String, dynamic> _decodeObject(http.Response resp, String context) {
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: context,
+    );
+    final payload = data['data'];
+    if (payload is Map<String, dynamic>) {
+      return payload;
     }
-    throw FormatException('Expected JSON object, got ${data.runtimeType}');
+    if (payload is Map) {
+      return Map<String, dynamic>.from(payload);
+    }
+    return data;
   }
 
   static String _normalizeRelationshipState(Map<String, dynamic> map) {
@@ -766,7 +787,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<Map<String, dynamic>> getUserProfile(String userId) async {
+  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
     if (userId == 'me') {
       final meUrl = _uri(UserApiMetadata.getMeProfilePath);
       final meResp = await _client.get(
@@ -774,7 +795,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         headers: CloudRequestHeaders.forPage(UserRequestPageIds.getMeProfile),
       );
       if (meResp.statusCode == 200) {
-        return json.decode(meResp.body) as Map<String, dynamic>;
+        final map = CloudResponseDecoder.asObject(
+          json.decode(meResp.body),
+          context: UserRequestPageIds.getMeProfile,
+        );
+        return ProfileSubjectViewData.fromProfileSubjectWire(
+          ProfileSubjectWireDto.fromMap(map),
+        );
       }
     }
 
@@ -788,7 +815,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (subjectResp.statusCode == 200) {
-      return json.decode(subjectResp.body) as Map<String, dynamic>;
+      final map = CloudResponseDecoder.asObject(
+        json.decode(subjectResp.body),
+        context: UserRequestPageIds.getSubAccountProfile,
+      );
+      return ProfileSubjectViewData.fromProfileSubjectWire(
+        ProfileSubjectWireDto.fromMap(map),
+      );
     }
 
     throw Exception(
@@ -797,7 +830,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<void> updateProfile(Map<String, dynamic> data) async {
+  Future<void> updateProfile(ProfileEditUpdatePayload data) async {
     final url = _uri(UserApiMetadata.updateUserProfilePath);
     final resp = await _client.patch(
       url,
@@ -805,7 +838,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.updateUserProfile),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(data.toRepositoryMap()),
     );
     if (resp.statusCode != 200) {
       throw Exception('updateProfile failed: ${resp.statusCode}');
@@ -830,9 +863,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserPosts failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[])
-        .cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: ContentRequestPageIds.listUserPosts,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
     return items.map(postBaseDtoFromMap).toList();
   }
 
@@ -846,9 +881,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserWorks failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[])
-        .cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listUserWorks,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
     return items.map(_workItemFromMap).toList();
   }
 
@@ -864,14 +901,16 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserLifeItems failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[])
-        .cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listUserLifeItems,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
     return items.map(_lifeItemFromMap).toList();
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(
+  Future<List<CircleDto>> listUserCircles(
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
@@ -888,19 +927,18 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserCircles failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: CircleRequestPageIds.listUserCircles,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
+    return items.map(CircleDto.fromMap).toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> getUserStats(String userId) async {
+  Future<UserProfileStatsViewData> getUserStats(String userId) async {
     final profile = await getUserProfile(userId);
-    return {
-      'followingCount': profile['followingCount'] ?? 0,
-      'circleCount': profile['circleCount'] ?? 0,
-      'followerCount': profile['followerCount'] ?? 0,
-      'likeCount': profile['likeCount'] ?? 0,
-    };
+    return UserProfileStatsViewData.fromProfile(profile);
   }
 
   @override
@@ -921,9 +959,14 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('searchSocialRelations failed: ${resp.statusCode}');
     }
-    return _decodeItems(
-      resp,
-    ).map(SocialRelationSearchItemView.fromMap).toList(growable: false);
+    return _decodeItems(resp, UserRequestPageIds.searchSocialRelations)
+        .map(
+          (m) => SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+            SocialRelationSearchItemWireDto.fromMap(m),
+            m,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -938,9 +981,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listRecentSearches failed: ${resp.statusCode}');
     }
-    return _decodeItems(
-      resp,
-    ).map(RecentSearchEntryView.fromMap).toList(growable: false);
+    return _decodeItems(resp, UserRequestPageIds.listRecentSearches)
+        .map(
+          (m) => RecentSearchEntryView.fromRecentSearchEntryWire(
+            RecentSearchEntryWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -969,7 +1016,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception('upsertRecentSearch failed: ${resp.statusCode}');
     }
-    return RecentSearchEntryView.fromMap(_decodeObject(resp));
+    return RecentSearchEntryView.fromRecentSearchEntryWire(
+      RecentSearchEntryWireDto.fromMap(
+        _decodeObject(resp, UserRequestPageIds.upsertRecentSearch),
+      ),
+    );
   }
 
   @override
@@ -1031,7 +1082,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowing(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1049,13 +1100,18 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowing failed: ${resp.statusCode}');
     }
-    return _decodeItems(
-      resp,
-    ).map(_normalizeRelationshipItem).toList(growable: false);
+    return _decodeItems(resp, UserRequestPageIds.listFollowing)
+        .map(_normalizeRelationshipItem)
+        .map(
+          (m) => ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+            ProfileSocialRelationRowWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowers(
+  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1073,13 +1129,18 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowers failed: ${resp.statusCode}');
     }
-    return _decodeItems(
-      resp,
-    ).map(_normalizeRelationshipItem).toList(growable: false);
+    return _decodeItems(resp, UserRequestPageIds.listFollowers)
+        .map(_normalizeRelationshipItem)
+        .map(
+          (m) => ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+            ProfileSocialRelationRowWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> getRelationship(String userId) async {
+  Future<RelationshipViewData> getRelationship(String userId) async {
     final url = _uri(
       UserApiMetadata.getRelationshipPath(profileSubjectId: userId),
     );
@@ -1090,12 +1151,17 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('getRelationship failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return _normalizeRelationship(data);
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: UserRequestPageIds.getRelationship,
+    );
+    return RelationshipViewData.fromRelationshipNormalizedWire(
+      RelationshipNormalizedWireDto.fromMap(_normalizeRelationship(data)),
+    );
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserLikes(
+  Future<List<ProfileUserLikeRowViewData>> listUserLikes(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1113,12 +1179,22 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserLikes failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listUserLikes,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
+    return items
+        .map(
+          (m) => ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+            ProfileUserLikeRowWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionReceived(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1138,18 +1214,27 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode == 200) {
-      return _decodeItems(resp);
+      return _decodeItems(
+            resp,
+            ContentRequestPageIds.listProfileInteractionActivitiesReceived,
+          )
+          .map(
+            (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+              ProfileInteractionActivityWireDto.fromMap(m),
+            ),
+          )
+          .toList(growable: false);
     }
     if (resp.statusCode == 204 ||
         resp.statusCode == 404 ||
         resp.statusCode == 501) {
-      return <Map<String, dynamic>>[];
+      return const <ProfileInteractionActivityViewData>[];
     }
     throw Exception('listUserInteractionReceived failed: ${resp.statusCode}');
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserInteractionSent(
+  Future<List<ProfileInteractionActivityViewData>> listUserInteractionSent(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -1169,12 +1254,21 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode == 200) {
-      return _decodeItems(resp);
+      return _decodeItems(
+            resp,
+            ContentRequestPageIds.listProfileInteractionActivitiesSent,
+          )
+          .map(
+            (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+              ProfileInteractionActivityWireDto.fromMap(m),
+            ),
+          )
+          .toList(growable: false);
     }
     if (resp.statusCode == 204 ||
         resp.statusCode == 404 ||
         resp.statusCode == 501) {
-      return <Map<String, dynamic>>[];
+      return const <ProfileInteractionActivityViewData>[];
     }
     throw Exception('listUserInteractionSent failed: ${resp.statusCode}');
   }
@@ -1182,7 +1276,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   // ── 分身 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<List<Map<String, dynamic>>> listPersonas() async {
+  Future<List<PersonaDto>> listPersonas() async {
     final url = _uri(UserApiMetadata.listPersonasPath);
     final resp = await _client.get(
       url,
@@ -1191,40 +1285,51 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listPersonas failed: ${resp.statusCode}');
     }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listPersonas,
+    );
+    final items = CloudResponseDecoder.mapList(data, 'items');
+    return items.map(_personaDtoFromWire).toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>> createPersona(Map<String, dynamic> data) async {
+  Future<PersonaDto> createPersona(PersonaCreateRequestDto request) async {
     final url = _uri(UserApiMetadata.createPersonaPath);
+    final bodyMap = _omitNullMapValues(request.toMap());
     final resp = await _client.post(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(bodyMap),
     );
     if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception('createPersona failed: ${resp.statusCode}');
     }
-    return json.decode(resp.body) as Map<String, dynamic>;
+    final body = json.decode(resp.body);
+    final map = CloudResponseDecoder.asObject(
+      body,
+      context: UserRequestPageIds.createPersona,
+    );
+    return _personaDtoFromWire(map);
   }
 
   @override
   Future<void> updatePersona(
     String personaId,
-    Map<String, dynamic> data,
+    PersonaUpdateRequestDto request,
   ) async {
     final url = _uri(UserApiMetadata.updatePersonaPath(personaId: personaId));
+    final bodyMap = _omitNullMapValues(request.toMap());
     final resp = await _client.patch(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.updatePersona),
         'Content-Type': 'application/json',
       },
-      body: json.encode(data),
+      body: json.encode(bodyMap),
     );
     if (resp.statusCode != 200) {
       throw Exception('updatePersona failed: ${resp.statusCode}');

@@ -1,3 +1,13 @@
+/// Thin wrapper for tool `execute` entry (S-LLM): keeps JSON shape as [Map] while
+/// centralizing common field reads without changing wire contracts.
+class AssistantToolArgumentsMap {
+  const AssistantToolArgumentsMap(this.raw);
+
+  final Map<String, dynamic> raw;
+
+  String? stringField(String key) => (raw[key] as String?)?.trim();
+}
+
 class AssistantToolCall {
   const AssistantToolCall({
     required this.name,

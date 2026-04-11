@@ -1,0 +1,14 @@
+# GET /v1/config/app 响应中 `content` 子树：客户端运行时实际消费的键（与 OpenAPI AppConfig.content 文档对齐）。
+# 解析实现：tools/codegen_app_metadata/content_app_config_client_codegen.go → content_app_config_client_dto.g.dart
+version: 1
+description: |
+  feature_flags: Map<string, bool>，与本地 ContentUIConfig 合并。
+  gray_release: experiment_bucket / current_stage / canary_matrix（行内 stage + rolloutPercent）。
+  client_state_sync: 透传至 ClientStateSyncConfig.fromMap（snake_case 为主）。
+documented_keys:
+  - feature_flags
+  - featureFlags
+  - gray_release
+  - grayRelease
+  - client_state_sync
+  - clientStateSync

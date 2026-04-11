@@ -52,7 +52,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       final conv = await repo.getConversation(widget.conversationId);
       if (mounted) {
         setState(() {
-          _groupName = conv['title'] as String? ?? '';
+          _groupName = conv.title ?? '';
         });
       }
     } catch (_) {}

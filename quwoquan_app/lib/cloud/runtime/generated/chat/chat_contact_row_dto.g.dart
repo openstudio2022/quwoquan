@@ -11,15 +11,15 @@ class ChatContactRowDto {
   final bool isFriend;
   final bool isStarred;
 
-  const ChatContactRowDto({
-    required this.userId,
-    required this.displayName,
-    required this.avatarUrl,
-    required this.bio,
-    required this.metFrom,
-    required this.lastInteraction,
-    required this.isFriend,
-    required this.isStarred,
+  ChatContactRowDto({
+    this.userId = '',
+    this.displayName = '',
+    this.avatarUrl = '',
+    this.bio = '',
+    this.metFrom = '',
+    this.lastInteraction = '',
+    this.isFriend = false,
+    this.isStarred = false,
   });
 
   factory ChatContactRowDto.fromMap(Map<String, dynamic> m) {

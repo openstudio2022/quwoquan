@@ -1,0 +1,37 @@
+version: 1
+read_model: PersonaManagementSummaryWire
+
+description: |
+  GetPersonaManagementSummary 等聚合响应：items + quota + activeContext（键名与网关 JSON 对齐）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: PersonaManagementSummaryWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart
+  fields:
+    - name: items
+      dart_type: List<Map<String, dynamic>>
+      nullable: false
+      source: items
+      aliases: [items, subAccounts, personas]
+      default: "const <Map<String, dynamic>>[]"
+
+    - name: quota
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: quota
+      aliases: [quota]
+      default: "null"
+
+    - name: activeContext
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: activeContext
+      aliases: [activeContext, activePersonaContext]
+      default: "null"

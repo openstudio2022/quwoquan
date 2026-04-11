@@ -1,8 +1,13 @@
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_write_wire_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('CircleRepository — 常规契约', () {
     late CircleRepository repo;
 
@@ -13,8 +18,8 @@ void main() {
     test('listCircles 返回非空圈子列表', () async {
       final circles = await repo.listCircles();
       expect(circles, isNotEmpty);
-      expect(circles.first.containsKey('id'), isTrue);
-      expect(circles.first.containsKey('name'), isTrue);
+      expect(circles.first.id, isNotEmpty);
+      expect(circles.first.name, isNotEmpty);
     });
 
     test('getCircle 返回完整圈子信息', () async {
@@ -31,22 +36,23 @@ void main() {
 
     test('getCircleFeed 返回 feed 列表', () async {
       final feed = await repo.getCircleFeed('circle_photo_01');
-      expect(feed, isList);
+      expect(feed, isNotEmpty);
+      expect(feed.first, isA<PostBaseDto>());
     });
 
     test('listFiles 返回文件列表', () async {
       final files = await repo.listFiles('circle_photo_01');
       expect(files, isNotEmpty);
-      expect(files.first.containsKey('id'), isTrue);
-      expect(files.first.containsKey('name'), isTrue);
-      expect(files.first.containsKey('fileType'), isTrue);
+      expect(files.first.id, isNotEmpty);
+      expect(files.first.name, isNotEmpty);
+      expect(files.first.fileType, isNotEmpty);
     });
 
     test('listMembers 返回成员列表', () async {
       final members = await repo.listMembers('circle_photo_01');
       expect(members, isNotEmpty);
-      expect(members.first.containsKey('id'), isTrue);
-      expect(members.first.containsKey('name'), isTrue);
+      expect(members.first.userId, isNotEmpty);
+      expect(members.first.displayName ?? members.first.userId, isNotEmpty);
     });
 
     test('listHomeCircleDiscoveryFeed Mock 非空', () async {
@@ -54,34 +60,38 @@ void main() {
       expect(feed, isNotEmpty);
     });
 
-    test('getCircleCategoryConfig Mock 含 all', () async {
+    test('getCircleCategoryConfig 与 ui_category_tabs SSOT 对齐', () async {
       final cfg = await repo.getCircleCategoryConfig();
       expect(cfg.containsKey('all'), isTrue);
+      expect(cfg['all']!.label, isNotEmpty);
+      expect(cfg.length, greaterThanOrEqualTo(8));
     });
 
     test('getCircleStats 返回统计数据', () async {
       final stats = await repo.getCircleStats('circle_photo_01');
-      expect(stats.containsKey('totalMembers'), isTrue);
-      expect(stats.containsKey('weeklyActive'), isTrue);
+      expect(stats.raw.containsKey('totalMembers'), isTrue);
+      expect(stats.raw.containsKey('weeklyActive'), isTrue);
     });
 
     test('createCircle 返回含 id 和 createdAt', () async {
-      final circle = await repo.createCircle({
-        'name': '测试圈子',
-        'category': 'tech',
-        'visibility': 'public',
-      });
-      expect(circle['id'], isNotNull);
-      expect(circle['createdAt'], isNotNull);
-      expect(circle['name'], '测试圈子');
+      final circle = await repo.createCircle(
+        CircleCreateWireDto.fromMap({
+          'name': '测试圈子',
+          'category': 'tech',
+          'visibility': 'public',
+        }),
+      );
+      expect(circle.id, isNotEmpty);
+      expect(circle.name, '测试圈子');
     });
 
     test('updateCircle 返回合并后的数据', () async {
-      final updated = await repo.updateCircle('circle_photo_01', {
-        'name': '新名称',
-      });
-      expect(updated['id'], 'circle_photo_01');
-      expect(updated['name'], '新名称');
+      final updated = await repo.updateCircle(
+        'circle_photo_01',
+        CircleUpdateWireDto.fromMap({'name': '新名称'}),
+      );
+      expect(updated.id, 'circle_photo_01');
+      expect(updated.name, '新名称');
     });
 
     test('archiveCircle 不崩溃', () async {
@@ -110,18 +120,21 @@ void main() {
     });
 
     test('createFile 返回含 id', () async {
-      final file = await repo.createFile('circle_photo_01', {
-        'name': '测试文件.txt',
-        'fileType': 'file',
-      });
-      expect(file['id'], isNotNull);
+      final file = await repo.createFile(
+        'circle_photo_01',
+        CircleFileCreateWireDto.fromMap({
+          'name': '测试文件.txt',
+          'fileType': 'file',
+        }),
+      );
+      expect(file.id, isNotEmpty);
     });
 
     test('getFile 返回匹配文件', () async {
       final files = await repo.listFiles('circle_photo_01');
       final firstFile = files.first;
-      final file = await repo.getFile('circle_photo_01', firstFile['id'] as String);
-      expect(file['id'], firstFile['id']);
+      final file = await repo.getFile('circle_photo_01', firstFile.id);
+      expect(file.id, firstFile.id);
     });
 
     test('updateFile 返回合并后数据', () async {
@@ -129,23 +142,28 @@ void main() {
       final firstFile = files.first;
       final updated = await repo.updateFile(
         'circle_photo_01',
-        firstFile['id'] as String,
-        {'name': '重命名.txt'},
+        firstFile.id,
+        CircleFileUpdateWireDto.fromMap({'name': '重命名.txt'}),
       );
-      expect(updated['name'], '重命名.txt');
+      expect(updated.name, '重命名.txt');
     });
 
     test('deleteFile 不崩溃', () async {
       final files = await repo.listFiles('circle_photo_01');
       await expectLater(
-        repo.deleteFile('circle_photo_01', files.first['id'] as String),
+        repo.deleteFile('circle_photo_01', files.first.id),
         completes,
       );
     });
 
     test('reportBehavior 不崩溃', () async {
       await expectLater(
-        repo.reportBehavior({'type': 'view', 'circleId': 'c1'}),
+        repo.reportBehavior(
+          CircleBehaviorReportWireDto.fromMap({
+            'type': 'view',
+            'circleId': 'c1',
+          }),
+        ),
         completes,
       );
     });
@@ -153,7 +171,7 @@ void main() {
     test('listUserCircles 返回圈子列表', () async {
       final circles = await repo.listUserCircles('user_001');
       expect(circles, isNotEmpty);
-      expect(circles.first.containsKey('id'), isTrue);
+      expect(circles.first.id, isNotEmpty);
     });
 
     test('listUserCircles limit 参数生效', () async {
@@ -161,16 +179,62 @@ void main() {
       expect(circles.length, lessThanOrEqualTo(2));
     });
 
-    test('CircleRepository 接口包含全部 21 个 service.yaml API 方法', () {
-      final methods = <String>[
-        'listCircles', 'getCircle', 'createCircle', 'updateCircle',
-        'archiveCircle', 'joinCircle', 'leaveCircle',
-        'listMembers', 'updateMemberRole',
-        'getCircleFeed', 'pinPost', 'featurePost', 'getCircleStats',
-        'listFiles', 'createFile', 'getFile', 'updateFile', 'deleteFile',
-        'updateSections', 'reportBehavior', 'listUserCircles',
-      ];
-      expect(methods.length, 21);
+    test('listCircleGroups 返回 CircleGroupDto 列表', () async {
+      final groups = await repo.listCircleGroups('circle_photo_01');
+      expect(groups, isNotEmpty);
+      expect(groups.first, isA<CircleGroupDto>());
+      expect(groups.first.circleId, 'circle_photo_01');
+    });
+
+    test('getCircleGroup 返回与 list 一致的默认群', () async {
+      final listed = await repo.listCircleGroups('circle_photo_01');
+      final g = await repo.getCircleGroup(
+        'circle_photo_01',
+        listed.first.id,
+      );
+      expect(g.id, listed.first.id);
+    });
+
+    test('listCircleGroupMembers 非空且为 DTO', () async {
+      final listed = await repo.listCircleGroups('circle_photo_01');
+      final members = await repo.listCircleGroupMembers(
+        'circle_photo_01',
+        listed.first.id,
+      );
+      expect(members, isNotEmpty);
+      expect(members.first, isA<CircleGroupMemberDto>());
+    });
+
+    test('searchCircleGroups 命中名称', () async {
+      final hits = await repo.searchCircleGroups(
+        'circle_photo_01',
+        query: '主群',
+      );
+      expect(hits, isNotEmpty);
+    });
+
+    test('createCircleGroup / updateCircleGroup 返回 DTO', () async {
+      final created = await repo.createCircleGroup(
+        'circle_photo_01',
+        CircleGroupCreateWireDto.fromMap({
+          'name': '契约测试群',
+          'groupType': 'public_group',
+          'visibility': 'public',
+          'joinPolicy': 'apply_only',
+        }),
+      );
+      expect(created.name, '契约测试群');
+      final updated = await repo.updateCircleGroup(
+        'circle_photo_01',
+        created.id,
+        CircleGroupUpdateWireDto.fromMap({'name': '已改名'}),
+      );
+      expect(updated.name, '已改名');
+    });
+
+    test('getCircle viewerWire 可读', () async {
+      final detail = await repo.getCircle('circle_photo_01');
+      expect(detail.viewerWire.role, isNotNull);
     });
   });
 
@@ -190,16 +254,12 @@ void main() {
       expect(info['storageQuotaBytes'] as int, greaterThan(info['storageUsedBytes'] as int));
     });
 
-    test('CircleMockData.circles 每项包含 domainId 字段', () {
-      for (final circle in CircleMockData.circles) {
-        expect(circle.containsKey('domainId'), isTrue,
-            reason: '${circle['name']} 缺少 domainId');
-        expect(circle['domainId'], isNotEmpty);
+    test('CircleMockData.catalogCircleDtos 每项包含非空 domainId', () {
+      for (final circle in CircleMockData.catalogCircleDtos) {
+        expect(circle.domainId, isNotNull,
+            reason: '${circle.name} 缺少 domainId');
+        expect(circle.domainId, isNotEmpty);
       }
-    });
-
-    test('CircleMockData.categoryConfig 包含至少 8 个频道', () {
-      expect(CircleMockData.categoryConfig.length, greaterThanOrEqualTo(8));
     });
 
     test('CircleMockData.files 包含文件和文件夹两种类型', () {
@@ -224,7 +284,10 @@ void main() {
     });
 
     test('createCircle 空 data 不崩溃', () async {
-      expect(() async => await repo.createCircle({}), returnsNormally);
+      expect(
+        () async => await repo.createCircle(CircleCreateWireDto.fromMap({})),
+        returnsNormally,
+      );
     });
 
     test('updateSections 空列表不崩溃', () async {
@@ -253,7 +316,12 @@ void main() {
     });
 
     test('reportBehavior 空报告不崩溃', () async {
-      expect(() async => await repo.reportBehavior({}), returnsNormally);
+      expect(
+        () async => await repo.reportBehavior(
+          CircleBehaviorReportWireDto.fromMap({}),
+        ),
+        returnsNormally,
+      );
     });
   });
 }

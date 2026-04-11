@@ -51,6 +51,7 @@ type FieldsSpec struct {
 
 type EntityFieldDef struct {
 	Description string     `yaml:"description"`
+	Embedded    bool       `yaml:"embedded"`
 	Fields      []FieldDef `yaml:"fields"`
 }
 

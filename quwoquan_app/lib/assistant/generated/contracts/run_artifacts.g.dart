@@ -677,18 +677,21 @@ class RetrievalProcessingReference {
     this.url = "",
     this.source = "",
     this.snippet = "",
+    this.rank = 0,
   });
 
   final String title;
   final String url;
   final String source;
   final String snippet;
+  final int rank;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'title': title,
         'url': url,
         'source': source,
         'snippet': snippet,
+        'rank': rank,
       };
 
   factory RetrievalProcessingReference.fromJson(Map<String, dynamic> json) {
@@ -697,6 +700,7 @@ class RetrievalProcessingReference {
       url: (json['url'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
       snippet: (json['snippet'] as String?)?.trim() ?? "",
+      rank: (json['rank'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -706,6 +710,7 @@ class RetrievalProcessingReferenceFields {
   static const String url = 'url';
   static const String source = 'source';
   static const String snippet = 'snippet';
+  static const String rank = 'rank';
 }
 
 class SlotStateSnapshot {

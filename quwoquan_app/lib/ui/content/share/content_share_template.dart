@@ -67,6 +67,7 @@ class ContentShareTemplateBuilder {
   }) {
     final permission = _normalizeVisibility(visibility);
     if (permission == 'private') {
+      final blockedSeed = _shareSeedForPost(post);
       return ContentShareTemplate(
         profileId: post.identity,
         layout: 'blocked',
@@ -75,9 +76,9 @@ class ContentShareTemplateBuilder {
         landingPage: 'blocked',
         title: UITextConstants.shareTo,
         subtitle: UITextConstants.sharePrivateBlocked,
-        shareTitle: _shareSeedForPost(post).title,
-        shareSummary: _shareSeedForPost(post).summary,
-        coverUrl: _shareSeedForPost(post).coverUrl,
+        shareTitle: blockedSeed.title,
+        shareSummary: blockedSeed.summary,
+        coverUrl: blockedSeed.coverUrl,
         actions: const <ContentShareAction>[],
       isIdentityTemplate: enableIdentityTemplate,
       isBlocked: true,
@@ -156,38 +157,41 @@ class ContentShareTemplateBuilder {
   }
 
   static _ShareSeed _shareSeedForPost(PostBaseDto post) {
+    final read = PostReadPresentation.fromPostBase(post);
+    final cover =
+        read.coverUrl.isNotEmpty ? read.coverUrl : post.primaryVisualUrl;
     if (post.isArticleLike) {
       return _ShareSeed(
-        title: _clip(post.normalizedTitle, fallback: '作品'),
-        summary: _clip(post.normalizedBody, maxLength: 48),
-        coverUrl: post.primaryVisualUrl,
+        title: _clip(read.title, fallback: '作品'),
+        summary: _clip(read.body, maxLength: 48),
+        coverUrl: cover,
       );
     }
     if (post.isVideoLike) {
       return _ShareSeed(
-        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的视频作品'),
-        summary: _clip(post.normalizedBody, maxLength: 48),
-        coverUrl: post.primaryVisualUrl,
+        title: _clip(read.body, fallback: '${read.displayName} 的视频作品'),
+        summary: _clip(read.body, maxLength: 48),
+        coverUrl: cover,
       );
     }
     if (post.hasImages || post.mediaCoverUrl.isNotEmpty) {
       return _ShareSeed(
-        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的图片作品'),
-        summary: _clip(post.normalizedBody, maxLength: 48),
-        coverUrl: post.primaryVisualUrl,
+        title: _clip(read.body, fallback: '${read.displayName} 的图片作品'),
+        summary: _clip(read.body, maxLength: 48),
+        coverUrl: cover,
       );
     }
     if (post.identity == 'moment') {
       return _ShareSeed(
-        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的点滴'),
-        summary: _clip(post.normalizedBody, maxLength: 48),
-        coverUrl: post.primaryVisualUrl,
+        title: _clip(read.body, fallback: '${read.displayName} 的点滴'),
+        summary: _clip(read.body, maxLength: 48),
+        coverUrl: cover,
       );
     }
     return _ShareSeed(
-      title: _clip(post.displayName, fallback: '内容分享'),
+      title: _clip(read.displayName, fallback: '内容分享'),
       summary: '',
-      coverUrl: '',
+      coverUrl: cover,
     );
   }
 

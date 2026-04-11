@@ -16,11 +16,27 @@ class FeedItemDto {
   final String? videoUrl;
   final List<String> imageUrls;
   final int? durationMs;
+  final int? width;
+  final int? height;
   final int likeCount;
   final int commentCount;
   final int favoriteCount;
   final int shareCount;
   final DateTime createdAt;
+  final List<Map<String, dynamic>>? circleSummaries;
+  final List<String>? circleIds;
+  final List<String>? circleNames;
+  final String? circleId;
+  final String? circleName;
+  final List<String>? tags;
+  final String? visibility;
+  final String? summary;
+  final String? authorBackgroundUrl;
+  final String? articleTemplate;
+  final String? articleFontPreset;
+  final Map<String, dynamic>? articleDocument;
+  final List<Map<String, dynamic>>? cards;
+  final int? articlePresentationVersion;
 
   const FeedItemDto({
     required this.id,
@@ -37,11 +53,27 @@ class FeedItemDto {
     this.videoUrl,
     required this.imageUrls,
     this.durationMs,
+    this.width,
+    this.height,
     required this.likeCount,
     required this.commentCount,
     required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.circleSummaries,
+    this.circleIds,
+    this.circleNames,
+    this.circleId,
+    this.circleName,
+    this.tags,
+    this.visibility,
+    this.summary,
+    this.authorBackgroundUrl,
+    this.articleTemplate,
+    this.articleFontPreset,
+    this.articleDocument,
+    this.cards,
+    this.articlePresentationVersion,
   });
 
   factory FeedItemDto.fromMap(Map<String, dynamic> m) {
@@ -60,11 +92,27 @@ class FeedItemDto {
       videoUrl: m['videoUrl']?.toString() ?? m['video_url']?.toString() ?? null,
       imageUrls: _parseStringList(m['mediaUrls']) ?? _parseStringList(m['images']) ?? _parseStringList(m['imageUrls']) ?? _parseStringList(m['image_urls']) ?? <String>[],
       durationMs: (m['durationMs'] as num?)?.toInt() ?? (m['duration_ms'] as num?)?.toInt() ?? (m['duration'] as num?)?.toInt() ?? null,
+      width: (m['width'] as num?)?.toInt() ?? (m['imageWidth'] as num?)?.toInt() ?? (m['image_width'] as num?)?.toInt() ?? (m['w'] as num?)?.toInt() ?? null,
+      height: (m['height'] as num?)?.toInt() ?? (m['imageHeight'] as num?)?.toInt() ?? (m['image_height'] as num?)?.toInt() ?? (m['h'] as num?)?.toInt() ?? null,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? (m['likesCount'] as num?)?.toInt() ?? (m['likes'] as num?)?.toInt() ?? (m['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
       createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      circleSummaries: _parseMapList(m['circleSummaries']),
+      circleIds: _parseStringList(m['circleIds']) ?? null,
+      circleNames: _parseStringList(m['circleNames']) ?? null,
+      circleId: m['circleId']?.toString() ?? null,
+      circleName: m['circleName']?.toString() ?? null,
+      tags: _parseStringList(m['tags']) ?? null,
+      visibility: m['visibility']?.toString() ?? null,
+      summary: m['summary']?.toString() ?? m['highlightText']?.toString() ?? null,
+      authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
+      articleTemplate: m['articleTemplate']?.toString() ?? null,
+      articleFontPreset: m['articleFontPreset']?.toString() ?? null,
+      articleDocument: _parseStringKeyMap(m['articleDocument']) ?? null,
+      cards: _parseMapList(m['cards']),
+      articlePresentationVersion: (m['articlePresentationVersion'] as num?)?.toInt() ?? null,
     );
   }
 
@@ -84,11 +132,27 @@ class FeedItemDto {
       'videoUrl': videoUrl,
       'imageUrls': imageUrls,
       'durationMs': durationMs,
+      'width': width,
+      'height': height,
       'likeCount': likeCount,
       'commentCount': commentCount,
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'circleSummaries': circleSummaries,
+      'circleIds': circleIds,
+      'circleNames': circleNames,
+      'circleId': circleId,
+      'circleName': circleName,
+      'tags': tags,
+      'visibility': visibility,
+      'summary': summary,
+      'authorBackgroundUrl': authorBackgroundUrl,
+      'articleTemplate': articleTemplate,
+      'articleFontPreset': articleFontPreset,
+      'articleDocument': articleDocument,
+      'cards': cards,
+      'articlePresentationVersion': articlePresentationVersion,
     };
   }
 
@@ -107,11 +171,27 @@ class FeedItemDto {
     String? videoUrl,
     List<String>? imageUrls,
     int? durationMs,
+    int? width,
+    int? height,
     int? likeCount,
     int? commentCount,
     int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    List<Map<String, dynamic>>? circleSummaries,
+    List<String>? circleIds,
+    List<String>? circleNames,
+    String? circleId,
+    String? circleName,
+    List<String>? tags,
+    String? visibility,
+    String? summary,
+    String? authorBackgroundUrl,
+    String? articleTemplate,
+    String? articleFontPreset,
+    Map<String, dynamic>? articleDocument,
+    List<Map<String, dynamic>>? cards,
+    int? articlePresentationVersion,
   }) {
     return FeedItemDto(
       id: id ?? this.id,
@@ -128,11 +208,27 @@ class FeedItemDto {
       videoUrl: videoUrl ?? this.videoUrl,
       imageUrls: imageUrls ?? this.imageUrls,
       durationMs: durationMs ?? this.durationMs,
+      width: width ?? this.width,
+      height: height ?? this.height,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      circleSummaries: circleSummaries ?? this.circleSummaries,
+      circleIds: circleIds ?? this.circleIds,
+      circleNames: circleNames ?? this.circleNames,
+      circleId: circleId ?? this.circleId,
+      circleName: circleName ?? this.circleName,
+      tags: tags ?? this.tags,
+      visibility: visibility ?? this.visibility,
+      summary: summary ?? this.summary,
+      authorBackgroundUrl: authorBackgroundUrl ?? this.authorBackgroundUrl,
+      articleTemplate: articleTemplate ?? this.articleTemplate,
+      articleFontPreset: articleFontPreset ?? this.articleFontPreset,
+      articleDocument: articleDocument ?? this.articleDocument,
+      cards: cards ?? this.cards,
+      articlePresentationVersion: articlePresentationVersion ?? this.articlePresentationVersion,
     );
   }
 
@@ -156,5 +252,28 @@ DateTime? _parseDateTime(dynamic v) {
 List<String>? _parseStringList(dynamic v) {
   if (v == null) return null;
   if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}
+
+List<Map<String, dynamic>> _parseMapList(Object? v) {
+  if (v == null) return const <Map<String, dynamic>>[];
+  if (v is! List) return const <Map<String, dynamic>>[];
+  final out = <Map<String, dynamic>>[];
+  for (final e in v) {
+    if (e is Map) {
+      out.add(Map<String, dynamic>.from(e));
+    }
+  }
+  return out;
+}
+
+Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) {
+    return Map<String, dynamic>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
   return null;
 }

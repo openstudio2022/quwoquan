@@ -15,7 +15,7 @@ class _MockAppDataSourceModeNotifier extends AppDataSourceModeNotifier {
 }
 
 class _PickerChatRepository extends MockChatRepository {
-  static const ChatInboxDto _inbox002 = ChatInboxDto(
+  static final ChatInboxDto _inbox002 = ChatInboxDto(
     id: 'conv_002',
     type: 'group',
     title: '当前群聊',
@@ -30,7 +30,7 @@ class _PickerChatRepository extends MockChatRepository {
     pinned: false,
     circleId: '',
   );
-  static const ChatInboxDto _inbox003 = ChatInboxDto(
+  static final ChatInboxDto _inbox003 = ChatInboxDto(
     id: 'conv_003',
     type: 'group',
     title: '摄影同好群',
@@ -51,30 +51,15 @@ class _PickerChatRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
   }) async {
-    return const [_inbox002, _inbox003];
+    return <ChatInboxDto>[_inbox002, _inbox003];
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
-    return <Map<String, dynamic>>[
-      {
-        '_id': 'conv_002',
-        'id': 'conv_002',
-        'type': 'group',
-        'title': '当前群聊',
-        'memberCount': 4,
-      },
-      {
-        '_id': 'conv_003',
-        'id': 'conv_003',
-        'type': 'group',
-        'title': '摄影同好群',
-        'memberCount': 3,
-      },
-    ];
+    return <ChatInboxDto>[_inbox002, _inbox003];
   }
 
   @override
@@ -86,7 +71,7 @@ class _PickerChatRepository extends MockChatRepository {
     String? sort,
   }) async {
     if (conversationId == 'conv_002') {
-      return const [
+      return [
         ChatConversationMemberDto(
           userId: 'user_002',
           displayName: '当前群成员 A',
@@ -108,7 +93,7 @@ class _PickerChatRepository extends MockChatRepository {
       ];
     }
     if (conversationId == 'conv_003') {
-      return const [
+      return [
         ChatConversationMemberDto(
           userId: 'user_004',
           displayName: '跨群成员 A',
@@ -129,7 +114,7 @@ class _PickerChatRepository extends MockChatRepository {
         ),
       ];
     }
-    return const [];
+    return <ChatConversationMemberDto>[];
   }
 
   @override
@@ -137,7 +122,7 @@ class _PickerChatRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
   }) async {
-    return const [
+    return [
       ChatContactRowDto(
         userId: 'user_006',
         displayName: '同好小雨',

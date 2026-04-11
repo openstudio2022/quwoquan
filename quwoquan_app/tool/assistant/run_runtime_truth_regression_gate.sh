@@ -79,7 +79,7 @@ echo "[gate] Step 3/3: flutter tests"
 flutter test \
   test/assistant/assistant_turn_contract_roundtrip_test.dart \
   test/assistant/assistant_contract_models_test.dart \
-  test/assistant/assistant_metadata_contract_split_test.dart \
+  test/assistant/assistant_metadata_index_sanity_test.dart \
   test/assistant/log_completeness_contract_test.dart \
   test/assistant/process_protocol_governance_test.dart \
   test/assistant/prompt_v2_e2e_test.dart \

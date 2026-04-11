@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/media/video/viewer/immersive_video_viewer.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -52,7 +53,14 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
             category: 'video',
             limit: 50,
           );
-      _posts = dtos.map(PostSummaryView.fromDto).toList(growable: false);
+      _posts = dtos
+          .map(
+            (dto) => PostSummaryView.fromDto(
+              dto,
+              surfaceId: PostReadSurfaceId.detailVideo,
+            ),
+          )
+          .toList(growable: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -87,7 +95,14 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
         final value = next.value;
         if (value != null && value.items.length > _posts.length && mounted) {
           setState(() {
-            _posts = value.items.map(PostSummaryView.fromDto).toList(growable: false);
+            _posts = value.items
+                .map(
+                  (dto) => PostSummaryView.fromDto(
+                    dto,
+                    surfaceId: PostReadSurfaceId.detailVideo,
+                  ),
+                )
+                .toList(growable: false);
           });
         }
       });

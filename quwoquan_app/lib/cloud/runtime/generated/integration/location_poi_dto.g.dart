@@ -9,11 +9,11 @@ class LocationPoiDto {
   final String? address;
   final int? distanceMeters;
 
-  const LocationPoiDto({
-    required this.id,
-    required this.name,
-    required this.latitude,
-    required this.longitude,
+  LocationPoiDto({
+    this.id = '',
+    this.name = '',
+    this.latitude = 0.0,
+    this.longitude = 0.0,
     this.address,
     this.distanceMeters,
   });

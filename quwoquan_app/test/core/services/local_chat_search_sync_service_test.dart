@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -281,29 +283,33 @@ class _StableChatRepository extends MockChatRepository {
   int getConversationCalls = 0;
 
   @override
-  Future<Map<String, dynamic>> getConversation(String id) async {
+  Future<ConversationDto> getConversation(String id) async {
     getConversationCalls += 1;
-    return <String, dynamic>{
-      'conversationId': id,
+    return ConversationDto.fromMap(<String, dynamic>{
+      '_id': id,
+      'id': id,
       'title': '摄影讨论组',
       'type': 'group',
+      'creatorId': 'creator',
+      'maxSeq': 0,
+      'memberCount': 2,
+      'maxGroupSize': 1000,
+      'receiptEnabled': true,
+      'messageCount': 0,
+      'status': 'active',
+      'createdAt': '2026-03-27T10:00:00.000Z',
       'updatedAt': '2026-03-27T10:00:00.000Z',
-      'settingsUpdatedAt': '2026-03-27T10:00:00.000Z',
       'lastMessageAt': '2026-03-27T10:00:00.000Z',
       'lastMessagePreview': '',
-    };
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> syncMessages({
+  Future<SyncResponse> syncMessages({
     required String conversationId,
-    String? cursor,
-    int lastSeq = 0,
+    required int lastSeq,
     int limit = 200,
   }) async {
-    return <String, dynamic>{
-      'hasMore': false,
-      'messages': const <Map<String, dynamic>>[],
-    };
+    return const SyncResponse(messages: [], hasMore: false);
   }
 }

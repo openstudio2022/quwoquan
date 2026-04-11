@@ -6,14 +6,14 @@ description: |
   端侧独立测试场景（不依赖云端）。
   data_source: fields.yaml constraints 派生 mock fixture（NOT_NULL/DEFAULT/NULLABLE）。
   覆盖：DTO解析 + 错误码映射 + 行为上报格式 + UI配置完整性 + Widget渲染 + Journey旅程。
-  分层：
-    dto_scenarios      → L1a contract tests (test/features/content/*_contract_test.dart)
-    error_scenarios    → L1a contract tests
-    behavior_scenarios → L1a contract tests
-    ui_config_scenarios→ L1a contract tests
-    widget_scenarios   → L1b widget tests  (test/features/content/widgets/)
-    journey_scenarios  → L1c journey tests (test/features/content/journeys/)
-  执行：flutter test test/features/content/
+  分层（与仓库实际目录对齐，非自动生成）：
+    dto_scenarios      → L1a contract tests (quwoquan_app/test/cloud/content/**、test/ui/content/post/contract/*_contract_test.dart)
+    error_scenarios    → L1a contract tests（同上 + content_errors 消费处）
+    behavior_scenarios → L1a contract tests（如 test/cloud/content/content_behavior_tracker_test.dart）
+    ui_config_scenarios→ L1a contract tests（test/ui/content/post/contract/post_ui_config_contract_test.dart）
+    widget_scenarios   → L1b widget tests  (quwoquan_app/test/ui/content/**、test/ui/discovery/**)
+    journey_scenarios  → L1c journey tests (quwoquan_app/test/ui/content/entry/journeys/**)
+  执行抽样：flutter test quwoquan_app/test/ui/content/ quwoquan_app/test/cloud/content/ quwoquan_app/test/ui/discovery/
 
 # ── DTO 解析场景 ─────────────────────────────────────────────────────
 dto_scenarios:
@@ -249,7 +249,7 @@ ui_config_scenarios:
       - ContentUIConfig.cardConfigs.containsKey("article")
 
 # ── L1b Widget 测试场景 ───────────────────────────────────────────────
-# dart_func: 对应 test/features/content/widgets/ 下的测试函数名
+# dart_func: 对应 quwoquan_app/test/ui/content/** 等下的测试函数名（见 description 分层）
 # fixture: MockContentRepository 返回的 post 数据
 widget_scenarios:
   - name: photo_card_author_avatar_visibility
@@ -293,7 +293,7 @@ widget_scenarios:
       - (widget as ElevatedButton).onPressed != null
 
 # ── L1c Journey 测试场景 ──────────────────────────────────────────────
-# dart_func: 对应 test/features/content/journeys/ 下的测试函数名
+# dart_func: 对应 quwoquan_app/test/ui/content/entry/journeys/** 等下的测试函数名
 # mock_config: MockContentRepository 的特殊配置（异常注入等）
 journey_scenarios:
   - name: discovery_to_detail_route_params

@@ -256,10 +256,10 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                 onInvite: () {
                   context.push(
                     AppRoutePaths.rtcPickParticipants,
-                    extra: {
-                      'callId': widget.callId,
-                      'maxParticipants': session.session?.maxParticipants ?? 32,
-                    },
+                    extra: CallParticipantPickerRouteExtra(
+                      callId: widget.callId,
+                      maxParticipants: session.session?.maxParticipants ?? 32,
+                    ),
                   );
                 },
               ),

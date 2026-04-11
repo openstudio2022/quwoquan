@@ -1,0 +1,18 @@
+{
+  "userId": "user_fixture_1",
+  "totalFeedbackCount": 3,
+  "positiveFeedbackCount": 2,
+  "negativeFeedbackCount": 1,
+  "textFeedbackCount": 1,
+  "highPriorityCount": 0,
+  "mediumPriorityCount": 1,
+  "lastFeedbackType": "thumb",
+  "lastFeedbackScore": 0.5,
+  "lastFeedbackAt": "2026-04-11T00:00:00Z",
+  "lastMetricId": "answer_relevance",
+  "lastMetricScore": 0.8,
+  "topReasonCodes": ["unclear", "too_slow"],
+  "metricAverages": { "answer_relevance": 0.72 },
+  "latestMetricScores": { "answer_relevance": 0.81 },
+  "updatedAt": "2026-04-11T01:00:00Z"
+}

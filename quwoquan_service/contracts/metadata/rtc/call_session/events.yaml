@@ -7,6 +7,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store
+    client_ws_type: call.initiated
     payload_entity: CallSession
     payload_fields: [_id, callType, initiatorId, initiatorRingtoneId, conversationId, circleId, maxParticipants, createdAt]
     realtime_channel: "rt:rtc:call:{callId}"
@@ -16,7 +17,11 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store
+    client_ws_type: call.ringing
     payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, targetUserId, conversationId]
+    optional_client_string_fields: [callerName]
+    client_payload_defaults:
+      callType: voice
     realtime_channel: "rt:rtc:user:{targetUserId}"
     push_policy:
       online: websocket
@@ -28,6 +33,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: call.answered
     payload_fields: [callId, userId]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -36,6 +42,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: call.connected
     payload_fields: [callId, userId, participantCount]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -44,6 +51,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway, chat-service, notification-service]
     channel: event_store
+    client_ws_type: call.ended
     payload_entity: CallSession
     payload_fields: [_id, callType, initiatorId, conversationId, endReason, durationMs, participantCount, startedAt, endedAt]
     realtime_channel: "rt:rtc:call:{callId}"
@@ -55,6 +63,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: participant.joined
     payload_fields: [callId, userId, role, participantCount]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -63,6 +72,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: participant.left
     payload_fields: [callId, userId, participantCount]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -71,6 +81,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: call.recording_started
     payload_fields: [callId, startedByUserId]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -79,6 +90,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: call.recording_stopped
     payload_fields: [callId, recordingUrl]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -87,6 +99,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: screen_share.started
     payload_fields: [callId, userId]
     realtime_channel: "rt:rtc:call:{callId}"
 
@@ -95,5 +108,6 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway]
     channel: event_store
+    client_ws_type: screen_share.stopped
     payload_fields: [callId, userId]
     realtime_channel: "rt:rtc:call:{callId}"

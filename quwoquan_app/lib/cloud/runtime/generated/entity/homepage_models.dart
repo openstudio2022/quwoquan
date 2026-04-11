@@ -1,6 +1,26 @@
-// 手写维护：非机器 codegen。字段与契约对齐见：
-// quwoquan_service/contracts/metadata/entity/homepage/fields.yaml
+// 混合维护：壳层预览/认领记录等由 entity/homepage/projections/*.yaml 生成（*.g.dart）再 export；
+// 继承链（CanonicalReference/Summary/Detail）、HomepageShellData、Draft 仍手写；wire 收窄见 [HomepageWireCodec]。
+// 字段与 quwoquan_service/contracts/metadata/entity/homepage/fields.yaml 对齐。
 // 路由与 operation 常量：entity_api_metadata.g.dart、entity_request_page_ids.g.dart
+// 审核类写请求体：entity_homepage_mutation_wires.g.dart（由 service.yaml writable_fields 生成）。
+// 契约测试：test/cloud/entity/contract/homepage_repository_contract_test.dart
+
+import 'package:quwoquan_app/cloud/runtime/codec/homepage_wire_codec.dart';
+
+import 'homepage_content_preview.g.dart';
+import 'homepage_geo_point.g.dart';
+import 'homepage_question_preview.g.dart';
+import 'homepage_related_group_summary.g.dart';
+import 'homepage_review_summary_data.g.dart';
+
+export 'homepage_claim_request_record.g.dart';
+export 'homepage_content_preview.g.dart';
+export 'homepage_geo_point.g.dart';
+export 'homepage_question_preview.g.dart';
+export 'homepage_related_group_summary.g.dart';
+export 'homepage_review_dimension_score.g.dart';
+export 'homepage_review_summary_data.g.dart';
+export 'homepage_status_report_record.g.dart';
 
 class HomepageCanonicalReference {
   const HomepageCanonicalReference({
@@ -19,11 +39,13 @@ class HomepageCanonicalReference {
   final String? coverUrl;
   final String? status;
 
-  static HomepageCanonicalReference? fromOptionalMap(Map? map) {
+  static HomepageCanonicalReference? fromOptionalMap(
+    Map<String, dynamic>? map,
+  ) {
     if (map == null) {
       return null;
     }
-    return HomepageCanonicalReference.fromMap(Map<String, dynamic>.from(map));
+    return HomepageCanonicalReference.fromMap(map);
   }
 
   factory HomepageCanonicalReference.fromMap(Map<String, dynamic> map) {
@@ -107,13 +129,29 @@ class HomepageSummary extends HomepageCanonicalReference {
           .trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
       title: (map['title'] ?? '').toString().trim(),
-      subtitle: _optionalString(map['subtitle']),
-      coverUrl: _optionalString(map['coverUrl']),
-      status: _optionalString(map['status']),
-      city: _optionalString(map['city']),
-      address: _optionalString(map['address']),
-      averageRating: _optionalDouble(map['averageRating']),
+      subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
+      coverUrl: HomepageWireCodec.optionalTrimmedString(map['coverUrl']),
+      status: HomepageWireCodec.optionalTrimmedString(map['status']),
+      city: HomepageWireCodec.optionalTrimmedString(map['city']),
+      address: HomepageWireCodec.optionalTrimmedString(map['address']),
+      averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Mock / 本地聚合：由 [HomepageDetail] 投影为搜索列表行（与 [fromMap] 字段一致）。
+  factory HomepageSummary.fromDetail(HomepageDetail detail) {
+    return HomepageSummary(
+      id: detail.id,
+      homepageType: detail.homepageType,
+      title: detail.title,
+      subtitle: detail.subtitle,
+      coverUrl: detail.coverUrl,
+      status: detail.status,
+      city: detail.city,
+      address: detail.address,
+      averageRating: detail.averageRating,
+      ratingCount: detail.ratingCount,
     );
   }
 }
@@ -170,209 +208,106 @@ class HomepageDetail extends HomepageCanonicalReference {
           .trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
       title: (map['title'] ?? '').toString().trim(),
-      subtitle: _optionalString(map['subtitle']),
-      coverUrl: _optionalString(map['coverUrl']),
-      status: _optionalString(map['status']),
-      sourceType: _optionalString(map['sourceType']),
-      claimStatus: _optionalString(map['claimStatus']),
+      subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
+      coverUrl: HomepageWireCodec.optionalTrimmedString(map['coverUrl']),
+      status: HomepageWireCodec.optionalTrimmedString(map['status']),
+      sourceType: HomepageWireCodec.optionalTrimmedString(map['sourceType']),
+      claimStatus: HomepageWireCodec.optionalTrimmedString(map['claimStatus']),
       categoryTags:
           (map['categoryTags'] as List?)
               ?.map((item) => item.toString())
               .toList(growable: false) ??
           const <String>[],
-      address: _optionalString(map['address']),
-      city: _optionalString(map['city']),
-      location: map['location'] is Map
-          ? HomepageGeoPoint.fromMap(
-              (map['location'] as Map).cast<String, dynamic>(),
-            )
-          : null,
-      ownerUserId: _optionalString(map['ownerUserId']),
-      averageRating: _optionalDouble(map['averageRating']),
+      address: HomepageWireCodec.optionalTrimmedString(map['address']),
+      city: HomepageWireCodec.optionalTrimmedString(map['city']),
+      location: () {
+        final loc = map['location'];
+        return loc is Map
+            ? HomepageGeoPoint.fromMap(
+                Map<String, dynamic>.from(loc),
+              )
+            : null;
+      }(),
+      ownerUserId: HomepageWireCodec.optionalTrimmedString(map['ownerUserId']),
+      averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
-      reviewSummary: map['reviewSummary'] is Map
-          ? HomepageReviewSummaryData.fromMap(
-              (map['reviewSummary'] as Map).cast<String, dynamic>(),
-            )
-          : null,
-      contentPreview:
-          (map['contentPreview'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageContentPreview.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
+      reviewSummary: () {
+        final rs = map['reviewSummary'];
+        return rs is Map
+            ? HomepageReviewSummaryData.fromMap(
+                Map<String, dynamic>.from(rs),
               )
-              .toList(growable: false) ??
-          const <HomepageContentPreview>[],
-      questionPreview:
-          (map['questionPreview'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageQuestionPreview.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageQuestionPreview>[],
-      relatedGroups:
-          (map['relatedGroups'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageRelatedGroupSummary.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageRelatedGroupSummary>[],
-      createdAt: _optionalDateTime(map['createdAt']),
-      updatedAt: _optionalDateTime(map['updatedAt']),
-      publishedAt: _optionalDateTime(map['publishedAt']),
-      offlineAt: _optionalDateTime(map['offlineAt']),
-    );
-  }
-}
-
-class HomepageGeoPoint {
-  const HomepageGeoPoint({required this.latitude, required this.longitude});
-
-  final double latitude;
-  final double longitude;
-
-  factory HomepageGeoPoint.fromMap(Map<String, dynamic> map) {
-    return HomepageGeoPoint(
-      latitude: (map['latitude'] as num?)?.toDouble() ?? 0,
-      longitude: (map['longitude'] as num?)?.toDouble() ?? 0,
+            : null;
+      }(),
+      contentPreview: HomepageWireCodec.mapList(
+        map['contentPreview'],
+        HomepageContentPreview.fromMap,
+      ),
+      questionPreview: HomepageWireCodec.mapList(
+        map['questionPreview'],
+        HomepageQuestionPreview.fromMap,
+      ),
+      relatedGroups: HomepageWireCodec.mapList(
+        map['relatedGroups'],
+        HomepageRelatedGroupSummary.fromMap,
+      ),
+      createdAt: HomepageWireCodec.optionalDateTime(map['createdAt']),
+      updatedAt: HomepageWireCodec.optionalDateTime(map['updatedAt']),
+      publishedAt: HomepageWireCodec.optionalDateTime(map['publishedAt']),
+      offlineAt: HomepageWireCodec.optionalDateTime(map['offlineAt']),
     );
   }
 
-  Map<String, dynamic> toMap() => <String, dynamic>{
-    'latitude': latitude,
-    'longitude': longitude,
-  };
-}
-
-class HomepageReviewDimensionScore {
-  const HomepageReviewDimensionScore({
-    required this.label,
-    required this.score,
-  });
-
-  final String label;
-  final double score;
-
-  factory HomepageReviewDimensionScore.fromMap(Map<String, dynamic> map) {
-    return HomepageReviewDimensionScore(
-      label: (map['label'] ?? '').toString().trim(),
-      score: (map['score'] as num?)?.toDouble() ?? 0,
-    );
-  }
-}
-
-class HomepageReviewSummaryData {
-  const HomepageReviewSummaryData({
-    this.averageRating,
-    this.ratingCount = 0,
-    this.highlightTags = const <String>[],
-    this.dimensionScores = const <HomepageReviewDimensionScore>[],
-  });
-
-  final double? averageRating;
-  final int ratingCount;
-  final List<String> highlightTags;
-  final List<HomepageReviewDimensionScore> dimensionScores;
-
-  factory HomepageReviewSummaryData.fromMap(Map<String, dynamic> map) {
-    return HomepageReviewSummaryData(
-      averageRating: _optionalDouble(map['averageRating']),
-      ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
-      highlightTags:
-          (map['highlightTags'] as List?)
-              ?.map((item) => item.toString())
-              .toList(growable: false) ??
-          const <String>[],
-      dimensionScores:
-          (map['dimensionScores'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageReviewDimensionScore.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageReviewDimensionScore>[],
-    );
-  }
-}
-
-class HomepageContentPreview {
-  const HomepageContentPreview({
-    required this.postId,
-    required this.title,
-    this.summary,
-    this.contentType,
-    this.coverUrl,
-  });
-
-  final String postId;
-  final String title;
-  final String? summary;
-  final String? contentType;
-  final String? coverUrl;
-
-  factory HomepageContentPreview.fromMap(Map<String, dynamic> map) {
-    return HomepageContentPreview(
-      postId: (map['postId'] ?? '').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      summary: _optionalString(map['summary']),
-      contentType: _optionalString(map['contentType']),
-      coverUrl: _optionalString(map['coverUrl']),
-    );
-  }
-}
-
-class HomepageQuestionPreview {
-  const HomepageQuestionPreview({
-    required this.postId,
-    required this.title,
-    this.summary,
-  });
-
-  final String postId;
-  final String title;
-  final String? summary;
-
-  factory HomepageQuestionPreview.fromMap(Map<String, dynamic> map) {
-    return HomepageQuestionPreview(
-      postId: (map['postId'] ?? '').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      summary: _optionalString(map['summary']),
-    );
-  }
-}
-
-class HomepageRelatedGroupSummary {
-  const HomepageRelatedGroupSummary({
-    required this.circleId,
-    required this.name,
-    this.memberCount = 0,
-    this.linkedHomepageId,
-    this.linkedHomepageTitle,
-  });
-
-  final String circleId;
-  final String name;
-  final int memberCount;
-  final String? linkedHomepageId;
-  final String? linkedHomepageTitle;
-
-  factory HomepageRelatedGroupSummary.fromMap(Map<String, dynamic> map) {
-    return HomepageRelatedGroupSummary(
-      circleId: (map['circleId'] ?? map['id'] ?? '').toString().trim(),
-      name: (map['name'] ?? '').toString().trim(),
-      memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
-      linkedHomepageId: _optionalString(map['linkedHomepageId']),
-      linkedHomepageTitle: _optionalString(map['linkedHomepageTitle']),
+  /// 深拷贝 / Mock 可变状态：未传入的字段沿用当前值。
+  HomepageDetail copyWith({
+    String? id,
+    String? homepageType,
+    String? title,
+    String? subtitle,
+    String? coverUrl,
+    String? status,
+    String? sourceType,
+    String? claimStatus,
+    List<String>? categoryTags,
+    String? address,
+    String? city,
+    HomepageGeoPoint? location,
+    String? ownerUserId,
+    double? averageRating,
+    int? ratingCount,
+    HomepageReviewSummaryData? reviewSummary,
+    List<HomepageContentPreview>? contentPreview,
+    List<HomepageQuestionPreview>? questionPreview,
+    List<HomepageRelatedGroupSummary>? relatedGroups,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
+    DateTime? offlineAt,
+  }) {
+    return HomepageDetail(
+      id: id ?? this.id,
+      homepageType: homepageType ?? this.homepageType,
+      title: title ?? this.title,
+      subtitle: subtitle ?? this.subtitle,
+      coverUrl: coverUrl ?? this.coverUrl,
+      status: status ?? this.status,
+      sourceType: sourceType ?? this.sourceType,
+      claimStatus: claimStatus ?? this.claimStatus,
+      categoryTags: categoryTags ?? this.categoryTags,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      location: location ?? this.location,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
+      averageRating: averageRating ?? this.averageRating,
+      ratingCount: ratingCount ?? this.ratingCount,
+      reviewSummary: reviewSummary ?? this.reviewSummary,
+      contentPreview: contentPreview ?? this.contentPreview,
+      questionPreview: questionPreview ?? this.questionPreview,
+      relatedGroups: relatedGroups ?? this.relatedGroups,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
+      offlineAt: offlineAt ?? this.offlineAt,
     );
   }
 }
@@ -394,45 +329,27 @@ class HomepageShellData {
 
   factory HomepageShellData.fromMap(Map<String, dynamic> map) {
     return HomepageShellData(
-      homepage: HomepageDetail.fromMap(
-        (map['homepage'] as Map? ?? const <String, dynamic>{})
-            .cast<String, dynamic>(),
+      homepage: HomepageDetail.fromMap(HomepageWireCodec.stringKeyMapOrEmpty(map['homepage'])),
+      reviewSummary: () {
+        final rs = map['reviewSummary'];
+        return rs is Map
+            ? HomepageReviewSummaryData.fromMap(
+                Map<String, dynamic>.from(rs),
+              )
+            : null;
+      }(),
+      contentPreview: HomepageWireCodec.mapList(
+        map['contentPreview'],
+        HomepageContentPreview.fromMap,
       ),
-      reviewSummary: map['reviewSummary'] is Map
-          ? HomepageReviewSummaryData.fromMap(
-              (map['reviewSummary'] as Map).cast<String, dynamic>(),
-            )
-          : null,
-      contentPreview:
-          (map['contentPreview'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageContentPreview.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageContentPreview>[],
-      questionPreview:
-          (map['questionPreview'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageQuestionPreview.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageQuestionPreview>[],
-      relatedGroups:
-          (map['relatedGroups'] as List?)
-              ?.whereType<Map>()
-              .map(
-                (item) => HomepageRelatedGroupSummary.fromMap(
-                  item.cast<String, dynamic>(),
-                ),
-              )
-              .toList(growable: false) ??
-          const <HomepageRelatedGroupSummary>[],
+      questionPreview: HomepageWireCodec.mapList(
+        map['questionPreview'],
+        HomepageQuestionPreview.fromMap,
+      ),
+      relatedGroups: HomepageWireCodec.mapList(
+        map['relatedGroups'],
+        HomepageRelatedGroupSummary.fromMap,
+      ),
     );
   }
 }
@@ -504,41 +421,6 @@ class HomepageClaimRequestDraft {
   };
 }
 
-class HomepageClaimRequestRecord {
-  const HomepageClaimRequestRecord({
-    required this.id,
-    required this.homepageId,
-    required this.requesterUserId,
-    required this.claimTier,
-    required this.status,
-    this.reviewNote,
-    this.createdAt,
-    this.reviewedAt,
-  });
-
-  final String id;
-  final String homepageId;
-  final String requesterUserId;
-  final String claimTier;
-  final String status;
-  final String? reviewNote;
-  final DateTime? createdAt;
-  final DateTime? reviewedAt;
-
-  factory HomepageClaimRequestRecord.fromMap(Map<String, dynamic> map) {
-    return HomepageClaimRequestRecord(
-      id: (map['_id'] ?? map['id'] ?? '').toString().trim(),
-      homepageId: (map['homepageId'] ?? '').toString().trim(),
-      requesterUserId: (map['requesterUserId'] ?? '').toString().trim(),
-      claimTier: (map['claimTier'] ?? '').toString().trim(),
-      status: (map['status'] ?? '').toString().trim(),
-      reviewNote: _optionalString(map['reviewNote']),
-      createdAt: _optionalDateTime(map['createdAt']),
-      reviewedAt: _optionalDateTime(map['reviewedAt']),
-    );
-  }
-}
-
 class HomepageBasicDraft {
   const HomepageBasicDraft({
     this.title,
@@ -593,66 +475,4 @@ class HomepageStatusReportDraft {
     if (reporterUserId.trim().isNotEmpty)
       'reporterUserId': reporterUserId.trim(),
   };
-}
-
-class HomepageStatusReportRecord {
-  const HomepageStatusReportRecord({
-    required this.id,
-    required this.homepageId,
-    required this.reporterUserId,
-    required this.reason,
-    required this.status,
-    this.description,
-    this.evidenceUrls = const <String>[],
-    this.reviewNote,
-    this.createdAt,
-    this.reviewedAt,
-  });
-
-  final String id;
-  final String homepageId;
-  final String reporterUserId;
-  final String reason;
-  final String status;
-  final String? description;
-  final List<String> evidenceUrls;
-  final String? reviewNote;
-  final DateTime? createdAt;
-  final DateTime? reviewedAt;
-
-  factory HomepageStatusReportRecord.fromMap(Map<String, dynamic> map) {
-    return HomepageStatusReportRecord(
-      id: (map['_id'] ?? map['id'] ?? '').toString().trim(),
-      homepageId: (map['homepageId'] ?? '').toString().trim(),
-      reporterUserId: (map['reporterUserId'] ?? '').toString().trim(),
-      reason: (map['reason'] ?? '').toString().trim(),
-      status: (map['status'] ?? '').toString().trim(),
-      description: _optionalString(map['description']),
-      evidenceUrls:
-          (map['evidenceUrls'] as List?)
-              ?.map((item) => item.toString())
-              .toList(growable: false) ??
-          const <String>[],
-      reviewNote: _optionalString(map['reviewNote']),
-      createdAt: _optionalDateTime(map['createdAt']),
-      reviewedAt: _optionalDateTime(map['reviewedAt']),
-    );
-  }
-}
-
-String? _optionalString(Object? value) {
-  final raw = (value ?? '').toString().trim();
-  return raw.isEmpty ? null : raw;
-}
-
-double? _optionalDouble(Object? value) {
-  return (value as num?)?.toDouble();
-}
-
-DateTime? _optionalDateTime(Object? value) {
-  final raw = (value ?? '').toString().trim();
-  if (raw.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(raw);
 }

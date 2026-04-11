@@ -10,25 +10,35 @@ class _FakeAssistantRepository implements AssistantRepository {
   final List<AssistantSkillConsent> _items;
 
   @override
-  Future<Map<String, dynamic>> getPolicySnapshot({
+  Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
-  }) async => <String, dynamic>{
-    'version': policyVersionHint.isEmpty ? 'test' : policyVersionHint,
-    'grantedScopes': _items.where((item) => item.granted).map((item) => item.skillId).toList(growable: false),
-  };
+  }) async => AssistantPolicyView(
+    version: policyVersionHint.isEmpty ? 'test' : policyVersionHint,
+    values: <String, dynamic>{
+      'grantedScopes': _items
+          .where((item) => item.granted)
+          .map((item) => item.skillId)
+          .toList(growable: false),
+    },
+  );
 
   @override
-  Future<Map<String, dynamic>> reportInteractionEvents({
-    required List<Map<String, dynamic>> events,
-  }) async => <String, dynamic>{'accepted': true, 'count': events.length};
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
+  }) async => AssistantInteractionReportBatchAck(
+    accepted: true,
+    count: events.length,
+    resource: 'interaction_event_batch',
+  );
 
   @override
-  Future<Map<String, dynamic>> reportScorecards({
-    required List<Map<String, dynamic>> scorecards,
-  }) async => <String, dynamic>{
-    'accepted': true,
-    'count': scorecards.length,
-  };
+  Future<AssistantScorecardReportBatchAck> reportScorecards({
+    required List<Scorecard> scorecards,
+  }) async => AssistantScorecardReportBatchAck(
+    accepted: true,
+    count: scorecards.length,
+    resource: 'scorecard_batch',
+  );
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() async {

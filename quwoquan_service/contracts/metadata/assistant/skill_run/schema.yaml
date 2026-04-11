@@ -1,0 +1,41 @@
+# SkillRun：与 AssistantTurnOutput.skillRuns 项对齐；代码由 codegen_app_metadata 生成。
+dart_class: SkillRun
+library_path: assistant/contracts/skill_run.dart
+output_path: assistant/generated/contracts/skill_run.g.dart
+fields:
+  - name: runId
+    dart_type: String
+    json_key: runId
+  - name: domainId
+    dart_type: String
+    json_key: domainId
+  - name: goal
+    dart_type: String
+    json_key: goal
+  - name: problemClass
+    dart_type: String
+    json_key: problemClass
+  - name: shell
+    dart_type: Map<String, dynamic>
+    json_key: shell
+    default: const <String, dynamic>{}
+  - name: slotState
+    dart_type: Map<String, dynamic>
+    json_key: slotState
+    default: const <String, dynamic>{}
+  - name: answerReady
+    dart_type: bool
+    json_key: answerReady
+    default: false
+  - name: stopReason
+    dart_type: String
+    json_key: stopReason
+    default: "''"
+  - name: references
+    dart_type: List<Map<String, dynamic>>
+    json_key: references
+    default: const <Map<String, dynamic>>[]
+  - name: resultSummary
+    dart_type: String
+    json_key: resultSummary
+    default: "''"

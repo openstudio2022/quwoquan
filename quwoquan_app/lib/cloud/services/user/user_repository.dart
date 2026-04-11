@@ -1,11 +1,23 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guard_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+
+UserSettingDto _userSettingDtoFromWire(Map<String, dynamic> json) {
+  final m = Map<String, dynamic>.from(json);
+  m.putIfAbsent('userId', () => '');
+  return UserSettingDto.fromJson(m);
+}
 
 /// User 域 Repository：owner-plane 子账号管理、活动身份上下文与用户设置。
 abstract class UserRepository {
@@ -31,35 +43,32 @@ abstract class UserRepository {
   Future<void> retireSubAccount(String subAccountId);
   Future<void> deleteEmptySubAccount(String subAccountId);
 
-  Future<Map<String, dynamic>> getNotificationSettings();
-  Future<Map<String, dynamic>> getPrivacySettings();
+  Future<UserSettingDto> getNotificationSettings();
+  Future<UserSettingDto> getPrivacySettings();
+}
+
+/// 与网关 `ListSubAccounts` 同形 JSON，经 `jsonDecode` 再走 Wire → View（与 Remote 对齐）。
+const String _kMockSubAccountsWireJson = r'''
+[
+  {"subAccountId":"owner_primary","profileSubjectId":"user_001","displayName":"主账号","avatarUrl":"https://i.pravatar.cc/150?u=user_001","isolationLevel":"open","profileVisibility":"public","isPrimary":true,"isActive":true},
+  {"subAccountId":"persona_photo","profileSubjectId":"user_001_photo","displayName":"摄影分身","avatarUrl":"https://i.pravatar.cc/150?u=user_001_photo","isolationLevel":"semi","profileVisibility":"public","isPrimary":false,"isActive":false,"hasAttributedHistory":true}
+]
+''';
+
+List<Map<String, dynamic>> _decodeMockSubAccountsWire() {
+  final decoded = jsonDecode(_kMockSubAccountsWireJson);
+  if (decoded is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+  return decoded
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
 }
 
 class MockUserRepository implements UserRepository {
-  static const List<Map<String, dynamic>> _mockSubAccounts =
-      <Map<String, dynamic>>[
-        <String, dynamic>{
-          'subAccountId': 'owner_primary',
-          'profileSubjectId': 'user_001',
-          'displayName': '主账号',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=user_001',
-          'isolationLevel': 'open',
-          'profileVisibility': 'public',
-          'isPrimary': true,
-          'isActive': true,
-        },
-        <String, dynamic>{
-          'subAccountId': 'persona_photo',
-          'profileSubjectId': 'user_001_photo',
-          'displayName': '摄影分身',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=user_001_photo',
-          'isolationLevel': 'semi',
-          'profileVisibility': 'public',
-          'isPrimary': false,
-          'isActive': false,
-          'hasAttributedHistory': true,
-        },
-      ];
+  static final List<Map<String, dynamic>> _mockSubAccounts =
+      _decodeMockSubAccountsWire();
 
   @override
   Future<void> activateSubAccount(String subAccountId) async {}
@@ -115,19 +124,25 @@ class MockUserRepository implements UserRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getNotificationSettings() async {
-    return <String, dynamic>{'enablePush': true};
+  Future<UserSettingDto> getNotificationSettings() async {
+    return _userSettingDtoFromWire(<String, dynamic>{'enablePush': true});
   }
 
   @override
-  Future<Map<String, dynamic>> getPrivacySettings() async {
-    return <String, dynamic>{'profileVisibility': 'public'};
+  Future<UserSettingDto> getPrivacySettings() async {
+    return _userSettingDtoFromWire(
+      <String, dynamic>{'profileVisibility': 'public'},
+    );
   }
 
   @override
   Future<List<PersonaManagementItemViewData>> listSubAccounts() async {
     return _mockSubAccounts
-        .map(PersonaManagementItemViewData.fromMap)
+        .map(
+          (m) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
+            PersonaManagementItemWireDto.fromMap(m),
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -170,76 +185,51 @@ class RemoteUserRepository implements UserRepository {
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
-  Map<String, dynamic> _asObject(
-    dynamic decoded, {
-    required String context,
-  }) {
-    return CloudResponseDecoder.asObject(decoded, context: context);
-  }
-
-  List<Map<String, dynamic>> _extractItems(
-    dynamic decoded, {
-    required String context,
-  }) {
-    if (decoded is List) {
-      return decoded.whereType<Map>().map((item) {
-        return item.cast<String, dynamic>();
-      }).toList(growable: false);
-    }
-    final object = _asObject(decoded, context: context);
-    final rawItems =
-        (object['items'] as List?) ??
-        (object['subAccounts'] as List?) ??
-        (object['personas'] as List?) ??
-        const <dynamic>[];
-    return rawItems.whereType<Map>().map((item) {
-      return item.cast<String, dynamic>();
-    }).toList(growable: false);
-  }
-
   @override
   Future<List<PersonaManagementItemViewData>> listSubAccounts() async {
     final uri = _uri(UserApiMetadata.listSubAccountsPath);
-    final decoded = await _httpClient.getJson(
+    final items = await _httpClient.getJsonItemList(
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listSubAccounts),
-    );
-    return _extractItems(
-      decoded,
       context: UserRequestPageIds.listSubAccounts,
-    ).map(PersonaManagementItemViewData.fromMap).toList(growable: false);
+    );
+    return items
+        .map(
+          (m) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
+            PersonaManagementItemWireDto.fromMap(m),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
     final uri = _uri(UserApiMetadata.getPersonaManagementSummaryPath);
-    final decoded = await _httpClient.getJson(
+    final object = await _httpClient.getJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getPersonaManagementSummary,
       ),
-    );
-    final object = _asObject(
-      decoded,
       context: UserRequestPageIds.getPersonaManagementSummary,
     );
-    return PersonaManagementSummaryViewData.fromMap(object);
+    return PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
+      PersonaManagementSummaryWireDto.fromMap(object),
+    );
   }
 
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
     final uri = _uri(UserApiMetadata.getActivePersonaContextPath);
-    final decoded = await _httpClient.getJson(
+    final object = await _httpClient.getJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getActivePersonaContext,
       ),
-    );
-    final object = _asObject(
-      decoded,
       context: UserRequestPageIds.getActivePersonaContext,
     );
-    return ActivePersonaContextViewData.fromMap(object);
+    return ActivePersonaContextViewData.fromActivePersonaContextWire(
+      ActivePersonaContextWireDto.fromMap(object),
+    );
   }
 
   @override
@@ -248,16 +238,13 @@ class RemoteUserRepository implements UserRepository {
     String isolationLevel = 'open',
   }) async {
     final uri = _uri(UserApiMetadata.createSubAccountPath);
-    final decoded = await _httpClient.postJson(
+    final object = await _httpClient.postJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.createSubAccount),
       body: <String, dynamic>{
         'displayName': displayName,
         'isolationLevel': isolationLevel,
       },
-    );
-    final object = _asObject(
-      decoded,
       context: UserRequestPageIds.createSubAccount,
     );
     return PersonaManagementItemViewData.fromMap(object);
@@ -281,13 +268,10 @@ class RemoteUserRepository implements UserRepository {
     if (avatarUrl != null) body['avatarUrl'] = avatarUrl;
     if (isolationLevel != null) body['isolationLevel'] = isolationLevel;
     if (profileVisibility != null) body['profileVisibility'] = profileVisibility;
-    final decoded = await _httpClient.patchJson(
+    final object = await _httpClient.patchJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.updateSubAccount),
       body: body,
-    );
-    final object = _asObject(
-      decoded,
       context: UserRequestPageIds.updateSubAccount,
     );
     return PersonaManagementItemViewData.fromMap(object);
@@ -316,17 +300,16 @@ class RemoteUserRepository implements UserRepository {
         subAccountId: subAccountId,
       ),
     );
-    final decoded = await _httpClient.getJson(
+    final object = await _httpClient.getJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getSubAccountLifecycleGuard,
       ),
-    );
-    final object = _asObject(
-      decoded,
       context: UserRequestPageIds.getSubAccountLifecycleGuard,
     );
-    return PersonaLifecycleGuardViewData.fromMap(object);
+    return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
+      PersonaLifecycleGuardWireDto.fromMap(object),
+    );
   }
 
   @override
@@ -355,31 +338,27 @@ class RemoteUserRepository implements UserRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getNotificationSettings() async {
+  Future<UserSettingDto> getNotificationSettings() async {
     final uri = _uri(UserApiMetadata.getNotificationSettingsPath);
-    final decoded = await _httpClient.getJson(
+    final object = await _httpClient.getJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getNotificationSettings,
       ),
-    );
-    return CloudResponseDecoder.asObject(
-      decoded,
       context: UserRequestPageIds.getNotificationSettings,
     );
+    return _userSettingDtoFromWire(object);
   }
 
   @override
-  Future<Map<String, dynamic>> getPrivacySettings() async {
+  Future<UserSettingDto> getPrivacySettings() async {
     final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
-    final decoded = await _httpClient.getJson(
+    final object = await _httpClient.getJsonObject(
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.getPrivacySettings),
-    );
-    return CloudResponseDecoder.asObject(
-      decoded,
       context: UserRequestPageIds.getPrivacySettings,
     );
+    return _userSettingDtoFromWire(object);
   }
 }
 

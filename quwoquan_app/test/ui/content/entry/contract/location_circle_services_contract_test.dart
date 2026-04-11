@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -9,12 +10,12 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 
 class _FakeCircleRepository extends MockCircleRepository {
-  _FakeCircleRepository({required this.circles});
+  _FakeCircleRepository({required List<CircleDto> circles}) : _circles = circles;
 
-  final List<Map<String, dynamic>> circles;
+  final List<CircleDto> _circles;
 
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? domainId,
     String? recommendFor,
@@ -23,7 +24,7 @@ class _FakeCircleRepository extends MockCircleRepository {
     String? sort,
     String? subCategory,
   }) async {
-    return circles.take(limit).toList(growable: false);
+    return _circles.take(limit).toList(growable: false);
   }
 }
 
@@ -126,15 +127,24 @@ void main() {
     test('uses remote circles when endpoint has data', () async {
       const service = CreateCircleService();
       final fake = _FakeCircleRepository(
-        circles: <Map<String, dynamic>>[
-          <String, dynamic>{
+        circles: [
+          CircleDto.fromMap({
             'id': 'c1',
             'name': '测试圈子A',
+            'ownerId': 'u1',
             'coverUrl': 'https://example.com/c1.jpg',
             'memberCount': 88,
             'postCount': 12,
-          },
-          <String, dynamic>{'id': 'c2', 'name': '测试圈子B'},
+            'createdAt': '2025-01-01T00:00:00.000Z',
+            'updatedAt': '2025-01-01T00:00:00.000Z',
+          }),
+          CircleDto.fromMap({
+            'id': 'c2',
+            'name': '测试圈子B',
+            'ownerId': 'u1',
+            'createdAt': '2025-01-01T00:00:00.000Z',
+            'updatedAt': '2025-01-01T00:00:00.000Z',
+          }),
         ],
       );
       final result = await service.listCircles(fake);

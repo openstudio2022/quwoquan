@@ -6,8 +6,26 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
-import 'package:quwoquan_app/core/mock/prototype_mock_data.dart';
+import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
+import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
+
+export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show
+        AssistantCreateRunRequestWire,
+        AssistantInteractionReportBatchAck,
+        AssistantPolicyView,
+        AssistantReportPageContextRequestWire,
+        AssistantScorecardReportBatchAck,
+        AssistantSearchCitationView,
+        AssistantSearchResultView,
+        AssistantSearchXiaoquRequestWire,
+        AssistantSkillCatalogItemView,
+        AssistantUserMemoryView,
+        AssistantUserTaskView,
+        InteractionEvent,
+        Scorecard;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
@@ -62,192 +80,6 @@ class AssistantSkillConsent {
   };
 }
 
-class AssistantSearchCitationView {
-  const AssistantSearchCitationView({
-    required this.citationId,
-    required this.objectType,
-    required this.objectId,
-    required this.title,
-    this.contentType,
-    this.snippet,
-    this.coverUrl,
-    this.badgeLabel,
-    this.sourceDomain,
-  });
-
-  final String citationId;
-  final String objectType;
-  final String objectId;
-  final String title;
-  final String? contentType;
-  final String? snippet;
-  final String? coverUrl;
-  final String? badgeLabel;
-  final String? sourceDomain;
-
-  factory AssistantSearchCitationView.fromJson(Map<String, dynamic> json) {
-    return AssistantSearchCitationView(
-      citationId: (json['citationId'] ?? '').toString().trim(),
-      objectType: (json['objectType'] ?? '').toString().trim(),
-      objectId: (json['objectId'] ?? '').toString().trim(),
-      title: (json['title'] ?? '').toString().trim(),
-      contentType: json['contentType']?.toString(),
-      snippet: json['snippet']?.toString(),
-      coverUrl: json['coverUrl']?.toString(),
-      badgeLabel: json['badgeLabel']?.toString(),
-      sourceDomain: json['sourceDomain']?.toString(),
-    );
-  }
-}
-
-class AssistantSearchResultView {
-  const AssistantSearchResultView({
-    required this.queryEcho,
-    this.summary,
-    this.searchIntensity,
-    this.citations = const <AssistantSearchCitationView>[],
-  });
-
-  final String queryEcho;
-  final String? summary;
-  final String? searchIntensity;
-  final List<AssistantSearchCitationView> citations;
-
-  factory AssistantSearchResultView.fromJson(Map<String, dynamic> json) {
-    final rawCitations =
-        (json['citations'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    return AssistantSearchResultView(
-      queryEcho: (json['queryEcho'] ?? json['userQuery'] ?? '')
-          .toString()
-          .trim(),
-      summary: json['summary']?.toString(),
-      searchIntensity: json['searchIntensity']?.toString(),
-      citations: rawCitations
-          .map(AssistantSearchCitationView.fromJson)
-          .where((item) => item.citationId.isNotEmpty || item.title.isNotEmpty)
-          .toList(growable: false),
-    );
-  }
-}
-
-/// 助手日程/待办项（对齐 metadata `AssistantUserTaskView`）。
-class AssistantUserTaskView {
-  const AssistantUserTaskView({
-    required this.taskId,
-    required this.title,
-    this.description,
-    required this.status,
-    this.dueAt,
-    this.priority,
-    this.sourceSkillId,
-    this.updatedAt,
-  });
-
-  final String taskId;
-  final String title;
-  final String? description;
-  final String status;
-  final String? dueAt;
-  final String? priority;
-  final String? sourceSkillId;
-  final String? updatedAt;
-
-  /// 兼容旧 UI 使用的 `title` / `desc` Map。
-  Map<String, dynamic> toScheduleRowMap() => <String, dynamic>{
-    'title': title,
-    'desc': description ?? '',
-  };
-
-  factory AssistantUserTaskView.fromJson(Map<String, dynamic> json) {
-    return AssistantUserTaskView(
-      taskId: (json['taskId'] ?? json['task_id'] ?? json['id'] ?? '')
-          .toString(),
-      title: (json['title'] ?? '').toString(),
-      description: json['description']?.toString(),
-      status: (json['status'] ?? 'pending').toString(),
-      dueAt: json['dueAt']?.toString() ?? json['due_at']?.toString(),
-      priority: json['priority']?.toString(),
-      sourceSkillId:
-          json['sourceSkillId']?.toString() ??
-          json['source_skill_id']?.toString(),
-      updatedAt:
-          json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
-    );
-  }
-}
-
-/// 助手记忆摘要项（对齐 metadata `AssistantUserMemoryView`）。
-class AssistantUserMemoryView {
-  const AssistantUserMemoryView({
-    required this.memoryId,
-    required this.title,
-    this.snippet,
-    this.sourceType,
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  final String memoryId;
-  final String title;
-  final String? snippet;
-  final String? sourceType;
-  final String? createdAt;
-  final String? updatedAt;
-
-  factory AssistantUserMemoryView.fromJson(Map<String, dynamic> json) {
-    return AssistantUserMemoryView(
-      memoryId: (json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '')
-          .toString(),
-      title: (json['title'] ?? '').toString(),
-      snippet: json['snippet']?.toString(),
-      sourceType:
-          json['sourceType']?.toString() ?? json['source_type']?.toString(),
-      createdAt:
-          json['createdAt']?.toString() ?? json['created_at']?.toString(),
-      updatedAt:
-          json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
-    );
-  }
-}
-
-/// 技能目录项（对齐 metadata `AssistantSkillCatalogItemView`）。
-class AssistantSkillCatalogItemView {
-  const AssistantSkillCatalogItemView({
-    required this.skillId,
-    required this.displayName,
-    this.description,
-    this.category,
-    this.requiresConsent = false,
-    this.iconHint,
-  });
-
-  final String skillId;
-  final String displayName;
-  final String? description;
-  final String? category;
-  final bool requiresConsent;
-  final String? iconHint;
-
-  factory AssistantSkillCatalogItemView.fromJson(Map<String, dynamic> json) {
-    return AssistantSkillCatalogItemView(
-      skillId: (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '')
-          .toString(),
-      displayName:
-          (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '')
-              .toString(),
-      description: json['description']?.toString() ?? json['desc']?.toString(),
-      category: json['category']?.toString(),
-      requiresConsent:
-          json['requiresConsent'] == true || json['requires_consent'] == true,
-      iconHint: json['iconHint']?.toString() ?? json['icon_hint']?.toString(),
-    );
-  }
-}
-
 AssistantSearchResultView _buildFallbackSearchResult({
   required String query,
   required String searchIntensity,
@@ -265,16 +97,16 @@ AssistantSearchResultView _buildFallbackSearchResult({
 }
 
 abstract class AssistantRepository {
-  Future<Map<String, dynamic>> getPolicySnapshot({
+  Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   });
 
-  Future<Map<String, dynamic>> reportInteractionEvents({
-    required List<Map<String, dynamic>> events,
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
   });
 
-  Future<Map<String, dynamic>> reportScorecards({
-    required List<Map<String, dynamic>> scorecards,
+  Future<AssistantScorecardReportBatchAck> reportScorecards({
+    required List<Scorecard> scorecards,
   });
 
   Future<List<AssistantSkillConsent>> listConsents();
@@ -315,45 +147,45 @@ class MockAssistantRepository implements AssistantRepository {
   final AssistantConsentStore _store;
 
   @override
-  Future<Map<String, dynamic>> getPolicySnapshot({
+  Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   }) async {
-    return <String, dynamic>{
-      'version': policyVersionHint.trim().isEmpty
+    return AssistantPolicyView(
+      version: policyVersionHint.trim().isEmpty
           ? 'assistant_policy_local_mock_v1'
           : policyVersionHint.trim(),
-      'values': <String, dynamic>{
+      values: <String, dynamic>{
         'learningSyncEnabled': false,
         'suggestedActionsEnabled': true,
         'pageContextTtlSeconds': 300,
         'searchFallbackMode': 'local_mock',
         'defaultSearchIntensity': 'balanced',
       },
-    };
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> reportInteractionEvents({
-    required List<Map<String, dynamic>> events,
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
   }) async {
-    return <String, dynamic>{
-      'accepted': true,
-      'count': events.length,
-      'resource': 'interaction_event_batch',
-      'mode': 'local_mock',
-    };
+    return AssistantInteractionReportBatchAck(
+      accepted: true,
+      count: events.length,
+      resource: 'interaction_event_batch',
+      mode: 'local_mock',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> reportScorecards({
-    required List<Map<String, dynamic>> scorecards,
+  Future<AssistantScorecardReportBatchAck> reportScorecards({
+    required List<Scorecard> scorecards,
   }) async {
-    return <String, dynamic>{
-      'accepted': true,
-      'count': scorecards.length,
-      'resource': 'scorecard_batch',
-      'mode': 'local_mock',
-    };
+    return AssistantScorecardReportBatchAck(
+      accepted: true,
+      count: scorecards.length,
+      resource: 'scorecard_batch',
+      mode: 'local_mock',
+    );
   }
 
   @override
@@ -397,26 +229,24 @@ class MockAssistantRepository implements AssistantRepository {
     int limit = _kAssistantListPageDefaultLimit,
     String? status,
   }) async {
-    final raw = PrototypeMockData.assistantTasksData;
-    Iterable<Map<String, dynamic>> rows = raw;
+    final raw = AppContentPrototypeBundle.instance.assistantTasksData;
+    Iterable<AssistantPrototypeTaskRow> rows = raw;
     if (status != null && status.trim().isNotEmpty) {
-      rows = raw.where(
-        (row) => (row['status']?.toString() ?? '') == status.trim(),
-      );
+      rows = raw.where((row) => row.status == status.trim());
     }
     return rows
         .map((row) {
-          final time = row['time']?.toString() ?? '';
-          final category = row['category']?.toString() ?? '';
+          final time = row.time ?? '';
+          final category = row.category ?? '';
           final desc = <String>[
             if (time.isNotEmpty) time,
             if (category.isNotEmpty) category,
           ].join(' · ');
           return AssistantUserTaskView(
-            taskId: row['id']?.toString() ?? '',
-            title: row['title']?.toString() ?? '',
+            taskId: row.taskKey,
+            title: row.title,
             description: desc.isEmpty ? null : desc,
-            status: row['status']?.toString() ?? 'pending',
+            status: row.status,
           );
         })
         .take(limit)
@@ -427,13 +257,13 @@ class MockAssistantRepository implements AssistantRepository {
   Future<List<AssistantUserMemoryView>> listAssistantMemories({
     int limit = _kAssistantListPageDefaultLimit,
   }) async {
-    return PrototypeMockData.assistantMemoryData
+    return AppContentPrototypeBundle.instance.assistantMemoryData
         .map(
           (row) => AssistantUserMemoryView(
-            memoryId: row['id']?.toString() ?? '',
-            title: row['title']?.toString() ?? '',
-            snippet: row['type']?.toString(),
-            sourceType: row['type']?.toString(),
+            memoryId: row.memoryKey,
+            title: row.title,
+            snippet: row.kind,
+            sourceType: row.kind,
           ),
         )
         .take(limit)
@@ -444,12 +274,12 @@ class MockAssistantRepository implements AssistantRepository {
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = _kAssistantSkillCatalogDefaultLimit,
   }) async {
-    return PrototypeMockData.assistantSkillsData
+    return AppContentPrototypeBundle.instance.assistantSkillsData
         .map(
           (row) => AssistantSkillCatalogItemView(
-            skillId: row['id']?.toString() ?? '',
-            displayName: row['name']?.toString() ?? '',
-            description: row['desc']?.toString(),
+            skillId: row.skillId,
+            displayName: row.name,
+            description: row.description,
             requiresConsent: false,
           ),
         )
@@ -467,7 +297,7 @@ class RemoteAssistantRepository implements AssistantRepository {
   final AssistantConsentStore _store;
 
   @override
-  Future<Map<String, dynamic>> getPolicySnapshot({
+  Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   }) async {
     try {
@@ -492,34 +322,34 @@ class RemoteAssistantRepository implements AssistantRepository {
                 ),
               );
         if (decoded.isNotEmpty) {
-          return decoded;
+          return AssistantPolicyView.fromJson(decoded);
         }
       }
     } catch (_) {
       // Fall back to a safe default snapshot when assistant-service is unavailable.
     }
-    return <String, dynamic>{
-      'version': policyVersionHint.trim().isEmpty
+    return AssistantPolicyView(
+      version: policyVersionHint.trim().isEmpty
           ? 'assistant_policy_remote_fallback_v1'
           : policyVersionHint.trim(),
-      'values': <String, dynamic>{
+      values: <String, dynamic>{
         'learningSyncEnabled': true,
         'suggestedActionsEnabled': true,
         'pageContextTtlSeconds': 300,
         'searchFallbackMode': 'summary_with_citations',
         'defaultSearchIntensity': 'balanced',
       },
-    };
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> reportInteractionEvents({
-    required List<Map<String, dynamic>> events,
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
   }) async {
-    final accepted = <Map<String, dynamic>>[];
+    final accepted = <InteractionEvent>[];
     for (final event in events) {
-      final eventId = (event['eventId'] ?? '').toString().trim();
-      final runId = (event['runId'] ?? '').toString().trim();
+      final eventId = event.eventId.trim();
+      final runId = event.runId.trim();
       if (eventId.isEmpty || runId.isEmpty) {
         continue;
       }
@@ -536,7 +366,7 @@ class RemoteAssistantRepository implements AssistantRepository {
             ),
             'Content-Type': 'application/json',
           },
-          body: jsonEncode(event),
+          body: jsonEncode(event.toJson()),
         );
         if (response.statusCode >= 200 && response.statusCode < 300) {
           accepted.add(event);
@@ -545,22 +375,22 @@ class RemoteAssistantRepository implements AssistantRepository {
         // Best effort: keep batch partial-success semantics.
       }
     }
-    return <String, dynamic>{
+    return AssistantInteractionReportBatchAck.fromJson(<String, dynamic>{
       'accepted': accepted.length == events.length,
       'acceptedCount': accepted.length,
       'count': events.length,
       'resource': 'interaction_event_batch',
-    };
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> reportScorecards({
-    required List<Map<String, dynamic>> scorecards,
+  Future<AssistantScorecardReportBatchAck> reportScorecards({
+    required List<Scorecard> scorecards,
   }) async {
-    final accepted = <Map<String, dynamic>>[];
+    final accepted = <Scorecard>[];
     for (final scorecard in scorecards) {
-      final scoreId = (scorecard['scoreId'] ?? '').toString().trim();
-      final eventId = (scorecard['eventId'] ?? '').toString().trim();
+      final scoreId = scorecard.scoreId.trim();
+      final eventId = scorecard.eventId.trim();
       if (scoreId.isEmpty || eventId.isEmpty) {
         continue;
       }
@@ -575,7 +405,7 @@ class RemoteAssistantRepository implements AssistantRepository {
             ),
             'Content-Type': 'application/json',
           },
-          body: jsonEncode(scorecard),
+          body: jsonEncode(scorecard.toJson()),
         );
         if (response.statusCode >= 200 && response.statusCode < 300) {
           accepted.add(scorecard);
@@ -584,12 +414,12 @@ class RemoteAssistantRepository implements AssistantRepository {
         // Best effort: keep batch partial-success semantics.
       }
     }
-    return <String, dynamic>{
+    return AssistantScorecardReportBatchAck.fromJson(<String, dynamic>{
       'accepted': accepted.length == scorecards.length,
       'acceptedCount': accepted.length,
       'count': scorecards.length,
       'resource': 'scorecard_batch',
-    };
+    });
   }
 
   Map<String, String> _headersForSettings({
@@ -805,12 +635,14 @@ class RemoteAssistantRepository implements AssistantRepository {
           ),
           'Content-Type': 'application/json',
         },
-        body: jsonEncode(<String, dynamic>{
-          'userQuery': trimmedQuery,
-          'searchIntensity': searchIntensity,
-          'sourceSurfaceId': AppUiSurfaces.globalSearchNetworkResults.id,
-          'fromGlobalSearch': true,
-        }),
+        body: jsonEncode(
+          AssistantSearchXiaoquRequestWire(
+            userQuery: trimmedQuery,
+            searchIntensity: searchIntensity,
+            sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+            fromGlobalSearch: true,
+          ).toJson(),
+        ),
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = response.body.trim().isEmpty

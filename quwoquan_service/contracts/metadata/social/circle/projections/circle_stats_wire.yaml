@@ -1,0 +1,19 @@
+version: 1
+read_model: CircleStatsWire
+
+description: |
+  圈子统计接口返回体：当前为松散 JSON，键集合随版本演进。
+  Flutter：`CircleStatsWireDto` 保留 raw Map（见 circle_stats_wire_dto.dart），展示层用 CircleStatsViewData.fromStatsWire 解析。
+
+consumer: app
+
+# 非穷尽列举，仅供契约文档与评审；新增键不应破坏客户端对 raw 的透传。
+documented_keys_examples:
+  - totalMembers
+  - members
+  - posts
+  - weeklyActive
+  - storageUsedBytes
+  - storageQuotaBytes
+
+payload_shape: opaque_object

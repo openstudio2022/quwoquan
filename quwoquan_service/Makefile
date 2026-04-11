@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -15,7 +15,7 @@ build:
 test: test-unit
 
 test-unit:
-	go test ./runtime/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
+	go test ./runtime/... ./generated/assistant/wirepoc/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 test-contract:
 	go test ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
@@ -45,7 +45,7 @@ lint:
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
-codegen: codegen-content-service codegen-storage codegen-rec-model-python codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-control-plane-runtime codegen-ops-portal
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service
@@ -58,6 +58,9 @@ codegen-control-plane-runtime:
 
 codegen-content-service:
 	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post
+
+codegen-circle-service:
+	go run ./tools/codegen_circle_domain --metadata-dir contracts/metadata --output-dir services/circle-service/internal
 
 codegen-rec-model-python:
 	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/rec_model --output-dir services/rec-model-service/generated

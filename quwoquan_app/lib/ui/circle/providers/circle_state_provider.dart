@@ -103,7 +103,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
         role: _circleRoleFromRaw(detail.viewerRole),
         joinStatus: detail.joinStatusIfPresent ?? state.joinStatus,
         isFollowed: detail.isFollowedIfPresent ?? state.isFollowed,
-        circleStats: CircleStatsViewData.fromWire(
+        circleStats: CircleStatsViewData.fromStatsWire(
           statsWire,
           circleFallback: dto,
         ),
@@ -186,23 +186,25 @@ class CircleStateNotifier extends Notifier<CircleState> {
     }
   }
 
-  Future<bool> updateCircleDetails(Map<String, dynamic> data) async {
+  Future<bool> updateCircleDetails(CircleUpdateWireDto wire) async {
     try {
       final repo = ref.read(circleRepositoryProvider);
-      final updated = await repo.updateCircle(_circleId, data);
+      final patch = wire.toMap();
+      final updated = await repo.updateCircle(
+        _circleId,
+        wire,
+      );
       final merged = <String, dynamic>{
         ...?state.circleData?.toMap(),
-        ...updated,
+        ...updated.toMap(),
+        ...patch,
       };
       state = state.copyWith(
         circleData: CircleDto.fromMap(merged),
-        role: _circleRoleFromRaw(updated['role'] ?? merged['role']),
-        joinStatus:
-            (updated['joinStatus'] ?? merged['joinStatus'] ?? state.joinStatus)
-                .toString(),
-        isFollowed: updated['isFollowed'] as bool? ??
-            merged['isFollowed'] as bool? ??
-            state.isFollowed,
+        role: _circleRoleFromRaw(merged['role']),
+        joinStatus: (merged['joinStatus'] ?? state.joinStatus).toString(),
+        isFollowed:
+            merged['isFollowed'] as bool? ?? state.isFollowed,
         error: null,
       );
       return true;

@@ -6,10 +6,10 @@ class AppLogSkillCenterRestoreDefaultPayload {
   final String action;
   final int skillCount;
 
-  const AppLogSkillCenterRestoreDefaultPayload({
-    required this.event,
-    required this.action,
-    required this.skillCount,
+  AppLogSkillCenterRestoreDefaultPayload({
+    this.event = 'skill_center_action',
+    this.action = 'restore_default_all',
+    this.skillCount = 0,
   });
 
   factory AppLogSkillCenterRestoreDefaultPayload.fromMap(Map<String, dynamic> m) {

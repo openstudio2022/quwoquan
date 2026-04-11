@@ -6,6 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -118,7 +120,7 @@ void main() {
     test(
       'falls back to local group results when remote returns empty',
       () async {
-        final seedCircleId = CircleMockData.circles.first['id'] as String;
+        final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
         final seedGroup = (await _EmptyCircleRepository().listCircleGroups(
           seedCircleId,
           limit: 1,
@@ -143,7 +145,7 @@ void main() {
             );
           },
         );
-        final query = (seedGroup['name'] as String).substring(0, 2);
+        final query = seedGroup.name.substring(0, 2);
 
         final response = await repo.search(
           SearchRequest(
@@ -171,7 +173,7 @@ void main() {
     test(
       'falls back to persisted local group snapshot when remote search fails',
       () async {
-        final seedCircleId = CircleMockData.circles.first['id'] as String;
+        final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
         final seedGroup = (await MockCircleRepository().listCircleGroups(
           seedCircleId,
           limit: 1,
@@ -180,9 +182,9 @@ void main() {
           namespace: namespace,
           groups: <Map<String, dynamic>>[
             <String, dynamic>{
-              ...seedGroup,
+              ...seedGroup.toMap(),
               'circleId': seedCircleId,
-              'circleName': CircleMockData.circles.first['name'],
+              'circleName': CircleMockData.catalogCircleDtos.first.name,
             },
           ],
         );
@@ -206,7 +208,7 @@ void main() {
             );
           },
         );
-        final query = (seedGroup['name'] as String).substring(0, 2);
+        final query = seedGroup.name.substring(0, 2);
 
         final response = await repo.search(
           SearchRequest(
@@ -523,20 +525,20 @@ void main() {
 
 class _EmptyCircleRepository extends MockCircleRepository {
   @override
-  Future<List<Map<String, dynamic>>> searchCircleGroups(
+  Future<List<CircleGroupDto>> searchCircleGroups(
     String circleId, {
     required String query,
     String? visibility,
     String? groupType,
     int limit = 20,
   }) async {
-    return const <Map<String, dynamic>>[];
+    return const <CircleGroupDto>[];
   }
 }
 
 class _ThrowingCircleRepository extends MockCircleRepository {
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? subCategory,
     String? domainId,

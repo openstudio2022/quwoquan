@@ -393,7 +393,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       controller: _scrollController,
       itemCount: encrypted.length,
       itemBuilder: (context, i) {
-        final c = ChatInboxDto.fromMap(encrypted[i]);
+        final c = encrypted[i];
         return _ConversationTile(
           conversation: c,
           isSpecial: false,

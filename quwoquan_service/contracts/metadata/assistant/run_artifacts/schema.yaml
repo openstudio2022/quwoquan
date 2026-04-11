@@ -21,7 +21,14 @@ fields:
   - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
   - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
   - { name: slotState, type: object, ref: slot_state, default: {} }
+  # answerDecision: type map — 与 LLM decision / answerGate 等 spread 合并，扩展键必须保留。
+  # 稳定键（编排写入，供端上 ReadView 读取；非穷尽）：nextAction, answerEligibility,
+  # finalAnswerReady, evidenceSummary, confidence, reasoning, synthesisReady, synthesisReason 等。
   - { name: answerDecision, type: map, default: {} }
+  # diagnostics: type map — 与 answerPayload['diagnostics'] spread；扩展键必须保留。
+  # 稳定键（非穷尽）：domainId, renderMode, renderFallback, answerEligibility, qualityGates,
+  # evidenceEvaluation, answerBoundaryPolicy, evidenceSummary, evidencePassed, finalAnswerMode,
+  # synthesisReady, synthesisReason, heuristicFallbackUsed, emergedTags 等。
   - { name: diagnostics, type: map, default: {} }
   - { name: domainPolicyBundle, type: object, ref: policy_bundle }
 subcontracts:
@@ -196,6 +203,7 @@ subcontracts:
       - { name: url, type: string, default: '' }
       - { name: source, type: string, default: '' }
       - { name: snippet, type: string, default: '' }
+      - { name: rank, type: int, default: 0 }
   retrieval_processing:
     class_name: RetrievalProcessingSnapshot
     fields:
@@ -205,3 +213,30 @@ subcontracts:
       - { name: selectedKeyPoints, type: list<string>, default: [] }
       - { name: expansionReason, type: string, default: '' }
       - { name: acceptedReferences, type: list<object>, ref: retrieval_reference, default: [] }
+
+# 供 codegen 生成 Dart `Set<String>`，用于 map 字段「稳定键 / 扩展键」分区（不改变 JSON 形状）。
+map_stable_keys:
+  answerDecision:
+    - nextAction
+    - answerEligibility
+    - finalAnswerReady
+    - evidenceSummary
+    - confidence
+    - reasoning
+    - synthesisReady
+    - synthesisReason
+  diagnostics:
+    - domainId
+    - renderMode
+    - renderFallback
+    - answerEligibility
+    - qualityGates
+    - evidenceEvaluation
+    - answerBoundaryPolicy
+    - evidenceSummary
+    - evidencePassed
+    - finalAnswerMode
+    - synthesisReady
+    - synthesisReason
+    - heuristicFallbackUsed
+    - emergedTags

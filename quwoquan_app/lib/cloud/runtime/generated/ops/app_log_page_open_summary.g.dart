@@ -5,9 +5,9 @@ class AppLogPageOpenSummaryPayload {
   final String event;
   final String route;
 
-  const AppLogPageOpenSummaryPayload({
-    required this.event,
-    required this.route,
+  AppLogPageOpenSummaryPayload({
+    this.event = 'open',
+    this.route = '',
   });
 
   factory AppLogPageOpenSummaryPayload.fromMap(Map<String, dynamic> m) {

@@ -99,7 +99,7 @@ void main() {
 class _CustomMockChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return const [
+    return [
       ChatInboxDto(
         id: 'conv_custom',
         type: 'direct',
@@ -120,22 +120,11 @@ class _CustomMockChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
-    return [
-      {
-        '_id': 'conv_custom',
-        'type': 'direct',
-        'title': '自定义会话',
-        'status': 'active',
-        'memberCount': 2,
-        'maxSeq': 1,
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      },
-    ];
+    return listInbox(cursor: cursor, limit: limit);
   }
 }
 
@@ -146,11 +135,11 @@ class _EmptyChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
-    return [];
+    return const <ChatInboxDto>[];
   }
 }
 
@@ -161,7 +150,7 @@ class _ErrorChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {

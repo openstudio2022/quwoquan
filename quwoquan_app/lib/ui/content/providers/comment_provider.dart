@@ -154,16 +154,13 @@ class CommentNotifier extends Notifier<CommentState> {
       pendingComments: [...state.pendingComments, optimistic],
     );
     try {
-      final result = await _repo.createComment(
+      final confirmed = await _repo.createComment(
         postId: postId,
         content: content,
         replyToCommentId: replyToCommentId,
         personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
         profileSubjectId: resolvedProfileSubjectId,
         personaContextVersion: activeContext.personaContextVersion,
-      );
-      final confirmed = CommentDto.fromMap(
-        result['comment'] as Map<String, dynamic>? ?? result,
       );
       state = state.copyWith(
         comments: state.comments

@@ -32,9 +32,14 @@ type sharedFieldDef struct {
 // ── post/fields.yaml ─────────────────────────────────────────────────────────
 
 type fieldDef struct {
-	Name        string   `yaml:"name"`
-	Type        string   `yaml:"type"`
-	Constraints []string `yaml:"constraints"`
+	Name           string   `yaml:"name"`
+	Type           string   `yaml:"type"`
+	Constraints    []string `yaml:"constraints"`
+	EnumRef        string   `yaml:"enum_ref"`
+	ClientDartName string   `yaml:"client_dart_name"`
+	JsonKeys       []string `yaml:"json_keys"`
+	ClientDefault  string   `yaml:"client_default"`
+	ItemEntity     string   `yaml:"item_entity"`
 }
 
 type entityDef struct {
@@ -48,12 +53,15 @@ type fieldsFile struct {
 // ── post/service.yaml ─────────────────────────────────────────────────────────
 
 type routeDef struct {
-	Method         string   `yaml:"method"`
-	Path           string   `yaml:"path"`
-	Operation      string   `yaml:"operation"`
-	Description    string   `yaml:"description"`
-	QueryParams    []string `yaml:"query_params"`
-	WritableFields []string `yaml:"writable_fields"`
+	Method          string   `yaml:"method"`
+	Path            string   `yaml:"path"`
+	Operation       string   `yaml:"operation"`
+	Description     string   `yaml:"description"`
+	QueryParams     []string `yaml:"query_params"`
+	WritableFields  []string `yaml:"writable_fields"`
+	RequestFields   []string `yaml:"request_fields"`
+	ResponseFields  []string `yaml:"response_fields"`
+	ResponseEntity  string   `yaml:"response_entity"`
 }
 
 type serviceInfo struct {
@@ -75,13 +83,16 @@ type integrationLocationServiceFile struct {
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
 
 type projectionFieldDef struct {
-	Name        string   `yaml:"name"`
-	DartType    string   `yaml:"dart_type"`
-	Nullable    bool     `yaml:"nullable"`
-	Source      string   `yaml:"source"`
-	Aliases     []string `yaml:"aliases"`
-	Default     string   `yaml:"default"`
-	Description string   `yaml:"description"`
+	Name                     string   `yaml:"name"`
+	DartType                 string   `yaml:"dart_type"`
+	Nullable                 bool     `yaml:"nullable"`
+	Source                   string   `yaml:"source"`
+	Aliases                  []string `yaml:"aliases"`
+	Default                  string   `yaml:"default"`
+	Description              string   `yaml:"description"`
+	SkipEmptyStringAliases   bool     `yaml:"skip_empty_string_aliases"`
+	// When dart_type is List<SomeDto>, set to SomeDto; fromMap uses SomeDto.fromMap per element.
+	ListElementDartClass string `yaml:"list_element_dart_class"`
 }
 
 type computedGetterDef struct {
@@ -96,6 +107,7 @@ type clientProjection struct {
 	DartClass       string               `yaml:"dart_class"`
 	BaseClass       string               `yaml:"base_class"`
 	OutputPath      string               `yaml:"output_path"`
+	DartImports     []string             `yaml:"dart_imports"`
 	Fields          []projectionFieldDef `yaml:"fields"`
 	ComputedGetters []computedGetterDef  `yaml:"computed_getters"`
 }
@@ -485,6 +497,16 @@ func main() {
 		generatedStandaloneProjectionPaths[dtoRelPath] = true
 	}
 
+	contentGenDir := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content")
+	writeFile(filepath.Join(contentGenDir, "comment_dto.g.dart"), renderCommentDtoDart())
+	writeFile(filepath.Join(contentGenDir, "post_search_item_view_dto.g.dart"), renderPostSearchItemViewDtoDart())
+	writeFile(filepath.Join(contentGenDir, "report_create_request_wire.g.dart"), renderCreateReportRequestWireDart())
+
+	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
+		exitErr(err)
+	}
+	writeContentAppConfigClientDart(filepath.Join(contentGenDir, "content_app_config_client_dto.g.dart"))
+
 	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）
 	if errsDef, err := readErrors(filepath.Join(postDir, "errors.yaml")); err == nil {
 		out := renderContentErrorsDart(errsDef)
@@ -607,7 +629,15 @@ func main() {
 		writeFile(dtoPath, out)
 	}
 
-	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）
+	writeFile(filepath.Join(contentGenDir, "content_dtos.dart"), renderContentDtosBarrelDart())
+	writeContentPostMutationWires(filepath.Join(contentGenDir, "content_post_mutation_wires.g.dart"), service)
+	writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir)
+
+	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
+	// 用户域 Auth/Invite/Greeting 等 wire 读模型见：
+	//   user/user_profile/projections/*.yaml
+	//   user/invite_record/projections/*.yaml
+	//   user/greeting_request/projections/*.yaml
 	err = filepath.WalkDir(metadataDir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -663,6 +693,15 @@ func main() {
 			pageIDsOut,
 		)
 	}
+	if err := writeRtcCallSessionDtos(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeRtcSignalPayloads(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
 	writeFile(
 		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "app_request_page_ids.g.dart"),
 		renderStandaloneRequestPageIDsDart(sharedRequestContext.StandalonePageIDs),
@@ -703,7 +742,25 @@ func main() {
 			renderSearchRegistryDart(searchObjects),
 		)
 	}
+	if circleWireKeysOut, err := renderCircleWriteWireWritableKeysDart(metadataDir); err != nil {
+		exitErr(err)
+	} else {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "circle", "circle_write_wire_writable_keys.g.dart"),
+			circleWireKeysOut,
+		)
+	}
 	if err := generateAssistantRuntimeArtifacts(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
+	if err := generateAssistantCloudApiWireDart(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
+	svcRoot, err := filepath.Abs(".")
+	if err != nil {
+		exitErr(err)
+	}
+	if err := generateAssistantWireGoPoC(metadataDir, svcRoot); err != nil {
 		exitErr(err)
 	}
 }
@@ -1527,6 +1584,12 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s. DO NOT EDIT.\n", sourcePath))
 	b.WriteString("// ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators\n\n")
+	for _, imp := range proj.DartImports {
+		b.WriteString(fmt.Sprintf("import '%s';\n", imp))
+	}
+	if len(proj.DartImports) > 0 {
+		b.WriteString("\n")
+	}
 
 	className := proj.DartClass
 	if className == "" {
@@ -1540,10 +1603,18 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		}
 		b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, f.Name))
 	}
-	b.WriteString("\n  const " + className + "({\n")
+	// 非 const：DateTime / 集合默认值等在 const 构造下非法。
+	b.WriteString("\n  " + className + "({\n")
 	for _, f := range proj.Fields {
+		dt := normalizeDartType(f.DartType)
 		if f.Nullable {
 			b.WriteString(fmt.Sprintf("    this.%s,\n", f.Name))
+		} else if md := mapEmptyCtorDefaultFromYaml(f, dt); md != "" {
+			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, md))
+		} else if cd := constSafeCtorDefaultFromYaml(f, dt); cd != "" {
+			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, cd))
+		} else if ld := listCtorDefaultConst(dt); ld != "" {
+			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, ld))
 		} else {
 			b.WriteString(fmt.Sprintf("    required this.%s,\n", f.Name))
 		}
@@ -1597,6 +1668,10 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	needsStringKeyMap := false
 	needsDateTime := false
 	needsStringList := false
+	needsMapList := false
+	needsProjectionDtoList := false
+	needsFirstNonEmptyMapList := false
+	needsFirstNonEmptyWireString := false
 	for _, f := range proj.Fields {
 		dt := normalizeDartType(f.DartType)
 		switch dt {
@@ -1606,7 +1681,28 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 			needsDateTime = true
 		case "List<String>":
 			needsStringList = true
+		case "List<Map<String, dynamic>>":
+			needsMapList = true
+			keys := projectionFieldAliasKeys(f)
+			if len(keys) > 1 {
+				needsFirstNonEmptyMapList = true
+			}
 		}
+		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
+			needsProjectionDtoList = true
+		}
+		if dt == "String" && f.SkipEmptyStringAliases {
+			needsFirstNonEmptyWireString = true
+		}
+	}
+	if needsFirstNonEmptyWireString {
+		b.WriteString("String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {\n")
+		b.WriteString("  for (final k in keys) {\n")
+		b.WriteString("    final v = m[k]?.toString();\n")
+		b.WriteString("    if (v != null && v.isNotEmpty) return v;\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n\n")
 	}
 	if needsDateTime {
 		b.WriteString("DateTime? _parseDateTime(dynamic v) {\n")
@@ -1622,6 +1718,46 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
 		b.WriteString("  return null;\n")
 		b.WriteString("}\n")
+	}
+	if needsMapList {
+		b.WriteString("List<Map<String, dynamic>> _parseMapList(Object? v) {\n")
+		b.WriteString("  if (v == null) return const <Map<String, dynamic>>[];\n")
+		b.WriteString("  if (v is! List) return const <Map<String, dynamic>>[];\n")
+		b.WriteString("  final out = <Map<String, dynamic>>[];\n")
+		b.WriteString("  for (final e in v) {\n")
+		b.WriteString("    if (e is Map) {\n")
+		b.WriteString("      out.add(Map<String, dynamic>.from(e));\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return out;\n")
+		b.WriteString("}\n\n")
+	}
+	if needsProjectionDtoList {
+		b.WriteString("List<T> _parseProjectionDtoList<T>(\n")
+		b.WriteString("  Object? v,\n")
+		b.WriteString("  T Function(Map<String, dynamic> m) fromMap,\n")
+		b.WriteString(") {\n")
+		b.WriteString("  if (v == null) return List<T>.empty(growable: false);\n")
+		b.WriteString("  if (v is! List) return List<T>.empty(growable: false);\n")
+		b.WriteString("  final out = <T>[];\n")
+		b.WriteString("  for (final e in v) {\n")
+		b.WriteString("    if (e is Map<String, dynamic>) {\n")
+		b.WriteString("      out.add(fromMap(e));\n")
+		b.WriteString("    } else if (e is Map) {\n")
+		b.WriteString("      out.add(fromMap(Map<String, dynamic>.from(e)));\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return out;\n")
+		b.WriteString("}\n\n")
+	}
+	if needsFirstNonEmptyMapList {
+		b.WriteString("List<Map<String, dynamic>> _firstNonEmptyMapList(Map<String, dynamic> m, List<String> keys) {\n")
+		b.WriteString("  for (final k in keys) {\n")
+		b.WriteString("    final parsed = _parseMapList(m[k]);\n")
+		b.WriteString("    if (parsed.isNotEmpty) return parsed;\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return const <Map<String, dynamic>>[];\n")
+		b.WriteString("}\n\n")
 	}
 	if needsStringKeyMap {
 		b.WriteString("\nMap<String, dynamic>? _parseStringKeyMap(dynamic v) {\n")
@@ -1744,6 +1880,56 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 	b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
 	b.WriteString("  return null;\n")
 	b.WriteString("}\n")
+
+	needsMapList := false
+	needsFirstNonEmptyMapList := false
+	needsStringKeyMap := false
+	for _, f := range proj.Fields {
+		dt := normalizeDartType(f.DartType)
+		switch dt {
+		case "List<Map<String, dynamic>>":
+			needsMapList = true
+			if len(projectionFieldAliasKeys(f)) > 1 {
+				needsFirstNonEmptyMapList = true
+			}
+		case "Map<String, dynamic>":
+			needsStringKeyMap = true
+		}
+	}
+	if needsMapList {
+		b.WriteString("\nList<Map<String, dynamic>> _parseMapList(Object? v) {\n")
+		b.WriteString("  if (v == null) return const <Map<String, dynamic>>[];\n")
+		b.WriteString("  if (v is! List) return const <Map<String, dynamic>>[];\n")
+		b.WriteString("  final out = <Map<String, dynamic>>[];\n")
+		b.WriteString("  for (final e in v) {\n")
+		b.WriteString("    if (e is Map) {\n")
+		b.WriteString("      out.add(Map<String, dynamic>.from(e));\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return out;\n")
+		b.WriteString("}\n")
+	}
+	if needsFirstNonEmptyMapList {
+		b.WriteString("\nList<Map<String, dynamic>> _firstNonEmptyMapList(Map<String, dynamic> m, List<String> keys) {\n")
+		b.WriteString("  for (final k in keys) {\n")
+		b.WriteString("    final parsed = _parseMapList(m[k]);\n")
+		b.WriteString("    if (parsed.isNotEmpty) return parsed;\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return const <Map<String, dynamic>>[];\n")
+		b.WriteString("}\n")
+	}
+	if needsStringKeyMap {
+		b.WriteString("\nMap<String, dynamic>? _parseStringKeyMap(dynamic v) {\n")
+		b.WriteString("  if (v == null) return null;\n")
+		b.WriteString("  if (v is Map<String, dynamic>) return v;\n")
+		b.WriteString("  if (v is Map) {\n")
+		b.WriteString("    return Map<String, dynamic>.from(\n")
+		b.WriteString("      v.map((k, val) => MapEntry(k.toString(), val)),\n")
+		b.WriteString("    );\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n")
+	}
 
 	return b.String()
 }
@@ -1908,6 +2094,25 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	return b.String()
 }
 
+// projectionFieldAliasKeys returns source + aliases for a field, deduplicated.
+func projectionFieldAliasKeys(f projectionFieldDef) []string {
+	allKeys := []string{f.Source}
+	for _, a := range f.Aliases {
+		if a != f.Source {
+			allKeys = append(allKeys, a)
+		}
+	}
+	seen := map[string]bool{}
+	deduped := []string{}
+	for _, k := range allKeys {
+		if !seen[k] {
+			seen[k] = true
+			deduped = append(deduped, k)
+		}
+	}
+	return deduped
+}
+
 // buildAliasResolver generates the fromMap expression for a single field,
 // trying each alias key in order until a non-null value is found.
 func buildAliasResolver(f projectionFieldDef) string {
@@ -1921,24 +2126,32 @@ func buildAliasResolver(f projectionFieldDef) string {
 		}
 	}
 
-	allKeys := []string{f.Source}
-	for _, a := range f.Aliases {
-		if a != f.Source {
-			allKeys = append(allKeys, a)
+	deduped := projectionFieldAliasKeys(f)
+
+	if f.ListElementDartClass != "" && strings.HasPrefix(dartType, "List<") && strings.HasSuffix(dartType, ">") {
+		if len(deduped) == 0 {
+			return defaultVal
 		}
-	}
-	// deduplicate
-	seen := map[string]bool{}
-	deduped := []string{}
-	for _, k := range allKeys {
-		if !seen[k] {
-			seen[k] = true
-			deduped = append(deduped, k)
-		}
+		return fmt.Sprintf(
+			"_parseProjectionDtoList(m['%s'], %s.fromMap)",
+			deduped[0],
+			f.ListElementDartClass,
+		)
 	}
 
 	switch dartType {
 	case "String":
+		if f.SkipEmptyStringAliases && len(deduped) > 0 {
+			quoted := make([]string, len(deduped))
+			for i, k := range deduped {
+				quoted[i] = fmt.Sprintf("'%s'", k)
+			}
+			return fmt.Sprintf(
+				"_firstNonEmptyWireString(m, <String>[%s]) ?? %s",
+				strings.Join(quoted, ", "),
+				defaultVal,
+			)
+		}
 		parts := make([]string, len(deduped))
 		for i, k := range deduped {
 			parts[i] = fmt.Sprintf("m['%s']?.toString()", k)
@@ -1980,6 +2193,19 @@ func buildAliasResolver(f projectionFieldDef) string {
 		}
 		return strings.Join(parts, " ?? ") + fmt.Sprintf(" ?? %s", defaultVal)
 
+	case "List<Map<String, dynamic>>":
+		if len(deduped) == 0 {
+			return defaultVal
+		}
+		if len(deduped) == 1 {
+			return fmt.Sprintf("_parseMapList(m['%s'])", deduped[0])
+		}
+		quoted := make([]string, len(deduped))
+		for i, k := range deduped {
+			quoted[i] = fmt.Sprintf("'%s'", k)
+		}
+		return fmt.Sprintf("_firstNonEmptyMapList(m, <String>[%s])", strings.Join(quoted, ", "))
+
 	case "Map<String, dynamic>":
 		if len(deduped) == 0 {
 			return defaultVal
@@ -2017,10 +2243,94 @@ func defaultForType(dartType string) string {
 		return "false"
 	case "List<String>":
 		return "<String>[]"
+	case "List<Map<String, dynamic>>":
+		return "const <Map<String, dynamic>>[]"
 	case "DateTime":
 		return "DateTime(0)"
 	default:
+		if strings.HasPrefix(dartType, "List<") && strings.HasSuffix(dartType, ">") {
+			inner := strings.TrimSuffix(strings.TrimPrefix(dartType, "List<"), ">")
+			return fmt.Sprintf("<%s>[]", inner)
+		}
 		return "null"
+	}
+}
+
+// listCtorDefaultConst returns a const empty list default for non-nullable List<...> ctor params.
+func mapEmptyCtorDefaultFromYaml(f projectionFieldDef, dt string) string {
+	if dt != "Map<String, dynamic>" {
+		return ""
+	}
+	d := strings.TrimSpace(f.Default)
+	if d == "<String, dynamic>{}" || d == "{}" {
+		return "const <String, dynamic>{}"
+	}
+	return ""
+}
+
+func listCtorDefaultConst(dartType string) string {
+	switch dartType {
+	case "List<String>":
+		return "const <String>[]"
+	case "List<Map<String, dynamic>>":
+		return "const <Map<String, dynamic>>[]"
+	default:
+		if strings.HasPrefix(dartType, "List<") && strings.HasSuffix(dartType, ">") {
+			inner := strings.TrimSuffix(strings.TrimPrefix(dartType, "List<"), ">")
+			return fmt.Sprintf("const <%s>[]", inner)
+		}
+	}
+	return ""
+}
+
+// constSafeCtorDefaultFromYaml emits const-constructor-safe defaults from YAML `default`
+// (int/double/bool/string literals only). Skips DateTime/Map/List — those use listCtorDefaultConst or required.
+func constSafeCtorDefaultFromYaml(f projectionFieldDef, dt string) string {
+	d := strings.TrimSpace(f.Default)
+	if d == "" {
+		return ""
+	}
+	switch dt {
+	case "int":
+		for _, r := range d {
+			if r < '0' || r > '9' {
+				return ""
+			}
+		}
+		return d
+	case "double":
+		ok := true
+		dot := false
+		for i, r := range d {
+			if i == 0 && r == '-' {
+				continue
+			}
+			if r == '.' {
+				if dot {
+					ok = false
+					break
+				}
+				dot = true
+				continue
+			}
+			if r < '0' || r > '9' {
+				ok = false
+				break
+			}
+		}
+		if !ok || d == "." || d == "-" {
+			return ""
+		}
+		return d
+	case "bool":
+		if d == "true" || d == "false" {
+			return d
+		}
+		return ""
+	case "String":
+		return d
+	default:
+		return ""
 	}
 }
 

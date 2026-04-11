@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "_id": "call_golden_001",
+      "callType": "audio",
+      "status": "ended",
+      "initiatorId": "user_golden",
+      "roomId": "room_golden",
+      "maxParticipants": 32,
+      "participantCount": 0,
+      "participants": [],
+      "isRecording": false,
+      "isScreenSharing": false,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}

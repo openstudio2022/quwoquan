@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/recent_search_read_presentation.dart';
 import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -1275,6 +1276,7 @@ class _HistoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pres = RecentSearchReadPresentation.fromEntry(entry);
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
@@ -1308,7 +1310,7 @@ class _HistoryChip extends StatelessWidget {
             SizedBox(width: AppSpacing.intraGroupXs),
             Expanded(
               child: Text(
-                entry.query,
+                pres.displayQuery,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

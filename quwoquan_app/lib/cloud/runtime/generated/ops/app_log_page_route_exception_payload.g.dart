@@ -8,12 +8,12 @@ class AppLogPageRouteExceptionPayload {
   final String source;
   final String exception;
 
-  const AppLogPageRouteExceptionPayload({
-    required this.event,
-    required this.route,
-    required this.pageName,
-    required this.source,
-    required this.exception,
+  AppLogPageRouteExceptionPayload({
+    this.event = 'exception',
+    this.route = 'app',
+    this.pageName = 'app',
+    this.source = '',
+    this.exception = '',
   });
 
   factory AppLogPageRouteExceptionPayload.fromMap(Map<String, dynamic> m) {

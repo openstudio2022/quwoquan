@@ -32,6 +32,23 @@ void main() {
       expect(decoded.userProfileSnapshot['profileVersion'], equals('v1'));
     });
 
+    test('run request gateway body keeps extension keys', () {
+      final req = AssistantRunRequest.fromGatewayBody(<String, dynamic>{
+        'messages': <Map<String, dynamic>>[
+          <String, dynamic>{'role': 'user', 'content': 'x'},
+        ],
+        'modelRef': 'm1',
+        'customProbe': 42,
+      });
+      expect(req.messages, hasLength(1));
+      expect(req.maxIterations, 8);
+      expect(req.jsonExtension['modelRef'], 'm1');
+      expect(req.jsonExtension['customProbe'], 42);
+      final roundTrip = AssistantRunRequest.fromJson(req.toJson());
+      expect(roundTrip.jsonExtension['modelRef'], 'm1');
+      expect(roundTrip.jsonExtension['customProbe'], 42);
+    });
+
     test('run response supports json roundtrip', () {
       final response = AssistantRunResponse(
         finalText: 'ok',

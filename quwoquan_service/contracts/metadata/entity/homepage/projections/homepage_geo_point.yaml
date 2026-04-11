@@ -1,0 +1,30 @@
+version: 1
+read_model: HomepageGeoPoint
+
+description: |
+  主页地理坐标 wire（与 fields.yaml / homepage_models 历史形状一致）；由 codegen_app_metadata 生成，供 HomepageDetail 等引用。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageGeoPoint
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_geo_point.g.dart
+  fields:
+    - name: latitude
+      dart_type: double
+      nullable: false
+      source: latitude
+      aliases: [latitude]
+      default: "0.0"
+
+    - name: longitude
+      dart_type: double
+      nullable: false
+      source: longitude
+      aliases: [longitude]
+      default: "0.0"

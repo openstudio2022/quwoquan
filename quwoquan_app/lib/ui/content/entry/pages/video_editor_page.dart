@@ -33,6 +33,8 @@ class VideoEditorResult {
 }
 
 /// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
+/// 剪辑结果回写草稿后，发布确认页的帖子元数据预览与 `publish_draft_projection_bridge`
+///（`postReadPreviewBundleFromPublishConfirmSummary` / `PostReadSurfaceId.draftPreview`）同源。
 class VideoEditorPage extends StatefulWidget {
   const VideoEditorPage({
     super.key,

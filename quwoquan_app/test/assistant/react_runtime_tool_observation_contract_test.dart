@@ -585,10 +585,15 @@ void main() {
     expect(provider.callCount, equals(2), reason: '自动补检索后应继续进入下一轮收敛');
     expect(result.finalText, equals('最终回答'));
     expect(captureTool.lastArguments['query'], equals('深圳住宿 通勤 景点 夜生活 适合'));
-    final firstThinkingTrace = result.traces.firstWhere(
-      (trace) => trace.type == AssistantTraceEventType.thinkingProgress,
+    expect(
+      result.traces.any(
+        (trace) =>
+            trace.type == AssistantTraceEventType.searchQueryGenerated &&
+            ((trace.data?['query'] as String?)?.contains('深圳住宿') ?? false),
+      ),
+      isTrue,
+      reason: '自动注入检索应产生 searchQueryGenerated 轨迹',
     );
-    expect(firstThinkingTrace.data?['phase'], equals('search'));
   });
 
   test('phase 侧已有 precomputed queryTasks 时优先自动注入 search', () async {

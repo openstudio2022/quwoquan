@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 
 /// L1a 契约测试：FeedItemDto — 覆盖 mock.yaml dto_scenarios
@@ -15,8 +16,9 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('PostFeedDto — 常规契约', () {
     test('parses canonical photo item correctly', () {
-      final raw = ContentMockData.discoveryPhotoData.first;
-      final dto = FeedItemDto.fromMap(raw);
+      final dto = FeedItemDto.fromMap(
+        ContentMockData.discoveryPhotoData.first.toDiscoveryWireMap(),
+      );
 
       expect(dto.id, equals('d1'));
       expect(dto.type, equals('image'));
@@ -35,8 +37,9 @@ void main() {
     });
 
     test('parses canonical video item correctly', () {
-      final raw = ContentMockData.discoveryVideoData.first;
-      final dto = FeedItemDto.fromMap(raw);
+      final dto = FeedItemDto.fromMap(
+        ContentMockData.discoveryVideoData.first.toDiscoveryWireMap(),
+      );
 
       expect(dto.id, equals('v1'));
       expect(dto.type, equals('video'));
@@ -50,8 +53,9 @@ void main() {
     });
 
     test('parses canonical moment item correctly', () {
-      final raw = ContentMockData.discoveryMomentData.first;
-      final dto = FeedItemDto.fromMap(raw);
+      final dto = FeedItemDto.fromMap(
+        ContentMockData.discoveryMomentData.first.toDiscoveryWireMap(),
+      );
 
       expect(dto.id, equals('m4'));
       expect(dto.type, equals('micro'));
@@ -62,8 +66,9 @@ void main() {
     });
 
     test('parses canonical article item correctly', () {
-      final raw = ContentMockData.discoveryArticleData.first;
-      final dto = FeedItemDto.fromMap(raw);
+      final dto = FeedItemDto.fromMap(
+        ContentMockData.discoveryArticleData.first.toDiscoveryWireMap(),
+      );
 
       expect(dto.id, equals('web-dev'));
       expect(dto.type, equals('article'));
@@ -74,16 +79,16 @@ void main() {
     });
 
     test('all mock data: id/authorId/displayName non-empty for every item', () {
-      for (final raw in [
+      for (final item in [
         ...ContentMockData.discoveryPhotoData,
         ...ContentMockData.discoveryVideoData,
         ...ContentMockData.discoveryMomentData,
         ...ContentMockData.discoveryArticleData,
       ]) {
-        final dto = FeedItemDto.fromMap(raw);
-        expect(dto.id, isNotEmpty, reason: 'id must be non-empty for ${raw['postId']}');
-        expect(dto.authorId, isNotEmpty, reason: 'authorId must be set for ${raw['postId']}');
-        expect(dto.displayName, isNotEmpty, reason: 'displayName must be set for ${raw['postId']}');
+        final dto = FeedItemDto.fromMap(item.toDiscoveryWireMap());
+        expect(dto.id, isNotEmpty, reason: 'id must be non-empty for ${item.id}');
+        expect(dto.authorId, isNotEmpty, reason: 'authorId must be set for ${item.id}');
+        expect(dto.displayName, isNotEmpty, reason: 'displayName must be set for ${item.id}');
       }
     });
   });
@@ -115,8 +120,7 @@ void main() {
     });
 
     test('toMap round-trips canonical fields correctly', () {
-      final raw = ContentMockData.discoveryPhotoData.first;
-      final dto = FeedItemDto.fromMap(raw);
+      final dto = ContentMockData.discoveryPhotoData.first;
       final map = dto.toMap();
 
       expect(map['id'], equals(dto.id));
@@ -128,7 +132,7 @@ void main() {
     });
 
     test('copyWith produces correct partial update while preserving other fields', () {
-      final original = FeedItemDto.fromMap(ContentMockData.discoveryPhotoData.first);
+      final original = ContentMockData.discoveryPhotoData.first;
       final updated = original.copyWith(likeCount: 9999, displayName: 'Updated Name');
 
       expect(updated.likeCount, equals(9999));
@@ -169,7 +173,7 @@ void main() {
       // This test validates that CursorPage correctly stores and returns the cursor.
       const cursorValue = 'post_d1';
       final page = CursorPage<FeedItemDto>(
-        items: [FeedItemDto.fromMap(ContentMockData.discoveryPhotoData.first)],
+        items: [ContentMockData.discoveryPhotoData.first],
         nextCursor: cursorValue,
       );
       expect(page.nextCursor, equals(cursorValue),
@@ -180,7 +184,7 @@ void main() {
 
     test('CursorPage with null nextCursor indicates last page', () {
       final page = CursorPage<FeedItemDto>(
-        items: [FeedItemDto.fromMap(ContentMockData.discoveryPhotoData.first)],
+        items: [ContentMockData.discoveryPhotoData.first],
         // no nextCursor — this is the last page
       );
       expect(page.nextCursor, isNull,

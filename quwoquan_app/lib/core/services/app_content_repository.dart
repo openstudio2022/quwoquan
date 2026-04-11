@@ -1,6 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
 
 export 'package:quwoquan_app/cloud/services/app_content/app_content_repository_provider.dart';
 
@@ -29,36 +38,60 @@ final appDataSourceModeProvider =
   AppDataSourceModeNotifier.new,
 );
 
+/// 应用级内容相关 mock / 过渡数据入口（含发现区 wire 切片）。
+///
+/// **强类型发现列表**：遍历四类 mock 为 [PostBaseDto] 时使用
+/// [AppContentRepositoryDiscoveryPosts.discoveryPostsAsDtos]（与 `discovery*Data` 同源，跳过不可解析行）。
+/// **单条 + 扩展 wire**：[lookupDiscoveryFeedWireRow] / [lookupDiscoveryPostBaseDto]。
+///
+/// 聊天 / 圈子 / 助理 Tab 原型数据均为 **codegen DTO 或显式原型模型**，不再对外暴露 `List<Map<String,dynamic>>`。
 abstract class AppContentRepository {
-  List<Map<String, dynamic>> get discoveryMomentData;
-  List<Map<String, dynamic>> get discoveryPhotoData;
-  List<Map<String, dynamic>> get discoveryArticleData;
-  List<Map<String, dynamic>> get discoveryVideoData;
+  @Deprecated(
+    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+  )
+  List<FeedItemDto> get discoveryMomentData;
+  @Deprecated(
+    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+  )
+  List<FeedItemDto> get discoveryPhotoData;
+  @Deprecated(
+    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+  )
+  List<FeedItemDto> get discoveryArticleData;
+  @Deprecated(
+    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+  )
+  List<FeedItemDto> get discoveryVideoData;
+  @Deprecated(
+    '文章详情请优先 ContentRepository.getPost；Prototype 仅过渡期保留。',
+  )
   Map<String, dynamic>? articleById(String id);
 
   /// 发现 Feed 原型数据中按 postId 定位单行 Map（分享模板圈名/tags 等扩展字段；非 codegen DTO）。
+  @Deprecated(
+    '请使用 prototypeDiscoveryWireRowForMock + lookupCanonicalDiscoveryWireRowByPostId（discovery_wire_lookup.dart）。',
+  )
   Map<String, dynamic>? discoveryFeedWireRowByPostId(String postId);
 
-  List<Map<String, dynamic>> get chatMockConversations;
-  List<Map<String, dynamic>> get chatMockConversationsAtMe;
-  List<Map<String, dynamic>> get chatEncryptedConversations;
-  Map<String, dynamic> get chatAssistantConversation;
-  List<Map<String, dynamic>> get chatMockContactCircles;
-  List<Map<String, dynamic>> get chatMockContacts;
-  List<Map<String, dynamic>> get chatMockContactGroups;
-  List<Map<String, dynamic>> chatMessagesFor(String conversationId);
+  List<ChatInboxDto> get chatMockConversations;
+  List<ChatInboxDto> get chatMockConversationsAtMe;
+  List<ChatInboxDto> get chatEncryptedConversations;
+  ChatInboxDto get chatAssistantConversation;
+  List<ChatContactTabCircleRowDto> get chatMockContactCircles;
+  List<ChatContactTabFunGroupRowDto> get chatMockContactGroups;
+  List<ChatContactRowDto> get chatMockContacts;
+  List<ChatMessageDto> chatMessagesFor(String conversationId);
 
-  List<Map<String, dynamic>> get assistantMemoryData;
-  List<Map<String, dynamic>> get assistantTasksData;
-  List<Map<String, dynamic>> get assistantSkillsData;
+  List<AssistantPrototypeMemoryRow> get assistantMemoryData;
+  List<AssistantPrototypeTaskRow> get assistantTasksData;
+  List<AssistantPrototypeSkillRow> get assistantSkillsData;
 
-  /// 帮读摘要：一句话综述 + 分维度展开事实。格式见 PrototypeMockData.helperReadSummary。
-  Map<String, dynamic> get helperReadSummary;
+  HelperReadSummaryPrototype get helperReadSummary;
 
-  Map<String, dynamic> get circlePageCircleInfo;
-  Map<String, Map<String, dynamic>> get circlesCategoryConfig;
-  List<Map<String, dynamic>> get circlesMockActivities;
-  List<Map<String, dynamic>> get circlesMockCircles;
+  CirclePagePrototypeInfo get circlePageCircleInfo;
+  Map<String, CircleCategoryTabConfigDto> get circlesCategoryConfig;
+  List<CircleActivityPrototypeRow> get circlesMockActivities;
+  List<CircleDto> get circlesMockCircles;
 }
 
 /// 在发现区四类 mock 聚合中按帖子 id 查找原始 wire 行（仅 parse/原型边界用）。
@@ -66,24 +99,15 @@ Map<String, dynamic>? lookupDiscoveryFeedWireRow(
   AppContentRepository repo,
   String postId,
 ) {
-  if (postId.isEmpty) return null;
-  final all = <Map<String, dynamic>>[
-    ...repo.discoveryPhotoData,
-    ...repo.discoveryVideoData,
-    ...repo.discoveryArticleData,
-    ...repo.discoveryMomentData,
-  ];
-  for (final item in all) {
-    final itemId =
-        item['postId']?.toString() ??
-        item['_id']?.toString() ??
-        item['id']?.toString() ??
-        '';
-    if (itemId == postId) {
-      return item;
-    }
-  }
-  return null;
+  return findDiscoveryWireRowByPostId(
+    postId,
+    aggregateDiscoveryWireSlices(
+      photo: repo.discoveryPhotoData,
+      video: repo.discoveryVideoData,
+      article: repo.discoveryArticleData,
+      moment: repo.discoveryMomentData,
+    ),
+  );
 }
 
 /// 在四类发现 mock 聚合中按帖子 id 解析为 [PostBaseDto]（无则 null）。
@@ -100,20 +124,66 @@ PostBaseDto? lookupDiscoveryPostBaseDto(AppContentRepository repo, String postId
 class RemoteAppContentRepository implements AppContentRepository {
   RemoteAppContentRepository();
 
-  static final List<Map<String, dynamic>> _empty =
-      List<Map<String, dynamic>>.unmodifiable(<Map<String, dynamic>>[]);
+  static final List<FeedItemDto> _emptyFeed =
+      List<FeedItemDto>.unmodifiable(<FeedItemDto>[]);
+
+  static final List<ChatInboxDto> _emptyInbox =
+      List<ChatInboxDto>.unmodifiable(<ChatInboxDto>[]);
+  static final List<ChatContactTabCircleRowDto> _emptyCircles =
+      List<ChatContactTabCircleRowDto>.unmodifiable(<ChatContactTabCircleRowDto>[]);
+  static final List<ChatContactTabFunGroupRowDto> _emptyGroups =
+      List<ChatContactTabFunGroupRowDto>.unmodifiable(
+        <ChatContactTabFunGroupRowDto>[],
+      );
+  static final List<ChatContactRowDto> _emptyContacts =
+      List<ChatContactRowDto>.unmodifiable(<ChatContactRowDto>[]);
+  static final List<ChatMessageDto> _emptyMessages =
+      List<ChatMessageDto>.unmodifiable(<ChatMessageDto>[]);
+  static final List<AssistantPrototypeMemoryRow> _emptyMemories =
+      List<AssistantPrototypeMemoryRow>.unmodifiable(
+        <AssistantPrototypeMemoryRow>[],
+      );
+  static final List<AssistantPrototypeTaskRow> _emptyTasks =
+      List<AssistantPrototypeTaskRow>.unmodifiable(<AssistantPrototypeTaskRow>[]);
+  static final List<AssistantPrototypeSkillRow> _emptySkills =
+      List<AssistantPrototypeSkillRow>.unmodifiable(<AssistantPrototypeSkillRow>[]);
+  static final List<CircleActivityPrototypeRow> _emptyActivities =
+      List<CircleActivityPrototypeRow>.unmodifiable(
+        <CircleActivityPrototypeRow>[],
+      );
+  static final List<CircleDto> _emptyCircleDtos =
+      List<CircleDto>.unmodifiable(<CircleDto>[]);
+
+  static final ChatInboxDto _emptyInboxRow = ChatInboxDto();
+  static const CirclePagePrototypeInfo _emptyCirclePage =
+      CirclePagePrototypeInfo(
+    name: '',
+    id: '',
+    avatar: '',
+    cover: '',
+    desc: '',
+    stats: CirclePrototypeStats(
+      members: '',
+      groups: '',
+      fans: '',
+      likes: '',
+    ),
+    hasNewMessages: false,
+  );
+  static const HelperReadSummaryPrototype _emptyHelperRead =
+      HelperReadSummaryPrototype(oneLiner: '', dimensions: []);
 
   @override
-  List<Map<String, dynamic>> get discoveryMomentData => _empty;
+  List<FeedItemDto> get discoveryMomentData => _emptyFeed;
 
   @override
-  List<Map<String, dynamic>> get discoveryPhotoData => _empty;
+  List<FeedItemDto> get discoveryPhotoData => _emptyFeed;
 
   @override
-  List<Map<String, dynamic>> get discoveryArticleData => _empty;
+  List<FeedItemDto> get discoveryArticleData => _emptyFeed;
 
   @override
-  List<Map<String, dynamic>> get discoveryVideoData => _empty;
+  List<FeedItemDto> get discoveryVideoData => _emptyFeed;
 
   @override
   Map<String, dynamic>? articleById(String id) => null;
@@ -122,52 +192,76 @@ class RemoteAppContentRepository implements AppContentRepository {
   Map<String, dynamic>? discoveryFeedWireRowByPostId(String postId) => null;
 
   @override
-  List<Map<String, dynamic>> get chatMockConversations => _empty;
+  List<ChatInboxDto> get chatMockConversations => _emptyInbox;
 
   @override
-  List<Map<String, dynamic>> get chatMockConversationsAtMe => _empty;
+  List<ChatInboxDto> get chatMockConversationsAtMe => _emptyInbox;
 
   @override
-  List<Map<String, dynamic>> get chatEncryptedConversations => _empty;
+  List<ChatInboxDto> get chatEncryptedConversations => _emptyInbox;
 
   @override
-  Map<String, dynamic> get chatAssistantConversation => const {};
+  ChatInboxDto get chatAssistantConversation => _emptyInboxRow;
 
   @override
-  List<Map<String, dynamic>> get chatMockContactCircles => _empty;
+  List<ChatContactTabCircleRowDto> get chatMockContactCircles => _emptyCircles;
 
   @override
-  List<Map<String, dynamic>> get chatMockContacts => _empty;
+  List<ChatContactTabFunGroupRowDto> get chatMockContactGroups => _emptyGroups;
 
   @override
-  List<Map<String, dynamic>> get chatMockContactGroups => _empty;
+  List<ChatContactRowDto> get chatMockContacts => _emptyContacts;
 
   @override
-  List<Map<String, dynamic>> chatMessagesFor(String conversationId) => _empty;
+  List<ChatMessageDto> chatMessagesFor(String conversationId) => _emptyMessages;
 
   @override
-  List<Map<String, dynamic>> get assistantMemoryData => _empty;
+  List<AssistantPrototypeMemoryRow> get assistantMemoryData => _emptyMemories;
 
   @override
-  List<Map<String, dynamic>> get assistantTasksData => _empty;
+  List<AssistantPrototypeTaskRow> get assistantTasksData => _emptyTasks;
 
   @override
-  List<Map<String, dynamic>> get assistantSkillsData => _empty;
+  List<AssistantPrototypeSkillRow> get assistantSkillsData => _emptySkills;
 
   @override
-  Map<String, dynamic> get helperReadSummary => const {};
+  HelperReadSummaryPrototype get helperReadSummary => _emptyHelperRead;
 
   @override
-  Map<String, dynamic> get circlePageCircleInfo => const {};
+  CirclePagePrototypeInfo get circlePageCircleInfo => _emptyCirclePage;
 
   @override
-  Map<String, Map<String, dynamic>> get circlesCategoryConfig => const {
-    'all': {'label': '推荐'},
-  };
+  Map<String, CircleCategoryTabConfigDto> get circlesCategoryConfig => const {
+        'all': CircleCategoryTabConfigDto(label: '推荐'),
+      };
 
   @override
-  List<Map<String, dynamic>> get circlesMockActivities => _empty;
+  List<CircleActivityPrototypeRow> get circlesMockActivities => _emptyActivities;
 
   @override
-  List<Map<String, dynamic>> get circlesMockCircles => _empty;
+  List<CircleDto> get circlesMockCircles => _emptyCircleDtos;
+}
+
+/// 在 [AppContentRepository] 四类 `discovery*Data` wire 列表之上提供强类型视图。
+///
+/// 与 [lookupDiscoveryPostBaseDto] 同源：逐行 [postBaseDtoFromMap]；不可解析行跳过。
+/// 需要扩展 wire 键时仍用 [lookupDiscoveryFeedWireRow]。
+extension AppContentRepositoryDiscoveryPosts on AppContentRepository {
+  List<PostBaseDto> get discoveryPostsAsDtos {
+    final items = <FeedItemDto>[
+      ...discoveryPhotoData,
+      ...discoveryVideoData,
+      ...discoveryArticleData,
+      ...discoveryMomentData,
+    ];
+    final out = <PostBaseDto>[];
+    for (final item in items) {
+      try {
+        out.add(postBaseDtoFromMap(item.toDiscoveryWireMap()));
+      } catch (_) {
+        continue;
+      }
+    }
+    return out;
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
+import 'package:quwoquan_app/cloud/rtc/models/rtc_signal_payloads.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -38,15 +39,16 @@ class IncomingCallCoordinator {
     signaling.connect(userId);
 
     _signalSub = signaling.incomingCalls.listen((event) {
+      final wrap = event.payload as RtcCallRingingWsPayload;
+      final ringing = wrap.data;
       _pendingCallId = event.callId;
-      _pendingCallType = event.payload['callType'] as String? ?? 'voice';
+      _pendingCallType = ringing.callType;
       final callerName =
-          event.payload['callerName'] as String? ?? event.actorId ?? '';
+          ringing.callerName ?? ringing.initiatorId ?? event.actorId ?? '';
       () async {
         final settings = await ref.read(callSettingsRepositoryProvider)
             .getCallSettings();
-        final initiatorRingtoneId =
-            event.payload['initiatorRingtoneId'] as String?;
+        final initiatorRingtoneId = ringing.initiatorRingtoneId;
         final ringtoneId = settings.allowCallerRingtoneOverride &&
                 initiatorRingtoneId != null &&
                 initiatorRingtoneId.isNotEmpty

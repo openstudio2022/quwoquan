@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/assistant/api/assistant_gateway_json_payloads.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 
@@ -105,7 +106,11 @@ class AssistantHttpGateway {
       if (method == 'GET' && path == '/v1/sessions') {
         final sessions = await _gateway.listSessions();
         request.response.headers.contentType = ContentType.json;
-        request.response.write(jsonEncode(sessions));
+        request.response.write(
+          jsonEncode(
+            sessions.map((e) => e.toJson()).toList(growable: false),
+          ),
+        );
         _audit('list_sessions', requestId, request, auditKey, HttpStatus.ok);
         await request.response.close();
         return;
@@ -132,7 +137,7 @@ class AssistantHttpGateway {
           return;
         }
         request.response.headers.contentType = ContentType.json;
-        request.response.write(jsonEncode(detail));
+        request.response.write(jsonEncode(detail.toJson()));
         _audit('session_detail', requestId, request, auditKey, HttpStatus.ok);
         await request.response.close();
         return;
@@ -140,8 +145,8 @@ class AssistantHttpGateway {
       if (method == 'POST' && path == '/v1/skills/invoke') {
         final body = await utf8.decoder.bind(request).join();
         final json = (jsonDecode(body) as Map).cast<String, dynamic>();
-        final skillId = (json['skill_id'] as String?) ?? '';
-        if (skillId.trim().isEmpty) {
+        final invokeBody = AssistantGatewaySkillInvokeBody.fromJson(json);
+        if (invokeBody.skillId.isEmpty) {
           request.response.statusCode = HttpStatus.badRequest;
           request.response.headers.contentType = ContentType.json;
           request.response.write(
@@ -162,16 +167,11 @@ class AssistantHttpGateway {
           await request.response.close();
           return;
         }
-        final args =
-            (json['arguments'] as Map?)?.cast<String, dynamic>() ??
-            <String, dynamic>{};
-        final deviceProfile = (json['deviceProfile'] as String?) ?? 'mobile';
-        final channel = (json['channel'] as String?) ?? 'app';
         final result = await _gateway.invokeSkill(
-          skillId: skillId,
-          arguments: args,
-          deviceProfile: deviceProfile,
-          channel: channel,
+          skillId: invokeBody.skillId,
+          arguments: invokeBody.arguments,
+          deviceProfile: invokeBody.deviceProfile,
+          channel: invokeBody.channel,
         );
         request.response.headers.contentType = ContentType.json;
         request.response.write(jsonEncode(result.toJson()));
@@ -182,8 +182,8 @@ class AssistantHttpGateway {
       if (method == 'POST' && path == '/v1/run') {
         final body = await utf8.decoder.bind(request).join();
         final json = (jsonDecode(body) as Map).cast<String, dynamic>();
-        final rawMessages = (json['messages'] as List?) ?? const <dynamic>[];
-        if (rawMessages.isEmpty) {
+        final runRequest = AssistantRunRequest.fromGatewayBody(json);
+        if (runRequest.messages.isEmpty) {
           request.response.statusCode = HttpStatus.badRequest;
           request.response.headers.contentType = ContentType.json;
           request.response.write(
@@ -198,32 +198,7 @@ class AssistantHttpGateway {
           await request.response.close();
           return;
         }
-        final messages = rawMessages
-            .whereType<Map>()
-            .map(
-              (m) => AssistantRunMessage(
-                role: m['role']?.toString() ?? 'user',
-                content: m['content']?.toString() ?? '',
-              ),
-            )
-            .toList(growable: false);
-        final response = await _gateway.run(
-          AssistantRunRequest(
-            messages: messages,
-            sessionId: json['sessionId'] as String?,
-            userId: json['userId'] as String?,
-            profileSubjectId: json['profileSubjectId'] as String?,
-            subAccountId: json['subAccountId'] as String?,
-            personaContextVersion: json['personaContextVersion'] as String?,
-            deviceProfile: (json['deviceProfile'] as String?) ?? 'mobile',
-            channel: (json['channel'] as String?) ?? 'app',
-            traceId: json['traceId'] as String?,
-            maxIterations: (json['maxIterations'] as int?) ?? 6,
-            sourceSurfaceId: json['sourceSurfaceId'] as String?,
-            sourceQuery: json['sourceQuery'] as String?,
-            fromGlobalSearch: json['fromGlobalSearch'] == true,
-          ),
-        );
+        final response = await _gateway.run(runRequest);
         final includeTraces = json['includeTraces'] == true;
         final payload = response.toJson();
         if (!includeTraces) {
@@ -238,37 +213,13 @@ class AssistantHttpGateway {
       if (method == 'POST' && path == '/v1/run/stream') {
         final body = await utf8.decoder.bind(request).join();
         final json = (jsonDecode(body) as Map).cast<String, dynamic>();
-        final rawMessages = (json['messages'] as List?) ?? const <dynamic>[];
-        final messages = rawMessages
-            .whereType<Map>()
-            .map(
-              (m) => AssistantRunMessage(
-                role: m['role']?.toString() ?? 'user',
-                content: m['content']?.toString() ?? '',
-              ),
-            )
-            .toList(growable: false);
+        final runRequest = AssistantRunRequest.fromGatewayBody(json);
         request.response.headers.set(
           HttpHeaders.contentTypeHeader,
           'text/event-stream',
         );
         request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
         request.response.bufferOutput = false;
-        final runRequest = AssistantRunRequest(
-          messages: messages,
-          sessionId: json['sessionId'] as String?,
-          userId: json['userId'] as String?,
-          profileSubjectId: json['profileSubjectId'] as String?,
-          subAccountId: json['subAccountId'] as String?,
-          personaContextVersion: json['personaContextVersion'] as String?,
-          deviceProfile: (json['deviceProfile'] as String?) ?? 'mobile',
-          channel: (json['channel'] as String?) ?? 'app',
-          traceId: json['traceId'] as String?,
-          maxIterations: (json['maxIterations'] as int?) ?? 6,
-          sourceSurfaceId: json['sourceSurfaceId'] as String?,
-          sourceQuery: json['sourceQuery'] as String?,
-          fromGlobalSearch: json['fromGlobalSearch'] == true,
-        );
         final response = await _gateway.runWithTraceStream(
           runRequest,
           onTraceEvent: (trace) {

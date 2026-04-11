@@ -93,7 +93,7 @@ class ProfileCirclesTab extends ConsumerWidget {
         final circle = state.circles[index];
         return CircleCompactCard(
           name: circle.name,
-          coverUrl: circle.coverUrl,
+          coverUrl: circle.coverUrl ?? '',
           postCount: circle.postCount,
           isDark: isDark,
           onTap: () => context.push(AppRoutePaths.circleDetail(id: circle.id)),

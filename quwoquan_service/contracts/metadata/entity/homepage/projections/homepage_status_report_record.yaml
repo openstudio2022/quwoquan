@@ -1,0 +1,81 @@
+version: 1
+read_model: HomepageStatusReportRecord
+
+description: |
+  主页状态举报记录 wire（读路径）；_id / id 兼容。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageStatusReportRecord
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_status_report_record.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: _id
+      aliases: [_id, id]
+      default: "''"
+
+    - name: homepageId
+      dart_type: String
+      nullable: false
+      source: homepageId
+      aliases: [homepageId]
+      default: "''"
+
+    - name: reporterUserId
+      dart_type: String
+      nullable: false
+      source: reporterUserId
+      aliases: [reporterUserId]
+      default: "''"
+
+    - name: reason
+      dart_type: String
+      nullable: false
+      source: reason
+      aliases: [reason]
+      default: "''"
+
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status]
+      default: "''"
+
+    - name: description
+      dart_type: String
+      nullable: true
+      source: description
+      aliases: [description]
+
+    - name: evidenceUrls
+      dart_type: List<String>
+      nullable: false
+      source: evidenceUrls
+      aliases: [evidenceUrls]
+
+    - name: reviewNote
+      dart_type: String
+      nullable: true
+      source: reviewNote
+      aliases: [reviewNote]
+
+    - name: createdAt
+      dart_type: DateTime
+      nullable: true
+      source: createdAt
+      aliases: [createdAt]
+
+    - name: reviewedAt
+      dart_type: DateTime
+      nullable: true
+      source: reviewedAt
+      aliases: [reviewedAt]

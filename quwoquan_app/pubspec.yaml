@@ -110,6 +110,7 @@ flutter:
   
   assets:
     - assets/filters/filter_presets.json
+    - ../quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml
     - assets/assistant/config/
     # skills — 根目录 + 每个垂类所有子目录
     - assets/assistant/skills/

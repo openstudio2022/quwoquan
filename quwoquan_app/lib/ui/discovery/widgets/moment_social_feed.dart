@@ -16,14 +16,15 @@ import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
+import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 const double _momentCellVerticalPadding = AppSpacing.fourteen;
 const double _momentSectionGap = AppSpacing.interGroupSm;
@@ -77,9 +78,9 @@ class MomentSocialFeed extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final discoveryState = ref.watch(discoveryStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
-    final appContentRepository = ref.watch(appContentRepositoryProvider);
-    final fallbackRaw = appContentRepository.discoveryMomentData;
-    final fallbackArticleRaw = appContentRepository.discoveryArticleData;
+    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
+    final fallbackRaw = mockDiscoveryMomentWireFallback(isMock);
+    final fallbackArticleRaw = mockDiscoveryArticleWireFallback(isMock);
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final articleDistributionEnabled = ref.watch(
       contentFeatureFlagProvider('enable_article_distribution_profiles'),
@@ -412,9 +413,8 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   Map<String, dynamic>? _rawDiscoveryItem(WidgetRef ref, String postId) {
-    return ref
-        .read(appContentRepositoryProvider)
-        .discoveryFeedWireRowByPostId(postId);
+    final isMock = ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
+    return prototypeDiscoveryWireRowForMock(isMock, postId);
   }
 
   String _extractKeyword(String text) {

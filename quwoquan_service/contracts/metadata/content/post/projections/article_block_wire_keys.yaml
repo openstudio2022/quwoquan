@@ -1,0 +1,20 @@
+# articleDocument.blocks / articleBlocks[] 条目的 JSON 键（文章 AST wire）。
+# 生成 ArticleBlockWireKeys；post_view_projection 内多块解析共用。
+version: 1
+dart_class: ArticleBlockWireKeys
+description: "文章块级 wire 子 map 键名 SSOT（paragraph/heading/image 等）"
+keys:
+  - const_name: type
+    json_key: type
+  - const_name: text
+    json_key: text
+  - const_name: id
+    json_key: id
+  - const_name: imagePath
+    json_key: imagePath
+  - const_name: imageUrl
+    json_key: imageUrl
+  - const_name: imageLayout
+    json_key: imageLayout
+  - const_name: caption
+    json_key: caption

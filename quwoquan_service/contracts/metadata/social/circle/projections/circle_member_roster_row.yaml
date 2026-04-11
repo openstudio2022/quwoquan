@@ -1,0 +1,65 @@
+version: 1
+read_model: CircleMemberRosterRow
+
+description: |
+  圈子成员列表「行」投影（API / Mock 可能叠加用户摘要字段）。
+  Flutter 实现：quwoquan_app/lib/cloud/runtime/generated/circle/circle_member_roster_item_dto.dart
+
+consumer: app
+
+# 逻辑字段 → JSON 键（首个匹配即采用，与 fromMap 一致）
+fields:
+  - name: membershipId
+    type: string
+    source_keys: [_id, id, userId]
+
+  - name: circleId
+    type: ObjectId
+
+  - name: userId
+    type: string
+    source_keys: [userId, id, _id]
+
+  - name: role
+    type: string
+    default_wire: member
+
+  - name: joinedAt
+    type: timestamp
+
+  - name: displayName
+    type: string
+    source_keys: [displayName, name]
+    nullable: true
+
+  - name: avatarUrl
+    type: string
+    source_keys: [avatarUrl, avatar]
+    nullable: true
+
+  - name: worksCountLabel
+    type: string
+    source_keys: [worksCountLabel, worksCount]
+    nullable: true
+
+  - name: fansCountLabel
+    type: string
+    source_keys: [fansCountLabel, fansCount]
+    nullable: true
+
+  - name: likesCountLabel
+    type: string
+    source_keys: [likesCountLabel, likesCount]
+    nullable: true
+
+  - name: isFollowed
+    type: boolean
+    default_wire: false
+
+  - name: lastActiveAt
+    type: timestamp
+    nullable: true
+
+  - name: contribution
+    type: int
+    default_wire: 0

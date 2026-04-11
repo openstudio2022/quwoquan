@@ -17,12 +17,15 @@ import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_transcript_loader.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_replay_trace_payload.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/reasoning/geo/geo_resolution_catalog.dart';
 import 'package:quwoquan_app/assistant/tool/impl/device/local_context_tool.dart';
+import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_dialogue_runtime_read_view.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/assistant_transcript_row_patch.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/replay/assistant_replay_record.dart';
@@ -35,6 +38,9 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_context_scope_read_view.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_privacy_policy_hint_read_view.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_structured_run_response_read_view.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_display_fallbacks.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
@@ -115,9 +121,6 @@ class AssistantConversationController extends ChangeNotifier {
       _assistantFeedbackStatusByMessageId;
   List<AssistantReplayRecord> get replayRecords => _assistantReplayRecords;
 
-  Map<String, dynamic> _rowToMap(AssistantTranscriptTimelineRow row) =>
-      PersistedTimelineTurnCodec.encode(row);
-
   AssistantTranscriptTimelineRow _mapToRow(Map<String, dynamic> m) =>
       PersistedTimelineTurnCodec.decode(m);
 
@@ -127,27 +130,45 @@ class AssistantConversationController extends ChangeNotifier {
   ) => patchTranscriptRowWithMapMerge(row, patch);
 
   bool _rowEligibleForAssistantRun(AssistantTranscriptTimelineRow r) {
-    final m = _rowToMap(r);
-    if ((m['type'] as String? ?? 'text') != 'text') return false;
-    if (m['streaming'] == true) return false;
-    if (m['isError'] == true) return false;
-    if (m['isSelf'] == true) {
-      return ((m['content'] as String?)?.trim().isNotEmpty ?? false);
+    switch (r) {
+      case ErrorTranscriptTimelineRow():
+        return false;
+      case UserTranscriptTimelineRow row:
+        if (row.type != 'text') return false;
+        return row.content.trim().isNotEmpty;
+      case AssistantAnswerTranscriptRow row:
+        if (row.type != 'text') return false;
+        if (row.streaming) return false;
+        return _assistantHistoryContentForAssistantRow(row).trim().isNotEmpty;
     }
-    return _assistantHistoryContentForModel(m).trim().isNotEmpty;
   }
 
   AssistantRunMessage? _rowAsRunMessage(AssistantTranscriptTimelineRow r) {
-    final m = _rowToMap(r);
-    final isUser = m['isSelf'] == true;
-    final content = isUser
-        ? ((m['content'] as String?) ?? '')
-        : _assistantHistoryContentForModel(m);
-    if (content.trim().isEmpty) return null;
-    return AssistantRunMessage(
-      role: isUser ? 'user' : 'assistant',
-      content: content,
-    );
+    switch (r) {
+      case UserTranscriptTimelineRow row:
+        if (row.content.trim().isEmpty) return null;
+        return AssistantRunMessage(role: 'user', content: row.content);
+      case AssistantAnswerTranscriptRow row:
+        final content = _assistantHistoryContentForAssistantRow(row);
+        if (content.trim().isEmpty) return null;
+        return AssistantRunMessage(role: 'assistant', content: content);
+      case ErrorTranscriptTimelineRow():
+        return null;
+    }
+  }
+
+  /// 助手行送入模型的正文候选（与历史 Map 路径 [ _assistantHistoryContentForModel ] 对齐）。
+  String _assistantHistoryContentForAssistantRow(AssistantAnswerTranscriptRow row) {
+    final candidates = <String>[
+      row.persisted.displayPlainText,
+      row.persisted.displayMarkdown,
+      row.content,
+    ];
+    for (final candidate in candidates) {
+      final sanitized = _sanitizeAssistantHistoryContent(candidate);
+      if (sanitized.isNotEmpty) return sanitized;
+    }
+    return '';
   }
 
   void _ensureTranscriptRowsGrowable() {
@@ -253,29 +274,25 @@ class AssistantConversationController extends ChangeNotifier {
     final sessions = await _ref.read(assistantGatewayProvider).listSessions();
     if (_disposed || sessions.isEmpty) return false;
     final namespacedSessions = sessions
-        .where((item) {
-          final sessionId = (item['sessionId'] ?? '').toString();
-          return isAssistantSessionForBackend(
-            sessionId,
+        .where(
+          (d) => isAssistantSessionForBackend(
+            d.sessionId,
             AssistantBackend.local,
-          );
-        })
+          ),
+        )
         .toList(growable: false);
     if (namespacedSessions.isEmpty) return false;
-    Map<String, dynamic> active = namespacedSessions.first;
-    for (final item in namespacedSessions) {
-      if (item['isActive'] == true) {
-        active = item;
-        break;
-      }
-    }
-    final nextSessionId = (active['sessionId'] ?? '').toString();
-    final nextTopic = (active['topicTitle'] as String?)?.trim();
+    final active = namespacedSessions.firstWhere(
+      (d) => d.isActive,
+      orElse: () => namespacedSessions.first,
+    );
+    final nextSessionId = active.sessionId;
+    final nextTopic = active.topicTitle.trim();
     if (nextSessionId.isEmpty) return false;
     _assistantBackend = assistantBackendForSessionId(nextSessionId);
     _assistantRuntimeSessionId = nextSessionId;
-    _assistantTopicTitle = (nextTopic?.isNotEmpty ?? false)
-        ? nextTopic!
+    _assistantTopicTitle = nextTopic.isNotEmpty
+        ? nextTopic
         : UITextConstants.assistantHistoryAll;
     _notify();
     await _loadAssistantSessionMessages(nextSessionId);
@@ -288,59 +305,18 @@ class AssistantConversationController extends ChangeNotifier {
         .read(assistantGatewayProvider)
         .sessionDetail(sessionId);
     if (_disposed || detail == null) return;
-    final messages =
-        (detail['messages'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    final now = DateTime.now();
-    var serial = 0;
-    final mapped = messages
-        .map((item) {
-          final isUser = (item['role'] ?? '').toString() == 'user';
-          final normalizedContent = isUser
-              ? (item['content'] ?? '').toString()
-              : _assistantHistoryContentForModel(item);
-          final hasPersistedTurn =
-              !isUser &&
-              (!resolvePersistedAssistantTimeline(item).isEmpty ||
-                  isCanonicalPersistedAssistantTurnMessage(item));
-          if (!isUser &&
-              normalizedContent.trim().isEmpty &&
-              !hasPersistedTurn) {
-            return null;
-          }
-          serial += 1;
-          return <String, dynamic>{
-            ...item,
-            'id': 'assistant_${sessionId}_$serial',
-            'conversationId': AppConceptConstants.assistantConversationId,
-            'type': 'text',
-            'content': normalizedContent,
-            'senderId': isUser
-                ? _currentProfileSubjectId()
-                : AppConceptConstants.assistantSenderId,
-            'senderName': isUser ? '我' : AppConceptConstants.assistantLabel,
-            'senderAvatar': '',
-            'timestamp': '${now.hour}:${now.minute.toString().padLeft(2, '0')}',
-            'isRead': true,
-            'isSelf': isUser,
-          };
-        })
-        .whereType<Map<String, dynamic>>()
-        .toList(growable: false);
-    final splitIndex = math.max(0, mapped.length - _assistantHistoryPageSize);
-    final hiddenHistory = mapped.sublist(0, splitIndex);
-    final visibleMessages = mapped.sublist(splitIndex);
-    _assistantHiddenHistory = hiddenHistory
-        .map(_mapToRow)
-        .toList(growable: false);
+    final result = await loadTranscriptRowsFromSessionDetail(
+      detail: detail,
+      pageSize: _assistantHistoryPageSize,
+      profileSubjectId: _currentProfileSubjectId(),
+      normalizeAssistantContentForModel: _assistantHistoryContentForModel,
+    );
+    _assistantHiddenHistory = result.hiddenRows;
     _assistantLoadingOlderHistory = false;
-    _showAssistantHistoryPeek = hiddenHistory.isNotEmpty;
-    _transcriptRows = visibleMessages.map(_mapToRow).toList(growable: false);
-    final topic = (detail['topicTitle'] as String?)?.trim();
-    if (topic != null && topic.isNotEmpty) {
+    _showAssistantHistoryPeek = result.hiddenRows.isNotEmpty;
+    _transcriptRows = result.visibleRows;
+    final topic = detail.topicTitle.trim();
+    if (topic.isNotEmpty) {
       _assistantTopicTitle = topic;
     }
     _notify();
@@ -467,6 +443,7 @@ class AssistantConversationController extends ChangeNotifier {
         ),
         geoRuntimeContext,
       );
+      final contextScopeView = AssistantContextScopeReadView(contextScope);
       final sourceQueryHint =
           openContext?.hints['sourceQuery']?.toString().trim() ?? '';
       final sourceSurfaceIdHint =
@@ -488,9 +465,7 @@ class AssistantConversationController extends ChangeNotifier {
         gpsLocation: geoRuntimeContext.gpsLocation,
         contextScopeHint: contextScope,
         privacyProfile: 'default',
-        privacyPolicy:
-            (contextScope['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{},
+        privacyPolicy: contextScopeView.privacyPolicy,
         sourceSurfaceId: fromGlobalSearch && sourceSurfaceIdHint.isNotEmpty
             ? sourceSurfaceIdHint
             : null,
@@ -569,42 +544,21 @@ class AssistantConversationController extends ChangeNotifier {
             allowJsonExtraction: false,
           );
       _resetStreamingAnswerDecoder();
-      final resolvedSessionId =
-          (runResponse.structuredResponse['effectiveSessionId'] as String?)
-              ?.trim() ??
-          '';
+      final structuredRead = AssistantStructuredRunResponseReadView(
+        runResponse.structuredResponse,
+      );
+      final resolvedSessionId = structuredRead.effectiveSessionIdOrEmpty;
       final activeSessionId =
           isAssistantSessionForBackend(resolvedSessionId, _assistantBackend)
           ? resolvedSessionId
           : effectiveAssistantSessionId;
-      final activeTopicTitle =
-          (runResponse.structuredResponse['activeTopicTitle'] as String?)
-              ?.trim();
-      final dialogueRuntime =
-          (runResponse.structuredResponse['dialogueRuntime'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final activeTopicTitle = structuredRead.activeTopicTitleOrNull;
       final elapsedMs = DateTime.now().difference(runStartedAt).inMilliseconds;
       final replyTime = ChatTimeFormatter.format(DateTime.now());
       final assistantMessageId =
           'assistant_${DateTime.now().millisecondsSinceEpoch}';
-      final uiReferences =
-          (runResponse.structuredResponse['uiReferences'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final uiActions =
-          (runResponse.structuredResponse['uiActions'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
       final uiUsageStats = _buildConversationCumulativeUsageStats(
-        runUsageStats:
-            (runResponse.structuredResponse['uiUsageStats'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{},
+        runUsageStats: structuredRead.uiUsageStats,
         excludeMessageId: streamingAssistantMessageId,
       );
       final resolvedJourney = resolveAssistantJourneyFromResponse(runResponse);
@@ -654,115 +608,45 @@ class AssistantConversationController extends ChangeNotifier {
         retrievalProcessing: completedCanonicalState.retrievalProcessing,
         answerProcessing: completedCanonicalState.answerProcessing,
       );
+      final mergedRunArtifacts = _withDisplayOverrides(
+        _responseRunArtifactsMap(runResponse),
+        displayMarkdown: displayMarkdown,
+        displayPlainText: displayPlainText,
+        displayState: completedCanonicalState.displayState,
+        journey: completedCanonicalState.journey,
+        processTimeline: completedCanonicalState.canonicalProcessTimeline,
+        understandingSnapshot: completedCanonicalState.understandingSnapshot,
+        retrievalProcessing: completedCanonicalState.retrievalProcessing,
+        answerProcessing: completedCanonicalState.answerProcessing,
+      );
+      final completedAssistantRow =
+          AssistantTranscriptAssembler.completedAssistantAnswerTranscriptRow(
+        mergeFrom: existingIndex >= 0
+            ? clearedRow! as AssistantAnswerTranscriptRow
+            : null,
+        newRowId: assistantMessageId,
+        content: displayMarkdown,
+        timestamp: replyTime,
+        sourceQuery: trimmed,
+        runId: runResponse.runId ?? '',
+        traceId: runResponse.traceId ?? '',
+        degraded: runResponse.degraded,
+        templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
+        phaseOneRoutingDiagnostics: structuredRead.phaseOneRoutingDiagnosticsMap,
+        qualityMetrics: structuredRead.qualityMetricsMap,
+        heuristicFallbackUsed:
+            structuredRead.heuristicFallbackUsedFromQualityMetrics,
+        dialogueState: structuredRead.dialogueRuntime,
+        uiReferences: structuredRead.uiReferences,
+        uiActions: structuredRead.uiActions,
+        mergedRunArtifacts: mergedRunArtifacts,
+        uiUsageStats: uiUsageStats,
+        persistedTurnFields: persistedTurnFields,
+      );
       if (existingIndex >= 0) {
-        _transcriptRows[existingIndex] = _mapToRow({
-          ..._rowToMap(clearedRow!),
-          'content': displayMarkdown,
-          'timestamp': replyTime,
-          'runId': runResponse.runId ?? '',
-          'traceId': runResponse.traceId ?? '',
-          'sourceQuery': trimmed,
-          'templateVersionUsed':
-              (runResponse.structuredResponse['templateVersionUsed']
-                  as String?) ??
-              '',
-          'phaseOneRoutingDiagnostics':
-              (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
-                      as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          'degraded': runResponse.degraded,
-          'qualityMetrics':
-              (runResponse.structuredResponse['qualityMetrics'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          'heuristicFallbackUsed':
-              (((runResponse.structuredResponse['qualityMetrics'] as Map?)
-                  ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
-              true,
-          'runArtifacts': _withDisplayOverrides(
-            _responseRunArtifactsMap(runResponse),
-            displayMarkdown: displayMarkdown,
-            displayPlainText: displayPlainText,
-            displayState: completedCanonicalState.displayState,
-            journey: completedCanonicalState.journey,
-            processTimeline: completedCanonicalState.canonicalProcessTimeline,
-            understandingSnapshot:
-                completedCanonicalState.understandingSnapshot,
-            retrievalProcessing: completedCanonicalState.retrievalProcessing,
-            answerProcessing: completedCanonicalState.answerProcessing,
-          ),
-          'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
-          'dialogueState': dialogueRuntime,
-          'uiReferences': uiReferences,
-          'uiActions': uiActions,
-          'uiUsageStats': uiUsageStats,
-          ...persistedTurnFields,
-          assistantDisplayMarkdownField: displayMarkdown,
-          assistantDisplayPlainTextField: displayPlainText,
-          assistantDisplayStateField: completedCanonicalState.displayState
-              .toJson(),
-          'streamFinalAnswer': '',
-          'streaming': false,
-        });
+        _transcriptRows[existingIndex] = completedAssistantRow;
       } else {
-        _transcriptRows.add(
-          _mapToRow({
-            'id': assistantMessageId,
-            'conversationId': AppConceptConstants.assistantConversationId,
-            'type': 'text',
-            'content': displayMarkdown,
-            'senderId': AppConceptConstants.assistantSenderId,
-            'senderName': AppConceptConstants.assistantLabel,
-            'senderAvatar': '',
-            'timestamp': replyTime,
-            'isRead': true,
-            'isSelf': false,
-            'runId': runResponse.runId ?? '',
-            'traceId': runResponse.traceId ?? '',
-            'sourceQuery': trimmed,
-            'templateVersionUsed':
-                (runResponse.structuredResponse['templateVersionUsed']
-                    as String?) ??
-                '',
-            'phaseOneRoutingDiagnostics':
-                (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
-                        as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'degraded': runResponse.degraded,
-            'qualityMetrics':
-                (runResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'heuristicFallbackUsed':
-                (((runResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
-                true,
-            'runArtifacts': _withDisplayOverrides(
-              _responseRunArtifactsMap(runResponse),
-              displayMarkdown: displayMarkdown,
-              displayPlainText: displayPlainText,
-              displayState: completedCanonicalState.displayState,
-              journey: completedCanonicalState.journey,
-              processTimeline: completedCanonicalState.canonicalProcessTimeline,
-              understandingSnapshot:
-                  completedCanonicalState.understandingSnapshot,
-              retrievalProcessing: completedCanonicalState.retrievalProcessing,
-              answerProcessing: completedCanonicalState.answerProcessing,
-            ),
-            'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
-            'dialogueState': dialogueRuntime,
-            'uiReferences': uiReferences,
-            'uiActions': uiActions,
-            'uiUsageStats': uiUsageStats,
-            ...persistedTurnFields,
-            assistantDisplayMarkdownField: displayMarkdown,
-            assistantDisplayPlainTextField: displayPlainText,
-            assistantDisplayStateField: completedCanonicalState.displayState
-                .toJson(),
-          }),
-        );
+        _transcriptRows.add(completedAssistantRow);
       }
       _assistantResponding = false;
       _assistantPhaseLabel = '';
@@ -775,15 +659,9 @@ class AssistantConversationController extends ChangeNotifier {
         _assistantTopicTitle = activeTopicTitle;
       }
       _stopAssistantProgress();
-      final userTags =
-          (contextScope['userTags'] as List?)
-              ?.whereType<String>()
-              .map((item) => item.trim())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
+      final userTags = contextScopeView.normalizedUserTags;
       _storeAssistantReplayRecord(
-        messageId: assistantMessageId,
+        messageId: completedAssistantRow.id,
         query: trimmed,
         response: runResponse,
       );
@@ -799,7 +677,7 @@ class AssistantConversationController extends ChangeNotifier {
                 'trace_${DateTime.now().millisecondsSinceEpoch}',
             userId: activeContext.profileSubjectId,
             sessionId: effectiveAssistantSessionId,
-            pageType: (contextScope['pageType'] as String?) ?? 'chat',
+            pageType: contextScopeView.pageType,
             queryText: trimmed,
             answerText: _resolveAssistantDisplayPlainText(runResponse),
             userTags: userTags,
@@ -937,11 +815,11 @@ class AssistantConversationController extends ChangeNotifier {
       if (response != null && !_disposed) {
         final finalResponse = response;
         final finalAnswerReady = _responseMarksFinalAnswerReady(finalResponse);
+        final structuredRead = AssistantStructuredRunResponseReadView(
+          finalResponse.structuredResponse,
+        );
         final uiUsageStats = _buildConversationCumulativeUsageStats(
-          runUsageStats:
-              (finalResponse.structuredResponse['uiUsageStats'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
+          runUsageStats: structuredRead.uiUsageStats,
           excludeMessageId: streamingAssistantMessageId,
         );
         final resolvedJourney = resolveAssistantJourneyFromResponse(
@@ -1010,49 +888,42 @@ class AssistantConversationController extends ChangeNotifier {
               answerProcessing: completedCanonicalState.answerProcessing,
             );
         if (idx >= 0) {
-          _transcriptRows[idx] = _mapToRow({
-            ..._rowToMap(clearedRow!),
-            'content': displayMarkdown,
-            'streamFinalAnswer': '',
-            'streaming': false,
-            'sourceQuery': query,
-            'templateVersionUsed':
-                (finalResponse.structuredResponse['templateVersionUsed']
-                    as String?) ??
-                '',
-            'phaseOneRoutingDiagnostics':
-                (finalResponse.structuredResponse['phaseOneRoutingDiagnostics']
-                        as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'degraded': finalResponse.degraded,
-            'qualityMetrics':
-                (finalResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'heuristicFallbackUsed':
-                (((finalResponse.structuredResponse['qualityMetrics'] as Map?)
-                    ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
-                true,
-            'runArtifacts': _withDisplayOverrides(
-              _responseRunArtifactsMap(finalResponse),
-              displayMarkdown: displayMarkdown,
-              displayPlainText: displayPlainText,
-              displayState: completedCanonicalState.displayState,
-              journey: completedCanonicalState.journey,
-              processTimeline: completedCanonicalState.canonicalProcessTimeline,
-              understandingSnapshot:
-                  completedCanonicalState.understandingSnapshot,
-              retrievalProcessing: completedCanonicalState.retrievalProcessing,
-              answerProcessing: completedCanonicalState.answerProcessing,
-            ),
-            'uiUsageStats': uiUsageStats,
-            ...persistedTurnFields,
-            assistantDisplayMarkdownField: displayMarkdown,
-            assistantDisplayPlainTextField: displayPlainText,
-            assistantDisplayStateField: completedCanonicalState.displayState
-                .toJson(),
-          });
+          final mergeRow = clearedRow! as AssistantAnswerTranscriptRow;
+          final mergedRunArtifacts = _withDisplayOverrides(
+            _responseRunArtifactsMap(finalResponse),
+            displayMarkdown: displayMarkdown,
+            displayPlainText: displayPlainText,
+            displayState: completedCanonicalState.displayState,
+            journey: completedCanonicalState.journey,
+            processTimeline: completedCanonicalState.canonicalProcessTimeline,
+            understandingSnapshot:
+                completedCanonicalState.understandingSnapshot,
+            retrievalProcessing: completedCanonicalState.retrievalProcessing,
+            answerProcessing: completedCanonicalState.answerProcessing,
+          );
+          _transcriptRows[idx] =
+              AssistantTranscriptAssembler.completedAssistantAnswerTranscriptRow(
+            mergeFrom: mergeRow,
+            newRowId: streamingAssistantMessageId,
+            content: displayMarkdown,
+            timestamp: mergeRow.timestamp,
+            sourceQuery: query,
+            runId: finalResponse.runId ?? '',
+            traceId: finalResponse.traceId ?? '',
+            degraded: finalResponse.degraded,
+            templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
+            phaseOneRoutingDiagnostics:
+                structuredRead.phaseOneRoutingDiagnosticsMap,
+            qualityMetrics: structuredRead.qualityMetricsMap,
+            heuristicFallbackUsed:
+                structuredRead.heuristicFallbackUsedFromQualityMetrics,
+            dialogueState: structuredRead.dialogueRuntime,
+            uiReferences: structuredRead.uiReferences,
+            uiActions: structuredRead.uiActions,
+            mergedRunArtifacts: mergedRunArtifacts,
+            uiUsageStats: uiUsageStats,
+            persistedTurnFields: persistedTurnFields,
+          );
         }
         _answerGateOpen = finalAnswerReady;
       }
@@ -1086,13 +957,8 @@ class AssistantConversationController extends ChangeNotifier {
         ? target.traceId
         : (replay?.traceId ?? '');
     final contextScope = buildContextScope();
-    final userTags =
-        (contextScope['userTags'] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+    final scopeView = AssistantContextScopeReadView(contextScope);
+    final userTags = scopeView.normalizedUserTags;
     await _ref
         .read(assistantLearningServiceProvider)
         .recordExplicitFeedback(
@@ -1104,7 +970,7 @@ class AssistantConversationController extends ChangeNotifier {
               : 'trace_${DateTime.now().millisecondsSinceEpoch}',
           userId: _currentProfileSubjectId(),
           sessionId: effectiveAssistantSessionId,
-          pageType: (contextScope['pageType'] as String?) ?? 'chat',
+          pageType: scopeView.pageType,
           queryText: query,
           answerText: target.answerText,
           userTags: userTags,
@@ -1132,14 +998,10 @@ class AssistantConversationController extends ChangeNotifier {
     List<String> userTags = const <String>[],
   }) async {
     final contextScope = buildContextScope();
+    final scopeView = AssistantContextScopeReadView(contextScope);
     final tags = userTags.isNotEmpty
         ? userTags
-        : ((contextScope['userTags'] as List?)
-                  ?.whereType<String>()
-                  .map((item) => item.trim())
-                  .where((item) => item.isNotEmpty)
-                  .toList(growable: false) ??
-              const <String>[]);
+        : scopeView.normalizedUserTags;
     await _ref
         .read(assistantLearningServiceProvider)
         .recordInteraction(
@@ -1151,7 +1013,7 @@ class AssistantConversationController extends ChangeNotifier {
               : 'trace_${DateTime.now().millisecondsSinceEpoch}',
           userId: _currentProfileSubjectId(),
           sessionId: effectiveAssistantSessionId,
-          pageType: (contextScope['pageType'] as String?) ?? 'chat',
+          pageType: scopeView.pageType,
           queryText: target.sourceQuery,
           answerText: target.displayPlainText.trim().isNotEmpty
               ? target.displayPlainText
@@ -1184,10 +1046,8 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   List<String> referenceWhitelistHosts() {
-    final contextScope = buildContextScope();
-    final privacyPolicy =
-        (contextScope['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final scopeView = AssistantContextScopeReadView(buildContextScope());
+    final privacyPolicy = scopeView.privacyPolicy;
     final rawHosts =
         (privacyPolicy['allowedReferenceHosts'] as List?)
             ?.whereType<String>()
@@ -1254,30 +1114,8 @@ class AssistantConversationController extends ChangeNotifier {
 
   Map<String, dynamic> buildContextScope() {
     final hints = openContext?.hints ?? const <String, dynamic>{};
-    final privacyPolicy =
-        (hints['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{
-          'webAccessMode': 'limited',
-          'allowedCapabilities': AssistantCapabilityCatalog.defaultCatalog,
-          'allowedProviders': <String>[
-            'page_context',
-            'conversation',
-            'memory',
-            'web',
-          ],
-          'blockedProviders': <String>[],
-          'allowedPageTypes': <String>[
-            'discovery',
-            'circles',
-            'create',
-            'chat',
-            'home',
-          ],
-          'maxWebRounds': 1,
-          'redactBeforeWeb': true,
-          'allowedReferenceHosts':
-              AppConceptConstants.assistantReferenceHostWhitelist,
-        };
+    final privacyView =
+        AssistantPrivacyPolicyHintReadView.fromOpenContextHints(hints);
     final contentAccessState = _ref.read(personalContentAccessProvider);
     final identityIndexFeatureFlag = _ref.read(
       contentFeatureFlagProvider('enable_assistant_content_identity_index'),
@@ -1285,29 +1123,18 @@ class AssistantConversationController extends ChangeNotifier {
     final identityIndexEnabled = _ref.read(
       assistantContentIdentityIndexEnabledProvider,
     );
-    final allowedProviders =
-        ((privacyPolicy['allowedProviders'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: true) ??
-        <String>[]);
-    final blockedProviders =
-        ((privacyPolicy['blockedProviders'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: true) ??
-        <String>[]);
+    final allowedProviders = List<String>.from(privacyView.allowedProviders);
+    final blockedProviders = List<String>.from(privacyView.blockedProviders);
     if (!contentAccessState.granted) {
       allowedProviders.remove('page_context');
       if (!blockedProviders.contains('page_context')) {
         blockedProviders.add('page_context');
       }
     }
-    final normalizedPrivacyPolicy = <String, dynamic>{
-      ...privacyPolicy,
-      'allowedProviders': allowedProviders,
-      'blockedProviders': blockedProviders,
-    };
+    final normalizedPrivacyPolicy = privacyView.copyWithProviderLists(
+      allowedProviders: allowedProviders,
+      blockedProviders: blockedProviders,
+    );
     final userTags =
         (hints['userTags'] as List?)
             ?.whereType<String>()
@@ -1316,6 +1143,8 @@ class AssistantConversationController extends ChangeNotifier {
             .toList(growable: false) ??
         const <String>[];
     final latestDialogueState = _latestAssistantDialogueState();
+    final dialogueRuntimeView =
+        AssistantDialogueRuntimeReadView(latestDialogueState);
     final latestRunArtifacts = _latestAssistantRunArtifacts();
     final scope = <String, dynamic>{
       'pageType': _assistantSourceToPageType(openContext?.source),
@@ -1325,18 +1154,14 @@ class AssistantConversationController extends ChangeNotifier {
       if (openContext?.tab != null) 'tab': openContext!.tab!,
       if (openContext?.dimension != null) 'dimension': openContext!.dimension!,
       'hints': hints,
-      if (hints['behaviorTimeline'] is List<dynamic>)
+      if (hints['behaviorTimeline'] is List)
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
       if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
       if (latestRunArtifacts != null)
         'runArtifacts': latestRunArtifacts.toJson(),
-      if (latestDialogueState['suggestedNextStateId'] is String &&
-          (latestDialogueState['suggestedNextStateId'] as String)
-              .trim()
-              .isNotEmpty)
-        'currentStateId':
-            (latestDialogueState['suggestedNextStateId'] as String).trim(),
+      if (dialogueRuntimeView.suggestedNextStateIdOrEmpty.isNotEmpty)
+        'currentStateId': dialogueRuntimeView.suggestedNextStateIdOrEmpty,
       'assistantContentAccess': <String, dynamic>{
         'skillId': kPersonalContentAccessSkillId,
         'granted': contentAccessState.granted,
@@ -1401,7 +1226,9 @@ class AssistantConversationController extends ChangeNotifier {
       return _cachedGeoRuntimeContext!;
     }
     try {
-      final result = await _localContextTool.execute(const <String, dynamic>{});
+      final result = await _localContextTool
+          .execute(const <String, dynamic>{})
+          .timeout(const Duration(seconds: 2));
       final data = result.data ?? const <String, dynamic>{};
       final geoCatalog = await GeoResolutionCatalog.load();
       final resolved = _AssistantGeoRuntimeContext(
@@ -1817,19 +1644,18 @@ class AssistantConversationController extends ChangeNotifier {
     required bool finalAnswerReady,
     required String displayMarkdown,
   }) {
-    final existingMessage = existingRow == null ? null : _rowToMap(existingRow);
-    final carriedProcessTimeline = existingMessage == null
+    final carriedProcessTimeline = existingRow == null
         ? const <ProcessTimelineFrame>[]
-        : resolveAssistantProcessTimelineFromMessage(existingMessage);
-    final carriedUnderstandingSnapshot = existingMessage == null
+        : resolveAssistantProcessTimelineFromTranscriptRow(existingRow);
+    final carriedUnderstandingSnapshot = existingRow == null
         ? const RunArtifactsUnderstandingSnapshot()
-        : resolveAssistantUnderstandingSnapshotFromMessage(existingMessage);
-    final carriedRetrievalProcessing = existingMessage == null
+        : resolveAssistantUnderstandingSnapshotFromTranscriptRow(existingRow);
+    final carriedRetrievalProcessing = existingRow == null
         ? const RetrievalProcessingSnapshot()
-        : resolveAssistantRetrievalProcessingFromMessage(existingMessage);
-    final carriedAnswerProcessing = existingMessage == null
+        : resolveAssistantRetrievalProcessingFromTranscriptRow(existingRow);
+    final carriedAnswerProcessing = existingRow == null
         ? const RunArtifactsAnswerProcessing()
-        : resolveAssistantAnswerProcessingFromMessage(existingMessage);
+        : resolveAssistantAnswerProcessingFromTranscriptRow(existingRow);
     final responseUnderstandingSnapshot =
         (response.structuredResponse[assistantUnderstandingSnapshotField]
                 as Map?)
@@ -1870,9 +1696,9 @@ class AssistantConversationController extends ChangeNotifier {
           retrievalProcessing: mergedRetrievalProcessing,
           answerProcessing: mergedAnswerProcessing,
         );
-    final carriedDisplayState = existingMessage == null
+    final carriedDisplayState = existingRow == null
         ? const AssistantDisplayState()
-        : resolvePersistedAssistantDisplayState(existingMessage);
+        : resolvePersistedAssistantDisplayStateFromTranscriptRow(existingRow);
     final mergedDisplayState = AssistantDisplayState(
       process: buildAssistantDisplayState(
         explicitState: AssistantDisplayState(
@@ -2318,8 +2144,8 @@ class AssistantConversationController extends ChangeNotifier {
         streamedAnswerDelta: value,
       );
       final prevMarkdown = renderAnswerBlocksToMarkdown(
-        resolvePersistedAssistantDisplayState(
-          _rowToMap(existingRow),
+        resolvePersistedAssistantDisplayStateFromTranscriptRow(
+          existingRow,
         ).answer.blocks,
       );
       final nextMarkdown = renderAnswerBlocksToMarkdown(
@@ -2334,22 +2160,11 @@ class AssistantConversationController extends ChangeNotifier {
     } else {
       final initialDisplayState = _streamingAnswerDisplayState(value);
       _transcriptRows.add(
-        _mapToRow({
-          'id': messageId,
-          'conversationId': AppConceptConstants.assistantConversationId,
-          'type': 'text',
-          'content': '',
-          'streamFinalAnswer': '',
-          'senderId': AppConceptConstants.assistantSenderId,
-          'senderName': AppConceptConstants.assistantLabel,
-          'senderAvatar': '',
-          'timestamp': ts,
-          'isRead': true,
-          'isSelf': false,
-          'streaming': true,
-          if (hasAssistantDisplayState(initialDisplayState))
-            assistantDisplayStateField: initialDisplayState.toJson(),
-        }),
+        AssistantTranscriptAssembler.assistantStreamingPlaceholderWithInitialDisplayState(
+          id: messageId,
+          streamTimestamp: ts,
+          initialDisplayState: initialDisplayState,
+        ),
       );
     }
     if (_shouldOpenAnswerGateForJourney(_currentJourney)) {
@@ -2384,8 +2199,7 @@ class AssistantConversationController extends ChangeNotifier {
     String streamedAnswerDelta = '',
     RunArtifactsUnderstandingSnapshot? understandingSnapshot,
   }) {
-    final message = _rowToMap(row);
-    final current = resolvePersistedAssistantDisplayState(message);
+    final current = resolvePersistedAssistantDisplayStateFromTranscriptRow(row);
     final currentMarkdown = renderAnswerBlocksToMarkdown(current.answer.blocks);
     final mergedMarkdown = streamedAnswerDelta.trim().isEmpty
         ? currentMarkdown
@@ -2394,7 +2208,7 @@ class AssistantConversationController extends ChangeNotifier {
             incoming: streamedAnswerDelta,
           );
     final carriedUnderstandingSnapshot =
-        resolveAssistantUnderstandingSnapshotFromMessage(message);
+        resolveAssistantUnderstandingSnapshotFromTranscriptRow(row);
     final effectiveUnderstandingSnapshot =
         _mergeUnderstandingSnapshots(<RunArtifactsUnderstandingSnapshot>[
           carriedUnderstandingSnapshot,
@@ -2404,10 +2218,10 @@ class AssistantConversationController extends ChangeNotifier {
         ]);
     final effectiveProcessTimeline = _currentCanonicalProcessTimeline.isNotEmpty
         ? _currentCanonicalProcessTimeline
-        : resolveAssistantProcessTimelineFromMessage(message);
+        : resolveAssistantProcessTimelineFromTranscriptRow(row);
     final effectiveRetrievalProcessing =
         _mergeRetrievalProcessingSnapshots(<RetrievalProcessingSnapshot>[
-          resolveAssistantRetrievalProcessingFromMessage(message),
+          resolveAssistantRetrievalProcessingFromTranscriptRow(row),
           if (_hasStructuredRetrievalProcessing(_currentRetrievalProcessing))
             _currentRetrievalProcessing,
         ]);
@@ -2425,7 +2239,7 @@ class AssistantConversationController extends ChangeNotifier {
       processTimeline: effectiveProcessTimeline,
       understandingSnapshot: effectiveUnderstandingSnapshot,
       retrievalProcessing: effectiveRetrievalProcessing,
-      answerProcessing: resolveAssistantAnswerProcessingFromMessage(message),
+      answerProcessing: resolveAssistantAnswerProcessingFromTranscriptRow(row),
       finalAnswerReady: false,
     ).process;
     return AssistantDisplayState(process: mergedProcess, answer: answerState);
@@ -2448,7 +2262,8 @@ class AssistantConversationController extends ChangeNotifier {
     }
     final carriedAnswer = existingRow == null
         ? const AssistantAnswerDisplayState()
-        : resolvePersistedAssistantDisplayState(_rowToMap(existingRow)).answer;
+        : resolvePersistedAssistantDisplayStateFromTranscriptRow(existingRow)
+              .answer;
     final carriedSummary = carriedAnswer.summary.trim();
     final resolvedSummary = completedSummary.isNotEmpty
         ? completedSummary
@@ -3070,48 +2885,7 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _extractReplayPayload(List<AssistantTraceEvent> traces) {
-    Map<String, dynamic> webSearchDiagnostics = const <String, dynamic>{};
-    for (var i = traces.length - 1; i >= 0; i--) {
-      final trace = traces[i];
-      if (trace.type != AssistantTraceEventType.toolResult &&
-          trace.type != AssistantTraceEventType.toolError) {
-        continue;
-      }
-      final data = trace.data ?? const <String, dynamic>{};
-      final diagnostics =
-          (data['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      if (diagnostics.isNotEmpty) {
-        webSearchDiagnostics = diagnostics;
-        break;
-      }
-    }
-    for (var i = traces.length - 1; i >= 0; i--) {
-      final trace = traces[i];
-      if (trace.type != AssistantTraceEventType.toolResult) continue;
-      final data = trace.data ?? const <String, dynamic>{};
-      final queryPlan = (data['queryPlan'] as Map?)?.cast<String, dynamic>();
-      final policyDecision = (data['policyDecision'] as Map?)
-          ?.cast<String, dynamic>();
-      final roundTraces = (data['roundTraces'] as List?)
-          ?.whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false);
-      if (queryPlan != null || policyDecision != null || roundTraces != null) {
-        return <String, dynamic>{
-          'queryPlan': queryPlan ?? const <String, dynamic>{},
-          'policyDecision': policyDecision ?? const <String, dynamic>{},
-          'roundTraces': roundTraces ?? const <Map<String, dynamic>>[],
-          'webSearchDiagnostics': webSearchDiagnostics,
-        };
-      }
-    }
-    return <String, dynamic>{
-      'queryPlan': const <String, dynamic>{},
-      'policyDecision': const <String, dynamic>{},
-      'roundTraces': const <Map<String, dynamic>>[],
-      'webSearchDiagnostics': webSearchDiagnostics,
-    };
+    return AssistantReplayTracePayload.fromTraces(traces).toPayloadMap();
   }
 
   String _rewriteUserLabel(RewriteMode mode) {

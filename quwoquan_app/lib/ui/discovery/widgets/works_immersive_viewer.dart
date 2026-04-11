@@ -23,6 +23,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
@@ -33,6 +34,7 @@ import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -56,7 +58,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.initialPostIndex = 0,
     this.initialImageIndex = 0,
     this.source = 'featured',
-    this.rawPostsById = const <String, Map<String, Object?>>{},
+    this.rawPostsById = const <String, MediaViewerPostWireRow>{},
     this.defaultCircleId,
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.onDismissed,
@@ -83,7 +85,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final int initialPostIndex;
   final int initialImageIndex;
   final String source;
-  final Map<String, Map<String, Object?>> rawPostsById;
+  final Map<String, MediaViewerPostWireRow> rawPostsById;
   final String? defaultCircleId;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final ValueChanged<MediaViewerResult>? onDismissed;
@@ -356,15 +358,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (raw == null) {
       return false;
     }
-    if (raw['articleDocument'] is Map &&
-        (raw['articleDocument'] as Map).isNotEmpty) {
+    if (raw[ArticleDetailWireKeys.articleDocument] is Map &&
+        (raw[ArticleDetailWireKeys.articleDocument] as Map).isNotEmpty) {
       return true;
     }
-    if (raw['articleBlocks'] is List &&
-        (raw['articleBlocks'] as List).isNotEmpty) {
+    if (raw[ArticleDetailWireKeys.articleBlocks] is List &&
+        (raw[ArticleDetailWireKeys.articleBlocks] as List).isNotEmpty) {
       return true;
     }
-    if (raw['cards'] is List && (raw['cards'] as List).isNotEmpty) {
+    if (raw[ArticleDetailWireKeys.cards] is List &&
+        (raw[ArticleDetailWireKeys.cards] as List).isNotEmpty) {
       return true;
     }
     return false;
@@ -396,7 +399,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       'body': rawBody.isNotEmpty
           ? rawBody
           : (hasStructuredPayload ? '' : post.body),
-      'coverUrl': (raw?['coverUrl'] ?? post.coverUrl).toString(),
+      'coverUrl':
+          (raw?[ArticleDetailWireKeys.coverUrl] ?? post.coverUrl).toString(),
       'thumbnailUrl': (raw?['thumbnailUrl'] ?? post.thumbnailUrl).toString(),
       'mediaUrls': raw?['mediaUrls'] ?? post.imageUrls,
       'likeCount': raw?['likeCount'] ?? post.likeCount,
@@ -545,10 +549,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   Map<String, Object?>? _rawPostById(String postId) {
     final external = widget.rawPostsById[postId];
-    if (external != null) return external;
-    final wire = ref
-        .watch(appContentRepositoryProvider)
-        .discoveryFeedWireRowByPostId(postId);
+    if (external != null) return external.toObjectMap();
+    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
+    final wire = prototypeDiscoveryWireRowForMock(isMock, postId);
     if (wire == null) return null;
     return Map<String, Object?>.from(wire);
   }
@@ -562,29 +565,49 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return null;
   }
 
+  Map<String, dynamic> _wireMapForPresentation(PostBaseDto post) {
+    final raw = _effectiveRawPostById(post.id);
+    if (raw == null) {
+      return post.toMap();
+    }
+    return Map<String, dynamic>.from(
+      raw.map((k, v) => MapEntry(k.toString(), v)),
+    );
+  }
+
   String _titleForPost(PostBaseDto post) {
     final raw = _effectiveRawPostById(post.id);
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     if (rawTitle.isNotEmpty) return rawTitle;
     final summary = _summaryForPost(post.id);
-    final summaryTitle = summary?.title?.trim() ?? '';
+    final summaryTitle = summary?.readPresentation.title.trim() ?? '';
     if (summaryTitle.isNotEmpty) return summaryTitle;
-    return post.normalizedTitle;
+    final pres = PostReadProjectionFacade.presentationFor(
+      post,
+      PostReadSurfaceId.immersive,
+      wire: _wireMapForPresentation(post),
+    );
+    return pres.title.isNotEmpty ? pres.title : post.normalizedTitle;
   }
 
   String _bodyForPost(PostBaseDto post) {
     final raw = _effectiveRawPostById(post.id);
     final rawBody =
         raw?['body']?.toString().trim() ??
-        raw?['description']?.toString().trim() ??
-        raw?['content']?.toString().trim() ??
-        raw?['caption']?.toString().trim() ??
+        raw?[ContentPostImmersiveWireKeys.description]?.toString().trim() ??
+        raw?[ContentPostImmersiveWireKeys.content]?.toString().trim() ??
+        raw?[ContentPostImmersiveWireKeys.caption]?.toString().trim() ??
         '';
     if (rawBody.isNotEmpty) return rawBody;
     final summary = _summaryForPost(post.id);
-    final summaryBody = summary?.body?.trim() ?? '';
+    final summaryBody = summary?.readPresentation.body.trim() ?? '';
     if (summaryBody.isNotEmpty) return summaryBody;
-    return post.normalizedBody;
+    final pres = PostReadProjectionFacade.presentationFor(
+      post,
+      PostReadSurfaceId.immersive,
+      wire: _wireMapForPresentation(post),
+    );
+    return pres.body.isNotEmpty ? pres.body : post.normalizedBody;
   }
 
   String _overlayTitleForPost(PostBaseDto post) {
@@ -613,7 +636,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return const <_PostCircleTarget>[];
     }
 
-    final summaries = raw['circleSummaries'];
+    final summaries = raw[ContentPostImmersiveWireKeys.circleSummaries];
     if (summaries is List) {
       final resolved = summaries
           .whereType<Map>()
@@ -629,13 +652,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     }
 
     final circleIds =
-        (raw['circleIds'] as List?)
+        (raw[ContentPostImmersiveWireKeys.circleIds] as List?)
             ?.map((item) => item.toString())
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
     final circleNames =
-        (raw['circleNames'] as List?)
+        (raw[ContentPostImmersiveWireKeys.circleNames] as List?)
             ?.map((item) => item.toString())
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
@@ -650,8 +673,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     }
 
     final circleId =
-        raw['circleId']?.toString() ?? widget.defaultCircleId ?? '';
-    final circleName = raw['circleName']?.toString() ?? '';
+        raw[ContentPostImmersiveWireKeys.circleId]?.toString() ??
+            widget.defaultCircleId ??
+            '';
+    final circleName =
+        raw[ContentPostImmersiveWireKeys.circleName]?.toString() ?? '';
     if (circleId.isNotEmpty) {
       return <_PostCircleTarget>[
         _PostCircleTarget(
@@ -1292,7 +1318,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         child: _WorksTextCanvas(
           title: _titleForPost(post),
           body: _bodyForPost(post),
-          imageUrl: _rawPostById(post.id)?['coverUrl']?.toString(),
+          imageUrl: _rawPostById(post.id)?[ArticleDetailWireKeys.coverUrl]
+              ?.toString(),
         ),
       );
     }
@@ -1347,9 +1374,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     required bool enableIdentityTemplate,
   }) {
     final raw = _rawPostById(post.id);
-    final visibility = raw?['visibility']?.toString() ?? 'public';
+    final visibility =
+        raw?[ContentPostImmersiveWireKeys.visibility]?.toString() ?? 'public';
     final tags =
-        (raw?['tags'] as List?)
+        (raw?[ContentPostImmersiveWireKeys.tags] as List?)
             ?.map((item) => item.toString().trim())
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
@@ -1368,7 +1396,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _recordShare(String postId, String actionId) {
     setState(() {
       final rawShareCount =
-          (_rawPostById(postId)?['shareCount'] as num?)?.toInt() ?? 0;
+          (_rawPostById(postId)?[ContentPostImmersiveWireKeys.shareCount]
+                  as num?)
+              ?.toInt() ??
+          0;
       final current = _postSharesCount[postId] ?? rawShareCount;
       _postSharesCount[postId] = current + 1;
     });

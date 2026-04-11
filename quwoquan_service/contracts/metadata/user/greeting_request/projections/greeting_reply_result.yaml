@@ -1,0 +1,23 @@
+version: 1
+read_model: GreetingReplyResult
+
+description: |
+  POST /v1/user/greeting-request/{requestId}/reply 响应 wire（含会话 ID）。
+
+source_entities:
+  - GreetingRequest
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: GreetingReplyResultDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/greeting_reply_result_dto.g.dart
+  fields:
+    - name: conversationId
+      dart_type: String
+      nullable: false
+      source: conversationId
+      aliases: [conversationId, promotedConversationId]
+      default: "''"

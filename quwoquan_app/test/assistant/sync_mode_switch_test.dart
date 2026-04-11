@@ -62,35 +62,37 @@ void main() {
 
 class _FakeAssistantRepository implements AssistantRepository {
   @override
-  Future<Map<String, dynamic>> getPolicySnapshot({
+  Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   }) async {
-    return <String, dynamic>{
-      'version': policyVersionHint.isEmpty ? 'v1' : policyVersionHint,
-      'values': const <String, dynamic>{'learningSyncEnabled': true},
-    };
+    return AssistantPolicyView(
+      version: policyVersionHint.isEmpty ? 'v1' : policyVersionHint,
+      values: const <String, dynamic>{'learningSyncEnabled': true},
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> reportInteractionEvents({
-    required List<Map<String, dynamic>> events,
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
   }) async {
-    return <String, dynamic>{
-      'accepted': true,
-      'acceptedCount': events.length,
-      'count': events.length,
-    };
+    return AssistantInteractionReportBatchAck(
+      accepted: true,
+      acceptedCount: events.length,
+      count: events.length,
+      resource: 'interaction_event_batch',
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> reportScorecards({
-    required List<Map<String, dynamic>> scorecards,
+  Future<AssistantScorecardReportBatchAck> reportScorecards({
+    required List<Scorecard> scorecards,
   }) async {
-    return <String, dynamic>{
-      'accepted': true,
-      'acceptedCount': scorecards.length,
-      'count': scorecards.length,
-    };
+    return AssistantScorecardReportBatchAck(
+      accepted: true,
+      acceptedCount: scorecards.length,
+      count: scorecards.length,
+      resource: 'scorecard_batch',
+    );
   }
 
   @override

@@ -5,9 +5,9 @@ class AppLogSkillCenterActionSummaryPayload {
   final String event;
   final String action;
 
-  const AppLogSkillCenterActionSummaryPayload({
-    required this.event,
-    required this.action,
+  AppLogSkillCenterActionSummaryPayload({
+    this.event = 'skill_center_action',
+    this.action = '',
   });
 
   factory AppLogSkillCenterActionSummaryPayload.fromMap(Map<String, dynamic> m) {

@@ -512,6 +512,8 @@ class _FakeWeatherSearchTool implements AssistantTool {
         'provider': 'duckduckgo',
         'qualityScore': 0.85,
         'summary': '深圳今天天气晴朗，温度25°C',
+        'freshnessKnown': true,
+        'freshnessSatisfied': true,
         'authorityDomains': <String>['weather.com.cn', 'cma.cn'],
         'totalReferences': 2,
         'references': <Map<String, dynamic>>[
@@ -1981,10 +1983,15 @@ void main() {
       expect(structured.containsKey('processSummary'), isFalse);
       expect(structured.containsKey('processReferenceCount'), isFalse);
       expect(structured.containsKey('uiProcessContentBlocks'), isFalse);
-      final userMessages = journey.entries
-          .map((item) => '${item.headline} ${item.detail}'.trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
+      final userMessages = <String>[
+        ...journey.entries
+            .map((item) => '${item.headline} ${item.detail}'.trim())
+            .where((item) => item.isNotEmpty),
+        if (journey.summary.trim().isNotEmpty) journey.summary.trim(),
+        ...journey.stages
+            .map((stage) => stage.summary.trim())
+            .where((item) => item.isNotEmpty),
+      ];
       expect(
         userMessages.any((item) => item.contains('深圳') && item.contains('天气')),
         isTrue,
@@ -1996,7 +2003,13 @@ void main() {
               item.contains('先确认') ||
               item.contains('我在') ||
               item.contains('我先') ||
-              item.contains('先把'),
+              item.contains('先把') ||
+              item.contains('围绕你') ||
+              item.contains('已经能直接确认') ||
+              item.contains('最关心') ||
+              item.contains('背景线索') ||
+              item.contains('更容易看') ||
+              item.contains('基本对齐'),
         ),
         isTrue,
         reason: '过程事件应解释当前为什么这样收敛，而不是只报系统状态',

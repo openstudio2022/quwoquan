@@ -62,6 +62,8 @@ for dir in "$BASE"/*; do
       [[ -d "$sub" ]] || continue
       subname="$(basename "$sub")"
       [[ "$subname" == _* ]] && continue
+      # Wire JSON fixtures only (no aggregate/entity graph); see verify_metadata skip for test_fixtures
+      [[ "$subname" == "test_fixtures" ]] && continue
       _verify_entity_dir "$sub" "$name/$subname"
     done
     continue
@@ -83,6 +85,14 @@ done
 
 if command -v python3 >/dev/null 2>&1; then
   python3 "${ROOT}/scripts/verify_link_templates_route_ids.py" || exit 1
+fi
+
+# Go 侧元数据一致性（与 make -C quwoquan_service verify-metadata 对齐）
+if command -v go >/dev/null 2>&1; then
+  echo "[verify] contract metadata (go verify_metadata)"
+  (cd "${ROOT}/quwoquan_service" && go run ./tools/verify_metadata/ contracts/metadata) || exit 1
+else
+  echo "[verify] WARN: go not found — skipping tools/verify_metadata (run: make -C quwoquan_service verify-metadata)"
 fi
 
 echo "[verify] OK: metadata contracts (v3) validated"

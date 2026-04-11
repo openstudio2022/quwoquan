@@ -5,9 +5,9 @@ class AppLogBottomNavTapMeta {
   final int fromIndex;
   final int toIndex;
 
-  const AppLogBottomNavTapMeta({
-    required this.fromIndex,
-    required this.toIndex,
+  AppLogBottomNavTapMeta({
+    this.fromIndex = 0,
+    this.toIndex = 0,
   });
 
   factory AppLogBottomNavTapMeta.fromMap(Map<String, dynamic> m) {

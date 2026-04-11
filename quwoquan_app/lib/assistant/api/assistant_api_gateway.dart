@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/assistant/api/assistant_gateway_json_payloads.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
 import 'package:quwoquan_app/assistant/cost/assistant_cost_ledger.dart';
 import 'package:quwoquan_app/assistant/observability/assistant_observability_runtime.dart';
@@ -8,6 +9,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_run_interaction_collector.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_wire_json_codec.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/providers/assistant_provider_runtime.dart';
 import 'package:quwoquan_app/assistant/security/assistant_security_runtime.dart';
@@ -104,28 +106,26 @@ class AssistantApiGateway {
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/models/select')) {
         final payload = await _decodeBody(request);
-        final selectedModels =
-            ((payload['selectedModels'] as List?) ?? const <dynamic>[])
-                .whereType<String>()
-                .map((item) => item.trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false);
-        final modelRef = (payload['modelRef'] as String?)?.trim() ?? '';
+        final selectBody = AssistantGatewayModelSelectBody.fromJson(payload);
 
         var selectedApplied = false;
-        if (selectedModels.isNotEmpty) {
-          selectedApplied = _assistantGateway.setSelectedModels(selectedModels);
+        if (selectBody.selectedModels.isNotEmpty) {
+          selectedApplied = _assistantGateway.setSelectedModels(
+            selectBody.selectedModels,
+          );
         }
 
-        final switchTarget = modelRef.isNotEmpty
-            ? modelRef
-            : (selectedModels.isNotEmpty ? selectedModels.first : '');
+        final switchTarget = selectBody.modelRef.isNotEmpty
+            ? selectBody.modelRef
+            : (selectBody.selectedModels.isNotEmpty
+                  ? selectBody.selectedModels.first
+                  : '');
         var switched = false;
         if (switchTarget.isNotEmpty) {
           switched = _assistantGateway.switchModel(switchTarget);
         }
 
-        if ((!selectedApplied && selectedModels.isNotEmpty) ||
+        if ((!selectedApplied && selectBody.selectedModels.isNotEmpty) ||
             (!switched && switchTarget.isNotEmpty)) {
           await _writeJson(
             request: request,
@@ -232,12 +232,9 @@ class AssistantApiGateway {
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/logs/export')) {
         final payload = await _decodeBody(request);
-        final targetDirectory =
-            (payload['targetDirectory'] as String?)?.trim().isNotEmpty == true
-            ? (payload['targetDirectory'] as String).trim()
-            : '/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/app_log';
+        final exportBody = AssistantGatewayLogsExportBody.fromJson(payload);
         final result = await _assistantGateway.exportLogsToWorkspace(
-          targetDirectory: targetDirectory,
+          targetDirectory: exportBody.targetDirectory,
         );
         await _writeJson(
           request: request,
@@ -249,17 +246,15 @@ class AssistantApiGateway {
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/logs/boost')) {
         final payload = await _decodeBody(request);
-        final sessionId = (payload['sessionId'] as String?)?.trim() ?? '';
-        final runId = (payload['runId'] as String?)?.trim() ?? '';
-        final clear = payload['clear'] == true;
-        if (clear) {
+        final boostBody = AssistantGatewayLogsBoostBody.fromJson(payload);
+        if (boostBody.clear) {
           AppLogService.instance.clearBoosts();
         } else {
-          if (sessionId.isNotEmpty) {
-            AppLogService.instance.boostSession(sessionId);
+          if (boostBody.sessionId.isNotEmpty) {
+            AppLogService.instance.boostSession(boostBody.sessionId);
           }
-          if (runId.isNotEmpty) {
-            AppLogService.instance.boostRun(runId);
+          if (boostBody.runId.isNotEmpty) {
+            AppLogService.instance.boostRun(boostBody.runId);
           }
         }
         await _writeJson(
@@ -267,9 +262,9 @@ class AssistantApiGateway {
           statusCode: HttpStatus.ok,
           data: <String, dynamic>{
             'ok': true,
-            'clear': clear,
-            'sessionId': sessionId,
-            'runId': runId,
+            'clear': boostBody.clear,
+            'sessionId': boostBody.sessionId,
+            'runId': boostBody.runId,
           },
         );
         return;
@@ -277,23 +272,11 @@ class AssistantApiGateway {
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/alerts/test')) {
         final payload = await _decodeBody(request);
-        final severityRaw =
-            (payload['severity'] as String?)?.trim().toLowerCase() ?? 'warning';
-        final severity = severityRaw == 'critical'
-            ? AssistantSloAlertSeverity.critical
-            : AssistantSloAlertSeverity.warning;
-        final providerId =
-            (payload['providerId'] as String?)?.trim().isNotEmpty == true
-            ? (payload['providerId'] as String).trim()
-            : 'synthetic_provider';
-        final message =
-            (payload['message'] as String?)?.trim().isNotEmpty == true
-            ? (payload['message'] as String).trim()
-            : 'synthetic alert for routing verification';
+        final alertBody = AssistantGatewayAlertsTestBody.fromJson(payload);
         final alert = await _alertDispatcher.dispatchSynthetic(
-          providerId: providerId,
-          severity: severity,
-          message: message,
+          providerId: alertBody.providerId,
+          severity: alertBody.severity,
+          message: alertBody.message,
         );
         await _writeJson(
           request: request,
@@ -331,25 +314,25 @@ class AssistantApiGateway {
         await _writeJson(
           request: request,
           statusCode: HttpStatus.ok,
-          data: <String, dynamic>{'sessions': sessions},
+          data: <String, dynamic>{
+            'sessions': sessions.map((e) => e.toJson()).toList(growable: false),
+          },
         );
         return;
       }
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/skills/invoke')) {
         final payload = await _decodeBody(request);
-        final skillId = (payload['skill_id'] as String?)?.trim() ?? '';
-        final actor = (payload['userId'] as String?)?.trim() ?? 'external';
-        final channel = (payload['channel'] as String?)?.trim() ?? 'app';
+        final invokeBody = AssistantGatewaySkillInvokeBody.fromJson(payload);
         final acl = _authAcl.allow(
           AssistantAccessContext(
-            channel: channel,
-            actorId: actor,
-            resource: 'skills/$skillId',
+            channel: invokeBody.channel,
+            actorId: invokeBody.actorUserId,
+            resource: 'skills/${invokeBody.skillId}',
             action: 'invoke',
           ),
         );
-        if (!acl || skillId.isEmpty) {
+        if (!acl || invokeBody.skillId.isEmpty) {
           await _writeJson(
             request: request,
             statusCode: HttpStatus.forbidden,
@@ -358,20 +341,17 @@ class AssistantApiGateway {
           return;
         }
         final result = await _assistantGateway.invokeSkill(
-          skillId: skillId,
-          arguments:
-              (payload['arguments'] as Map?)?.cast<String, dynamic>() ??
-              <String, dynamic>{},
-          deviceProfile:
-              (payload['deviceProfile'] as String?)?.trim() ?? 'mobile',
-          channel: channel,
+          skillId: invokeBody.skillId,
+          arguments: invokeBody.arguments,
+          deviceProfile: invokeBody.deviceProfile,
+          channel: invokeBody.channel,
         );
         await _writeJson(
           request: request,
           statusCode: HttpStatus.ok,
           data: <String, dynamic>{
             'runId': requestId,
-            'traceId': payload['traceId'] ?? requestId,
+            'traceId': invokeBody.traceId ?? requestId,
             ...result.toJson(),
           },
         );
@@ -379,16 +359,8 @@ class AssistantApiGateway {
       }
       if (method == 'POST' && _matchesPath(path, '/v1/assistant/runs')) {
         final payload = await _decodeBody(request);
-        final messages = ((payload['messages'] as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map(
-              (m) => AssistantRunMessage(
-                role: m['role']?.toString() ?? 'user',
-                content: m['content']?.toString() ?? '',
-              ),
-            )
-            .toList(growable: false);
-        if (messages.isEmpty) {
+        final runReq = AssistantRunRequest.fromGatewayBody(payload);
+        if (runReq.messages.isEmpty) {
           await _writeJson(
             request: request,
             statusCode: HttpStatus.badRequest,
@@ -396,59 +368,20 @@ class AssistantApiGateway {
           );
           return;
         }
-        final runReq = AssistantRunRequest(
-          messages: messages,
-          sessionId: payload['sessionId'] as String?,
-          userId: payload['userId'] as String?,
-          profileSubjectId: payload['profileSubjectId'] as String?,
-          subAccountId: payload['subAccountId'] as String?,
-          personaContextVersion: payload['personaContextVersion'] as String?,
-          channel: (payload['channel'] as String?) ?? 'app',
-          deviceProfile: (payload['deviceProfile'] as String?) ?? 'mobile',
-          traceId: payload['traceId'] as String?,
-          maxIterations: (payload['maxIterations'] as int?) ?? 8,
-          capabilityCatalog:
-              (payload['capabilityCatalog'] as List?)
-                  ?.whereType<String>()
-                  .map((item) => item.trim())
-                  .where((item) => item.isNotEmpty)
-                  .toList(growable: false) ??
-              const <String>[],
-          contextScopeHint:
-              (payload['contextScopeHint'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          privacyProfile:
-              (payload['privacyProfile'] as String?)?.trim().isNotEmpty == true
-              ? (payload['privacyProfile'] as String).trim()
-              : 'default',
-          privacyPolicy:
-              (payload['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          sourceSurfaceId: payload['sourceSurfaceId'] as String?,
-          sourceQuery: payload['sourceQuery'] as String?,
-          fromGlobalSearch: payload['fromGlobalSearch'] == true,
-        );
-        final requestedModelRef =
-            (payload['modelRef'] as String?)?.trim() ?? '';
-        final requestedSelectedModels =
-            ((payload['selectedModels'] as List?) ?? const <dynamic>[])
-                .whereType<String>()
-                .map((item) => item.trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false);
+        final modelHints = AssistantGatewayRunModelHintsBody.fromJson(payload);
         AssistantProviderDescriptor? selectedProvider;
-        if (requestedSelectedModels.isNotEmpty) {
-          _assistantGateway.setSelectedModels(requestedSelectedModels);
+        if (modelHints.selectedModels.isNotEmpty) {
+          _assistantGateway.setSelectedModels(modelHints.selectedModels);
         }
-        if (requestedModelRef.isNotEmpty) {
-          final switched = _assistantGateway.switchModel(requestedModelRef);
+        if (modelHints.modelRef.isNotEmpty) {
+          final switched = _assistantGateway.switchModel(modelHints.modelRef);
           if (!switched) {
             await _writeJson(
               request: request,
               statusCode: HttpStatus.badRequest,
               data: <String, dynamic>{
                 'error': 'invalid_model_ref',
-                'requestedModelRef': requestedModelRef,
+                'requestedModelRef': modelHints.modelRef,
                 'availableModels': _assistantGateway.listAvailableModels(),
               },
             );
@@ -503,7 +436,7 @@ class AssistantApiGateway {
           }
         }
         final usage = _tokenMeter.estimate(
-          inputText: messages.map((m) => m.content).join('\n'),
+          inputText: runReq.messages.map((m) => m.content).join('\n'),
           outputText: runRes.finalText,
         );
         await _costLedger.append(
@@ -546,47 +479,7 @@ class AssistantApiGateway {
       if (method == 'POST' &&
           _matchesPath(path, '/v1/assistant/runs/stream')) {
         final payload = await _decodeBody(request);
-        final messages = ((payload['messages'] as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map(
-              (m) => AssistantRunMessage(
-                role: m['role']?.toString() ?? 'user',
-                content: m['content']?.toString() ?? '',
-              ),
-            )
-            .toList(growable: false);
-        final runReq = AssistantRunRequest(
-          messages: messages,
-          sessionId: payload['sessionId'] as String?,
-          userId: payload['userId'] as String?,
-          profileSubjectId: payload['profileSubjectId'] as String?,
-          subAccountId: payload['subAccountId'] as String?,
-          personaContextVersion: payload['personaContextVersion'] as String?,
-          channel: (payload['channel'] as String?) ?? 'app',
-          deviceProfile: (payload['deviceProfile'] as String?) ?? 'mobile',
-          traceId: payload['traceId'] as String?,
-          maxIterations: (payload['maxIterations'] as int?) ?? 8,
-          capabilityCatalog:
-              (payload['capabilityCatalog'] as List?)
-                  ?.whereType<String>()
-                  .map((item) => item.trim())
-                  .where((item) => item.isNotEmpty)
-                  .toList(growable: false) ??
-              const <String>[],
-          contextScopeHint:
-              (payload['contextScopeHint'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          privacyProfile:
-              (payload['privacyProfile'] as String?)?.trim().isNotEmpty == true
-              ? (payload['privacyProfile'] as String).trim()
-              : 'default',
-          privacyPolicy:
-              (payload['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          sourceSurfaceId: payload['sourceSurfaceId'] as String?,
-          sourceQuery: payload['sourceQuery'] as String?,
-          fromGlobalSearch: payload['fromGlobalSearch'] == true,
-        );
+        final runReq = AssistantRunRequest.fromGatewayBody(payload);
         final runRes = await _assistantGateway.run(runReq);
         request.response.headers.set(
           HttpHeaders.contentTypeHeader,
@@ -694,10 +587,7 @@ class AssistantApiGateway {
 
   Future<Map<String, dynamic>> _decodeBody(HttpRequest request) async {
     final body = await utf8.decoder.bind(request).join();
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return decoded.cast<String, dynamic>();
-    return <String, dynamic>{};
+    return assistantDecodeJsonObjectBody(body);
   }
 
   Future<void> _writeJson({

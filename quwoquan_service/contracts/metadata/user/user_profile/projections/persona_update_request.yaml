@@ -1,0 +1,94 @@
+version: 1
+read_model: PersonaUpdateRequest
+
+description: |
+  PATCH /v1/user/personas/{personaId}（UpdatePersona）请求体 wire。
+  与 user_profile/service.yaml UpdatePersona 的 request_fields 一致（ProfileSubjectMutation 子集）。
+
+source_entities:
+  - ProfileSubjectMutation
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: PersonaUpdateRequestDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/persona_update_request_dto.g.dart
+  fields:
+    - name: displayName
+      dart_type: String
+      nullable: true
+      source: displayName
+      aliases: [displayName]
+      default: "null"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: true
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "null"
+
+    - name: backgroundUrl
+      dart_type: String
+      nullable: true
+      source: backgroundUrl
+      aliases: [backgroundUrl]
+      default: "null"
+
+    - name: bio
+      dart_type: String
+      nullable: true
+      source: bio
+      aliases: [bio]
+      default: "null"
+
+    - name: callerRingtoneId
+      dart_type: String
+      nullable: true
+      source: callerRingtoneId
+      aliases: [callerRingtoneId]
+      default: "null"
+
+    - name: isolationLevel
+      dart_type: String
+      nullable: true
+      source: isolationLevel
+      aliases: [isolationLevel]
+      default: "null"
+
+    - name: purposeHint
+      dart_type: String
+      nullable: true
+      source: purposeHint
+      aliases: [purposeHint]
+      default: "null"
+
+    - name: profileVisibility
+      dart_type: String
+      nullable: true
+      source: profileVisibility
+      aliases: [profileVisibility]
+      default: "null"
+
+    - name: applyScope
+      dart_type: String
+      nullable: true
+      source: applyScope
+      aliases: [applyScope]
+      default: "null"
+
+    - name: syncTargetIds
+      dart_type: List<String>
+      nullable: true
+      source: syncTargetIds
+      aliases: [syncTargetIds]
+      default: "null"
+
+    - name: fieldsMask
+      dart_type: List<String>
+      nullable: true
+      source: fieldsMask
+      aliases: [fieldsMask]
+      default: "null"

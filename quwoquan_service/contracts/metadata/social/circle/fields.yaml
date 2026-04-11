@@ -963,3 +963,47 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: cursor
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  CircleBehaviorReport:
+    description: POST /v1/circles/behaviors 行为上报请求体
+    fields:
+      - name: userId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: circleId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: eventType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+        description: 主事件类型（如 impression）；兼容字段 type 由客户端任选其一
+
+      - name: sessionId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read

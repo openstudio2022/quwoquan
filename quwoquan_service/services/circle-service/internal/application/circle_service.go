@@ -198,10 +198,39 @@ type SearchCirclesRequest struct {
 	Limit       int
 }
 
+// CircleSearchItemWire aligns with contracts/metadata/social/circle/fields.yaml CircleSearchItemView.
+type CircleSearchItemWire struct {
+	CircleID             string `json:"circleId"`
+	Name                 string `json:"name"`
+	Description          string `json:"description,omitempty"`
+	CoverURL             string `json:"coverUrl,omitempty"`
+	CategoryID           string `json:"categoryId,omitempty"`
+	SubCategory          string `json:"subCategory,omitempty"`
+	DomainID             string `json:"domainId,omitempty"`
+	Kind                 string `json:"kind,omitempty"`
+	DisplaySubjectType   string `json:"displaySubjectType,omitempty"`
+	MemberCount          int64  `json:"memberCount"`
+	PostCount            int64  `json:"postCount"`
+	HighlightText        string `json:"highlightText,omitempty"`
+	MatchedField         string `json:"matchedField,omitempty"`
+	LinkedHomepageID     string `json:"linkedHomepageId,omitempty"`
+	LinkedHomepageType   string `json:"linkedHomepageType,omitempty"`
+	LinkedHomepageTitle  string `json:"linkedHomepageTitle,omitempty"`
+}
+
+// CircleFacetBucketWire aligns with CircleFacetBucketView.
+type CircleFacetBucketWire struct {
+	FacetKey    string `json:"facetKey"`
+	Label       string `json:"label"`
+	CategoryID  string `json:"categoryId,omitempty"`
+	SubCategory string `json:"subCategory,omitempty"`
+	FacetCount  int64  `json:"facetCount"`
+}
+
 type SearchCirclesResponse struct {
-	Items        []map[string]any `json:"items"`
-	FacetBuckets []map[string]any `json:"facetBuckets"`
-	Cursor       string           `json:"cursor,omitempty"`
+	Items        []CircleSearchItemWire `json:"items"`
+	FacetBuckets []CircleFacetBucketWire `json:"facetBuckets"`
+	Cursor       string                 `json:"cursor,omitempty"`
 }
 
 func (s *CircleService) SearchCircles(
@@ -218,7 +247,7 @@ func (s *CircleService) SearchCircles(
 		Limit:    limit * 8,
 	})
 	query := strings.TrimSpace(strings.ToLower(req.Query))
-	items := make([]map[string]any, 0, limit)
+	items := make([]CircleSearchItemWire, 0, limit)
 	facetCounts := map[string]int{}
 	for _, circle := range listResp.Items {
 		categoryID := strings.TrimSpace(circle.Category)
@@ -246,18 +275,23 @@ func (s *CircleService) SearchCircles(
 			}
 		}
 		facetCounts[categoryID]++
-		items = append(items, map[string]any{
-			"circleId":      circle.ID,
-			"name":          circle.Name,
-			"description":   circle.Description,
-			"coverUrl":      circle.CoverUrl,
-			"categoryId":    categoryID,
-			"subCategory":   "",
-			"domainId":      circle.DomainID,
-			"memberCount":   circle.MemberCount,
-			"postCount":     circle.PostCount,
-			"highlightText": circle.Name,
-			"matchedField":  "name",
+		items = append(items, CircleSearchItemWire{
+			CircleID:            circle.ID,
+			Name:                circle.Name,
+			Description:         circle.Description,
+			CoverURL:            circle.CoverUrl,
+			CategoryID:          categoryID,
+			SubCategory:         "",
+			DomainID:            circle.DomainID,
+			Kind:                string(circle.Kind),
+			DisplaySubjectType:  string(circle.DisplaySubjectType),
+			MemberCount:         circle.MemberCount,
+			PostCount:           circle.PostCount,
+			HighlightText:       circle.Name,
+			MatchedField:        "name",
+			LinkedHomepageID:    circle.LinkedHomepageID,
+			LinkedHomepageType:  string(circle.LinkedHomepageType),
+			LinkedHomepageTitle: circle.LinkedHomepageTitle,
 		})
 		if len(items) >= limit {
 			break
@@ -268,21 +302,19 @@ func (s *CircleService) SearchCircles(
 		facetKeys = append(facetKeys, key)
 	}
 	sort.Strings(facetKeys)
-	facetBuckets := make([]map[string]any, 0, len(facetKeys))
+	facetBuckets := make([]CircleFacetBucketWire, 0, len(facetKeys))
 	for _, key := range facetKeys {
-		facetBuckets = append(facetBuckets, map[string]any{
-			"facetKey":    key,
-			"label":       key,
-			"categoryId":  key,
-			"subCategory": "",
-			"facetCount":  facetCounts[key],
+		facetBuckets = append(facetBuckets, CircleFacetBucketWire{
+			FacetKey:    key,
+			Label:       key,
+			CategoryID:  key,
+			SubCategory: "",
+			FacetCount:  int64(facetCounts[key]),
 		})
 	}
 	cursor := ""
 	if len(items) == limit {
-		if circleID, ok := items[len(items)-1]["circleId"].(string); ok {
-			cursor = circleID
-		}
+		cursor = items[len(items)-1].CircleID
 	}
 	return SearchCirclesResponse{
 		Items:        items,

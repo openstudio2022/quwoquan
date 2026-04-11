@@ -27,13 +27,14 @@ class PhaseOneDirectAnswerGate {
     required SynthesisReadinessResult synthesisReadiness,
     bool executionSignalsPresent = false,
   }) {
-    final parsed = LlmResponseParser.parse(rawFinalText).json;
-    if (parsed == null) {
+    final parseResult = LlmResponseParser.parse(rawFinalText);
+    if (!parseResult.ok || parseResult.json == null) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
         reason: 'phase_one_not_structured',
       );
     }
+    final parsed = parseResult.json!;
     final turn = tryParseAssistantTurnOutput(parsed);
     if (turn == null) {
       return const PhaseOneDirectAnswerDecision(

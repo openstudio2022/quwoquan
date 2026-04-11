@@ -1,0 +1,48 @@
+version: 1
+read_model: HomepageContentPreview
+
+description: |
+  主页壳层内容预览项 wire。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageContentPreview
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_content_preview.g.dart
+  fields:
+    - name: postId
+      dart_type: String
+      nullable: false
+      source: postId
+      aliases: [postId]
+      default: "''"
+
+    - name: title
+      dart_type: String
+      nullable: false
+      source: title
+      aliases: [title]
+      default: "''"
+
+    - name: summary
+      dart_type: String
+      nullable: true
+      source: summary
+      aliases: [summary]
+
+    - name: contentType
+      dart_type: String
+      nullable: true
+      source: contentType
+      aliases: [contentType]
+
+    - name: coverUrl
+      dart_type: String
+      nullable: true
+      source: coverUrl
+      aliases: [coverUrl]

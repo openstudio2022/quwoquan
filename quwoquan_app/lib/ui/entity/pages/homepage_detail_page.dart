@@ -64,25 +64,29 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     });
     try {
       final repository = ref.read(homepageRepositoryProvider);
-      final detailFuture = repository.getHomepageDetail(widget.homepageId);
-      final shellFuture = repository.getHomepageShell(widget.homepageId);
-      final activeContextFuture = ref
-          .read(activePersonaContextProvider.future)
-          .then<ActivePersonaContextViewData?>((value) => value)
-          .catchError((_) => null);
-      final results = await Future.wait<Object?>(<Future<Object?>>[
-        detailFuture,
-        shellFuture,
-        activeContextFuture,
+      late HomepageDetail loadedDetail;
+      late HomepageShellData loadedShell;
+      await Future.wait<void>([
+        repository.getHomepageDetail(widget.homepageId).then((d) {
+          loadedDetail = d;
+        }),
+        repository.getHomepageShell(widget.homepageId).then((s) {
+          loadedShell = s;
+        }),
       ]);
+      ActivePersonaContextViewData? activeContext;
+      try {
+        activeContext = await ref.read(activePersonaContextProvider.future);
+      } catch (_) {
+        activeContext = null;
+      }
       if (!mounted) {
         return;
       }
-      final activeContext = results[2] as ActivePersonaContextViewData?;
       final ownerId = activeContext?.ownerUserId.trim() ?? '';
       setState(() {
-        _detail = results[0] as HomepageDetail;
-        _shell = results[1] as HomepageShellData;
+        _detail = loadedDetail;
+        _shell = loadedShell;
         _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId;
         _isLoading = false;
       });

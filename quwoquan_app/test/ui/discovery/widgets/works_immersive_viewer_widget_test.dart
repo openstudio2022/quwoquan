@@ -8,15 +8,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+
+Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
+  Map<String, Map<String, dynamic>> raw,
+) =>
+    raw.map(
+      (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
+    );
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -240,8 +249,13 @@ class _ConfigurableContentRepository extends MockContentRepository {
   int getPostCallCount = 0;
 
   @override
-  Future<Map<String, dynamic>> getAppConfig() async {
-    return appConfig ?? super.getAppConfig();
+  Future<ContentAppConfigWire> getAppConfig() async {
+    if (appConfig != null) {
+      return ContentAppConfigWire.fromResponseObject(
+        Map<String, dynamic>.from(appConfig!),
+      );
+    }
+    return super.getAppConfig();
   }
 
   @override
@@ -377,7 +391,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'photo',
@@ -394,7 +408,7 @@ void main() {
                 {'id': 'circle-2', 'name': '测试圈子B'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -438,7 +452,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'moment',
@@ -450,7 +464,7 @@ void main() {
               'body': post.body,
               'circleName': '测试圈子',
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -540,7 +554,7 @@ void main() {
           showWorksToolbar: true,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -555,7 +569,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
           onSwitchToCircles: () {
@@ -594,7 +608,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -621,7 +635,7 @@ void main() {
                 ],
               },
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -666,7 +680,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -684,7 +698,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -722,7 +736,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -738,7 +752,7 @@ void main() {
               'articleFontPreset': post.articleFontPreset,
               'cards': cards,
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -775,7 +789,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -790,7 +804,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -859,7 +873,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -871,7 +885,7 @@ void main() {
               'body': '分发摘要正文',
               'coverUrl': post.coverUrl,
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -914,7 +928,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -929,7 +943,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -964,7 +978,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -979,7 +993,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -1020,7 +1034,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: <String, Map<String, dynamic>>{
+          rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
               'type': 'article',
@@ -1035,7 +1049,7 @@ void main() {
                 {'title': '第二页标题', 'body': '第二页正文'},
               ],
             },
-          },
+          }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),

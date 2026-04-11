@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
+
 // 本地 Assistant Gateway 返回的会话/偏好快照在 UI 层的强类型视图（非 codegen）。
 
 class AssistantLocalSessionSummaryView {
@@ -15,13 +17,22 @@ class AssistantLocalSessionSummaryView {
   final int messageCount;
   final String lastMessage;
 
-  factory AssistantLocalSessionSummaryView.fromMap(Map<String, dynamic> m) {
+  factory AssistantLocalSessionSummaryView.fromDescriptor(
+    AssistantSessionDescriptor d,
+  ) {
     return AssistantLocalSessionSummaryView(
-      sessionId: (m['sessionId'] ?? '').toString(),
-      topicTitle: (m['topicTitle'] ?? '').toString(),
-      topicSummary: (m['topicSummary'] ?? '').toString(),
-      messageCount: (m['messageCount'] as num?)?.toInt() ?? 0,
-      lastMessage: (m['lastMessage'] ?? '').toString(),
+      sessionId: d.sessionId,
+      topicTitle: d.topicTitle,
+      topicSummary: d.topicSummary,
+      messageCount: d.messageCount,
+      lastMessage: d.lastMessage,
+    );
+  }
+
+  @Deprecated('Use fromDescriptor for gateway listSessions results')
+  factory AssistantLocalSessionSummaryView.fromMap(Map<String, dynamic> m) {
+    return AssistantLocalSessionSummaryView.fromDescriptor(
+      AssistantSessionDescriptor.fromJson(m),
     );
   }
 }
@@ -70,6 +81,17 @@ class AssistantSessionDetailView {
     return AssistantSessionDetailView(
       sessionPreferenceFacts: parseFacts('sessionPreferenceFacts'),
       longTermPreferenceFacts: parseFacts('longTermPreferenceFacts'),
+    );
+  }
+
+  factory AssistantSessionDetailView.fromWire(AssistantSessionWireDetail detail) {
+    return AssistantSessionDetailView(
+      sessionPreferenceFacts: detail.sessionPreferenceFacts
+          .map(AssistantPreferenceFactView.fromMap)
+          .toList(growable: false),
+      longTermPreferenceFacts: detail.longTermPreferenceFacts
+          .map(AssistantPreferenceFactView.fromMap)
+          .toList(growable: false),
     );
   }
 }

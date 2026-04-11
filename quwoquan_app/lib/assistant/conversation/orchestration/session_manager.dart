@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话存储加载/合并历史 Map；入口 assistantJsonAsStringKeyedMap。
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -5,6 +7,7 @@ import 'dart:math' as math;
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
@@ -52,29 +55,30 @@ class AssistantSessionManager {
       return;
     }
     if (rawText.trim().isEmpty) return;
-    dynamic raw;
+    Object? decoded;
     try {
-      raw = jsonDecode(rawText);
+      decoded = jsonDecode(rawText);
     } on FormatException {
       await _wipePersistedHistoryFile(file);
       return;
     }
-    if (raw is! Map) {
+    final root = assistantJsonAsStringKeyedMap(decoded);
+    if (root == null) {
       await _wipePersistedHistoryFile(file);
       return;
     }
-    if ((raw['version'] ?? '').toString().trim() !=
+    if ((root['version'] ?? '').toString().trim() !=
         assistantHistoryStorageVersion) {
       await _wipePersistedHistoryFile(file);
       return;
     }
-    final rawSessions = raw['sessions'];
+    final rawSessions = root['sessions'];
     if (rawSessions is! Map) {
       await _wipePersistedHistoryFile(file);
       return;
     }
     final rawMetadata =
-        (raw['metadata'] as Map?)?.cast<String, dynamic>() ??
+        (root['metadata'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     var mutated = false;
     for (final entry in rawSessions.entries) {
@@ -100,7 +104,7 @@ class AssistantSessionManager {
         _sessionMeta[key] = meta.cast<String, dynamic>();
       }
     }
-    final activeSessionId = (raw['activeSessionId'] ?? '').toString().trim();
+    final activeSessionId = (root['activeSessionId'] ?? '').toString().trim();
     if (_sessions.containsKey(activeSessionId)) {
       _activeSessionId = activeSessionId;
     } else if (activeSessionId.isNotEmpty) {
@@ -369,7 +373,7 @@ class AssistantSessionManager {
     };
   }
 
-  List<Map<String, dynamic>> listSessionDescriptors() {
+  List<AssistantSessionDescriptor> listSessionDescriptors() {
     final items = _sessions.entries
         .map((entry) {
           final sessionId = entry.key;
@@ -380,24 +384,24 @@ class AssistantSessionManager {
           final updatedAt = (meta['updatedAt'] ?? '').toString();
           final topicTitle = (meta['topicTitle'] ?? '').toString().trim();
           final topicSummary = (meta['topicSummary'] ?? '').toString().trim();
-          return <String, dynamic>{
-            'sessionId': sessionId,
-            'messageCount': messages.length,
-            'lastMessage': messages.isEmpty
+          return AssistantSessionDescriptor(
+            sessionId: sessionId,
+            messageCount: messages.length,
+            lastMessage: messages.isEmpty
                 ? ''
-                : (messages.last['content'] ?? ''),
-            'topicTitle': topicTitle.isEmpty ? _defaultTopicTitle : topicTitle,
-            'topicSummary': topicSummary,
-            'sessionPreferenceFactCount': sessionFacts.length,
-            'longTermPreferenceFactCount': longTermFacts.length,
-            'updatedAt': updatedAt,
-            'isActive': sessionId == _activeSessionId,
-          };
+                : (messages.last['content'] ?? '').toString(),
+            topicTitle: topicTitle.isEmpty ? _defaultTopicTitle : topicTitle,
+            topicSummary: topicSummary,
+            sessionPreferenceFactCount: sessionFacts.length,
+            longTermPreferenceFactCount: longTermFacts.length,
+            updatedAt: updatedAt,
+            isActive: sessionId == _activeSessionId,
+          );
         })
         .toList(growable: false);
     items.sort((a, b) {
-      final ta = DateTime.tryParse((a['updatedAt'] ?? '').toString());
-      final tb = DateTime.tryParse((b['updatedAt'] ?? '').toString());
+      final ta = DateTime.tryParse(a.updatedAt);
+      final tb = DateTime.tryParse(b.updatedAt);
       if (ta == null && tb == null) return 0;
       if (ta == null) return 1;
       if (tb == null) return -1;

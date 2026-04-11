@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — `runArtifacts` / cardPayload 等开放 JSON 与 Markdown 解析。
+
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -6,7 +8,6 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -37,8 +38,7 @@ class AssistantAnswerContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = PersistedTimelineTurnCodec.encode(transcriptRow);
-    final references = _resolveReferenceItems(message);
+    final references = _resolveReferenceItemsFromTranscriptRow(transcriptRow);
     final cleaned = content
         .replaceFirst(_referenceBlockPattern, '')
         .trimRight();
@@ -493,11 +493,24 @@ class AssistantAnswerContent extends StatelessWidget {
     }
   }
 
-  List<_AssistantReferenceItem> _resolveReferenceItems(
-    Map<String, dynamic> message,
+  List<_AssistantReferenceItem> _resolveReferenceItemsFromTranscriptRow(
+    AssistantTranscriptTimelineRow row,
   ) {
+    return switch (row) {
+      AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerParts(
+          runArtifactsMap: r.runArtifacts,
+          uiReferences: r.uiReferences,
+        ),
+      _ => const <_AssistantReferenceItem>[],
+    };
+  }
+
+  static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerParts({
+    required Map<String, dynamic> runArtifactsMap,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
     final items = <_AssistantReferenceItem>[];
-    final runArtifacts = _resolveRunArtifacts(message);
+    final runArtifacts = _resolveRunArtifactsFromMap(runArtifactsMap);
     final bindings =
         runArtifacts?.answerEvidenceBindings ?? const <AnswerEvidenceBinding>[];
     if (bindings.isNotEmpty) {
@@ -521,12 +534,6 @@ class AssistantAnswerContent extends StatelessWidget {
     if (items.isNotEmpty) {
       return items;
     }
-    final uiReferences =
-        (message['uiReferences'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
     for (var index = 0; index < uiReferences.length; index++) {
       final reference = uiReferences[index];
       final url = (reference['url'] as String?)?.trim() ?? '';
@@ -547,9 +554,10 @@ class AssistantAnswerContent extends StatelessWidget {
     return items;
   }
 
-  RunArtifacts? _resolveRunArtifacts(Map<String, dynamic> message) {
-    final raw = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
+  static RunArtifacts? _resolveRunArtifactsFromMap(
+    Map<String, dynamic> raw,
+  ) {
+    if (raw.isEmpty) return null;
     try {
       return parseRunArtifacts(raw);
     } catch (_) {

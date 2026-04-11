@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:quwoquan_app/assistant/application/assistant_journey_projector.dart';
 import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_answer_payload_read_view.dart';
 import 'package:quwoquan_app/assistant/contracts/agent_run_observability.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
@@ -55,6 +56,7 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -884,7 +886,7 @@ class LocalPhaseExecutionOwner {
     ) {
       final carriedEvidenceLedger =
           continuationActive &&
-              intentGraph.problemClassType != ProblemClass.realtimeInfo
+              intentGraph.problemClass != ProblemClass.realtimeInfo
           ? (ownerState.previousRunArtifacts?.evidenceLedger ??
                 const <EvidenceLedgerEntry>[])
           : const <EvidenceLedgerEntry>[];
@@ -3493,11 +3495,10 @@ class LocalPhaseExecutionOwner {
     required Map<String, dynamic> templateVariables,
     required void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
-    final rawPlans =
-        (answerPayload['subagentPlan'] as List?)?.whereType<Map>().toList() ??
-        const <Map>[];
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
+    final rawPlans = apv.subagentPlanMaps;
     final plans = rawPlans
-        .map((item) => SubagentPlan.fromJson(item.cast<String, dynamic>()))
+        .map((item) => SubagentPlan.fromJson(item))
         .where((item) => item.goal.trim().isNotEmpty)
         .toList(growable: false);
     if (plans.isEmpty) return const <Map<String, dynamic>>[];
@@ -3853,6 +3854,7 @@ class LocalPhaseExecutionOwner {
     required List<SkillRun> skillRuns,
     required List<Map<String, dynamic>> uiReferences,
   }) {
+    final apvPayload = AssistantAnswerPayloadReadView(answerPayload);
     final now = DateTime.now().toIso8601String();
     final facts = <PreferenceFact>[
       PreferenceFact(
@@ -3887,8 +3889,7 @@ class LocalPhaseExecutionOwner {
         ),
       );
     }
-    final followupPrompt =
-        (answerPayload['followupPrompt'] as String?)?.trim() ?? '';
+    final followupPrompt = apvPayload.followupPromptTrimmed;
     if (followupPrompt.isNotEmpty) {
       facts.add(
         PreferenceFact(
@@ -3917,12 +3918,8 @@ class LocalPhaseExecutionOwner {
             )
             .toList(growable: false) ??
         const <PreferenceFact>[];
-    final emergedTags =
-        ((answerPayload['diagnostics'] as Map?)?['emergedTags'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
+    final emergedTags = apv.diagnosticsEmergedTagMaps;
     if (emergedTags.isEmpty) return seedFacts;
     final now = DateTime.now().toIso8601String();
     return <PreferenceFact>[
@@ -4247,16 +4244,14 @@ class LocalPhaseExecutionOwner {
       evidenceEvaluation: evidenceEvaluation,
       synthesisReadiness: effectiveSynthesisReadiness,
     );
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
     final webEvidencePacks = _extractWebEvidencePacks(toolResults);
     final evidenceGatePassed =
         evidenceEvaluation.passed ||
         evidenceEvaluation.status == EvidenceStatus.bounded ||
         !evidenceEvaluation.evidenceRequired;
-    final modelSelfScore = _asDouble(
-      ((answerPayload['modelSelfScore'] as Map?)?['score']),
-    );
-    final parseStatus =
-        (answerPayload['parseStatus'] as String?) ?? 'fallback_text';
+    final modelSelfScore = _asDouble(apv.modelSelfScoreMap['score']);
+    final parseStatus = apv.parseStatusOrDefault('fallback_text');
     final decisionParseSuccess = parseStatus == 'assistant_turn_parsed';
     final heuristicFallbackUsed = _usedHeuristicFallback(result.traces);
     final messageKind = _resolveMessageKind(
@@ -4290,7 +4285,7 @@ class LocalPhaseExecutionOwner {
     );
     var answerProcessingSnapshot = _buildAnswerProcessingSnapshot(
       raw: _preferStructuredMap(
-        (answerPayload['answerProcessing'] as Map?)?.cast<String, dynamic>(),
+        apv.answerProcessingMap,
         const <String, dynamic>{},
       ),
       streamedReadinessSummary: streamedAnswerReadinessSummary,
@@ -4310,7 +4305,7 @@ class LocalPhaseExecutionOwner {
       understandingSnapshot: understandingSnapshot,
     );
     final explicitDisplayState = parseAssistantDisplayStateFromMap(
-      (answerPayload['displayState'] as Map?)?.cast<String, dynamic>(),
+      apv.displayStateMap,
     );
     final directMarkdown = _extractUiMarkdown(answerPayload);
     final preferredMarkdown = directMarkdown.trim();
@@ -4340,9 +4335,7 @@ class LocalPhaseExecutionOwner {
         effectiveStateDecision.finalAnswerReady;
     var retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
       processing: _preferStructuredMap(
-        (answerPayload['retrievalProcessing'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{},
+        apv.retrievalProcessingMap,
         carriedRetrievalProcessing,
       ),
       streamedProcessingSummary: streamedRetrievalProcessingSummary,
@@ -4369,9 +4362,7 @@ class LocalPhaseExecutionOwner {
     if (answerGateDecision.finalAnswerReady != provisionalFinalAnswerReady) {
       retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
         processing: _preferStructuredMap(
-          (answerPayload['retrievalProcessing'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
+          apv.retrievalProcessingMap,
           carriedRetrievalProcessing,
         ),
         streamedProcessingSummary: streamedRetrievalProcessingSummary,
@@ -4593,8 +4584,7 @@ class LocalPhaseExecutionOwner {
       answerEvidenceBindings: answerEvidenceBindings,
       slotState: groundedSlotState,
       answerDecision: <String, dynamic>{
-        ...((answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{}),
+        ...apv.decisionMap,
         ...effectiveStateDecision.toDecisionMap(),
         ...answerGateDecision.toJson(),
         'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
@@ -4614,8 +4604,7 @@ class LocalPhaseExecutionOwner {
         'qualityGates': effectiveStateDecision.qualityGatesData,
         'evidenceEvaluation': evidenceEvaluation.toJson(),
         'answerBoundaryPolicy': answerBoundaryPolicy.toJson(),
-        ...((answerPayload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{}),
+        ...apv.diagnosticsMap,
       },
       domainPolicyBundle: domainPolicyBundle,
     );
@@ -4632,9 +4621,8 @@ class LocalPhaseExecutionOwner {
     );
     final enrichedAnswerPayload = <String, dynamic>{
       ...answerPayload,
-      'contractId':
-          (answerPayload['contractId'] as String?)?.trim().isNotEmpty == true
-          ? (answerPayload['contractId'] as String).trim()
+      'contractId': apv.hasNonEmptyContractId
+          ? apv.contractIdTrimmed
           : kAssistantTurnCurrentContractId,
       'intentGraph': intentGraph.toJson(),
       'messageKind': messageKind,
@@ -4658,35 +4646,28 @@ class LocalPhaseExecutionOwner {
       'displayState': displayState.toJson(),
       'userMarkdown': displayMarkdown,
       'result': <String, dynamic>{
-        ...((answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{}),
+        ...apv.resultMap,
         'text': displayPlainText,
       },
-      'askUser':
-          (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      'askUser': apv.askUserMap,
       'decision': <String, dynamic>{
         ...effectiveStateDecision.toDecisionMap(),
         ...answerGateDecision.toJson(),
-        ...((answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{}),
+        ...apv.decisionMap,
         'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
             ? answerGateDecision.nextAction
             : effectiveStateDecision.nextActionWireName,
         'answerEligibility': resolvedAnswerEligibility,
         'finalAnswerReady': effectiveFinalAnswerReady,
       },
-      'phaseId':
-          (answerPayload['phaseId'] as String?)?.trim().isNotEmpty == true
-          ? (answerPayload['phaseId'] as String).trim()
+      'phaseId': apv.hasNonEmptyPhaseId
+          ? apv.phaseIdTrimmed
           : PlannerPhaseId.answering.wireName,
-      'actionCode':
-          (answerPayload['actionCode'] as String?)?.trim().isNotEmpty == true
-          ? (answerPayload['actionCode'] as String).trim()
+      'actionCode': apv.hasNonEmptyActionCode
+          ? apv.actionCodeTrimmed
           : PlannerActionCode.composeAnswer.wireName,
-      'reasonCode':
-          (answerPayload['reasonCode'] as String?)?.trim().isNotEmpty == true
-          ? (answerPayload['reasonCode'] as String).trim()
+      'reasonCode': apv.hasNonEmptyReasonCode
+          ? apv.reasonCodeTrimmed
           : (answerGateDecision.reasonCode.trim().isNotEmpty
                 ? answerGateDecision.reasonCode.trim()
                 : (effectiveFinalAnswerReady
@@ -4860,23 +4841,13 @@ class LocalPhaseExecutionOwner {
                   .toList(growable: false),
       },
       'learningSignals': <String, dynamic>{
-        'profileTagDelta':
-            ((answerPayload['diagnostics'] as Map?)?['emergedTags'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[],
+        'profileTagDelta': apv.diagnosticsEmergedTagMaps,
         'retrievalStrategyOutcome': 'not_generated',
         'answerFormatOutcome': 'not_generated',
         'satisfactionProxy': learningSatisfaction,
         'modelSelfScore': modelSelfScore,
       },
-      'reasoningBasis':
-          (answerPayload['reasoningBasis'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[],
+      'reasoningBasis': apv.reasoningBasisMaps,
       'selfCheck': _mergeSelfCheck(
         answerPayload: answerPayload,
         answerEligible: effectiveFinalAnswerReady,
@@ -4884,8 +4855,7 @@ class LocalPhaseExecutionOwner {
         evidenceGatePassed: evidenceGatePassed,
       ),
       'diagnostics': <String, dynamic>{
-        ...((answerPayload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{}),
+        ...apv.diagnosticsMap,
         'synthesisReason': effectiveSynthesisReadiness.reason,
         'toolResultCount': toolResults.length,
         'toolErrorCount': toolErrors.length,
@@ -5332,12 +5302,7 @@ class LocalPhaseExecutionOwner {
   }) {
     final bindings = <AnswerEvidenceBinding>[];
     final seenKeys = <String>{};
-    final rawEvidence =
-        (answerPayload['evidence'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+    final rawEvidence = AssistantAnswerPayloadReadView(answerPayload).evidenceMaps;
     for (final item in rawEvidence) {
       final candidate = _normalizeInlineEvidenceBinding(
         item: item,
@@ -5965,10 +5930,8 @@ class LocalPhaseExecutionOwner {
     required Map<String, dynamic> answerPayload,
     required List<EvidenceLedgerEntry> evidenceLedger,
   }) {
-    final fromPayload =
-        ((answerPayload['evidence'] as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
+    final fromPayload = AssistantAnswerPayloadReadView(answerPayload)
+        .evidenceMaps
             .map(
               (item) => (item['claim'] as String?)?.trim().isNotEmpty == true
                   ? _sanitizeAnswerKeyFact((item['claim'] as String).trim())
@@ -6504,11 +6467,7 @@ class LocalPhaseExecutionOwner {
     required String primaryDomainId,
   }) {
     final existingPlans =
-        (answerPayload['subagentPlan'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+        AssistantAnswerPayloadReadView(answerPayload).subagentPlanMaps;
     if (existingPlans.isEmpty) return const <SubagentPlan>[];
     return existingPlans
         .where(
@@ -6549,7 +6508,7 @@ class LocalPhaseExecutionOwner {
               'toolBudget': 2,
               'stopPolicy': StopPolicy.balanced.wireName,
               'searchIntensity':
-                  intentGraph.problemClassType == ProblemClass.realtimeInfo
+                  intentGraph.problemClass == ProblemClass.realtimeInfo
                   ? SearchIntensity.low.wireName
                   : SearchIntensity.medium.wireName,
             },
@@ -6606,20 +6565,17 @@ class LocalPhaseExecutionOwner {
     required SkillExecutionShell executionShell,
     required List<Map<String, dynamic>> references,
   }) {
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
     return SkillRun(
       runId: 'skill_primary_$domainId',
       domainId: domainId,
       goal: intentGraph.userGoal,
       problemClass: executionShell.problemClass,
       shell: executionShell.toJson(),
-      slotState:
-          (answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      slotState: apv.slotStateMap,
       answerReady:
-          (answerPayload['userMarkdown'] as String?)?.trim().isNotEmpty ==
-              true ||
-          (answerPayload['result'] as Map?) != null,
-      stopReason: (answerPayload['messageKind'] as String?)?.trim() ?? '',
+          apv.userMarkdownTrimmed.isNotEmpty || apv.hasTopLevelResultMap,
+      stopReason: apv.messageKindTrimmed,
       references: references,
       resultSummary: _extractUiSummary(
         answerPayload,
@@ -6745,9 +6701,7 @@ class LocalPhaseExecutionOwner {
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     final current =
-        (answerPayload['understandingSnapshot'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        AssistantAnswerPayloadReadView(answerPayload).understandingSnapshotMap;
     if (!_hasStructuredContent(carriedUnderstandingSnapshot)) {
       return _preferStructuredMap(current, const <String, dynamic>{});
     }
@@ -6766,10 +6720,9 @@ class LocalPhaseExecutionOwner {
     required ConversationStateDecision stateDecision,
     required SynthesisReadinessResult synthesisReadiness,
   }) {
-    final current =
-        (answerPayload['historicalThinkingSnapshot'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final current = AssistantAnswerPayloadReadView(
+      answerPayload,
+    ).historicalThinkingSnapshotMap;
     if (!_hasStructuredContent(carriedHistoricalThinkingSnapshot)) {
       return _preferStructuredMap(current, const <String, dynamic>{});
     }
@@ -6882,9 +6835,9 @@ class LocalPhaseExecutionOwner {
     required String synthesisReason,
     required bool evidenceGatePassed,
   }) {
-    final base =
-        (answerPayload['selfCheck'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{};
+    final base = Map<String, dynamic>.from(
+      AssistantAnswerPayloadReadView(answerPayload).selfCheckMap,
+    );
     final failed = <String>[
       ...((base['failedItems'] as List?)?.whereType<String>() ??
           const <String>[]),
@@ -6903,15 +6856,11 @@ class LocalPhaseExecutionOwner {
     String fallback,
   ) {
     final turn = tryParseAssistantTurnOutput(answerPayload);
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
     final interpretation =
-        turn?.interpretation ??
-        (((answerPayload['result'] as Map?)?['interpretation'] as String?)
-                ?.trim() ??
-            '');
+        turn?.interpretation ?? apv.resultInterpretationTrimmed;
     if (interpretation.isNotEmpty) return interpretation;
-    final text =
-        turn?.resultText ??
-        (((answerPayload['result'] as Map?)?['text'] as String?)?.trim() ?? '');
+    final text = turn?.resultText ?? apv.resultTextTrimmed;
     if (text.isNotEmpty) return text;
     return fallback;
   }
@@ -6920,12 +6869,12 @@ class LocalPhaseExecutionOwner {
     required String fallbackProblemClass,
     required Map<String, dynamic> answerPayload,
   }) {
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
     final payloadProblemClass =
-        (answerPayload['problemClass'] as String?)?.trim().toLowerCase() ??
-        (((answerPayload['decision'] as Map?)?['problemClass'] as String?)
-                ?.trim()
-                .toLowerCase() ??
-            '');
+        apv.problemClassRootTrimmedLower.isNotEmpty
+            ? apv.problemClassRootTrimmedLower
+            : (apv.decisionMap['problemClass'] as String?)?.trim().toLowerCase() ??
+                '';
     if (payloadProblemClass.isNotEmpty) {
       return parseProblemClass(payloadProblemClass) ==
           ProblemClass.realtimeInfo;
@@ -6956,6 +6905,7 @@ class LocalPhaseExecutionOwner {
     required Map<String, dynamic> answerPayload,
     required String displayMarkdown,
   }) {
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
     final normalizedMarkdown =
         AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
           displayMarkdown,
@@ -6964,9 +6914,7 @@ class LocalPhaseExecutionOwner {
     final plainFromMarkdown = _sanitizeDisplayPlainCandidate(
       AssistantDisplayTextResolver.stripMarkdown(normalizedMarkdown),
     );
-    final result =
-        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final result = apv.resultMap;
     final directText = _sanitizeDisplayPlainCandidate(
       (result['text'] as String?)?.trim() ?? '',
     );
@@ -6998,9 +6946,8 @@ class LocalPhaseExecutionOwner {
     // nextAction 为中间动作时不应作为最终展示内容输出；但 fail-closed 的 abort
     // 需要把明确失败提示继续暴露给用户。
     // nextAction 来自 _parseAnswerPayload 注入到 result 中的值，属于受控 Map。
-    final resultMap =
-        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
+    final resultMap = apv.resultMap;
     final nextAction = (resultMap['nextAction'] as String?)?.trim() ?? '';
     if (nextAction.isNotEmpty &&
         nextAction != AssistantNextAction.answer.wireName &&
@@ -7010,7 +6957,7 @@ class LocalPhaseExecutionOwner {
     // 优先级 1：userMarkdown（契约标准字段，已通过 AssistantTurnOutput 类型化解析）
     final userMd =
         AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          (answerPayload['userMarkdown'] as String?)?.trim() ?? '',
+          apv.userMarkdownTrimmed,
           allowJsonExtraction: false,
         );
     if (_isRenderableAssistantAnswerText(userMd)) {
@@ -7631,8 +7578,7 @@ class LocalPhaseExecutionOwner {
 
   String _explicitAnswerModeFromPayload(Map<String, dynamic> answerPayload) {
     final resultPayload =
-        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        AssistantAnswerPayloadReadView(answerPayload).resultMap;
     final interpretation =
         (resultPayload['interpretation'] as String?)?.trim().toLowerCase() ??
         '';
@@ -7705,28 +7651,19 @@ class LocalPhaseExecutionOwner {
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     final turn = tryParseAssistantTurnOutput(answerPayload);
-    final diagnostics =
-        (answerPayload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final existingDecision =
-        turn?.decision.toJson() ??
-        (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final existingAskUser =
-        turn?.askUser.toJson() ??
-        (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final apv = AssistantAnswerPayloadReadView(answerPayload);
+    final diagnostics = apv.diagnosticsMap;
+    final existingDecision = turn?.decision.toJson() ?? apv.decisionMap;
+    final existingAskUser = turn?.askUser.toJson() ?? apv.askUserMap;
     final sanitizedAskUser = _sanitizeAskUserPayload(
       existingAskUser: existingAskUser,
       decision: decision,
     );
     final userMarkdown =
-        turn?.userMarkdown.trim() ??
-        (answerPayload['userMarkdown'] as String?)?.trim() ??
-        '';
+        turn?.userMarkdown.trim() ?? apv.userMarkdownTrimmed;
     final resultText =
         turn?.resultText ??
-        ((answerPayload['result'] as Map?)?['text'] as String?)?.trim() ??
+        (apv.resultMap['text'] as String?)?.trim() ??
         '';
     final hasRenderableAnswer =
         _isRenderableAssistantAnswerText(userMarkdown) ||
@@ -7790,8 +7727,8 @@ class LocalPhaseExecutionOwner {
         _hasExplicitAnswerGateAssessment(turn.answerGateAssessment)) {
       return turn.answerGateAssessment;
     }
-    final raw = (answerPayload['answerGateAssessment'] as Map?)
-        ?.cast<String, dynamic>();
+    final raw =
+        AssistantAnswerPayloadReadView(answerPayload).answerGateAssessmentMapOrNull;
     if (raw == null) {
       return null;
     }
@@ -7841,8 +7778,7 @@ class LocalPhaseExecutionOwner {
   }) {
     final normalizedExistingMode = _normalizedAnswerGateMode(existing);
     final resultPayload =
-        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        AssistantAnswerPayloadReadView(answerPayload).resultMap;
     final interpretationMode =
         (resultPayload['interpretation'] as String?)?.trim().toLowerCase() ??
         '';
@@ -8752,30 +8688,32 @@ class LocalPhaseExecutionOwner {
     return lines.join('\n');
   }
 
-  Future<List<Map<String, dynamic>>> listSessions() async {
+  Future<List<AssistantSessionDescriptor>> listSessions() async {
     await _sessionManager.load();
     _sessionManager.ensureAssistantActiveSession();
     return _sessionManager.listSessionDescriptors();
   }
 
-  Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
+  Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) async {
     await _sessionManager.load();
     final messages = _sessionManager.sessions[sessionId];
     if (messages == null) return null;
-    return <String, dynamic>{
-      'sessionId': sessionId,
-      'messages': messages,
-      'summary': _sessionManager.summarizeRecent(sessionId),
-      'topicTitle': _sessionManager.topicTitleOf(sessionId),
-      'sessionPreferenceFacts': _sessionManager
+    return AssistantSessionWireDetail(
+      sessionId: sessionId,
+      summary: _sessionManager.summarizeRecent(sessionId),
+      topicTitle: _sessionManager.topicTitleOf(sessionId),
+      messages: messages
+          .map(AssistantSessionWireMessage.fromJson)
+          .toList(growable: false),
+      sessionPreferenceFacts: _sessionManager
           .sessionPreferenceFactsOf(sessionId)
           .map((item) => item.toJson())
           .toList(growable: false),
-      'longTermPreferenceFacts': _sessionManager
+      longTermPreferenceFacts: _sessionManager
           .longTermPreferenceFactsOf(sessionId)
           .map((item) => item.toJson())
           .toList(growable: false),
-    };
+    );
   }
 
   Future<void> switchSession(String sessionId) async {

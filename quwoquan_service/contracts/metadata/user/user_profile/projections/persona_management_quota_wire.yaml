@@ -1,0 +1,30 @@
+version: 1
+read_model: PersonaManagementQuotaWire
+
+description: |
+  分身管理摘要中的 quota 子对象 wire。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: PersonaManagementQuotaWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart
+  fields:
+    - name: maxSubAccounts
+      dart_type: int
+      nullable: false
+      source: maxSubAccounts
+      aliases: [maxSubAccounts, maxPersonas, quotaLimit]
+      default: "5"
+
+    - name: usedSubAccounts
+      dart_type: int
+      nullable: false
+      source: usedSubAccounts
+      aliases: [usedSubAccounts, usedPersonas, totalCount]
+      default: "0"

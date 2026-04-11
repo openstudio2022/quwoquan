@@ -47,8 +47,8 @@ void main() {
     await tester.pumpWidget(
       _buildApp(
         _HomepagePickerHarness(
-          initialSelection: HomepageSummary.fromMap(
-            HomepageMockData.homepages.first,
+          initialSelection: HomepageSummary.fromDetail(
+            HomepageMockData.homepageDetailTemplates.first,
           ).canonicalReference,
         ),
       ),

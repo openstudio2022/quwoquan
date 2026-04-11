@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_wire_normalize.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -1020,12 +1022,12 @@ class AppSearchRepository implements SearchRepository {
     final candidateCircles = await _circleRepository.listCircles(limit: 12);
     final merged = <String, Map<String, dynamic>>{};
     for (final circle in candidateCircles) {
-      final circleId = _firstNonEmpty(<Object?>[circle['id'], circle['_id']]);
+      final circleId = circle.id.trim();
       if (circleId.isEmpty) {
         continue;
       }
-      final circleName = _firstNonEmpty(<Object?>[circle['name']]);
-      List<Map<String, dynamic>> groups;
+      final circleName = circle.name.trim();
+      List<CircleGroupDto> groups;
       try {
         groups = await _circleRepository.searchCircleGroups(
           circleId,
@@ -1035,12 +1037,15 @@ class AppSearchRepository implements SearchRepository {
       } catch (_) {
         continue;
       }
-      for (final raw in groups) {
-        final payload = _normalizeCircleGroupPayload(<String, dynamic>{
-          ...raw,
-          'circleId': circleId,
-          if (circleName.isNotEmpty) 'circleName': circleName,
-        });
+      for (final g in groups) {
+        final payload = normalizeCircleGroupWireMap(
+          <String, dynamic>{
+            ...g.toMap(),
+            'circleId': circleId,
+            if (circleName.isNotEmpty) 'circleName': circleName,
+          },
+          shape: CircleGroupWireShape.searchHit,
+        );
         final groupId = _firstNonEmpty(<Object?>[
           payload['groupId'],
           payload['circleGroupId'],
@@ -1074,7 +1079,10 @@ class AppSearchRepository implements SearchRepository {
     SearchResolvedFrom resolvedFrom,
     String query,
   ) {
-    final normalizedPayload = _normalizeCircleGroupPayload(payload);
+    final normalizedPayload = normalizeCircleGroupWireMap(
+      Map<String, dynamic>.from(payload),
+      shape: CircleGroupWireShape.searchHit,
+    );
     return SearchHit(
       objectType: SearchObjectType.circleGroup,
       objectId: _firstNonEmpty(<Object?>[
@@ -1111,24 +1119,7 @@ class AppSearchRepository implements SearchRepository {
       snippet: item.description,
       resolvedFrom: resolvedFrom,
       matchedField: item.matchedField,
-      payload: <String, dynamic>{
-        'id': item.circleId,
-        'circleId': item.circleId,
-        'name': item.name,
-        'description': item.description,
-        'coverUrl': item.coverUrl,
-        'categoryId': item.categoryId,
-        'subCategory': item.subCategory,
-        'domainId': item.domainId,
-        'kind': item.kind,
-        'displaySubjectType': item.displaySubjectType,
-        'memberCount': item.memberCount,
-        'postCount': item.postCount,
-        'highlightText': item.highlightText,
-        'matchedField': item.matchedField,
-        if (item.circleName != null && item.circleName!.trim().isNotEmpty)
-          'circleName': item.circleName,
-      },
+      payload: item.toSearchHitPayload(),
     );
   }
 
@@ -1149,45 +1140,6 @@ class AppSearchRepository implements SearchRepository {
           : 'name',
       payload: item.toMap(),
     );
-  }
-
-  Map<String, dynamic> _normalizeCircleGroupPayload(Map<String, dynamic> raw) {
-    final circleId = _firstNonEmpty(<Object?>[
-      raw['circleId'],
-      raw['circle_id'],
-    ]);
-    final groupId = _firstNonEmpty(<Object?>[
-      raw['groupId'],
-      raw['circleGroupId'],
-      raw['group_id'],
-      raw['id'],
-      raw['_id'],
-    ]);
-    final name = _firstNonEmpty(<Object?>[
-      raw['name'],
-      raw['title'],
-      raw['highlightText'],
-      groupId,
-    ]);
-    final description = _firstNonEmpty(<Object?>[
-      raw['description'],
-      raw['summary'],
-    ]);
-    final payload = <String, dynamic>{
-      ...raw,
-      'circleId': circleId,
-      'groupId': groupId,
-      'name': name,
-      'description': description,
-      'circleName': _firstNonEmpty(<Object?>[
-        raw['circleName'],
-        raw['circle_name'],
-      ]),
-      'memberCount': raw['memberCount'],
-      'matchedField': raw['matchedField'],
-      'highlightText': raw['highlightText'] ?? name,
-    };
-    return payload;
   }
 
   String _matchedFieldForCircleGroup({

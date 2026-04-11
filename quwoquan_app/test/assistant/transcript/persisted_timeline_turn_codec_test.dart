@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 
 Future<Map<String, dynamic>> _loadFixture(String name) async {
   final path = 'test/assistant/transcript/fixtures/$name';
@@ -37,5 +39,23 @@ void main() {
     final out = PersistedTimelineTurnCodec.encode(row);
     expect(out['isError'], true);
     expect(out['content'], raw['content']);
+  });
+
+  test('codec round-trip preserves assistant runArtifacts for parseRunArtifacts', () {
+    const md = '# codec-round-trip';
+    final row = AssistantAnswerTranscriptRow(
+      id: 'codec_ra',
+      conversationId: 'c1',
+      content: 'body',
+      senderId: 'assistant',
+      senderName: 'Assistant',
+      runArtifacts: <String, dynamic>{'displayMarkdown': md},
+    );
+    final decoded = PersistedTimelineTurnCodec.decode(
+      PersistedTimelineTurnCodec.encode(row),
+    );
+    expect(decoded, isA<AssistantAnswerTranscriptRow>());
+    final answer = decoded as AssistantAnswerTranscriptRow;
+    expect(parseRunArtifacts(answer.runArtifacts).displayMarkdown, md);
   });
 }

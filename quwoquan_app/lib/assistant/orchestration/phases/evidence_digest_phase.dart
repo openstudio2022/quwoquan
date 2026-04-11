@@ -113,6 +113,23 @@ class EvidenceDigestPhase implements Phase {
         acceptedReferences: snapshot.acceptedReferences,
       );
     }
+    if (!stageBlocked && snapshot.processingSummary.trim().isEmpty) {
+      final readyNarrative = _synthesizeReadyProcessingSummary(
+        understanding: input.state.understandingSnapshot,
+        references: snapshot.acceptedReferences,
+        keyPoints: snapshot.selectedKeyPoints,
+      );
+      if (readyNarrative.isNotEmpty) {
+        snapshot = RetrievalProcessingSnapshot(
+          processedDocumentCount: snapshot.processedDocumentCount,
+          acceptedDocumentCount: snapshot.acceptedDocumentCount,
+          processingSummary: readyNarrative,
+          selectedKeyPoints: snapshot.selectedKeyPoints,
+          expansionReason: snapshot.expansionReason,
+          acceptedReferences: snapshot.acceptedReferences,
+        );
+      }
+    }
     final updatedExecutionSnapshot = <String, dynamic>{
       ...executionSnapshot,
       'retrievalProcessing': snapshot.toJson(),
@@ -364,5 +381,47 @@ class EvidenceDigestPhase implements Phase {
 
   String _sanitizeKeyPoint(String raw) {
     return SafeReferenceNormalizer.normalizeFact(raw);
+  }
+
+  /// Ready 链路下，当 resolver 未给出 summary 时，用理解快照关注点 + 证据片段生成用户可见的处理摘要。
+  String _synthesizeReadyProcessingSummary({
+    required RunArtifactsUnderstandingSnapshot understanding,
+    required List<RetrievalProcessingReference> references,
+    required List<String> keyPoints,
+  }) {
+    final concerns = understanding.concernPoints
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (concerns.isEmpty) {
+      return '';
+    }
+    var confirm = '';
+    for (final ref in references) {
+      final snippet = ref.snippet.trim();
+      if (snippet.length >= 6) {
+        confirm = snippet;
+        break;
+      }
+    }
+    if (confirm.isEmpty) {
+      for (final point in keyPoints) {
+        final trimmed = point.trim();
+        if (trimmed.length >= 6) {
+          confirm = trimmed;
+          break;
+        }
+      }
+    }
+    if (confirm.isEmpty) {
+      return '';
+    }
+    final punctuated = confirm.endsWith('。') ||
+            confirm.endsWith('！') ||
+            confirm.endsWith('？')
+        ? confirm
+        : '$confirm。';
+    final joined = concerns.join('、');
+    return '围绕你刚才最关心的$joined，现在已经能直接确认的是：$punctuated其余背景线索我不会直接带进最终答案。';
   }
 }

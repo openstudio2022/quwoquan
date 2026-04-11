@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话持久化消息 Map；子树用 codegen/Codec/assistantJsonAsStringKeyedMap 收窄。
+
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
@@ -25,6 +27,17 @@ const String assistantProviderReasoningContinuationField =
 const String assistantTurnSchemaVersionField = 'assistantTurnSchemaVersion';
 const String assistantHistoryStorageVersion = 'assistant_history_v1';
 const String assistantTurnSchemaVersion = 'assistant_turn_v1';
+
+/// `jsonDecode` 根或嵌套 JSON 对象 → `Map<String, dynamic>`（会话持久化加载等）。
+Map<String, dynamic>? assistantJsonAsStringKeyedMap(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map((k, v) => MapEntry(k.toString(), v));
+  }
+  return null;
+}
 
 const List<JourneyStageId> assistantPrimaryJourneyStages = <JourneyStageId>[
   JourneyStageId.analyze,

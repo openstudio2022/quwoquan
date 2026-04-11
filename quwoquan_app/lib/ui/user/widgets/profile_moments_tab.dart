@@ -178,7 +178,15 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                     .where((post) => post.identity == 'moment')
                     .toList();
                 final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
-                final postViews = moments.map(PostSummaryView.fromDto).toList();
+                final postViews = moments
+                    .map(
+                      (dto) => PostSummaryView.fromDto(
+                        dto,
+                        surfaceId: PostReadSurfaceId.profileMoments,
+                        wire: dto.toMap(),
+                      ),
+                    )
+                    .toList();
                 
                 context.push(
                   '/media-viewer/photo/$initialIndex',
@@ -204,7 +212,15 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                     .where((post) => post.identity == 'moment')
                     .toList();
                 final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
-                final postViews = moments.map(PostSummaryView.fromDto).toList();
+                final postViews = moments
+                    .map(
+                      (dto) => PostSummaryView.fromDto(
+                        dto,
+                        surfaceId: PostReadSurfaceId.profileMoments,
+                        wire: dto.toMap(),
+                      ),
+                    )
+                    .toList();
                 
                 context.push(
                   '/video-viewer/$initialIndex',

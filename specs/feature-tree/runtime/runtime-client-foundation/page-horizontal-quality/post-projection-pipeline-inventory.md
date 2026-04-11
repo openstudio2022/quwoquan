@@ -1,16 +1,16 @@
 # 帖子（图/视频/文章）投影管线 — 页面与挂靠面清单
 
 > **目的**：在「同一领域模型」下，显式区分 **Wire DTO**、**只读多表面投影（ReadPresentation + SurfaceSpec）**、**可编辑 Draft**、**存储/同步形态**，并完成逐面实施与验收。  
-> **门禁**：在下列项全部落地前，相关页的 **P2（元数据驱动 UI 行模型）** 在矩阵中记为 **○ 待实现**，`metadata_driven_ui_gap_inventory.yaml` 中记为 **`partial`**。
+> **门禁（2026-04-11）**：帖子相关页已完成 ReadPresentation+Surface 与创作链 draftPreview 收口；矩阵 **P2=✓**、清单 **`compliant`**。下列表保留为 DoD 参照。
 
 ## 1. 完成定义（Definition of Done）
 
 | 层级 | 要求 | 当前典型缺口 |
 |------|------|----------------|
-| **Wire / API DTO** | `PostBaseDto` 族与 metadata/codegen 一致；Repository 出口无业务 `Map` | 部分 API 仍 `Map`；`CircleHubFeedPostEntry.raw` 写回 |
-| **只读 ReadPresentation** | 每表面一套 **默认机械映射** + 可选 **读扩展**；Widget 不直接字符串键读帖 | 多处仍 `PostBaseDto` 直驱 UI 或仅 `PostSummaryView.fromDto` 单形 |
-| **SurfaceSpec** | 关注流 / 沉浸 / 圈子 / 个人主页 / 搜索命中 / 详情 等 **布局与动作差异** 数据化（枚举或 metadata） | 逻辑散在 `works_immersive_viewer`、`section_creations` |
-| **Edit Draft** | 创作/编辑与预览：**Draft → ReadPresentation（预览）** 与 **Draft → UpdatePayload** 显式分离 | `ContentPublishDraftComposite` 与详情 `PostSummaryView` 未统一管线 |
+| **Wire / API DTO** | `PostBaseDto` 族与 metadata/codegen 一致；Repository 出口无业务 `Map` | 持续审计 Remote 边界 |
+| **只读 ReadPresentation** | 每表面 **PostReadSurfaceId** + `PostReadProjectionFacade` / `PostSummaryView.readPresentation` | 已落地；新表面需补枚举与 facade switch |
+| **SurfaceSpec** | 关注流 / 沉浸 / 圈子 / 个人主页 / 搜索 / 详情 / draftPreview 等数据化 | `PostReadSurfaceId`（codegen） |
+| **Edit Draft** | **Draft → ReadPresentation（预览）** 与 **Draft → CreatePayload** 经 `publish_draft_projection_bridge` | 长文/发布确认已接 `postReadPreviewBundle*` |
 | **存储投影（可选）** | 本地缓存/离线草稿字段与云契约可追踪 | 未统一文档化 |
 
 **P2 记为 ✓ 的条件（帖子相关页）**：上述 **ReadPresentation（至少本页所用 Surface）+ 本页涉及编辑时的 Draft→Payload** 已接好，且清单 `status` 改回 `compliant`。
@@ -34,8 +34,8 @@
 | P2 | 页面 | `lib/ui/content/pages/video_detail_page.dart` | 视频详情 | ReadPresentation(detail_video) |
 | P2 | 页面 | `lib/ui/search/pages/search_network_results_page.dart` | 搜索结果含帖子 | `SearchHit` → post 分支 ReadPresentation(search_card) |
 | P2 | 页面 | `lib/ui/search/pages/global_search_page.dart` | 全局搜索（含内容命中） | 同上 |
-| P3 | 创作链 | `create_page.dart`、`article_preview_page.dart`、`video_editor_page.dart`、`publish_*` | 编辑/预览/提交 | Draft→预览=ReadPresentation；Draft→`toCreatePayload` |
-| — | 非页面 | `lib/ui/content/share/content_share_template.dart` | 分享 | 依赖 ReadPresentation 或窄字段 |
+| P3 | 创作链 | `create_page.dart`、`article_typography_page.dart`、`video_editor_page.dart`、`publish_*` | 编辑/预览/提交 | `postReadPreviewBundleFromCreateEditorState` / `postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）+ `buildCreatePostPayloadMap` |
+| — | 非页面 | `lib/ui/content/share/content_share_template.dart` | 分享 | `PostReadPresentation.fromPostBase` 生成 share 标题/摘要/封面 |
 
 ## 3. 与清单 / 矩阵的对应关系
 
@@ -47,3 +47,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-03-30 | 初版：帖子投影管线全量面清单；驱动 P2 与清单 `partial` 收口标准 |
+| 2026-04-11 | 全量收口：门面+各表面 wire；`works_immersive_viewer`/`unified_media_viewer`/`section_creations`/profile/search/详情/创作链/分享模板已接；清单 compliant + 矩阵 P2 ✓ |

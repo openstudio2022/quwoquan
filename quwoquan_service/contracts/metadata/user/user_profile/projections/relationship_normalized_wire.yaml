@@ -1,0 +1,45 @@
+version: 1
+read_model: RelationshipNormalizedWire
+
+description: |
+  getRelationship 经 Repository 归一化后的快照（relationState / 三向布尔），
+  与 [RelationshipViewData] 字段 1:1。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: RelationshipNormalizedWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart
+  fields:
+    - name: relationState
+      dart_type: String
+      nullable: false
+      source: relationState
+      aliases: [relationState]
+      default: "'not_following'"
+
+    - name: isFollowing
+      dart_type: bool
+      nullable: false
+      source: isFollowing
+      aliases: [isFollowing]
+      default: "false"
+
+    - name: isFollowedBy
+      dart_type: bool
+      nullable: false
+      source: isFollowedBy
+      aliases: [isFollowedBy]
+      default: "false"
+
+    - name: isMutual
+      dart_type: bool
+      nullable: false
+      source: isMutual
+      aliases: [isMutual]
+      default: "false"

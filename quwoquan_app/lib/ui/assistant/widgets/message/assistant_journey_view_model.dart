@@ -310,21 +310,13 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
   return processTimeline
       .where((frame) => frame.hasVisibleContent)
       .map(
-        (frame) => AssistantJourneyBlockViewModel(
-          kind: frame.stepId == ProcessStepId.retrievalProcessing
-              ? AssistantJourneyBlockKind.searchSummary
-              : AssistantJourneyBlockKind.narrative,
-          stageId: frame.stepId,
-          headline: _headlineForFrame(frame),
-          detail: _detailForFrame(
+        (frame) {
+          var headline = _headlineForFrame(frame);
+          var detail = _detailForFrame(
             frame,
             fallbackRetrievalProcessing: retrievalProcessing,
-          ),
-          referenceLabel: _referenceLabelForFrame(
-            frame,
-            fallbackRetrievalProcessing: retrievalProcessing,
-          ),
-          references: frame.references
+          );
+          final refs = frame.references
               .map(
                 (reference) => AssistantJourneyReferenceViewModel(
                   title: reference.title.trim(),
@@ -336,8 +328,37 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
                 (reference) =>
                     reference.title.isNotEmpty || reference.url.isNotEmpty,
               )
-              .toList(growable: false),
-        ),
+              .toList(growable: false);
+          if (frame.stepId == ProcessStepId.retrievalProcessing &&
+              refs.isNotEmpty) {
+            // 仅按「消息级」检索摘要去重：journey fallback 会在帧内把 processingSummary
+            // 设成与 headline 相同，若再用帧内 summary 剥离会把整条 headline 清空。
+            final summary = retrievalProcessing.processingSummary.trim();
+            if (summary.isNotEmpty) {
+              headline = _stripRetrievalProcessingSummaryFromCopy(
+                headline,
+                retrievalProcessing.processingSummary,
+              );
+              detail = _stripRetrievalProcessingSummaryFromCopy(
+                detail,
+                retrievalProcessing.processingSummary,
+              );
+            }
+          }
+          return AssistantJourneyBlockViewModel(
+            kind: frame.stepId == ProcessStepId.retrievalProcessing
+                ? AssistantJourneyBlockKind.searchSummary
+                : AssistantJourneyBlockKind.narrative,
+            stageId: frame.stepId,
+            headline: headline,
+            detail: detail,
+            referenceLabel: _referenceLabelForFrame(
+              frame,
+              fallbackRetrievalProcessing: retrievalProcessing,
+            ),
+            references: refs,
+          );
+        },
       )
       .toList(growable: false);
 }
@@ -411,6 +432,17 @@ List<AssistantJourneyBlockViewModel> _buildBlocksFromDisplayState({
         final processedCount = retrievalProcessing.processedDocumentCount > 0
             ? retrievalProcessing.processedDocumentCount
             : acceptedCount;
+        if (stepId == ProcessStepId.retrievalProcessing &&
+            references.isNotEmpty) {
+          headline = _stripRetrievalProcessingSummaryFromCopy(
+            headline,
+            retrievalProcessing.processingSummary,
+          );
+          detail = _stripRetrievalProcessingSummaryFromCopy(
+            detail,
+            retrievalProcessing.processingSummary,
+          );
+        }
         return AssistantJourneyBlockViewModel(
           kind: stepId == ProcessStepId.retrievalProcessing
               ? AssistantJourneyBlockKind.searchSummary
@@ -783,4 +815,20 @@ String _sanitizeProcessSingleLine(String raw, {required ProcessStepId stepId}) {
     return '';
   }
   return normalized;
+}
+
+/// 引用块已足够表达检索结果时，不在 headline/detail 重复展示 [RetrievalProcessingSnapshot.processingSummary] 类低信号成答前状态句。
+String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
+  final t = text.trim();
+  final s = summary.trim();
+  if (t.isEmpty || s.isEmpty) {
+    return t;
+  }
+  if (t == s) {
+    return '';
+  }
+  if (t.contains(s)) {
+    return t.replaceAll(s, '').trim();
+  }
+  return t;
 }

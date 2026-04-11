@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -112,10 +111,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(TestKeys.createPage), findsOneWidget);
-      final bodyInput = tester.widget<CupertinoTextField>(
-        find.byKey(TestKeys.createMomentInput),
+      // 空文档首次输入会 materialize 为正文节点，`createMomentInput` 仅存在于空文档态。
+      expect(
+        find.descendant(
+          of: find.byKey(TestKeys.createPage),
+          matching: find.text('东京三日行程整理'),
+        ),
+        findsOneWidget,
       );
-      expect(bodyInput.controller?.text, '东京三日行程整理');
     });
 
     testWidgets('有内容时 10 秒自动保存草稿到本地缓存', (tester) async {

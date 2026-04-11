@@ -1,0 +1,30 @@
+version: 1
+read_model: InviteAcceptResponse
+
+description: |
+  POST 接受邀请接口返回的常用字段（与 Mock 及精简 wire 对齐）。
+
+source_entities:
+  - InviteRecord
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: InviteAcceptResponseDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/invite_accept_response_dto.g.dart
+  fields:
+    - name: linkCode
+      dart_type: String
+      nullable: false
+      source: linkCode
+      aliases: [linkCode]
+      default: "''"
+
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status]
+      default: "''"

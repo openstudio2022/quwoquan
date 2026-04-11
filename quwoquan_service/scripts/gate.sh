@@ -662,8 +662,12 @@ if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ]; then
 fi
 
 # ── Tooling / control-plane codegen tests ────────────────────────────────────
+echo "[gate] verify contracts/metadata (verify_metadata)"
+go run ./tools/verify_metadata contracts/metadata \
+  || fail "metadata verification failed"
+
 echo "[gate] running metadata and control-plane tooling tests"
-go test ./tools/verify_metadata ./tools/codegen_ops_portal_metadata ./tools/codegen_control_plane_runtime -count=1 \
+go test ./tools/verify_metadata ./tools/codegen_ops_portal_metadata ./tools/codegen_control_plane_runtime ./runtime/codegen ./tools/codegen_circle_domain -count=1 \
   || fail "control-plane tooling tests failed"
 
 bash scripts/verify_domain_onboarding.sh \

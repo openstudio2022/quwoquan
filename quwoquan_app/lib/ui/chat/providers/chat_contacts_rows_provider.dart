@@ -8,12 +8,12 @@ final chatContactsRowsForSubTabProvider =
     FutureProvider.family<List<ChatContactsRow>, String>((ref, subTab) async {
       final repo = ref.watch(chatRepositoryProvider);
       if (subTab == UITextConstants.contactsTabCircles) {
-        final maps = await repo.listContactTabCircles(limit: 500);
-        return maps.map(ChatContactsRow.fromContactTabCircleMap).toList();
+        final rows = await repo.listContactTabCircles(limit: 500);
+        return rows.map(ChatContactsRow.fromContactTabCircleDto).toList();
       }
       if (subTab == UITextConstants.contactsTabFunGroup) {
-        final maps = await repo.listContactTabFunGroups(limit: 500);
-        return maps.map(ChatContactsRow.fromContactTabFunGroupMap).toList();
+        final rows = await repo.listContactTabFunGroups(limit: 500);
+        return rows.map(ChatContactsRow.fromContactTabFunGroupDto).toList();
       }
       final contacts = await repo.listContacts(limit: 500);
       var rows = contacts.map(ChatContactsRow.fromContactDto).toList();

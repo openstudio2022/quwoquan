@@ -50,7 +50,9 @@ api_routes:
   - method: GET
     path: /v1/users/{userId}/circles
     operation: ListUserCircles
-    description: 查询用户已加入的圈子列表
+    description: |
+      查询用户已加入的圈子列表。列表项与 Circle 聚合根 wire 对齐；
+      App 端 UserProfileRepository 与 CircleRepository 均解析为 codegen CircleDto。
     query_params: [cursor, limit]
     response_entity: Circle
 
@@ -153,6 +155,7 @@ api_routes:
     path: /v1/circles/behaviors
     operation: ReportCircleBehavior
     description: 圈子行为上报
+    request_entity: CircleBehaviorReport
 
   # --- 板块配置 ---
   - method: PATCH

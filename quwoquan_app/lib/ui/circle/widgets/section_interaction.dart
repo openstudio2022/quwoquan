@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -19,11 +20,38 @@ class SectionInteraction extends ConsumerStatefulWidget {
   ConsumerState<SectionInteraction> createState() => _SectionInteractionState();
 }
 
+/// 互动行展示模型（由 [PostBaseDto] 或本地占位数据构造，避免 UI 层 Map 按键漂移）。
+class _InteractionRow {
+  const _InteractionRow({
+    required this.userName,
+    required this.avatar,
+    required this.time,
+    required this.action,
+    required this.target,
+  });
+
+  final String userName;
+  final String avatar;
+  final String time;
+  final String action;
+  final String target;
+
+  factory _InteractionRow.fromPost(PostBaseDto p) {
+    return _InteractionRow(
+      userName: p.displayName,
+      avatar: p.avatarUrl ?? '',
+      time: '',
+      action: '发布了',
+      target: p.normalizedTitle.isNotEmpty ? p.normalizedTitle : p.type,
+    );
+  }
+}
+
 class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   String _activeSubTab = 'likes';
   bool _isLoading = true;
   String? _error;
-  List<Map<String, dynamic>> _interactions = const [];
+  List<_InteractionRow> _interactions = const [];
 
   @override
   void initState() {
@@ -41,7 +69,8 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       final feed = await repo.getCircleFeed(widget.circleId);
       if (mounted) {
         setState(() {
-          _interactions = feed;
+          _interactions =
+              feed.map(_InteractionRow.fromPost).toList(growable: false);
           _isLoading = false;
         });
       }
@@ -56,44 +85,35 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   }
 
   // Fallback mock data when feed is empty
-  List<Map<String, dynamic>> get _displayInteractions {
-    if (_interactions.isNotEmpty &&
-        _interactions.every(
-          (item) =>
-              item['userName'] is String &&
-              item['avatar'] is String &&
-              item['time'] is String,
-        )) {
+  List<_InteractionRow> get _displayInteractions {
+    if (_interactions.isNotEmpty) {
       return _interactions;
     }
-    return [
-      {
-        'id': 'i1',
-        'userName': '陈一发',
-        'avatar':
+    return const [
+      _InteractionRow(
+        userName: '陈一发',
+        avatar:
             'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-        'action': '赞了',
-        'target': '《川西秘境摄影集》',
-        'time': '14:20',
-      },
-      {
-        'id': 'i2',
-        'userName': '王小明',
-        'avatar':
+        action: '赞了',
+        target: '《川西秘境摄影集》',
+        time: '14:20',
+      ),
+      _InteractionRow(
+        userName: '王小明',
+        avatar:
             'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
-        'action': '评论了',
-        'target': '器材交流帖',
-        'time': '10:05',
-      },
-      {
-        'id': 'i3',
-        'userName': '李青云',
-        'avatar':
+        action: '评论了',
+        target: '器材交流帖',
+        time: '10:05',
+      ),
+      _InteractionRow(
+        userName: '李青云',
+        avatar:
             'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
-        'action': '赞了',
-        'target': '周末外拍活动照片',
-        'time': '昨天',
-      },
+        action: '赞了',
+        target: '周末外拍活动照片',
+        time: '昨天',
+      ),
     ];
   }
 
@@ -143,7 +163,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   }
 
   Widget _buildInteractionItem(
-    Map<String, dynamic> item,
+    _InteractionRow item,
     Color fgPrimary,
     Color fgSecondary,
   ) {
@@ -154,7 +174,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
         children: [
           CircleAvatar(
             radius: AppSpacing.md,
-            backgroundImage: NetworkImage(item['avatar'] as String),
+            backgroundImage: NetworkImage(item.avatar),
             onBackgroundImageError: (_, _) {},
           ),
           SizedBox(width: AppSpacing.sm),
@@ -167,7 +187,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
                   children: [
                     Expanded(
                       child: Text(
-                        item['userName'] as String,
+                        item.userName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -179,7 +199,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
                     ),
                     SizedBox(width: AppSpacing.sm),
                     Text(
-                      item['time'] as String,
+                      item.time,
                       style: TextStyle(
                         fontSize: AppTypography.xs,
                         color: fgSecondary,
@@ -189,7 +209,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
                 ),
                 SizedBox(height: AppSpacing.xs),
                 Text(
-                  '${item['action']} ${item['target']}',
+                  '${item.action} ${item.target}',
                   style: TextStyle(
                     fontSize: AppTypography.sm,
                     color: fgSecondary,

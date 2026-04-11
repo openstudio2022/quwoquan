@@ -496,6 +496,20 @@ class PersonalAssistantContextOrchestrator {
     }
     sanitized.remove('lat');
     sanitized.remove('lng');
+    for (final key in const <String>[
+      'city',
+      'cityLabel',
+      'region',
+      'regionLabel',
+      'province',
+      'district',
+      'districtLabel',
+      'country',
+      'countryCode',
+      'countryLabel',
+    ]) {
+      sanitized.remove(key);
+    }
     final nested = (sanitized['location'] as Map?)?.cast<String, dynamic>();
     if (nested != null && nested.isNotEmpty) {
       sanitized['location'] = <String, dynamic>{
@@ -506,7 +520,14 @@ class PersonalAssistantContextOrchestrator {
               key == 'lng' ||
               key == 'latitude' ||
               key == 'longitude' ||
-              key == 'lon',
+              key == 'lon' ||
+              key == 'city' ||
+              key == 'cityLabel' ||
+              key == 'region' ||
+              key == 'regionLabel' ||
+              key == 'province' ||
+              key == 'district' ||
+              key == 'districtLabel',
         );
     }
     return sanitized;

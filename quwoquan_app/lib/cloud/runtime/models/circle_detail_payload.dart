@@ -15,19 +15,21 @@ class CircleDetailPayload {
 
   final Map<String, dynamic> _wire;
 
-  String? get viewerRole => _wire['role']?.toString();
+  String? get viewerRole => viewerWire.role;
 
   /// Wire 未带 `joinStatus` 时返回 null，由调用方保留上一轮 UI 状态。
-  String? get joinStatusIfPresent {
-    if (!_wire.containsKey('joinStatus')) return null;
-    return (_wire['joinStatus'] ?? 'none').toString();
-  }
+  String? get joinStatusIfPresent =>
+      _wire.containsKey('joinStatus') ? viewerWire.joinStatus : null;
 
   /// Wire 未带 `isFollowed` 时返回 null，由调用方保留上一轮 UI 状态。
   bool? get isFollowedIfPresent =>
-      _wire.containsKey('isFollowed') ? _wire['isFollowed'] as bool? : null;
+      _wire.containsKey('isFollowed') ? viewerWire.isFollowed : null;
 
-  String? get categoryId => _wire['categoryId']?.toString();
+  String? get categoryId => viewerWire.categoryId;
+
+  /// 视角投影（metadata：`projections/circle_detail_viewer_wire.yaml`）。
+  CircleDetailWireDto get viewerWire =>
+      CircleDetailWireDto.fromViewerWire(_wire);
 
   Map<String, dynamic> repositoryMergeBase() => Map<String, dynamic>.from(_wire);
 }

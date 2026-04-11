@@ -4,8 +4,8 @@
 class ChatConversationCreatedDto {
   final String conversationId;
 
-  const ChatConversationCreatedDto({
-    required this.conversationId,
+  ChatConversationCreatedDto({
+    this.conversationId = '',
   });
 
   factory ChatConversationCreatedDto.fromMap(Map<String, dynamic> m) {

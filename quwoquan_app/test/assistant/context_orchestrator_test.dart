@@ -1,7 +1,23 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:test/test.dart';
+
+import 'assistant_test_fixture_paths.dart';
+
+Map<String, dynamic> _sessionTurnRunArtifacts(String userFacingSummary) {
+  final path =
+      assistantMetadataFixturePath('wire_session_turn_run_artifacts.json');
+  final m = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
+  final us = Map<String, dynamic>.from(
+    (m['understandingSnapshot'] as Map).cast<String, dynamic>(),
+  );
+  us['userFacingSummary'] = userFacingSummary;
+  return <String, dynamic>{...m, 'understandingSnapshot': us};
+}
 
 void main() {
   group('PersonalAssistantContextOrchestrator', () {
@@ -66,34 +82,20 @@ void main() {
       final policy = continuity(
         '第三问怎么继续',
         recentRoundsLimit: 2,
-        sessionHistory: const <Map<String, dynamic>>[
+        sessionHistory: <Map<String, dynamic>>[
           <String, dynamic>{'role': 'user', 'content': '第一问'},
           <String, dynamic>{
             'role': 'assistant',
             'content': '第一答',
             'id': 'turn_1',
-            'runArtifacts': <String, dynamic>{
-              'journey': <String, dynamic>{
-                'readiness': <String, dynamic>{'finalAnswerReady': true},
-              },
-              'understandingSnapshot': <String, dynamic>{
-                'userFacingSummary': '第一轮理解',
-              },
-            },
+            'runArtifacts': _sessionTurnRunArtifacts('第一轮理解'),
           },
           <String, dynamic>{'role': 'user', 'content': '第二问'},
           <String, dynamic>{
             'role': 'assistant',
             'content': '第二答',
             'id': 'turn_2',
-            'runArtifacts': <String, dynamic>{
-              'journey': <String, dynamic>{
-                'readiness': <String, dynamic>{'finalAnswerReady': true},
-              },
-              'understandingSnapshot': <String, dynamic>{
-                'userFacingSummary': '第二轮理解',
-              },
-            },
+            'runArtifacts': _sessionTurnRunArtifacts('第二轮理解'),
           },
           <String, dynamic>{'role': 'user', 'content': '第三问'},
         ],

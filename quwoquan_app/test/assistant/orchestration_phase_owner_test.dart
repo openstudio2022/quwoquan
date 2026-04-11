@@ -9,6 +9,7 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
@@ -436,6 +437,26 @@ void main() {
         requiresExternalEvidence: true,
         authorityDomains: const <String>['gov.cn'],
         freshnessHoursMax: 24,
+        queryTasks: const <QueryTask>[
+          QueryTask(
+            id: 'candidate_space',
+            dimension: QueryTaskDimension.candidateSpace,
+            label: '候选范围',
+            query: '深圳住宿 候选片区 酒店 民宿 公寓',
+          ),
+          QueryTask(
+            id: 'fit_scenarios',
+            dimension: QueryTaskDimension.fitScenarios,
+            label: '适用场景',
+            query: '深圳住宿 通勤 景点 夜生活 亲子 商务 适合',
+          ),
+          QueryTask(
+            id: 'risks',
+            dimension: QueryTaskDimension.riskBoundaries,
+            label: '风险边界',
+            query: '深圳住宿 避坑 噪音 交通 拥堵 安全 风险',
+          ),
+        ],
       );
       final request = AssistantRunRequest(
         messages: const <AssistantRunMessage>[
@@ -493,6 +514,20 @@ void main() {
         entityAnchors: <String>['深圳'],
         authorityDomains: <String>['weather.cma.cn'],
         freshnessHoursMax: 6,
+        queryTasks: <QueryTask>[
+          QueryTask(
+            id: 'key_facts',
+            dimension: QueryTaskDimension.keyFacts,
+            label: '关键事实',
+            query: '深圳 周末 天气 实况',
+          ),
+          QueryTask(
+            id: 'decision_threshold',
+            dimension: QueryTaskDimension.decisionThreshold,
+            label: '出门阈值',
+            query: '深圳 周末 天气 出门 适合 条件',
+          ),
+        ],
       );
       const request = AssistantRunRequest(
         messages: <AssistantRunMessage>[
@@ -587,6 +622,14 @@ void main() {
         },
         authorityDomains: <String>['gov.cn'],
         freshnessHoursMax: 24,
+        queryTasks: <QueryTask>[
+          QueryTask(
+            id: 'route_priority',
+            dimension: QueryTaskDimension.tradeoffs,
+            label: '路线取舍',
+            query: '九寨沟 4天 路线 优先级 对比',
+          ),
+        ],
       );
       final previousRunArtifacts = parseRunArtifacts(<String, dynamic>{
         'machineEnvelope': '',

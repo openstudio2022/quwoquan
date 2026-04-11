@@ -16,10 +16,8 @@ class ProfileStatsRow extends StatelessWidget {
   final ProfileSubjectViewData? profile;
   final void Function(String type)? onStatTap;
 
-  String _formatCount(dynamic count) {
-    if (count == null) return '0';
-    final n = count is int ? count : int.tryParse(count.toString()) ?? 0;
-    return formatCompactActionCount(n);
+  String _formatCount(int count) {
+    return formatCompactActionCount(count);
   }
 
   @override
@@ -33,17 +31,17 @@ class ProfileStatsRow extends StatelessWidget {
 
     final items = [
       _StatItem(
-        value: _formatCount(subject?.circleCount),
+        value: _formatCount(subject?.circleCount ?? 0),
         label: UITextConstants.contactsTabCircles,
         type: 'circles',
       ),
       _StatItem(
-        value: _formatCount(subject?.followingCount),
+        value: _formatCount(subject?.followingCount ?? 0),
         label: UITextConstants.follow,
         type: 'following',
       ),
       _StatItem(
-        value: _formatCount(subject?.followerCount),
+        value: _formatCount(subject?.followerCount ?? 0),
         label: UITextConstants.circleFans,
         type: 'fans',
       ),

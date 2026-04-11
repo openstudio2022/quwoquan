@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -77,7 +75,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   Future<bool> markConversationRead() async {
     final latest = state.messages.reversed.firstWhere(
       (message) => message.id.isNotEmpty,
-      orElse: () => const MessageDto(
+      orElse: () => MessageDto(
         id: '',
         conversationId: '',
         seq: 0,
@@ -137,7 +135,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     );
     state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
     try {
-      final raw = await _repo.sendMessage(
+      final resp = await _repo.sendMessage(
         conversationId: conversationId,
         type: type,
         content: content,
@@ -150,7 +148,6 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         personaContextVersion: activeContext.personaContextVersion,
         clientMsgId: clientMsgId,
       );
-      final resp = SendMessageResponse.fromMap(raw);
       final confirmed = optimistic.copyWith(
         id: resp.id,
         seq: resp.seq,
@@ -181,7 +178,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
-      final raw = await _repo.sendMessage(
+      final resp = await _repo.sendMessage(
         conversationId: conversationId,
         type: msg.type,
         content: msg.content ?? '',
@@ -196,7 +193,6 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         personaContextVersion: activeContext.personaContextVersion,
         clientMsgId: clientMsgId,
       );
-      final resp = SendMessageResponse.fromMap(raw);
       final confirmed = msg.copyWith(
         id: resp.id,
         seq: resp.seq,
@@ -236,11 +232,10 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   /// 手动触发 sync 补全缺失消息。
   Future<void> syncFromSeq(int lastSeq) async {
     try {
-      final raw = await _repo.syncMessages(
+      final syncResp = await _repo.syncMessages(
         conversationId: conversationId,
         lastSeq: lastSeq,
       );
-      final syncResp = SyncResponse.fromMap(raw);
       if (syncResp.messages.isNotEmpty) {
         final merged = _mergeMessages(state.messages, syncResp.messages);
         state = state.copyWith(messages: _sorted(merged));

@@ -1,0 +1,36 @@
+version: 1
+read_model: HomepageQuestionPreview
+
+description: |
+  主页壳层问答预览项 wire。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageQuestionPreview
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_question_preview.g.dart
+  fields:
+    - name: postId
+      dart_type: String
+      nullable: false
+      source: postId
+      aliases: [postId]
+      default: "''"
+
+    - name: title
+      dart_type: String
+      nullable: false
+      source: title
+      aliases: [title]
+      default: "''"
+
+    - name: summary
+      dart_type: String
+      nullable: true
+      source: summary
+      aliases: [summary]

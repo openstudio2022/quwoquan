@@ -13,15 +13,15 @@ api_routes:
     path: /v1/rtc/calls
     operation: InitiateCall
     description: 发起通话（创建 CallSession + LiveKit Room + 签发发起方 Token + 推送来电通知）
-    request_fields: [callType, targetUserIds, conversationId, circleId]
-    response_fields: [callId, roomId, token, participants]
+    request_fields: [callType, inviteeIds, conversationId, circleId, maxParticipants]
+    response_fields: [session, token]
     auth: required
 
   - method: POST
     path: /v1/rtc/calls/{callId}/answer
     operation: AnswerCall
     description: 接听通话（签发接听方 Token）
-    response_fields: [token, roomId]
+    response_fields: [session, token, roomId]
     auth: required
 
   - method: POST
@@ -47,7 +47,7 @@ api_routes:
     path: /v1/rtc/calls/{callId}/join
     operation: JoinCall
     description: 加入多人通话（收到邀请后主动加入，签发 Token）
-    response_fields: [token, roomId, participants]
+    response_fields: [session, token]
     auth: required
 
   - method: POST
@@ -60,7 +60,7 @@ api_routes:
     path: /v1/rtc/calls/{callId}/invite
     operation: InviteToCall
     description: 邀请更多人加入通话（通话中拉人）
-    request_fields: [targetUserIds]
+    request_fields: [inviteeIds]
     auth: required
 
   # ── 通话查询 ──────────────────────────────────────
@@ -91,7 +91,7 @@ api_routes:
     path: /v1/rtc/calls/{callId}/camera
     operation: ToggleCamera
     description: 切换摄像头状态
-    request_fields: [enabled]
+    request_fields: [cameraOn]
     auth: required
 
   # ── 录制 ──────────────────────────────────────────

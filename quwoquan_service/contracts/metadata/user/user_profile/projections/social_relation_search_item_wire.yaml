@@ -1,0 +1,66 @@
+version: 1
+read_model: SocialRelationSearchItemWire
+
+description: |
+  SearchSocialRelations 列表元素 wire；嵌套 capability 缺失时由 View 用整行 Map 回退解析。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: SocialRelationSearchItemWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart
+  fields:
+    - name: profileSubjectId
+      dart_type: String
+      nullable: false
+      source: profileSubjectId
+      aliases: [profileSubjectId, userId]
+      default: "''"
+      skip_empty_string_aliases: true
+
+    - name: username
+      dart_type: String
+      nullable: false
+      source: username
+      aliases: [username, subAccountId]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, nickname]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: true
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "null"
+
+    - name: headline
+      dart_type: String
+      nullable: true
+      source: headline
+      aliases: [headline, bio]
+      default: "null"
+
+    - name: chatAvailable
+      dart_type: bool
+      nullable: false
+      source: chatAvailable
+      aliases: [chatAvailable]
+      default: "false"
+
+    - name: relationshipCapability
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: relationshipCapability
+      aliases: [relationshipCapability]
+      default: "null"

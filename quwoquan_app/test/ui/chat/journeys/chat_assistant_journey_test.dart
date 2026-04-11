@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -315,7 +316,7 @@ class _TrackingAssistantRepo extends MockChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> sendMessage({
+  Future<SendMessageResponse> sendMessage({
     required String conversationId,
     required String type,
     required String content,

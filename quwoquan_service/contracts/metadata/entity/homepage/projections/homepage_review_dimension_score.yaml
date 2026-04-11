@@ -1,0 +1,30 @@
+version: 1
+read_model: HomepageReviewDimensionScore
+
+description: |
+  主页壳层评价维度分 wire；与 homepage_models 历史 fromMap 对齐。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageReviewDimensionScore
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_review_dimension_score.g.dart
+  fields:
+    - name: label
+      dart_type: String
+      nullable: false
+      source: label
+      aliases: [label]
+      default: "''"
+
+    - name: score
+      dart_type: double
+      nullable: false
+      source: score
+      aliases: [score]
+      default: "0.0"

@@ -22,6 +22,7 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/learning/assistant_learning_runtime.dart';
@@ -30,6 +31,7 @@ import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_context_scope_read_view.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_conversation_controller.dart';
 
 List<Map<String, dynamic>> _messageMaps(AssistantConversationController c) {
@@ -80,12 +82,12 @@ void main() {
     testWidgets('initialize 会按分页窗口拆分本地历史并支持继续上拉加载', (tester) async {
       final sessionId = 'local_assistant_test_history';
       final gateway = _FakeAssistantGateway(
-        sessions: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'sessionId': sessionId,
-            'topicTitle': '川西路线',
-            'isActive': true,
-          },
+        sessions: <AssistantSessionDescriptor>[
+          AssistantSessionDescriptor(
+            sessionId: sessionId,
+            topicTitle: '川西路线',
+            isActive: true,
+          ),
         ],
         sessionDetails: <String, Map<String, dynamic>>{
           sessionId: <String, dynamic>{
@@ -128,12 +130,12 @@ void main() {
     ) async {
       final sessionId = 'local_assistant_persisted_turn';
       final gateway = _FakeAssistantGateway(
-        sessions: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'sessionId': sessionId,
-            'topicTitle': '周末出行',
-            'isActive': true,
-          },
+        sessions: <AssistantSessionDescriptor>[
+          AssistantSessionDescriptor(
+            sessionId: sessionId,
+            topicTitle: '周末出行',
+            isActive: true,
+          ),
         ],
         sessionDetails: <String, Map<String, dynamic>>{
           sessionId: <String, dynamic>{
@@ -734,7 +736,7 @@ void main() {
       'sendMessage 完成后 remount/reinitialize 仍恢复 query design、timeline 与答案',
       (tester) async {
         final initialGateway = _FakeAssistantGateway(
-          sessions: const <Map<String, dynamic>>[],
+          sessions: const <AssistantSessionDescriptor>[],
           sessionDetails: const <String, Map<String, dynamic>>{},
         );
         final entry = _FakeStreamingLocalAssistantEntry();
@@ -779,12 +781,12 @@ void main() {
         await tester.pump();
 
         final reloadGateway = _FakeAssistantGateway(
-          sessions: <Map<String, dynamic>>[
-            <String, dynamic>{
-              'sessionId': sessionId,
-              'topicTitle': '天气回放',
-              'isActive': true,
-            },
+          sessions: <AssistantSessionDescriptor>[
+            AssistantSessionDescriptor(
+              sessionId: sessionId,
+              topicTitle: '天气回放',
+              isActive: true,
+            ),
           ],
           sessionDetails: <String, Map<String, dynamic>>{
             sessionId: <String, dynamic>{
@@ -848,7 +850,7 @@ void main() {
             assistantRemoteConfiguredProvider.overrideWith((ref) => true),
             assistantGatewayProvider.overrideWithValue(
               _FakeAssistantGateway(
-                sessions: const <Map<String, dynamic>>[],
+                sessions: const <AssistantSessionDescriptor>[],
                 sessionDetails: const <String, Map<String, dynamic>>{},
               ),
             ),
@@ -1031,6 +1033,7 @@ void main() {
           ],
           isRunning: false,
           understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+            queryDesignSummary: '交易日确认：先把相对时间落成具体日期。',
             queryGroups: <RunArtifactsUnderstandingQueryGroup>[
               RunArtifactsUnderstandingQueryGroup(
                 dimension: '交易日确认',
@@ -1065,6 +1068,21 @@ void main() {
         );
       },
     );
+
+    test('contextScope 读视图与 run 请求使用的键一致', () {
+      final raw = <String, dynamic>{
+        'privacyPolicy': <String, dynamic>{'webAccessMode': 'limited'},
+        'pageType': 'discovery',
+        'userTags': <dynamic>[' t1 ', 't2'],
+      };
+      final view = AssistantContextScopeReadView(raw);
+      expect(
+        (raw['privacyPolicy'] as Map).cast<String, dynamic>(),
+        view.privacyPolicy,
+      );
+      expect(view.pageType, 'discovery');
+      expect(view.normalizedUserTags, ['t1', 't2']);
+    });
   });
 }
 
@@ -1157,15 +1175,17 @@ class _FakeAssistantGateway extends AssistantGateway {
   _FakeAssistantGateway({required this.sessions, required this.sessionDetails})
     : super(AssistantRuntime.createForTest());
 
-  final List<Map<String, dynamic>> sessions;
+  final List<AssistantSessionDescriptor> sessions;
   final Map<String, Map<String, dynamic>> sessionDetails;
 
   @override
-  Future<List<Map<String, dynamic>>> listSessions() async => sessions;
+  Future<List<AssistantSessionDescriptor>> listSessions() async => sessions;
 
   @override
-  Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
-    return sessionDetails[sessionId];
+  Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) async {
+    final raw = sessionDetails[sessionId];
+    if (raw == null) return null;
+    return AssistantSessionWireDetail.fromJson(raw);
   }
 
   @override

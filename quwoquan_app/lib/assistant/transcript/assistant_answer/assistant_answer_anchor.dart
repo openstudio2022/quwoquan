@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_quality_metrics_read_view.dart';
+
 /// 助手回答的运行锚点（C3）。不等于完整持久化 turn。
 class AssistantAnswerAnchor {
   const AssistantAnswerAnchor({
@@ -47,4 +49,8 @@ class AssistantAnswerAnchor {
       domainId: domainId ?? this.domainId,
     );
   }
+
+  /// `qualityMetrics` 子树的稳定键投影（避免 UI 直接深索引 Map）。
+  AssistantQualityMetricsReadView get qualityMetricsReadView =>
+      AssistantQualityMetricsReadView(qualityMetrics);
 }

@@ -94,19 +94,27 @@ run_app() {
       python3 scripts/verify_page_abc_governance.py --quiet
     fi
     python3 scripts/verify_metadata_driven_ui_gate.py || exit 1
+    python3 scripts/verify_metadata_routes_vs_codegen_app.py || exit 1
+    python3 scripts/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 scripts/verify_ui_mock_isolation.py || exit 1
     python3 scripts/verify_lib_no_test_only_symbols.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_metadata_driven_ui_gate, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
-  local flutter_l1_output=""
-  if ! flutter_l1_output="$(
-    cd quwoquan_app && flutter test test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1
-  )"; then
-    echo "$flutter_l1_output"
-    if [[ "$flutter_l1_output" == *"Connection closed before full header was received"* ]]; then
+  # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
+  local flutter_log
+  flutter_log="$(mktemp -t quwoquan_gate_flutter_l1.XXXXXX)"
+  local flutter_status=0
+  set +e
+  set -o pipefail
+  (cd quwoquan_app && flutter test test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log")
+  flutter_status=${PIPESTATUS[0]:-1}
+  set +o pipefail
+  set -e
+  if [[ "$flutter_status" -ne 0 ]]; then
+    if grep -Fq "Connection closed before full header was received" "$flutter_log" 2>/dev/null; then
       echo ""
       echo "[gate] FAIL: flutter_tester loopback bootstrap failed — Proxifier Network Extension is intercepting 127.0.0.1 TCP connections."
       echo ""
@@ -132,10 +140,10 @@ run_app() {
       echo "  Quit Proxifier.app before running 'make gate', then reopen after."
       echo ""
     fi
+    rm -f "$flutter_log"
     return 1
-  else
-    echo "$flutter_l1_output"
   fi
+  rm -f "$flutter_log"
   # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
   # 桶 A 覆盖降级响应根因/消息历史协议/可观测字段，失败即退。
   bash scripts/run_pa_core_tests.sh

@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_tile.dart';
 
-/// FaceTime-style dynamic grid layout with pagination for >16 participants.
+/// FaceTime-style adaptive grid layout with pagination for >16 participants.
 class VideoGridLayout extends StatelessWidget {
   const VideoGridLayout({
     super.key,

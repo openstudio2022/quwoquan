@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: LLM_RAW | EXTENSION_MAP — ReAct 轨迹与工具结果 Map；JSON 工具计划经 LlmResponseParser。
+
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -5,7 +7,7 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/react_planner.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_execution_guard.dart';
@@ -1492,56 +1494,40 @@ class ReactRuntime {
   /// 用于不支持 native function calling 的模型（如 mimo-v2-flash）。
   List<AssistantToolCall> _extractToolCallsFromJsonText(String text) {
     if (text.trim().isEmpty) return const <AssistantToolCall>[];
-    try {
-      // 去掉 <think>...</think> 标签
-      final stripped = text
-          .replaceAll(
-            RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
-            '',
-          )
-          .trim();
-      // 找到第一个 JSON 对象
-      final start = stripped.indexOf('{');
-      if (start < 0) return const <AssistantToolCall>[];
-      final decoded = jsonDecode(stripped.substring(start));
-      if (decoded is! Map) return const <AssistantToolCall>[];
-      final payload = decoded.cast<String, dynamic>();
-      final turn = tryParseAssistantTurnOutput(payload);
+    final parsed = LlmResponseParser.parse(text);
+    if (!parsed.ok || parsed.json == null) return const <AssistantToolCall>[];
+    final payload = parsed.json!;
+    final turn = tryParseAssistantTurnOutput(payload);
+    final view = LlmAssistantOutputJsonView(payload);
 
-      // 只在 nextAction='tool_call' 时才解析
-      final nextAction =
-          turn?.nextAction ??
-          (((payload['decision'] as Map?)?['nextAction'] as String?)?.trim() ??
-              '');
-      if (nextAction != 'tool_call') return const <AssistantToolCall>[];
+    // 只在 nextAction='tool_call' 时才解析
+    final nextAction = turn?.nextAction ?? view.nextAction;
+    if (nextAction != 'tool_call') return const <AssistantToolCall>[];
 
-      final toolPlan = turn?.toolPlan ?? payload['toolPlan'];
-      if (toolPlan is! List) return const <AssistantToolCall>[];
+    final toolPlan = turn?.toolPlan ?? payload['toolPlan'];
+    if (toolPlan is! List) return const <AssistantToolCall>[];
 
-      final calls = <AssistantToolCall>[];
-      for (final item in toolPlan) {
-        if (item is! Map) continue;
-        final toolName =
-            (item['toolName'] as String? ?? item['name'] as String?)?.trim() ??
-            '';
-        if (toolName.isEmpty) continue;
-        final rawArgs = item['arguments'];
-        final args = rawArgs is Map
-            ? rawArgs.cast<String, dynamic>()
-            : <String, dynamic>{
-                for (final entry in item.entries)
-                  if (entry.key != 'toolName' &&
-                      entry.key != 'name' &&
-                      entry.key != 'toolCallId')
-                    '${entry.key}': entry.value,
-              };
-        calls.add(AssistantToolCall(name: toolName, arguments: args));
-      }
-
-      return calls;
-    } catch (_) {
-      return const <AssistantToolCall>[];
+    final calls = <AssistantToolCall>[];
+    for (final item in toolPlan) {
+      if (item is! Map) continue;
+      final toolName =
+          (item['toolName'] as String? ?? item['name'] as String?)?.trim() ??
+          '';
+      if (toolName.isEmpty) continue;
+      final rawArgs = item['arguments'];
+      final args = rawArgs is Map
+          ? rawArgs.cast<String, dynamic>()
+          : <String, dynamic>{
+              for (final entry in item.entries)
+                if (entry.key != 'toolName' &&
+                    entry.key != 'name' &&
+                    entry.key != 'toolCallId')
+                  '${entry.key}': entry.value,
+            };
+      calls.add(AssistantToolCall(name: toolName, arguments: args));
     }
+
+    return calls;
   }
 
   static const Set<String> _jsonOnlyTemplateIds = <String>{'evidence_digest'};

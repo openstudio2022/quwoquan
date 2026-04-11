@@ -12,11 +12,14 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
-import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
-/// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格
+/// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格。
+///
+/// 主数据为 [CircleHubFeedPostEntry]（含 [PostBaseDto] + 写回用 raw）；旧 Map 工具方法仅作
+/// wire 兼容层，新逻辑应优先读 `entry.dto`。
 class SectionCreations extends ConsumerStatefulWidget {
   const SectionCreations({
     super.key,
@@ -38,7 +41,7 @@ class SectionCreations extends ConsumerStatefulWidget {
 class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool _isLoading = true;
   String? _error;
-  List<Map<String, dynamic>> _feedItems = const [];
+  List<CircleHubFeedPostEntry> _feedEntries = const [];
   String? _circleCategoryId;
 
   List<IdentityFilterConfig> get _identityFilters =>
@@ -87,7 +90,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       );
       if (mounted) {
         setState(() {
-          _feedItems = items;
+          _feedEntries =
+              items.map(CircleHubFeedPostEntry.fromPostDto).toList(growable: false);
           _circleCategoryId = circleDetail.categoryId;
           _isLoading = false;
         });
@@ -377,31 +381,31 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  bool _matchesIdentityFilter(Map<String, dynamic> item, CreationSubTab tab) {
+  bool _matchesIdentityFilter(CircleHubFeedPostEntry entry, CreationSubTab tab) {
     switch (tab) {
       case CreationSubTab.moment:
-        return _itemIdentity(item) == 'moment';
+        return _entryIdentity(entry) == 'moment';
       case CreationSubTab.micro:
-        return _itemIdentity(item) == 'moment' &&
-            _itemDisplayFormat(item) == 'micro';
+        return _entryIdentity(entry) == 'moment' &&
+            _entryDisplayFormat(entry) == 'micro';
       case CreationSubTab.work:
-        return _itemIdentity(item) == 'work';
+        return _entryIdentity(entry) == 'work';
       case CreationSubTab.image:
-        return _itemIdentity(item) == 'work' &&
-            _itemDisplayFormat(item) == 'image';
+        return _entryIdentity(entry) == 'work' &&
+            _entryDisplayFormat(entry) == 'image';
       case CreationSubTab.video:
-        return _itemIdentity(item) == 'work' &&
-            _itemDisplayFormat(item) == 'video';
+        return _entryIdentity(entry) == 'work' &&
+            _entryDisplayFormat(entry) == 'video';
       case CreationSubTab.article:
-        return _itemIdentity(item) == 'work' &&
-            _itemDisplayFormat(item) == 'note';
+        return _entryIdentity(entry) == 'work' &&
+            _entryDisplayFormat(entry) == 'note';
       case CreationSubTab.all:
         return true;
     }
   }
 
   bool _matchesWorkFormat(
-    Map<String, dynamic> item,
+    CircleHubFeedPostEntry entry,
     CreationSubTab activeSubTab,
     CreationWorkFormat format,
   ) {
@@ -410,23 +414,35 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
     switch (format) {
       case CreationWorkFormat.image:
-        return _itemDisplayFormat(item) == 'image';
+        return _entryDisplayFormat(entry) == 'image';
       case CreationWorkFormat.video:
-        return _itemDisplayFormat(item) == 'video';
+        return _entryDisplayFormat(entry) == 'video';
       case CreationWorkFormat.note:
-        return _itemDisplayFormat(item) == 'note';
+        return _entryDisplayFormat(entry) == 'note';
       case CreationWorkFormat.all:
         return true;
     }
   }
 
-  String _itemIdentity(Map<String, dynamic> item) {
+  bool _entryIsArticle(CircleHubFeedPostEntry entry) {
+    final d = entry.dto;
+    if (d != null) return d.type == 'article';
+    return _rawIsArticle(entry.raw);
+  }
+
+  bool _entryIsVideo(CircleHubFeedPostEntry entry) {
+    final d = entry.dto;
+    if (d != null) return d.isVideoLike;
+    return _rawIsVideo(entry.raw);
+  }
+
+  String _rawIdentity(Map<String, dynamic> item) {
     return (item['contentIdentity'] ??
             (item['type']?.toString() == 'moment' ? 'moment' : 'work'))
         .toString();
   }
 
-  String _itemDisplayFormat(Map<String, dynamic> item) {
+  String _rawDisplayFormat(Map<String, dynamic> item) {
     final type = (item['type'] ?? '').toString();
     switch (type) {
       case 'image':
@@ -442,12 +458,116 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  String _itemTypeLabel(Map<String, dynamic> item) {
-    final identity = _itemIdentity(item);
+  String _entryIdentity(CircleHubFeedPostEntry entry) {
+    final d = entry.dto;
+    if (d != null) {
+      if (d.identity == 'moment') return 'moment';
+      return d.identity.isNotEmpty
+          ? d.identity
+          : (entry.raw['type']?.toString() == 'moment' ? 'moment' : 'work');
+    }
+    return _rawIdentity(entry.raw);
+  }
+
+  String _entryDisplayFormat(CircleHubFeedPostEntry entry) {
+    final d = entry.dto;
+    if (d != null) {
+      switch (d.type) {
+        case 'image':
+          return 'image';
+        case 'video':
+          return 'video';
+        case 'article':
+          return 'note';
+        case 'moment':
+          return 'moment';
+        default:
+          return d.type;
+      }
+    }
+    return _rawDisplayFormat(entry.raw);
+  }
+
+  String _entryArticleTemplate(CircleHubFeedPostEntry entry) {
+    final rp = entry.tryReadPresentation();
+    if (rp != null && rp.articleTemplate.isNotEmpty) return rp.articleTemplate;
+    return (entry.raw['articleTemplate'] ?? '').toString();
+  }
+
+  String _entryCoverUrl(CircleHubFeedPostEntry entry) => entry.wireCoverUrl;
+
+  String _entryHeadlineText(CircleHubFeedPostEntry entry) {
+    final rp = entry.tryReadPresentation();
+    if (rp != null && rp.title.isNotEmpty) return rp.title;
+    return _rawHeadlineText(entry.raw);
+  }
+
+  String _entrySupportingText(CircleHubFeedPostEntry entry) {
+    final rp = entry.tryReadPresentation();
+    if (rp == null) return _rawSupportingText(entry.raw);
+    final headline =
+        rp.title.isNotEmpty ? rp.title : _entryTypeLabel(entry);
+    final summary = rp.body.trim();
+    if (_entryIsArticle(entry) &&
+        summary.isNotEmpty &&
+        summary != headline) {
+      return summary;
+    }
+    return _rawSupportingText(entry.raw);
+  }
+
+  int _entryLikeCount(CircleHubFeedPostEntry entry) {
+    final rp = entry.tryReadPresentation();
+    if (rp != null) return rp.likeCount;
+    return _rawLikeCount(entry.raw);
+  }
+
+  String _entryAuthorDisplayName(CircleHubFeedPostEntry entry) {
+    return entry.wireAuthorDisplayName.trim();
+  }
+
+  String _entryId(CircleHubFeedPostEntry entry) {
+    final rp = entry.tryReadPresentation();
+    if (rp != null && rp.postId.isNotEmpty) return rp.postId;
+    return entry.postIdForKey;
+  }
+
+  String _entryTypeLabel(CircleHubFeedPostEntry entry) {
+    final identity = _entryIdentity(entry);
     if (identity == 'moment') {
       return UITextConstants.creationFilterMoment;
     }
-    switch (_itemDisplayFormat(item)) {
+    switch (_entryDisplayFormat(entry)) {
+      case 'image':
+        return UITextConstants.workFormatFilterImage;
+      case 'video':
+        return UITextConstants.workFormatFilterVideo;
+      case 'note':
+        return UITextConstants.workFormatFilterNote;
+      default:
+        return UITextConstants.creationFilterWork;
+    }
+  }
+
+  Widget _entryArticleTemplateBadge(CircleHubFeedPostEntry entry) {
+    return _rawArticleTemplateBadge(entry.raw);
+  }
+
+  String _entryArticleTemplateLabel(CircleHubFeedPostEntry entry) {
+    final id = _entryArticleTemplate(entry);
+    return articleTemplatePresetFromString(id.isNotEmpty ? id : null).label;
+  }
+
+  String _entryArticleRecommendationLabel(CircleHubFeedPostEntry entry) {
+    return _rawArticleRecommendationLabel(entry.raw);
+  }
+
+  String _rawTypeLabel(Map<String, dynamic> item) {
+    final identity = _rawIdentity(item);
+    if (identity == 'moment') {
+      return UITextConstants.creationFilterMoment;
+    }
+    switch (_rawDisplayFormat(item)) {
       case 'image':
         return UITextConstants.workFormatFilterImage;
       case 'video':
@@ -561,29 +681,25 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
     final activeSubTab = circleState.activeSubTab;
     final activeWorkFormat = circleState.activeWorkFormat;
-    final filtered = _feedItems
-        .where((item) {
-          return _matchesIdentityFilter(item, activeSubTab) &&
-              _matchesWorkFormat(item, activeSubTab, activeWorkFormat);
+    final filtered = _feedEntries
+        .where((entry) {
+          return _matchesIdentityFilter(entry, activeSubTab) &&
+              _matchesWorkFormat(entry, activeSubTab, activeWorkFormat);
         })
         .toList(growable: true);
 
     if (activeSubTab == CreationSubTab.article ||
         activeWorkFormat == CreationWorkFormat.note) {
       filtered.sort((left, right) {
-        final leftHasTemplate = (left['articleTemplate'] ?? '')
-            .toString()
-            .trim()
-            .isNotEmpty;
-        final rightHasTemplate = (right['articleTemplate'] ?? '')
-            .toString()
-            .trim()
-            .isNotEmpty;
+        final leftHasTemplate =
+            _entryArticleTemplate(left).trim().isNotEmpty;
+        final rightHasTemplate =
+            _entryArticleTemplate(right).trim().isNotEmpty;
         if (leftHasTemplate != rightHasTemplate) {
           return leftHasTemplate ? -1 : 1;
         }
-        final leftHasCover = _itemCoverUrl(left).isNotEmpty;
-        final rightHasCover = _itemCoverUrl(right).isNotEmpty;
+        final leftHasCover = _entryCoverUrl(left).isNotEmpty;
+        final rightHasCover = _entryCoverUrl(right).isNotEmpty;
         if (leftHasCover != rightHasCover) {
           return leftHasCover ? -1 : 1;
         }
@@ -611,11 +727,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         separatorBuilder: (_, _) =>
             SizedBox(height: AppSpacing.postPreviewGridSpacing),
         itemBuilder: (context, index) {
-          final item = filtered[index];
+          final entry = filtered[index];
           return _buildListItem(
-            item,
+            entry,
             fgSecondary,
-            onTap: () => _openMediaViewer(context, item, filtered),
+            onTap: () => _openMediaViewer(context, entry, filtered),
           );
         },
       );
@@ -647,11 +763,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           ),
           itemCount: filtered.length,
           itemBuilder: (context, index) {
-            final item = filtered[index];
+            final entry = filtered[index];
             return _buildGridItem(
-              item,
+              entry,
               fgSecondary,
-              onTap: () => _openMediaViewer(context, item, filtered),
+              onTap: () => _openMediaViewer(context, entry, filtered),
             );
           },
         );
@@ -661,28 +777,32 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   Future<void> _openMediaViewer(
     BuildContext context,
-    Map<String, dynamic> tapped,
-    List<Map<String, dynamic>> sourceItems,
+    CircleHubFeedPostEntry tapped,
+    List<CircleHubFeedPostEntry> sourceItems,
   ) async {
     final tappedDto = _tryParsePost(tapped);
     if (tappedDto == null) return;
     if (!_supportsViewer(tappedDto)) return;
 
     final viewerEntries = sourceItems
-        .map((item) => (raw: item, dto: _tryParsePost(item)))
-        .where((entry) => entry.dto != null && _supportsViewer(entry.dto!))
+        .where((e) {
+          final d = _tryParsePost(e);
+          return d != null && _supportsViewer(d);
+        })
         .toList(growable: false);
     if (viewerEntries.isEmpty) return;
 
     final viewerDtos = viewerEntries
-        .map((entry) => entry.dto!)
+        .map((e) => _tryParsePost(e)!)
         .toList(growable: false);
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
-    final rawPostsById = <String, Map<String, Object?>>{
-      for (final entry in viewerEntries)
-        entry.dto!.id: Map<String, Object?>.from(entry.raw),
+    final rawPostsById = <String, MediaViewerPostWireRow>{
+      for (final e in viewerEntries)
+        _tryParsePost(e)!.id: MediaViewerPostWireRow.fromDynamicMap(
+          Map<String, dynamic>.from(e.raw),
+        ),
     };
 
     final route = _isVideoPost(tappedDto)
@@ -690,10 +810,30 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         : AppRoutePaths.mediaViewer(category: 'circle', index: '$initialIndex');
     final relationshipState = ref.read(userRelationshipStateProvider);
     final postInteractionState = ref.read(postInteractionStateProvider);
+    final postLikesCount = <String, int>{};
+    final postBookmarksCount = <String, int>{};
+    final postSharesCount = <String, int>{};
+    for (final e in viewerEntries) {
+      final id = _tryParsePost(e)!.id;
+      postLikesCount[id] = postInteractionState.likeCountFor(
+        id,
+        fallback: e.wireLikeCount,
+      );
+      postBookmarksCount[id] = postInteractionState.bookmarkCountFor(
+        id,
+        fallback: e.wireBookmarkCount,
+      );
+      postSharesCount[id] = postInteractionState.shareCountFor(
+        id,
+        fallback: e.wireShareCount,
+      );
+    }
     final result = await context.push<Object?>(
       route,
       extra: MediaViewerExtra(
-        posts: viewerDtos.map(PostSummaryView.fromDto).toList(growable: false),
+        posts: viewerDtos
+            .map((dto) => PostSummaryView.fromDto(dto))
+            .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
         category: 'circle',
@@ -706,35 +846,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           ),
           likedPosts: Set<String>.from(postInteractionState.likedPostIds),
           savedPosts: Set<String>.from(postInteractionState.savedPostIds),
-          postLikesCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.likeCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['likeCount'] as num?)?.toInt() ??
-                    (entry.raw['likes'] as num?)?.toInt() ??
-                    entry.dto!.likeCount,
-              ),
-          },
-          postBookmarksCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.bookmarkCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['favoriteCount'] as num?)?.toInt() ??
-                    (entry.raw['bookmarkCount'] as num?)?.toInt() ??
-                    entry.dto!.favoriteCount,
-              ),
-          },
-          postSharesCount: {
-            for (final entry in viewerEntries)
-              entry.dto!.id: postInteractionState.shareCountFor(
-                entry.dto!.id,
-                fallback:
-                    (entry.raw['shareCount'] as num?)?.toInt() ??
-                    entry.dto!.shareCount,
-              ),
-          },
+          postLikesCount: postLikesCount,
+          postBookmarksCount: postBookmarksCount,
+          postSharesCount: postSharesCount,
         ),
       ),
     );
@@ -743,13 +857,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  PostBaseDto? _tryParsePost(Map<String, dynamic> item) {
-    try {
-      return postBaseDtoFromMap(item);
-    } catch (_) {
-      return null;
-    }
-  }
+  PostBaseDto? _tryParsePost(CircleHubFeedPostEntry entry) =>
+      entry.tryResolveDto();
 
   bool _supportsViewer(PostBaseDto post) {
     return post.supportsUnifiedViewer;
@@ -763,26 +872,26 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     ref.read(userRelationshipStateProvider.notifier).applyViewerResult(result);
     ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
     setState(() {
-      _feedItems = applyMediaViewerResultToFeedItems(_feedItems, result);
+      CircleHubFeedPostEntry.applyResultToList(_feedEntries, result);
     });
   }
 
   Widget _buildGridItem(
-    Map<String, dynamic> item,
+    CircleHubFeedPostEntry entry,
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
-    if (_isArticleItem(item)) {
-      return _buildArticleGridItem(item, fgSecondary, onTap: onTap);
+    if (_entryIsArticle(entry)) {
+      return _buildArticleGridItem(entry, fgSecondary, onTap: onTap);
     }
-    final typeLabel = _itemTypeLabel(item);
+    final typeLabel = _entryTypeLabel(entry);
     return PostPreviewCard(
       isDark: widget.isDark,
-      title: _itemHeadlineText(item),
+      title: _entryHeadlineText(entry),
       supportingText: '',
-      coverUrl: _itemCoverUrl(item),
+      coverUrl: _entryCoverUrl(entry),
       mediaAspectRatio: _creationGridCoverAspectRatio,
-      showVideoBadge: _isVideoItem(item),
+      showVideoBadge: _entryIsVideo(entry),
       mediaOverlay: Container(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
@@ -806,7 +915,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         children: [
           PostCardMetric(
             icon: CupertinoIcons.heart_fill,
-            label: '${_itemLikeCount(item)}',
+            label: '${_entryLikeCount(entry)}',
             color: fgSecondary,
             iconColor: AppColors.error.withValues(alpha: 0.9),
             textStyle: TextStyle(
@@ -820,27 +929,27 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildListItem(
-    Map<String, dynamic> item,
+    CircleHubFeedPostEntry entry,
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
-    if (_isArticleItem(item)) {
-      return _buildArticleListItem(item, fgSecondary, onTap: onTap);
+    if (_entryIsArticle(entry)) {
+      return _buildArticleListItem(entry, fgSecondary, onTap: onTap);
     }
-    final typeLabel = _itemTypeLabel(item);
+    final typeLabel = _entryTypeLabel(entry);
     return PostPreviewListTile(
       isDark: widget.isDark,
       eyebrowText: typeLabel,
-      title: _itemHeadlineText(item),
-      supportingText: _itemSupportingText(item),
-      coverUrl: _itemCoverUrl(item),
-      showVideoBadge: _isVideoItem(item),
+      title: _entryHeadlineText(entry),
+      supportingText: _entrySupportingText(entry),
+      coverUrl: _entryCoverUrl(entry),
+      showVideoBadge: _entryIsVideo(entry),
       onTap: onTap,
       footer: Row(
         children: [
           PostCardMetric(
             icon: CupertinoIcons.heart_fill,
-            label: '赞 ${_itemLikeCount(item)}',
+            label: '赞 ${_entryLikeCount(entry)}',
             color: fgSecondary,
             iconColor: AppColors.error.withValues(alpha: 0.9),
             textStyle: TextStyle(
@@ -859,24 +968,22 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildArticleGridItem(
-    Map<String, dynamic> item,
+    CircleHubFeedPostEntry entry,
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
-    final recommendationLabel = _articleRecommendationLabel(item);
-    final authorName = (item['authorNickname'] ?? item['displayName'] ?? '')
-        .toString()
-        .trim();
+    final recommendationLabel = _entryArticleRecommendationLabel(entry);
+    final authorName = _entryAuthorDisplayName(entry);
     return PostPreviewCard(
-      key: ValueKey<String>('circle-article-grid-${_itemId(item)}'),
+      key: ValueKey<String>('circle-article-grid-${_entryId(entry)}'),
       isDark: widget.isDark,
-      title: _itemHeadlineText(item),
-      supportingText: _itemSupportingText(item),
+      title: _entryHeadlineText(entry),
+      supportingText: _entrySupportingText(entry),
       supportingTextMaxLines:
           _circleArticleDistributionProfile.summaryLineLimit,
-      coverUrl: _itemCoverUrl(item),
+      coverUrl: _entryCoverUrl(entry),
       mediaAspectRatio: _creationGridCoverAspectRatio,
-      mediaOverlay: _articleTemplateBadge(item),
+      mediaOverlay: _entryArticleTemplateBadge(entry),
       onTap: onTap,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -911,7 +1018,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               SizedBox(width: AppSpacing.intraGroupXs),
               PostCardMetric(
                 icon: CupertinoIcons.heart_fill,
-                label: '${_itemLikeCount(item)}',
+                label: '${_entryLikeCount(entry)}',
                 color: fgSecondary,
                 iconColor: AppColors.error.withValues(alpha: 0.9),
                 textStyle: TextStyle(
@@ -927,26 +1034,24 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _buildArticleListItem(
-    Map<String, dynamic> item,
+    CircleHubFeedPostEntry entry,
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
-    final recommendationLabel = _articleRecommendationLabel(item);
-    final authorName = (item['authorNickname'] ?? item['displayName'] ?? '')
-        .toString()
-        .trim();
+    final recommendationLabel = _entryArticleRecommendationLabel(entry);
+    final authorName = _entryAuthorDisplayName(entry);
     return PostPreviewListTile(
-      key: ValueKey<String>('circle-article-list-${_itemId(item)}'),
+      key: ValueKey<String>('circle-article-list-${_entryId(entry)}'),
       isDark: widget.isDark,
       eyebrowText: recommendationLabel.isNotEmpty
           ? recommendationLabel
-          : '笔记 · ${_articleTemplateLabel(item)}',
+          : '笔记 · ${_entryArticleTemplateLabel(entry)}',
       eyebrowColor: AppColors.primaryColor,
-      title: _itemHeadlineText(item),
-      supportingText: _itemSupportingText(item),
+      title: _entryHeadlineText(entry),
+      supportingText: _entrySupportingText(entry),
       supportingTextMaxLines:
           _circleArticleDistributionProfile.summaryLineLimit,
-      coverUrl: _itemCoverUrl(item),
+      coverUrl: _entryCoverUrl(entry),
       hideThumbnailWhenNoCover: true,
       onTap: onTap,
       footer: Row(
@@ -965,7 +1070,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           SizedBox(width: AppSpacing.intraGroupXs),
           PostCardMetric(
             icon: CupertinoIcons.heart_fill,
-            label: '赞 ${_itemLikeCount(item)}',
+            label: '赞 ${_entryLikeCount(entry)}',
             color: fgSecondary,
             iconColor: AppColors.error.withValues(alpha: 0.9),
             textStyle: TextStyle(
@@ -983,25 +1088,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  String _itemCoverUrl(Map<String, dynamic> item) {
-    final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
-    if (cover.isNotEmpty) return cover;
-    final imageUrls = item['imageUrls'];
-    if (imageUrls is List && imageUrls.isNotEmpty) {
-      return imageUrls.first.toString();
-    }
-    return '';
-  }
-
-  String _itemId(Map<String, dynamic> item) {
-    return (item['postId'] ?? item['id'] ?? '').toString();
-  }
-
-  bool _isArticleItem(Map<String, dynamic> item) {
+  bool _rawIsArticle(Map<String, dynamic> item) {
     return (item['contentType'] ?? item['type'] ?? '').toString() == 'article';
   }
 
-  String _itemTitle(Map<String, dynamic> item) {
+  String _rawTitle(Map<String, dynamic> item) {
     final candidates = [
       item['title'],
       item['body'],
@@ -1014,21 +1105,21 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         return text;
       }
     }
-    return _itemTypeLabel(item);
+    return _rawTypeLabel(item);
   }
 
-  String _itemHeadlineText(Map<String, dynamic> item) {
-    final title = _itemTitle(item);
+  String _rawHeadlineText(Map<String, dynamic> item) {
+    final title = _rawTitle(item);
     if (title.isNotEmpty) {
       return title;
     }
-    return _itemTypeLabel(item);
+    return _rawTypeLabel(item);
   }
 
-  String _itemSupportingText(Map<String, dynamic> item) {
-    final headline = _itemHeadlineText(item);
+  String _rawSupportingText(Map<String, dynamic> item) {
+    final headline = _rawHeadlineText(item);
     final summary = (item['summary'] ?? '').toString().trim();
-    if (_isArticleItem(item) && summary.isNotEmpty && summary != headline) {
+    if (_rawIsArticle(item) && summary.isNotEmpty && summary != headline) {
       return summary;
     }
     final body =
@@ -1045,7 +1136,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return body;
   }
 
-  Widget _articleTemplateBadge(Map<String, dynamic> item) {
+  Widget _rawArticleTemplateBadge(Map<String, dynamic> item) {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -1056,7 +1147,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
       ),
       child: Text(
-        _articleTemplateLabel(item),
+        articleTemplatePresetFromString(
+          item['articleTemplate']?.toString(),
+        ).label,
         style: TextStyle(
           color: AppColors.white,
           fontSize: AppTypography.xs,
@@ -1064,12 +1157,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         ),
       ),
     );
-  }
-
-  String _articleTemplateLabel(Map<String, dynamic> item) {
-    return articleTemplatePresetFromString(
-      item['articleTemplate']?.toString(),
-    ).label;
   }
 
   List<String> _recommendedArticleTemplatesForCircle() {
@@ -1086,7 +1173,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return const <String>[];
   }
 
-  String _articleRecommendationLabel(Map<String, dynamic> item) {
+  String _rawArticleRecommendationLabel(Map<String, dynamic> item) {
     final recommended = _recommendedArticleTemplatesForCircle();
     if (recommended.isEmpty) {
       return '';
@@ -1105,13 +1192,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return '频道推荐 · $labels';
   }
 
-  int _itemLikeCount(Map<String, dynamic> item) {
+  int _rawLikeCount(Map<String, dynamic> item) {
     return (item['likeCount'] as num?)?.toInt() ??
         (item['likes'] as num?)?.toInt() ??
         0;
   }
 
-  bool _isVideoItem(Map<String, dynamic> item) {
+  bool _rawIsVideo(Map<String, dynamic> item) {
     return (item['type'] ?? '').toString() == 'video' ||
         (item['videoUrl']?.toString().trim() ?? '').isNotEmpty;
   }

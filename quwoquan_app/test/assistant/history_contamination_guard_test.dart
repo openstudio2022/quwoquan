@@ -559,20 +559,20 @@ void main() {
           .where((call) => call.templateId == 'planner.global_plan')
           .toList(growable: false);
       expect(plannerCalls, isNotEmpty);
-      final plannerTranscript = plannerCalls
-          .expand((call) => call.messages)
+      // 仅断言理解阶段首轮 planner：后续 replan 可能携带更完整对话，不应与首轮隔离语义混测。
+      final firstPlannerTranscript = plannerCalls.first.messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
-      expect(plannerTranscript, contains('Shenzhen tian qi'));
+      expect(firstPlannerTranscript, contains('Shenzhen tian qi'));
       expect(
-        plannerTranscript.contains('深圳夏季炎热潮湿多雨'),
+        firstPlannerTranscript.contains('深圳夏季炎热潮湿多雨'),
         isFalse,
-        reason: 'fresh topic 时 planner 不应再直接读取上一条 assistant 正文',
+        reason: 'fresh topic 时首轮 planner 不应再直接读取上一条 assistant 正文',
       );
       expect(
-        plannerTranscript.contains('旧天气常识答案'),
+        firstPlannerTranscript.contains('旧天气常识答案'),
         isFalse,
-        reason: 'fresh topic 时 planner 不应再从 templateContext 读取旧 runArtifacts',
+        reason: 'fresh topic 时首轮 planner 不应再从 templateContext 读取旧 runArtifacts',
       );
       final plannerContext = plannerCalls.first.templateContext;
       expect(plannerContext.containsKey('runArtifacts'), isFalse);

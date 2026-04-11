@@ -1,0 +1,44 @@
+version: 1
+read_model: CallSettingsWire
+
+description: |
+  通话设置 GET/PATCH 响应体 wire（与 /v1/user/settings/calls 对齐）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: CallSettingsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/call_settings_wire_dto.g.dart
+  fields:
+    - name: defaultIncomingCallRingtoneId
+      dart_type: String
+      nullable: true
+      source: defaultIncomingCallRingtoneId
+      aliases: [defaultIncomingCallRingtoneId]
+      default: "null"
+
+    - name: allowCallerRingtoneOverride
+      dart_type: bool
+      nullable: false
+      source: allowCallerRingtoneOverride
+      aliases: [allowCallerRingtoneOverride]
+      default: "true"
+
+    - name: enableCallVibration
+      dart_type: bool
+      nullable: false
+      source: enableCallVibration
+      aliases: [enableCallVibration]
+      default: "true"
+
+    - name: enableGroupCallRing
+      dart_type: bool
+      nullable: false
+      source: enableGroupCallRing
+      aliases: [enableGroupCallRing]
+      default: "true"

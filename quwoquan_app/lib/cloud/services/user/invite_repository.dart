@@ -1,7 +1,11 @@
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/invite_accept_response_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/invite_generate_response_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/invite_record_list_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -9,45 +13,45 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 /// InviteRepository：邀请归因与生命周期管理。
 abstract class InviteRepository {
   /// 为指定子账号生成邀请链接。
-  Future<Map<String, dynamic>> generate({
+  Future<InviteGenerateResponseDto> generate({
     required String subAccountId,
     required String channel,
     String? inviteePhone,
   });
 
   /// 列出子账号发出的邀请列表。
-  Future<List<Map<String, dynamic>>> listBySubAccount({
+  Future<List<InviteRecordListItemDto>> listBySubAccount({
     required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   /// 通过邀请码获取邀请详情（公开接口，无需鉴权）。
-  Future<Map<String, dynamic>?> getByCode(String code);
+  Future<InviteRecordListItemDto?> getByCode(String code);
 
   /// 接受邀请（被邀请方调用）。
-  Future<Map<String, dynamic>> accept(String code);
+  Future<InviteAcceptResponseDto> accept(String code);
 }
 
 class MockInviteRepository implements InviteRepository {
   @override
-  Future<Map<String, dynamic>> generate({
+  Future<InviteGenerateResponseDto> generate({
     required String subAccountId,
     required String channel,
     String? inviteePhone,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    return {
+    return InviteGenerateResponseDto.fromMap(<String, dynamic>{
       'id': 'mock_invite_${DateTime.now().millisecondsSinceEpoch}',
       'linkCode': 'MOCK${subAccountId.hashCode.abs() % 10000}',
       'inviterSubAccountId': subAccountId,
       'channel': channel,
       'status': 'pending',
-    };
+    });
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listBySubAccount({
+  Future<List<InviteRecordListItemDto>> listBySubAccount({
     required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
@@ -56,13 +60,16 @@ class MockInviteRepository implements InviteRepository {
   }
 
   @override
-  Future<Map<String, dynamic>?> getByCode(String code) async {
+  Future<InviteRecordListItemDto?> getByCode(String code) async {
     return null;
   }
 
   @override
-  Future<Map<String, dynamic>> accept(String code) async {
-    return {'linkCode': code, 'status': 'accepted'};
+  Future<InviteAcceptResponseDto> accept(String code) async {
+    return InviteAcceptResponseDto.fromMap(<String, dynamic>{
+      'linkCode': code,
+      'status': 'accepted',
+    });
   }
 }
 
@@ -77,7 +84,7 @@ class RemoteInviteRepository implements InviteRepository {
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   @override
-  Future<Map<String, dynamic>> generate({
+  Future<InviteGenerateResponseDto> generate({
     required String subAccountId,
     required String channel,
     String? inviteePhone,
@@ -94,11 +101,16 @@ class RemoteInviteRepository implements InviteRepository {
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.generateInvite),
       body: body,
     );
-    return resp as Map<String, dynamic>;
+    return InviteGenerateResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        resp,
+        context: UserRequestPageIds.generateInvite,
+      ),
+    );
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listBySubAccount({
+  Future<List<InviteRecordListItemDto>> listBySubAccount({
     required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
@@ -117,30 +129,45 @@ class RemoteInviteRepository implements InviteRepository {
       uri,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listMyInvites),
     );
-    final data = resp as Map<String, dynamic>;
-    return (data['invites'] as List<dynamic>).cast<Map<String, dynamic>>();
+    final data = CloudResponseDecoder.asObject(
+      resp,
+      context: UserRequestPageIds.listMyInvites,
+    );
+    return CloudResponseDecoder.mapList(data, 'invites')
+        .map(InviteRecordListItemDto.fromMap)
+        .toList(growable: false);
   }
 
   @override
-  Future<Map<String, dynamic>?> getByCode(String code) async {
+  Future<InviteRecordListItemDto?> getByCode(String code) async {
     try {
       final resp = await _client.getJson(
         _uri(UserApiMetadata.getInviteByCodePath(linkCode: code)),
         headers: CloudRequestHeaders.forPage(UserRequestPageIds.getInviteByCode),
       );
-      return resp as Map<String, dynamic>;
+      return InviteRecordListItemDto.fromMap(
+        CloudResponseDecoder.asObject(
+          resp,
+          context: UserRequestPageIds.getInviteByCode,
+        ),
+      );
     } catch (_) {
       return null;
     }
   }
 
   @override
-  Future<Map<String, dynamic>> accept(String code) async {
+  Future<InviteAcceptResponseDto> accept(String code) async {
     final resp = await _client.postJson(
       _uri(UserApiMetadata.acceptInvitePath(linkCode: code)),
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.acceptInvite),
       body: {},
     );
-    return resp as Map<String, dynamic>;
+    return InviteAcceptResponseDto.fromMap(
+      CloudResponseDecoder.asObject(
+        resp,
+        context: UserRequestPageIds.acceptInvite,
+      ),
+    );
   }
 }

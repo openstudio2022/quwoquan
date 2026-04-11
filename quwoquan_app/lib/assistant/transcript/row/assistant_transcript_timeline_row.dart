@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
+import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_dialogue_runtime_read_view.dart';
 import 'package:quwoquan_app/assistant/transcript/identity/transcript_line_id.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_state.dart';
@@ -108,7 +109,7 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
     this.anchor = const AssistantAnswerAnchor(),
     PersistedAssistantTimelinePayload? persisted,
     this.dialogueState = const <String, dynamic>{},
-    this.uiReferences = const <dynamic>[],
+    this.uiReferences = const <Map<String, dynamic>>[],
     this.uiActions = const <Map<String, dynamic>>[],
     this.runArtifacts = const <String, dynamic>{},
     this.uiUsageStats = const <String, dynamic>{},
@@ -129,8 +130,9 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
   final String streamFinalAnswer;
   final AssistantAnswerAnchor anchor;
   final PersistedAssistantTimelinePayload persisted;
+  /// 开放 JSON；稳定键请用 [AssistantDialogueRuntimeReadView]。
   final Map<String, dynamic> dialogueState;
-  final List<dynamic> uiReferences;
+  final List<Map<String, dynamic>> uiReferences;
   final List<Map<String, dynamic>> uiActions;
   final Map<String, dynamic> runArtifacts;
   final Map<String, dynamic> uiUsageStats;
@@ -151,7 +153,7 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
     AssistantAnswerAnchor? anchor,
     PersistedAssistantTimelinePayload? persisted,
     Map<String, dynamic>? dialogueState,
-    List<dynamic>? uiReferences,
+    List<Map<String, dynamic>>? uiReferences,
     List<Map<String, dynamic>>? uiActions,
     Map<String, dynamic>? runArtifacts,
     Map<String, dynamic>? uiUsageStats,

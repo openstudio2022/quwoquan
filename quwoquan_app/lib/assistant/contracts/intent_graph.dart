@@ -9,8 +9,6 @@ extension IntentGraphCompat on IntentGraph {
 
   bool get isFastConvergence => problemClass.isFastConvergence;
 
-  ProblemClass get problemClassType => problemClass;
-
   FreshnessNeed get freshnessNeedType => freshnessNeed;
 
   AnswerShape get answerShapeType => answerShape;

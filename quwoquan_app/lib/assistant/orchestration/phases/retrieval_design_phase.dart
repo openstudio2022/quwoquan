@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/slot_value_codec.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
@@ -282,7 +283,9 @@ class RetrievalDesignPhase implements Phase {
       }
     }
     for (final snapshot in previousSlotState.slotValues.values) {
-      final normalized = _normalizedAnchorValue(snapshot.value);
+      final normalized = _normalizedAnchorValue(
+        SlotValueCodec.displayForSlotMerge(snapshot.value),
+      );
       if (normalized.isNotEmpty) {
         anchors.add(normalized);
       }

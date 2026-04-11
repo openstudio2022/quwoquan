@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -22,7 +23,9 @@ class GeoResolutionCatalog {
       return _cached;
     }
     try {
-      final raw = await rootBundle.loadString(assetPath);
+      final raw = await rootBundle
+          .loadString(assetPath)
+          .timeout(const Duration(seconds: 3));
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
         _cached = GeoResolutionCatalog.fromJson(

@@ -53,8 +53,8 @@ class _RecordingCircleRepository extends MockCircleRepository {
   Map<String, dynamic>? createdPayload;
 
   @override
-  Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data) async {
-    createdPayload = Map<String, dynamic>.from(data);
+  Future<CircleDto> createCircle(CircleCreateWireDto data) async {
+    createdPayload = data.toMockMergeMap();
     return super.createCircle(data);
   }
 }
@@ -150,7 +150,11 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
 
       expect(repository.createdPayload?['name'], '夜跑搭子');
-      expect(repository.createdPayload?['categoryId'], isNotNull);
+      expect(
+        repository.createdPayload?['categoryId'] ??
+            repository.createdPayload?['category'],
+        isNotNull,
+      );
       expect(repository.createdPayload?['coverUrl'], '/tmp/circle-cover.png');
       expect(repository.createdPayload?['avatar'], '/tmp/circle-avatar.png');
     });

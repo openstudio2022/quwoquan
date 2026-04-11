@@ -1,0 +1,23 @@
+version: 1
+read_model: ContentArticleSummaryGenerateResponse
+
+description: |
+  POST /v1/content/articles/summary:generate 响应 wire。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentArticleSummaryGenerateResponseDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_article_summary_generate_response_dto.g.dart
+  fields:
+    - name: summary
+      dart_type: String
+      nullable: false
+      source: summary
+      aliases: [summary]
+      default: "''"

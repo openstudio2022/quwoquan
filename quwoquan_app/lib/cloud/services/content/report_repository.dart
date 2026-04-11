@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/report_create_request_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 举报 Repository（三层模式：Abstract → Mock → Remote）
@@ -61,12 +62,12 @@ class RemoteReportRepository extends ReportRepository {
     String? description,
   }) async {
     final uri = _uri(ContentApiMetadata.createReportPath);
-    final body = <String, dynamic>{
-      'targetId': targetId,
-      'targetType': targetType,
-      'reason': reason,
-      if (description != null && description.isNotEmpty) 'description': description,
-    };
+    final body = CreateReportRequestWire(
+      targetId: targetId,
+      targetType: targetType,
+      reason: reason,
+      description: description,
+    ).toMap();
     await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createReport),

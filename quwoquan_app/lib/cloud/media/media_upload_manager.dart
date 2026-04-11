@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
@@ -106,16 +107,16 @@ class MediaUploadManager {
     try {
       final session = await _initUpload(task);
       task
-        ..sessionId = session['sessionId'] as String?
-        ..presignUrl = session['presignUrl'] as String?;
+        ..sessionId = session.sessionId
+        ..presignUrl = session.presignUrl ?? session.uploadUrl;
 
       await _uploadToOSS(task);
 
       final asset = await _completeUpload(task);
       task
         ..status = UploadStatus.completed
-        ..cdnUrl = asset['cdnUrl'] as String?
-        ..assetId = asset['assetId'] as String?;
+        ..cdnUrl = asset.cdnUrl
+        ..assetId = asset.assetId ?? asset.sessionId;
       _controller.add(task);
     } catch (e) {
       task.retryCount++;
@@ -134,9 +135,9 @@ class MediaUploadManager {
     }
   }
 
-  Future<Map<String, dynamic>> _initUpload(UploadTask task) async {
+  Future<ContentMediaInitUploadResponseDto> _initUpload(UploadTask task) async {
     final uri = Uri.parse('$_baseUrl${ContentApiMetadata.initMediaUploadPath}');
-    return await _httpClient.postJson(
+    final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.initMediaUpload),
       body: {
@@ -146,6 +147,9 @@ class MediaUploadManager {
         'contentType': task.contentType,
         'fileSize': task.fileSize,
       },
+    );
+    return ContentMediaInitUploadResponseDto.fromMap(
+      Map<String, dynamic>.from(decoded as Map),
     );
   }
 
@@ -169,16 +173,21 @@ class MediaUploadManager {
     }
   }
 
-  Future<Map<String, dynamic>> _completeUpload(UploadTask task) async {
+  Future<ContentMediaCompleteUploadResponseDto> _completeUpload(
+    UploadTask task,
+  ) async {
     final uri = Uri.parse(
       '$_baseUrl${ContentApiMetadata.completeMediaUploadPath(sessionId: task.sessionId ?? '')}',
     );
-    return await _httpClient.postJson(
+    final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.completeMediaUpload,
       ),
       body: task.completionMetadata ?? {},
+    );
+    return ContentMediaCompleteUploadResponseDto.fromMap(
+      Map<String, dynamic>.from(decoded as Map),
     );
   }
 

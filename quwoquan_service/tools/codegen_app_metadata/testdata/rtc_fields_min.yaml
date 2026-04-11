@@ -1,0 +1,47 @@
+# Minimal RTC fields fixture for codegen golden tests (not a production contract).
+version: 2
+aggregate: CallSession
+
+entities:
+  CallParticipant:
+    fields:
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        client_default: ""
+
+  CallSession:
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        client_dart_name: id
+        json_keys: [id, _id, callId]
+
+      - name: status
+        type: enum
+        constraints: [NOT_NULL]
+        client_default: initiated
+
+      - name: participantCount
+        type: int
+        constraints: [NOT_NULL]
+        client_default: "0"
+
+      - name: isRecording
+        type: bool
+        constraints: [NOT_NULL]
+        client_default: "false"
+
+      - name: isScreenSharing
+        type: bool
+        constraints: [NOT_NULL]
+        client_default: "false"
+
+      - name: createdAt
+        type: datetime
+        constraints: [NOT_NULL]
+
+      - name: updatedAt
+        type: datetime
+        constraints: [NOT_NULL]

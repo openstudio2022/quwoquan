@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_write_wire_dtos.dart';
 
 /// 圈子编辑页提交体；仅在调用 Repository 时转为 wire map。
 class CircleEditSubmitPayload {
@@ -25,6 +26,10 @@ class CircleEditSubmitPayload {
   final String avatarUrl;
   final String? categoryId;
   final List<CircleSectionConfigDto> sectionConfig;
+
+  /// 与 [CircleRepository.updateCircle] 的 PATCH 体对齐。
+  CircleUpdateWireDto toUpdateWireDto() =>
+      CircleUpdateWireDto.fromMap(toWire());
 
   Map<String, dynamic> toWire() {
     return <String, dynamic>{

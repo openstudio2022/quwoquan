@@ -111,14 +111,14 @@ void main() {
       expect(() => mock.likePost(postId: 'p1'), throwsException);
     });
 
-    test('createComment tracks call and returns comment map', () async {
+    test('createComment tracks call and returns comment DTO', () async {
       final mock = MockContentRepository();
       final result = await mock.createComment(postId: 'p1', content: '好图！');
       expect(mock.createCommentCallCount, equals(1));
       expect(mock.lastCommentText, equals('好图！'));
       expect(mock.lastCommentPostId, equals('p1'));
-      expect(result['content'], equals('好图！'));
-      expect(result['_id'], isNotNull);
+      expect(result.content, equals('好图！'));
+      expect(result.id, isNotEmpty);
     });
 
     test('createComment throws when throwOnCreateComment is set', () async {
@@ -134,7 +134,8 @@ void main() {
       final mock = MockContentRepository()
         ..reactionStateStub = {'liked': true, 'favorited': false};
       final state = await mock.getReactionState(postId: 'p1');
-      expect(state['liked'], isTrue);
+      expect(state.liked, isTrue);
+      expect(state.postId, 'p1');
     });
 
     test('listComments reflects comments added via createComment', () async {

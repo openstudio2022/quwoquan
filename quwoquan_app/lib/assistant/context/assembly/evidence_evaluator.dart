@@ -441,7 +441,7 @@ class DefaultEvidenceEvaluator {
     final contributions = <String, dynamic>{};
     for (final entry in slotState.slotValues.entries) {
       final slot = entry.value;
-      final value = slot.value?.toString().trim() ?? '';
+      final value = SlotValueCodec.displayForSlotMerge(slot.value);
       if (value.isEmpty) continue;
       if (combined.contains(value.toLowerCase())) {
         contributions[entry.key] = value;

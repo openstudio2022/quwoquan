@@ -10,9 +10,10 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
@@ -46,9 +47,8 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   String _selectedDimension = 'all';
   String _selectedExpandedMenuId = _expandedMenuAllId;
   bool _routeContextApplied = false;
-  Map<String, Map<String, Object?>> _categoryConfig = const {
-    'all': {'label': '推荐'},
-  };
+  Map<String, CircleCategoryTabConfigDto> _categoryConfig =
+      CircleCategoryTabDefaults.remoteStyleFallback;
 
   @override
   bool get wantKeepAlive => true;
@@ -98,10 +98,10 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       list.add({'id': id, 'label': label});
     }
 
-    addCategory('all', (config['all']?['label'] as String?) ?? '推荐');
+    addCategory('all', config['all']?.label ?? '推荐');
     for (final entry in config.entries) {
       if (_fixedCategoryOrder.contains(entry.key)) continue;
-      addCategory(entry.key, entry.value['label']?.toString() ?? entry.key);
+      addCategory(entry.key, entry.value.label.isNotEmpty ? entry.value.label : entry.key);
     }
     return list;
   }
@@ -120,22 +120,17 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       final cfg = await repo.getCircleCategoryConfig();
       if (mounted) {
         setState(() {
-          _categoryConfig = {
-            for (final e in cfg.entries)
-              e.key: Map<String, Object?>.from(e.value),
-          };
-          _repoCircles = data
-              .map((c) => circleDtoFromHubMockMap(Map<String, Object?>.from(c)))
-              .toList(growable: false);
+          _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(cfg);
+          _repoCircles = List<CircleDto>.from(data);
           _circlesLoaded = true;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _categoryConfig = const <String, Map<String, Object?>>{
-            'all': {'label': '推荐'},
-          };
+          _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
+            CircleCategoryTabDefaults.remoteStyleFallback,
+          );
           _repoCircles = [];
           _circlesLoaded = true;
         });

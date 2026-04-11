@@ -1,0 +1,130 @@
+# 内容域 Map<String,dynamic> / dynamic 使用盘点（与「无遗漏」审视一致）。
+# 归类：intentional（HTTP/JSON 或诚实边界）| migrate（应收口到 DTO/WireKeys/ReadPresentation）
+#      | adjacent（邻域 UI）| out_of_scope（非帖子主链，仅列明排除）
+#
+# 辅助：python3 scripts/scan_content_dynamic_surfaces.py
+# 门禁：python3 scripts/verify_post_view_projection_wire_keys.py
+#        python3 scripts/verify_ui_content_no_dynamic_parameters.py
+#        python3 scripts/verify_content_wire_dto_fields.py
+version: 1
+updated: "2026-04-11"
+
+repository_content:
+  - path: quwoquan_app/lib/cloud/services/content/content_repository.dart
+    category: mixed
+    notes: |
+      读模型已 PostBaseDto / CommentDto / PostSearchItemView / ContentPostDetailPayload；
+      写模型已 *RequestWire。getAppConfig → ContentAppConfigWire；`content` 子树由
+      ContentAppConfigClientParsed（metadata SSOT：content_app_config_client.yaml + Go 模板生成）解析。
+      initMediaUpload / completeMediaUpload / getMediaAsset / 封面与摘要 / getRecommendation 等为生成 DTO；
+      getMediaAsset 的 derivatives 在投影中为 List<Map<String,dynamic>> 上限类型（对齐 OpenAPI additionalProperties）。
+      reportBehaviors(events) 为行为埋点非 Post 实体，仍为 intentional Map/契约 DTO 批次。
+
+wire_dual_load:
+  - path: quwoquan_app/lib/cloud/runtime/models/content_post_detail_payload.dart
+    category: intentional
+    notes: post + ContentPostDetailWireDto + 全量 wire；UI 优先 readPresentation，详情/沉浸保留 wireForArticleProjection。
+  - path: quwoquan_app/lib/core/models/media_viewer_extra.dart
+    category: migrate_done_partially
+    notes: |
+      MediaViewerPostWireRow 内聚 FeedItemDto（feedItem）+ toDynamicMap/toObjectMap；
+      已移除对外 operator []；沉浸器仍可用 toObjectMap 过渡。
+
+projection_ui:
+  - path: quwoquan_app/lib/ui/content/post_view_projection.dart
+    category: migrate_done_partially
+    notes: |
+      顶层键已 ArticleDetailWireKeys；cards[] / blocks[] 子键已 ArticleCardWireKeys / ArticleBlockWireKeys。
+      projectPostMap 入参仍为 Map（JSON 边界）。
+  - path: quwoquan_app/lib/ui/content/post_summary_view.dart
+    category: migrate_guidance
+    notes: |
+      沉浸/详情消费强类型 Summary；与 PostReadPresentation 分工见类文档。
+      新只读面优先 PostReadPresentation + DTO，不在 Summary 上堆字段。
+
+read_presentation:
+  - path: quwoquan_service/contracts/metadata/content/post/projections/post_read_presentation.yaml
+    category: ssot
+    notes: codegen PostReadPresentation；与 PostSummaryView 关系见 App 侧 dartdoc。
+
+create_editor:
+  - path: quwoquan_app/lib/ui/content/entry/
+    category: transitional
+    notes: Map 组装草稿/发布前 payload；上云经 CreatePostRequestWire.fromMap。长期可强类型中间模型。
+
+mock:
+  - path: quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart
+    category: migrate_done_partially
+    notes: |
+      字面量经 _withCircleContext → FeedItemDto.fromMap；对外 discovery*Data 为 List<FeedItemDto>；
+      边界还原见 feed_item_discovery_wire_map.toDiscoveryWireMap。
+
+discovery_adjacent:
+  - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+    category: migrate_done_partially
+    notes: 并行 raw 路径已 ArticleDetailWireKeys + ContentPostImmersiveWireKeys；标题/计数等通用键可继续收口。
+  - path: quwoquan_app/lib/ui/discovery/widgets/moment_social_feed.dart
+    category: adjacent
+    notes: mock fallback 使用 ContentMockData wire + postBaseDtoFromMap。
+
+circle_adjacent:
+  - path: quwoquan_app/lib/ui/circle/widgets/section_creations.dart
+    category: migrate_partial
+    notes: _entry* + tryReadPresentation 为主；_item* 保留 raw 回退。
+
+app_content_repository:
+  - path: quwoquan_app/lib/core/services/app_content_repository.dart
+    category: migrate_done_partially
+    notes: |
+      discovery*Data 为 List<FeedItemDto>；lookupDiscoveryFeedWireRow 经 aggregateDiscoveryWireSlices 产出 wire Map。
+      discoveryPostsAsDtos 使用 toDiscoveryWireMap + postBaseDtoFromMap。
+
+out_of_scope_non_post_mainline:
+  - path: quwoquan_app/lib/core/services/app_content_repository.dart
+    category: out_of_scope
+    notes: chatMock* / assistant* / circlesMock* / helperReadSummary 等 — 非内容域双写核心。
+
+codegen_generated:
+  - path: quwoquan_app/lib/cloud/runtime/generated/content/
+    category: ssot
+    notes: |
+      *.g.dart 由 make codegen-app 生成；勿手改。
+      已 nested/专用生成：content_app_config_client_dto.g.dart（App 配置 content 子树）；
+      wire 键：article_*_wire_keys、content_post_immersive_wire_keys.g.dart。
+
+# 独立里程碑：article_document_schema → 全量节点 codegen → 与 ArticleDocumentData 深度合并
+article_document_codegen:
+  - path: quwoquan_service/contracts/metadata/content/post/article_document_schema.yaml
+    category: ssot_pending_codegen
+    notes: |
+      形状 SSOT；App 已增加手写适配壳 quwoquan_app/lib/cloud/runtime/models/article_document_wire_dto.dart
+      （nodes 仍为 JSON 边界 List<Map>，经 toArticleDocumentData 进入编辑器模型）。
+      全量生成节点 DTO 与 UI 替换仍单列里程碑。
+
+article_document_wire_adapter:
+  - path: quwoquan_app/lib/cloud/runtime/models/article_document_wire_dto.dart
+    category: migrate_done_partially
+    notes: 与 schema 对齐的手写 wire DTO；测试见 test/cloud/content/contract/article_document_wire_dto_test.dart。
+
+# 计划 P0–P4 与仓库状态（metadata 加深 / 减少手写 dynamic）
+migration_slices:
+  p0_app_config_client_projection:
+    status: done
+    notes: |
+      content_app_config_client.yaml + content_app_config_client_dto.g.dart；
+      ContentRuntimeConfigState.fromClientParsed；OpenAPI AppConfig.content 补全客户端键。
+  p1_media_derivatives:
+    status: done
+    notes: content_media_asset_wire.yaml 扩展 derivatives / moderationStatus / errorCode；codegen DTO。
+  p2_immersive_wire_keys:
+    status: done
+    notes: content_post_immersive_wire_keys.yaml + codegen；works_immersive_viewer 消费。
+  p3_article_document_codegen:
+    status: in_progress
+    notes: |
+      已落地 ArticleDocumentWireDto 适配壳 + 契约测试；编辑器全量切换仍 pending。
+  p4_gates_and_verify:
+    status: done
+    notes: |
+      本文件 + verify_content_wire_dto_fields.py + scan_content_dynamic_surfaces.py；
+      发现 mock 链路契约测试经 FeedItemDto.fromMap(toDiscoveryWireMap())。

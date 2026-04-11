@@ -1,0 +1,72 @@
+version: 1
+read_model: AppearanceSettingsWire
+
+description: |
+  AppearanceSettings JSON wire，与 openapi AppearanceSettings 一致。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: AppearanceSettingsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/appearance_settings_wire_dto.g.dart
+  fields:
+    - name: themeMode
+      dart_type: String
+      nullable: false
+      source: themeMode
+      aliases: [themeMode]
+      default: "'system'"
+
+    - name: fontSizePreset
+      dart_type: String
+      nullable: false
+      source: fontSizePreset
+      aliases: [fontSizePreset]
+      default: "'md'"
+
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source]
+      default: "'system_default'"
+
+    - name: ownerDefaultThemeMode
+      dart_type: String
+      nullable: false
+      source: ownerDefaultThemeMode
+      aliases: [ownerDefaultThemeMode]
+      default: "'system'"
+
+    - name: ownerDefaultFontSizePreset
+      dart_type: String
+      nullable: false
+      source: ownerDefaultFontSizePreset
+      aliases: [ownerDefaultFontSizePreset]
+      default: "'md'"
+
+    - name: hasSubAccountOverride
+      dart_type: bool
+      nullable: false
+      source: hasSubAccountOverride
+      aliases: [hasSubAccountOverride]
+      default: "false"
+
+    - name: version
+      dart_type: int
+      nullable: false
+      source: version
+      aliases: [version]
+      default: "0"
+
+    - name: updatedAt
+      dart_type: DateTime
+      nullable: false
+      source: updatedAt
+      aliases: [updatedAt]
+      default: "DateTime.fromMillisecondsSinceEpoch(0)"

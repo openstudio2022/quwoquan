@@ -244,13 +244,13 @@ class _AssistantChatSettingsPageState
     if (!mounted) return;
     final sessions = await ref.read(assistantGatewayProvider).listSessions();
     if (!mounted) return;
-    for (final item in sessions) {
-      if ((item['sessionId'] ?? '').toString() != selected) continue;
+    for (final d in sessions) {
+      if (d.sessionId != selected) continue;
       setState(() {
         _sessionId = selected;
-        _topicTitle = (item['topicTitle'] as String?)?.trim().isNotEmpty == true
-            ? (item['topicTitle'] as String).trim()
-            : UITextConstants.assistantHistoryAll;
+        final t = d.topicTitle.trim();
+        _topicTitle =
+            t.isNotEmpty ? t : UITextConstants.assistantHistoryAll;
       });
       break;
     }
@@ -268,10 +268,14 @@ class _PreferenceFactsSection extends ConsumerWidget {
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     return FutureBuilder<AssistantSessionDetailView>(
-      future: ref
-          .read(assistantGatewayProvider)
-          .sessionDetail(currentSessionId)
-          .then(AssistantSessionDetailView.fromMap),
+      future: ref.read(assistantGatewayProvider).sessionDetail(currentSessionId).then(
+            (detail) => detail == null
+                ? const AssistantSessionDetailView(
+                    sessionPreferenceFacts: <AssistantPreferenceFactView>[],
+                    longTermPreferenceFacts: <AssistantPreferenceFactView>[],
+                  )
+                : AssistantSessionDetailView.fromWire(detail),
+          ),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return SettingsInsetGroupedSection(
@@ -395,7 +399,7 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
           child: FutureBuilder<List<AssistantLocalSessionSummaryView>>(
             future: ref.read(assistantGatewayProvider).listSessions().then(
                   (raw) => raw
-                      .map(AssistantLocalSessionSummaryView.fromMap)
+                      .map(AssistantLocalSessionSummaryView.fromDescriptor)
                       .where(
                         (item) => isAssistantSessionForBackend(
                           item.sessionId,

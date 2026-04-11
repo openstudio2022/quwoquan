@@ -57,7 +57,7 @@ class ArticleDocumentNode {
       'figure' || 'image' => ArticleDocumentNodeType.figure,
       _ => ArticleDocumentNodeType.paragraph,
     };
-    final spansRaw = (map['spans'] as List?) ?? const <dynamic>[];
+    final spansRaw = (map['spans'] as List?) ?? const <Object?>[];
     final spans = spansRaw
         .whereType<Map>()
         .map(
@@ -303,7 +303,7 @@ class ArticleDocumentBlock {
       'image' => ArticleDocumentBlockType.image,
       _ => ArticleDocumentBlockType.paragraph,
     };
-    final spansRaw = (map['spans'] as List?) ?? const <dynamic>[];
+    final spansRaw = (map['spans'] as List?) ?? const <Object?>[];
     final spans = spansRaw
         .whereType<Map>()
         .map((e) => ArticleInlineSpan.fromMap(Map<String, dynamic>.from(e)))
@@ -479,7 +479,7 @@ class ArticleDocumentData {
 
   /// 从 wire JSON 构造，支持新格式（blocks 含 image/paragraph 完整序列）。
   factory ArticleDocumentData.fromMap(Map<String, dynamic> map) {
-    final nodeEntries = ((map['nodes'] as List?) ?? const <dynamic>[])
+    final nodeEntries = ((map['nodes'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
           (entry) =>
@@ -494,7 +494,7 @@ class ArticleDocumentData {
                   node.type == ArticleDocumentNodeType.paragraph),
         )
         .toList(growable: false);
-    final assets = ((map['assets'] as List?) ?? const <dynamic>[])
+    final assets = ((map['assets'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
           (entry) =>
@@ -502,7 +502,7 @@ class ArticleDocumentData {
         )
         .where((asset) => asset.id.trim().isNotEmpty && asset.hasImage)
         .toList(growable: false);
-    final blocks = ((map['blocks'] as List?) ?? const <dynamic>[])
+    final blocks = ((map['blocks'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
           (entry) =>

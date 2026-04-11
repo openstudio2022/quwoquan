@@ -161,11 +161,11 @@ class _EmptyChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
-    return [];
+    return const <ChatInboxDto>[];
   }
 }
 
@@ -176,7 +176,7 @@ class _ErrorChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {

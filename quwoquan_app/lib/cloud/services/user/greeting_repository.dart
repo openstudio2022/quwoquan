@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
@@ -92,7 +94,7 @@ abstract class GreetingRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> replyGreeting(String requestId);
+  Future<GreetingReplyResultDto> replyGreeting(String requestId);
 
   Future<GreetingRequestDto> ignoreGreeting(String requestId);
 
@@ -139,8 +141,10 @@ class MockGreetingRepository extends GreetingRepository {
   }) async => _outbox.where((g) => g.status == status).toList();
 
   @override
-  Future<Map<String, dynamic>> replyGreeting(String requestId) async =>
-      <String, dynamic>{'conversationId': 'mock_conv_$requestId'};
+  Future<GreetingReplyResultDto> replyGreeting(String requestId) async =>
+      GreetingReplyResultDto.fromMap(<String, dynamic>{
+        'conversationId': 'mock_conv_$requestId',
+      });
 
   @override
   Future<GreetingRequestDto> ignoreGreeting(String requestId) async {
@@ -214,7 +218,10 @@ class RemoteGreetingRepository extends GreetingRepository {
     );
     if (resp.statusCode == 200 || resp.statusCode == 201) {
       return GreetingRequestDto.fromMap(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.sendGreetingRequest,
+        ),
       );
     }
     throw Exception('SendGreetingRequest failed: ${resp.statusCode}');
@@ -243,10 +250,13 @@ class RemoteGreetingRepository extends GreetingRepository {
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listGreetingInbox),
     );
     if (resp.statusCode == 200) {
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      final items = (body['items'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-      return items.map(GreetingRequestDto.fromMap).toList();
+      final body = CloudResponseDecoder.asObject(
+        jsonDecode(resp.body),
+        context: UserRequestPageIds.listGreetingInbox,
+      );
+      return CloudResponseDecoder.mapList(body, 'items')
+          .map(GreetingRequestDto.fromMap)
+          .toList(growable: false);
     }
     return [];
   }
@@ -274,16 +284,19 @@ class RemoteGreetingRepository extends GreetingRepository {
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listGreetingOutbox),
     );
     if (resp.statusCode == 200) {
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      final items = (body['items'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-      return items.map(GreetingRequestDto.fromMap).toList();
+      final body = CloudResponseDecoder.asObject(
+        jsonDecode(resp.body),
+        context: UserRequestPageIds.listGreetingOutbox,
+      );
+      return CloudResponseDecoder.mapList(body, 'items')
+          .map(GreetingRequestDto.fromMap)
+          .toList(growable: false);
     }
     return [];
   }
 
   @override
-  Future<Map<String, dynamic>> replyGreeting(String requestId) async {
+  Future<GreetingReplyResultDto> replyGreeting(String requestId) async {
     final uri = _uri(
       UserApiMetadata.replyGreetingRequestPath(requestId: requestId),
     );
@@ -294,7 +307,12 @@ class RemoteGreetingRepository extends GreetingRepository {
       ),
     );
     if (resp.statusCode == 200) {
-      return jsonDecode(resp.body) as Map<String, dynamic>;
+      return GreetingReplyResultDto.fromMap(
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.replyGreetingRequest,
+        ),
+      );
     }
     throw Exception('ReplyGreetingRequest failed: ${resp.statusCode}');
   }
@@ -312,7 +330,10 @@ class RemoteGreetingRepository extends GreetingRepository {
     );
     if (resp.statusCode == 200) {
       return GreetingRequestDto.fromMap(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.ignoreGreetingRequest,
+        ),
       );
     }
     throw Exception('IgnoreGreetingRequest failed: ${resp.statusCode}');
@@ -331,7 +352,10 @@ class RemoteGreetingRepository extends GreetingRepository {
     );
     if (resp.statusCode == 200) {
       return GreetingRequestDto.fromMap(
-        jsonDecode(resp.body) as Map<String, dynamic>,
+        CloudResponseDecoder.asObject(
+          jsonDecode(resp.body),
+          context: UserRequestPageIds.cancelGreetingRequest,
+        ),
       );
     }
     throw Exception('CancelGreetingRequest failed: ${resp.statusCode}');

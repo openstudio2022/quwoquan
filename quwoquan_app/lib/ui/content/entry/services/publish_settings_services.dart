@@ -1,11 +1,11 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:meta/meta.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -124,15 +124,23 @@ class CreateLocationService {
     }
   }
 
-  List<CreateLocationOption> _parseItems(dynamic decoded) {
-    if (decoded is! Map<String, dynamic>) return const <CreateLocationOption>[];
-    final raw = decoded[IntegrationLocationMetadata.responseItemsKey];
+  List<CreateLocationOption> _parseItems(Object? decoded) =>
+      CreateLocationService.parseIntegrationLocationItems(decoded);
+
+  /// JSON 解析边界：非法类型返回空列表，不抛异常。
+  @visibleForTesting
+  static List<CreateLocationOption> parseIntegrationLocationItems(
+    Object? decoded,
+  ) {
+    if (decoded is! Map) return const <CreateLocationOption>[];
+    final decodedMap = Map<String, dynamic>.from(decoded);
+    final raw = decodedMap[IntegrationLocationMetadata.responseItemsKey];
     if (raw is! List) return const <CreateLocationOption>[];
     final result = <CreateLocationOption>[];
     for (final item in raw) {
       if (item is! Map) continue;
       try {
-        final dto = LocationPoiDto.fromMap(item.cast<String, dynamic>());
+        final dto = LocationPoiDto.fromMap(Map<String, dynamic>.from(item));
         if (dto.name.trim().isEmpty) continue;
         result.add(CreateLocationOption.from(dto));
       } catch (_) {
@@ -153,14 +161,9 @@ class CreateCircleService {
       final result = await circleRepository.listCircles(limit: 20);
       if (result.isNotEmpty) {
         final out = <CreateCircleOption>[];
-        for (final item in result) {
-          try {
-            final dto = CircleDto.fromMap(item);
-            if (dto.id.isEmpty || dto.name.isEmpty) continue;
-            out.add(CreateCircleOption.fromCircleDto(dto));
-          } catch (_) {
-            continue;
-          }
+        for (final dto in result) {
+          if (dto.id.isEmpty || dto.name.isEmpty) continue;
+          out.add(CreateCircleOption.fromCircleDto(dto));
         }
         if (out.isNotEmpty) return out;
       }

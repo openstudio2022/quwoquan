@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -49,7 +50,8 @@ String coverAssetPathForPayload(CreateEditorState state) {
   return state.imagePaths.first;
 }
 
-/// 发布用请求体（JSON 可序列化）；在页面扫描路径外组装为 [Map<String, dynamic>]。
+/// 创作编辑器 → 云端发帖的**唯一 wire 出口**：先 [buildCreatePostPayloadMap]，
+/// 再 [attachActivePersonaToCreatePayload]，最后 [repositoryCreatePost] 内 [CreatePostRequestWire.fromMap]。
 Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   final settings = state.settings.toPayloadFields();
   final coverAssetPath = coverAssetPathForPayload(state);
@@ -113,10 +115,12 @@ Future<void> reportCreateEditorSurfaceEvent(
       'timestamp': DateTime.now().toIso8601String(),
       ...extras,
     };
-    await ref
-        .read(contentRepositoryProvider)
-        .reportBehaviors(
-          events: <Map<String, dynamic>>[Map<String, dynamic>.from(row)],
+    await ref.read(contentRepositoryProvider).reportBehaviors(
+          events: <ContentBehaviorBatchEventDto>[
+            ContentBehaviorBatchEventDto.fromMap(
+              Map<String, dynamic>.from(row),
+            ),
+          ],
         );
   } catch (_) {}
 }
@@ -153,15 +157,58 @@ Future<Map<String, Object?>> attachActivePersonaToCreatePayload(
   };
 }
 
-Future<Map<String, Object?>> repositoryCreatePost(
+Future<PostBaseDto> repositoryCreatePost(
   ContentRepository repository,
   Map<String, Object?> payload,
 ) async {
-  final created = await repository.createPost(
-    payload: Map<String, dynamic>.from(payload),
+  return repository.createPost(
+    body: CreatePostRequestWire.fromMap(
+      Map<String, dynamic>.from(payload),
+    ),
   );
-  return Map<String, Object?>.from(created);
 }
+
+// ─── 创作页埋点 extras（避免在 UI 散写 Map 字面量）────────────────────────────
+
+Map<String, Object?> createEditorSurfaceExtrasEditorKind(
+  CreateEditorKind kind,
+) =>
+    <String, Object?>{'editorKind': kind.name};
+
+Map<String, Object?> createEditorSurfaceExtrasReady({
+  required CreateEditorKind editorKind,
+  required bool unifiedCreateEditorEnabled,
+}) =>
+    <String, Object?>{
+      'editorKind': editorKind.name,
+      'flag': unifiedCreateEditorEnabled,
+    };
+
+Map<String, Object?> createEditorSurfaceExtrasMediaBatch({
+  required int count,
+  required CreateEditorKind editorKind,
+}) =>
+    <String, Object?>{
+      'count': count,
+      'editorKind': editorKind.name,
+    };
+
+Map<String, Object?> createEditorSurfaceExtrasVideoEdited({
+  required bool muted,
+  required int trimStartMs,
+  required int trimEndMs,
+}) =>
+    <String, Object?>{
+      'muted': muted,
+      'trimStartMs': trimStartMs,
+      'trimEndMs': trimEndMs,
+    };
+
+/// 与 [buildCreatePostPayloadMap] 写入的 `contentType` 一致，供发布成功打点使用。
+Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
+  Map<String, Object?> payload,
+) =>
+    <String, Object?>{'contentType': payload['contentType']};
 
 Future<void> repositoryPublishPostWithSettings(
   ContentRepository repository, {
@@ -170,12 +217,7 @@ Future<void> repositoryPublishPostWithSettings(
 }) async {
   await repository.publishPost(
     postId: postId,
-    payload: settings.toPayloadFields(),
+    body: PublishPostRequestWire.fromMap(settings.toPayloadFields()),
   );
 }
 
-String extractCreatedPostId(Map<String, Object?> payload) {
-  return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
-      .toString()
-      .trim();
-}

@@ -6,10 +6,10 @@ class AppLogAnalyticsEventSummaryPayload {
   final String eventType;
   final String eventName;
 
-  const AppLogAnalyticsEventSummaryPayload({
-    required this.kind,
-    required this.eventType,
-    required this.eventName,
+  AppLogAnalyticsEventSummaryPayload({
+    this.kind = 'analytics_event',
+    this.eventType = '',
+    this.eventName = '',
   });
 
   factory AppLogAnalyticsEventSummaryPayload.fromMap(Map<String, dynamic> m) {

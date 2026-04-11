@@ -191,6 +191,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AppearanceSettings" }
+  /v1/user/settings/calls:
+    get:
+      summary: Get call settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallSettings" }
+    patch:
+      summary: Update call settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallSettingsPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallSettings" }
+  /v1/user/profile-subjects/{profileSubjectId}/relationship/capability:
+    get:
+      summary: Get relationship capability for target profile subject
+      parameters:
+        - name: profileSubjectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RelationshipCapability" }
+  /v1/owner/sub-accounts/summary:
+    get:
+      summary: Persona management summary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonaManagementSummary" }
   /v1/user/devices/push-tokens:
     post:
       summary: Register push token
@@ -279,6 +324,9 @@ components:
         profileVisibility:
           type: string
           enum: [public, friends, private]
+        blockedKeywords:
+          type: array
+          items: { type: string }
     PrivacySettingsPatch:
       type: object
       additionalProperties: true
@@ -331,6 +379,70 @@ components:
         applyScope:
           type: string
           enum: [all_accounts, current_sub_account, inherit_owner_default]
+    CallSettings:
+      type: object
+      properties:
+        defaultIncomingCallRingtoneId: { type: string, nullable: true }
+        allowCallerRingtoneOverride: { type: boolean }
+        enableCallVibration: { type: boolean }
+        enableGroupCallRing: { type: boolean }
+    CallSettingsPatch:
+      type: object
+      additionalProperties: true
+    RelationshipCapability:
+      type: object
+      required:
+        [
+          viewerProfileSubjectId,
+          targetProfileSubjectId,
+          relationState,
+          canFollow,
+          canUnfollow,
+          canMessage,
+          canFollowBack,
+          canStartVoiceCall,
+          canStartVideoCall,
+          isBlocked,
+          isBlockedBy,
+        ]
+      properties:
+        viewerProfileSubjectId: { type: string }
+        targetProfileSubjectId: { type: string }
+        relationState: { type: string }
+        relationTier: { type: string, nullable: true }
+        canFollow: { type: boolean }
+        canUnfollow: { type: boolean }
+        canMessage: { type: boolean }
+        canFollowBack: { type: boolean }
+        canGreet: { type: boolean }
+        canOpenConversation: { type: boolean }
+        canAddSameInterest: { type: boolean }
+        canSetCloseFriend: { type: boolean }
+        canStartVoiceCall: { type: boolean }
+        canStartVideoCall: { type: boolean }
+        isBlocked: { type: boolean }
+        isBlockedBy: { type: boolean }
+    PersonaManagementSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { type: object, additionalProperties: true }
+        subAccounts:
+          type: array
+          items: { type: object, additionalProperties: true }
+        personas:
+          type: array
+          items: { type: object, additionalProperties: true }
+        quota:
+          type: object
+          additionalProperties: true
+        activeContext:
+          type: object
+          additionalProperties: true
+        activePersonaContext:
+          type: object
+          additionalProperties: true
     RegisterPushTokenRequest:
       type: object
       required: [platform, token, deviceId]

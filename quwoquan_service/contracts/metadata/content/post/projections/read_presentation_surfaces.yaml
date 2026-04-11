@@ -1,0 +1,28 @@
+# Post 只读多表面（ReadPresentation / SurfaceSpec）— 与
+# specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/post-projection-pipeline-inventory.md
+# 及 specs/gates/metadata_driven_ui_gap_inventory.yaml 中 target_read_projection: PostReadPresentation 对齐。
+#
+# 当前阶段：表面 ID 为 SSOT，供端侧逐步收口投影管线；完整 ReadPresentation 类型与字段映射后续迭代扩展。
+version: 1
+dart_enum_name: PostReadSurfaceId
+surfaces:
+  - dart_member: feedCard
+    description: 关注流 / 发现列表卡片（MediaPostCard 等）
+  - dart_member: detailArticle
+    description: 文章详情阅读态
+  - dart_member: detailPhoto
+    description: 图文详情
+  - dart_member: detailVideo
+    description: 视频详情
+  - dart_member: immersive
+    description: 沉浸滑卡 / 统一媒体浏览器
+  - dart_member: searchCard
+    description: 搜索结果内容命中卡片
+  - dart_member: circleWorks
+    description: 圈子作品区 / hub 流
+  - dart_member: profileWorks
+    description: 个人主页作品栅格
+  - dart_member: profileMoments
+    description: 个人主页微趣列表
+  - dart_member: draftPreview
+    description: 创作预览（Draft → ReadPresentation）

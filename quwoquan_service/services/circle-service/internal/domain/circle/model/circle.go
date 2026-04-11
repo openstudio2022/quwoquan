@@ -3,101 +3,300 @@ package circle
 
 import "time"
 
+// GeoPoint represents a geographic coordinate.
+type GeoPoint struct {
+	Latitude  float64 `json:"latitude" bson:"latitude"`
+	Longitude float64 `json:"longitude" bson:"longitude"`
+}
+
 var _ = time.Now
 
-// CircleStatus enumerates circle lifecycle states.
-type CircleStatus string
+// CircleDisplaySubjectType enumerates allowed wire values for CircleDisplaySubjectType.
+type CircleDisplaySubjectType string
 
 const (
-	CircleStatusActive   CircleStatus = "active"
-	CircleStatusArchived CircleStatus = "archived"
+	CircleDisplaySubjectTypeCircle CircleDisplaySubjectType = "circle"
+
+	CircleDisplaySubjectTypeSchool CircleDisplaySubjectType = "school"
+
+	CircleDisplaySubjectTypeCollege CircleDisplaySubjectType = "college"
+
+	CircleDisplaySubjectTypeGrade CircleDisplaySubjectType = "grade"
+
+	CircleDisplaySubjectTypeClassroom CircleDisplaySubjectType = "classroom"
+
+	CircleDisplaySubjectTypeCompany CircleDisplaySubjectType = "company"
+
+	CircleDisplaySubjectTypeDepartment CircleDisplaySubjectType = "department"
+
+	CircleDisplaySubjectTypeTeam CircleDisplaySubjectType = "team"
 )
 
-// CircleVisibility controls who can discover the circle.
-type CircleVisibility string
-
-const (
-	CircleVisibilityPublic  CircleVisibility = "public"
-	CircleVisibilityPrivate CircleVisibility = "private"
-)
-
-// CircleJoinPolicy controls how users join the circle.
-type CircleJoinPolicy string
-
-const (
-	CircleJoinPolicyOpen       CircleJoinPolicy = "open"
-	CircleJoinPolicyApproval   CircleJoinPolicy = "approval"
-	CircleJoinPolicyInviteOnly CircleJoinPolicy = "invite_only"
-)
-
-// CircleMemberRole represents a member's role within a circle.
-type CircleMemberRole string
-
-const (
-	CircleMemberRoleOwner  CircleMemberRole = "owner"
-	CircleMemberRoleAdmin  CircleMemberRole = "admin"
-	CircleMemberRoleMember CircleMemberRole = "member"
-)
-
-// CircleSectionType identifies the type of a circle homepage section.
-type CircleSectionType string
-
-const (
-	CircleSectionTypeWorks       CircleSectionType = "works"
-	CircleSectionTypeChat        CircleSectionType = "chat"
-	CircleSectionTypeStorage     CircleSectionType = "storage"
-	CircleSectionTypeInteraction CircleSectionType = "interaction"
-	CircleSectionTypeCustom      CircleSectionType = "custom"
-)
-
-// CircleFileType distinguishes files from folders.
-type CircleFileType string
-
-const (
-	CircleFileTypeFile   CircleFileType = "file"
-	CircleFileTypeFolder CircleFileType = "folder"
-)
-
-// CircleFileStatus tracks file upload lifecycle.
+// CircleFileStatus enumerates allowed wire values for CircleFileStatus.
 type CircleFileStatus string
 
 const (
-	CircleFileStatusActive    CircleFileStatus = "active"
 	CircleFileStatusUploading CircleFileStatus = "uploading"
-	CircleFileStatusDeleted   CircleFileStatus = "deleted"
+
+	CircleFileStatusActive CircleFileStatus = "active"
+
+	CircleFileStatusDeleted CircleFileStatus = "deleted"
 )
 
-// Circle domain model (aggregate root).
+// CircleFileType enumerates allowed wire values for CircleFileType.
+type CircleFileType string
+
+const (
+	CircleFileTypeFile CircleFileType = "file"
+
+	CircleFileTypeFolder CircleFileType = "folder"
+)
+
+// CircleGroupJoinPolicy enumerates allowed wire values for CircleGroupJoinPolicy.
+type CircleGroupJoinPolicy string
+
+const (
+	CircleGroupJoinPolicyApplyOnly CircleGroupJoinPolicy = "apply_only"
+
+	CircleGroupJoinPolicyInviteOnly CircleGroupJoinPolicy = "invite_only"
+)
+
+// CircleGroupMemberRole enumerates allowed wire values for CircleGroupMemberRole.
+type CircleGroupMemberRole string
+
+const (
+	CircleGroupMemberRoleOwner CircleGroupMemberRole = "owner"
+
+	CircleGroupMemberRoleManager CircleGroupMemberRole = "manager"
+
+	CircleGroupMemberRoleMember CircleGroupMemberRole = "member"
+)
+
+// CircleGroupMemberStatus enumerates allowed wire values for CircleGroupMemberStatus.
+type CircleGroupMemberStatus string
+
+const (
+	CircleGroupMemberStatusPending CircleGroupMemberStatus = "pending"
+
+	CircleGroupMemberStatusJoined CircleGroupMemberStatus = "joined"
+
+	CircleGroupMemberStatusRejected CircleGroupMemberStatus = "rejected"
+)
+
+// CircleGroupStatus enumerates allowed wire values for CircleGroupStatus.
+type CircleGroupStatus string
+
+const (
+	CircleGroupStatusActive CircleGroupStatus = "active"
+
+	CircleGroupStatusArchived CircleGroupStatus = "archived"
+)
+
+// CircleGroupType enumerates allowed wire values for CircleGroupType.
+type CircleGroupType string
+
+const (
+	CircleGroupTypePublicGroup CircleGroupType = "public_group"
+
+	CircleGroupTypeSelfBuilt CircleGroupType = "self_built"
+
+	CircleGroupTypeOrgNode CircleGroupType = "org_node"
+)
+
+// CircleGroupVisibility enumerates allowed wire values for CircleGroupVisibility.
+type CircleGroupVisibility string
+
+const (
+	CircleGroupVisibilityPublic CircleGroupVisibility = "public"
+
+	CircleGroupVisibilityPrivate CircleGroupVisibility = "private"
+)
+
+// CircleJoinPolicy enumerates allowed wire values for CircleJoinPolicy.
+type CircleJoinPolicy string
+
+const (
+	CircleJoinPolicyOpen CircleJoinPolicy = "open"
+
+	CircleJoinPolicyApproval CircleJoinPolicy = "approval"
+
+	CircleJoinPolicyInviteOnly CircleJoinPolicy = "invite_only"
+)
+
+// CircleKind enumerates allowed wire values for CircleKind.
+type CircleKind string
+
+const (
+	CircleKindInterest CircleKind = "interest"
+
+	CircleKindOrganization CircleKind = "organization"
+)
+
+// CircleMemberRole enumerates allowed wire values for CircleMemberRole.
+type CircleMemberRole string
+
+const (
+	CircleMemberRoleOwner CircleMemberRole = "owner"
+
+	CircleMemberRoleAdmin CircleMemberRole = "admin"
+
+	CircleMemberRoleMember CircleMemberRole = "member"
+)
+
+// CircleSectionType enumerates allowed wire values for CircleSectionType.
+type CircleSectionType string
+
+const (
+	CircleSectionTypeWorks CircleSectionType = "works"
+
+	CircleSectionTypeChat CircleSectionType = "chat"
+
+	CircleSectionTypeStorage CircleSectionType = "storage"
+
+	CircleSectionTypeInteraction CircleSectionType = "interaction"
+
+	CircleSectionTypeCustom CircleSectionType = "custom"
+)
+
+// CircleStatus enumerates allowed wire values for CircleStatus.
+type CircleStatus string
+
+const (
+	CircleStatusActive CircleStatus = "active"
+
+	CircleStatusArchived CircleStatus = "archived"
+
+	CircleStatusDeleted CircleStatus = "deleted"
+)
+
+// CircleVisibility enumerates allowed wire values for CircleVisibility.
+type CircleVisibility string
+
+const (
+	CircleVisibilityPublic CircleVisibility = "public"
+
+	CircleVisibilityPrivate CircleVisibility = "private"
+
+	CircleVisibilityInviteOnly CircleVisibility = "invite_only"
+)
+
+// HomepageType enumerates allowed wire values for HomepageType.
+type HomepageType string
+
+const (
+	HomepageTypeVehicle HomepageType = "vehicle"
+
+	HomepageTypeHotel HomepageType = "hotel"
+
+	HomepageTypeRestaurant HomepageType = "restaurant"
+
+	HomepageTypeSight HomepageType = "sight"
+)
+
+// OrganizationNodeType enumerates allowed wire values for OrganizationNodeType.
+type OrganizationNodeType string
+
+const (
+	OrganizationNodeTypeGeneric OrganizationNodeType = "generic"
+
+	OrganizationNodeTypeCollege OrganizationNodeType = "college"
+
+	OrganizationNodeTypeGrade OrganizationNodeType = "grade"
+
+	OrganizationNodeTypeClassroom OrganizationNodeType = "classroom"
+
+	OrganizationNodeTypeDepartment OrganizationNodeType = "department"
+
+	OrganizationNodeTypeTeam OrganizationNodeType = "team"
+)
+
+// Circle domain model.
 type Circle struct {
-	ID               string             `json:"_id" bson:"_id"`
-	Name             string             `json:"name" bson:"name"`
-	Description      string             `json:"description" bson:"description"`
-	CoverUrl         string             `json:"coverUrl" bson:"coverUrl"`
-	OwnerID          string             `json:"ownerId" bson:"ownerId"`
-	Category         string             `json:"category" bson:"category"`
-	Tags             []string           `json:"tags" bson:"tags"`
-	MemberCount      int64              `json:"memberCount" bson:"memberCount"`
-	PostCount        int64              `json:"postCount" bson:"postCount"`
-	WeeklyActiveCount int64             `json:"weeklyActiveCount" bson:"weeklyActiveCount"`
-	Status           CircleStatus       `json:"status" bson:"status"`
-	Visibility       CircleVisibility   `json:"visibility" bson:"visibility"`
-	JoinPolicy       CircleJoinPolicy   `json:"joinPolicy" bson:"joinPolicy"`
-	ConversationID   string             `json:"conversationId" bson:"conversationId"`
-	AutoSyncChat     bool               `json:"autoSyncChat" bson:"autoSyncChat"`
-	SectionConfig    []CircleSectionConfig `json:"sectionConfig" bson:"sectionConfig"`
-	StorageUsedBytes int64              `json:"storageUsedBytes" bson:"storageUsedBytes"`
-	StorageQuotaBytes int64             `json:"storageQuotaBytes" bson:"storageQuotaBytes"`
-	DomainID         string             `json:"domainId" bson:"domainId"`
-	CreatedAt        time.Time          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt        time.Time          `json:"updatedAt" bson:"updatedAt"`
+	ID                   string                   `json:"_id" bson:"_id"`
+	Name                 string                   `json:"name" bson:"name"`
+	Description          string                   `json:"description" bson:"description"`
+	CoverUrl             string                   `json:"coverUrl" bson:"coverUrl"`
+	OwnerID              string                   `json:"ownerId" bson:"ownerId"`
+	Category             string                   `json:"category" bson:"category"`
+	SubCategory          string                   `json:"subCategory" bson:"subCategory"`
+	Tags                 []string                 `json:"tags" bson:"tags"`
+	MemberCount          int64                    `json:"memberCount" bson:"memberCount"`
+	PostCount            int64                    `json:"postCount" bson:"postCount"`
+	WeeklyActiveCount    int64                    `json:"weeklyActiveCount" bson:"weeklyActiveCount"`
+	Status               CircleStatus             `json:"status" bson:"status"`
+	Visibility           CircleVisibility         `json:"visibility" bson:"visibility"`
+	JoinPolicy           CircleJoinPolicy         `json:"joinPolicy" bson:"joinPolicy"`
+	Kind                 CircleKind               `json:"kind" bson:"kind"`
+	DisplaySubjectType   CircleDisplaySubjectType `json:"displaySubjectType" bson:"displaySubjectType"`
+	FollowEnabled        bool                     `json:"followEnabled" bson:"followEnabled"`
+	DefaultPublicGroupID string                   `json:"defaultPublicGroupId" bson:"defaultPublicGroupId"`
+	ConversationID       string                   `json:"conversationId" bson:"conversationId"`
+	AutoSyncChat         bool                     `json:"autoSyncChat" bson:"autoSyncChat"`
+	SectionConfig        []CircleSectionConfig    `json:"sectionConfig" bson:"sectionConfig"`
+	StorageUsedBytes     int64                    `json:"storageUsedBytes" bson:"storageUsedBytes"`
+	StorageQuotaBytes    int64                    `json:"storageQuotaBytes" bson:"storageQuotaBytes"`
+	DomainID             string                   `json:"domainId" bson:"domainId"`
+	LinkedHomepageID     string                   `json:"linkedHomepageId" bson:"linkedHomepageId"`
+	LinkedHomepageType   HomepageType             `json:"linkedHomepageType" bson:"linkedHomepageType"`
+	LinkedHomepageTitle  string                   `json:"linkedHomepageTitle" bson:"linkedHomepageTitle"`
+	CreatedAt            time.Time                `json:"createdAt" bson:"createdAt"`
+	UpdatedAt            time.Time                `json:"updatedAt" bson:"updatedAt"`
 }
 
-// CircleSectionConfig is an embedded document within Circle.
-type CircleSectionConfig struct {
-	SectionType CircleSectionType `json:"sectionType" bson:"sectionType"`
-	Visible     bool              `json:"visible" bson:"visible"`
-	Order       int               `json:"order" bson:"order"`
-	CustomTitle string            `json:"customTitle" bson:"customTitle"`
+// CircleFile domain model.
+type CircleFile struct {
+	ID             string           `json:"_id" bson:"_id"`
+	CircleID       string           `json:"circleId" bson:"circleId"`
+	GroupID        string           `json:"groupId" bson:"groupId"`
+	ParentFolderID string           `json:"parentFolderId" bson:"parentFolderId"`
+	Name           string           `json:"name" bson:"name"`
+	FileType       CircleFileType   `json:"fileType" bson:"fileType"`
+	MimeType       string           `json:"mimeType" bson:"mimeType"`
+	SizeBytes      int64            `json:"sizeBytes" bson:"sizeBytes"`
+	ObjectKey      string           `json:"objectKey" bson:"objectKey"`
+	UploaderID     string           `json:"uploaderId" bson:"uploaderId"`
+	Status         CircleFileStatus `json:"status" bson:"status"`
+	CreatedAt      time.Time        `json:"createdAt" bson:"createdAt"`
+	UpdatedAt      time.Time        `json:"updatedAt" bson:"updatedAt"`
+}
+
+// CircleGroup domain model.
+type CircleGroup struct {
+	ID                   string                `json:"_id" bson:"_id"`
+	CircleID             string                `json:"circleId" bson:"circleId"`
+	ParentGroupID        string                `json:"parentGroupId" bson:"parentGroupId"`
+	GroupType            CircleGroupType       `json:"groupType" bson:"groupType"`
+	NodeType             OrganizationNodeType  `json:"nodeType" bson:"nodeType"`
+	Name                 string                `json:"name" bson:"name"`
+	Description          string                `json:"description" bson:"description"`
+	Visibility           CircleGroupVisibility `json:"visibility" bson:"visibility"`
+	JoinPolicy           CircleGroupJoinPolicy `json:"joinPolicy" bson:"joinPolicy"`
+	OwnerUserID          string                `json:"ownerUserId" bson:"ownerUserId"`
+	ManagerIds           []string              `json:"managerIds" bson:"managerIds"`
+	MemberCount          int64                 `json:"memberCount" bson:"memberCount"`
+	ConversationID       string                `json:"conversationId" bson:"conversationId"`
+	StorageEnabled       bool                  `json:"storageEnabled" bson:"storageEnabled"`
+	NoticeEnabled        bool                  `json:"noticeEnabled" bson:"noticeEnabled"`
+	IsDefaultPublicGroup bool                  `json:"isDefaultPublicGroup" bson:"isDefaultPublicGroup"`
+	LastActiveAt         time.Time             `json:"lastActiveAt" bson:"lastActiveAt"`
+	Status               CircleGroupStatus     `json:"status" bson:"status"`
+	CreatedAt            time.Time             `json:"createdAt" bson:"createdAt"`
+	UpdatedAt            time.Time             `json:"updatedAt" bson:"updatedAt"`
+}
+
+// CircleGroupMember domain model.
+type CircleGroupMember struct {
+	ID              string                  `json:"_id" bson:"_id"`
+	GroupID         string                  `json:"groupId" bson:"groupId"`
+	CircleID        string                  `json:"circleId" bson:"circleId"`
+	UserID          string                  `json:"userId" bson:"userId"`
+	Role            CircleGroupMemberRole   `json:"role" bson:"role"`
+	Status          CircleGroupMemberStatus `json:"status" bson:"status"`
+	JoinedAt        time.Time               `json:"joinedAt" bson:"joinedAt"`
+	InvitedByUserID string                  `json:"invitedByUserId" bson:"invitedByUserId"`
+	DecidedAt       time.Time               `json:"decidedAt" bson:"decidedAt"`
+	CreatedAt       time.Time               `json:"createdAt" bson:"createdAt"`
+	UpdatedAt       time.Time               `json:"updatedAt" bson:"updatedAt"`
 }
 
 // CircleMember domain model.
@@ -111,18 +310,10 @@ type CircleMember struct {
 	Contribution int64            `json:"contribution" bson:"contribution"`
 }
 
-// CircleFile domain model.
-type CircleFile struct {
-	ID             string           `json:"_id" bson:"_id"`
-	CircleID       string           `json:"circleId" bson:"circleId"`
-	ParentFolderID string           `json:"parentFolderId" bson:"parentFolderId"`
-	Name           string           `json:"name" bson:"name"`
-	FileType       CircleFileType   `json:"fileType" bson:"fileType"`
-	MimeType       string           `json:"mimeType" bson:"mimeType"`
-	SizeBytes      int64            `json:"sizeBytes" bson:"sizeBytes"`
-	ObjectKey      string           `json:"objectKey" bson:"objectKey"`
-	UploaderID     string           `json:"uploaderId" bson:"uploaderId"`
-	Status         CircleFileStatus `json:"status" bson:"status"`
-	CreatedAt      time.Time        `json:"createdAt" bson:"createdAt"`
-	UpdatedAt      time.Time        `json:"updatedAt" bson:"updatedAt"`
+// CircleSectionConfig domain model.
+type CircleSectionConfig struct {
+	SectionType CircleSectionType `json:"sectionType" bson:"sectionType"`
+	Visible     bool              `json:"visible" bson:"visible"`
+	Order       int64             `json:"order" bson:"order"`
+	CustomTitle string            `json:"customTitle" bson:"customTitle"`
 }

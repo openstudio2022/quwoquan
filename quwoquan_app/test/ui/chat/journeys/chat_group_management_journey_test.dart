@@ -601,7 +601,7 @@ class _MemberRoleMockRepo extends MockChatRepository {
     String? role,
     String? sort,
   }) async {
-    return const [
+    return [
       ChatConversationMemberDto(
         userId: 'user_001',
         displayName: '我',

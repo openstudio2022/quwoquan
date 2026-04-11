@@ -18,6 +18,8 @@ class ConversationDto {
   final String status;
   final DateTime createdAt;
   final DateTime updatedAt;
+  /// 群成员名册版本（Mock/部分 wire 扩展字段）。
+  final int? membersRosterRevision;
 
   const ConversationDto({
     required this.id,
@@ -37,6 +39,7 @@ class ConversationDto {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.membersRosterRevision,
   });
 
   factory ConversationDto.fromMap(Map<String, dynamic> map) {
@@ -62,10 +65,12 @@ class ConversationDto {
           DateTime.now(),
       updatedAt: DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
           DateTime.now(),
+      membersRosterRevision: (map['membersRosterRevision'] as num?)?.toInt(),
     );
   }
 
   Map<String, dynamic> toMap() => {
+        '_id': id,
         'id': id,
         'type': type,
         if (title != null) 'title': title,
@@ -79,11 +84,15 @@ class ConversationDto {
         if (lastMessageId != null) 'lastMessageId': lastMessageId,
         if (lastMessagePreview != null)
           'lastMessagePreview': lastMessagePreview,
-        if (lastMessageTime != null)
+        if (lastMessageTime != null) ...{
           'lastMessageTime': lastMessageTime!.toIso8601String(),
+          'lastMessageAt': lastMessageTime!.toIso8601String(),
+        },
         'messageCount': messageCount,
         'status': status,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
+        if (membersRosterRevision != null)
+          'membersRosterRevision': membersRosterRevision,
       };
 }

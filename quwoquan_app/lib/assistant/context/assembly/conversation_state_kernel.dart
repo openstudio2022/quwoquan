@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/slot_value_codec.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
@@ -336,7 +337,7 @@ class ConversationStateKernel {
         confidence: 0.8,
       );
     }
-    final value = raw?.toString().trim() ?? '';
+    final value = SlotValueCodec.displayForSlotMerge(raw);
     return SlotValueSnapshot(
       slotId: slotId,
       status: value.isEmpty
@@ -399,7 +400,7 @@ class ConversationStateKernel {
 
   bool _hasUsableValue(SlotValueSnapshot? slot) {
     if (slot == null) return false;
-    final value = slot.value?.toString().trim() ?? '';
+    final value = SlotValueCodec.displayForSlotMerge(slot.value);
     if (value.isEmpty) return false;
     return slot.status != SlotValueStatus.missing &&
         slot.status != SlotValueStatus.conflicted;

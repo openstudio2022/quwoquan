@@ -142,9 +142,9 @@ Future<void> testCommentPostJourney(WidgetTester tester) async {
       reason: 'postId 应正确传入');
 
   // 断言：返回结果包含评论内容
-  expect(result['content'], equals(commentText),
+  expect(result.content, equals(commentText),
       reason: 'createComment 响应应包含提交的内容');
-  expect(result['_id'], isNotNull, reason: 'createComment 响应应包含新评论 id');
+  expect(result.id, isNotEmpty, reason: 'createComment 响应应包含新评论 id');
 
   // 评论计数已更新
   expect(mock.countersStubCommentCount, equals(1),
@@ -214,7 +214,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(result['replyToCommentId'], equals('comment_parent_001'));
+      expect(result.replyToCommentId, equals('comment_parent_001'));
       expect(find.byType(MaterialApp), findsOneWidget);
     });
 
@@ -224,8 +224,16 @@ void main() {
 
       await expectLater(
         mock.reportBehaviors(events: [
-          {'postId': 'p1', 'type': 'impression', 'feedPosition': 0},
-          {'postId': 'p1', 'type': 'dwell', 'dwellMs': 12000},
+          ContentBehaviorBatchEventDto.fromMap(<String, dynamic>{
+            'postId': 'p1',
+            'type': 'impression',
+            'feedPosition': 0,
+          }),
+          ContentBehaviorBatchEventDto.fromMap(<String, dynamic>{
+            'postId': 'p1',
+            'type': 'dwell',
+            'dwellMs': 12000,
+          }),
         ]),
         completes,
       );

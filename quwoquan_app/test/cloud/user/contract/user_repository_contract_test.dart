@@ -32,14 +32,12 @@ void main() {
 
     test('getNotificationSettings 返回通知设置', () async {
       final settings = await repo.getNotificationSettings();
-      expect(settings, isA<Map<String, dynamic>>());
-      expect(settings.containsKey('enablePush'), isTrue);
+      expect(settings.enablePush, isTrue);
     });
 
     test('getPrivacySettings 返回隐私设置', () async {
       final settings = await repo.getPrivacySettings();
-      expect(settings, isA<Map<String, dynamic>>());
-      expect(settings.containsKey('profileVisibility'), isTrue);
+      expect(settings.profileVisibility, 'public');
     });
   });
 

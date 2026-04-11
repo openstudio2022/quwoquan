@@ -1,11 +1,16 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 
-/// 投射后的 post 视图模型 — 由 projectPostMap 从 DTO 生成，供 viewer/detail 消费。
+/// 投射后的 post 视图模型 — 由 [PostSummaryView.fromDto] 从 [PostBaseDto] 构建；
+/// 典型入口为 `post_view_projection.dart` 中的 `projectPostMap`（避免与本文件循环 import，故不作 dartdoc 链接）。
 ///
-/// 取代所有 post['likesCount']、post['author']['name']、post['images'] 等写死字符串访问。
-/// 字段命名与 DTO canonical 字段保持一致（likeCount → likesCount，以 UI 侧统一为准）。
+/// **与 [PostReadPresentation] 分工**：本类内嵌 [readPresentation]（metadata 对齐的标题/正文等）；
+/// 同时保留 **viewer 侧历史命名**（如 [likesCount]）。新业务优先直接用 [readPresentation] 或 DTO，
+/// 避免第三套并行只读模型。
+///
+/// 取代所有 `post['likesCount']`、`post['author']['name']` 等散落字符串访问。
 class PostSummaryView {
-  const PostSummaryView({
+  PostSummaryView({
     required this.id,
     required this.type,
     required this.authorId,
@@ -18,6 +23,8 @@ class PostSummaryView {
     required this.savesCount,
     required this.sharesCount,
     required this.createdAt,
+    required this.readPresentation,
+    this.surfaceId = PostReadSurfaceId.feedCard,
     this.images,
     this.thumbnail,
     this.thumbnailUrl,
@@ -29,6 +36,12 @@ class PostSummaryView {
     this.title,
     this.body,
   });
+
+  /// metadata 只读投影（与 [surfaceId] 对应表面一致由调用方保证）。
+  final PostReadPresentation readPresentation;
+
+  /// 本视图所服务的 UI 表面（P2 SurfaceSpec）。
+  final PostReadSurfaceId surfaceId;
 
   final String id;
   final String type;
@@ -79,7 +92,11 @@ class PostSummaryView {
 
   // ── 工厂：直接从 DTO 创建（零字符串 key 访问）────────────
 
-  factory PostSummaryView.fromDto(PostBaseDto dto) {
+  factory PostSummaryView.fromDto(
+    PostBaseDto dto, {
+    PostReadSurfaceId surfaceId = PostReadSurfaceId.feedCard,
+    Map<String, dynamic>? wire,
+  }) {
     final author = PostAuthorSummary(
       id: dto.authorId,
       username: dto.authorId,
@@ -113,8 +130,13 @@ class PostSummaryView {
     final videoUrl = dto.hasVideo ? dto.mediaVideoUrl : null;
     final videoType = dto.hasVideo ? dto.type : null;
     final duration = dto.durationMs;
-    final title = dto.normalizedTitle.isEmpty ? null : dto.normalizedTitle;
-    final body = dto.normalizedBody.isEmpty ? null : dto.normalizedBody;
+    final read = PostReadProjectionFacade.presentationFor(
+      dto,
+      surfaceId,
+      wire: wire,
+    );
+    final title = read.title.isEmpty ? null : read.title;
+    final body = read.body.isEmpty ? null : read.body;
 
     return PostSummaryView(
       id: dto.id,
@@ -129,6 +151,8 @@ class PostSummaryView {
       savesCount: dto.favoriteCount,
       sharesCount: dto.shareCount,
       createdAt: dto.createdAt.toIso8601String(),
+      readPresentation: read,
+      surfaceId: surfaceId,
       images: images,
       thumbnail: thumbnail,
       thumbnailUrl: thumbnailUrl,

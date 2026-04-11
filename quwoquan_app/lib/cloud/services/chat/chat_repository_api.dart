@@ -1,3 +1,9 @@
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
@@ -48,7 +54,7 @@ abstract class ChatRepository {
   });
 
   /// 历史 wire 形态会话列表；新实现应优先 [listInbox]。
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -67,7 +73,7 @@ abstract class ChatRepository {
     List<String>? initialMemberIds,
   });
 
-  Future<Map<String, dynamic>> getConversation(String conversationId);
+  Future<ConversationDto> getConversation(String conversationId);
 
   /// 更新会话展示标题（群名等）。Remote 侧按资源 PATCH；无独立 operation 元数据时用 GetConversation 上下文。
   Future<void> updateConversationTitle(
@@ -87,7 +93,7 @@ abstract class ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<Map<String, dynamic>> sendMessage({
+  Future<SendMessageResponse> sendMessage({
     required String conversationId,
     required String type,
     required String content,
@@ -107,7 +113,7 @@ abstract class ChatRepository {
     required String messageId,
   });
 
-  Future<Map<String, dynamic>> syncMessages({
+  Future<SyncResponse> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
@@ -119,7 +125,7 @@ abstract class ChatRepository {
     required String messageId,
   });
 
-  Future<List<Map<String, dynamic>>> getReceipts({
+  Future<List<ChatMessageReceiptDto>> getReceipts({
     required String conversationId,
     required String messageId,
   });
@@ -166,12 +172,12 @@ abstract class ChatRepository {
   });
 
   /// 联系人 Tab「圈子」行（Mock：canonical；Remote：空列表）。
-  Future<List<Map<String, dynamic>>> listContactTabCircles({
+  Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   });
 
   /// 联系人 Tab「趣群」行（Mock：canonical；Remote：空列表）。
-  Future<List<Map<String, dynamic>>> listContactTabFunGroups({
+  Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
     int limit = CloudApiDefaults.pageLimit,
   });
 
@@ -184,9 +190,9 @@ abstract class ChatRepository {
   });
 
   // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> getConversationTimestamps();
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps();
 
-  Future<List<Map<String, dynamic>>> batchGetConversations(List<String> ids);
+  Future<List<ConversationDto>> batchGetConversations(List<String> ids);
 
   // ── 群管理 ──────────────────────────────────────────────────────────────────
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId);

@@ -12,6 +12,16 @@ type GeoPoint struct {
 }
 
 var _ = time.Now
+{{range $t := .EnumTypes}}
+// {{$t.Name}} enumerates allowed wire values for {{$t.Name}}.
+type {{$t.Name}} string
+
+const (
+{{range $t.Values}}
+	{{.ConstName}} {{$t.Name}} = "{{.WireValue}}"
+{{end}}
+)
+{{end}}
 {{range .Entities}}
 // {{.Name}} domain model.
 type {{.Name}} struct {

@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: LLM_RAW | EXTENSION_MAP — 理解阶段模板变量与 answer 轨 Map；稳定字段走 codegen/View。
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -1642,7 +1644,16 @@ class UnderstandPhase implements Phase {
   }) {
     final limit = bootstrapContext?.recentDialogueRoundsLimit ??
         resolveRecentDialogueRoundsLimit(request.contextScopeHint);
-    return trimMessagesToRecentRounds(request.messages, limit: limit);
+    final policy = bootstrapContext?.contextContinuityPolicy ??
+        const ContextContinuityPolicy();
+    final isolatePlannerTurn = !policy.explicitContinuation &&
+        (policy.continuityMode == ContextContinuityMode.freshTopic ||
+            policy.continuityMode == ContextContinuityMode.unknown);
+    final effectiveLimit = isolatePlannerTurn ? 0 : limit;
+    return trimMessagesToRecentRounds(
+      request.messages,
+      limit: effectiveLimit,
+    );
   }
 
   bool _hasStructuredContent(Map<String, dynamic> value) {

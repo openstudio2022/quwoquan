@@ -1,0 +1,67 @@
+version: 1
+read_model: ActivePersonaContextWire
+
+description: |
+  当前活动分身上下文 wire（getActivePersonaContext 等）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ActivePersonaContextWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart
+  fields:
+    - name: profileSubjectId
+      dart_type: String
+      nullable: false
+      source: profileSubjectId
+      aliases: [profileSubjectId, subAccountId, userId]
+      default: "''"
+      skip_empty_string_aliases: true
+    - name: ownerUserId
+      dart_type: String
+      nullable: false
+      source: ownerUserId
+      aliases: [ownerUserId, userId]
+      default: "''"
+      skip_empty_string_aliases: true
+    - name: subAccountId
+      dart_type: String
+      nullable: false
+      source: subAccountId
+      aliases: [subAccountId]
+      default: "''"
+    - name: subjectType
+      dart_type: String
+      nullable: false
+      source: subjectType
+      aliases: [subjectType]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, nickname]
+      default: "''"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl, avatar, avatarUrlSnapshot]
+      default: "''"
+    - name: personaContextVersion
+      dart_type: String
+      nullable: false
+      source: personaContextVersion
+      aliases: [personaContextVersion, contextVersion]
+      default: "''"
+    - name: isPrimary
+      dart_type: bool
+      nullable: false
+      source: isPrimary
+      aliases: [isPrimary]
+      default: "false"

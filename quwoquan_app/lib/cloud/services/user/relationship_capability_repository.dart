@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
@@ -155,35 +157,32 @@ class RelationshipCapabilityDto {
     return relationState == 'followed_by';
   }
 
-  factory RelationshipCapabilityDto.fromMap(Map<String, dynamic> map) {
-    final relationState = map['relationState'] as String?;
-    final hasCanMessage = map.containsKey('canMessage');
+  factory RelationshipCapabilityDto.fromRelationshipCapabilityWire(
+    RelationshipCapabilityWireDto w,
+  ) {
     return RelationshipCapabilityDto(
-      viewerSubAccountId:
-          (map['viewerProfileSubjectId'] as String?) ??
-          (map['viewerSubAccountId'] as String?) ??
-          '',
-      targetSubAccountId:
-          (map['targetProfileSubjectId'] as String?) ??
-          (map['targetSubAccountId'] as String?) ??
-          '',
-      relationState: relationState,
-      relationTier: map['relationTier'] as String?,
-      canFollow: map['canFollow'] as bool?,
-      canUnfollow: map['canUnfollow'] as bool?,
-      canMessage: map['canMessage'] as bool?,
-      canFollowBack: map['canFollowBack'] as bool?,
-      canGreet: (map['canGreet'] as bool?) ?? false,
-      canOpenConversation:
-          (map['canOpenConversation'] as bool?) ??
-          (hasCanMessage ? (map['canMessage'] as bool?) : null) ??
-          false,
-      canAddSameInterest: (map['canAddSameInterest'] as bool?) ?? false,
-      canSetCloseFriend: (map['canSetCloseFriend'] as bool?) ?? false,
-      canStartVoiceCall: (map['canStartVoiceCall'] as bool?) ?? false,
-      canStartVideoCall: (map['canStartVideoCall'] as bool?) ?? false,
-      isBlocked: (map['isBlocked'] as bool?) ?? false,
-      isBlockedBy: (map['isBlockedBy'] as bool?) ?? false,
+      viewerSubAccountId: w.viewerProfileSubjectId,
+      targetSubAccountId: w.targetProfileSubjectId,
+      relationState: w.relationState,
+      relationTier: w.relationTier,
+      canFollow: w.canFollow,
+      canUnfollow: w.canUnfollow,
+      canMessage: w.canMessage,
+      canFollowBack: w.canFollowBack,
+      canGreet: w.canGreet,
+      canOpenConversation: w.canOpenConversation ?? w.canMessage ?? false,
+      canAddSameInterest: w.canAddSameInterest,
+      canSetCloseFriend: w.canSetCloseFriend,
+      canStartVoiceCall: w.canStartVoiceCall,
+      canStartVideoCall: w.canStartVideoCall,
+      isBlocked: w.isBlocked,
+      isBlockedBy: w.isBlockedBy,
+    );
+  }
+
+  factory RelationshipCapabilityDto.fromMap(Map<String, dynamic> map) {
+    return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
+      RelationshipCapabilityWireDto.fromMap(map),
     );
   }
 
@@ -276,8 +275,13 @@ class RemoteRelationshipCapabilityRepository
       ),
     );
     if (resp.statusCode == 200) {
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      return RelationshipCapabilityDto.fromMap(body);
+      final body = CloudResponseDecoder.asObject(
+        jsonDecode(resp.body),
+        context: UserRequestPageIds.getRelationshipCapability,
+      );
+      return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
+        RelationshipCapabilityWireDto.fromMap(body),
+      );
     }
     throw Exception(
       'GetRelationshipCapability failed: ${resp.statusCode} ${resp.body}',

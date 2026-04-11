@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 
 void main() {
   group('CircleDto — 常规契约', () {
@@ -445,6 +446,41 @@ void main() {
         'order': null,
       });
       expect(config.order, 0);
+    });
+  });
+
+  group('CircleStatsWireDto', () {
+    test('fromMap 保留 raw 并可供 CircleStatsViewData 解析', () {
+      final dto = CircleStatsWireDto.fromMap({
+        'totalMembers': 10,
+        'weeklyActive': 3,
+        'totalPosts': 20,
+        'totalLikes': 99,
+      });
+      final view = CircleStatsViewData.fromStatsWire(dto);
+      expect(view.members, 10);
+      expect(view.weeklyActive, 3);
+      expect(view.posts, 20);
+      expect(view.likes, 99);
+    });
+  });
+
+  group('CircleMemberRosterItemDto', () {
+    test('fromMap 解析 Mock 成员展示字段', () {
+      final m = CircleMemberRosterItemDto.fromMap(
+        {
+          'id': 'u1',
+          'name': '张三',
+          'avatar': 'https://example.com/a.jpg',
+          'role': 'member',
+          'joinedAt': '2024-01-15',
+        },
+        circleId: 'c1',
+      );
+      expect(m.userId, 'u1');
+      expect(m.circleId, 'c1');
+      expect(m.displayName, '张三');
+      expect(m.avatarUrl, 'https://example.com/a.jpg');
     });
   });
 }

@@ -1,14 +1,59 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 
+const Duration _kCirclesPageSettleTimeout = Duration(seconds: 1);
+
+/// 墙钟上界 1s：用有限次 [pump] 代替 [pumpAndSettle]，避免永不 settle 或与 fake clock 交织时长时间挂起。
+Future<void> _circlesPumpSettled(WidgetTester tester) async {
+  final deadline = DateTime.now().add(_kCirclesPageSettleTimeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (!tester.binding.hasScheduledFrame) return;
+  }
+}
+
+/// 与 [CircleCategoryTabsLoader.assetPath] 同源；单测里避免 `rootBundle.loadString` 在部分环境下挂起。
+Map<String, CircleCategoryTabConfigDto> _fixtureCategoryTabsConfig() {
+  final candidates = <File>[
+    File(
+      '${Directory.current.path}/../quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
+    ),
+    File(
+      '${Directory.current.path}/quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
+    ),
+  ];
+  for (final f in candidates) {
+    if (f.existsSync()) {
+      return CircleCategoryTabsLoader.parseFromYamlString(f.readAsStringSync());
+    }
+  }
+  return Map<String, CircleCategoryTabConfigDto>.from(
+    CircleCategoryTabDefaults.remoteStyleFallback,
+  );
+}
+
+/// 避免单测里 [CircleCategoryTabsLoader.loadFromAsset] 走 `rootBundle` 挂起。
+class _FixtureCategoryMockRepo extends MockCircleRepository {
+  @override
+  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+    return _fixtureCategoryTabsConfig();
+  }
+}
+
 Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
-  final repo = mock ?? MockCircleRepository();
+  final repo = mock ?? _FixtureCategoryMockRepo();
   return ProviderScope(
     overrides: [circleRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp.router(
@@ -53,20 +98,27 @@ void main() {
     });
 
     testWidgets('展示圈子广场标题与左侧分类菜单', (tester) async {
-      await tester.pumpWidget(_scopedApp());
-      await tester.pumpAndSettle();
+      final mock = _FixtureCategoryMockRepo();
+      final cfg = _fixtureCategoryTabsConfig();
+      await tester.pumpWidget(_scopedApp(mock: mock));
+      await tester.pump();
+      await _circlesPumpSettled(tester);
 
       expect(find.text(UITextConstants.circlesDirectoryTitle), findsOneWidget);
       expect(find.text(UITextConstants.homeCirclesMy), findsOneWidget);
-      expect(find.text('推荐'), findsOneWidget);
-      expect(find.text('遇见'), findsOneWidget);
+      final allLabel = cfg['all']?.label ?? '推荐';
+      expect(find.text(allLabel), findsOneWidget);
+      final meet = cfg['meet'];
+      if (meet != null && meet.label.trim().isNotEmpty) {
+        expect(find.text(meet.label), findsOneWidget);
+      }
     });
   });
 
   group('CirclesPage — 交互契约', () {
     testWidgets('页面正常加载不崩溃', (tester) async {
       await tester.pumpWidget(_scopedApp());
-      await tester.pumpAndSettle();
+      await _circlesPumpSettled(tester);
 
       expect(find.byType(CirclesPage), findsOneWidget);
     });
@@ -84,7 +136,7 @@ void main() {
       };
       try {
         await tester.pumpWidget(_scopedApp(textScaleFactor: 1.4));
-        await tester.pumpAndSettle();
+        await _circlesPumpSettled(tester);
       } finally {
         FlutterError.onError = originalOnError;
       }
@@ -108,9 +160,9 @@ void main() {
   });
 }
 
-class _EmptyCircleRepository extends MockCircleRepository {
+class _EmptyCircleRepository extends _FixtureCategoryMockRepo {
   @override
-  Future<List<Map<String, dynamic>>> listCircles({
+  Future<List<CircleDto>> listCircles({
     String? category,
     String? domainId,
     String? recommendFor,

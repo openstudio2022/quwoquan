@@ -56,7 +56,7 @@ abstract final class AssistantDisplayTextResolver {
     caseSensitive: false,
   );
   static final RegExp _reportStyleProcessFragmentRe = RegExp(
-    r'(处理了\s*\d+\s*篇|检索了\s*\d+\s*条|交叉核对|信息已就位|进入成答|资料筛选|收拢到\s*\d+\s*条)',
+    r'(处理了\s*\d+\s*篇|检索了\s*\d+\s*条|交叉核对|信息已就位|收拢到\s*\d+\s*条)',
     caseSensitive: false,
   );
   static final RegExp _residualXmlToolFragmentRe = RegExp(

@@ -16,12 +16,14 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
@@ -152,13 +154,16 @@ void main() {
     });
 
     test('createCircle → POST /v1/circles', () async {
-      await repo.createCircle({'name': 'test'});
+      await repo.createCircle(CircleCreateWireDto.fromMap({'name': 'test'}));
       expect(log.last.method, 'POST');
       expect(log.last.path, CircleApiMetadata.createCirclePath);
     });
 
     test('updateCircle → PATCH /v1/circles/{circleId}', () async {
-      await repo.updateCircle('c1', {'name': 'updated'});
+      await repo.updateCircle(
+        'c1',
+        CircleUpdateWireDto.fromMap({'name': 'updated'}),
+      );
       expect(log.last.method, 'PATCH');
       expect(log.last.path, CircleApiMetadata.updateCirclePath(circleId: 'c1'));
     });
@@ -296,7 +301,13 @@ void main() {
     });
 
     test('createFile → POST /v1/circles/{circleId}/files', () async {
-      await repo.createFile('c1', {'name': 'doc.pdf'});
+      await repo.createFile(
+        'c1',
+        CircleFileCreateWireDto.fromMap({
+          'name': 'doc.pdf',
+          'fileType': 'file',
+        }),
+      );
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
@@ -314,7 +325,11 @@ void main() {
     });
 
     test('updateFile → PATCH /v1/circles/{id}/files/{fileId}', () async {
-      await repo.updateFile('c1', 'f1', {'name': 'updated'});
+      await repo.updateFile(
+        'c1',
+        'f1',
+        CircleFileUpdateWireDto.fromMap({'name': 'updated'}),
+      );
       expect(log.last.method, 'PATCH');
       expect(
         log.last.path,
@@ -341,7 +356,9 @@ void main() {
     });
 
     test('reportBehavior → POST /v1/circles/behaviors', () async {
-      await repo.reportBehavior({'type': 'view'});
+      await repo.reportBehavior(
+        CircleBehaviorReportWireDto.fromMap({'type': 'view'}),
+      );
       expect(log.last.method, 'POST');
       expect(log.last.path, CircleApiMetadata.reportCircleBehaviorPath);
     });
@@ -405,7 +422,9 @@ void main() {
 
     test('createPost → POST /v1/content/posts', () async {
       try {
-        await repo.createPost(payload: {'type': 'moment'});
+        await repo.createPost(
+          body: CreatePostRequestWire.fromMap({'type': 'moment'}),
+        );
       } catch (_) {}
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.createPostPath);
@@ -413,7 +432,10 @@ void main() {
 
     test('publishPost → POST /v1/content/posts/{postId}/publish', () async {
       try {
-        await repo.publishPost(postId: 'p1', payload: {'visibility': 'public'});
+        await repo.publishPost(
+          postId: 'p1',
+          body: PublishPostRequestWire.fromMap({'visibility': 'public'}),
+        );
       } catch (_) {}
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.publishPostPath(postId: 'p1'));
@@ -425,7 +447,9 @@ void main() {
         try {
           await repo.updatePostSettings(
             postId: 'p1',
-            payload: {'assistantUsePolicy': 'exclude'},
+            body: UpdatePostSettingsRequestWire.fromMap({
+              'assistantUsePolicy': 'exclude',
+            }),
           );
         } catch (_) {}
         expect(log.last.method, 'PATCH');
@@ -442,7 +466,9 @@ void main() {
         try {
           await repo.promotePostToWork(
             postId: 'p1',
-            payload: {'contentType': 'image'},
+            body: PromotePostToWorkRequestWire.fromMap({
+              'contentType': 'image',
+            }),
           );
         } catch (_) {}
         expect(log.last.method, 'POST');

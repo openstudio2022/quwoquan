@@ -1,0 +1,21 @@
+# `AssistantRunResponse.structuredResponse` 中与端云对齐优先收口的子树（qualityMetrics / dialogueRuntime / uiReferences）。
+# 编排层仍可向 Map 写入扩展键；`qualityMetrics` / `dialogueRuntime` 使用 type: map 以保留未知键往返。
+dart_class: AssistantStructuredResponseWire
+library_path: assistant/contracts/assistant_structured_response_wire.dart
+output_path: assistant/generated/contracts/assistant_structured_response_wire.g.dart
+contract: assistant_structured_response_wire
+version: v1
+kind: runtime_wire_contract
+fields:
+  - { name: qualityMetrics, type: map, default: {} }
+  - { name: dialogueRuntime, type: map, default: {} }
+  - { name: uiReferences, type: list<object>, ref: assistant_ui_reference, default: [] }
+subcontracts:
+  assistant_ui_reference:
+    class_name: AssistantUiReferenceWireDto
+    fields:
+      - { name: url, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+      - { name: label, type: string, default: '' }

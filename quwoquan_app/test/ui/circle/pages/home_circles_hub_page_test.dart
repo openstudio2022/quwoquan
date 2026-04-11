@@ -6,10 +6,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// 单用例原则：settle 上界 1s，避免默认 10 分钟超时拖死整批测试。
+const Duration _kHubPumpSettleTimeout = Duration(seconds: 1);
+
+Future<void> _hubPumpSettled(WidgetTester tester) async {
+  await tester.pumpAndSettle(
+    const Duration(milliseconds: 100),
+    EnginePhase.sendSemanticsUpdate,
+    _kHubPumpSettleTimeout,
+  );
+}
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -114,6 +128,11 @@ class _FakeHttpClientRequest extends Fake implements HttpClientRequest {
 }
 
 class _FakeHttpHeaders extends Fake implements HttpHeaders {}
+
+class _HubTestMockDataSourceModeNotifier extends AppDataSourceModeNotifier {
+  @override
+  AppDataSourceMode build() => AppDataSourceMode.mock;
+}
 
 class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   static const _kTransparentPng = [
@@ -236,6 +255,11 @@ Widget _buildTestApp({double textScaleFactor = 1.0}) {
     ],
   );
   return ProviderScope(
+    overrides: [
+      appDataSourceModeProvider.overrideWith(
+        _HubTestMockDataSourceModeNotifier.new,
+      ),
+    ],
     child: MaterialApp.router(
       routerConfig: router,
       builder: (context, child) {
@@ -257,15 +281,68 @@ void _consumeImageLoadExceptions(WidgetTester tester) {
   }
 }
 
+/// 主垂滑在 [CirclesHubPage] 子树内解析，避免误命中 [MaterialApp] 其它垂直 [Scrollable]。
+Finder _hubVerticalScrollable() {
+  return find.descendant(
+    of: find.byType(CirclesHubPage),
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    ),
+  ).at(0);
+}
+
+Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
+  final probe = find.byKey(
+    const ValueKey('home-circle-grid-post-circle_post_image_1'),
+  );
+  await _hubPumpSettled(tester);
+  // 渐进式 bootstrap 后 feed 先 setState；短帧轮询有上界（≤~192ms 虚拟时间）
+  for (var i = 0; i < 12 && probe.evaluate().isEmpty; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await _hubPumpSettled(tester);
+}
+
+Future<void> _scrollHubUntilVisible(
+  WidgetTester tester,
+  Finder target,
+) async {
+  await tester.scrollUntilVisible(
+    target,
+    200,
+    scrollable: _hubVerticalScrollable(),
+    maxScrolls: 24,
+    duration: const Duration(milliseconds: 8),
+  );
+  await tester.ensureVisible(target);
+  await _hubPumpSettled(tester);
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
     HttpOverrides.global = _FakeHttpOverrides();
   });
 
+  test('Provider 覆盖下 Mock 圈子发现流非空', () async {
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(
+          _HubTestMockDataSourceModeNotifier.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final repo = container.read(circleRepositoryProvider);
+    expect(repo, isA<MockCircleRepository>());
+    final feed = await repo.listHomeCircleDiscoveryFeed(limit: 20);
+    expect(feed, isNotEmpty);
+  });
+
   testWidgets('频道管理按钮右缘保持统一安全边距', (tester) async {
     await tester.pumpWidget(_buildTestApp());
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
     _consumeImageLoadExceptions(tester);
 
     final page = find.byType(CirclesHubPage);
@@ -282,18 +359,18 @@ void main() {
 
   testWidgets('查看更多跳转到圈子展开页', (tester) async {
     await tester.pumpWidget(_buildTestApp());
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
     _consumeImageLoadExceptions(tester);
 
     await tester.tap(find.text('查看更多'));
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
 
     expect(find.text('circles-page'), findsOneWidget);
   });
 
   testWidgets('推荐圈子列表的查看全部卡片可跳转到圈子展开页', (tester) async {
     await tester.pumpWidget(_buildTestApp());
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
     _consumeImageLoadExceptions(tester);
 
     final horizontalCircleRail = find
@@ -306,52 +383,44 @@ void main() {
       find.text(UITextConstants.homeCirclesViewAll),
       horizontalCircleRail,
       const Offset(-240, 0),
+      maxIteration: 20,
+      duration: const Duration(milliseconds: 8),
     );
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
     await tester.tap(find.text(UITextConstants.homeCirclesViewAll));
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
 
     expect(find.text('circles-page'), findsOneWidget);
   });
 
   testWidgets('一级 tab 图片作品点击进入 unified media viewer', (tester) async {
     await tester.pumpWidget(_buildTestApp());
-    await tester.pumpAndSettle();
     _consumeImageLoadExceptions(tester);
 
-    final gridPost = find.byKey(
+    await _pumpUntilHubGridKeysVisible(tester);
+    final card = find.byKey(
       const ValueKey('home-circle-grid-post-circle_post_image_1'),
     );
-    await tester.dragUntilVisible(
-      gridPost,
-      find.byType(Scrollable).last,
-      const Offset(0, -300),
-    );
-    await tester.ensureVisible(gridPost);
-    await tester.pumpAndSettle();
-    await tester.tap(gridPost);
-    await tester.pumpAndSettle();
+    expect(card, findsOneWidget);
+    await _scrollHubUntilVisible(tester, card);
+    await tester.tap(card);
+    await _hubPumpSettled(tester);
 
     expect(find.text('media-viewer'), findsOneWidget);
   });
 
   testWidgets('一级 tab 视频作品点击进入 unified video viewer', (tester) async {
     await tester.pumpWidget(_buildTestApp());
-    await tester.pumpAndSettle();
     _consumeImageLoadExceptions(tester);
 
-    final gridPost = find.byKey(
+    await _pumpUntilHubGridKeysVisible(tester);
+    final card = find.byKey(
       const ValueKey('home-circle-grid-post-circle_post_video_1'),
     );
-    await tester.dragUntilVisible(
-      gridPost,
-      find.byType(Scrollable).last,
-      const Offset(0, -300),
-    );
-    await tester.ensureVisible(gridPost);
-    await tester.pumpAndSettle();
-    await tester.tap(gridPost);
-    await tester.pumpAndSettle();
+    expect(card, findsOneWidget);
+    await _scrollHubUntilVisible(tester, card);
+    await tester.tap(card);
+    await _hubPumpSettled(tester);
 
     expect(find.text('video-viewer'), findsOneWidget);
   });
@@ -372,7 +441,7 @@ void main() {
     });
 
     await tester.pumpWidget(_buildTestApp(textScaleFactor: 1.4));
-    await tester.pumpAndSettle();
+    await _hubPumpSettled(tester);
 
     final overflowErrors = capturedErrors
         .map((details) => details.exceptionAsString())

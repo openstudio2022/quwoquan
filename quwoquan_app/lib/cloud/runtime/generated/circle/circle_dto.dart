@@ -2,7 +2,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_confi
 
 /// 圈子聚合根 DTO。
 ///
-/// 字段对齐：contracts/metadata/social/circle/fields.yaml Circle
+/// 字段对齐：contracts/metadata/social/circle/fields.yaml Circle；
+/// Dart/JSON 映射约定见 `quwoquan_service/contracts/metadata/social/circle/dart_type_mapping.yaml`。
 class CircleDto {
   final String id;
   final String name;

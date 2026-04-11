@@ -86,11 +86,7 @@ func (h *CircleHandler) handleSearchCircles(w http.ResponseWriter, r *http.Reque
 		Cursor:      q.Get("cursor"),
 		Limit:       limit,
 	})
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":        resp.Items,
-		"facetBuckets": resp.FacetBuckets,
-		"cursor":       resp.Cursor,
-	})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
@@ -92,7 +98,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listConversations({
+  Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -111,13 +117,14 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listConversations,
       ),
     );
-    return CloudResponseDecoder.asCursorPage(
+    final page = CloudResponseDecoder.asCursorPage(
       decoded,
       context: _contextForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationsOperation,
       ),
-    ).items;
+    );
+    return page.items.map(ChatInboxDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -187,17 +194,20 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getConversation(String conversationId) async {
+  Future<ConversationDto> getConversation(String conversationId) async {
     final uri = _uri(
       ChatApiMetadata.getConversationPath(conversationId: conversationId),
     );
-    return await _httpClient.getJson(
+    final decoded = await _httpClient.getJson(
       uri,
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.getConversationOperation,
         clientPageId: ChatRequestPageIds.getConversation,
       ),
+    );
+    return ConversationDto.fromMap(
+      Map<String, dynamic>.from(decoded as Map),
     );
   }
 
@@ -283,7 +293,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> sendMessage({
+  Future<SendMessageResponse> sendMessage({
     required String conversationId,
     required String type,
     required String content,
@@ -300,7 +310,7 @@ class RemoteChatRepository implements ChatRepository {
     final uri = _uri(
       ChatApiMetadata.sendMessagePath(conversationId: conversationId),
     );
-    return await _httpClient.postJson(
+    final decoded = await _httpClient.postJson(
       uri,
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
@@ -320,6 +330,9 @@ class RemoteChatRepository implements ChatRepository {
         'senderProfileSubjectId': ?senderProfileSubjectId,
         'personaContextVersion': ?personaContextVersion,
       },
+    );
+    return SendMessageResponse.fromMap(
+      Map<String, dynamic>.from(decoded as Map),
     );
   }
 
@@ -346,7 +359,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> syncMessages({
+  Future<SyncResponse> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
@@ -354,7 +367,7 @@ class RemoteChatRepository implements ChatRepository {
     final uri = _uri(
       ChatApiMetadata.syncMessagesPath(conversationId: conversationId),
     );
-    return await _httpClient.postJson(
+    final decoded = await _httpClient.postJson(
       uri,
       headers: _headersForSurface(
         AppUiSurfaces.chatDetail,
@@ -363,6 +376,7 @@ class RemoteChatRepository implements ChatRepository {
       ),
       body: {'lastSeq': lastSeq, 'limit': limit},
     );
+    return SyncResponse.fromMap(Map<String, dynamic>.from(decoded as Map));
   }
 
   // ── 已读回执 ──────────────────────────────────────────────────────────────
@@ -390,7 +404,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getReceipts({
+  Future<List<ChatMessageReceiptDto>> getReceipts({
     required String conversationId,
     required String messageId,
   }) async {
@@ -410,9 +424,14 @@ class RemoteChatRepository implements ChatRepository {
     );
     final items = decoded['items'];
     if (items is List) {
-      return items.cast<Map<String, dynamic>>();
+      return items
+          .whereType<Map>()
+          .map((m) => ChatMessageReceiptDto.fromMap(
+                Map<String, dynamic>.from(m),
+              ))
+          .toList(growable: false);
     }
-    return [];
+    return const [];
   }
 
   // ── 成员管理 ──────────────────────────────────────────────────────────────
@@ -585,14 +604,14 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listContactTabCircles({
+  Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return const [];
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listContactTabFunGroups({
+  Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return const [];
@@ -640,7 +659,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 会话时间戳索引 ──────────────────────────────────────────────────────────
 
   @override
-  Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
     final uri = _uri(ChatApiMetadata.listConversationTimestampsPath);
     final decoded = await _httpClient.getJson(
       uri,
@@ -652,13 +671,18 @@ class RemoteChatRepository implements ChatRepository {
     );
     final items = decoded['items'];
     if (items is List) {
-      return items.cast<Map<String, dynamic>>();
+      return items
+          .whereType<Map>()
+          .map((m) => ChatConversationTimestampDto.fromMap(
+                Map<String, dynamic>.from(m),
+              ))
+          .toList(growable: false);
     }
-    return [];
+    return const [];
   }
 
   @override
-  Future<List<Map<String, dynamic>>> batchGetConversations(
+  Future<List<ConversationDto>> batchGetConversations(
     List<String> ids,
   ) async {
     final uri = _uri(ChatApiMetadata.batchGetConversationsPath);
@@ -673,9 +697,12 @@ class RemoteChatRepository implements ChatRepository {
     );
     final items = decoded['items'];
     if (items is List) {
-      return items.cast<Map<String, dynamic>>();
+      return items
+          .whereType<Map>()
+          .map((m) => ConversationDto.fromMap(Map<String, dynamic>.from(m)))
+          .toList(growable: false);
     }
-    return [];
+    return const [];
   }
 
   // ── 群管理 ──────────────────────────────────────────────────────────────────
@@ -693,7 +720,9 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.getConversation,
       ),
     );
-    return ChatGroupSettingsDto.fromMap(decoded);
+    return ChatGroupSettingsDto.fromMap(
+      Map<String, dynamic>.from(decoded as Map),
+    );
   }
 
   @override

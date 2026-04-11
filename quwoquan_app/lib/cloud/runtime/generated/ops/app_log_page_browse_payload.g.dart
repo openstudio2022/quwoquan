@@ -8,11 +8,11 @@ class AppLogPageBrowsePayload {
   final String action;
   final Map<String, dynamic>? actionMeta;
 
-  const AppLogPageBrowsePayload({
-    required this.event,
-    required this.route,
-    required this.pageName,
-    required this.action,
+  AppLogPageBrowsePayload({
+    this.event = 'browse',
+    this.route = '',
+    this.pageName = '',
+    this.action = '',
     this.actionMeta,
   });
 

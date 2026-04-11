@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — 搜索供应商 HTTP/JSON，边界归一化为 NormalizedWebReference 等。
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +16,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dar
 import 'package:quwoquan_app/assistant/observability/logging/app_run_interaction_collector.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/normalized_web_reference.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 
@@ -97,7 +100,8 @@ class WebSearchTool implements AssistantTool {
       final result = await broker.search(request);
       return _sanitizeBrokerSearchResult(request: request, result: result);
     }
-    final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
+    final args = AssistantToolArgumentsMap(arguments);
+    final rawQuery = args.stringField('query') ?? '';
     final queryTasks = _normalizeQueryTasks(arguments['queryTasks']);
     final variants =
         (arguments['queryVariants'] as List?)
@@ -614,8 +618,9 @@ class WebSearchTool implements AssistantTool {
       domainPolicy: domainPolicy,
     );
     final retrievedAt = DateTime.now().toIso8601String();
+    final dataView = BrokerWebSearchResultDataView(sanitizedData);
     final referenceCandidates = _referenceCandidatesFromResultData(
-      data: sanitizedData,
+      data: dataView,
       queryTask: queryTask,
       retrievedAt: retrievedAt,
     );
@@ -665,38 +670,32 @@ class WebSearchTool implements AssistantTool {
   }
 
   List<Map<String, dynamic>> _referenceCandidatesFromResultData({
-    required Map<String, dynamic> data,
+    required BrokerWebSearchResultDataView data,
     required Map<String, dynamic> queryTask,
     required String retrievedAt,
   }) {
-    final refs =
-        (data['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+    final refs = data.embeddedReferences;
     if (refs.isNotEmpty) return refs;
-    final url = (data['url'] as String?)?.trim() ?? '';
+    final url = data.valueOf('url');
     if (url.isEmpty) return const <Map<String, dynamic>>[];
-    final snippet = (data['summary'] as String?)?.trim().isNotEmpty == true
-        ? (data['summary'] as String).trim()
-        : (data['snippet'] as String?)?.trim() ?? '';
+    final snippet = data.summaryOrSnippet;
+    final title = data.valueOf('title');
+    final source = data.valueOf('source');
+    final sourceHost = data.valueOf('sourceHost');
     return <Map<String, dynamic>>[
       <String, dynamic>{
-        'title': (data['title'] as String?)?.trim() ?? url,
+        'title': title.isNotEmpty ? title : url,
         'url': url,
-        'source': (data['source'] as String?)?.trim().isNotEmpty == true
-            ? (data['source'] as String).trim()
-            : (data['sourceHost'] as String?)?.trim() ?? '',
+        'source': source.isNotEmpty ? source : sourceHost,
         'snippet': snippet,
-        'sourceTier': (data['sourceTier'] as String?)?.trim() ?? '',
-        'publishedAt': (data['publishedAt'] as String?)?.trim() ?? '',
-        'observedAt': (data['observedAt'] as String?)?.trim() ?? '',
-        'queryTaskId': _stringValue(data['queryTaskId']).isNotEmpty
-            ? _stringValue(data['queryTaskId'])
+        'sourceTier': data.valueOf('sourceTier'),
+        'publishedAt': data.valueOf('publishedAt'),
+        'observedAt': data.valueOf('observedAt'),
+        'queryTaskId': data.valueOf('queryTaskId').isNotEmpty
+            ? data.valueOf('queryTaskId')
             : _stringValue(queryTask['id']),
-        'dimension': _stringValue(data['dimension']).isNotEmpty
-            ? _stringValue(data['dimension'])
+        'dimension': data.valueOf('dimension').isNotEmpty
+            ? data.valueOf('dimension')
             : _stringValue(queryTask['dimension']),
         'retrievedAt': retrievedAt,
       },
@@ -1997,6 +1996,14 @@ class WebSearchTool implements AssistantTool {
     }
   }
 
+  /// 供应商最小 JSON fixture 测试用（与内部 `_extractReferences` 输出一致）。
+  List<Map<String, dynamic>> extractReferencesForFixtureTest({
+    required AssistantSearchProvider provider,
+    required Object? decoded,
+  }) {
+    return _extractReferences(provider: provider, decoded: decoded);
+  }
+
   List<Map<String, dynamic>> _extractBraveReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final results =
@@ -2007,15 +2014,16 @@ class WebSearchTool implements AssistantTool {
         const <Map<String, dynamic>>[];
     return results
         .take(12)
-        .map(
-          (item) => _normalizedReference(
+        .map((item) {
+          final n = NormalizedWebReference.fromBraveWebResult(item);
+          return _normalizedReference(
             provider: AssistantSearchProvider.brave,
-            title: (item['title'] as String?)?.trim() ?? '',
-            url: (item['url'] as String?)?.trim() ?? '',
-            snippet: (item['description'] as String?)?.trim() ?? '',
+            title: n.title,
+            url: n.url,
+            snippet: n.snippet,
             raw: item,
-          ),
-        )
+          );
+        })
         .where((item) => (item['url'] as String).isNotEmpty)
         .toList(growable: false);
   }
@@ -2031,15 +2039,16 @@ class WebSearchTool implements AssistantTool {
     if (organic.isNotEmpty) {
       return organic
           .take(12)
-          .map(
-            (item) => _normalizedReference(
+          .map((item) {
+            final n = NormalizedWebReference.fromSerpOrganicItem(item);
+            return _normalizedReference(
               provider: AssistantSearchProvider.duckduckgo,
-              title: (item['title'] as String?)?.trim() ?? '',
-              url: (item['url'] as String?)?.trim() ?? '',
-              snippet: (item['snippet'] as String?)?.trim() ?? '',
+              title: n.title,
+              url: n.url,
+              snippet: n.snippet,
               raw: item,
-            ),
-          )
+            );
+          })
           .where((item) => (item['url'] as String).isNotEmpty)
           .toList(growable: false);
     }
@@ -2051,15 +2060,14 @@ class WebSearchTool implements AssistantTool {
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     for (final item in related.take(12)) {
-      final text = (item['Text'] as String?)?.trim() ?? '';
-      final url = (item['FirstURL'] as String?)?.trim() ?? '';
-      if (url.isNotEmpty) {
+      final n = NormalizedWebReference.fromDuckduckgoRelatedTopic(item);
+      if (n.url.isNotEmpty) {
         refs.add(
           _normalizedReference(
             provider: AssistantSearchProvider.duckduckgo,
-            title: text,
-            url: url,
-            snippet: text,
+            title: n.title,
+            url: n.url,
+            snippet: n.snippet,
             raw: item,
           ),
         );
@@ -2100,15 +2108,16 @@ class WebSearchTool implements AssistantTool {
         const <Map<String, dynamic>>[];
     return organic
         .take(12)
-        .map(
-          (item) => _normalizedReference(
+        .map((item) {
+          final n = NormalizedWebReference.fromSerpApiOrganic(item);
+          return _normalizedReference(
             provider: AssistantSearchProvider.serpapi,
-            title: (item['title'] as String?)?.trim() ?? '',
-            url: (item['link'] as String?)?.trim() ?? '',
-            snippet: (item['snippet'] as String?)?.trim() ?? '',
+            title: n.title,
+            url: n.url,
+            snippet: n.snippet,
             raw: item,
-          ),
-        )
+          );
+        })
         .where((item) => (item['url'] as String).isNotEmpty)
         .toList(growable: false);
   }

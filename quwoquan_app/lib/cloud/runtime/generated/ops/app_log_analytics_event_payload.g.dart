@@ -7,11 +7,11 @@ class AppLogAnalyticsEventPayload {
   final String eventName;
   final Map<String, dynamic> properties;
 
-  const AppLogAnalyticsEventPayload({
-    required this.kind,
-    required this.eventType,
-    required this.eventName,
-    required this.properties,
+  AppLogAnalyticsEventPayload({
+    this.kind = 'analytics_event',
+    this.eventType = '',
+    this.eventName = '',
+    this.properties = const <String, dynamic>{},
   });
 
   factory AppLogAnalyticsEventPayload.fromMap(Map<String, dynamic> m) {

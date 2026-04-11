@@ -1,3 +1,5 @@
+// F6: Optional metadata/schema codegen for this contract is deferred; the persisted shape
+// stays Dart-class + JSON fields aligned with run artifacts.
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 
 const String assistantRetrievalOutcomeField = 'retrievalOutcome';

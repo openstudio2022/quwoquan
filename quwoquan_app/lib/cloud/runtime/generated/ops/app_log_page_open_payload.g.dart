@@ -6,10 +6,10 @@ class AppLogPageOpenPayload {
   final String route;
   final String pageName;
 
-  const AppLogPageOpenPayload({
-    required this.event,
-    required this.route,
-    required this.pageName,
+  AppLogPageOpenPayload({
+    this.event = 'open',
+    this.route = '',
+    this.pageName = '',
   });
 
   factory AppLogPageOpenPayload.fromMap(Map<String, dynamic> m) {

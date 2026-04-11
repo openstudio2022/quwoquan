@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -56,7 +57,14 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
             category: category,
             limit: 100,
           );
-      _posts = dtos.map(PostSummaryView.fromDto).toList(growable: false);
+      _posts = dtos
+          .map(
+            (dto) => PostSummaryView.fromDto(
+              dto,
+              surfaceId: PostReadSurfaceId.detailPhoto,
+            ),
+          )
+          .toList(growable: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -90,7 +98,14 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
         final value = next.value;
         if (value != null && value.items.length > _posts.length && mounted) {
           setState(() {
-            _posts = value.items.map(PostSummaryView.fromDto).toList(growable: false);
+            _posts = value.items
+                .map(
+                  (dto) => PostSummaryView.fromDto(
+                    dto,
+                    surfaceId: PostReadSurfaceId.detailPhoto,
+                  ),
+                )
+                .toList(growable: false);
           });
         }
       });

@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 
 CircleDto circleDtoFromHubMockMap(Map<String, Object?> circle) {
   return CircleDto.fromMap({
@@ -18,6 +18,14 @@ Map<String, dynamic> mergeCircleStoryRaw(
     ...Map<String, dynamic>.from(item),
     if (!item.containsKey('circleName')) 'circleName': circleName,
   };
+}
+
+/// 合并圈子展示名后解析为 [CircleHubFeedPostEntry]（单点入口，避免各处重复 `fromMap(merge...)`）。
+CircleHubFeedPostEntry mergeCircleStoryEntry(
+  Map<String, Object?> item,
+  String circleName,
+) {
+  return CircleHubFeedPostEntry.fromMap(mergeCircleStoryRaw(item, circleName));
 }
 
 String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
@@ -43,10 +51,3 @@ String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
   }
 }
 
-PostBaseDto? hubTryParsePostBaseDto(Map<String, dynamic> item) {
-  try {
-    return postBaseDtoFromMap(item);
-  } catch (_) {
-    return null;
-  }
-}

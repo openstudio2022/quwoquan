@@ -1,0 +1,14 @@
+# 与 service.yaml 中 request_fields 对应的 Dart/JSON 类型（codegen 唯一源）。
+# 键名与 request_fields 条目一致。
+version: 1
+field_types:
+  callType: string
+  inviteeIds: list_string
+  conversationId: string
+  circleId: string
+  maxParticipants: int
+  muted: bool
+  cameraOn: bool
+# toJson 时若为 null 则省略键（与 App 侧可选请求体一致）
+omit_if_null_by_operation:
+  InitiateCall: [conversationId, circleId]

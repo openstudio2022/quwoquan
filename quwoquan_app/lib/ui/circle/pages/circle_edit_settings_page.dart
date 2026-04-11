@@ -73,7 +73,7 @@ class _CircleEditSettingsPageState
   late bool _autoSyncChat;
   late List<CircleSectionConfigDto> _sections;
   bool _isSaving = false;
-  Map<String, Map<String, Object?>> _categoryLabelsFromRepo = {};
+  Map<String, CircleCategoryTabConfigDto> _categoryLabelsFromRepo = {};
 
   bool get _isCreateMode => widget.isCreateMode;
 
@@ -131,10 +131,9 @@ class _CircleEditSettingsPageState
         return;
       }
       setState(() {
-        _categoryLabelsFromRepo = {
-          for (final e in cfg.entries)
-            e.key: Map<String, Object?>.from(e.value),
-        };
+        _categoryLabelsFromRepo = Map<String, CircleCategoryTabConfigDto>.from(
+          cfg,
+        );
       });
     } catch (_) {}
   }
@@ -336,13 +335,14 @@ class _CircleEditSettingsPageState
     setState(() => _isSaving = true);
     final payload = _submitPayload(name);
     final wire = payload.toWire();
+    final wireDto = CircleCreateWireDto.fromMap(wire);
     bool success = false;
     String? createdCircleId;
     if (_isCreateMode) {
       try {
         final repo = ref.read(circleRepositoryProvider);
-        final created = await repo.createCircle(wire);
-        final merged = mergeCreateCircleWireWithCreated(wire, created);
+        final created = await repo.createCircle(wireDto);
+        final merged = mergeCreateCircleWireWithCreated(wireDto, created);
         createdCircleId = CircleDto.fromMap(merged).id;
         success = createdCircleId.isNotEmpty;
         if (success) {
@@ -353,7 +353,7 @@ class _CircleEditSettingsPageState
       }
     } else {
       final circleCtrl = ref.read(circleStateProvider(widget.circleId!).notifier);
-      success = await circleCtrl.updateCircleDetails(wire);
+      success = await circleCtrl.updateCircleDetails(payload.toUpdateWireDto());
     }
     if (!mounted) {
       return;
@@ -1119,7 +1119,7 @@ class _CircleEditSettingsPageState
         .map(
           (id) => MapEntry(
             id,
-            labels[id]?['label']?.toString() ?? id,
+            labels[id]?.label ?? id,
           ),
         )
         .toList(growable: false);

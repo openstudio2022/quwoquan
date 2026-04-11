@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 
@@ -50,6 +51,17 @@ class ChatContactsRow {
     );
   }
 
+  factory ChatContactsRow.fromContactTabCircleDto(ChatContactTabCircleRowDto d) {
+    return ChatContactsRow(
+      kind: ChatContactsRowKind.circle,
+      id: d.circleId,
+      displayName: d.displayName,
+      avatarUrl: d.avatarUrl,
+      subtitle: d.subtitle,
+      circleId: d.circleId.isNotEmpty ? d.circleId : null,
+    );
+  }
+
   factory ChatContactsRow.fromContactTabCircleMap(Map<String, dynamic> m) {
     final circleId = (m['circleId'] ?? m['id'] ?? '').toString();
     return ChatContactsRow(
@@ -59,6 +71,20 @@ class ChatContactsRow {
       avatarUrl: (m['avatarUrl'] ?? '').toString(),
       subtitle: (m['subtitle'] ?? '').toString(),
       circleId: circleId.isNotEmpty ? circleId : null,
+    );
+  }
+
+  factory ChatContactsRow.fromContactTabFunGroupDto(
+    ChatContactTabFunGroupRowDto d,
+  ) {
+    return ChatContactsRow(
+      kind: ChatContactsRowKind.group,
+      id: d.conversationId,
+      displayName: d.displayName,
+      avatarUrl: d.avatarUrl,
+      subtitle: d.subtitle,
+      conversationId:
+          d.conversationId.isNotEmpty ? d.conversationId : null,
     );
   }
 

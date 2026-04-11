@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — 站内/聚合搜索桥接；结果归一化后进入工具协议。
+
 import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';

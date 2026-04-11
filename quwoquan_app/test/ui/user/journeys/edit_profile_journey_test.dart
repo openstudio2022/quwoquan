@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -19,14 +21,36 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
   final Map<String, dynamic> _updatedProfile = {};
 
   @override
-  Future<void> updateProfile(Map<String, dynamic> data) async {
-    _updatedProfile.addAll(data);
+  Future<void> updateProfile(ProfileEditUpdatePayload data) async {
+    _updatedProfile.addAll(data.toRepositoryMap());
   }
 
   @override
-  Future<Map<String, dynamic>> getUserProfile(String userId) async {
+  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
     final base = await super.getUserProfile(userId);
-    return {...base, ..._updatedProfile};
+    if (_updatedProfile.isEmpty) return base;
+    final nick = _updatedProfile['nickname'] as String?;
+    return ProfileSubjectViewData(
+      profileSubjectId: base.profileSubjectId,
+      ownerUserId: base.ownerUserId,
+      subjectType: base.subjectType,
+      subAccountId: base.subAccountId,
+      username: (_updatedProfile['username'] as String?) ?? base.username,
+      displayName:
+          (nick != null && nick.isNotEmpty) ? nick : base.displayName,
+      avatarUrl: base.avatarUrl,
+      backgroundUrl: base.backgroundUrl,
+      bio: (_updatedProfile['bio'] as String?) ?? base.bio,
+      followerCount: base.followerCount,
+      followingCount: base.followingCount,
+      postCount: base.postCount,
+      circleCount: base.circleCount,
+      likeCount: base.likeCount,
+      profileVisibility: base.profileVisibility,
+      inheritsFromOwner: base.inheritsFromOwner,
+      overriddenFields: base.overriddenFields,
+      updatedAt: base.updatedAt,
+    );
   }
 }
 

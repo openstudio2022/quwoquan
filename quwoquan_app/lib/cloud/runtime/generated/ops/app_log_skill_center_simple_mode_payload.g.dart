@@ -6,10 +6,10 @@ class AppLogSkillCenterSimpleModePayload {
   final String action;
   final bool enabled;
 
-  const AppLogSkillCenterSimpleModePayload({
-    required this.event,
-    required this.action,
-    required this.enabled,
+  AppLogSkillCenterSimpleModePayload({
+    this.event = 'skill_center_action',
+    this.action = 'simple_mode_toggle',
+    this.enabled = false,
   });
 
   factory AppLogSkillCenterSimpleModePayload.fromMap(Map<String, dynamic> m) {

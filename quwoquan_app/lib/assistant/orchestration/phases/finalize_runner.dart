@@ -1,3 +1,5 @@
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — finalize 消费持久化/响应 Map；与 RunArtifacts 对齐。
+
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';

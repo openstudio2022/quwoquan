@@ -126,12 +126,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         status: CallStatus.initiated,
       );
 
-      final map = await _repo.initiateCall(
+      final result = await _repo.initiateCall(
         callType: callTypeStr,
         inviteeIds: targetUserIds,
         conversationId: conversationId,
       );
-      final session = CallSessionDto.fromMap(map);
+      final session = result.session;
 
       state = state.copyWith(
         session: session,
@@ -147,7 +147,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      final token = map['token'] as String? ?? '';
+      final token = result.token;
       if (token.isNotEmpty) {
         await _connectToLiveKit(token, enableVideo: callTypeStr == 'video');
       }
@@ -166,13 +166,17 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       state = state.copyWith(isLoading: true, error: null);
       _cancelTimeoutTimer();
 
-      final map = await _repo.answerCall(callId);
-      final session = CallSessionDto.fromMap(map);
+      final answer = await _repo.answerCall(callId);
+      final session = answer.session ?? state.session;
+      if (session == null) {
+        state = state.copyWith(isLoading: false, error: 'answerCall: empty session');
+        return;
+      }
       // Preserve the call type established during the ringing phase;
       // the answer response must not silently override it (e.g., mock data
       // may always return a 'video' session regardless of actual type).
       final type = state.callType;
-      final token = map['token'] as String? ?? '';
+      final token = answer.token ?? '';
 
       state = state.copyWith(
         session: session,
@@ -240,10 +244,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     try {
       state = state.copyWith(isLoading: true, error: null);
 
-      final tokenMap = await _repo.joinRtcToken(callId);
-      final token = tokenMap['token'] as String? ?? '';
-      final sessionMap = await _repo.getCallSession(callId);
-      final session = CallSessionDto.fromMap(sessionMap);
+      final creds = await _repo.joinRtcToken(callId);
+      final token = creds.token;
+      final session = await _repo.getCallSession(callId);
       final type = CallType.fromString(session.callType);
 
       state = state.copyWith(
@@ -282,12 +285,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     }
   }
 
-  Future<void> inviteToCall(List<String> userIds) async {
+  Future<void> inviteToCall(List<String> inviteeIds) async {
     final callId = state.session?.id;
     if (callId == null) return;
     try {
-      final sessionMap = await _repo.getCallSession(callId);
-      final session = CallSessionDto.fromMap(sessionMap);
+      await _repo.inviteToCall(callId: callId, inviteeIds: inviteeIds);
+      final session = await _repo.getCallSession(callId);
       state = state.copyWith(session: session);
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -337,7 +340,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     final session = state.session;
     if (session == null) return;
     final answered = session.copyWith(
-      status: 'active',
+      status: 'in_call',
       updatedAt: DateTime.now(),
     );
     state = state.copyWith(

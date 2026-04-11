@@ -1,4 +1,7 @@
 import 'package:test/test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 
 void main() {
@@ -15,19 +18,25 @@ void main() {
 
     test('getUserProfile 返回完整档案', () async {
       final profile = await repo.getUserProfile('nature_photographer');
-      expect(profile['userId'], 'nature_photographer');
-      expect(profile['nickname'], isNotEmpty);
-      expect(profile['avatarUrl'], isNotEmpty);
-      expect(profile.containsKey('followerCount'), isTrue);
-      expect(profile.containsKey('followingCount'), isTrue);
-      expect(profile.containsKey('postCount'), isTrue);
-      expect(profile.containsKey('circleCount'), isTrue);
-      expect(profile.containsKey('likeCount'), isTrue);
+      expect(profile.profileSubjectId, 'nature_photographer');
+      expect(profile.displayName, isNotEmpty);
+      expect(profile.avatarUrl, isNotEmpty);
+      expect(profile.followerCount, greaterThan(0));
+      expect(profile.followingCount, greaterThan(0));
+      expect(profile.postCount, greaterThan(0));
+      expect(profile.circleCount, greaterThan(0));
+      expect(profile.likeCount, greaterThan(0));
     });
 
     test('updateProfile 不崩溃', () async {
       await expectLater(
-        repo.updateProfile({'nickname': '新昵称'}),
+        repo.updateProfile(
+          const ProfileEditUpdatePayload(
+            nickname: '新昵称',
+            username: 'u',
+            bio: 'b',
+          ),
+        ),
         completes,
       );
     });
@@ -67,18 +76,18 @@ void main() {
       final circles = await repo.listUserCircles('nature_photographer');
       expect(circles, isNotEmpty);
       for (final c in circles) {
-        expect(c['id'], isNotNull);
-        expect(c['name'], isNotNull);
-        expect(c['coverUrl'], isNotNull);
+        expect(c.id, isNotEmpty);
+        expect(c.name, isNotEmpty);
+        expect(c.coverUrl ?? '', isNotEmpty);
       }
     });
 
     test('getUserStats 返回统计数据', () async {
       final stats = await repo.getUserStats('nature_photographer');
-      expect(stats.containsKey('followingCount'), isTrue);
-      expect(stats.containsKey('circleCount'), isTrue);
-      expect(stats.containsKey('followerCount'), isTrue);
-      expect(stats.containsKey('likeCount'), isTrue);
+      expect(stats.followingCount, greaterThan(0));
+      expect(stats.circleCount, greaterThan(0));
+      expect(stats.followerCount, greaterThan(0));
+      expect(stats.likeCount, greaterThan(0));
     });
 
     // ── 关注 / 粉丝 ────────────────────────────────────────────────────────
@@ -96,9 +105,9 @@ void main() {
       expect(following, isList);
       expect(following, isNotEmpty);
       for (final u in following) {
-        expect(u['userId'], isNotNull);
-        expect(u['nickname'], isNotNull);
-        expect(u['avatarUrl'], isNotNull);
+        expect(u.profileSubjectId, isNotEmpty);
+        expect(u.displayName, isNotEmpty);
+        expect(u.avatarUrl, isNotEmpty);
       }
     });
 
@@ -107,16 +116,16 @@ void main() {
       expect(followers, isList);
       expect(followers, isNotEmpty);
       for (final u in followers) {
-        expect(u['userId'], isNotNull);
-        expect(u['nickname'], isNotNull);
+        expect(u.profileSubjectId, isNotEmpty);
+        expect(u.displayName, isNotEmpty);
       }
     });
 
     test('getRelationship 返回关系状态', () async {
       final rel = await repo.getRelationship('target_user_1');
-      expect(rel.containsKey('isFollowing'), isTrue);
-      expect(rel.containsKey('isFollowedBy'), isTrue);
-      expect(rel.containsKey('isMutual'), isTrue);
+      expect(rel.isFollowing, isA<bool>());
+      expect(rel.isFollowedBy, isA<bool>());
+      expect(rel.isMutual, isA<bool>());
     });
 
     test('listUserLikes 返回获赞列表', () async {
@@ -124,8 +133,8 @@ void main() {
       expect(likes, isList);
       expect(likes, isNotEmpty);
       for (final item in likes) {
-        expect(item['postId'], isNotNull);
-        expect(item['likerNickname'], isNotNull);
+        expect(item.postId, isNotEmpty);
+        expect(item.likerNickname, isNotEmpty);
       }
     });
 
@@ -135,25 +144,29 @@ void main() {
       final personas = await repo.listPersonas();
       expect(personas, isNotEmpty);
       for (final p in personas) {
-        expect(p['id'], isNotNull);
-        expect(p['displayName'], isNotNull);
-        expect(p.containsKey('isPrimary'), isTrue);
-        expect(p.containsKey('isActive'), isTrue);
+        expect(p.id, isNotEmpty);
+        expect(p.displayName, isNotEmpty);
       }
     });
 
     test('createPersona 返回含 id 的分身', () async {
-      final persona = await repo.createPersona({
-        'displayName': '新分身',
-        'isPrivate': true,
-      });
-      expect(persona['id'], isNotNull);
-      expect(persona['displayName'], '新分身');
+      final persona = await repo.createPersona(
+        PersonaCreateRequestDto(
+          displayName: '新分身',
+          isolationLevel: 'strict',
+        ),
+      );
+      expect(persona.id, isNotEmpty);
+      expect(persona.displayName, '新分身');
+      expect(persona.isPrivate, isTrue);
     });
 
     test('updatePersona 不崩溃', () async {
       await expectLater(
-        repo.updatePersona('persona_primary', {'displayName': '更新名'}),
+        repo.updatePersona(
+          'persona_primary',
+          PersonaUpdateRequestDto(displayName: '更新名'),
+        ),
         completes,
       );
     });
@@ -221,21 +234,21 @@ void main() {
     test('getUserProfile 统计字段与 getUserStats 一致', () async {
       final profile = await repo.getUserProfile('nature_photographer');
       final stats = await repo.getUserStats('nature_photographer');
-      expect(profile['followingCount'], stats['followingCount']);
-      expect(profile['followerCount'], stats['followerCount']);
-      expect(profile['circleCount'], stats['circleCount']);
-      expect(profile['likeCount'], stats['likeCount']);
+      expect(profile.followingCount, stats.followingCount);
+      expect(profile.followerCount, stats.followerCount);
+      expect(profile.circleCount, stats.circleCount);
+      expect(profile.likeCount, stats.likeCount);
     });
 
     test('listPersonas 至少有一个 isPrimary=true', () async {
       final personas = await repo.listPersonas();
-      final primary = personas.where((p) => p['isPrimary'] == true);
+      final primary = personas.where((p) => p.isPrimary);
       expect(primary, isNotEmpty);
     });
 
     test('listPersonas 恰好有一个 isActive=true', () async {
       final personas = await repo.listPersonas();
-      final active = personas.where((p) => p['isActive'] == true);
+      final active = personas.where((p) => p.isActive);
       expect(active.length, 1);
     });
   });
@@ -256,15 +269,17 @@ void main() {
 
     test('不存在的 userId — getUserProfile 返回默认档案', () async {
       final profile = await repo.getUserProfile('nonexistent_user_xyz');
-      expect(profile['userId'], 'nonexistent_user_xyz');
-      expect(profile.containsKey('nickname'), isTrue);
+      expect(profile.profileSubjectId, 'nonexistent_user_xyz');
+      expect(profile.displayName, isNotEmpty);
     });
 
-    test('getUserStats 所有值为 int', () async {
+    test('getUserStats 所有计数为非负 int', () async {
       final stats = await repo.getUserStats('nature_photographer');
-      for (final value in stats.values) {
-        expect(value, isA<int>());
-      }
+      expect(stats.followingCount, isNonNegative);
+      expect(stats.circleCount, isNonNegative);
+      expect(stats.followerCount, isNonNegative);
+      expect(stats.likeCount, isNonNegative);
+      expect(stats.postCount, isNonNegative);
     });
 
     test('帖子各类型 DTO 正确分发', () async {
@@ -292,13 +307,24 @@ void main() {
       await expectLater(repo.activatePersona('nonexistent'), completes);
     });
 
-    test('updateProfile 空 data 不崩溃', () async {
-      await expectLater(repo.updateProfile({}), completes);
+    test('updateProfile 空 payload 不崩溃', () async {
+      await expectLater(
+        repo.updateProfile(
+          const ProfileEditUpdatePayload(
+            nickname: '',
+            username: '',
+            bio: '',
+          ),
+        ),
+        completes,
+      );
     });
 
-    test('createPersona 空 data 不崩溃', () async {
-      final result = await repo.createPersona({});
-      expect(result['id'], isNotNull);
+    test('createPersona 最小请求（仅 displayName 空串）不崩溃', () async {
+      final result = await repo.createPersona(
+        PersonaCreateRequestDto(displayName: ''),
+      );
+      expect(result.id, isNotEmpty);
     });
 
     test('listFollowing cursor 参数不崩溃', () async {

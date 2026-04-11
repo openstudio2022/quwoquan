@@ -6,10 +6,10 @@ class AppLogPageBrowseSummaryPayload {
   final String route;
   final String action;
 
-  const AppLogPageBrowseSummaryPayload({
-    required this.event,
-    required this.route,
-    required this.action,
+  AppLogPageBrowseSummaryPayload({
+    this.event = 'browse',
+    this.route = '',
+    this.action = '',
   });
 
   factory AppLogPageBrowseSummaryPayload.fromMap(Map<String, dynamic> m) {

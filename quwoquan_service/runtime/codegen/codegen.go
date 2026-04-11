@@ -6,8 +6,10 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"quwoquan_service/runtime/registry"
 )
@@ -16,14 +18,20 @@ import (
 type Generator struct {
 	reg       *registry.EntityRegistry
 	outputDir string
+	cfg       generatorConfig
 	templates map[string]*template.Template
 }
 
-// NewGenerator creates a code generator.
-func NewGenerator(reg *registry.EntityRegistry, outputDir string) *Generator {
+// NewGenerator creates a code generator with optional behavior overrides.
+func NewGenerator(reg *registry.EntityRegistry, outputDir string, opts ...GeneratorOption) *Generator {
+	var cfg generatorConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	g := &Generator{
 		reg:       reg,
 		outputDir: outputDir,
+		cfg:       cfg,
 		templates: make(map[string]*template.Template),
 	}
 	g.registerBuiltinTemplates()
@@ -47,7 +55,10 @@ func (g *Generator) GenerateForAggregate(name string) error {
 		return err
 	}
 
-	data := g.buildTemplateData(name, agg)
+	data, err := g.buildTemplateData(name, agg)
+	if err != nil {
+		return err
+	}
 
 	targets := []struct {
 		tmplName string
@@ -68,6 +79,22 @@ func (g *Generator) GenerateForAggregate(name string) error {
 	return nil
 }
 
+// GenerateDomainModelOnly writes only the Go domain model file for the aggregate root package
+// (does not emit repository or event stubs). Used when repository interfaces are curated manually.
+func (g *Generator) GenerateDomainModelOnly(aggregateName string) error {
+	agg, err := g.reg.GetAggregate(aggregateName)
+	if err != nil {
+		return err
+	}
+	data, err := g.buildTemplateData(aggregateName, agg)
+	if err != nil {
+		return err
+	}
+	subDir := filepath.Join("domain", data.PackageName, "model")
+	fileName := data.SnakeName + ".go"
+	return g.renderToFile("go_model", data, subDir, fileName)
+}
+
 type templateData struct {
 	PackageName   string
 	AggregateRoot string
@@ -75,9 +102,20 @@ type templateData struct {
 	Domain        string
 	Backend       string
 	Entities      []entityData
+	EnumTypes     []enumTypeData
 	Events        []eventData
 	HasCache      bool
 	CacheTTL      int
+}
+
+type enumTypeData struct {
+	Name   string
+	Values []enumValueData
+}
+
+type enumValueData struct {
+	ConstName string
+	WireValue string
 }
 
 type entityData struct {
@@ -103,7 +141,7 @@ type eventData struct {
 	PayloadFields []string
 }
 
-func (g *Generator) buildTemplateData(name string, agg *registry.AggregateEntry) templateData {
+func (g *Generator) buildTemplateData(name string, agg *registry.AggregateEntry) (templateData, error) {
 	td := templateData{
 		PackageName:   strings.ToLower(name),
 		AggregateRoot: name,
@@ -114,14 +152,37 @@ func (g *Generator) buildTemplateData(name string, agg *registry.AggregateEntry)
 		CacheTTL:      agg.Spec.CacheTTLSeconds,
 	}
 
-	for entityName, entityDef := range agg.Fields.Entities {
+	entityNames := make([]string, 0, len(agg.Fields.Entities))
+	for n := range agg.Fields.Entities {
+		if g.cfg.skipViewEntities && strings.HasSuffix(n, "View") {
+			continue
+		}
+		entityNames = append(entityNames, n)
+	}
+	sort.Strings(entityNames)
+
+	entitySet := make(map[string]struct{}, len(entityNames))
+	for _, n := range entityNames {
+		entitySet[n] = struct{}{}
+	}
+
+	if g.cfg.typedEnums {
+		enums, err := g.collectEnumTypes(agg, entityNames)
+		if err != nil {
+			return templateData{}, err
+		}
+		td.EnumTypes = enums
+	}
+
+	for _, entityName := range entityNames {
+		entityDef := agg.Fields.Entities[entityName]
 		isRoot := entityName == name
 		var fields []fieldData
 		for _, f := range entityDef.Fields {
 			fields = append(fields, fieldData{
 				Name:       f.Name,
-				GoName:     toPascal(f.Name),
-				GoType:     yamlTypeToGo(f.Type),
+				GoName:     g.fieldGoName(f.Name),
+				GoType:     g.fieldGoType(f, entitySet),
 				JSONTag:    f.Name,
 				BSONTag:    f.Name,
 				IsPK:       containsStr(f.Constraints, "PK"),
@@ -144,7 +205,115 @@ func (g *Generator) buildTemplateData(name string, agg *registry.AggregateEntry)
 		})
 	}
 
-	return td
+	return td, nil
+}
+
+func (g *Generator) collectEnumTypes(agg *registry.AggregateEntry, entityNames []string) ([]enumTypeData, error) {
+	seen := make(map[string]struct{})
+	for _, en := range entityNames {
+		ed := agg.Fields.Entities[en]
+		for _, f := range ed.Fields {
+			if strings.TrimSpace(f.Type) != "enum" || f.EnumRef == "" {
+				continue
+			}
+			seen[f.EnumRef] = struct{}{}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for n := range seen {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	out := make([]enumTypeData, 0, len(names))
+	for _, n := range names {
+		vals, err := g.reg.GetEnum(n)
+		if err != nil {
+			return nil, fmt.Errorf("aggregate %q enum %q: %w", agg.Spec.Domain, n, err)
+		}
+		ev := make([]enumValueData, 0, len(vals))
+		for _, w := range vals {
+			ev = append(ev, enumValueData{
+				ConstName: enumConstName(n, w),
+				WireValue: w,
+			})
+		}
+		out = append(out, enumTypeData{Name: n, Values: ev})
+	}
+	return out, nil
+}
+
+func enumConstName(typeName, wire string) string {
+	parts := strings.Split(wire, "_")
+	var b strings.Builder
+	b.WriteString(typeName)
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		r := []rune(p)
+		b.WriteRune(unicode.ToUpper(r[0]))
+		if len(r) > 1 {
+			b.WriteString(string(r[1:]))
+		}
+	}
+	return b.String()
+}
+
+func (g *Generator) fieldGoName(jsonName string) string {
+	if g.cfg.goFieldIDSuffix && jsonName != "_id" && strings.HasSuffix(jsonName, "Id") {
+		base := jsonName[:len(jsonName)-2]
+		return camelBaseToPascal(base) + "ID"
+	}
+	return toPascal(jsonName)
+}
+
+// camelBaseToPascal turns "owner" -> "Owner", "defaultPublicGroup" -> "DefaultPublicGroup".
+func camelBaseToPascal(s string) string {
+	if s == "" {
+		return ""
+	}
+	start := 0
+	var b strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' && s[i-1] >= 'a' && s[i-1] <= 'z' {
+			part := s[start:i]
+			if len(part) > 0 {
+				b.WriteString(strings.ToUpper(part[:1]))
+				b.WriteString(part[1:])
+			}
+			start = i
+		}
+	}
+	part := s[start:]
+	if len(part) > 0 {
+		b.WriteString(strings.ToUpper(part[:1]))
+		b.WriteString(part[1:])
+	}
+	return b.String()
+}
+
+func (g *Generator) fieldGoType(f registry.FieldDef, entityNames map[string]struct{}) string {
+	t := strings.TrimSpace(f.Type)
+	if strings.HasPrefix(t, "[]") {
+		inner := strings.TrimSpace(strings.TrimPrefix(t, "[]"))
+		if inner == "string" {
+			return "[]string"
+		}
+		if g.cfg.resolveSliceEntity {
+			if _, ok := entityNames[inner]; ok {
+				return "[]" + inner
+			}
+		}
+		return yamlTypeToGo(t)
+	}
+	if t == "enum" {
+		if g.cfg.typedEnums && f.EnumRef != "" {
+			return f.EnumRef
+		}
+		return "string"
+	}
+	return yamlTypeToGo(t)
 }
 
 func (g *Generator) renderToFile(tmplName string, data templateData, subDir, fileName string) error {
@@ -182,6 +351,8 @@ func yamlTypeToGo(t string) string {
 	switch t {
 	case "string", "ObjectId":
 		return "string"
+	case "int64":
+		return "int64"
 	case "int", "integer":
 		return "int64"
 	case "float", "float64", "double":

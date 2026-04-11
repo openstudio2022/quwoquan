@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_file_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子存储空间板块：容量条 + 文件列表 + 上传按钮（含独立 loading/error 状态）
@@ -25,7 +26,7 @@ class SectionStorage extends ConsumerStatefulWidget {
 class _SectionStorageState extends ConsumerState<SectionStorage> {
   bool _isLoading = true;
   String? _error;
-  List<Map<String, dynamic>> _files = const [];
+  List<CircleFileDto> _files = const [];
 
   @override
   void initState() {
@@ -239,17 +240,17 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   }
 
   Widget _buildFileItem(
-    Map<String, dynamic> file,
+    CircleFileDto file,
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
     Color backgroundColor,
   ) {
-    final name = file['name'] as String;
-    final fileType = file['fileType'] as String;
-    final mimeType = file['mimeType'] as String?;
-    final sizeBytes = file['sizeBytes'] as int;
-    final date = file['createdAt'] as String;
+    final name = file.name;
+    final fileType = file.fileType;
+    final mimeType = file.mimeType;
+    final sizeBytes = file.sizeBytes;
+    final date = file.createdAt.toIso8601String().split('T').first;
 
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.sm),

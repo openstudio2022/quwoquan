@@ -258,7 +258,7 @@ void main() {
       }
     });
 
-    test('3 个用户可见阶段会按顺序流式输出并在完成态保持稳定字段，且第一阶段保留 query-design 信息', () async {
+    test('用户可见阶段按顺序流式输出并在完成态保持稳定字段，且第一阶段保留 query-design 信息', () async {
       final entry = LocalAssistantEntry(
         assistantGateway: gateway,
         requestPolicy: const AssistantRequestPolicy(),
@@ -284,9 +284,9 @@ void main() {
           .toList(growable: false);
       expect(processEvents, isNotEmpty, reason: '应发出 processTimelineUpdate 流式事件');
 
+      // ready 链路不再单独插入 retrieval_processing 过程帧（证据摘要进 journey / answer 前快照）。
       const expectedSteps = <ProcessStepId>[
         ProcessStepId.understanding,
-        ProcessStepId.retrievalProcessing,
         ProcessStepId.answerOrganization,
       ];
 
@@ -317,7 +317,7 @@ void main() {
         expect(
           firstSeenIndex[expectedSteps[i]]!,
           lessThan(firstSeenIndex[expectedSteps[i + 1]]!),
-          reason: '3 个可见阶段必须按 understanding → retrieval_processing → answer_organization 顺序首次出现',
+          reason: '可见阶段必须按 understanding → answer_organization 顺序首次出现',
         );
       }
 

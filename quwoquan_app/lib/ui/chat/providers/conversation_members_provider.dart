@@ -11,18 +11,20 @@ class ConversationMembersState {
   final bool isLoading;
   final String? error;
 
-  const ConversationMembersState({
+  static final ChatGroupSettingsDto _defaultGroupSettings = ChatGroupSettingsDto(
+    qrCodeJoinEnabled: true,
+    joinRequiresApproval: false,
+    nameEditableByAdminOnly: false,
+    privacyShieldAdminOnly: false,
+    conversationType: 'group',
+  );
+
+  ConversationMembersState({
     this.members = const [],
-    this.groupSettings = const ChatGroupSettingsDto(
-      qrCodeJoinEnabled: true,
-      joinRequiresApproval: false,
-      nameEditableByAdminOnly: false,
-      privacyShieldAdminOnly: false,
-      conversationType: 'group',
-    ),
+    ChatGroupSettingsDto? groupSettings,
     this.isLoading = false,
     this.error,
-  });
+  }) : groupSettings = groupSettings ?? _defaultGroupSettings;
 
   /// 当前登录用户的角色（'owner' | 'admin' | 'member'）
   String get currentUserRole {
@@ -70,7 +72,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     ref.watch(chatRepositoryProvider);
     ref.watch(currentUserIdProvider);
     Future<void>.microtask(load);
-    return const ConversationMembersState(isLoading: true);
+    return ConversationMembersState(isLoading: true);
   }
 
   /// 加载成员列表和群组设置

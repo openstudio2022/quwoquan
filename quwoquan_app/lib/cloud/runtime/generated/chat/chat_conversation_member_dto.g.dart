@@ -11,15 +11,15 @@ class ChatConversationMemberDto {
   final DateTime? joinedAt;
   final bool isCurrentUser;
 
-  const ChatConversationMemberDto({
-    required this.userId,
-    required this.displayName,
-    required this.avatarUrl,
-    required this.role,
-    required this.memberType,
+  ChatConversationMemberDto({
+    this.userId = '',
+    this.displayName = '',
+    this.avatarUrl = '',
+    this.role = 'member',
+    this.memberType = 'user',
     this.assistantSkillId,
     this.joinedAt,
-    required this.isCurrentUser,
+    this.isCurrentUser = false,
   });
 
   factory ChatConversationMemberDto.fromMap(Map<String, dynamic> m) {

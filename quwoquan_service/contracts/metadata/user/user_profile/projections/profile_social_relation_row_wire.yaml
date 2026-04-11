@@ -1,0 +1,44 @@
+version: 1
+read_model: ProfileSocialRelationRowWire
+
+description: |
+  listFollowing / listFollowers 列表元素 wire，与 ProfileSocialRelationRowViewData 对齐。
+
+source_entities:
+  - FollowEdge
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ProfileSocialRelationRowWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart
+  fields:
+    - name: profileSubjectId
+      dart_type: String
+      nullable: false
+      source: profileSubjectId
+      aliases: [userId]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, nickname]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "''"
+
+    - name: isFollowing
+      dart_type: bool
+      nullable: false
+      source: isFollowing
+      aliases: [isFollowing]
+      default: "false"

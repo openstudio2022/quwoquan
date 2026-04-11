@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 
 /// L1a 契约测试：PostDto — 覆盖 mock.yaml dto_scenarios
@@ -65,27 +66,27 @@ void main() {
       });
 
       test('mock data: all photo entries have width > 0 and height > 0', () {
-        for (final raw in ContentMockData.discoveryPhotoData) {
-          final dto = PhotoPostDto.fromMap(raw);
+        for (final item in ContentMockData.discoveryPhotoData) {
+          final dto = PhotoPostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.width,
             isNotNull,
-            reason: 'postId=${raw['postId']} should have width',
+            reason: 'postId=${item.id} should have width',
           );
           expect(
             dto.height,
             isNotNull,
-            reason: 'postId=${raw['postId']} should have height',
+            reason: 'postId=${item.id} should have height',
           );
           expect(
             dto.width!,
             greaterThan(0),
-            reason: 'postId=${raw['postId']} width should be > 0',
+            reason: 'postId=${item.id} width should be > 0',
           );
           expect(
             dto.height!,
             greaterThan(0),
-            reason: 'postId=${raw['postId']} height should be > 0',
+            reason: 'postId=${item.id} height should be > 0',
           );
         }
       });
@@ -142,17 +143,17 @@ void main() {
       });
 
       test('mock data: all video entries have width > 0 and height > 0', () {
-        for (final raw in ContentMockData.discoveryVideoData) {
-          final dto = VideoPostDto.fromMap(raw);
+        for (final item in ContentMockData.discoveryVideoData) {
+          final dto = VideoPostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.width,
             isNotNull,
-            reason: 'postId=${raw['postId']} should have width',
+            reason: 'postId=${item.id} should have width',
           );
           expect(
             dto.height,
             isNotNull,
-            reason: 'postId=${raw['postId']} should have height',
+            reason: 'postId=${item.id} should have height',
           );
           expect(dto.width!, greaterThan(0));
           expect(dto.height!, greaterThan(0));
@@ -206,12 +207,12 @@ void main() {
       });
 
       test('mock article data: body non-empty，标题可留空', () {
-        for (final raw in ContentMockData.discoveryArticleData) {
-          final dto = ArticlePostDto.fromMap(raw);
+        for (final item in ContentMockData.discoveryArticleData) {
+          final dto = ArticlePostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.normalizedBody,
             isNotEmpty,
-            reason: 'postId=${raw['postId']} should have non-empty body',
+            reason: 'postId=${item.id} should have non-empty body',
           );
         }
       });
@@ -230,7 +231,7 @@ void main() {
         ];
         for (final template in templates) {
           final items = ContentMockData.discoveryArticleData
-              .where((raw) => raw['articleTemplate'] == template)
+              .where((it) => it.articleTemplate == template)
               .toList(growable: false);
           expect(
             items.length,
@@ -238,22 +239,19 @@ void main() {
             reason: 'template=$template 至少要有有封面/无封面两种存在形态',
           );
           expect(
-            items.any(
-              (raw) => (raw['coverUrl'] ?? '').toString().trim().isNotEmpty,
-            ),
+            items.any((it) => it.coverUrl.trim().isNotEmpty),
             isTrue,
             reason: 'template=$template 必须至少有 1 条有封面样本',
           );
           expect(
-            items.any(
-              (raw) => (raw['coverUrl'] ?? '').toString().trim().isEmpty,
-            ),
+            items.any((it) => it.coverUrl.trim().isEmpty),
             isTrue,
             reason: 'template=$template 必须至少有 1 条无封面样本',
           );
           expect(
             items.every(
-              (raw) => raw['articleDocument'] is Map<String, dynamic>,
+              (it) =>
+                  it.articleDocument != null && it.articleDocument!.isNotEmpty,
             ),
             isTrue,
             reason: 'template=$template 的 canonical 样本必须带 articleDocument',
@@ -264,13 +262,10 @@ void main() {
       test('canonical article mock 覆盖封面/标题四种组合', () {
         final items = ContentMockData.discoveryArticleData;
         bool hasCase({required bool expectCover, required bool expectTitle}) {
-          return items.any((raw) {
-            final hasCover = (raw['coverUrl'] ?? '')
-                .toString()
-                .trim()
-                .isNotEmpty;
-            final hasTitle = (raw['title'] ?? '').toString().trim().isNotEmpty;
-            final hasBody = (raw['body'] ?? '').toString().trim().isNotEmpty;
+          return items.any((it) {
+            final hasCover = it.coverUrl.trim().isNotEmpty;
+            final hasTitle = (it.title ?? '').trim().isNotEmpty;
+            final hasBody = (it.body ?? '').trim().isNotEmpty;
             return hasBody &&
                 hasCover == expectCover &&
                 hasTitle == expectTitle;
@@ -394,7 +389,9 @@ void main() {
           ...ContentMockData.discoveryMomentData,
           ...ContentMockData.discoveryArticleData,
         ];
-        final dtos = rawList.map(postBaseDtoFromMap).toList(growable: false);
+        final dtos = rawList
+            .map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap()))
+            .toList(growable: false);
         expect(dtos, isA<List<PostBaseDto>>());
 
         final photos = dtos.whereType<PhotoPostDto>().toList();
@@ -422,7 +419,7 @@ void main() {
 
       test('base fields accessible via PostBaseDto interface', () {
         final dtos = ContentMockData.discoveryPhotoData
-            .map(postBaseDtoFromMap)
+            .map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap()))
             .toList();
         for (final dto in dtos) {
           expect(dto.id, isNotEmpty);

@@ -13,6 +13,8 @@ class VideoPostCard extends MediaPostCard {
   const VideoPostCard({
     super.key,
     required super.post,
+    super.readPresentation,
+    super.surfaceId,
     required super.onPostTap,
     required super.onUserTap,
     super.onLike,

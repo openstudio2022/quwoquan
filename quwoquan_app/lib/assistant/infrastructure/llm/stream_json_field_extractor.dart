@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+// ASSISTANT_WEAK_TYPE: LLM_RAW — 流式片段上按路径抽取 JSON 字符串字段，产出增量 String。
+
 class JsonFieldStreamExtractor {
   JsonFieldStreamExtractor(this.fieldName);
 

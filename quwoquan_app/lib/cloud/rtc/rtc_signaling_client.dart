@@ -7,26 +7,37 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
+import 'package:quwoquan_app/cloud/rtc/rtc_signaling_wire.dart';
+import 'package:quwoquan_app/cloud/rtc/rtc_signaling_wire_frame.dart';
 
 class RtcSignalEvent {
   final String type;
   final String callId;
   final String? actorId;
-  final Map<String, dynamic> payload;
+  /// 已按 `events.yaml` / [parseRtcWsPayload] 解析；未知 `type` 为 [RtcWsUnknownPayload]。
+  final RtcWsPayload payload;
 
   const RtcSignalEvent({
     required this.type,
     required this.callId,
     this.actorId,
-    this.payload = const {},
+    required this.payload,
   });
 
   factory RtcSignalEvent.fromJson(Map<String, dynamic> json) {
+    final p = json['payload'];
+    final payloadMap = p is Map<String, dynamic>
+        ? p
+        : p is Map
+        ? Map<String, dynamic>.from(p)
+        : <String, dynamic>{};
+    final type = json['type'] as String? ?? '';
     return RtcSignalEvent(
-      type: json['type'] as String? ?? '',
+      type: type,
       callId: json['callId'] as String? ?? '',
       actorId: json['actorId'] as String?,
-      payload: json['payload'] as Map<String, dynamic>? ?? {},
+      payload: parseRtcWsPayload(wireType: type, payload: payloadMap),
     );
   }
 }
@@ -49,13 +60,13 @@ class RtcSignalingClient {
   ValueListenable<bool> get isConnected => _connectionState;
 
   Stream<RtcSignalEvent> get incomingCalls =>
-      events.where((e) => e.type == 'call.ringing');
+      events.where((e) => e.payload is RtcCallRingingWsPayload);
 
   Stream<RtcSignalEvent> get callEnded =>
-      events.where((e) => e.type == 'call.ended');
+      events.where((e) => e.payload is RtcCallEndedWsPayload);
 
   Stream<RtcSignalEvent> get callAnswered =>
-      events.where((e) => e.type == 'call.answered');
+      events.where((e) => e.payload is RtcCallAnsweredWsPayload);
 
   Future<void> connect(String userId) async {
     _userId = userId;
@@ -85,8 +96,14 @@ class RtcSignalingClient {
       _channel = pendingChannel;
 
       _channel!.stream.listen(
-        _onMessage,
-        onError: _onError,
+        (data) => _handleInboundFrame(
+          RtcSignalingWireFrame.fromChannelData(data),
+        ),
+        onError: (Object error) {
+          debugPrint('RtcSignaling: connection error: $error');
+          _connectionState.value = false;
+          _scheduleReconnect();
+        },
         onDone: _onDone,
       );
 
@@ -94,8 +111,7 @@ class RtcSignalingClient {
       _reconnectAttempt = 0;
       _startHeartbeat();
 
-      // Authenticate after connection
-      _send({'type': 'auth', 'userId': _userId, ...headers});
+      _sendOutbound(_outboundAuthBody(_userId, headers));
     } catch (e) {
       try {
         await pendingChannel?.sink.close();
@@ -106,9 +122,11 @@ class RtcSignalingClient {
     }
   }
 
-  void _onMessage(dynamic data) {
+  void _handleInboundFrame(RtcSignalingWireFrame frame) {
     try {
-      final json = jsonDecode(data as String) as Map<String, dynamic>;
+      final json = decodeRtcSignalingJsonMessage(frame);
+      if (json == null) return;
+
       final type = json['type'] as String? ?? '';
 
       if (type == 'pong') return;
@@ -117,12 +135,6 @@ class RtcSignalingClient {
     } catch (e) {
       debugPrint('RtcSignaling: failed to parse message: $e');
     }
-  }
-
-  void _onError(Object error) {
-    debugPrint('RtcSignaling: connection error: $error');
-    _connectionState.value = false;
-    _scheduleReconnect();
   }
 
   void _onDone() {
@@ -134,7 +146,7 @@ class RtcSignalingClient {
   void _startHeartbeat() {
     _stopHeartbeat();
     _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
-      _send({'type': 'ping'});
+      _sendOutbound(const <String, dynamic>{'type': 'ping'});
     });
   }
 
@@ -157,10 +169,21 @@ class RtcSignalingClient {
     });
   }
 
-  void _send(Map<String, dynamic> message) {
+  void _sendOutbound(Map<String, dynamic> message) {
     try {
       _channel?.sink.add(jsonEncode(message));
     } catch (_) {}
+  }
+
+  static Map<String, dynamic> _outboundAuthBody(
+    String? userId,
+    Map<String, String> headers,
+  ) {
+    return <String, dynamic>{
+      'type': 'auth',
+      'userId': ?userId,
+      ...headers,
+    };
   }
 
   Future<void> disconnect() async {
