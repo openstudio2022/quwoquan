@@ -281,15 +281,14 @@ const String _kMockLikesJson = r'''
 class MockUserProfileRepository extends UserProfileRepository {
   const MockUserProfileRepository();
 
-  static final List<Map<String, dynamic>> _recentSearchEntries =
-      <Map<String, dynamic>>[];
+  static final List<RecentSearchEntryWireDto> _recentSearchEntries =
+      <RecentSearchEntryWireDto>[];
 
   @override
   Future<ProfileSubjectViewData> getUserProfile(String userId) async {
-    final raw = _mockProfiles[userId] ?? _defaultProfile(userId);
-    return ProfileSubjectViewData.fromProfileSubjectWire(
-      ProfileSubjectWireDto.fromMap(raw),
-    );
+    final wire = _mockProfileWireByUserId[userId] ??
+        ProfileSubjectWireDto.fromMap(_defaultProfile(userId));
+    return ProfileSubjectViewData.fromProfileSubjectWire(wire);
   }
 
   @override
@@ -319,36 +318,43 @@ class MockUserProfileRepository extends UserProfileRepository {
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
-    final raw = <Map<String, dynamic>>[
-      {
-        'id': 'c1',
-        'name': '极简摄影俱乐部',
-        'coverUrl':
+    final t = DateTime.parse('2025-01-01T00:00:00Z');
+    final circles = <CircleDto>[
+      CircleDto(
+        id: 'c1',
+        name: '极简摄影俱乐部',
+        coverUrl:
             'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
-        'ownerId': userId,
-        'memberCount': 2340,
-        'postCount': 128,
-      },
-      {
-        'id': 'c2',
-        'name': '旅行手账',
-        'coverUrl':
+        ownerId: userId,
+        memberCount: 2340,
+        postCount: 128,
+        createdAt: t,
+        updatedAt: t,
+      ),
+      CircleDto(
+        id: 'c2',
+        name: '旅行手账',
+        coverUrl:
             'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
-        'ownerId': userId,
-        'memberCount': 1280,
-        'postCount': 56,
-      },
-      {
-        'id': 'c3',
-        'name': '咖啡品鉴',
-        'coverUrl':
+        ownerId: userId,
+        memberCount: 1280,
+        postCount: 56,
+        createdAt: t,
+        updatedAt: t,
+      ),
+      CircleDto(
+        id: 'c3',
+        name: '咖啡品鉴',
+        coverUrl:
             'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
-        'ownerId': userId,
-        'memberCount': 890,
-        'postCount': 34,
-      },
-    ].take(limit).toList();
-    return raw.map(CircleDto.fromMap).toList(growable: false);
+        ownerId: userId,
+        memberCount: 890,
+        postCount: 34,
+        createdAt: t,
+        updatedAt: t,
+      ),
+    ];
+    return circles.take(limit).toList(growable: false);
   }
 
   @override
@@ -386,23 +392,24 @@ class MockUserProfileRepository extends UserProfileRepository {
           final isFollowing = UserProfileMockData.viewerFollowsTarget(
             profileSubjectId,
           );
-          final row = <String, dynamic>{
-            ...user,
-            'profileSubjectId': profileSubjectId,
-            'username': user['username'] ?? user['nickname'],
-            'displayName': user['displayName'] ?? user['nickname'],
-            'headline': user['headline'] ?? user['bio'],
-            'chatAvailable': true,
-            'relationshipCapability': <String, dynamic>{
+          final wire = SocialRelationSearchItemWireDto(
+            profileSubjectId: profileSubjectId,
+            username: (user['username'] ?? user['nickname'] ?? '').toString(),
+            displayName: (user['displayName'] ?? user['nickname'] ?? '')
+                .toString(),
+            avatarUrl: user['avatarUrl']?.toString(),
+            headline: (user['headline'] ?? user['bio'] ?? '').toString(),
+            chatAvailable: true,
+            relationshipCapability: <String, dynamic>{
               'relationState': relationState,
               'canFollow': !isFollowing,
               'canUnfollow': isFollowing,
               'canOpenConversation': relationState == 'mutual',
             },
-          };
+          );
           return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-            SocialRelationSearchItemWireDto.fromMap(row),
-            row,
+            wire,
+            wire.toMap(),
           );
         })
         .toList(growable: false);
@@ -411,11 +418,7 @@ class MockUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<RecentSearchEntryView>> listRecentSearches() async {
     return _recentSearchEntries
-        .map(
-          (e) => RecentSearchEntryView.fromRecentSearchEntryWire(
-            RecentSearchEntryWireDto.fromMap(e),
-          ),
-        )
+        .map(RecentSearchEntryView.fromRecentSearchEntryWire)
         .toList(growable: false);
   }
 
@@ -428,23 +431,21 @@ class MockUserProfileRepository extends UserProfileRepository {
     final scopeValue = scope.wireValue;
     final seed = '$scopeValue|${facet ?? ''}|${query.trim().toLowerCase()}';
     final entryId = 'recent_${seed.hashCode.abs().toRadixString(16)}';
-    _recentSearchEntries.removeWhere((entry) => entry['entryId'] == entryId);
-    final entry = <String, dynamic>{
-      'entryId': entryId,
-      'query': query,
-      'scope': scopeValue,
-      'facet': facet,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
-    _recentSearchEntries.insert(0, entry);
-    return RecentSearchEntryView.fromRecentSearchEntryWire(
-      RecentSearchEntryWireDto.fromMap(entry),
+    _recentSearchEntries.removeWhere((entry) => entry.entryId == entryId);
+    final entry = RecentSearchEntryWireDto(
+      entryId: entryId,
+      query: query,
+      scope: scopeValue,
+      facet: facet,
+      updatedAt: DateTime.now(),
     );
+    _recentSearchEntries.insert(0, entry);
+    return RecentSearchEntryView.fromRecentSearchEntryWire(entry);
   }
 
   @override
   Future<void> deleteRecentSearch(String entryId) async {
-    _recentSearchEntries.removeWhere((entry) => entry['entryId'] == entryId);
+    _recentSearchEntries.removeWhere((entry) => entry.entryId == entryId);
   }
 
   @override
@@ -508,12 +509,12 @@ class MockUserProfileRepository extends UserProfileRepository {
     final isFollowing = UserProfileMockData.viewerFollowsTarget(userId);
     final isFollowedBy = UserProfileMockData.targetFollowsViewer(userId);
     return RelationshipViewData.fromRelationshipNormalizedWire(
-      RelationshipNormalizedWireDto.fromMap(<String, dynamic>{
-        'relationState': relationState,
-        'isFollowing': isFollowing,
-        'isFollowedBy': isFollowedBy,
-        'isMutual': relationState == 'mutual',
-      }),
+      RelationshipNormalizedWireDto(
+        relationState: relationState,
+        isFollowing: isFollowing,
+        isFollowedBy: isFollowedBy,
+        isMutual: relationState == 'mutual',
+      ),
     );
   }
 
@@ -616,8 +617,11 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static final Map<String, Map<String, dynamic>> _mockProfiles =
-      _decodeBundledMockUserProfiles(_kBundledMockUserProfilesJson);
+  static final Map<String, ProfileSubjectWireDto> _mockProfileWireByUserId = {
+    for (final e in _decodeBundledMockUserProfiles(_kBundledMockUserProfilesJson)
+        .entries)
+      e.key: ProfileSubjectWireDto.fromMap(e.value),
+  };
 
   static final List<Map<String, dynamic>> _mockRelationUsers =
       _decodeJsonObjectList(_kMockRelationUsersJson);
@@ -704,6 +708,14 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     return CloudResponseDecoder.mapList(obj, 'items');
   }
 
+  List<T> _decodeItemsAs<T>(
+    http.Response resp,
+    String context,
+    T Function(Map<String, dynamic> m) map,
+  ) {
+    return _decodeItems(resp, context).map(map).toList(growable: false);
+  }
+
   Map<String, dynamic> _decodeObject(http.Response resp, String context) {
     final data = CloudResponseDecoder.asObject(
       json.decode(resp.body),
@@ -770,18 +782,19 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static Map<String, dynamic> _normalizeRelationship(Map<String, dynamic> raw) {
+  static RelationshipNormalizedWireDto relationshipNormalizedFromRaw(
+    Map<String, dynamic> raw,
+  ) {
     final relationState = _normalizeRelationshipState(raw);
     final isMutual = relationState == 'mutual';
     final isFollowing = relationState == 'following' || isMutual;
     final isFollowedBy = relationState == 'followed_by' || isMutual;
-    return <String, dynamic>{
-      ..._normalizeRelationshipItem(raw),
-      'relationState': relationState,
-      'isFollowing': raw['isFollowing'] == true || isFollowing,
-      'isFollowedBy': raw['isFollowedBy'] == true || isFollowedBy,
-      'isMutual': raw['isMutual'] == true || isMutual,
-    };
+    return RelationshipNormalizedWireDto(
+      relationState: relationState,
+      isFollowing: raw['isFollowing'] == true || isFollowing,
+      isFollowedBy: raw['isFollowedBy'] == true || isFollowedBy,
+      isMutual: raw['isMutual'] == true || isMutual,
+    );
   }
 
   // ── 档案 ──────────────────────────────────────────────────────────────────
@@ -959,14 +972,17 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('searchSocialRelations failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp, UserRequestPageIds.searchSocialRelations)
-        .map(
-          (m) => SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-            SocialRelationSearchItemWireDto.fromMap(m),
-            m,
-          ),
-        )
-        .toList(growable: false);
+    return _decodeItemsAs(
+      resp,
+      UserRequestPageIds.searchSocialRelations,
+      (m) {
+        final w = SocialRelationSearchItemWireDto.fromMap(m);
+        return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+          w,
+          m,
+        );
+      },
+    );
   }
 
   @override
@@ -981,13 +997,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listRecentSearches failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp, UserRequestPageIds.listRecentSearches)
-        .map(
-          (m) => RecentSearchEntryView.fromRecentSearchEntryWire(
-            RecentSearchEntryWireDto.fromMap(m),
-          ),
-        )
-        .toList(growable: false);
+    return _decodeItemsAs(
+      resp,
+      UserRequestPageIds.listRecentSearches,
+      (m) => RecentSearchEntryView.fromRecentSearchEntryWire(
+        RecentSearchEntryWireDto.fromMap(m),
+      ),
+    );
   }
 
   @override
@@ -1156,7 +1172,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       context: UserRequestPageIds.getRelationship,
     );
     return RelationshipViewData.fromRelationshipNormalizedWire(
-      RelationshipNormalizedWireDto.fromMap(_normalizeRelationship(data)),
+      relationshipNormalizedFromRaw(data),
     );
   }
 
@@ -1214,16 +1230,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode == 200) {
-      return _decodeItems(
-            resp,
-            ContentRequestPageIds.listProfileInteractionActivitiesReceived,
-          )
-          .map(
-            (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-              ProfileInteractionActivityWireDto.fromMap(m),
-            ),
-          )
-          .toList(growable: false);
+      return _decodeItemsAs(
+        resp,
+        ContentRequestPageIds.listProfileInteractionActivitiesReceived,
+        (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+          ProfileInteractionActivityWireDto.fromMap(m),
+        ),
+      );
     }
     if (resp.statusCode == 204 ||
         resp.statusCode == 404 ||
@@ -1254,16 +1267,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode == 200) {
-      return _decodeItems(
-            resp,
-            ContentRequestPageIds.listProfileInteractionActivitiesSent,
-          )
-          .map(
-            (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-              ProfileInteractionActivityWireDto.fromMap(m),
-            ),
-          )
-          .toList(growable: false);
+      return _decodeItemsAs(
+        resp,
+        ContentRequestPageIds.listProfileInteractionActivitiesSent,
+        (m) => ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+          ProfileInteractionActivityWireDto.fromMap(m),
+        ),
+      );
     }
     if (resp.statusCode == 204 ||
         resp.statusCode == 404 ||

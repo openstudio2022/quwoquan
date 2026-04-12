@@ -1,3 +1,6 @@
+import 'package:quwoquan_app/assistant/contracts/assistant_run_structured_bundle.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_run_structured_interaction_view.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
@@ -30,6 +33,18 @@ class AssistantRunResponse {
   final String? errorCode;
   final Map<String, dynamic> structuredResponse;
   final ProfileUpdateProposal? profileUpdateProposal;
+
+  /// metadata [`assistant_structured_response_wire`](quwoquan_service/contracts/metadata/assistant/assistant_structured_response_wire/schema.yaml) 子树视图。
+  AssistantStructuredResponseWire get assistantStructuredWireView =>
+      assistantStructuredWireFromStructuredRoot(structuredResponse);
+
+  /// 模型交互子域：大图上的只读投影（具名 wire + artifacts），不替代 [structuredResponse] 持久化 Map。
+  AssistantRunStructuredInteractionView get structuredInteractionView =>
+      AssistantRunStructuredInteractionView(structuredResponse);
+
+  /// 与 [structuredResponse] 同根的只读 bundle（runArtifacts + structured wire 子树）。
+  AssistantRunStructuredBundle get structuredBundle =>
+      AssistantRunStructuredBundle.fromStructuredResponseRoot(structuredResponse);
 
   RunArtifacts? get runArtifacts {
     final raw = (structuredResponse['runArtifacts'] as Map?)
@@ -79,12 +94,15 @@ class AssistantRunResponse {
   String get followupPrompt =>
       (structuredResponse['followupPrompt'] as String?)?.trim() ?? '';
 
-  List<String> get actionHints =>
-      ((structuredResponse['actionHints'] as List?) ?? const <dynamic>[])
-          .whereType<String>()
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
+  List<String> get actionHints {
+    final raw = structuredResponse['actionHints'];
+    if (raw is! List) return const <String>[];
+    return raw
+        .whereType<String>()
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -100,7 +118,8 @@ class AssistantRunResponse {
   }
 
   factory AssistantRunResponse.fromJson(Map<String, dynamic> json) {
-    final traceList = (json['traces'] as List?) ?? const <dynamic>[];
+    final traceRaw = json['traces'];
+    final traceList = traceRaw is List ? traceRaw : const <Never>[];
     final rawProposal = (json['profileUpdateProposal'] as Map?)
         ?.cast<String, dynamic>();
     return AssistantRunResponse(

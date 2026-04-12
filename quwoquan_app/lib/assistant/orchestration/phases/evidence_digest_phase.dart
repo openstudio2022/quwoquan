@@ -28,9 +28,7 @@ class EvidenceDigestPhase implements Phase {
 
   @override
   Future<PhaseOutput> run(PhaseInput input) async {
-    final request = input.request is AssistantRunRequest
-        ? input.request as AssistantRunRequest
-        : AssistantRunRequest.fromJson((input.request as dynamic).toJson());
+    final request = coerceAssistantRunRequest(input.request);
     final executionSnapshot = input.state.executionBridgeSnapshot;
     final phaseOneResult = executionSnapshot['phaseOneResult'];
     if (phaseOneResult is! ReactRuntimeResult) {

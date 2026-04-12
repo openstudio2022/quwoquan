@@ -4,6 +4,17 @@ package runartifacts
 
 import "encoding/json"
 
+type RunArtifactsAnswerDecisionCore struct {
+	NextAction string `json:"nextAction"`
+	AnswerEligibility string `json:"answerEligibility"`
+	FinalAnswerReady bool `json:"finalAnswerReady"`
+	EvidenceSummary string `json:"evidenceSummary"`
+	Confidence float64 `json:"confidence"`
+	Reasoning string `json:"reasoning"`
+	SynthesisReady bool `json:"synthesisReady"`
+	SynthesisReason string `json:"synthesisReason"`
+}
+
 type AssistantDisplayItem struct {
 	ItemId string `json:"itemId"`
 	Title string `json:"title"`
@@ -41,6 +52,23 @@ type RunArtifactsAnswerProcessing struct {
 	KeyFacts []string `json:"keyFacts"`
 	MissingDimensions []string `json:"missingDimensions"`
 	RetrieveMoreReason string `json:"retrieveMoreReason"`
+}
+
+type RunArtifactsDiagnosticsCore struct {
+	DomainId string `json:"domainId"`
+	RenderMode string `json:"renderMode"`
+	RenderFallback string `json:"renderFallback"`
+	AnswerEligibility string `json:"answerEligibility"`
+	QualityGates json.RawMessage `json:"qualityGates"`
+	EvidenceEvaluation json.RawMessage `json:"evidenceEvaluation"`
+	AnswerBoundaryPolicy json.RawMessage `json:"answerBoundaryPolicy"`
+	EvidenceSummary string `json:"evidenceSummary"`
+	EvidencePassed bool `json:"evidencePassed"`
+	FinalAnswerMode string `json:"finalAnswerMode"`
+	SynthesisReady bool `json:"synthesisReady"`
+	SynthesisReason string `json:"synthesisReason"`
+	HeuristicFallbackUsed bool `json:"heuristicFallbackUsed"`
+	EmergedTags []string `json:"emergedTags"`
 }
 
 type RetrievalProcessingReference struct {

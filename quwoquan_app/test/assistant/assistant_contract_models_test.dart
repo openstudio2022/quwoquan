@@ -182,7 +182,8 @@ void main() {
       expect(artifacts.journey.entries.single.headline, '已核对 1 个权威来源');
       expect(artifacts.journey.referenceSummary.count, 1);
       expect(artifacts.slotState.domainId, equals('weather'));
-      expect(artifacts.answerDecision['nextAction'], equals('answer'));
+      expect(artifacts.answerDecision.core.nextAction, equals('answer'));
+      expect(artifacts.diagnostics.core.renderMode, equals('fallback_text'));
       expect(artifacts.domainPolicyBundle?.domainId, equals('weather'));
       expect(artifacts.toJson()['journey'], isA<Map<String, dynamic>>());
     });

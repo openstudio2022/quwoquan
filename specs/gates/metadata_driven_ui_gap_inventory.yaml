@@ -5,7 +5,7 @@
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
 # 双向校验：scripts/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
-updated: "2026-04-11"
+updated: "2026-04-12"
 policy:
   mock_remote_same_return_types: true
   ui_domain_rows_should_be_codegen_dto: true
@@ -23,6 +23,74 @@ policy:
     - search
     - rtc
     - assistant
+  # 非助手域弱类型治理：与「metadata → codegen → Repository 对外 DTO」一致；HTTP 解码边界保留 Object? 见 session_c §1.1
+  homepage_shell_data_p35_decision: handwritten_accepted
+  homepage_shell_data_p35_note: |
+    HomepageShellData（及壳层聚合中与 Detail 的继承/组合）继续手写于 homepage_models.dart；
+    可选 3.5（拆 HomepageDetail 等到独立库文件 + Shell projection codegen）暂不排期，避免 barrel 循环依赖与一次性大改；
+    若后续产品要求 Shell 字段频繁演进，再启动拆分与 metadata projection。
+  cloud_repository_typing_backlog_order:
+    # P1：高 churn、手写 Map 仍作业务状态的路径；与本清单 domains.content / circle / user 行对照
+    - domain: content
+      focus_paths:
+        - quwoquan_app/lib/cloud/services/content/content_repository.dart
+        - quwoquan_app/lib/cloud/services/app_content/app_content_prototype_codec.dart
+      coordination: quwoquan_app/lib/core/services/app_content_repository.dart
+    - domain: circle
+      focus_paths:
+        - quwoquan_app/lib/cloud/services/circle/circle_repository.dart
+    - domain: user
+      focus_paths:
+        - quwoquan_app/lib/cloud/services/user/user_profile_repository.dart
+  non_assistant_ui_projection_matrix:
+    reference: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+    note: |
+      非助手 UI 与矩阵扫描路径对齐：帖子/圈子等页面持 codegen ReadPresentation 或 DTO；
+      Map<String,dynamic> 限单点适配器与 wire 解码，不跨层当业务状态；与 policy.p2_rolling_convergence_order 一致（assistant 域单独治理）。
+  non_assistant_ui_wire_adapter_entrypoints:
+    # 单点 raw map → ReadPresentation / DTO；页面不直接持匿名 Map 业务状态
+    - quwoquan_app/lib/ui/content/post_view_projection.dart
+    - quwoquan_app/lib/ui/circle/services/home_circles_hub_wire.dart
+  non_assistant_weak_typing_p1_tranche_note: |
+    里程碑「ContentRepository / UserProfileRepository 对外全 DTO 化」已完成：ContentPostDetailWireDto 嵌套子 projection（cards、circleSummaries、articleDocument、articleBlocks、articlePages）、
+    ContentPostDetailPayload.mergedArticleWireMap、ContentAppConfigWire.wireRoot；Mock/Remote 仓库以 wire DTO / PostBaseDto / CommentDto 为会话态，profile ViewData.fromMap 已标 Deprecated。
+    遗留弱类型边界见各 Repository 类注释与 HTTP decode 窄区间（session_c §1.1）。
+  non_assistant_weak_typing_p3_tranche_note: |
+    local_chat_search_store 引入 LocalChatSearchContactWire（Map<String,Object?>）及 upsertContacts 强类型；同步侧用 Map<String,Object?>.from(dto.toMap())。
+  contract_test_fixture_policy_ref: specs/gates/session_c_page_typing.md（§6 契约测试与 Map 断言）
+  gates_baseline_rhythm:
+    map_literal_baseline_script: scripts/report_map_typing_baseline.py
+    page_abc_c_command: python3 scripts/verify_page_abc_governance.py --enforce-c
+    last_verified: "2026-04-12"
+    last_page_abc_c: pass
+    last_map_baseline_snapshot_note: |
+      非助手域弱类型计划实施核对：report_map_typing_baseline；verify_page_abc_governance --enforce-c（raw_C=0）。
+  # 助手 / 模型 / App 搜索：与「页面 64 路径门禁 C」扫描集不同；采用棘轮而非绝对禁止 dynamic
+  page_abc_c_scope_note: |
+    verify_page_abc_governance 维度 C 仅扫描横向矩阵 64 路径（page_abc_governance.md），不包含 lib/assistant/** 全文。
+    助手手写与 search_repository 的弱类型防回退见 assistant_search_weak_typing_ratchet 与 governance 文档。
+  assistant_search_weak_typing_ratchet:
+    governance: specs/gates/assistant_search_weak_typing_governance.md
+    baseline: specs/gates/assistant_search_weak_typing_baseline.json
+    script: scripts/verify_assistant_search_weak_typing_ratchet.py
+    make_target: verify-app-assistant-search-weak-typing-ratchet
+    buckets:
+      - assistant_handwritten
+      - core_search_repository
+  assistant_handwritten_weak_typing_inventory: specs/gates/assistant_handwritten_weak_typing_inventory.md
+  assistant_handwritten_metadata_wave_targets: specs/gates/assistant_handwritten_metadata_wave_targets.yaml
+  assistant_model_search_typing_backlog_order:
+    # 与弱类型收口优先级一致；新增强类型优先走 contracts/metadata → codegen
+    - focus: assistant_web_and_search_tools
+      paths:
+        - quwoquan_app/lib/assistant/tool/impl/web/websearch_tool.dart
+        - quwoquan_app/lib/assistant/tool/impl/search/search_tool.dart
+    - focus: assistant_retrieval_runtime
+      paths:
+        - quwoquan_app/lib/assistant/reasoning/runtime/retrieval_outcome_resolver.dart
+    - focus: app_search_repository
+      paths:
+        - quwoquan_app/lib/core/services/search_repository.dart
 
 domains:
   - id: chat
@@ -273,7 +341,7 @@ domains:
       note: |
         HomepageRepository 对外已强类型；Remote 审核类 POST 体由 entity_homepage_mutation_wires（service.yaml writable_fields）生成。
         Mock 种子为 HomepageMockData.homepageDetailTemplates（HomepageDetail），经 cloneHomepageSeeds 深拷贝写入 MockHomepageRepository；认领单与状态报告为强类型 Record 列表。
-        homepage_models.dart 仍含继承链、HomepageShellData、Draft；ReviewSummary/壳层预览/维度分与认领/举报 Record 均由 projections 生成；JSON 子树收窄集中在 lib/cloud/runtime/codec/homepage_wire_codec.dart（HomepageWireCodec）。
+        homepage_models.dart 仍含继承链、HomepageShellData（手写，policy.homepage_shell_data_p35_decision）、Draft；ReviewSummary/壳层预览/维度分与认领/举报 Record 均由 projections 生成；JSON 子树收窄集中在 lib/cloud/runtime/codec/homepage_wire_codec.dart（HomepageWireCodec）。
         Remote getHomepageRelatedGroups 使用 CloudResponseDecoder.mapListFirstPresent(groups, relatedGroups)；仓库内无手写 Object? 列表解析辅助函数。
     ui_pages:
       - path: quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart

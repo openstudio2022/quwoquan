@@ -98,8 +98,8 @@ void main() {
     test('isolates contacts and messages by namespace', () async {
       await store.upsertContacts(
         namespace: namespace,
-        contacts: const <Map<String, dynamic>>[
-          <String, dynamic>{
+        contacts: const <Map<String, Object?>>[
+          <String, Object?>{
             'contactId': 'u_owner_1',
             'displayName': '王芳',
             'subtitle': '主账号联系人',
@@ -108,8 +108,8 @@ void main() {
       );
       await store.upsertContacts(
         namespace: subNamespace,
-        contacts: const <Map<String, dynamic>>[
-          <String, dynamic>{
+        contacts: const <Map<String, Object?>>[
+          <String, Object?>{
             'contactId': 'u_sub_1',
             'displayName': '李雷',
             'subtitle': '子账号联系人',

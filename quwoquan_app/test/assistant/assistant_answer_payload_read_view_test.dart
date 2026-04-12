@@ -21,6 +21,7 @@ void main() {
     };
     final v = AssistantAnswerPayloadReadView(raw);
     expect(v.decisionMap['problemClass'], 'realtime_info');
+    expect(v.asTypedOutput.decision.problemClass, 'realtime_info');
     expect(v.diagnosticsEmergedTagMaps.single['tag'], 't1');
     expect(v.resultMap['text'], ' hello ');
     expect(v.askUserMap['slotId'], 'city');

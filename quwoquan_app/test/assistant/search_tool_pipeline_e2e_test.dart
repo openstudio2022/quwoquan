@@ -17,6 +17,7 @@ import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
+import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 
 class _SearchFirstLlm implements AssistantLlmProvider {
@@ -145,12 +146,12 @@ class _FakeSearchRepository implements SearchRepository {
               title: '摄影入门：曝光三要素',
               subtitle: '站内内容',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: <String, dynamic>{
+              payload: const SearchHitPayloadLegacy(<String, dynamic>{
                 'postId': 'post_1',
                 'contentType': 'article',
                 'title': '摄影入门：曝光三要素',
                 'summary': '站内内容',
-              },
+              }),
             ),
           ],
           resolvedFrom: SearchResolvedFrom.remote,

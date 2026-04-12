@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
@@ -50,6 +53,10 @@ void main() {
     });
 
     test('run response supports json roundtrip', () {
+      final structuredPath =
+          '../quwoquan_service/contracts/metadata/assistant/test_fixtures/wire_protocol_compatibility_structured_response.json';
+      final structuredResponse = jsonDecode(File(structuredPath).readAsStringSync())
+          as Map<String, dynamic>;
       final response = AssistantRunResponse(
         finalText: 'ok',
         traces: <AssistantTraceEvent>[
@@ -62,24 +69,7 @@ void main() {
         ],
         degraded: true,
         errorCode: 'network_unavailable',
-        structuredResponse: <String, dynamic>{
-          'experimentBucket': 'control',
-          'domainResults': <String, dynamic>{'toolResultCount': 1},
-          'uiTimeline': <Map<String, dynamic>>[
-            <String, dynamic>{'event': 'thinking', 'label': '正在思考'},
-          ],
-          'uiReferences': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'title': '示例资料',
-              'url': 'https://example.com',
-              'source': 'example.com',
-            },
-          ],
-          'uiActions': <Map<String, dynamic>>[
-            <String, dynamic>{'id': 'regenerate'},
-            <String, dynamic>{'id': 'brief'},
-          ],
-        },
+        structuredResponse: structuredResponse,
         profileUpdateProposal: ProfileUpdateProposal(
           proposalId: 'p_1',
           profileVersionRead: 'v1',

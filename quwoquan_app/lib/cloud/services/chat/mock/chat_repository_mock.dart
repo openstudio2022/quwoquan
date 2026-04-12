@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
@@ -308,8 +309,8 @@ class MockChatRepository implements ChatRepository {
     required String type,
     required String content,
     String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
+    CloudJsonMap? media,
+    CloudJsonMap? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
     String? senderPersonaId,

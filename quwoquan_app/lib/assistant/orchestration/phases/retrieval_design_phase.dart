@@ -43,9 +43,7 @@ class RetrievalDesignPhase implements Phase {
 
   @override
   Future<PhaseOutput> run(PhaseInput input) async {
-    final request = input.request is AssistantRunRequest
-        ? input.request as AssistantRunRequest
-        : AssistantRunRequest.fromJson((input.request as dynamic).toJson());
+    final request = coerceAssistantRunRequest(input.request);
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
         : '';

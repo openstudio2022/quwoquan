@@ -8,6 +8,7 @@
 .PHONY: verify-app-page-abc-governance-enforce-all
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-session-b-legacy
+.PHONY: verify-app-assistant-search-weak-typing-ratchet
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -54,6 +55,10 @@ verify-app-ui-map-literal-budget:
 
 verify-app-session-b-legacy:
 	@python3 scripts/verify_session_b_legacy_governance.py
+
+# 助手手写（排除 generated）+ search_repository：Map/dynamic 计数棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
+verify-app-assistant-search-weak-typing-ratchet:
+	@python3 scripts/verify_assistant_search_weak_typing_ratchet.py
 
 gate:
 	@bash scripts/verify_deployment_domain_mapping.sh

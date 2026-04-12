@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 
@@ -29,16 +26,14 @@ void main() {
       },
     });
     final ext = RunArtifactsMapPartition.answerDecisionExtension(
-      ra.answerDecision,
+      ra.answerDecision.toWireMap(),
     );
     expect(ext['custom'], 1);
   });
 
   test('metadata wire_min_run_artifacts.json partitions answerDecision', () {
-    final path = assistantMetadataFixturePath('wire_min_run_artifacts.json');
-    final json =
-        jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
-    final adv = json['answerDecision']! as Map<String, dynamic>;
+    final raFixture = assistantLoadRunArtifactsFixture('wire_min_run_artifacts.json');
+    final adv = raFixture.answerDecision.toWireMap();
     final stable = RunArtifactsMapPartition.answerDecisionStable(adv);
     final ext = RunArtifactsMapPartition.answerDecisionExtension(adv);
     expect(stable['nextAction'], 'answer');
@@ -47,5 +42,6 @@ void main() {
       RunArtifactsMapPartition.mergeSlices(stable, ext)['nextAction'],
       'answer',
     );
+    expect(raFixture.answerDecision.core.nextAction, 'answer');
   });
 }

@@ -1,0 +1,65 @@
+version: 1
+read_model: ContentPostDetailArticlePageWire
+
+description: |
+  GET post 响应中 articlePages[] 单条（与 ArticlePageData.fromMap 键对齐）。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentPostDetailArticlePageWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_post_detail_article_page_wire_dto.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: true
+      source: id
+      aliases: [id]
+      default: "null"
+
+    - name: title
+      dart_type: String
+      nullable: true
+      source: title
+      aliases: [title]
+      default: "null"
+
+    - name: body
+      dart_type: String
+      nullable: true
+      source: body
+      aliases: [body]
+      default: "null"
+
+    - name: imageUrl
+      dart_type: String
+      nullable: true
+      source: imageUrl
+      aliases: [imageUrl]
+      default: "null"
+
+    - name: imagePath
+      dart_type: String
+      nullable: true
+      source: imagePath
+      aliases: [imagePath]
+      default: "null"
+
+    - name: imageLayout
+      dart_type: String
+      nullable: true
+      source: imageLayout
+      aliases: [imageLayout]
+      default: "null"
+
+    - name: caption
+      dart_type: String
+      nullable: true
+      source: caption
+      aliases: [caption]
+      default: "null"

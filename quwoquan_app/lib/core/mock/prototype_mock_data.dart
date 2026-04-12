@@ -6,6 +6,8 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
 /// 发现页 / 作者主页 / 圈子页等各页面 mock 数据，与原型 TSX 逐字段一致。
 ///
+/// **弱类型策略**：历史 TSX 1:1 切片仍为 `Map<String, dynamic>`；**新增** mock 行在有 codegen DTO 时应优先 `Map<String, Object?>.from(dto.toMap())`（session_c §6）。
+///
 /// **与内容域 canonical 数据**：发现区 Feed wire 已以 [ContentMockData]（`discovery_*`）为单一真相；
 /// [MockAppContentRepository.articleById] 已委托 [ContentMockData.articleWireByPostId]；本类仍保留 TSX 1:1
 /// `discovery*` 切片供非内容域原型使用。

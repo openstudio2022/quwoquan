@@ -62,9 +62,7 @@ class UnderstandPhase implements Phase {
 
   @override
   Future<PhaseOutput> run(PhaseInput input) async {
-    final request = input.request is AssistantRunRequest
-        ? input.request as AssistantRunRequest
-        : AssistantRunRequest.fromJson((input.request as dynamic).toJson());
+    final request = coerceAssistantRunRequest(input.request);
     final bootstrapContext = input.state.bootstrapContext;
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
@@ -91,10 +89,10 @@ class UnderstandPhase implements Phase {
 
     final hintedIntentRaw =
         (request.contextScopeHint['precomputedIntentGraph'] as Map?)
-            ?.cast<String, dynamic>() ??
+            ?.cast<String, Object?>() ??
         (request.contextScopeHint['intentGraph'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            ?.cast<String, Object?>() ??
+        const <String, Object?>{};
     if (hintedIntentRaw.isNotEmpty) {
       try {
         final hinted = IntentGraph.fromJson(hintedIntentRaw);
@@ -120,7 +118,7 @@ class UnderstandPhase implements Phase {
           intentGraph: geoResolvedIntent,
           contextEnvelope:
               input.state.contextAssembly?.contextEnvelope ??
-              const <String, dynamic>{},
+              const <String, Object?>{},
           availableTools:
               runtime?.listAvailableToolNames() ??
               const <String>['search', 'web_search'],
@@ -216,7 +214,7 @@ class UnderstandPhase implements Phase {
           intentGraph: geoResolvedIntent,
           contextEnvelope:
               input.state.contextAssembly?.contextEnvelope ??
-              const <String, dynamic>{},
+              const <String, Object?>{},
           availableTools:
               runtime?.listAvailableToolNames() ??
               const <String>['search', 'web_search'],
@@ -286,7 +284,7 @@ class UnderstandPhase implements Phase {
       intentGraph: geoResolvedIntent,
       contextEnvelope:
           input.state.contextAssembly?.contextEnvelope ??
-          const <String, dynamic>{},
+          const <String, Object?>{},
       availableTools:
           runtime?.listAvailableToolNames() ??
           const <String>['search', 'web_search'],
@@ -628,7 +626,7 @@ class UnderstandPhase implements Phase {
     required TemporalReferenceContext temporalReference,
     required String runId,
     required String traceId,
-    void Function(dynamic event)? onTraceEvent,
+    AssistantTraceEventSink? onTraceEvent,
     required ProcessTimelineEmitter processEmitter,
   }) async {
     final runtime = this.runtime;
@@ -667,7 +665,7 @@ class UnderstandPhase implements Phase {
               const ContextContinuityPolicy(),
           overrideSlots:
               bootstrapContext?.continuityOverrideSlots ??
-              const <String, dynamic>{},
+              const <String, Object?>{},
         ),
         stageState: <String, dynamic>{
           'allowedChoices': const <String>['tool_call', 'ask_user', 'answer'],
@@ -823,7 +821,7 @@ class UnderstandPhase implements Phase {
     if (intentGraph == null) return null;
     final parsedSnapshot = parsed['understandingSnapshot'] is Map
         ? parseRunArtifactsUnderstandingSnapshotFromMap(
-            (parsed['understandingSnapshot'] as Map).cast<String, dynamic>(),
+            (parsed['understandingSnapshot'] as Map).cast<String, Object?>(),
           )
         : const RunArtifactsUnderstandingSnapshot();
     final stabilizedSnapshot = RunArtifactsUnderstandingSnapshot(
@@ -1275,12 +1273,12 @@ class UnderstandPhase implements Phase {
       'deviceOs': request.deviceOs,
       'gpsLocation': continuityPolicy.allowLocationHints
           ? request.gpsLocation
-          : const <String, dynamic>{},
+          : const <String, Object?>{},
       'availableGeoContext':
           contextAssembly != null &&
               hasAvailableGeoContext(contextAssembly.availableGeoContext)
           ? contextAssembly.availableGeoContext.toJson()
-          : const <String, dynamic>{},
+          : const <String, Object?>{},
       'contextScopeHint': sanitizedScopeHint,
     };
   }
@@ -1315,12 +1313,12 @@ class UnderstandPhase implements Phase {
       'userProfileSnapshot': request.userProfileSnapshot,
       'historicalRetrievalFeedback':
           (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+              ?.cast<String, Object?>() ??
+          const <String, Object?>{},
       'domainLearningSignals':
           (request.contextScopeHint['domainLearningSignals'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+              ?.cast<String, Object?>() ??
+          const <String, Object?>{},
     };
   }
 
@@ -1354,15 +1352,15 @@ class UnderstandPhase implements Phase {
       },
       'slotStateSnapshot': continuationActive
           ? previousRunArtifacts?.slotState.toJson() ??
-                const <String, dynamic>{}
-          : const <String, dynamic>{},
+                const <String, Object?>{}
+          : const <String, Object?>{},
       'contextSlots': continuationActive
-          ? previousIntentGraph?.contextSlots ?? const <String, dynamic>{}
-          : const <String, dynamic>{},
+          ? previousIntentGraph?.contextSlots ?? const <String, Object?>{}
+          : const <String, Object?>{},
       'domainPolicyBundle': continuationActive
           ? previousRunArtifacts?.domainPolicyBundle?.toJson() ??
-                const <String, dynamic>{}
-          : const <String, dynamic>{},
+                const <String, Object?>{}
+          : const <String, Object?>{},
       'skillExecutionShell': const SkillExecutionShell().toJson(),
     };
   }
@@ -1373,7 +1371,7 @@ class UnderstandPhase implements Phase {
   }) {
     final scopedStateRaw =
         (request.contextScopeHint['searchIterationState'] as Map?)
-            ?.cast<String, dynamic>();
+            ?.cast<String, Object?>();
     if (scopedStateRaw != null && scopedStateRaw.isNotEmpty) {
       return SearchIterationState.fromJson(scopedStateRaw);
     }
@@ -1418,7 +1416,7 @@ class UnderstandPhase implements Phase {
               bootstrapContext.previousUnderstandingSnapshot.toJson(),
             )
         ? bootstrapContext.previousUnderstandingSnapshot.toJson()
-        : const <String, dynamic>{};
+        : const <String, Object?>{};
     final previousAnswerProcessing =
         continuationActive &&
             bootstrapContext != null &&
@@ -1426,7 +1424,7 @@ class UnderstandPhase implements Phase {
               bootstrapContext.previousAnswerProcessing.toJson(),
             )
         ? bootstrapContext.previousAnswerProcessing.toJson()
-        : const <String, dynamic>{};
+        : const <String, Object?>{};
     final historicalThinkingSnapshot =
         continuationActive &&
             bootstrapContext != null &&
@@ -1434,7 +1432,7 @@ class UnderstandPhase implements Phase {
               bootstrapContext.historicalThinkingSnapshot.toJson(),
             )
         ? bootstrapContext.historicalThinkingSnapshot.toJson()
-        : const <String, dynamic>{};
+        : const <String, Object?>{};
     return <String, dynamic>{
       'continuityMode': continuityMode,
       'problemClassHint': problemClass,
@@ -1449,13 +1447,13 @@ class UnderstandPhase implements Phase {
       'previousIntentGraph':
           continuationActive && bootstrapContext?.previousIntentGraph != null
           ? bootstrapContext!.previousIntentGraph!.toJson()
-          : const <String, dynamic>{},
+          : const <String, Object?>{},
       'previousUnderstandingSnapshot': previousUnderstandingSnapshot,
       'previousAnswerProcessing': previousAnswerProcessing,
       'previousSlotState': continuationActive
           ? previousRunArtifacts?.slotState.toJson() ??
-                const <String, dynamic>{}
-          : const <String, dynamic>{},
+                const <String, Object?>{}
+          : const <String, Object?>{},
       'previousAnswerSummary': continuationActive
           ? bootstrapContext?.previousAnswerSummary ?? ''
           : '',
@@ -1672,7 +1670,7 @@ class UnderstandPhase implements Phase {
     required bool allowLocationHints,
   }) {
     if (scopeHint.isEmpty) {
-      return const <String, dynamic>{};
+      return const <String, Object?>{};
     }
     final sanitized = Map<String, dynamic>.from(scopeHint);
     for (final key in const <String>[
@@ -1795,7 +1793,7 @@ class UnderstandPhase implements Phase {
         bootstrapContext: bootstrapContext,
       ),
       contextSlots: _mergeContextSlots(
-        current: previousIntentGraph?.contextSlots ?? const <String, dynamic>{},
+        current: previousIntentGraph?.contextSlots ?? const <String, Object?>{},
         bootstrapContext: bootstrapContext,
         previousIntentGraph: previousIntentGraph,
         previousRunArtifacts: previousRunArtifacts,
@@ -1803,7 +1801,7 @@ class UnderstandPhase implements Phase {
       ),
       globalConstraints: _mergeGlobalConstraints(
         current:
-            previousIntentGraph?.globalConstraints ?? const <String, dynamic>{},
+            previousIntentGraph?.globalConstraints ?? const <String, Object?>{},
         bootstrapContext: bootstrapContext,
         previousIntentGraph: previousIntentGraph,
         continuationActive: continuationActive,
@@ -1838,7 +1836,7 @@ class UnderstandPhase implements Phase {
   ) async {
     final normalized = domainId.trim();
     if (normalized.isEmpty) {
-      return const <String, dynamic>{};
+      return const <String, Object?>{};
     }
     final path =
         'assets/assistant/skills/$normalized/config/retrieval_policy.json';
@@ -1849,7 +1847,7 @@ class UnderstandPhase implements Phase {
         return decoded;
       }
       if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
+        return decoded.cast<String, Object?>();
       }
     } catch (_) {
       final file = File(path);
@@ -1860,14 +1858,14 @@ class UnderstandPhase implements Phase {
             return decoded;
           }
           if (decoded is Map) {
-            return decoded.cast<String, dynamic>();
+            return decoded.cast<String, Object?>();
           }
         } catch (_) {
-          return const <String, dynamic>{};
+          return const <String, Object?>{};
         }
       }
     }
-    return const <String, dynamic>{};
+    return const <String, Object?>{};
   }
 
   List<String> _hintedAuthorityDomains({

@@ -68,14 +68,14 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: widget.articleId);
-      final article = projectArticleDetailView(
-        detail.wireForArticleProjection,
+      final article = projectArticleDetailViewFromPayload(
+        detail,
         fallbackArticleId: widget.articleId,
       );
       final readBundle = PostReadUiBundle.fromPost(
         detail.post,
         PostReadSurfaceId.detailArticle,
-        wire: detail.wireForArticleProjection,
+        wire: detail.mergedArticleWireMap,
       );
       if (!mounted) return;
       setState(() {

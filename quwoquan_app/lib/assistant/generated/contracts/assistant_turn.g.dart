@@ -156,16 +156,19 @@ class AssistantTurnDecisionPayload {
     this.nextAction = AssistantNextAction.unknown,
     this.confidence = 0,
     this.reasoning = "",
+    this.problemClass = "",
   });
 
   final AssistantNextAction nextAction;
   final double confidence;
   final String reasoning;
+  final String problemClass;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'nextAction': nextAction.wireName,
         'confidence': confidence,
         'reasoning': reasoning,
+        'problemClass': problemClass,
       };
 
   factory AssistantTurnDecisionPayload.fromJson(Map<String, dynamic> json) {
@@ -173,6 +176,7 @@ class AssistantTurnDecisionPayload {
       nextAction: parseAssistantNextAction((json['nextAction'] as String?)?.trim() ?? ""),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       reasoning: (json['reasoning'] as String?)?.trim() ?? "",
+      problemClass: (json['problemClass'] as String?)?.trim() ?? "",
     );
   }
 }
@@ -181,6 +185,7 @@ class AssistantTurnDecisionPayloadFields {
   static const String nextAction = 'nextAction';
   static const String confidence = 'confidence';
   static const String reasoning = 'reasoning';
+  static const String problemClass = 'problemClass';
 }
 
 class AssistantTurnDiagnostics {

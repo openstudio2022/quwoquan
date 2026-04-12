@@ -2,6 +2,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_api_metadata.g.dart';
@@ -167,7 +168,7 @@ class RemoteRtcRepository implements RtcRepository {
   }
 
   static CursorPage<CallSessionDto> _rtcListCallsCursorPage(
-    Map<String, dynamic> obj,
+    CloudJsonMap obj,
   ) {
     final rawItems = obj['items'];
     if (rawItems is! List) {

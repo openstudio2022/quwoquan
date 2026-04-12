@@ -17,8 +17,8 @@ void main() {
     final runJson =
         jsonDecode(File(runPath).readAsStringSync()) as Map<String, dynamic>;
     final run = RunArtifacts.fromJson(runJson);
-    expect(run.answerDecision['_fixtureExtension'], isNotNull);
-    expect(run.diagnostics['_fixtureDiagExtension'], 'retained');
+    expect(run.answerDecision.toWireMap()['_fixtureExtension'], isNotNull);
+    expect(run.diagnostics.toWireMap()['_fixtureDiagExtension'], 'retained');
     final adv = run.answerDecisionReadView;
     expect(adv.nextAction, 'answer');
     expect(adv.finalAnswerReady, isTrue);
@@ -28,7 +28,7 @@ void main() {
     expect(dv.evidencePassed, isTrue);
     final runEnc = jsonEncode(run.toJson());
     final round = RunArtifacts.fromJson(jsonDecode(runEnc) as Map<String, dynamic>);
-    expect(round.answerDecision['_fixtureExtension'], isNotNull);
+    expect(round.answerDecision.toWireMap()['_fixtureExtension'], isNotNull);
 
     final turnJson =
         jsonDecode(File(turnPath).readAsStringSync()) as Map<String, dynamic>;
@@ -42,13 +42,17 @@ void main() {
         assistantMetadataFixturePath('wire_min_structured_response_subtrees.json');
     final raw =
         jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
-    final slice = AssistantStructuredResponseWire.fromJson(raw);
+    final slice = assistantStructuredWireFromStructuredRoot(raw);
     expect(slice.qualityMetrics['_fixtureExtension'], 'retained');
+    expect(slice.decisionParseSuccess, isTrue);
+    expect(slice.answerGateReady, isTrue);
+    expect(slice.answerGateReasonCode, 'ok');
+    expect(slice.dialogueDomainId, 'fixture.domain');
     expect(slice.dialogueRuntime['domainId'], 'fixture.domain');
     expect(slice.uiReferences.length, 1);
     expect(slice.uiReferences.first.url, 'https://example.com');
     final enc = jsonEncode(slice.toJson());
-    AssistantStructuredResponseWire.fromJson(
+    assistantStructuredWireFromStructuredRoot(
       jsonDecode(enc) as Map<String, dynamic>,
     );
   });

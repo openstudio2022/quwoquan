@@ -114,14 +114,16 @@ List<CircleActivityPrototypeRow> decodeCircleActivities(
       .toList(growable: false);
 }
 
-Object? _objectifyValue(dynamic v) {
+Object? _objectifyValue(Object? v) {
   if (v == null) return null;
   if (v is String || v is num || v is bool) return v;
   if (v is List) {
-    return v.map(_objectifyValue).toList(growable: false);
+    return v
+        .map<Object?>((Object? e) => _objectifyValue(e))
+        .toList(growable: false);
   }
   if (v is Map) {
-    return v.map(
+    return Map<Object?, Object?>.from(v).map(
       (k, val) => MapEntry(k.toString(), _objectifyValue(val)),
     );
   }

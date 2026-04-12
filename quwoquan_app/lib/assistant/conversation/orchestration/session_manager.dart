@@ -267,7 +267,7 @@ class AssistantSessionManager {
     return stripped;
   }
 
-  dynamic _jsonDecodeFirst(String text) {
+  Object? _jsonDecodeFirst(String text) {
     try {
       return jsonDecode(text);
     } catch (_) {

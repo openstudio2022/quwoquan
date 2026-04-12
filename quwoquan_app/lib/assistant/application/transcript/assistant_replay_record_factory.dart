@@ -48,7 +48,7 @@ class AssistantReplayRecordFactory {
           assistantAnswerGateDecisionField: response.answerGateDecision
               .toJson(),
           'answerDecision':
-              response.runArtifacts?.answerDecision ??
+              response.runArtifacts?.answerDecision.toWireMap() ??
               const <String, dynamic>{},
         };
     return AssistantReplayRecord(

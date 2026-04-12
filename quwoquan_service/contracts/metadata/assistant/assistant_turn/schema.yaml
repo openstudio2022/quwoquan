@@ -146,6 +146,8 @@ subcontracts:
       - { name: nextAction, type: enum, enum_ref: AssistantNextAction, default: '' }
       - { name: confidence, type: double, default: 0.0 }
       - { name: reasoning, type: string, default: '' }
+      # 编排/LLM 常见扩展键，与 AssistantAnswerPayloadReadView.decisionMap spread 对齐。
+      - { name: problemClass, type: string, default: '' }
   result:
     class_name: AssistantTurnResult
     fields:

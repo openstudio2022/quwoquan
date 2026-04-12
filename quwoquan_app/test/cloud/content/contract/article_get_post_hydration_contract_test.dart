@@ -16,7 +16,7 @@ void main() {
       final detail = await mockRepo.getPost(postId: 'web-dev');
       expect(detail.detailWire.articleTemplate, isNotNull);
       expect(detail.detailWire.articleDocument, isNotNull);
-      expect(detail.detailWire.articleDocument, isNotEmpty);
+      expect(detail.detailWire.articleDocument!.nodes, isNotEmpty);
     });
 
     test('Mock getPost 与 Remote getPost 投射结果保持一致', () async {
@@ -40,12 +40,12 @@ void main() {
         baseUrl: 'https://example.com',
       );
       final remoteDetail = await remoteRepo.getPost(postId: postId);
-      final mockView = projectArticleDetailView(
-        mockDetail.wireForArticleProjection,
+      final mockView = projectArticleDetailViewFromPayload(
+        mockDetail,
         fallbackArticleId: postId,
       );
-      final remoteView = projectArticleDetailView(
-        remoteDetail.wireForArticleProjection,
+      final remoteView = projectArticleDetailViewFromPayload(
+        remoteDetail,
         fallbackArticleId: postId,
       );
 

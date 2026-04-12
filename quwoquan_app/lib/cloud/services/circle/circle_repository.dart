@@ -396,8 +396,8 @@ class MockCircleRepository implements CircleRepository {
           (data['defaultPublicGroupId'] ?? '${circleId}_group_default')
               .toString(),
       'autoSyncChat': data['autoSyncChat'] as bool? ?? true,
-      'tags': (data['tags'] as List<dynamic>? ?? const <dynamic>[])
-          .map((item) => item.toString())
+      'tags': ((data['tags'] as List?) ?? const <Object?>[])
+          .map((Object? item) => item.toString())
           .toList(growable: false),
       'createdAt': data['createdAt'] ?? fallbackUpdatedAt ?? now,
       'updatedAt': data['updatedAt'] ?? fallbackUpdatedAt ?? now,
@@ -428,8 +428,8 @@ class MockCircleRepository implements CircleRepository {
       'visibility': (data['visibility'] ?? 'public').toString(),
       'joinPolicy': (data['joinPolicy'] ?? 'apply_only').toString(),
       'ownerUserId': (data['ownerUserId'] ?? 'owner_user').toString(),
-      'managerIds': (data['managerIds'] as List<dynamic>? ?? const <dynamic>[])
-          .map((item) => item.toString())
+      'managerIds': ((data['managerIds'] as List?) ?? const <Object?>[])
+          .map((Object? item) => item.toString())
           .toList(growable: false),
       'memberCount': (data['memberCount'] as num?)?.toInt() ?? 0,
       if (data['conversationId'] != null)

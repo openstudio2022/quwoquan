@@ -115,7 +115,7 @@ class AnswerGateResolver {
     );
     final conversationStateDecision = _parseConversationStateDecision(
       structured['conversationStateDecision'] ??
-          runArtifacts?.answerDecision ??
+          runArtifacts?.answerDecision.toWireMap() ??
           structured['decision'],
     );
     final renderableAnswer = _hasRenderableAnswer(structured, runArtifacts);

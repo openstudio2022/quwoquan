@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 /// Input passed to each phase.
 class PhaseInput {
@@ -11,12 +12,13 @@ class PhaseInput {
     this.onTraceEvent,
   });
 
-  final dynamic request;
+  /// 通常为 [AssistantRunRequest]；亦允许 Map / 网关桥接对象（见 `coerceAssistantRunRequest`）。
+  final Object? request;
   final AgentExecutionState state;
   final String runId;
   final String traceId;
   final String sessionId;
-  final void Function(dynamic event)? onTraceEvent;
+  final AssistantTraceEventSink? onTraceEvent;
 }
 
 /// Result from a phase; may contain updated state and/or a terminal response.
@@ -27,7 +29,7 @@ class PhaseResult {
   });
 
   final AgentExecutionState? state;
-  final dynamic response;
+  final Object? response;
 
   bool get hasResponse => response != null;
 }
@@ -41,6 +43,6 @@ class PhaseOutput {
   });
 
   final AgentExecutionState? state;
-  final dynamic response;
+  final Object? response;
   final bool earlyExit;
 }

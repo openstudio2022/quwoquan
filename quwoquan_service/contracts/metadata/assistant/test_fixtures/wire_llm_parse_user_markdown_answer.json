@@ -1,0 +1,6 @@
+{
+  "contractId": "assistant_turn",
+  "userMarkdown": "  hello  ",
+  "decision": { "nextAction": "answer" },
+  "result": { "text": " internal " }
+}

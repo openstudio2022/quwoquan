@@ -5,6 +5,22 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+/// 同步摄入的联系人行（与 `ChatContactDto.toMap()` 等 wire 对齐；值为 JSON 叶子或嵌套结构）。
+typedef LocalChatSearchContactWire = Map<String, Object?>;
+
+/// 会话同步 wire（与 inbox / 会话 DTO `toMap` 等对齐）。
+typedef LocalChatSearchConversationWire = Map<String, dynamic>;
+
+/// Named façade over a single sqflite row (`Map<String, Object?>`), used where
+/// id-ordered reads return raw driver maps.
+final class LocalChatSearchSqliteRow {
+  LocalChatSearchSqliteRow(this.values);
+
+  final Map<String, Object?> values;
+
+  Object? operator [](String key) => values[key];
+}
+
 class LocalChatSearchStore {
   LocalChatSearchStore({String? databasePath, DatabaseFactory? databaseFactory})
     : _databasePath = databasePath,
@@ -23,7 +39,7 @@ class LocalChatSearchStore {
 
   Future<void> upsertContacts({
     required LocalSearchNamespace namespace,
-    required List<Map<String, dynamic>> contacts,
+    required List<LocalChatSearchContactWire> contacts,
   }) async {
     if (contacts.isEmpty) {
       return;
@@ -54,7 +70,7 @@ class LocalChatSearchStore {
       final conversationId = _string(
         contact['conversationId'] ?? contact['directConversationId'],
       );
-      final payload = <String, dynamic>{
+      final payload = <String, Object?>{
         ...contact,
         'contactId': contactId,
         'displayName': displayName,
@@ -101,7 +117,7 @@ class LocalChatSearchStore {
 
   Future<void> upsertConversations({
     required LocalSearchNamespace namespace,
-    required List<Map<String, dynamic>> conversations,
+    required List<LocalChatSearchConversationWire> conversations,
   }) async {
     if (conversations.isEmpty) {
       return;
@@ -111,7 +127,9 @@ class LocalChatSearchStore {
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
     for (final conversation in conversations) {
-      final conversationId = _conversationId(conversation);
+      final conversationId = _conversationId(
+        Map<String, Object?>.from(conversation),
+      );
       if (conversationId.isEmpty) {
         continue;
       }
@@ -211,7 +229,9 @@ class LocalChatSearchStore {
     final batch = database.batch();
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
-    final fallbackConversationId = _conversationId(conversation);
+    final fallbackConversationId = _conversationId(
+      conversation == null ? null : Map<String, Object?>.from(conversation),
+    );
     final fallbackConversationType = _string(conversation?['type']);
     final fallbackConversationTitle = _firstNonEmpty(<Object?>[
       conversation?['title'],
@@ -728,14 +748,14 @@ class LocalChatSearchStore {
     return ids.take(limit).toList(growable: false);
   }
 
-  Future<List<Map<String, Object?>>> _rowsForIds({
+  Future<List<LocalChatSearchSqliteRow>> _rowsForIds({
     required Database database,
     required String table,
     required String idColumn,
     required List<String> ids,
   }) async {
     if (ids.isEmpty) {
-      return const <Map<String, Object?>>[];
+      return const <LocalChatSearchSqliteRow>[];
     }
     final placeholders = List<String>.filled(ids.length, '?').join(',');
     final rows = await database.rawQuery(
@@ -748,6 +768,7 @@ class LocalChatSearchStore {
     return ids
         .map((id) => byId[id])
         .whereType<Map<String, Object?>>()
+        .map(LocalChatSearchSqliteRow.new)
         .toList(growable: false);
   }
 
@@ -1066,7 +1087,7 @@ class LocalChatSearchStore {
     return const <String>[];
   }
 
-  String _contactId(Map<String, dynamic>? contact) {
+  String _contactId(Map<String, Object?>? contact) {
     return _string(
       contact?['contactId'] ??
           contact?['userId'] ??
@@ -1075,7 +1096,7 @@ class LocalChatSearchStore {
     );
   }
 
-  String _conversationId(Map<String, dynamic>? conversation) {
+  String _conversationId(Map<String, Object?>? conversation) {
     return _string(
       conversation?['conversationId'] ??
           conversation?['id'] ??

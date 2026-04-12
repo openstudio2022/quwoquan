@@ -158,7 +158,7 @@ func assistantGoWireFieldType(schema *assistantContractSchema, f assistantContra
 			return "*string", true
 		}
 		return "string", false
-	case "map", "any":
+	case "map", "partitioned_map", "any":
 		return "json.RawMessage", opt
 	case "list<string>":
 		return "[]string", opt

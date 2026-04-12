@@ -1,0 +1,6 @@
+{
+  "contractId": "assistant_turn",
+  "decision": { "nextAction": "answer" },
+  "messageKind": "answer",
+  "result": { "text": "hi" }
+}

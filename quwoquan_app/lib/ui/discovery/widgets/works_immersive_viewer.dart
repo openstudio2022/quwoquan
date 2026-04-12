@@ -870,7 +870,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       setState(() {
         _hydratedRawPostsById[post.id] = <String, Object?>{
           ...?raw,
-          ...Map<String, Object?>.from(detail.wireForArticleProjection),
+          ...Map<String, Object?>.from(detail.mergedArticleWireMap),
         };
       });
       final hydratedArticle = _articleViewFor(post);

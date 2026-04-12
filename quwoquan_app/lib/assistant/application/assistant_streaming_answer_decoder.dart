@@ -73,7 +73,7 @@ class AssistantStreamingAnswerDecoder {
     if (raw.isEmpty) return '';
     final parsed = LlmResponseParser.parse(raw);
     if (parsed.ok && parsed.json != null) {
-      final turn = tryParseAssistantTurnOutput(parsed.json!);
+      final turn = parsed.tryAssistantTurnOutput();
       if (turn == null) return '';
       if (turn.nextActionType != AssistantNextAction.answer) return '';
       if (turn.messageKindType == AssistantMessageKind.progress ||

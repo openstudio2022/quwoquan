@@ -32,6 +32,7 @@ type AssistantTurnDecisionPayload struct {
 	NextAction string `json:"nextAction"`
 	Confidence float64 `json:"confidence"`
 	Reasoning string `json:"reasoning"`
+	ProblemClass string `json:"problemClass"`
 }
 
 type AssistantTurnDiagnostics struct {

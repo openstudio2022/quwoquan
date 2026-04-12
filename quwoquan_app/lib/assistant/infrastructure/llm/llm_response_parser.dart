@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+
 /// LLM 响应统一解析器。
 ///
 /// 职责：从 raw text 中提取并解析 JSON，支持多种模型输出格式。
@@ -226,6 +228,12 @@ class LlmParseResult {
   LlmAssistantOutputJsonView? get assistantOutputView {
     if (!ok || json == null) return null;
     return LlmAssistantOutputJsonView(json!);
+  }
+
+  /// 根 JSON 满足 `assistant_turn` 契约时返回 metadata 生成类型，否则 `null`（与 [tryParseAssistantTurnOutput] 一致）。
+  AssistantTurnOutput? tryAssistantTurnOutput() {
+    if (!ok || json == null) return null;
+    return tryParseAssistantTurnOutput(json!);
   }
 
   /// 是否为非最终答案（tool_call / ask_user 等中间态）

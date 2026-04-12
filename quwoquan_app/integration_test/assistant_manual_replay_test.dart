@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
@@ -2527,13 +2529,24 @@ class _TemporalReplayCase {
 }
 
 class _AssistantBubbleSnapshot {
-  const _AssistantBubbleSnapshot({
+  _AssistantBubbleSnapshot({
     required this.message,
     required this.bubbleText,
-  });
+  }) : _runArtifacts = _tryParseRunArtifacts(message);
 
   final Map<String, dynamic> message;
   final String bubbleText;
+  final RunArtifacts? _runArtifacts;
+
+  static RunArtifacts? _tryParseRunArtifacts(Map<String, dynamic> message) {
+    final raw = message['runArtifacts'];
+    if (raw is! Map) return null;
+    try {
+      return RunArtifacts.fromJson(Map<String, dynamic>.from(raw));
+    } catch (_) {
+      return null;
+    }
+  }
 
   String get answerText {
     final displayPlain = (message['displayPlainText'] as String?)?.trim() ?? '';
@@ -2579,6 +2592,10 @@ class _AssistantBubbleSnapshot {
       const <String, dynamic>{};
 
   String get nextAction {
+    final ra = _runArtifacts;
+    if (ra != null) {
+      return ra.answerDecisionReadView.nextAction;
+    }
     final answerDecision =
         ((message['runArtifacts'] as Map?)?['answerDecision'] as Map?)
             ?.cast<String, dynamic>() ??
@@ -2587,12 +2604,18 @@ class _AssistantBubbleSnapshot {
   }
 
   String get finalAnswerMode {
+    final ra = _runArtifacts;
+    if (ra != null) {
+      final mode = ra.diagnosticsReadView.finalAnswerMode.trim();
+      if (mode.isNotEmpty) return mode;
+    }
     final answerDecision =
         ((message['runArtifacts'] as Map?)?['answerDecision'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final mode = (answerDecision['finalAnswerMode'] as String?)?.trim() ?? '';
-    if (mode.isNotEmpty) return mode;
+    final legacyMode =
+        (answerDecision['finalAnswerMode'] as String?)?.trim() ?? '';
+    if (legacyMode.isNotEmpty) return legacyMode;
     final aggregation =
         (message['aggregationState'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -2608,6 +2631,10 @@ class _AssistantBubbleSnapshot {
     final direct = (message['journey'] as Map?)?.cast<String, dynamic>();
     if (direct != null && direct.isNotEmpty) {
       return direct;
+    }
+    final ra = _runArtifacts;
+    if (ra != null) {
+      return ra.journey.toJson();
     }
     return ((message['runArtifacts'] as Map?)?['journey'] as Map?)
             ?.cast<String, dynamic>() ??
@@ -2668,25 +2695,55 @@ class _AssistantBubbleSnapshot {
   }
 
   int get evidenceLedgerCount {
+    final ra = _runArtifacts;
+    if (ra != null) {
+      return ra.evidenceLedger.length;
+    }
     final raw =
         (((message['runArtifacts'] as Map?)?['evidenceLedger'] as List?) ??
-                const <dynamic>[])
+                const <Object?>[])
             .whereType<Map>()
             .length;
     return raw;
   }
 
   int get answerEvidenceBindingCount {
+    final ra = _runArtifacts;
+    if (ra != null) {
+      return ra.answerEvidenceBindings.length;
+    }
     final raw =
         (((message['runArtifacts'] as Map?)?['answerEvidenceBindings']
                     as List?) ??
-                const <dynamic>[])
+                const <Object?>[])
             .whereType<Map>()
             .length;
     return raw;
   }
 
   List<String> get queryDesignLines {
+    final raForQueries = _runArtifacts;
+    final typedSnapshots = <RunArtifactsUnderstandingSnapshot>[
+      if (raForQueries != null) raForQueries.understandingSnapshot,
+    ];
+    final topRaw = message['understandingSnapshot'];
+    if (topRaw is Map) {
+      try {
+        typedSnapshots.add(
+          RunArtifactsUnderstandingSnapshot.fromJson(
+            Map<String, dynamic>.from(topRaw),
+          ),
+        );
+      } catch (_) {}
+    }
+    for (final snapshot in typedSnapshots) {
+      final queries = <String>[
+        for (final group in snapshot.queryGroups) ...group.queries,
+      ];
+      final uniqueQueries = _uniqueNonEmpty(queries);
+      if (uniqueQueries.isNotEmpty) return uniqueQueries;
+    }
+
     final candidates = <Map<String, dynamic>>[
       ((message['runArtifacts'] as Map?)?['understandingSnapshot'] as Map?)
               ?.cast<String, dynamic>() ??
@@ -2717,10 +2774,19 @@ class _AssistantBubbleSnapshot {
   }
 
   List<String> get canonicalProcessSteps {
+    final ra = _runArtifacts;
+    if (ra != null && ra.processTimeline.isNotEmpty) {
+      final steps = ra.processTimeline
+          .map((frame) => frame.stepId.wireName.trim())
+          .where((stepId) => stepId.isNotEmpty)
+          .toList(growable: false);
+      final uniqueSteps = _uniqueNonEmpty(steps);
+      if (uniqueSteps.isNotEmpty) return uniqueSteps;
+    }
     final candidates = <List<dynamic>>[
-      (message['processTimeline'] as List?) ?? const <dynamic>[],
+      (message['processTimeline'] as List?) ?? const <Object?>[],
       ((message['runArtifacts'] as Map?)?['processTimeline'] as List?) ??
-          const <dynamic>[],
+          const <Object?>[],
     ];
     for (final raw in candidates) {
       final steps = raw

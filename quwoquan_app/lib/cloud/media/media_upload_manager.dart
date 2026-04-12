@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
@@ -149,7 +150,7 @@ class MediaUploadManager {
       },
     );
     return ContentMediaInitUploadResponseDto.fromMap(
-      Map<String, dynamic>.from(decoded as Map),
+      CloudResponseDecoder.asObject(decoded, context: ContentRequestPageIds.initMediaUpload),
     );
   }
 
@@ -187,7 +188,7 @@ class MediaUploadManager {
       body: task.completionMetadata ?? {},
     );
     return ContentMediaCompleteUploadResponseDto.fromMap(
-      Map<String, dynamic>.from(decoded as Map),
+      CloudResponseDecoder.asObject(decoded, context: ContentRequestPageIds.completeMediaUpload),
     );
   }
 

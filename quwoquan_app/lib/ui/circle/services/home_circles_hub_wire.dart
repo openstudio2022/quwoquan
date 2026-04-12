@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 
+/// 圈子 Hub：wire / mock 行 → [CircleDto] 与 [CircleHubFeedPostEntry] 的单点适配（见 gap 清单 policy.non_assistant_ui_wire_adapter_entrypoints）。
 CircleDto circleDtoFromHubMockMap(Map<String, Object?> circle) {
   return CircleDto.fromMap({
     ...Map<String, dynamic>.from(circle),

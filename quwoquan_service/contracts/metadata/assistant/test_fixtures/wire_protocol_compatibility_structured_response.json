@@ -1,0 +1,15 @@
+{
+  "experimentBucket": "control",
+  "domainResults": { "toolResultCount": 1 },
+  "uiTimeline": [
+    { "event": "thinking", "label": "正在思考" }
+  ],
+  "uiReferences": [
+    {
+      "title": "示例资料",
+      "url": "https://example.com",
+      "source": "example.com"
+    }
+  ],
+  "uiActions": [{ "id": "regenerate" }, { "id": "brief" }]
+}

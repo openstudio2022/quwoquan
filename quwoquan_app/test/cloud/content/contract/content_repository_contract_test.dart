@@ -82,10 +82,11 @@ void main() {
 
     test('getAppConfig 返回 feature flags 与 gray release 结构', () async {
       final config = await repo.getAppConfig();
-      final content = config.raw['content'] as Map<String, dynamic>?;
-      expect(content, isNotNull);
-      final featureFlags = content?['feature_flags'] as Map<String, dynamic>?;
-      final grayRelease = content?['gray_release'] as Map<String, dynamic>?;
+      final content = config.wireRoot['content'];
+      expect(content, isA<Map>());
+      final contentMap = Map<String, dynamic>.from(content! as Map);
+      final featureFlags = contentMap['feature_flags'] as Map<String, dynamic>?;
+      final grayRelease = contentMap['gray_release'] as Map<String, dynamic>?;
 
       expect(featureFlags, isNotNull);
       expect(
@@ -105,7 +106,7 @@ void main() {
       expect(grayRelease?['current_stage'], isA<String>());
       expect(grayRelease?['canary_matrix'], isA<List<dynamic>>());
 
-      final parsed = ContentAppConfigClientParsed.fromRootMap(config.raw);
+      final parsed = config.clientParsed;
       expect(
         parsed.featureFlagOverrides['enable_article_book_reader'],
         isA<bool>(),

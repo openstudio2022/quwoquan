@@ -147,6 +147,41 @@ class BrokerWebSearchResultDataView {
   }
 }
 
+/// Typed read surface for `web_fetch` entries in [RetrievalFetchResult.data]
+/// (broker → tool boundary).
+class BrokerWebFetchResultDataView {
+  BrokerWebFetchResultDataView(Map<String, dynamic> data)
+    : _data = Map<String, dynamic>.from(data);
+
+  final Map<String, dynamic> _data;
+
+  Map<String, dynamic> get raw => _data;
+
+  String valueOf(String key) =>
+      (_data[key] as Object?)?.toString().trim() ?? '';
+
+  Object? get content => _data['content'];
+
+  String get title => valueOf('title');
+
+  String get url => valueOf('url');
+
+  String get source => valueOf('source');
+
+  String get sourceHost => valueOf('sourceHost');
+
+  String get summary => valueOf('summary');
+
+  String get sourceTier => valueOf('sourceTier');
+
+  List<Map<String, dynamic>> get referenceMaps =>
+      (_data['references'] as List?)
+          ?.whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false) ??
+      const <Map<String, dynamic>>[];
+}
+
 class RetrievalFetchResult {
   const RetrievalFetchResult({
     required this.success,

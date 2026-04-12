@@ -91,6 +91,8 @@ class ProfileSubjectViewData {
     );
   }
 
+  /// 仅用于 Repository / 契约解码边界；页面与业务层请使用 [fromProfileSubjectWire]。
+  @Deprecated('Use fromProfileSubjectWire(ProfileSubjectWireDto)')
   factory ProfileSubjectViewData.fromMap(Map<String, dynamic> map) {
     return ProfileSubjectViewData.fromProfileSubjectWire(
       ProfileSubjectWireDto.fromMap(map),
@@ -150,6 +152,7 @@ class UserProfileStatsViewData {
     );
   }
 
+  @Deprecated('Use fromUserProfileStatsWire(UserProfileStatsWireDto)')
   factory UserProfileStatsViewData.fromMap(Map<String, dynamic> m) {
     return UserProfileStatsViewData.fromUserProfileStatsWire(
       UserProfileStatsWireDto.fromMap(m),
@@ -193,6 +196,7 @@ class RelationshipViewData {
     );
   }
 
+  @Deprecated('Use fromRelationshipNormalizedWire(RelationshipNormalizedWireDto)')
   factory RelationshipViewData.fromNormalizedMap(Map<String, dynamic> m) {
     return RelationshipViewData.fromRelationshipNormalizedWire(
       RelationshipNormalizedWireDto.fromMap(m),
@@ -232,6 +236,7 @@ class ProfileUserLikeRowViewData {
     );
   }
 
+  @Deprecated('Use fromProfileUserLikeRowWire(ProfileUserLikeRowWireDto)')
   factory ProfileUserLikeRowViewData.fromMap(Map<String, dynamic> m) {
     return ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
       ProfileUserLikeRowWireDto.fromMap(m),
@@ -267,6 +272,7 @@ class ProfileSocialRelationRowViewData {
     );
   }
 
+  @Deprecated('Use fromProfileSocialRelationRowWire(ProfileSocialRelationRowWireDto)')
   factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
     return ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
       ProfileSocialRelationRowWireDto.fromMap(map),
@@ -334,6 +340,9 @@ class ProfileInteractionActivityViewData {
     );
   }
 
+  @Deprecated(
+    'Use fromProfileInteractionActivityWire(ProfileInteractionActivityWireDto)',
+  )
   factory ProfileInteractionActivityViewData.fromMap(Map<String, dynamic> map) {
     return ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
       ProfileInteractionActivityWireDto.fromMap(map),
@@ -392,6 +401,7 @@ class ActivePersonaContextViewData {
     );
   }
 
+  @Deprecated('Use fromActivePersonaContextWire(ActivePersonaContextWireDto)')
   factory ActivePersonaContextViewData.fromMap(Map<String, dynamic> map) {
     return ActivePersonaContextViewData.fromActivePersonaContextWire(
       ActivePersonaContextWireDto.fromMap(map),
@@ -476,6 +486,9 @@ class PersonaManagementItemViewData {
     );
   }
 
+  @Deprecated(
+    'Use fromPersonaManagementItemWire(PersonaManagementItemWireDto)',
+  )
   factory PersonaManagementItemViewData.fromMap(Map<String, dynamic> map) {
     return PersonaManagementItemViewData.fromPersonaManagementItemWire(
       PersonaManagementItemWireDto.fromMap(map),
@@ -511,6 +524,9 @@ class PersonaManagementQuotaViewData {
     );
   }
 
+  @Deprecated(
+    'Use fromPersonaManagementQuotaWire(PersonaManagementQuotaWireDto)',
+  )
   factory PersonaManagementQuotaViewData.fromMap(Map<String, dynamic> map) {
     return PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
       PersonaManagementQuotaWireDto.fromMap(map),
@@ -549,6 +565,9 @@ class PersonaLifecycleGuardViewData {
     );
   }
 
+  @Deprecated(
+    'Use fromPersonaLifecycleGuardWire(PersonaLifecycleGuardWireDto)',
+  )
   factory PersonaLifecycleGuardViewData.fromMap(Map<String, dynamic> map) {
     return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
       PersonaLifecycleGuardWireDto.fromMap(map),
@@ -597,6 +616,9 @@ class PersonaManagementSummaryViewData {
     );
   }
 
+  @Deprecated(
+    'Use fromPersonaManagementSummaryWire(PersonaManagementSummaryWireDto)',
+  )
   factory PersonaManagementSummaryViewData.fromMap(Map<String, dynamic> map) {
     return PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
       PersonaManagementSummaryWireDto.fromMap(map),

@@ -55,7 +55,7 @@ CommentDto _commentDtoFromContentWire(Map<String, dynamic> obj) {
 /// 媒体 / 摘要 / 推荐等 wire 响应为 metadata `client_projection` 生成的 DTO（见
 /// `contracts/metadata/content/post/projections/content_*_*.yaml`）。
 ///
-/// 仍为 `Map` / 弱类型的边界：[reportBehaviors] 的 `events`（行为埋点）；[ContentAppConfigWire] 内层 raw JSON。
+/// 仍为 `Map` / 弱类型的边界：[reportBehaviors] 的 `events`（行为埋点）；HTTP decode → DTO 之间的窄区间。
 abstract class ContentRepository {
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
@@ -218,9 +218,16 @@ class MockContentRepository implements ContentRepository {
   String? lastCommentPostId;
 
   Map<String, dynamic> reactionStateStub = {'liked': false, 'favorited': false};
-  List<Map<String, dynamic>> commentsStub = [];
+  List<CommentDto> commentsStub = [];
   int countersStubLikeCount = 0;
   int countersStubCommentCount = 0;
+
+  PostBaseDto _mockPostDto(
+    String postId, {
+    required Map<String, dynamic> payloadMerge,
+  }) {
+    return postBaseDtoFromMap(_mockPostWire(postId, payloadMerge: payloadMerge));
+  }
 
   Map<String, dynamic> _mockPostWire(
     String postId, {
@@ -268,12 +275,11 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async {
-    final rawList = _resolveDiscoveryRaw(
+    final items = _resolveDiscoveryPosts(
       category: category,
       identity: identity,
       type: type,
     );
-    final items = rawList.map(postBaseDtoFromMap).toList(growable: false);
     return CursorPage<PostBaseDto>(items: items, nextCursor: null);
   }
 
@@ -422,17 +428,10 @@ class MockContentRepository implements ContentRepository {
 
   @override
   Future<ContentPostDetailPayload> getPost({required String postId}) async {
-    final allRaw = aggregateDiscoveryWireSlices(
-      photo: ContentMockData.discoveryPhotoData,
-      video: ContentMockData.discoveryVideoData,
-      moment: ContentMockData.discoveryMomentData,
-      article: ContentMockData.discoveryArticleData,
-    );
-    final raw = allRaw.firstWhere(
-      (m) => m['postId']?.toString() == postId,
-      orElse: () => <String, dynamic>{},
-    );
-    if (raw.isEmpty) return Future.error(Exception('Post $postId not found'));
+    final raw = lookupCanonicalDiscoveryWireRowByPostId(postId);
+    if (raw == null) {
+      return Future.error(Exception('Post $postId not found'));
+    }
     return ContentPostDetailPayload.fromWire(raw);
   }
 
@@ -441,9 +440,7 @@ class MockContentRepository implements ContentRepository {
     required CreatePostRequestWire body,
   }) async {
     final postId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    return postBaseDtoFromMap(
-      _mockPostWire(postId, payloadMerge: body.toWire()),
-    );
+    return _mockPostDto(postId, payloadMerge: body.toWire());
   }
 
   @override
@@ -484,8 +481,7 @@ class MockContentRepository implements ContentRepository {
     String sort = 'latest',
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final dtos = commentsStub.map(CommentDto.fromMap).toList();
-    return CommentPage(items: dtos, nextCursor: null);
+    return CommentPage(items: List<CommentDto>.from(commentsStub), nextCursor: null);
   }
 
   @override
@@ -518,9 +514,10 @@ class MockContentRepository implements ContentRepository {
     if (replyToCommentId != null) {
       comment['replyToCommentId'] = replyToCommentId;
     }
-    commentsStub = [...commentsStub, comment];
+    final dto = CommentDto.fromMap(comment);
+    commentsStub = [...commentsStub, dto];
     countersStubCommentCount++;
-    return CommentDto.fromMap(comment);
+    return dto;
   }
 
   @override
@@ -528,7 +525,7 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required String commentId,
   }) async {
-    commentsStub = commentsStub.where((c) => c['_id'] != commentId).toList();
+    commentsStub = commentsStub.where((c) => c.id != commentId).toList();
   }
 
   @override
@@ -606,8 +603,9 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required UpdatePostRequestWire body,
   }) async {
-    return postBaseDtoFromMap(
-      _mockPostWire(postId, payloadMerge: {...body.toWire(), 'postId': postId}),
+    return _mockPostDto(
+      postId,
+      payloadMerge: {...body.toWire(), 'postId': postId},
     );
   }
 
@@ -620,15 +618,13 @@ class MockContentRepository implements ContentRepository {
     PublishPostRequestWire? body,
   }) async {
     final wire = body ?? PublishPostRequestWire();
-    return postBaseDtoFromMap(
-      _mockPostWire(
-        postId,
-        payloadMerge: {
-          ...wire.toWire(),
-          'postId': postId,
-          'status': 'published',
-        },
-      ),
+    return _mockPostDto(
+      postId,
+      payloadMerge: {
+        ...wire.toWire(),
+        'postId': postId,
+        'status': 'published',
+      },
     );
   }
 
@@ -637,11 +633,9 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required UpdatePostSettingsRequestWire body,
   }) async {
-    return postBaseDtoFromMap(
-      _mockPostWire(
-        postId,
-        payloadMerge: {...body.toWire(), 'postId': postId},
-      ),
+    return _mockPostDto(
+      postId,
+      payloadMerge: {...body.toWire(), 'postId': postId},
     );
   }
 
@@ -650,14 +644,15 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required PromotePostToWorkRequestWire body,
   }) async {
-    return postBaseDtoFromMap(
-      _mockPostWire(postId, payloadMerge: {
+    return _mockPostDto(
+      postId,
+      payloadMerge: {
         ...body.toWire(),
         'postId': postId,
         'contentIdentity': 'work',
         'identity': 'work',
         'status': 'published',
-      }),
+      },
     );
   }
 
@@ -667,11 +662,9 @@ class MockContentRepository implements ContentRepository {
     List<String> add = const [],
     List<String> remove = const [],
   }) async {
-    return postBaseDtoFromMap(
-      _mockPostWire(
-        postId,
-        payloadMerge: {'postId': postId, 'circleIds': add},
-      ),
+    return _mockPostDto(
+      postId,
+      payloadMerge: {'postId': postId, 'circleIds': add},
     );
   }
 
@@ -681,11 +674,12 @@ class MockContentRepository implements ContentRepository {
     required String circleId,
   }) async {
     final newId = 'local_repost_${DateTime.now().millisecondsSinceEpoch}';
-    return postBaseDtoFromMap(
-      _mockPostWire(newId, payloadMerge: {
+    return _mockPostDto(
+      newId,
+      payloadMerge: {
         'circleId': circleId,
         'sourcePostId': postId,
-      }),
+      },
     );
   }
 
@@ -696,12 +690,13 @@ class MockContentRepository implements ContentRepository {
     String quoteText = '',
   }) async {
     final newId = 'local_quote_${DateTime.now().millisecondsSinceEpoch}';
-    return postBaseDtoFromMap(
-      _mockPostWire(newId, payloadMerge: {
+    return _mockPostDto(
+      newId,
+      payloadMerge: {
         'body': quoteText,
         'circleId': circleId,
         'sourcePostId': postId,
-      }),
+      },
     );
   }
 
@@ -794,27 +789,29 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final allRaw = _allRawPosts();
-    final filtered = allRaw
-        .where((m) => m['authorId']?.toString() == userId)
+    final filtered = _allDiscoveryPosts()
+        .where((p) => p.authorId == userId)
         .where(
-          (m) => _matchesIdentityAndType(m, identity: identity, type: type),
+          (p) => _matchesIdentityAndTypePost(
+            p,
+            identity: identity,
+            type: type,
+          ),
         )
         .toList();
-    final items = filtered.map(postBaseDtoFromMap).toList(growable: false);
-    return CursorPage<PostBaseDto>(items: items, nextCursor: null);
+    return CursorPage<PostBaseDto>(items: filtered, nextCursor: null);
   }
 
-  List<Map<String, dynamic>> _allRawPosts() {
+  List<PostBaseDto> _allDiscoveryPosts() {
     return aggregateDiscoveryWireSlices(
       photo: ContentMockData.discoveryPhotoData,
       video: ContentMockData.discoveryVideoData,
       moment: ContentMockData.discoveryMomentData,
       article: ContentMockData.discoveryArticleData,
-    );
+    ).map(postBaseDtoFromMap).toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _resolveDiscoveryRaw({
+  List<PostBaseDto> _resolveDiscoveryPosts({
     required String category,
     String? identity,
     String? type,
@@ -823,15 +820,32 @@ class MockContentRepository implements ContentRepository {
     final resolvedType = _normalizeFeedType(
       type ?? _mapCategoryToFeedType(category),
     );
-    return _allRawPosts()
+    return _allDiscoveryPosts()
         .where(
-          (item) => _matchesIdentityAndType(
+          (item) => _matchesIdentityAndTypePost(
             item,
             identity: resolvedIdentity,
             type: resolvedType,
           ),
         )
         .toList(growable: false);
+  }
+
+  bool _matchesIdentityAndTypePost(
+    PostBaseDto post, {
+    String? identity,
+    String? type,
+  }) {
+    return _matchesIdentityAndType(
+      <String, dynamic>{
+        'contentType': post.type,
+        'type': post.type,
+        'contentIdentity': post.identity,
+        'identity': post.identity,
+      },
+      identity: identity,
+      type: type,
+    );
   }
 
   String? _mapCategoryToIdentity(String category) {

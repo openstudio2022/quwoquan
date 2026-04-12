@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show setEquals;
 
+export 'package:quwoquan_app/core/models/search_hit_payload.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';

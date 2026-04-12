@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "buckets": {
+    "assistant_handwritten": {
+      "map_string_dynamic": 1352,
+      "dynamic_keyword": 2779
+    },
+    "core_search_repository": {
+      "map_string_dynamic": 15,
+      "dynamic_keyword": 26
+    }
+  },
+  "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated.\nassistant_handwritten: Wave mechanical pass — .cast<String,Object?>, const map values Object?, websearch helpers Object?, retrieval/search/react/llm/understand_phase (see assistant_handwritten_weak_typing_inventory.md)."
+}

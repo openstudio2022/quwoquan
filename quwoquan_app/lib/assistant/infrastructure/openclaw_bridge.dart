@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 enum OpenClawRemoteStreamEventType {
   chunk,
@@ -205,7 +206,8 @@ class OpenClawBridge {
     }
   }
 
-  Future<Map<String, dynamic>?> invokeSkillRemote({
+  /// VENDOR_JSON：`/v1/skills/invoke` 成功体在此单次解码为 [AssistantToolResult]，不向编排层泄漏裸 Map。
+  Future<AssistantToolResult?> invokeSkillRemote({
     required String skillId,
     required Map<String, dynamic> arguments,
   }) async {
@@ -221,8 +223,20 @@ class OpenClawBridge {
       );
       if (response.statusCode >= 400) return null;
       final body = jsonDecode(response.body);
-      if (body is Map<String, dynamic>) return body;
-      return null;
+      if (body is! Map) return null;
+      final map = body is Map<String, dynamic>
+          ? body
+          : body.cast<String, dynamic>();
+      try {
+        return AssistantToolResult.fromJson(map);
+      } catch (_) {
+        return const AssistantToolResult(
+          success: false,
+          message: '远端技能返回格式异常',
+          errorCode: AssistantErrorCode.executionFailed,
+          degraded: true,
+        );
+      }
     } catch (_) {
       return null;
     }
@@ -290,23 +304,10 @@ class OpenClawBridge {
         eventName == 'process_append' ||
         eventName == 'process_commit') {
       final eventJson = decoded != null
-          ? <String, dynamic>{
-              if (decoded.containsKey('type'))
-                ...decoded
-              else ...<String, dynamic>{
-                'type': eventName == 'user_event'
-                    ? (decoded['type'] as String? ?? 'process_append')
-                    : eventName,
-                'scope': (decoded['scope'] as String? ?? 'root'),
-                'message':
-                    (decoded['message'] as String?)?.trim() ?? payloadRaw,
-                'nodeId': (decoded['nodeId'] as String? ?? ''),
-                'runId': (decoded['runId'] as String? ?? ''),
-                'payload':
-                    (decoded['payload'] as Map?)?.cast<String, dynamic>() ??
-                    decoded,
-              },
-            }
+          ? _OpenClawSseVendorPayload(decoded).wireUserEventOrProcess(
+              eventName: eventName,
+              payloadRaw: payloadRaw,
+            )
           : <String, dynamic>{
               'type': eventName == 'user_event' ? 'process_append' : eventName,
               'scope': 'root',
@@ -318,26 +319,16 @@ class OpenClawBridge {
     if (eventName == 'answer_delta') {
       if (decoded != null &&
           (decoded['scope'] != null || decoded['type'] != null)) {
-        final eventJson = <String, dynamic>{
-          'type': 'answer_delta',
-          'scope': (decoded['scope'] as String? ?? 'aggregation'),
-          'message':
-              (decoded['message'] as String?)?.trim() ??
-              (decoded['text'] as String?)?.trim() ??
-              '',
-          'nodeId': (decoded['nodeId'] as String? ?? ''),
-          'runId': (decoded['runId'] as String? ?? ''),
-          'payload':
-              (decoded['payload'] as Map?)?.cast<String, dynamic>() ?? decoded,
-        };
+        final eventJson =
+            _OpenClawSseVendorPayload(decoded).wireAnswerDeltaStructured();
         return OpenClawRemoteStreamEvent.userEvent(
           UserEvent.fromJson(eventJson),
         );
       }
       final chunk = decoded != null
-          ? ((decoded['chunk'] as String?)?.trim().isNotEmpty == true
-                ? (decoded['chunk'] as String)
-                : ((decoded['text'] as String?) ?? payloadRaw))
+          ? _OpenClawSseVendorPayload(decoded).chunkOrTextFallback(
+              payloadRaw,
+            )
           : payloadRaw;
       if (chunk.isNotEmpty) {
         return OpenClawRemoteStreamEvent.chunk(chunk);
@@ -346,9 +337,8 @@ class OpenClawBridge {
     }
     if (eventName == 'chunk' || eventName == 'delta' || eventName == 'token') {
       if (decoded != null) {
-        final chunk = (decoded['chunk'] as String?)?.trim().isNotEmpty == true
-            ? (decoded['chunk'] as String)
-            : ((decoded['text'] as String?) ?? '');
+        final chunk =
+            _OpenClawSseVendorPayload(decoded).chunkOrTextForTokenEvent();
         if (chunk.isNotEmpty) return OpenClawRemoteStreamEvent.chunk(chunk);
       }
       return OpenClawRemoteStreamEvent.chunk(payloadRaw);
@@ -422,10 +412,71 @@ class OpenClawBridge {
     if (result == null) {
       return 'bridge invoke unavailable';
     }
-    final success = result['success'] == true;
-    if (!success) {
-      return result['message']?.toString();
+    if (!result.success) {
+      return result.message;
     }
-    return result['message']?.toString();
+    return result.message;
+  }
+}
+
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — SSE `data:` 行已解码为 Map 后的私有投影，再转 [UserEvent] / [AssistantTraceEvent]。
+
+final class _OpenClawSseVendorPayload {
+  const _OpenClawSseVendorPayload(this.map);
+
+  final Map<String, dynamic> map;
+
+  Map<String, dynamic> wireUserEventOrProcess({
+    required String eventName,
+    required String payloadRaw,
+  }) {
+    if (map.containsKey('type')) {
+      return Map<String, dynamic>.from(map);
+    }
+    final payloadVal = map['payload'];
+    final payloadMap = payloadVal is Map
+        ? Map<String, dynamic>.from(payloadVal)
+        : map;
+    return <String, dynamic>{
+      'type': eventName == 'user_event'
+          ? (map['type'] as String? ?? 'process_append')
+          : eventName,
+      'scope': (map['scope'] as String? ?? 'root'),
+      'message': (map['message'] as String?)?.trim() ?? payloadRaw,
+      'nodeId': (map['nodeId'] as String? ?? ''),
+      'runId': (map['runId'] as String? ?? ''),
+      'payload': payloadMap,
+    };
+  }
+
+  Map<String, dynamic> wireAnswerDeltaStructured() {
+    return <String, dynamic>{
+      'type': 'answer_delta',
+      'scope': (map['scope'] as String? ?? 'aggregation'),
+      'message':
+          (map['message'] as String?)?.trim() ??
+          (map['text'] as String?)?.trim() ??
+          '',
+      'nodeId': (map['nodeId'] as String? ?? ''),
+      'runId': (map['runId'] as String? ?? ''),
+      'payload':
+          (map['payload'] as Map?)?.cast<String, dynamic>() ?? map,
+    };
+  }
+
+  String chunkOrTextFallback(String payloadRaw) {
+    final chunk = map['chunk'];
+    if (chunk is String && chunk.trim().isNotEmpty) {
+      return chunk;
+    }
+    return (map['text'] as String?) ?? payloadRaw;
+  }
+
+  String chunkOrTextForTokenEvent() {
+    final c = map['chunk'];
+    if (c is String && c.trim().isNotEmpty) {
+      return c;
+    }
+    return (map['text'] as String?) ?? '';
   }
 }

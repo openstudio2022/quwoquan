@@ -1,0 +1,54 @@
+# Wave A：assistant_handwritten 契约 / codegen 下一批目标（规划）
+# 真相源目录：quwoquan_service/contracts/metadata/assistant/
+# 生成：make codegen-app → quwoquan_app/lib/assistant/generated/contracts/*.g.dart
+# 说明：下列「高 churn 手写文件」应与 schema 增量对齐，减少手写 Map 组装；非一次 PR 完成。
+version: 1
+updated: "2026-04-12"
+metadata_root: quwoquan_service/contracts/metadata/assistant
+codegen_output_glob: quwoquan_app/lib/assistant/generated/contracts/*.g.dart
+# 主路径（诚实收口）：metadata/codegen 具名 DTO，而非仅靠 dynamic→Object? 等字面替换。
+honesty_policy:
+  primary_delivery_path: >-
+    contracts/metadata 增量 → make codegen-app → lib/assistant/generated/** 更新 →
+    手写层改为消费生成 DTO / 契约类型（或明确的 sealed/domain 类型）。
+  excluded_from_primary_claim: >-
+    仅将 dynamic 改为 Object?、替换 .cast、或 Map 顶层字面从 dynamic 迁到 Object?，
+    而无 schema/codegen 或领域类型跟进的 PR，不得申报为弱类型治理的主要交付。
+  governance_doc: specs/gates/assistant_search_weak_typing_governance.md
+  review_checklist: specs/gates/assistant_weak_typing_review_checklist.md
+wave_a_priority:
+  - id: run_artifacts_family
+    rationale: run_artifacts 分区与读视图仍大量 Map（inventory Top：run_artifacts_map_*）
+    schema_paths:
+      - quwoquan_service/contracts/metadata/assistant/run_artifacts/schema.yaml
+    handwritten_consumers:
+      - quwoquan_app/lib/assistant/contracts/run_artifacts_map_partition.dart
+      - quwoquan_app/lib/assistant/contracts/run_artifacts_map_read_views.dart
+  - id: assistant_turn_protocol
+    rationale: 持久化 turn / 载荷与 codegen assistant_turn 对齐
+    schema_paths:
+      - quwoquan_service/contracts/metadata/assistant/assistant_turn/schema.yaml
+      - quwoquan_service/contracts/metadata/assistant/assistant_run/fields.yaml
+    handwritten_consumers:
+      - quwoquan_app/lib/assistant/protocol/persisted_assistant_turn.dart
+      - quwoquan_app/lib/assistant/protocol/run_request.dart
+  - id: planner_and_observation
+    rationale: 规划与 react 观测面已有 schema 目录，可扩展字段替代动态 Map
+    schema_paths:
+      - quwoquan_service/contracts/metadata/assistant/planner_contracts/schema.yaml
+      - quwoquan_service/contracts/metadata/assistant/react_observation/schema.yaml
+    handwritten_consumers:
+      - quwoquan_app/lib/assistant/reasoning/runtime/react_runtime.dart
+      - quwoquan_app/lib/assistant/infrastructure/llm/llm_provider.dart
+wave_b_tool_retrieval:
+  note: 工具与检索以「单点 wire codec + DTO」为主，部分结构可进 assistant_run / tool_assessment metadata
+  files:
+    - quwoquan_app/lib/assistant/tool/impl/web/websearch_tool.dart
+    - quwoquan_app/lib/assistant/tool/impl/search/search_tool.dart
+    - quwoquan_app/lib/assistant/reasoning/runtime/retrieval_outcome_resolver.dart
+wave_c_orchestration:
+  note: local_phase_execution_owner 为当前最大文件，需独立里程碑
+  files:
+    - quwoquan_app/lib/assistant/orchestration/local_phase_execution_owner.dart
+    - quwoquan_app/lib/assistant/orchestration/phases/understand_phase.dart
+ratchet_reference: specs/gates/assistant_search_weak_typing_baseline.json

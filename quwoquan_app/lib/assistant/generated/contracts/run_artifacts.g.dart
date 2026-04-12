@@ -3,7 +3,65 @@
 // ignore_for_file: avoid_classes_with_only_static_members
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+
+class RunArtifactsAnswerDecisionCore {
+  const RunArtifactsAnswerDecisionCore({
+    this.nextAction = "",
+    this.answerEligibility = "",
+    this.finalAnswerReady = false,
+    this.evidenceSummary = "",
+    this.confidence = 0,
+    this.reasoning = "",
+    this.synthesisReady = false,
+    this.synthesisReason = "",
+  });
+
+  final String nextAction;
+  final String answerEligibility;
+  final bool finalAnswerReady;
+  final String evidenceSummary;
+  final double confidence;
+  final String reasoning;
+  final bool synthesisReady;
+  final String synthesisReason;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'nextAction': nextAction,
+        'answerEligibility': answerEligibility,
+        'finalAnswerReady': finalAnswerReady,
+        'evidenceSummary': evidenceSummary,
+        'confidence': confidence,
+        'reasoning': reasoning,
+        'synthesisReady': synthesisReady,
+        'synthesisReason': synthesisReason,
+      };
+
+  factory RunArtifactsAnswerDecisionCore.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsAnswerDecisionCore(
+      nextAction: (json['nextAction'] as String?)?.trim() ?? "",
+      answerEligibility: (json['answerEligibility'] as String?)?.trim() ?? "",
+      finalAnswerReady: json['finalAnswerReady'] == true,
+      evidenceSummary: (json['evidenceSummary'] as String?)?.trim() ?? "",
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+      reasoning: (json['reasoning'] as String?)?.trim() ?? "",
+      synthesisReady: json['synthesisReady'] == true,
+      synthesisReason: (json['synthesisReason'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class RunArtifactsAnswerDecisionCoreFields {
+  static const String nextAction = 'nextAction';
+  static const String answerEligibility = 'answerEligibility';
+  static const String finalAnswerReady = 'finalAnswerReady';
+  static const String evidenceSummary = 'evidenceSummary';
+  static const String confidence = 'confidence';
+  static const String reasoning = 'reasoning';
+  static const String synthesisReady = 'synthesisReady';
+  static const String synthesisReason = 'synthesisReason';
+}
 
 class AssistantAnswerDisplayBlock {
   const AssistantAnswerDisplayBlock({
@@ -178,6 +236,100 @@ class RunArtifactsAnswerProcessingFields {
   static const String keyFacts = 'keyFacts';
   static const String missingDimensions = 'missingDimensions';
   static const String retrieveMoreReason = 'retrieveMoreReason';
+}
+
+class RunArtifactsDiagnosticsCore {
+  const RunArtifactsDiagnosticsCore({
+    this.domainId = "",
+    this.renderMode = "",
+    this.renderFallback = "",
+    this.answerEligibility = "",
+    this.qualityGates = const <String, dynamic>{},
+    this.evidenceEvaluation = const <String, dynamic>{},
+    this.answerBoundaryPolicy = const <String, dynamic>{},
+    this.evidenceSummary = "",
+    this.evidencePassed = false,
+    this.finalAnswerMode = "",
+    this.synthesisReady = false,
+    this.synthesisReason = "",
+    this.heuristicFallbackUsed = false,
+    this.emergedTags = const <String>[],
+  });
+
+  final String domainId;
+  final String renderMode;
+  final String renderFallback;
+  final String answerEligibility;
+  final Map<String, dynamic> qualityGates;
+  final Map<String, dynamic> evidenceEvaluation;
+  final Map<String, dynamic> answerBoundaryPolicy;
+  final String evidenceSummary;
+  final bool evidencePassed;
+  final String finalAnswerMode;
+  final bool synthesisReady;
+  final String synthesisReason;
+  final bool heuristicFallbackUsed;
+  final List<String> emergedTags;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'domainId': domainId,
+        'renderMode': renderMode,
+        'renderFallback': renderFallback,
+        'answerEligibility': answerEligibility,
+        'qualityGates': qualityGates,
+        'evidenceEvaluation': evidenceEvaluation,
+        'answerBoundaryPolicy': answerBoundaryPolicy,
+        'evidenceSummary': evidenceSummary,
+        'evidencePassed': evidencePassed,
+        'finalAnswerMode': finalAnswerMode,
+        'synthesisReady': synthesisReady,
+        'synthesisReason': synthesisReason,
+        'heuristicFallbackUsed': heuristicFallbackUsed,
+        'emergedTags': emergedTags,
+      };
+
+  factory RunArtifactsDiagnosticsCore.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsDiagnosticsCore(
+      domainId: (json['domainId'] as String?)?.trim() ?? "",
+      renderMode: (json['renderMode'] as String?)?.trim() ?? "",
+      renderFallback: (json['renderFallback'] as String?)?.trim() ?? "",
+      answerEligibility: (json['answerEligibility'] as String?)?.trim() ?? "",
+      qualityGates: (json['qualityGates'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      evidenceEvaluation: (json['evidenceEvaluation'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      answerBoundaryPolicy: (json['answerBoundaryPolicy'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      evidenceSummary: (json['evidenceSummary'] as String?)?.trim() ?? "",
+      evidencePassed: json['evidencePassed'] == true,
+      finalAnswerMode: (json['finalAnswerMode'] as String?)?.trim() ?? "",
+      synthesisReady: json['synthesisReady'] == true,
+      synthesisReason: (json['synthesisReason'] as String?)?.trim() ?? "",
+      heuristicFallbackUsed: json['heuristicFallbackUsed'] == true,
+      emergedTags: _assistantStringList(json['emergedTags']),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class RunArtifactsDiagnosticsCoreFields {
+  static const String domainId = 'domainId';
+  static const String renderMode = 'renderMode';
+  static const String renderFallback = 'renderFallback';
+  static const String answerEligibility = 'answerEligibility';
+  static const String qualityGates = 'qualityGates';
+  static const String evidenceEvaluation = 'evidenceEvaluation';
+  static const String answerBoundaryPolicy = 'answerBoundaryPolicy';
+  static const String evidenceSummary = 'evidenceSummary';
+  static const String evidencePassed = 'evidencePassed';
+  static const String finalAnswerMode = 'finalAnswerMode';
+  static const String synthesisReady = 'synthesisReady';
+  static const String synthesisReason = 'synthesisReason';
+  static const String heuristicFallbackUsed = 'heuristicFallbackUsed';
+  static const String emergedTags = 'emergedTags';
 }
 
 class AssistantDisplayItem {
@@ -1022,6 +1174,45 @@ class RunArtifactsUnderstandingSnapshotFields {
   static const String discardedAssumptions = 'discardedAssumptions';
 }
 
+class RunArtifactsAnswerDecisionPartitioned {
+  const RunArtifactsAnswerDecisionPartitioned({
+    this.core = const RunArtifactsAnswerDecisionCore(),
+    this.extensions = const <String, dynamic>{},
+  });
+
+  final RunArtifactsAnswerDecisionCore core;
+  final Map<String, dynamic> extensions;
+
+  Map<String, dynamic> toWireMap() => RunArtifactsMapPartition.mergeSlices(core.toJson(), extensions);
+
+  factory RunArtifactsAnswerDecisionPartitioned.fromWireMap(Map<String, dynamic> map) {
+    return RunArtifactsAnswerDecisionPartitioned(
+      core: RunArtifactsAnswerDecisionCore.fromJson(RunArtifactsMapPartition.answerDecisionStable(map)),
+      extensions: RunArtifactsMapPartition.answerDecisionExtension(map),
+    );
+  }
+}
+
+class RunArtifactsDiagnosticsPartitioned {
+  const RunArtifactsDiagnosticsPartitioned({
+    this.core = const RunArtifactsDiagnosticsCore(),
+    this.extensions = const <String, dynamic>{},
+  });
+
+  final RunArtifactsDiagnosticsCore core;
+  final Map<String, dynamic> extensions;
+
+  Map<String, dynamic> toWireMap() => RunArtifactsMapPartition.mergeSlices(core.toJson(), extensions);
+
+  factory RunArtifactsDiagnosticsPartitioned.fromWireMap(Map<String, dynamic> map) {
+    return RunArtifactsDiagnosticsPartitioned(
+      core: RunArtifactsDiagnosticsCore.fromJson(RunArtifactsMapPartition.diagnosticsStable(map)),
+      extensions: RunArtifactsMapPartition.diagnosticsExtension(map),
+    );
+  }
+}
+
+
 class RunArtifacts {
   const RunArtifacts({
     this.machineEnvelope = "",
@@ -1037,8 +1228,8 @@ class RunArtifacts {
     this.evidenceLedger = const <EvidenceLedgerEntry>[],
     this.answerEvidenceBindings = const <AnswerEvidenceBinding>[],
     this.slotState = const SlotStateSnapshot(),
-    this.answerDecision = const <String, dynamic>{},
-    this.diagnostics = const <String, dynamic>{},
+    this.answerDecision = const RunArtifactsAnswerDecisionPartitioned(),
+    this.diagnostics = const RunArtifactsDiagnosticsPartitioned(),
     this.domainPolicyBundle,
   });
 
@@ -1055,8 +1246,8 @@ class RunArtifacts {
   final List<EvidenceLedgerEntry> evidenceLedger;
   final List<AnswerEvidenceBinding> answerEvidenceBindings;
   final SlotStateSnapshot slotState;
-  final Map<String, dynamic> answerDecision;
-  final Map<String, dynamic> diagnostics;
+  final RunArtifactsAnswerDecisionPartitioned answerDecision;
+  final RunArtifactsDiagnosticsPartitioned diagnostics;
   final DomainPolicyBundle? domainPolicyBundle;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1073,8 +1264,8 @@ class RunArtifacts {
         'evidenceLedger': evidenceLedger.map((item) => item.toJson()).toList(growable: false),
         'answerEvidenceBindings': answerEvidenceBindings.map((item) => item.toJson()).toList(growable: false),
         'slotState': slotState.toJson(),
-        'answerDecision': answerDecision,
-        'diagnostics': diagnostics,
+        'answerDecision': answerDecision.toWireMap(),
+        'diagnostics': diagnostics.toWireMap(),
         'domainPolicyBundle': domainPolicyBundle?.toJson(),
       };
 
@@ -1093,8 +1284,8 @@ class RunArtifacts {
       evidenceLedger: (json['evidenceLedger'] as List?)?.whereType<Map>().map((item) => EvidenceLedgerEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <EvidenceLedgerEntry>[],
       answerEvidenceBindings: (json['answerEvidenceBindings'] as List?)?.whereType<Map>().map((item) => AnswerEvidenceBinding.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AnswerEvidenceBinding>[],
       slotState: json['slotState'] is Map ? SlotStateSnapshot.fromJson((json['slotState'] as Map).cast<String, dynamic>()) : const SlotStateSnapshot(),
-      answerDecision: (json['answerDecision'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
-      diagnostics: (json['diagnostics'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      answerDecision: json['answerDecision'] is Map ? RunArtifactsAnswerDecisionPartitioned.fromWireMap((json['answerDecision'] as Map).cast<String, dynamic>()) : const RunArtifactsAnswerDecisionPartitioned(),
+      diagnostics: json['diagnostics'] is Map ? RunArtifactsDiagnosticsPartitioned.fromWireMap((json['diagnostics'] as Map).cast<String, dynamic>()) : const RunArtifactsDiagnosticsPartitioned(),
       domainPolicyBundle: json['domainPolicyBundle'] is Map ? DomainPolicyBundle.fromJson((json['domainPolicyBundle'] as Map).cast<String, dynamic>()) : null,
     );
   }

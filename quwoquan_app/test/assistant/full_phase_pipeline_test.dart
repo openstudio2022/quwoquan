@@ -7,6 +7,7 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
@@ -546,22 +547,22 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
     List<AssistantToolCall> toolCalls = const <AssistantToolCall>[],
   }) {
     totalCallCount += 1;
-    final entry = <String, dynamic>{
-      'provider': 'mock',
-      'modelId': 'usage-ledger-model',
-      'modelRef': 'usage-ledger-model',
-      'source': 'provider',
-      'streaming': false,
-      'inputTokens': 80 + totalCallCount,
-      'outputTokens': 20 + totalCallCount,
-      'totalTokens': 100 + totalCallCount * 2,
-      'latencyMs': 10,
-    };
-    totalTokensIssued += entry['totalTokens'] as int;
+    final entry = LlmUsageLedgerEntry(
+      provider: 'mock',
+      modelId: 'usage-ledger-model',
+      modelRef: 'usage-ledger-model',
+      source: 'provider',
+      streaming: false,
+      inputTokens: 80 + totalCallCount,
+      outputTokens: 20 + totalCallCount,
+      totalTokens: 100 + totalCallCount * 2,
+      latencyMs: 10,
+    );
+    totalTokensIssued += entry.totalTokens;
     return AssistantModelOutput(
       text: text,
       toolCalls: toolCalls,
-      usageEntries: <Map<String, dynamic>>[entry],
+      usageEntries: <LlmUsageLedgerEntry>[entry],
     );
   }
 

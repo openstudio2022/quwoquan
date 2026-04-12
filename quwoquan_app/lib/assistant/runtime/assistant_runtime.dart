@@ -7,7 +7,6 @@ import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
 import 'package:quwoquan_app/assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/tools/tool_schema.dart';
 
-typedef AssistantTraceEventSink = void Function(AssistantTraceEvent event);
 typedef AssistantRunHandler =
     Future<AssistantRunResponse> Function(
       AssistantRunRequest request, {

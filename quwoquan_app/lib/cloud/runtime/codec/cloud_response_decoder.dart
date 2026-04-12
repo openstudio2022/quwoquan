@@ -1,10 +1,11 @@
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
 class CloudResponseDecoder {
   const CloudResponseDecoder._();
 
-  static Map<String, dynamic> asObject(Object? decoded, {String? context}) {
+  static CloudJsonMap asObject(Object? decoded, {String? context}) {
     if (decoded is Map<String, dynamic>) return decoded;
     if (decoded is Map) {
       return Map<String, dynamic>.from(decoded);
@@ -15,7 +16,7 @@ class CloudResponseDecoder {
     );
   }
 
-  static CursorPage<Map<String, dynamic>> asCursorPage(
+  static CursorPage<CloudJsonMap> asCursorPage(
     Object? decoded, {
     String? context,
   }) {
@@ -27,7 +28,7 @@ class CloudResponseDecoder {
         message: 'Missing items${context == null ? '' : ': $context'}',
       );
     }
-    final items = <Map<String, dynamic>>[];
+    final items = <CloudJsonMap>[];
     for (final raw in rawItems) {
       if (raw is! Map) {
         continue;
@@ -35,12 +36,12 @@ class CloudResponseDecoder {
       items.add(Map<String, dynamic>.from(raw));
     }
     final nextCursor = obj['nextCursor']?.toString();
-    return CursorPage<Map<String, dynamic>>(items: items, nextCursor: nextCursor);
+    return CursorPage<CloudJsonMap>(items: items, nextCursor: nextCursor);
   }
 
   /// 从已解码对象中读取 `key` 对应的 `List<Map>`（忽略非 Map 元素），避免 `List<dynamic>.cast` 主路径。
-  static List<Map<String, dynamic>> mapList(
-    Map<String, dynamic> obj,
+  static List<CloudJsonMap> mapList(
+    CloudJsonMap obj,
     String key,
   ) {
     final raw = obj[key];
@@ -60,8 +61,8 @@ class CloudResponseDecoder {
 
   /// 按顺序查找 `keys` 中第一个存在于 `obj` 且值为 [List] 的键，解析为 [List<Map<String, dynamic>>]（忽略非 Map 元素）。
   /// 若均不存在或非 List，返回空列表。
-  static List<Map<String, dynamic>> mapListFirstPresent(
-    Map<String, dynamic> obj,
+  static List<CloudJsonMap> mapListFirstPresent(
+    CloudJsonMap obj,
     List<String> keys,
   ) {
     for (final key in keys) {
@@ -74,8 +75,8 @@ class CloudResponseDecoder {
   }
 
   /// 按顺序尝试 `keys`，返回首个 **非空** 的 `List<Map>`（与 persona summary 等多键列表别名一致）。
-  static List<Map<String, dynamic>> mapListFirstNonEmpty(
-    Map<String, dynamic> obj,
+  static List<CloudJsonMap> mapListFirstNonEmpty(
+    CloudJsonMap obj,
     List<String> keys,
   ) {
     for (final key in keys) {

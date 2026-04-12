@@ -47,7 +47,9 @@ class LocalChatSearchSyncService {
       final contactDtos = await _chatRepository.listContacts(limit: 200);
       await _store.upsertContacts(
         namespace: namespace,
-        contacts: contactDtos.map((c) => c.toMap()).toList(growable: false),
+        contacts: contactDtos
+            .map((c) => Map<String, Object?>.from(c.toMap()))
+            .toList(growable: false),
       );
 
       final timestamps = await _chatRepository.getConversationTimestamps();

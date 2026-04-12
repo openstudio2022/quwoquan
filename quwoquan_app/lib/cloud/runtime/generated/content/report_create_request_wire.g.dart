@@ -3,6 +3,8 @@
 // aligned with ContentApiMetadata.createReportPath payload.
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class CreateReportRequestWire {
   const CreateReportRequestWire({
     required this.targetId,
@@ -16,7 +18,7 @@ class CreateReportRequestWire {
   final String reason;
   final String? description;
 
-  Map<String, dynamic> toMap() => <String, dynamic>{
+  CloudJsonMap toMap() => <String, dynamic>{
         'targetId': targetId,
         'targetType': targetType,
         'reason': reason,

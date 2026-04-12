@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/report_create_request_wire.g.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 举报 Repository（三层模式：Abstract → Mock → Remote）
@@ -21,7 +22,7 @@ abstract class ReportRepository {
 
 /// Mock 实现：本地记录，不发 HTTP 请求。
 class MockReportRepository extends ReportRepository {
-  final List<Map<String, dynamic>> submitted = <Map<String, dynamic>>[];
+  final List<CloudJsonMap> submitted = <CloudJsonMap>[];
 
   @override
   Future<void> createReport({

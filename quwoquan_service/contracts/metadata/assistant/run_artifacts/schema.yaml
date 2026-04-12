@@ -21,17 +21,40 @@ fields:
   - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
   - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
   - { name: slotState, type: object, ref: slot_state, default: {} }
-  # answerDecision: type map — 与 LLM decision / answerGate 等 spread 合并，扩展键必须保留。
-  # 稳定键（编排写入，供端上 ReadView 读取；非穷尽）：nextAction, answerEligibility,
-  # finalAnswerReady, evidenceSummary, confidence, reasoning, synthesisReady, synthesisReason 等。
-  - { name: answerDecision, type: map, default: {} }
-  # diagnostics: type map — 与 answerPayload['diagnostics'] spread；扩展键必须保留。
-  # 稳定键（非穷尽）：domainId, renderMode, renderFallback, answerEligibility, qualityGates,
-  # evidenceEvaluation, answerBoundaryPolicy, evidenceSummary, evidencePassed, finalAnswerMode,
-  # synthesisReady, synthesisReason, heuristicFallbackUsed, emergedTags 等。
-  - { name: diagnostics, type: map, default: {} }
+  # answerDecision: partitioned_map — JSON 仍为单一 object；稳定键由 RunArtifactsAnswerDecisionCore 承载，其余进 extensions。
+  - { name: answerDecision, type: partitioned_map, ref: answer_decision_core, default: {} }
+  # diagnostics: partitioned_map — 同上。
+  - { name: diagnostics, type: partitioned_map, ref: diagnostics_core, default: {} }
   - { name: domainPolicyBundle, type: object, ref: policy_bundle }
 subcontracts:
+  answer_decision_core:
+    class_name: RunArtifactsAnswerDecisionCore
+    fields:
+      - { name: nextAction, type: string, default: '' }
+      - { name: answerEligibility, type: string, default: '' }
+      - { name: finalAnswerReady, type: bool, default: false }
+      - { name: evidenceSummary, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: reasoning, type: string, default: '' }
+      - { name: synthesisReady, type: bool, default: false }
+      - { name: synthesisReason, type: string, default: '' }
+  diagnostics_core:
+    class_name: RunArtifactsDiagnosticsCore
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: renderMode, type: string, default: '' }
+      - { name: renderFallback, type: string, default: '' }
+      - { name: answerEligibility, type: string, default: '' }
+      - { name: qualityGates, type: map, default: {} }
+      - { name: evidenceEvaluation, type: map, default: {} }
+      - { name: answerBoundaryPolicy, type: map, default: {} }
+      - { name: evidenceSummary, type: string, default: '' }
+      - { name: evidencePassed, type: bool, default: false }
+      - { name: finalAnswerMode, type: string, default: '' }
+      - { name: synthesisReady, type: bool, default: false }
+      - { name: synthesisReason, type: string, default: '' }
+      - { name: heuristicFallbackUsed, type: bool, default: false }
+      - { name: emergedTags, type: list<string>, default: [] }
   display_state:
     class_name: AssistantDisplayState
     fields:

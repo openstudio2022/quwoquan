@@ -110,6 +110,11 @@ func renderAssistantSchemaDrivenContract(schema *assistantContractSchema, index 
 		b.WriteString("\n")
 	}
 
+	if pw := renderPartitionedMapWrappers(schema); pw != "" {
+		b.WriteString(pw)
+		b.WriteString("\n")
+	}
+
 	b.WriteString(renderAssistantSchemaClass(schema.DartClass, schema.Fields, schema, index))
 	b.WriteString("\n")
 	b.WriteString(renderAssistantSchemaFieldConstants(schema.DartClass, schema.Fields))
@@ -163,6 +168,9 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 		if libraryPath, ok := index.libraryByClass[ref]; ok && libraryPath != schema.LibraryPath {
 			importsSet["package:quwoquan_app/"+libraryPath] = true
 		}
+	}
+	if assistantSchemaUsesPartitionedMap(schema) {
+		importsSet["package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart"] = true
 	}
 	var imports []string
 	for imp := range importsSet {
@@ -298,6 +306,11 @@ func assistantResolveBaseDartType(field assistantContractField, schema *assistan
 			return "Map<String, " + assistantResolveRefClassName(field.Ref, schema, index) + ">"
 		}
 		return "Map<String, Map<String, dynamic>>"
+	case "partitioned_map":
+		if strings.TrimSpace(field.Ref) == "" {
+			return "dynamic"
+		}
+		return assistantPartitionedWrapperClassName(strings.TrimSpace(schema.DartClass), field.Name)
 	case "any":
 		return "dynamic"
 	default:
@@ -350,6 +363,8 @@ func assistantRenderDefaultValue(field assistantContractField, schema *assistant
 			return fmt.Sprintf("const <String, %s>{}", assistantResolveRefClassName(field.Ref, schema, index))
 		}
 		return "const <String, Map<String, dynamic>>{}"
+	case "partitioned_map":
+		return fmt.Sprintf("const %s()", assistantPartitionedWrapperClassName(strings.TrimSpace(schema.DartClass), field.Name))
 	case "any":
 		return "null"
 	default:
@@ -381,6 +396,8 @@ func assistantRenderToJsonValue(indent string, field assistantContractField, acc
 		return accessor
 	case "datetime":
 		return accessor + "?.toIso8601String()"
+	case "partitioned_map":
+		return accessor + ".toWireMap()"
 	default:
 		return accessor
 	}
@@ -430,6 +447,9 @@ func assistantRenderFromJsonValue(field assistantContractField, schema *assistan
 		return fmt.Sprintf("_assistantObjectMap(json['%s'], (key, value) => %s.fromJson(value))", field.Name, className)
 	case "any":
 		return fmt.Sprintf("json['%s']", field.Name)
+	case "partitioned_map":
+		wrapper := assistantPartitionedWrapperClassName(strings.TrimSpace(schema.DartClass), field.Name)
+		return fmt.Sprintf("json['%s'] is Map ? %s.fromWireMap((json['%s'] as Map).cast<String, dynamic>()) : %s", field.Name, wrapper, field.Name, assistantRenderDefaultValue(field, schema, index))
 	default:
 		return jsonAccessor
 	}
@@ -607,6 +627,69 @@ func assistantEnumMemberNameFromDefault(enumName, raw string) string {
 		return assistantEnumDefault(enumName)
 	}
 	return result
+}
+
+func assistantSchemaUsesPartitionedMap(schema *assistantContractSchema) bool {
+	for _, f := range schema.Fields {
+		if strings.TrimSpace(f.Type) == "partitioned_map" {
+			return true
+		}
+	}
+	return false
+}
+
+func assistantDartFieldToPascal(fieldName string) string {
+	parts := strings.Split(fieldName, "_")
+	var b strings.Builder
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		if len(p) == 1 {
+			b.WriteString(strings.ToUpper(p))
+			continue
+		}
+		b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+	}
+	return b.String()
+}
+
+func assistantPartitionedWrapperClassName(rootDartClass, fieldName string) string {
+	return strings.TrimSpace(rootDartClass) + assistantDartFieldToPascal(strings.TrimSpace(fieldName)) + "Partitioned"
+}
+
+func renderPartitionedMapWrappers(schema *assistantContractSchema) string {
+	var b strings.Builder
+	for _, field := range schema.Fields {
+		if strings.TrimSpace(field.Type) != "partitioned_map" {
+			continue
+		}
+		ref := strings.TrimSpace(field.Ref)
+		if ref == "" {
+			continue
+		}
+		coreName := assistantResolveRefClassName(ref, schema, nil)
+		if coreName == "" {
+			continue
+		}
+		wrapperName := assistantPartitionedWrapperClassName(schema.DartClass, field.Name)
+		b.WriteString(fmt.Sprintf("class %s {\n", wrapperName))
+		b.WriteString(fmt.Sprintf("  const %s({\n", wrapperName))
+		b.WriteString(fmt.Sprintf("    this.core = const %s(),\n", coreName))
+		b.WriteString("    this.extensions = const <String, dynamic>{},\n")
+		b.WriteString("  });\n\n")
+		b.WriteString(fmt.Sprintf("  final %s core;\n", coreName))
+		b.WriteString("  final Map<String, dynamic> extensions;\n\n")
+		b.WriteString("  Map<String, dynamic> toWireMap() => RunArtifactsMapPartition.mergeSlices(core.toJson(), extensions);\n\n")
+		b.WriteString(fmt.Sprintf("  factory %s.fromWireMap(Map<String, dynamic> map) {\n", wrapperName))
+		b.WriteString(fmt.Sprintf("    return %s(\n", wrapperName))
+		b.WriteString(fmt.Sprintf("      core: %s.fromJson(RunArtifactsMapPartition.%sStable(map)),\n", coreName, field.Name))
+		b.WriteString(fmt.Sprintf("      extensions: RunArtifactsMapPartition.%sExtension(map),\n", field.Name))
+		b.WriteString("    );\n")
+		b.WriteString("  }\n")
+		b.WriteString("}\n\n")
+	}
+	return b.String()
 }
 
 // renderRunArtifactsMapStableKeysDart emits `RunArtifactsMapStableKeys` for `map_stable_keys` in schema.yaml.

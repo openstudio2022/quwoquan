@@ -351,15 +351,20 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
 
     final contacts = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
-        .map((hit) => ChatContactSearchItemDto.fromMap(hit.payload))
+        .map(
+          (hit) => ChatContactSearchItemDto.fromMap(hit.payload.toWireMap()),
+        )
         .toList(growable: false);
     final conversationHits = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)
-        .map((hit) => ConversationSearchItemView.fromMap(hit.payload))
+        .map(
+          (hit) =>
+              ConversationSearchItemView.fromMap(hit.payload.toWireMap()),
+        )
         .toList(growable: false);
     final messageHits = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatMessage)
-        .map((hit) => MessageSearchItemView.fromMap(hit.payload))
+        .map((hit) => MessageSearchItemView.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
     final circleSuggestions = includesCircles
         ? response.hits
@@ -368,7 +373,11 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
                     hit.objectType == SearchObjectType.circleGroup ||
                     hit.objectType == SearchObjectType.circleCircle,
               )
-              .map((hit) => CircleSearchItemView.fromMap(hit.payload))
+              .map(
+                (hit) =>
+                    hit.asCircleCircleItem ??
+                    CircleSearchItemView.fromMap(hit.payload.toWireMap()),
+              )
               .toList(growable: false)
         : const <CircleSearchItemView>[];
     final allConversations = ref

@@ -2,7 +2,9 @@
 // Source: contracts/metadata/content/post/service.yaml (writable_fields per operation).
 // Regenerate: make codegen-app
 
-Map<String, dynamic> _mutationPutOpt(Map<String, dynamic> m, String k, Object? v) {
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
+CloudJsonMap _mutationPutOpt(CloudJsonMap m, String k, Object? v) {
   if (v == null) return m;
   m[k] = v;
   return m;
@@ -16,9 +18,9 @@ List<String>? _mutationStringList(Object? v) {
   return null;
 }
 
-Map<String, dynamic>? _mutationStringKeyedMap(Object? v) {
+CloudJsonMap? _mutationStringKeyedMap(Object? v) {
   if (v is! Map) return null;
-  return Map<String, dynamic>.from(v as Map);
+  return Map<String, dynamic>.from(v);
 }
 
 /// HTTP body for CreatePost (metadata writable_fields).
@@ -64,14 +66,14 @@ class CreatePostRequestWire {
   final List<String>? tags;
   final List<String>? mediaUrls;
   final String? coverUrl;
-  final Map<String, dynamic>? articleDocument;
+  final CloudJsonMap? articleDocument;
   final String? videoUrl;
   final String? illustrationAssetId;
-  final Map<String, dynamic>? location;
+  final CloudJsonMap? location;
   final String? locationName;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
-  final Map<String, dynamic>? primaryHomepageSnapshot;
+  final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
   final List<String>? circleIds;
   final String? groupId;
@@ -79,13 +81,13 @@ class CreatePostRequestWire {
   final String? assistantUsePolicy;
   final String? sourcePostId;
   final String? sourceType;
-  final Map<String, dynamic>? deviceInfo;
-  final Map<String, dynamic>? publishLocation;
+  final CloudJsonMap? deviceInfo;
+  final CloudJsonMap? publishLocation;
   final String? personaId;
   final String? profileSubjectId;
   final String? personaContextVersion;
 
-  Map<String, dynamic> toWire() {
+  CloudJsonMap toWire() {
     final m = <String, dynamic>{};
     _mutationPutOpt(m, 'type', type);
     _mutationPutOpt(m, 'contentType', contentType);
@@ -119,7 +121,7 @@ class CreatePostRequestWire {
     return m;
   }
 
-  factory CreatePostRequestWire.fromMap(Map<String, dynamic> m) {
+  factory CreatePostRequestWire.fromMap(CloudJsonMap m) {
     return CreatePostRequestWire(
       type: m['type']?.toString(),
       contentType: m['contentType']?.toString(),
@@ -188,21 +190,21 @@ class UpdatePostRequestWire {
   final List<String>? tags;
   final List<String>? mediaUrls;
   final String? coverUrl;
-  final Map<String, dynamic>? articleDocument;
+  final CloudJsonMap? articleDocument;
   final String? videoUrl;
   final String? illustrationAssetId;
-  final Map<String, dynamic>? location;
+  final CloudJsonMap? location;
   final String? locationName;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
-  final Map<String, dynamic>? primaryHomepageSnapshot;
+  final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
   final List<String>? circleIds;
   final String? groupId;
   final String? nodeId;
   final String? assistantUsePolicy;
 
-  Map<String, dynamic> toWire() {
+  CloudJsonMap toWire() {
     final m = <String, dynamic>{};
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'contentIdentity', contentIdentity);
@@ -228,7 +230,7 @@ class UpdatePostRequestWire {
     return m;
   }
 
-  factory UpdatePostRequestWire.fromMap(Map<String, dynamic> m) {
+  factory UpdatePostRequestWire.fromMap(CloudJsonMap m) {
     return UpdatePostRequestWire(
       contentType: m['contentType']?.toString(),
       contentIdentity: m['contentIdentity']?.toString(),
@@ -272,14 +274,14 @@ class PublishPostRequestWire {
   final String? contentIdentity;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
-  final Map<String, dynamic>? primaryHomepageSnapshot;
+  final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
   final List<String>? circleIds;
   final String? groupId;
   final String? nodeId;
   final String? assistantUsePolicy;
 
-  Map<String, dynamic> toWire() {
+  CloudJsonMap toWire() {
     final m = <String, dynamic>{};
     _mutationPutOpt(m, 'contentIdentity', contentIdentity);
     _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
@@ -293,7 +295,7 @@ class PublishPostRequestWire {
     return m;
   }
 
-  factory PublishPostRequestWire.fromMap(Map<String, dynamic> m) {
+  factory PublishPostRequestWire.fromMap(CloudJsonMap m) {
     return PublishPostRequestWire(
       contentIdentity: m['contentIdentity']?.toString(),
       primaryHomepageId: m['primaryHomepageId']?.toString(),
@@ -324,13 +326,13 @@ class UpdatePostSettingsRequestWire {
   final String? visibility;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
-  final Map<String, dynamic>? primaryHomepageSnapshot;
+  final CloudJsonMap? primaryHomepageSnapshot;
   final List<String>? circleIds;
   final String? groupId;
   final String? nodeId;
   final String? assistantUsePolicy;
 
-  Map<String, dynamic> toWire() {
+  CloudJsonMap toWire() {
     final m = <String, dynamic>{};
     _mutationPutOpt(m, 'visibility', visibility);
     _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
@@ -343,7 +345,7 @@ class UpdatePostSettingsRequestWire {
     return m;
   }
 
-  factory UpdatePostSettingsRequestWire.fromMap(Map<String, dynamic> m) {
+  factory UpdatePostSettingsRequestWire.fromMap(CloudJsonMap m) {
     return UpdatePostSettingsRequestWire(
       visibility: m['visibility']?.toString(),
       primaryHomepageId: m['primaryHomepageId']?.toString(),
@@ -381,17 +383,17 @@ class PromotePostToWorkRequestWire {
   final String? summary;
   final List<String>? tags;
   final String? coverUrl;
-  final Map<String, dynamic>? articleDocument;
+  final CloudJsonMap? articleDocument;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
-  final Map<String, dynamic>? primaryHomepageSnapshot;
+  final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
   final List<String>? circleIds;
   final String? groupId;
   final String? nodeId;
   final String? assistantUsePolicy;
 
-  Map<String, dynamic> toWire() {
+  CloudJsonMap toWire() {
     final m = <String, dynamic>{};
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'title', title);
@@ -410,7 +412,7 @@ class PromotePostToWorkRequestWire {
     return m;
   }
 
-  factory PromotePostToWorkRequestWire.fromMap(Map<String, dynamic> m) {
+  factory PromotePostToWorkRequestWire.fromMap(CloudJsonMap m) {
     return PromotePostToWorkRequestWire(
       contentType: m['contentType']?.toString(),
       title: m['title']?.toString(),

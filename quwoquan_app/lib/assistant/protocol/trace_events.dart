@@ -136,3 +136,5 @@ class AssistantTraceEvent {
     );
   }
 }
+
+typedef AssistantTraceEventSink = void Function(AssistantTraceEvent event);

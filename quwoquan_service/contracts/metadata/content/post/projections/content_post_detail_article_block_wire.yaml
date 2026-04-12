@@ -1,0 +1,65 @@
+version: 1
+read_model: ContentPostDetailArticleBlockWire
+
+description: |
+  GET post 响应中 articleBlocks[] 单条（文章 AST wire，与 ArticleBlockWireKeys 对齐）。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: ContentPostDetailArticleBlockWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/content_post_detail_article_block_wire_dto.g.dart
+  fields:
+    - name: type
+      dart_type: String
+      nullable: true
+      source: type
+      aliases: [type]
+      default: "null"
+
+    - name: text
+      dart_type: String
+      nullable: true
+      source: text
+      aliases: [text]
+      default: "null"
+
+    - name: id
+      dart_type: String
+      nullable: true
+      source: id
+      aliases: [id]
+      default: "null"
+
+    - name: imagePath
+      dart_type: String
+      nullable: true
+      source: imagePath
+      aliases: [imagePath]
+      default: "null"
+
+    - name: imageUrl
+      dart_type: String
+      nullable: true
+      source: imageUrl
+      aliases: [imageUrl]
+      default: "null"
+
+    - name: imageLayout
+      dart_type: String
+      nullable: true
+      source: imageLayout
+      aliases: [imageLayout]
+      default: "null"
+
+    - name: caption
+      dart_type: String
+      nullable: true
+      source: caption
+      aliases: [caption]
+      default: "null"

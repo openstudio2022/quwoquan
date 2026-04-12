@@ -607,7 +607,11 @@ class _SearchNetworkResultsPageState
         );
     final results = response.hits
         .where((hit) => hit.objectType == SearchObjectType.contentPost)
-        .map((hit) => PostSearchItemView.fromMap(hit.payload))
+        .map(
+          (hit) =>
+              hit.asContentPostItem ??
+              PostSearchItemView.fromMap(hit.payload.toWireMap()),
+        )
         .toList(growable: false);
     results.sort((left, right) {
       final leftTime = left.publishedAt;
@@ -641,7 +645,7 @@ class _SearchNetworkResultsPageState
         );
     return response.hits
         .where((hit) => hit.objectType == SearchObjectType.entityHomepage)
-        .map((hit) => HomepageSummary.fromMap(hit.payload))
+        .map((hit) => HomepageSummary.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
   }
 
@@ -685,7 +689,7 @@ class _SearchNetworkResultsPageState
         .where(
           (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
         )
-        .map((hit) => LocationPoiDto.fromMap(hit.payload))
+        .map((hit) => LocationPoiDto.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
   }
 
@@ -701,7 +705,7 @@ class _SearchNetworkResultsPageState
         return;
       }
       final dto = detail.post;
-      final raw = detail.wireForArticleProjection;
+      final raw = detail.mergedArticleWireMap;
       if (dto.isArticleLike) {
         context.push(AppRoutePaths.articleDetail(id: dto.id));
         return;
@@ -1036,7 +1040,9 @@ class _GroupResultCardModel {
 
   factory _GroupResultCardModel.fromHit(SearchHit hit) {
     final isCircle = hit.objectType == SearchObjectType.circleCircle;
-    final view = CircleSearchItemView.fromMap(hit.payload);
+    final view =
+        hit.asCircleCircleItem ??
+        CircleSearchItemView.fromMap(hit.payload.toWireMap());
     final circleId = isCircle
         ? hit.objectId
         : (view.circleId.isNotEmpty ? view.circleId : hit.objectId);

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
@@ -31,10 +32,16 @@ class _FakeCircleRepository extends MockCircleRepository {
 class _StubCloudHttpClient extends CloudHttpClient {
   _StubCloudHttpClient(this.handler) : super(client: http.Client());
 
-  final Future<dynamic> Function(Uri uri, Map<String, String> headers) handler;
+  final Future<CloudHttpDecodedJson> Function(
+    Uri uri,
+    Map<String, String> headers,
+  ) handler;
 
   @override
-  Future<dynamic> getJson(Uri uri, {required Map<String, String> headers}) {
+  Future<CloudHttpDecodedJson> getJson(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) {
     return handler(uri, headers);
   }
 }

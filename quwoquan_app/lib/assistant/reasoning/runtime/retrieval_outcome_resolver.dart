@@ -146,7 +146,7 @@ class RetrievalOutcomeResolver {
     bool degraded = false,
   }) {
     final raw = (structured[assistantRetrievalOutcomeField] as Map?)
-        ?.cast<String, dynamic>();
+        ?.cast<String, Object?>();
     if (raw != null && raw.isNotEmpty) {
       try {
         return RetrievalOutcome.fromJson(raw);
@@ -164,12 +164,12 @@ class RetrievalOutcomeResolver {
         const RetrievalProcessingSnapshot();
     final evidenceEvaluation = _parseEvidenceEvaluation(
       structured['evidenceEvaluation'] ??
-          runArtifacts?.diagnostics['evidenceEvaluation'],
+          runArtifacts?.diagnostics.evidenceEvaluationForOutcomeMerge(),
       entries: runArtifacts?.evidenceLedger ?? const <EvidenceLedgerEntry>[],
     );
     final boundaryPolicy = _parseBoundaryPolicy(
       structured['answerBoundaryPolicy'] ??
-          runArtifacts?.diagnostics['answerBoundaryPolicy'],
+          runArtifacts?.diagnostics.answerBoundaryPolicyForOutcomeMerge(),
     );
     final synthesisReadiness =
         _parseSynthesisReadiness(structured['synthesisReadiness']) ??
@@ -228,8 +228,8 @@ class RetrievalOutcomeResolver {
     var bestScore = 0.0;
     for (final result in toolResults) {
       final data =
-          (result['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (result['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final qualityScore = (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
       if (qualityScore > bestScore) {
         bestScore = qualityScore;
@@ -237,7 +237,7 @@ class RetrievalOutcomeResolver {
       final references =
           (data['references'] as List?)
               ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => item.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       if (references.isEmpty) {
@@ -266,7 +266,7 @@ class RetrievalOutcomeResolver {
     final references =
         (resultData['references'] as List?)
             ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
+            .map((item) => item.cast<String, Object?>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     final retrievalProcessing = RetrievalProcessingSnapshot(
@@ -356,11 +356,11 @@ class RetrievalOutcomeResolver {
     var mergedTz = timezone.trim();
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (item['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final tc =
-          (data['timeConstraint'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final iso = (tc['referenceNowIso'] as String?)?.trim() ?? '';
       if (iso.isEmpty) {
         continue;
@@ -460,14 +460,14 @@ class RetrievalOutcomeResolver {
     }
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (item['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       if (data['freshnessRequired'] == true) {
         return true;
       }
       final timeConstraint =
-          (data['timeConstraint'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final temporalMode =
           (timeConstraint['temporalMode'] as String?)?.trim().toLowerCase() ??
           '';
@@ -514,11 +514,11 @@ class RetrievalOutcomeResolver {
   }) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (item['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final timeConstraint =
-          (data['timeConstraint'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       final temporalMode =
           (timeConstraint['temporalMode'] as String?)?.trim().toLowerCase() ??
           '';
@@ -545,15 +545,15 @@ class RetrievalOutcomeResolver {
   bool _resolveFreshnessKnown(List<Map<String, dynamic>> toolResults) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (item['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       if (data['freshnessKnown'] == true) {
         return true;
       }
       final references =
           (data['references'] as List?)
               ?.whereType<Map>()
-              .map((entry) => entry.cast<String, dynamic>())
+              .map((entry) => entry.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       for (final reference in references) {
@@ -574,15 +574,15 @@ class RetrievalOutcomeResolver {
   ) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+          (item['data'] as Map?)?.cast<String, Object?>() ??
+          const <String, Object?>{};
       if (data['freshnessSatisfied'] == true) {
         return true;
       }
       final references =
           (data['references'] as List?)
               ?.whereType<Map>()
-              .map((entry) => entry.cast<String, dynamic>())
+              .map((entry) => entry.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       for (final reference in references) {
@@ -796,14 +796,14 @@ class RetrievalOutcomeResolver {
     if (raw is! Map) {
       return null;
     }
-    final json = raw.cast<String, dynamic>();
+    final json = raw.cast<String, Object?>();
     if (json.containsKey('processedDocumentCount') ||
         json.containsKey('acceptedDocumentCount') ||
         json.containsKey('acceptedReferences')) {
       return RetrievalProcessingSnapshot.fromJson(json);
     }
     final nested = (json['retrievalProcessing'] as Map?)
-        ?.cast<String, dynamic>();
+        ?.cast<String, Object?>();
     if (nested != null &&
         (nested.containsKey('processedDocumentCount') ||
             nested.containsKey('acceptedDocumentCount') ||
@@ -818,7 +818,7 @@ class RetrievalOutcomeResolver {
     required List<EvidenceLedgerEntry> entries,
   }) {
     if (raw is Map) {
-      final json = raw.cast<String, dynamic>();
+      final json = raw.cast<String, Object?>();
       return EvidenceEvaluationResult(
         entries: entries,
         coverageScore: (json['coverageScore'] as num?)?.toDouble() ?? 0.0,
@@ -863,7 +863,7 @@ class RetrievalOutcomeResolver {
   AnswerBoundaryPolicy _parseBoundaryPolicy(Object? raw) {
     if (raw is! Map) return const AnswerBoundaryPolicy();
     try {
-      return AnswerBoundaryPolicy.fromJson(raw.cast<String, dynamic>());
+      return AnswerBoundaryPolicy.fromJson(raw.cast<String, Object?>());
     } catch (_) {
       return const AnswerBoundaryPolicy();
     }
@@ -872,7 +872,7 @@ class RetrievalOutcomeResolver {
   SynthesisReadinessResult? _parseSynthesisReadiness(Object? raw) {
     if (raw is! Map) return null;
     try {
-      return SynthesisReadinessResult.fromJson(raw.cast<String, dynamic>());
+      return SynthesisReadinessResult.fromJson(raw.cast<String, Object?>());
     } catch (_) {
       return null;
     }
@@ -886,18 +886,18 @@ class RetrievalOutcomeResolver {
     Map<String, dynamic> structured,
   ) {
     final domainResults =
-        (structured['domainResults'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (structured['domainResults'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
     return (domainResults['toolResults'] as List?)
             ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
+            .map((item) => item.cast<String, Object?>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
   }
 
   bool _terminalPayloadComplete(Map<String, dynamic> structured) {
     final gate = (structured[assistantAnswerGateDecisionField] as Map?)
-        ?.cast<String, dynamic>();
+        ?.cast<String, Object?>();
     if (gate != null && gate.containsKey('terminalPayloadComplete')) {
       return gate['terminalPayloadComplete'] != false;
     }
@@ -923,17 +923,17 @@ class RetrievalOutcomeResolver {
     RunArtifacts? runArtifacts,
   }) {
     final topLevel =
-        (structured['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (structured['queryNormalization'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
     final intentGraph = (structured['intentGraph'] as Map?)
-        ?.cast<String, dynamic>();
+        ?.cast<String, Object?>();
     final nested =
-        (intentGraph?['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (intentGraph?['queryNormalization'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
     final diagnostics =
-        (runArtifacts?.diagnostics['queryNormalization'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (runArtifacts?.diagnostics.extensions['queryNormalization'] as Map?)
+            ?.cast<String, Object?>() ??
+        const <String, Object?>{};
     return _StructuredTemporalReference(
       referenceNowIso: _firstNonEmpty(<String>[
         (topLevel['referenceNowIso'] as String?) ?? '',

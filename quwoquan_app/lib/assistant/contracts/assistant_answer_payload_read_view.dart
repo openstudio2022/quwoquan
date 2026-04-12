@@ -1,11 +1,16 @@
-// ASSISTANT_WEAK_TYPE: READ_VIEW — 编排层 answer 轨 JSON 子树仍为 `Map<String, dynamic>`；
-// 集中 `Map?` cast，避免在 `local_phase_execution_owner` 等处重复 spread 样板。
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 
-/// LLM/编排 answer 载荷（`AssistantTurn` 子集）的只读投影。
+/// LLM/编排 answer 载荷：与 [assistant_turn/schema.yaml] 中 `AssistantTurnOutput` 同源。
+///
+/// - [asTypedOutput]：metadata 生成类型，优先用于只读结构化字段。
+/// - `*Map` getter：保留 wire 上 **未收入 schema 的扩展键**（如 spread `...apv.decisionMap`）。
 class AssistantAnswerPayloadReadView {
   AssistantAnswerPayloadReadView(Map<String, dynamic> raw) : _raw = raw;
 
   final Map<String, dynamic> _raw;
+
+  /// 由 SSOT `AssistantTurnOutput.fromJson` 解析；调用方勿在持有本 view 期间再改 `_raw`。
+  AssistantTurnOutput get asTypedOutput => AssistantTurnOutput.fromJson(_raw);
 
   Map<String, dynamic> get decisionMap =>
       (_raw['decision'] as Map?)?.cast<String, dynamic>() ??
@@ -23,60 +28,55 @@ class AssistantAnswerPayloadReadView {
       (_raw['askUser'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
 
-  /// `diagnostics.emergedTags` 中条目的 Map 列表（与编排层 learning / facts 路径一致）。
-  List<Map<String, dynamic>> get diagnosticsEmergedTagMaps {
-    final raw = diagnosticsMap['emergedTags'];
-    if (raw is! List) return const <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList(growable: false);
+  /// `diagnostics.emergedTags`（与 metadata [AssistantTurnDiagnostics] 一致）。
+  List<Map<String, dynamic>> get diagnosticsEmergedTagMaps =>
+      asTypedOutput.diagnostics.emergedTags;
+
+  /// `subagentPlan` 每项的 wire map（与 [SubagentPlan] 同源）。
+  List<Map<String, dynamic>> get subagentPlanMaps =>
+      asTypedOutput.subagentPlan
+          .map((p) => p.toJson())
+          .toList(growable: false);
+
+  /// `evidence` wire maps。
+  List<Map<String, dynamic>> get evidenceMaps =>
+      asTypedOutput.evidence
+          .map((e) => e.toJson())
+          .toList(growable: false);
+
+  /// `reasoningBasis` wire maps。
+  List<Map<String, dynamic>> get reasoningBasisMaps =>
+      asTypedOutput.reasoningBasis
+          .map((e) => e.toJson())
+          .toList(growable: false);
+
+  Map<String, dynamic> get modelSelfScoreMap => asTypedOutput.modelSelfScore.toJson();
+
+  String parseStatusOrDefault(String def) {
+    final top = (_raw['parseStatus'] as String?)?.trim();
+    if (top != null && top.isNotEmpty) return top;
+    final d = asTypedOutput.diagnostics.parseStatus.trim();
+    if (d.isNotEmpty) return d;
+    return def;
   }
 
-  /// `subagentPlan` 列表（每项为 JSON 对象 map）。
-  List<Map<String, dynamic>> get subagentPlanMaps =>
-      _mapListField(_raw['subagentPlan']);
-
-  /// `evidence` 列表（每项为 JSON 对象 map）。
-  List<Map<String, dynamic>> get evidenceMaps => _mapListField(_raw['evidence']);
-
-  /// `reasoningBasis` 列表。
-  List<Map<String, dynamic>> get reasoningBasisMaps =>
-      _mapListField(_raw['reasoningBasis']);
-
-  Map<String, dynamic> get modelSelfScoreMap =>
-      (_raw['modelSelfScore'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-
-  String parseStatusOrDefault(String def) => (_raw['parseStatus'] as String?) ?? def;
-
   Map<String, dynamic> get answerProcessingMap =>
-      (_raw['answerProcessing'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+      asTypedOutput.answerProcessing.toJson();
 
-  Map<String, dynamic> get displayStateMap =>
-      (_raw['displayState'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+  Map<String, dynamic> get displayStateMap => asTypedOutput.displayState.toJson();
 
   Map<String, dynamic> get retrievalProcessingMap =>
-      (_raw['retrievalProcessing'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+      asTypedOutput.retrievalProcessing.toJson();
 
-  Map<String, dynamic> get slotStateMap =>
-      (_raw['slotState'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+  Map<String, dynamic> get slotStateMap => asTypedOutput.slotState.toJson();
 
   Map<String, dynamic> get understandingSnapshotMap =>
-      (_raw['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+      asTypedOutput.understandingSnapshot.toJson();
 
   Map<String, dynamic> get historicalThinkingSnapshotMap =>
-      (_raw['historicalThinkingSnapshot'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+      asTypedOutput.historicalThinkingSnapshot.toJson();
 
-  Map<String, dynamic> get selfCheckMap =>
-      (_raw['selfCheck'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
+  Map<String, dynamic> get selfCheckMap => asTypedOutput.selfCheck.toJson();
 
   Map<String, dynamic>? get answerGateAssessmentMapOrNull {
     final v = _raw['answerGateAssessment'];
@@ -84,42 +84,35 @@ class AssistantAnswerPayloadReadView {
     return v.cast<String, dynamic>();
   }
 
-  String get followupPromptTrimmed =>
-      (_raw['followupPrompt'] as String?)?.trim() ?? '';
+  String get followupPromptTrimmed => asTypedOutput.followupPrompt.trim();
 
-  bool get hasNonEmptyContractId =>
-      (_raw['contractId'] as String?)?.trim().isNotEmpty ?? false;
+  bool get hasNonEmptyContractId => asTypedOutput.contractId.trim().isNotEmpty;
 
-  String get contractIdTrimmed => (_raw['contractId'] as String?)?.trim() ?? '';
+  String get contractIdTrimmed => asTypedOutput.contractId.trim();
 
   bool get hasNonEmptyPhaseId =>
-      (_raw['phaseId'] as String?)?.trim().isNotEmpty ?? false;
+      asTypedOutput.phaseId.wireName.trim().isNotEmpty;
 
-  String get phaseIdTrimmed => (_raw['phaseId'] as String?)?.trim() ?? '';
+  String get phaseIdTrimmed => asTypedOutput.phaseId.wireName.trim();
 
   bool get hasNonEmptyActionCode =>
-      (_raw['actionCode'] as String?)?.trim().isNotEmpty ?? false;
+      asTypedOutput.actionCode.wireName.trim().isNotEmpty;
 
-  String get actionCodeTrimmed =>
-      (_raw['actionCode'] as String?)?.trim() ?? '';
+  String get actionCodeTrimmed => asTypedOutput.actionCode.wireName.trim();
 
   bool get hasNonEmptyReasonCode =>
-      (_raw['reasonCode'] as String?)?.trim().isNotEmpty ?? false;
+      asTypedOutput.reasonCode.wireName.trim().isNotEmpty;
 
-  String get reasonCodeTrimmed =>
-      (_raw['reasonCode'] as String?)?.trim() ?? '';
+  String get reasonCodeTrimmed => asTypedOutput.reasonCode.wireName.trim();
 
-  String get messageKindTrimmed =>
-      (_raw['messageKind'] as String?)?.trim() ?? '';
+  String get messageKindTrimmed => asTypedOutput.messageKind.wireName.trim();
 
-  String get userMarkdownTrimmed =>
-      (_raw['userMarkdown'] as String?)?.trim() ?? '';
+  String get userMarkdownTrimmed => asTypedOutput.userMarkdown.trim();
 
   String get resultInterpretationTrimmed =>
-      (resultMap['interpretation'] as String?)?.trim() ?? '';
+      asTypedOutput.result.interpretation.trim();
 
-  String get resultTextTrimmed =>
-      (resultMap['text'] as String?)?.trim() ?? '';
+  String get resultTextTrimmed => asTypedOutput.result.text.trim();
 
   bool get hasTopLevelResultMap => _raw['result'] is Map;
 
@@ -127,11 +120,4 @@ class AssistantAnswerPayloadReadView {
   String get problemClassRootTrimmedLower =>
       (_raw['problemClass'] as String?)?.trim().toLowerCase() ?? '';
 
-  List<Map<String, dynamic>> _mapListField(Object? raw) {
-    if (raw is! List) return const <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList(growable: false);
-  }
 }

@@ -496,8 +496,8 @@ void main() {
       );
       await chatStore.upsertContacts(
         namespace: otherNamespace,
-        contacts: <Map<String, dynamic>>[
-          <String, dynamic>{
+        contacts: <Map<String, Object?>>[
+          <String, Object?>{
             'contactId': 'hidden_contact',
             'displayName': '隔离联系人',
           },

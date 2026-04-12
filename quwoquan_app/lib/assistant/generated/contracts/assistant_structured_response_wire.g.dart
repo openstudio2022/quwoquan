@@ -47,16 +47,31 @@ class AssistantUiReferenceWireDtoFields {
 class AssistantStructuredResponseWire {
   const AssistantStructuredResponseWire({
     this.qualityMetrics = const <String, dynamic>{},
+    this.decisionParseSuccess = true,
+    this.hardCutSource = "",
+    this.answerGateReady = false,
+    this.answerGateReasonCode = "",
+    this.dialogueDomainId = "",
     this.dialogueRuntime = const <String, dynamic>{},
     this.uiReferences = const <AssistantUiReferenceWireDto>[],
   });
 
   final Map<String, dynamic> qualityMetrics;
+  final bool decisionParseSuccess;
+  final String hardCutSource;
+  final bool answerGateReady;
+  final String answerGateReasonCode;
+  final String dialogueDomainId;
   final Map<String, dynamic> dialogueRuntime;
   final List<AssistantUiReferenceWireDto> uiReferences;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'qualityMetrics': qualityMetrics,
+        'decisionParseSuccess': decisionParseSuccess,
+        'hardCutSource': hardCutSource,
+        'answerGateReady': answerGateReady,
+        'answerGateReasonCode': answerGateReasonCode,
+        'dialogueDomainId': dialogueDomainId,
         'dialogueRuntime': dialogueRuntime,
         'uiReferences': uiReferences.map((item) => item.toJson()).toList(growable: false),
       };
@@ -64,6 +79,11 @@ class AssistantStructuredResponseWire {
   factory AssistantStructuredResponseWire.fromJson(Map<String, dynamic> json) {
     return AssistantStructuredResponseWire(
       qualityMetrics: (json['qualityMetrics'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      decisionParseSuccess: json['decisionParseSuccess'] != false,
+      hardCutSource: (json['hardCutSource'] as String?)?.trim() ?? "",
+      answerGateReady: json['answerGateReady'] == true,
+      answerGateReasonCode: (json['answerGateReasonCode'] as String?)?.trim() ?? "",
+      dialogueDomainId: (json['dialogueDomainId'] as String?)?.trim() ?? "",
       dialogueRuntime: (json['dialogueRuntime'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       uiReferences: (json['uiReferences'] as List?)?.whereType<Map>().map((item) => AssistantUiReferenceWireDto.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantUiReferenceWireDto>[],
     );
@@ -72,6 +92,11 @@ class AssistantStructuredResponseWire {
 
 class AssistantStructuredResponseWireFields {
   static const String qualityMetrics = 'qualityMetrics';
+  static const String decisionParseSuccess = 'decisionParseSuccess';
+  static const String hardCutSource = 'hardCutSource';
+  static const String answerGateReady = 'answerGateReady';
+  static const String answerGateReasonCode = 'answerGateReasonCode';
+  static const String dialogueDomainId = 'dialogueDomainId';
   static const String dialogueRuntime = 'dialogueRuntime';
   static const String uiReferences = 'uiReferences';
 }

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.da
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
@@ -206,13 +207,13 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 title: '光影摄影社主群',
                 subtitle: '圈子主群',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: <String, dynamic>{
+                payload: const SearchHitPayloadLegacy(<String, dynamic>{
                   'circleId': 'circle_photo_01',
                   'groupId': 'group_light_photo',
                   'name': '光影摄影社主群',
                   'description': '圈子主群',
                   'circleName': '光影摄影社',
-                },
+                }),
               ),
             ],
             resolvedFrom: SearchResolvedFrom.remote,
@@ -239,14 +240,14 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 title: '西湖风景名胜区',
                 subtitle: '杭州市西湖区龙井路1号',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: <String, dynamic>{
+                payload: const SearchHitPayloadLegacy(<String, dynamic>{
                   'id': 'poi_west_lake',
                   'name': '西湖风景名胜区',
                   'latitude': 30.2431,
                   'longitude': 120.1500,
                   'address': '杭州市西湖区龙井路1号',
                   'distanceMeters': 1200,
-                },
+                }),
               ),
             ],
             resolvedFrom: SearchResolvedFrom.remote,

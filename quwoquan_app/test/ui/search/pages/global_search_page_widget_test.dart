@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.da
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
@@ -441,14 +442,14 @@ class _FakeSearchRepository implements SearchRepository {
           title: '西湖景区',
           subtitle: '杭州',
           resolvedFrom: SearchResolvedFrom.remote,
-          payload: const <String, dynamic>{
+          payload: const SearchHitPayloadLegacy(<String, dynamic>{
             'homepageId': 'homepage_west_lake',
             'homepageType': 'place',
             'title': '西湖景区',
             'subtitle': '杭州西湖风景名胜区',
             'city': '杭州',
             'address': '浙江省杭州市西湖区',
-          },
+          }),
         ),
       ];
       return SearchResponse(request: normalized, sections: _sectionsFor(hits));
@@ -469,55 +470,55 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ming',
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_li_ming',
               'displayName': '李明',
               'conversationId': 'conv_001',
-            },
+            }),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_xiang',
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_li_xiang',
               'displayName': '李想',
               'conversationId': 'conv_007',
-            },
+            }),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_qing',
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_li_qing',
               'displayName': '李青',
               'conversationId': 'conv_008',
-            },
+            }),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_yue',
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_li_yue',
               'displayName': '李悦',
               'conversationId': 'conv_009',
-            },
+            }),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_ze',
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_li_ze',
               'displayName': '李泽',
               'conversationId': 'conv_010',
-            },
+            }),
           ),
         ];
       case '王':
@@ -527,11 +528,11 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_wang_fang',
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: <String, dynamic>{
+            payload: const SearchHitPayloadLegacy(<String, dynamic>{
               'contactId': 'user_wang_fang',
               'displayName': '王芳',
               'conversationId': 'conv_002',
-            },
+            }),
           ),
         ];
       default:
@@ -549,52 +550,52 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_002',
         title: '周末登山群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: <String, dynamic>{
+        payload: const SearchHitPayloadLegacy(<String, dynamic>{
           'conversationId': 'conv_002',
           'type': 'group',
           'title': '周末登山群',
           'memberCount': 15,
           'lastMessagePreview': '周六早上8点出发',
-        },
+        }),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_3',
         title: '3人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: <String, dynamic>{
+        payload: const SearchHitPayloadLegacy(<String, dynamic>{
           'conversationId': 'conv_grid_3',
           'type': 'group',
           'title': '3人测试群',
           'memberCount': 3,
           'lastMessagePreview': '测试群聊',
-        },
+        }),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_4',
         title: '4人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: <String, dynamic>{
+        payload: const SearchHitPayloadLegacy(<String, dynamic>{
           'conversationId': 'conv_grid_4',
           'type': 'group',
           'title': '4人测试群',
           'memberCount': 4,
           'lastMessagePreview': '测试群聊',
-        },
+        }),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_5',
         title: '5人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: <String, dynamic>{
+        payload: const SearchHitPayloadLegacy(<String, dynamic>{
           'conversationId': 'conv_grid_5',
           'type': 'group',
           'title': '5人测试群',
           'memberCount': 5,
           'lastMessagePreview': '测试群聊',
-        },
+        }),
       ),
     ];
   }

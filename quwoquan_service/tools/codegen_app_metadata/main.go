@@ -93,6 +93,8 @@ type projectionFieldDef struct {
 	SkipEmptyStringAliases   bool     `yaml:"skip_empty_string_aliases"`
 	// When dart_type is List<SomeDto>, set to SomeDto; fromMap uses SomeDto.fromMap per element.
 	ListElementDartClass string `yaml:"list_element_dart_class"`
+	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.
+	MapFromStringKeyClass string `yaml:"map_from_string_key_class"`
 }
 
 type computedGetterDef struct {
@@ -1691,6 +1693,9 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
 			needsProjectionDtoList = true
 		}
+		if f.MapFromStringKeyClass != "" {
+			needsStringKeyMap = true
+		}
 		if dt == "String" && f.SkipEmptyStringAliases {
 			needsFirstNonEmptyWireString = true
 		}
@@ -1893,6 +1898,9 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 				needsFirstNonEmptyMapList = true
 			}
 		case "Map<String, dynamic>":
+			needsStringKeyMap = true
+		}
+		if f.MapFromStringKeyClass != "" {
 			needsStringKeyMap = true
 		}
 	}
@@ -2132,10 +2140,35 @@ func buildAliasResolver(f projectionFieldDef) string {
 		if len(deduped) == 0 {
 			return defaultVal
 		}
+		key := deduped[0]
+		if f.Nullable {
+			return fmt.Sprintf(
+				"m['%s'] == null ? null : _parseProjectionDtoList(m['%s'], %s.fromMap)",
+				key, key, f.ListElementDartClass,
+			)
+		}
 		return fmt.Sprintf(
 			"_parseProjectionDtoList(m['%s'], %s.fromMap)",
-			deduped[0],
+			key,
 			f.ListElementDartClass,
+		)
+	}
+
+	if f.MapFromStringKeyClass != "" {
+		if len(deduped) == 0 {
+			return defaultVal
+		}
+		key := deduped[0]
+		cls := f.MapFromStringKeyClass
+		if f.Nullable {
+			return fmt.Sprintf(
+				"m['%s'] == null ? null : %s.fromMap(_parseStringKeyMap(m['%s'])!)",
+				key, cls, key,
+			)
+		}
+		return fmt.Sprintf(
+			"%s.fromMap(_parseStringKeyMap(m['%s']) ?? <String, dynamic>{})",
+			cls, key,
 		)
 	}
 

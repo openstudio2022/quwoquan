@@ -1,7 +1,6 @@
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — answerDecision/diagnostics 仍为 metadata `type: map`；
-// 此处仅提供稳定键的只读投影，完整 Map 仍以 RunArtifacts 字段为真源。
+// ASSISTANT_WEAK_TYPE: READ_VIEW — `partitioned_map` 已提供 `core`/`extensions`；ReadView 仍基于合并后的 wire Map，供遗留路径使用。
 
 /// 只读：`RunArtifacts.answerDecision` 中编排层常用键（与 `local_phase_execution_owner` spread 对齐，非穷尽）。
 class RunArtifactsAnswerDecisionReadView {
@@ -66,8 +65,30 @@ class RunArtifactsDiagnosticsReadView {
 
 extension RunArtifactsMapReadViews on RunArtifacts {
   RunArtifactsAnswerDecisionReadView get answerDecisionReadView =>
-      RunArtifactsAnswerDecisionReadView(answerDecision);
+      RunArtifactsAnswerDecisionReadView(answerDecision.toWireMap());
 
   RunArtifactsDiagnosticsReadView get diagnosticsReadView =>
-      RunArtifactsDiagnosticsReadView(diagnostics);
+      RunArtifactsDiagnosticsReadView(diagnostics.toWireMap());
+}
+
+/// 兼容 `??` 合并：`core` 对 map 字段的默认 `{}` 不视为「wire 曾携带该键」；extensions 优先。
+extension RunArtifactsDiagnosticsPartitionedMergeLookup
+    on RunArtifactsDiagnosticsPartitioned {
+  Map<String, dynamic>? evidenceEvaluationForOutcomeMerge() {
+    if (extensions.containsKey('evidenceEvaluation')) {
+      final v = extensions['evidenceEvaluation'];
+      return v is Map ? Map<String, dynamic>.from(v.cast<String, dynamic>()) : null;
+    }
+    final c = core.evidenceEvaluation;
+    return c.isNotEmpty ? c : null;
+  }
+
+  Map<String, dynamic>? answerBoundaryPolicyForOutcomeMerge() {
+    if (extensions.containsKey('answerBoundaryPolicy')) {
+      final v = extensions['answerBoundaryPolicy'];
+      return v is Map ? Map<String, dynamic>.from(v.cast<String, dynamic>()) : null;
+    }
+    final c = core.answerBoundaryPolicy;
+    return c.isNotEmpty ? c : null;
+  }
 }

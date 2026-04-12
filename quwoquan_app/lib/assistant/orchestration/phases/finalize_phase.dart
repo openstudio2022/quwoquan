@@ -27,9 +27,7 @@ class FinalizePhase implements Phase {
       return PhaseOutput(state: input.state, response: pendingResponse);
     }
     final finalizedResponse = await _runner.finalize(
-      input.request is AssistantRunRequest
-          ? input.request as AssistantRunRequest
-          : AssistantRunRequest.fromJson((input.request as dynamic).toJson()),
+      coerceAssistantRunRequest(input.request),
       executionSnapshot: input.state.executionBridgeSnapshot,
       response: pendingResponse,
     );

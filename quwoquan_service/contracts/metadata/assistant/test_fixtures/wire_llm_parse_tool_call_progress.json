@@ -1,0 +1,8 @@
+{
+  "contractId": "assistant_turn",
+  "decision": { "nextAction": "tool_call" },
+  "messageKind": "progress",
+  "result": {
+    "text": "<tool_call><name>launch_app</name></tool_call>"
+  }
+}

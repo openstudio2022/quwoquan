@@ -3,6 +3,8 @@
 // plus wire aliases for API/Mock payloads (profileSubjectId, displayName, etc.).
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class CommentDto {
   const CommentDto({
     required this.id,
@@ -40,7 +42,7 @@ class CommentDto {
   final int? personaContextVersion;
   final DateTime createdAt;
 
-  factory CommentDto.fromMap(Map<String, dynamic> m) {
+  factory CommentDto.fromMap(CloudJsonMap m) {
     return CommentDto(
       id: (m['_id'] ?? m['id'] ?? '').toString(),
       postId: (m['postId'] ?? '').toString(),
@@ -63,7 +65,7 @@ class CommentDto {
     );
   }
 
-  Map<String, dynamic> toMap() => {
+  CloudJsonMap toMap() => {
         'id': id,
         'postId': postId,
         'authorId': authorId,

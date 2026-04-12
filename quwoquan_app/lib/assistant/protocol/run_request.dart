@@ -269,3 +269,33 @@ class AssistantRunRequest {
     );
   }
 }
+
+/// 将 Phase / 网关入口的 [request]（[AssistantRunRequest]、Map 或带 `toJson` 的桥接对象）规范为 [AssistantRunRequest]。
+AssistantRunRequest coerceAssistantRunRequest(Object? request) {
+  if (request is AssistantRunRequest) {
+    return request;
+  }
+  if (request is Map<String, dynamic>) {
+    return AssistantRunRequest.fromJson(request);
+  }
+  if (request is Map) {
+    return AssistantRunRequest.fromJson(
+      Map<String, dynamic>.from(request.cast<String, dynamic>()),
+    );
+  }
+  // ASSISTANT_WEAK_TYPE: HTTP/网关桥接 — 非 Map 对象通过 toJson（仅此处收敛）
+  final Object? json = (request as dynamic).toJson();
+  if (json is Map<String, dynamic>) {
+    return AssistantRunRequest.fromJson(json);
+  }
+  if (json is Map) {
+    return AssistantRunRequest.fromJson(
+      Map<String, dynamic>.from(json.cast<String, dynamic>()),
+    );
+  }
+  throw ArgumentError.value(
+    request,
+    'request',
+    'Expected AssistantRunRequest, Map, or object with toJson() map payload',
+  );
+}

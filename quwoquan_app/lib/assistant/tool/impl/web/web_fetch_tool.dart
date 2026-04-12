@@ -250,28 +250,23 @@ class WebFetchTool implements AssistantTool {
     required String queryTaskId,
     required String dimension,
   }) {
-    final rawRefs =
-        (data['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+    final view = BrokerWebFetchResultDataView(data);
+    final rawRefs = view.referenceMaps;
     final normalizedRefs = rawRefs
         .map(
           (item) => _normalizeFetchReference(
             raw: item,
             fallbackUrl: fallbackUrl,
-            fallbackTitle: (data['title'] as String?)?.trim() ?? '',
-            fallbackSource:
-                (data['source'] as String?)?.trim().isNotEmpty == true
-                ? (data['source'] as String).trim()
-                : (data['sourceHost'] as String?)?.trim() ?? '',
+            fallbackTitle: view.title,
+            fallbackSource: view.source.isNotEmpty
+                ? view.source
+                : view.sourceHost,
             fallbackSnippet:
                 (item['snippet'] as String?)?.trim().isNotEmpty == true
                 ? (item['snippet'] as String).trim()
-                : ((data['summary'] as String?)?.trim().isNotEmpty == true
-                      ? (data['summary'] as String).trim()
-                      : _snippetOfFetchContent(data['content'])),
+                : (view.summary.isNotEmpty
+                      ? view.summary
+                      : _snippetOfFetchContent(view.content)),
             queryTaskId:
                 (item['queryTaskId'] as String?)?.trim().isNotEmpty == true
                 ? (item['queryTaskId'] as String).trim()
@@ -282,9 +277,7 @@ class WebFetchTool implements AssistantTool {
             sourceTier:
                 (item['sourceTier'] as String?)?.trim().isNotEmpty == true
                 ? (item['sourceTier'] as String).trim()
-                : ((data['sourceTier'] as String?)?.trim().isNotEmpty == true
-                      ? (data['sourceTier'] as String).trim()
-                      : 'page'),
+                : (view.sourceTier.isNotEmpty ? view.sourceTier : 'page'),
             retrievedAt:
                 (item['retrievedAt'] as String?)?.trim().isNotEmpty == true
                 ? (item['retrievedAt'] as String).trim()
@@ -296,21 +289,15 @@ class WebFetchTool implements AssistantTool {
     if (normalizedRefs.isNotEmpty) return normalizedRefs;
     final fallback = _normalizeFetchReference(
       raw: const <String, dynamic>{},
-      fallbackUrl: (data['url'] as String?)?.trim().isNotEmpty == true
-          ? (data['url'] as String).trim()
-          : fallbackUrl,
-      fallbackTitle: (data['title'] as String?)?.trim() ?? '',
-      fallbackSource: (data['source'] as String?)?.trim().isNotEmpty == true
-          ? (data['source'] as String).trim()
-          : (data['sourceHost'] as String?)?.trim() ?? '',
-      fallbackSnippet: (data['summary'] as String?)?.trim().isNotEmpty == true
-          ? (data['summary'] as String).trim()
-          : _snippetOfFetchContent(data['content']),
+      fallbackUrl: view.url.isNotEmpty ? view.url : fallbackUrl,
+      fallbackTitle: view.title,
+      fallbackSource: view.source.isNotEmpty ? view.source : view.sourceHost,
+      fallbackSnippet: view.summary.isNotEmpty
+          ? view.summary
+          : _snippetOfFetchContent(view.content),
       queryTaskId: queryTaskId,
       dimension: dimension,
-      sourceTier: (data['sourceTier'] as String?)?.trim().isNotEmpty == true
-          ? (data['sourceTier'] as String).trim()
-          : 'page',
+      sourceTier: view.sourceTier.isNotEmpty ? view.sourceTier : 'page',
       retrievedAt: DateTime.now().toIso8601String(),
     );
     return fallback == null

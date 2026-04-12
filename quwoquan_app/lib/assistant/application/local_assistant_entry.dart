@@ -36,9 +36,10 @@ class LocalAssistantEntry {
     } catch (error, stackTrace) {
       return _buildErrorResponse(
         effectiveRequest,
-        error,
+        error.toString(),
         'local_run',
         stackTrace: stackTrace,
+        errorTypeName: error.runtimeType.toString(),
       );
     }
   }
@@ -113,9 +114,10 @@ class LocalAssistantEntry {
         );
         final fallback = _buildErrorResponse(
           effectiveRequest,
-          error,
+          error.toString(),
           'local_run_stream',
           stackTrace: stackTrace,
+          errorTypeName: error.runtimeType.toString(),
         );
         for (final trace in fallback.traces) {
           projector.emitTrace(trace, controller);
@@ -186,16 +188,22 @@ class LocalAssistantEntry {
 
   AssistantRunResponse _buildErrorResponse(
     AssistantRunRequest request,
-    Object error,
+    String errorDescription,
     String source, {
     StackTrace? stackTrace,
+    String? errorTypeName,
   }) {
     if (kDebugMode) {
-      debugPrint('local_entry_error[$source]: ${error.runtimeType}: $error');
+      debugPrint(
+        'local_entry_error[$source]: ${errorTypeName ?? ''}: $errorDescription',
+      );
       if (stackTrace != null) {
         debugPrint(stackTrace.toString());
       }
     }
+    final traceMessage = errorTypeName != null
+        ? 'local_entry_error[$source]: $errorTypeName: $errorDescription'
+        : 'local_entry_error[$source]: $errorDescription';
     return AssistantRunResponse(
       finalText: '本地助手执行异常，请重试。（$source）',
       degraded: true,
@@ -203,12 +211,12 @@ class LocalAssistantEntry {
       traces: <AssistantTraceEvent>[
         AssistantTraceEvent(
           type: AssistantTraceEventType.toolError,
-          message: 'local_entry_error[$source]: ${error.runtimeType}: $error',
+          message: traceMessage,
           timestamp: DateTime.now(),
           data: <String, dynamic>{
             'source': source,
-            'errorType': error.runtimeType.toString(),
-            'errorMessage': error.toString(),
+            if (errorTypeName != null) 'errorType': errorTypeName,
+            'errorMessage': errorDescription,
             if (stackTrace != null) 'stackTrace': stackTrace.toString(),
           },
         ),

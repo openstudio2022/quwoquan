@@ -12,6 +12,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/services/fake_location_permission_checker.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
@@ -21,10 +22,16 @@ import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 
 class _StubCloudHttpClient extends CloudHttpClient {
   _StubCloudHttpClient(this.handler) : super(client: http.Client());
-  final Future<dynamic> Function(Uri uri, Map<String, String> headers) handler;
+  final Future<CloudHttpDecodedJson> Function(
+    Uri uri,
+    Map<String, String> headers,
+  ) handler;
 
   @override
-  Future<dynamic> getJson(Uri uri, {required Map<String, String> headers}) =>
+  Future<CloudHttpDecodedJson> getJson(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) =>
       handler(uri, headers);
 }
 

@@ -325,7 +325,7 @@ String resolveAssistantFollowupPromptFromMessage(Map<String, dynamic> message) {
 List<String> resolveAssistantActionHintsFromMessage(
   Map<String, dynamic> message,
 ) {
-  return ((message[assistantActionHintsField] as List?) ?? const <dynamic>[])
+  return ((message[assistantActionHintsField] as List?) ?? const <Object?>[])
       .whereType<String>()
       .map(_sanitizeUserFacingTimelineText)
       .where((item) => item.isNotEmpty)
@@ -345,7 +345,7 @@ List<String> resolveAssistantActionHintsFromResponse(
   AssistantRunResponse response,
 ) {
   return ((response.structuredResponse[assistantActionHintsField] as List?) ??
-          const <dynamic>[])
+          const <Object?>[])
       .whereType<String>()
       .map(_sanitizeUserFacingTimelineText)
       .where((item) => item.isNotEmpty)

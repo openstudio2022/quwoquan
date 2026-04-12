@@ -120,7 +120,7 @@ class AnswerOutcomeResolver {
             : null) ??
         _parseEvidenceEvaluation(
           structured['evidenceEvaluation'] ??
-              runArtifacts?.diagnostics['evidenceEvaluation'] ??
+              runArtifacts?.diagnostics.evidenceEvaluationForOutcomeMerge() ??
               ((structured['webEvidenceGate'] as Map?)?['evaluation']),
           evidenceLedger: evidenceLedger,
         ) ??

@@ -38,7 +38,7 @@ func rtcWireDartType(wireType string) (dart string, isList bool) {
 	case "list_string":
 		return "List<String>", false
 	default:
-		return "dynamic", false
+		return "Object?", false
 	}
 }
 

@@ -3,6 +3,8 @@
 // plus wire aliases (id/_id, type, summary/body, avatar snapshots, etc.).
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class PostSearchItemView {
   const PostSearchItemView({
     required this.postId,
@@ -42,7 +44,7 @@ class PostSearchItemView {
   final String? matchedField;
   final DateTime? publishedAt;
 
-  factory PostSearchItemView.fromMap(Map<String, dynamic> map) {
+  factory PostSearchItemView.fromMap(CloudJsonMap map) {
     return PostSearchItemView(
       postId: (map['postId'] ?? map['id'] ?? map['_id'] ?? '')
           .toString()
@@ -80,7 +82,7 @@ class PostSearchItemView {
   }
 }
 
-DateTime? _postSearchWireParseDateTime(dynamic value) {
+DateTime? _postSearchWireParseDateTime(Object? value) {
   if (value == null) return null;
   if (value is DateTime) return value;
   final s = value.toString();
@@ -88,7 +90,7 @@ DateTime? _postSearchWireParseDateTime(dynamic value) {
   return DateTime.tryParse(s);
 }
 
-int? _postSearchWireParseInt(dynamic value) {
+int? _postSearchWireParseInt(Object? value) {
   if (value == null) return null;
   if (value is int) return value;
   if (value is num) return value.toInt();

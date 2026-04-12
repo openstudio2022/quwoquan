@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
@@ -101,8 +102,7 @@ class SearchDegradeSignal {
 /// 统一检索命中项。枚举与默认值对齐 `_shared/search_contract.yaml`（`search_contract.g.dart`）；
 /// 分区元数据见 `search_registry.g.dart`。
 ///
-/// `payload` 按 `objectType` 分发；消费侧应用 codegen / View 的 `fromMap` 解析（如联系人检索项 DTO、
-/// `CircleSearchItemView`），避免在 UI 层按键名遍历 Map。
+/// `payload` 为 [SearchHitPayload]（sealed）；帖子/圈子等已收口为具名 codegen 视图，其余为 [SearchHitPayloadLegacy]。
 class SearchHit {
   const SearchHit({
     required this.objectType,
@@ -112,7 +112,7 @@ class SearchHit {
     this.snippet,
     required this.resolvedFrom,
     this.matchedField,
-    this.payload = const <String, dynamic>{},
+    this.payload = const SearchHitPayloadLegacy(),
   });
 
   final SearchObjectType objectType;
@@ -122,7 +122,7 @@ class SearchHit {
   final String? snippet;
   final SearchResolvedFrom resolvedFrom;
   final String? matchedField;
-  final Map<String, dynamic> payload;
+  final SearchHitPayload payload;
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -133,7 +133,7 @@ class SearchHit {
       if (snippet != null) 'snippet': snippet,
       'resolvedFrom': resolvedFrom.wireValue,
       if (matchedField != null) 'matchedField': matchedField,
-      'payload': payload,
+      'payload': payload.toWireMap(),
     };
   }
 }
@@ -472,7 +472,7 @@ class AppSearchRepository implements SearchRepository {
               subtitle: payload['subtitle']?.toString() ?? '联系人',
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: payload['matchedField']?.toString(),
-              payload: payload,
+              payload: SearchHitPayloadLegacy(payload),
             );
           })
           .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
@@ -561,7 +561,9 @@ class AppSearchRepository implements SearchRepository {
               snippet: conversation.lastMessagePreview,
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: conversation.matchedField,
-              payload: _conversationSearchItemToMap(conversation),
+              payload: SearchHitPayloadLegacy(
+                _conversationSearchItemToMap(conversation),
+              ),
             ),
           ),
         );
@@ -586,7 +588,7 @@ class AppSearchRepository implements SearchRepository {
               snippet: message.contentPreview,
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: message.matchedField,
-              payload: _messageSearchItemToMap(message),
+              payload: SearchHitPayloadLegacy(_messageSearchItemToMap(message)),
             ),
           ),
         );
@@ -882,7 +884,7 @@ class AppSearchRepository implements SearchRepository {
               snippet: item.address,
               resolvedFrom: SearchResolvedFrom.remote,
               matchedField: 'title',
-              payload: item.toMap(),
+              payload: SearchHitPayloadLegacy(item.toMap()),
             ),
           )
           .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
@@ -1103,7 +1105,7 @@ class AppSearchRepository implements SearchRepository {
         query: query,
         payload: normalizedPayload,
       ),
-      payload: normalizedPayload,
+      payload: SearchHitPayloadLegacy(normalizedPayload),
     );
   }
 
@@ -1119,7 +1121,7 @@ class AppSearchRepository implements SearchRepository {
       snippet: item.description,
       resolvedFrom: resolvedFrom,
       matchedField: item.matchedField,
-      payload: item.toSearchHitPayload(),
+      payload: SearchHitPayloadCircleCircle(item),
     );
   }
 
@@ -1138,7 +1140,7 @@ class AppSearchRepository implements SearchRepository {
       matchedField: _matchesText(query, <Object?>[item.address])
           ? 'address'
           : 'name',
-      payload: item.toMap(),
+      payload: SearchHitPayloadLegacy(item.toMap()),
     );
   }
 
@@ -1187,25 +1189,7 @@ class AppSearchRepository implements SearchRepository {
       snippet: item.summary,
       resolvedFrom: resolvedFrom,
       matchedField: item.matchedField,
-      payload: <String, dynamic>{
-        'postId': item.postId,
-        'contentType': item.contentType,
-        'contentIdentity': item.contentIdentity,
-        'title': item.title,
-        'summary': item.summary,
-        'coverUrl': item.coverUrl,
-        'authorProfileSubjectId': item.authorProfileSubjectId,
-        'authorDisplayName': item.authorDisplayName,
-        'authorAvatarUrl': item.authorAvatarUrl,
-        'circleId': item.circleId,
-        'circleName': item.circleName,
-        'categoryId': item.categoryId,
-        'subCategory': item.subCategory,
-        'likeCount': item.likeCount,
-        'highlightText': item.highlightText,
-        'matchedField': item.matchedField,
-        'publishedAt': item.publishedAt?.toIso8601String(),
-      },
+      payload: SearchHitPayloadContentPost(item),
     );
   }
 
@@ -1285,4 +1269,16 @@ String? _normalizeConversationType(String? value) {
     return null;
   }
   return SearchConversationType.fromWire(normalized)?.wireValue;
+}
+
+extension SearchHitTypedViews on SearchHit {
+  PostSearchItemView? get asContentPostItem {
+    final p = payload;
+    return p is SearchHitPayloadContentPost ? p.item : null;
+  }
+
+  CircleSearchItemView? get asCircleCircleItem {
+    final p = payload;
+    return p is SearchHitPayloadCircleCircle ? p.item : null;
+  }
 }

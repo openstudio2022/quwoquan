@@ -9,6 +9,8 @@ func renderCommentDtoDart() string {
 // plus wire aliases for API/Mock payloads (profileSubjectId, displayName, etc.).
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class CommentDto {
   const CommentDto({
     required this.id,
@@ -46,7 +48,7 @@ class CommentDto {
   final int? personaContextVersion;
   final DateTime createdAt;
 
-  factory CommentDto.fromMap(Map<String, dynamic> m) {
+  factory CommentDto.fromMap(CloudJsonMap m) {
     return CommentDto(
       id: (m['_id'] ?? m['id'] ?? '').toString(),
       postId: (m['postId'] ?? '').toString(),
@@ -69,7 +71,7 @@ class CommentDto {
     );
   }
 
-  Map<String, dynamic> toMap() => {
+  CloudJsonMap toMap() => {
         'id': id,
         'postId': postId,
         'authorId': authorId,
@@ -122,6 +124,8 @@ func renderPostSearchItemViewDtoDart() string {
 // plus wire aliases (id/_id, type, summary/body, avatar snapshots, etc.).
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class PostSearchItemView {
   const PostSearchItemView({
     required this.postId,
@@ -161,7 +165,7 @@ class PostSearchItemView {
   final String? matchedField;
   final DateTime? publishedAt;
 
-  factory PostSearchItemView.fromMap(Map<String, dynamic> map) {
+  factory PostSearchItemView.fromMap(CloudJsonMap map) {
     return PostSearchItemView(
       postId: (map['postId'] ?? map['id'] ?? map['_id'] ?? '')
           .toString()
@@ -199,7 +203,7 @@ class PostSearchItemView {
   }
 }
 
-DateTime? _postSearchWireParseDateTime(dynamic value) {
+DateTime? _postSearchWireParseDateTime(Object? value) {
   if (value == null) return null;
   if (value is DateTime) return value;
   final s = value.toString();
@@ -207,7 +211,7 @@ DateTime? _postSearchWireParseDateTime(dynamic value) {
   return DateTime.tryParse(s);
 }
 
-int? _postSearchWireParseInt(dynamic value) {
+int? _postSearchWireParseInt(Object? value) {
   if (value == null) return null;
   if (value is int) return value;
   if (value is num) return value.toInt();
@@ -222,6 +226,8 @@ func renderCreateReportRequestWireDart() string {
 // aligned with ContentApiMetadata.createReportPath payload.
 // Regenerate: make codegen-app
 
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+
 class CreateReportRequestWire {
   const CreateReportRequestWire({
     required this.targetId,
@@ -235,7 +241,7 @@ class CreateReportRequestWire {
   final String reason;
   final String? description;
 
-  Map<String, dynamic> toMap() => <String, dynamic>{
+  CloudJsonMap toMap() => <String, dynamic>{
         'targetId': targetId,
         'targetType': targetType,
         'reason': reason,

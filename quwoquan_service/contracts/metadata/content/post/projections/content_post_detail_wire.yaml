@@ -16,13 +16,19 @@ client_projection:
   dart_class: ContentPostDetailWireDto
   base_class: ""
   output_path: cloud/runtime/generated/content/content_post_detail_wire_dto.g.dart
+  dart_imports:
+    - package:quwoquan_app/cloud/runtime/models/article_document_wire_dto.dart
+    - content_post_detail_card_wire_dto.g.dart
+    - content_post_detail_circle_summary_wire_dto.g.dart
+    - content_post_detail_article_block_wire_dto.g.dart
+    - content_post_detail_article_page_wire_dto.g.dart
   fields:
     - name: cards
-      dart_type: List<Map<String, dynamic>>
-      nullable: true
+      dart_type: List<ContentPostDetailCardWireDto>
+      nullable: false
       source: cards
       aliases: [cards]
-      default: "null"
+      list_element_dart_class: ContentPostDetailCardWireDto
 
     - name: isOfficial
       dart_type: bool
@@ -53,25 +59,28 @@ client_projection:
       default: "null"
 
     - name: articleDocument
-      dart_type: Map<String, dynamic>
+      dart_type: ArticleDocumentWireDto
       nullable: true
       source: articleDocument
       aliases: [articleDocument]
       default: "null"
+      map_from_string_key_class: ArticleDocumentWireDto
 
     - name: articleBlocks
-      dart_type: List<Map<String, dynamic>>
+      dart_type: List<ContentPostDetailArticleBlockWireDto>
       nullable: true
       source: articleBlocks
       aliases: [articleBlocks]
       default: "null"
+      list_element_dart_class: ContentPostDetailArticleBlockWireDto
 
     - name: articlePages
-      dart_type: List<Map<String, dynamic>>
+      dart_type: List<ContentPostDetailArticlePageWireDto>
       nullable: true
       source: articlePages
       aliases: [articlePages]
       default: "null"
+      list_element_dart_class: ContentPostDetailArticlePageWireDto
 
     - name: coverUrlWire
       dart_type: String
@@ -82,11 +91,11 @@ client_projection:
       description: wire 顶层 coverUrl（与 PostBaseDto.coverUrl 并存时的覆盖）
 
     - name: circleSummaries
-      dart_type: List<Map<String, dynamic>>
-      nullable: true
+      dart_type: List<ContentPostDetailCircleSummaryWireDto>
+      nullable: false
       source: circleSummaries
       aliases: [circleSummaries]
-      default: "null"
+      list_element_dart_class: ContentPostDetailCircleSummaryWireDto
 
     - name: circleIds
       dart_type: List<String>

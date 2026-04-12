@@ -44,3 +44,10 @@
 make verify-app-page-abc-governance
 python3 scripts/verify_page_abc_governance.py --enforce-c
 ```
+
+## 6. 契约测试与 Map 断言（非助手域）
+
+- **推荐**：关键路径用 **codegen DTO 构造 fixture**，再 **`.toMap()`** 与请求体/响应体形状对比（或与 golden JSON 对齐），减少手写匿名 `Map` 的随意性。
+- **可接受**：测试中 `json.decode(...) as Map<String, dynamic>`、以及对 **wire 形状** 的 `Map<String, dynamic>` 断言（解码后、收窄前）；这与 §1.1「边界与 `Map` 交接」一致。
+- **不推荐**：在测试里用松散 `Map` 冒充「业务状态」却不对应具体 DTO；若断言的是跨层契约，优先补 metadata 与 fixture DTO。
+- **生成体 `*.g.dart`**：内含 `_parse*(dynamic)` 等，**禁止手改**；弱类型收口走 metadata / codegen，不在契约测试里要求「字面量零 dynamic」。

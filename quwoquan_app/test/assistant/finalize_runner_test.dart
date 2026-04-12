@@ -139,8 +139,8 @@ AssistantRunResponse _buildFinalizeResponse({required bool includeAnswer}) {
     evidenceLedger: const <EvidenceLedgerEntry>[],
     answerEvidenceBindings: const <AnswerEvidenceBinding>[],
     slotState: const SlotStateSnapshot(domainId: 'assistant'),
-    answerDecision: const <String, dynamic>{},
-    diagnostics: const <String, dynamic>{},
+    answerDecision: const RunArtifactsAnswerDecisionPartitioned(),
+    diagnostics: const RunArtifactsDiagnosticsPartitioned(),
   );
   return AssistantRunResponse(
     finalText: 'retrieval_processing_blocked',

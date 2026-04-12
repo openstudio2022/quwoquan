@@ -1536,7 +1536,7 @@ class WebSearchTool implements AssistantTool {
     return null;
   }
 
-  int? _asInt(dynamic raw) {
+  int? _asInt(Object? raw) {
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
     if (raw is String) return int.tryParse(raw.trim());
@@ -1685,7 +1685,7 @@ class WebSearchTool implements AssistantTool {
     final timeRangeStart = _stringValue(arguments['timeRangeStart']);
     final timeRangeEnd = _stringValue(arguments['timeRangeEnd']);
     final contextConstraints =
-        ((arguments['contextConstraints'] as List?) ?? const <dynamic>[])
+        ((arguments['contextConstraints'] as List?) ?? const <Object?>[])
             .map((item) => item.toString().trim())
             .where((item) => item.isNotEmpty)
             .toList(growable: false);
@@ -1891,7 +1891,7 @@ class WebSearchTool implements AssistantTool {
     }
   }
 
-  Map<String, int> _toIntMap(dynamic raw) {
+  Map<String, int> _toIntMap(Object? raw) {
     if (raw is! Map) return const <String, int>{};
     final out = <String, int>{};
     for (final entry in raw.entries) {
@@ -1962,7 +1962,7 @@ class WebSearchTool implements AssistantTool {
 
   String _summarizeProviderResult({
     required AssistantSearchProvider provider,
-    required dynamic decoded,
+    required Object? decoded,
   }) {
     switch (provider) {
       case AssistantSearchProvider.perplexity:
@@ -1980,7 +1980,7 @@ class WebSearchTool implements AssistantTool {
 
   List<Map<String, dynamic>> _extractReferences({
     required AssistantSearchProvider provider,
-    required dynamic decoded,
+    required Object? decoded,
   }) {
     switch (provider) {
       case AssistantSearchProvider.brave:
@@ -2004,7 +2004,7 @@ class WebSearchTool implements AssistantTool {
     return _extractReferences(provider: provider, decoded: decoded);
   }
 
-  List<Map<String, dynamic>> _extractBraveReferences(dynamic decoded) {
+  List<Map<String, dynamic>> _extractBraveReferences(Object? decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final results =
         ((decoded['web'] as Map?)?['results'] as List?)
@@ -2028,7 +2028,7 @@ class WebSearchTool implements AssistantTool {
         .toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _extractDuckduckgoReferences(dynamic decoded) {
+  List<Map<String, dynamic>> _extractDuckduckgoReferences(Object? decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final organic =
         (decoded['organic_results'] as List?)
@@ -2076,7 +2076,7 @@ class WebSearchTool implements AssistantTool {
     return refs;
   }
 
-  List<Map<String, dynamic>> _extractPerplexityReferences(dynamic decoded) {
+  List<Map<String, dynamic>> _extractPerplexityReferences(Object? decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final citations =
         (decoded['citations'] as List?)
@@ -2098,7 +2098,7 @@ class WebSearchTool implements AssistantTool {
         .toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _extractSerpApiReferences(dynamic decoded) {
+  List<Map<String, dynamic>> _extractSerpApiReferences(Object? decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final organic =
         (decoded['organic_results'] as List?)
@@ -2122,7 +2122,7 @@ class WebSearchTool implements AssistantTool {
         .toList(growable: false);
   }
 
-  List<Map<String, dynamic>> _extractOpenclawReferences(dynamic decoded) {
+  List<Map<String, dynamic>> _extractOpenclawReferences(Object? decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final rawRefs =
         (decoded['references'] as List?)
@@ -2217,7 +2217,7 @@ class WebSearchTool implements AssistantTool {
     return item;
   }
 
-  String _summarizePerplexity(dynamic decoded) {
+  String _summarizePerplexity(Object? decoded) {
     if (decoded is! Map) return '';
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) return '';
@@ -2229,7 +2229,7 @@ class WebSearchTool implements AssistantTool {
     return _truncate(_compressWhitespace(content));
   }
 
-  String _summarizeBrave(dynamic decoded) {
+  String _summarizeBrave(Object? decoded) {
     if (decoded is! Map) return '';
     final web = decoded['web'];
     if (web is! Map) return '';
@@ -2251,7 +2251,7 @@ class WebSearchTool implements AssistantTool {
     return _truncate(snippets.join('；'));
   }
 
-  String _summarizeOpenclaw(dynamic decoded) {
+  String _summarizeOpenclaw(Object? decoded) {
     if (decoded is! Map) {
       return _truncate(_compressWhitespace(decoded.toString()));
     }
@@ -2266,7 +2266,7 @@ class WebSearchTool implements AssistantTool {
     return '';
   }
 
-  String _summarizeDuckduckgo(dynamic decoded) {
+  String _summarizeDuckduckgo(Object? decoded) {
     if (decoded is! Map) return '';
     final organic = (decoded['organic_results'] as List?)
         ?.whereType<Map>()
@@ -2292,7 +2292,7 @@ class WebSearchTool implements AssistantTool {
     return '';
   }
 
-  String _summarizeSerpApi(dynamic decoded) {
+  String _summarizeSerpApi(Object? decoded) {
     if (decoded is! Map) return '';
     final answerBox = decoded['answer_box'];
     if (answerBox is Map) {
@@ -2391,7 +2391,7 @@ class WebSearchTool implements AssistantTool {
     }
   }
 
-  Future<dynamic> _runProviderSearch({
+  Future<Object?> _runProviderSearch({
     required AssistantSearchProvider provider,
     required String query,
     required int count,
@@ -2472,7 +2472,7 @@ class WebSearchTool implements AssistantTool {
     );
   }
 
-  Future<dynamic> _searchBrave({
+  Future<Object?> _searchBrave({
     required String query,
     required int count,
     required String apiKey,
@@ -2498,7 +2498,7 @@ class WebSearchTool implements AssistantTool {
     return jsonDecode(response.body);
   }
 
-  Future<dynamic> _searchPerplexity({
+  Future<Object?> _searchPerplexity({
     required String query,
     required String apiKey,
     required String baseUrl,
@@ -2534,7 +2534,7 @@ class WebSearchTool implements AssistantTool {
     return jsonDecode(response.body);
   }
 
-  Future<dynamic> _searchOpenClawProxy({
+  Future<Object?> _searchOpenClawProxy({
     required String query,
     required int count,
     required String baseUrl,
@@ -2567,7 +2567,7 @@ class WebSearchTool implements AssistantTool {
     return jsonDecode(response.body);
   }
 
-  Future<dynamic> _searchDuckDuckGo({required String query}) async {
+  Future<Object?> _searchDuckDuckGo({required String query}) async {
     final cleanQuery = _stripSearchSuffixes(query);
     final response = await _httpClient
         .post(
@@ -2632,7 +2632,7 @@ class WebSearchTool implements AssistantTool {
     return <String, dynamic>{
       'AbstractText': abstractText,
       'Heading': '',
-      'RelatedTopics': <dynamic>[],
+      'RelatedTopics': <Object?>[],
       'organic_results': results,
       '_source': 'ddg_html',
     };
@@ -2650,7 +2650,7 @@ class WebSearchTool implements AssistantTool {
         .trim();
   }
 
-  Future<dynamic> _searchSerpApi({
+  Future<Object?> _searchSerpApi({
     required String query,
     required int count,
     required String apiKey,
@@ -2874,9 +2874,9 @@ class WebSearchTool implements AssistantTool {
     final search = web['search'];
     if (search is! Map) return const _WebSearchProfile();
     final perplexity = search['perplexity'];
-    Map<dynamic, dynamic> perplexityMap = const <dynamic, dynamic>{};
+    Map<Object?, Object?> perplexityMap = const <Object?, Object?>{};
     if (perplexity is Map) {
-      perplexityMap = perplexity;
+      perplexityMap = Map<Object?, Object?>.from(perplexity);
     }
     return _WebSearchProfile(
       provider: (search['provider'] as String?)?.trim() ?? '',
@@ -4021,7 +4021,7 @@ class _BackupSearchResult {
 
   final String providerLabel;
   final String summary;
-  final dynamic raw;
+  final Object? raw;
 }
 
 class _WebSearchRuntimeConfig {

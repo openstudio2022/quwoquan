@@ -8,6 +8,8 @@ import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/model_config.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/openai_compatible_chat_wire.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/stream_json_field_extractor.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
@@ -26,7 +28,7 @@ class AssistantModelOutput {
     this.failureCode = '',
     this.rawAssistantToolCallsMessage,
     this.reasoningText = '',
-    this.usageEntries = const <Map<String, dynamic>>[],
+    this.usageEntries = const <LlmUsageLedgerEntry>[],
   });
 
   final String text;
@@ -44,7 +46,7 @@ class AssistantModelOutput {
   final String reasoningText;
 
   /// Per-request usage ledger entries emitted by the model provider.
-  final List<Map<String, dynamic>> usageEntries;
+  final List<LlmUsageLedgerEntry> usageEntries;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
 
@@ -60,9 +62,7 @@ class AssistantModelOutput {
 
   /// 解析成功且满足 canonical `assistant_turn` 时的强类型；否则 `null`。
   AssistantTurnOutput? get assistantTurnOutputIfValid {
-    final parsed = parseAssistantText();
-    if (!parsed.ok || parsed.json == null) return null;
-    return tryParseAssistantTurnOutput(parsed.json!);
+    return parseAssistantText().tryAssistantTurnOutput();
   }
 
   AssistantModelOutput copyWith({
@@ -73,7 +73,7 @@ class AssistantModelOutput {
     String? failureCode,
     Map<String, dynamic>? rawAssistantToolCallsMessage,
     String? reasoningText,
-    List<Map<String, dynamic>>? usageEntries,
+    List<LlmUsageLedgerEntry>? usageEntries,
   }) {
     return AssistantModelOutput(
       text: text ?? this.text,
@@ -108,8 +108,8 @@ abstract class AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -215,8 +215,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -288,7 +288,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required String traceId,
     required LlmCallOptions callOptions,
   }) async {
-    final usageLedger = <Map<String, dynamic>>[];
+    final usageLedger = <LlmUsageLedgerEntry>[];
     final attemptedVariants = <String>{};
     AssistantModelOutput? lastResult;
 
@@ -318,7 +318,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       );
       usageLedger.addAll(retry.usageEntries);
       final merged = retry.copyWith(
-        usageEntries: List<Map<String, dynamic>>.from(usageLedger),
+        usageEntries: List<LlmUsageLedgerEntry>.from(usageLedger),
       );
       lastResult = merged;
       if (!merged.degraded ||
@@ -376,7 +376,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required LlmCallOptions callOptions,
     required void Function(String delta) onDelta,
   }) async {
-    final usageLedger = <Map<String, dynamic>>[];
+    final usageLedger = <LlmUsageLedgerEntry>[];
     final attemptedVariants = <String>{};
     AssistantModelOutput? lastResult;
 
@@ -407,7 +407,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       );
       usageLedger.addAll(retry.usageEntries);
       final merged = retry.copyWith(
-        usageEntries: List<Map<String, dynamic>>.from(usageLedger),
+        usageEntries: List<LlmUsageLedgerEntry>.from(usageLedger),
       );
       lastResult = merged;
       if (!merged.degraded ||
@@ -554,17 +554,17 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $apiKey',
     };
-    final requestBody = <String, dynamic>{
-      'model': modelId,
-      'messages': requestMessages,
-      if (enableTools && toolSchemas.isNotEmpty) 'tools': toolSchemas,
-      if (enableTools && toolSchemas.isNotEmpty) 'tool_choice': 'auto',
-      'temperature': callOptions.temperature ?? 0.3,
-      if (callOptions.maxTokens != null) 'max_tokens': callOptions.maxTokens,
-      ..._reasoningRequestEntries(_profile),
-      if (callOptions.forceJsonObject && _profile.supportsJsonMode)
-        'response_format': const <String, dynamic>{'type': 'json_object'},
-    };
+    final requestBody = buildOpenAiNonStreamingChatCompletionRequest(
+      modelId: modelId,
+      requestMessages: requestMessages,
+      toolSchemas: toolSchemas,
+      enableTools: enableTools,
+      temperature: callOptions.temperature ?? 0.3,
+      maxTokens: callOptions.maxTokens,
+      reasoningRequestEntries: _reasoningRequestEntries(_profile),
+      forceJsonObject: callOptions.forceJsonObject,
+      supportsJsonMode: _profile.supportsJsonMode,
+    );
     final timeoutDuration = Duration(seconds: callOptions.timeoutSeconds ?? 30);
     try {
       final startAt = DateTime.now();
@@ -610,7 +610,15 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           failureCode: AssistantFailureCode.modelHttp,
         );
       }
-      final decoded = jsonDecode(response.body);
+      final decodedBody = jsonDecode(response.body);
+      if (decodedBody is! Map) {
+        return const AssistantModelOutput(
+          text: '模型调用失败: 返回格式异常（非 JSON 对象）',
+          degraded: true,
+          failureCode: AssistantFailureCode.modelResponseInvalid,
+        );
+      }
+      final decoded = Map<String, dynamic>.from(decodedBody);
       await _logLlmInteraction(
         sessionId: sessionId,
         runId: runId,
@@ -628,15 +636,16 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           },
           'response': <String, dynamic>{
             'statusCode': response.statusCode,
-            'body': decoded,
+            'body': decodedBody,
           },
           'latencyMs': elapsedMs,
         },
       );
-      final parsed = _parseModelOutput(decoded);
+      final rootWire = OpenAiChatCompletionResponseRoot(decoded);
+      final parsed = _parseModelOutput(rootWire.root);
       return parsed.copyWith(
         usageEntries: _buildUsageEntries(
-          usageRaw: decoded is Map ? decoded['usage'] : null,
+          usageWire: rootWire.usage,
           requestMessages: requestMessages,
           responseText: '${parsed.text}\n${parsed.reasoningText}'.trim(),
           streaming: false,
@@ -692,18 +701,17 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       'Authorization': 'Bearer $apiKey',
       'Accept': 'text/event-stream',
     };
-    final requestBody = <String, dynamic>{
-      'model': modelId,
-      'messages': requestMessages,
-      if (enableTools && toolSchemas.isNotEmpty) 'tools': toolSchemas,
-      if (enableTools && toolSchemas.isNotEmpty) 'tool_choice': 'auto',
-      'temperature': callOptions.temperature ?? 0.3,
-      if (callOptions.maxTokens != null) 'max_tokens': callOptions.maxTokens,
-      'stream': true,
-      ..._reasoningRequestEntries(_profile),
-      if (callOptions.forceJsonObject && _profile.supportsJsonMode)
-        'response_format': const <String, dynamic>{'type': 'json_object'},
-    };
+    final requestBody = buildOpenAiStreamingChatCompletionRequest(
+      modelId: modelId,
+      requestMessages: requestMessages,
+      toolSchemas: toolSchemas,
+      enableTools: enableTools,
+      temperature: callOptions.temperature ?? 0.3,
+      maxTokens: callOptions.maxTokens,
+      reasoningRequestEntries: _reasoningRequestEntries(_profile),
+      forceJsonObject: callOptions.forceJsonObject,
+      supportsJsonMode: _profile.supportsJsonMode,
+    );
     final timeoutDuration = Duration(
       seconds: (callOptions.timeoutSeconds ?? 30) * 2,
     );
@@ -763,7 +771,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       for (final extractor in streamExtractors) {
         extractor.reset();
       }
-      Object? usageRaw;
+      Map<String, dynamic>? usageWire;
 
       await for (final line in streamedResponse.stream.transform(
         const _SseLineTransformer(),
@@ -774,10 +782,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         try {
           final decoded = jsonDecode(data);
           if (decoded is! Map) continue;
-          if (decoded['usage'] != null) {
-            usageRaw = decoded['usage'];
+          final decodedMap = Map<String, dynamic>.from(decoded);
+          final u = OpenAiChatCompletionResponseRoot(decodedMap).usage;
+          if (u != null) {
+            usageWire = u;
           }
-          final choices = decoded['choices'] as List?;
+          final choices = decodedMap['choices'] as List?;
           if (choices == null || choices.isEmpty) continue;
           final choice = choices.first as Map?;
           if (choice == null) continue;
@@ -788,7 +798,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           // `reasoning_content` field instead of (or in addition to) `content`.
           if (profile.supportsReasoningField) {
             final reasoningDelta = _extractReasoningField(
-              delta.cast<String, dynamic>(),
+              delta.cast<String, Object?>(),
               profile,
             );
             if (reasoningDelta.isNotEmpty) {
@@ -860,16 +870,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
 
       for (final accum in toolCallAccum.values) {
         if (accum.name.isEmpty) continue;
-        Map<String, dynamic> argsMap = <String, dynamic>{};
         final argsStr = accum.argsBuffer.toString();
-        if (argsStr.isNotEmpty) {
-          try {
-            final parsed = jsonDecode(argsStr);
-            if (parsed is Map) argsMap = parsed.cast<String, dynamic>();
-          } catch (_) {
-            argsMap = <String, dynamic>{'raw': argsStr};
-          }
-        }
+        final argsMap = argsStr.isEmpty
+            ? <String, dynamic>{}
+            : _decodeOpenAiFunctionArguments(argsStr);
         toolCalls.add(
           AssistantToolCall(name: accum.name, arguments: argsMap, id: accum.id),
         );
@@ -879,18 +883,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         rawAssistantMsg = <String, dynamic>{
           'role': 'assistant',
           'content': fullText.isEmpty ? null : fullText,
-          'tool_calls': toolCalls
-              .map(
-                (tc) => <String, dynamic>{
-                  'id': tc.id,
-                  'type': 'function',
-                  'function': <String, dynamic>{
-                    'name': tc.name,
-                    'arguments': jsonEncode(tc.arguments),
-                  },
-                },
-              )
-              .toList(),
+          'tool_calls': _openAiToolCallsWireFromAssistantCalls(toolCalls),
         };
       }
 
@@ -926,7 +919,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         rawAssistantToolCallsMessage: rawAssistantMsg,
         reasoningText: reasoning,
         usageEntries: _buildUsageEntries(
-          usageRaw: usageRaw,
+          usageWire: usageWire,
           requestMessages: requestMessages,
           responseText: '$effectiveText\n$reasoning'.trim(),
           streaming: true,
@@ -1091,8 +1084,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     void Function(String fieldPath, String delta)? onStructuredDelta,
     void Function(String failureCode, Map<String, dynamic> diagnostics)?
     onFailure,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'synthesizer.final_answer',
     String templateVersion = '',
     String sessionId = '',
@@ -1127,16 +1120,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       'Authorization': 'Bearer $apiKey',
       'Accept': 'text/event-stream',
     };
-    final requestBody = <String, dynamic>{
-      'model': modelId,
-      'messages': requestMessages,
-      'temperature': 0.2,
-      'max_tokens': 4096,
-      'stream': true,
-      ..._reasoningRequestEntries(profile),
-      if (profile.supportsJsonMode)
-        'response_format': const <String, dynamic>{'type': 'json_object'},
-    };
+    final requestBody = buildOpenAiStreamingPlannerChatRequest(
+      modelId: modelId,
+      requestMessages: requestMessages,
+      reasoningRequestEntries: _reasoningRequestEntries(profile),
+      supportsJsonMode: profile.supportsJsonMode,
+    );
     try {
       final request = http.Request('POST', Uri.parse(endpoint));
       request.headers.addAll(requestHeaders);
@@ -1225,7 +1214,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       if (choices == null || choices.isEmpty) return null;
       final choice = choices.first as Map?;
       if (choice == null) return null;
-      final choiceMap = choice.cast<String, dynamic>();
+      final choiceMap = choice.cast<String, Object?>();
       final delta = choiceMap['delta'] as Map?;
       if (delta == null) return null;
       return (delta['content'] as String?) ?? '';
@@ -1384,14 +1373,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     );
   }
 
-  AssistantModelOutput _parseModelOutput(dynamic decoded) {
-    if (decoded is! Map) {
-      return const AssistantModelOutput(
-        text: '模型调用失败: 返回格式异常（非 JSON 对象）',
-        degraded: true,
-        failureCode: AssistantFailureCode.modelResponseInvalid,
-      );
-    }
+  AssistantModelOutput _parseModelOutput(Map<String, dynamic> decoded) {
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) {
       return const AssistantModelOutput(
@@ -1419,7 +1401,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     final content = (message['content'] as String?)?.trim() ?? '';
     final profile = ModelCapabilityProfile.forModelRef(modelRef);
     final reasoning = profile.supportsReasoningField
-        ? _extractReasoningField(message.cast<String, dynamic>(), profile).trim()
+        ? _extractReasoningField(message.cast<String, Object?>(), profile).trim()
         : '';
     final toolCallsRaw = message['tool_calls'];
     final toolCalls = <AssistantToolCall>[];
@@ -1433,19 +1415,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         if (name.isEmpty) continue;
         final callId = (t['id'] as String?)?.trim() ?? '';
         final argsRaw = function['arguments'];
-        Map<String, dynamic> argsMap = <String, dynamic>{};
-        if (argsRaw is String && argsRaw.isNotEmpty) {
-          try {
-            final argsDecoded = jsonDecode(argsRaw);
-            if (argsDecoded is Map) {
-              argsMap = argsDecoded.cast<String, dynamic>();
-            }
-          } catch (_) {
-            argsMap = <String, dynamic>{'raw': argsRaw};
-          }
-        } else if (argsRaw is Map) {
-          argsMap = argsRaw.cast<String, dynamic>();
-        }
+        final argsMap = (argsRaw is String && argsRaw.trim().isEmpty)
+            ? <String, dynamic>{}
+            : _decodeOpenAiFunctionArguments(argsRaw);
         toolCalls.add(
           AssistantToolCall(name: name, arguments: argsMap, id: callId),
         );
@@ -1525,43 +1497,46 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     return false;
   }
 
-  List<Map<String, dynamic>> _buildUsageEntries({
-    required Object? usageRaw,
+  List<LlmUsageLedgerEntry> _buildUsageEntries({
+    required Map<String, dynamic>? usageWire,
     required List<Map<String, dynamic>> requestMessages,
     required String responseText,
     required bool streaming,
     required int latencyMs,
   }) {
     final entry = _buildUsageEntry(
-      usageRaw: usageRaw,
+      usageWire: usageWire,
       requestMessages: requestMessages,
       responseText: responseText,
       streaming: streaming,
       latencyMs: latencyMs,
     );
-    if (entry == null) return const <Map<String, dynamic>>[];
-    return <Map<String, dynamic>>[entry];
+    if (entry == null) return const <LlmUsageLedgerEntry>[];
+    return <LlmUsageLedgerEntry>[entry];
   }
 
-  Map<String, dynamic>? _buildUsageEntry({
-    required Object? usageRaw,
+  LlmUsageLedgerEntry? _buildUsageEntry({
+    required Map<String, dynamic>? usageWire,
     required List<Map<String, dynamic>> requestMessages,
     required String responseText,
     required bool streaming,
     required int latencyMs,
   }) {
-    final usage = usageRaw is Map
-        ? usageRaw.cast<String, dynamic>()
-        : const <String, dynamic>{};
-    var inputTokens = _usageInt(
-      usage['prompt_tokens'] ?? usage['input_tokens'] ?? usage['promptTokens'],
-    );
-    var outputTokens = _usageInt(
-      usage['completion_tokens'] ??
-          usage['output_tokens'] ??
-          usage['completionTokens'],
-    );
-    var totalTokens = _usageInt(usage['total_tokens'] ?? usage['totalTokens']);
+    final usage = usageWire ?? const <String, Object?>{};
+    var inputTokens = _nonNegativeIntFromUsageKeys(usage, const <String>[
+      'prompt_tokens',
+      'input_tokens',
+      'promptTokens',
+    ]);
+    var outputTokens = _nonNegativeIntFromUsageKeys(usage, const <String>[
+      'completion_tokens',
+      'output_tokens',
+      'completionTokens',
+    ]);
+    var totalTokens = _nonNegativeIntFromUsageKeys(usage, const <String>[
+      'total_tokens',
+      'totalTokens',
+    ]);
     var source = 'provider';
 
     final estimatedInput = _estimateTokenCount(
@@ -1585,27 +1560,38 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       }
     }
     if (totalTokens <= 0) return null;
-    return <String, dynamic>{
-      'provider': 'openai_compatible',
-      'modelId': modelId,
-      'modelRef': modelRef,
-      'streaming': streaming,
-      'source': source,
-      'inputTokens': inputTokens < 0 ? 0 : inputTokens,
-      'outputTokens': outputTokens < 0 ? 0 : outputTokens,
-      'totalTokens': totalTokens < 0 ? 0 : totalTokens,
-      'latencyMs': latencyMs < 0 ? 0 : latencyMs,
-    };
+    return LlmUsageLedgerEntry(
+      provider: 'openai_compatible',
+      modelId: modelId,
+      modelRef: modelRef,
+      streaming: streaming,
+      source: source,
+      inputTokens: inputTokens < 0 ? 0 : inputTokens,
+      outputTokens: outputTokens < 0 ? 0 : outputTokens,
+      totalTokens: totalTokens < 0 ? 0 : totalTokens,
+      latencyMs: latencyMs < 0 ? 0 : latencyMs,
+    );
   }
 
-  int _usageInt(Object? value) {
-    if (value is num) {
-      final number = value.toInt();
-      return number < 0 ? 0 : number;
+  /// OpenAI `usage` Map 中按候选键读取非负整数（供应商 wire，无 `Object?` 形参）。
+  int _nonNegativeIntFromUsageKeys(
+    Map<String, dynamic> usage,
+    List<String> keys,
+  ) {
+    for (final k in keys) {
+      final v = usage[k];
+      if (v == null) continue;
+      if (v is int) {
+        return v < 0 ? 0 : v;
+      }
+      if (v is num) {
+        final n = v.toInt();
+        return n < 0 ? 0 : n;
+      }
+      final parsed = int.tryParse(v.toString().trim());
+      if (parsed != null && parsed >= 0) return parsed;
     }
-    final parsed = int.tryParse(value?.toString() ?? '');
-    if (parsed == null || parsed < 0) return 0;
-    return parsed;
+    return 0;
   }
 
   String _flattenMessages(List<Map<String, dynamic>> messages) {
@@ -1715,7 +1701,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
 
   Map<String, dynamic> _reasoningRequestEntries(ModelCapabilityProfile profile) {
     if (profile.reasoningRequestObject.isEmpty) {
-      return const <String, dynamic>{};
+      return const <String, Object?>{};
     }
     return <String, dynamic>{'reasoning': profile.reasoningRequestObject};
   }
@@ -1760,8 +1746,8 @@ class ModelOnlyFailureLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -1867,8 +1853,8 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     void Function(String fieldPath, String delta)? onStructuredDelta,
     void Function(String failureCode, Map<String, dynamic> diagnostics)?
     onFailure,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'synthesizer.final_answer',
     String templateVersion = '',
     String sessionId = '',
@@ -1954,8 +1940,8 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -2031,7 +2017,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       onDelta: onDelta,
     );
     if (remoteResult.degraded) {
-      final usageLedger = <Map<String, dynamic>>[...remoteResult.usageEntries];
+      final usageLedger = <LlmUsageLedgerEntry>[...remoteResult.usageEntries];
       if (remoteResult.failureCode == AssistantFailureCode.templateMissing) {
         return remoteResult.copyWith(
           modelPath: remoteResult.modelPath.isEmpty
@@ -2089,7 +2075,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
           );
           if (!retry.degraded) {
             return retry.copyWith(
-              usageEntries: <Map<String, dynamic>>[
+              usageEntries: <LlmUsageLedgerEntry>[
                 ...usageLedger,
                 ...retry.usageEntries,
               ],
@@ -2100,7 +2086,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
               modelPath: retry.modelPath.isEmpty
                   ? 'template_error'
                   : retry.modelPath,
-              usageEntries: <Map<String, dynamic>>[
+              usageEntries: <LlmUsageLedgerEntry>[
                 ...usageLedger,
                 ...retry.usageEntries,
               ],
@@ -2128,7 +2114,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
         modelPath: fallback.modelPath.isEmpty
             ? 'fallback_local'
             : fallback.modelPath,
-        usageEntries: <Map<String, dynamic>>[
+        usageEntries: <LlmUsageLedgerEntry>[
           ...usageLedger,
           ...fallback.usageEntries,
         ],
@@ -2155,8 +2141,8 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
     required List<String> availableTools,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -2283,3 +2269,40 @@ class _SseLineTransformer extends StreamTransformerBase<List<int>, String> {
     return bytes.length;
   }
 }
+
+/// OpenAI-compatible `function.arguments`：字符串 JSON、对象或空；与流式拼接后的 `jsonDecode` 语义一致。
+Map<String, dynamic> _decodeOpenAiFunctionArguments(Object? argsRaw) {
+  if (argsRaw is String) {
+    final trimmed = argsRaw.trim();
+    if (trimmed.isEmpty) return <String, dynamic>{};
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map) return decoded.cast<String, Object?>();
+    } catch (_) {
+      return <String, dynamic>{'raw': trimmed};
+    }
+    return <String, dynamic>{};
+  }
+  if (argsRaw is Map) {
+    return argsRaw.cast<String, Object?>();
+  }
+  return <String, dynamic>{};
+}
+
+List<Map<String, dynamic>> _openAiToolCallsWireFromAssistantCalls(
+  List<AssistantToolCall> toolCalls,
+) {
+  return toolCalls
+      .map(
+        (tc) => <String, dynamic>{
+          'id': tc.id,
+          'type': 'function',
+          'function': <String, dynamic>{
+            'name': tc.name,
+            'arguments': jsonEncode(tc.arguments),
+          },
+        },
+      )
+      .toList(growable: false);
+}
+

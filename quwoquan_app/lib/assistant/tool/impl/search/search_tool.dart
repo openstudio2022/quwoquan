@@ -173,12 +173,12 @@ class SearchTool implements AssistantTool {
         SearchToolFieldNames.query: normalized.query,
         'count': normalized.limit,
       });
-      final webData = webResult.data ?? const <String, dynamic>{};
+      final webData = webResult.data ?? const <String, Object?>{};
       provider = (webData['provider'] as String?)?.trim() ?? '';
       final webReferences =
           (webData['references'] as List?)
               ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => item.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       _mergeMapList(
@@ -230,7 +230,7 @@ class SearchTool implements AssistantTool {
       hitCount: hits.length,
       referenceCount: references.length,
       webSummary:
-          (((webResult?.data ?? const <String, dynamic>{})['summary'])
+          (((webResult?.data ?? const <String, Object?>{})['summary'])
                   as String?)
               ?.trim() ??
           '',
@@ -310,13 +310,13 @@ class SearchTool implements AssistantTool {
 
     for (var i = 0; i < taskResults.length; i += 1) {
       final result = taskResults[i];
-      final data = result.data ?? const <String, dynamic>{};
-      final task = i < tasks.length ? tasks[i] : const <String, dynamic>{};
+      final data = result.data ?? const <String, Object?>{};
+      final task = i < tasks.length ? tasks[i] : const <String, Object?>{};
       _mergeSectionMaps(
         sections: sections,
         incoming:
             (data['sections'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, dynamic>(),
+              (item) => item.cast<String, Object?>(),
             ) ??
             const <Map<String, dynamic>>[],
       );
@@ -324,7 +324,7 @@ class SearchTool implements AssistantTool {
         target: hits,
         incoming:
             (data['hits'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, dynamic>(),
+              (item) => item.cast<String, Object?>(),
             ) ??
             const <Map<String, dynamic>>[],
         keyOf: _hitKey,
@@ -333,7 +333,7 @@ class SearchTool implements AssistantTool {
         target: references,
         incoming:
             (data['references'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, dynamic>(),
+              (item) => item.cast<String, Object?>(),
             ) ??
             const <Map<String, dynamic>>[],
         keyOf: _referenceKey,
@@ -342,7 +342,7 @@ class SearchTool implements AssistantTool {
         target: degradeSignals,
         incoming:
             (data['degradeSignals'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, dynamic>(),
+              (item) => item.cast<String, Object?>(),
             ) ??
             const <Map<String, dynamic>>[],
         keyOf: _degradeKey,
@@ -454,7 +454,7 @@ class SearchTool implements AssistantTool {
     }
     return raw
         .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
+        .map((item) => item.cast<String, Object?>())
         .where(
           (item) => ((item['query'] as String?)?.trim().isNotEmpty ?? false),
         )
@@ -499,7 +499,7 @@ class SearchTool implements AssistantTool {
       final rawHits =
           (raw['hits'] as List?)
               ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => item.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       final rawObjectTypes =
@@ -515,11 +515,11 @@ class SearchTool implements AssistantTool {
         continue;
       }
       final existing = sections[index[id]!]
-        ..putIfAbsent('hits', () => <dynamic>[]);
+        ..putIfAbsent('hits', () => <Object?>[]);
       final mergedHits =
           (existing['hits'] as List?)
               ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => item.cast<String, Object?>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       final mergedObjectTypes =
@@ -670,7 +670,7 @@ class SearchTool implements AssistantTool {
       snippet: snippet,
       resolvedFrom: SearchResolvedFrom.remote,
       matchedField: 'query',
-      payload: reference,
+      payload: SearchHitPayloadLegacy(reference),
     );
   }
 }

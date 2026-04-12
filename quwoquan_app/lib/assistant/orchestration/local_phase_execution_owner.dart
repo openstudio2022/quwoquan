@@ -44,6 +44,7 @@ import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resol
 import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
@@ -1098,13 +1099,7 @@ class LocalPhaseExecutionOwner {
           state: state,
           runId: runId,
           traceId: traceId,
-          onTraceEvent: onTraceEvent == null
-              ? null
-              : (event) {
-                  if (event is AssistantTraceEvent) {
-                    onTraceEvent(event);
-                  }
-                },
+          onTraceEvent: onTraceEvent,
         ),
       );
       state = bootstrapOutput.state ?? state;
@@ -1119,13 +1114,7 @@ class LocalPhaseExecutionOwner {
           state: state,
           runId: runId,
           traceId: traceId,
-          onTraceEvent: onTraceEvent == null
-              ? null
-              : (event) {
-                  if (event is AssistantTraceEvent) {
-                    onTraceEvent(event);
-                  }
-                },
+          onTraceEvent: onTraceEvent,
         ),
       );
       state = understandOutput.state ?? state;
@@ -1145,13 +1134,7 @@ class LocalPhaseExecutionOwner {
           state: state,
           runId: runId,
           traceId: traceId,
-          onTraceEvent: onTraceEvent == null
-              ? null
-              : (event) {
-                  if (event is AssistantTraceEvent) {
-                    onTraceEvent(event);
-                  }
-                },
+          onTraceEvent: onTraceEvent,
         ),
       );
       state = retrievalOutput.state ?? state;
@@ -1402,7 +1385,7 @@ class LocalPhaseExecutionOwner {
     final dialogueRoundScript =
         executionSnapshot['dialogueRoundScript'] as DialogueRoundScript;
     final domainCatalog =
-        ((executionSnapshot['domainCatalog'] as List?) ?? const <dynamic>[])
+        ((executionSnapshot['domainCatalog'] as List?) ?? const <Object?>[])
             .map((item) => item.toString())
             .toList(growable: false);
     final domainCatalogVersion =
@@ -1441,7 +1424,7 @@ class LocalPhaseExecutionOwner {
       ),
     );
     final messages =
-        ((executionSnapshot['messages'] as List?) ?? const <dynamic>[])
+        ((executionSnapshot['messages'] as List?) ?? const <Object?>[])
             .whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false);
@@ -1453,7 +1436,7 @@ class LocalPhaseExecutionOwner {
         executionSnapshot['synthesisReadiness'] as SynthesisReadinessResult;
     final supplementalTraces =
         ((executionSnapshot['supplementalTraces'] as List?) ??
-                const <dynamic>[])
+                const <Object?>[])
             .whereType<AssistantTraceEvent>()
             .toList(growable: false);
 
@@ -1641,7 +1624,7 @@ class LocalPhaseExecutionOwner {
         'domainResults': domainResultsForSynthesis,
       if (!hasLicensedEvidenceForSynthesis)
         'webEvidencePacks':
-            domainResultsForSynthesis['webEvidencePacks'] ?? const <dynamic>[],
+            domainResultsForSynthesis['webEvidencePacks'] ?? const <Object?>[],
       'contextSlots': _buildContextSlots(contextAssembly),
       'entityAnchors': intentGraph.entityAnchors,
     };
@@ -2072,17 +2055,17 @@ class LocalPhaseExecutionOwner {
                 'attempt': attempt,
                 'estimatedTokens': outputTokens,
                 'usageEntries': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'provider': 'synthesis_stream',
-                    'modelId': 'streaming_final_answer',
-                    'modelRef': 'streaming_final_answer',
-                    'streaming': true,
-                    'source': 'estimated',
-                    'inputTokens': inputTokens,
-                    'outputTokens': outputTokens,
-                    'totalTokens': inputTokens + outputTokens,
-                    'latencyMs': 0,
-                  },
+                  LlmUsageLedgerEntry(
+                    provider: 'synthesis_stream',
+                    modelId: 'streaming_final_answer',
+                    modelRef: 'streaming_final_answer',
+                    streaming: true,
+                    source: 'estimated',
+                    inputTokens: inputTokens,
+                    outputTokens: outputTokens,
+                    totalTokens: inputTokens + outputTokens,
+                    latencyMs: 0,
+                  ).toJson(),
                 ],
               },
             );
@@ -2997,7 +2980,7 @@ class LocalPhaseExecutionOwner {
     final seen = <String>{};
     final anchors = <String>[];
 
-    void collect(Iterable<dynamic> values) {
+    void collect(Iterable<Object?> values) {
       for (final raw in values) {
         final value = raw.toString().trim();
         if (!_isMeaningfulTopicAnchor(value) || !seen.add(value)) {
@@ -3403,7 +3386,7 @@ class LocalPhaseExecutionOwner {
     for (final event in traces.reversed) {
       if (event.type != AssistantTraceEventType.assistantDelta) continue;
       final data = event.data ?? const <String, dynamic>{};
-      final toolCalls = data['toolCalls'] as List? ?? const <dynamic>[];
+      final toolCalls = data['toolCalls'] as List? ?? const <Object?>[];
       if (toolCalls.isNotEmpty) continue;
       final raw = event.message.trim();
       if (raw.isEmpty) continue;
@@ -4402,7 +4385,9 @@ class LocalPhaseExecutionOwner {
     final renderMode = normalizedMarkdown.trim().isNotEmpty
         ? 'md_json_single_source'
         : 'fallback_text';
-    final renderFallback = renderMode == 'fallback_text';
+    final renderFallbackFlag = renderMode == 'fallback_text';
+    final renderFallbackWire =
+        renderFallbackFlag ? 'fallback_text' : '';
     if (onTraceEvent != null &&
         blockedProcessStepId == ProcessStepId.answerOrganization) {
       ProcessTimelineEmitter(
@@ -4583,29 +4568,33 @@ class LocalPhaseExecutionOwner {
       evidenceLedger: evidenceLedger,
       answerEvidenceBindings: answerEvidenceBindings,
       slotState: groundedSlotState,
-      answerDecision: <String, dynamic>{
-        ...apv.decisionMap,
-        ...effectiveStateDecision.toDecisionMap(),
-        ...answerGateDecision.toJson(),
-        'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
-            ? answerGateDecision.nextAction
-            : effectiveStateDecision.nextActionWireName,
-        'answerEligibility': resolvedAnswerEligibility,
-        'finalAnswerReady': effectiveFinalAnswerReady,
-        'evidenceSummary': evidenceEvaluation.summary,
-      },
-      diagnostics: <String, dynamic>{
-        'domainId': dialogueRoundScript.domainId,
-        'renderMode': displayState.answer.blocks.isNotEmpty
-            ? 'typed_display_state'
-            : renderMode,
-        'renderFallback': renderFallback,
-        'answerEligibility': resolvedAnswerEligibility,
-        'qualityGates': effectiveStateDecision.qualityGatesData,
-        'evidenceEvaluation': evidenceEvaluation.toJson(),
-        'answerBoundaryPolicy': answerBoundaryPolicy.toJson(),
-        ...apv.diagnosticsMap,
-      },
+      answerDecision: RunArtifactsAnswerDecisionPartitioned.fromWireMap(
+        <String, dynamic>{
+          ...apv.decisionMap,
+          ...effectiveStateDecision.toDecisionMap(),
+          ...answerGateDecision.toJson(),
+          'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
+              ? answerGateDecision.nextAction
+              : effectiveStateDecision.nextActionWireName,
+          'answerEligibility': resolvedAnswerEligibility,
+          'finalAnswerReady': effectiveFinalAnswerReady,
+          'evidenceSummary': evidenceEvaluation.summary,
+        },
+      ),
+      diagnostics: RunArtifactsDiagnosticsPartitioned.fromWireMap(
+        <String, dynamic>{
+          'domainId': dialogueRoundScript.domainId,
+          'renderMode': displayState.answer.blocks.isNotEmpty
+              ? 'typed_display_state'
+              : renderMode,
+          'renderFallback': renderFallbackWire,
+          'answerEligibility': resolvedAnswerEligibility,
+          'qualityGates': effectiveStateDecision.qualityGatesData,
+          'evidenceEvaluation': evidenceEvaluation.toJson(),
+          'answerBoundaryPolicy': answerBoundaryPolicy.toJson(),
+          ...apv.diagnosticsMap,
+        },
+      ),
       domainPolicyBundle: domainPolicyBundle,
     );
     final sessionPreferenceFacts = _buildSessionPreferenceFacts(
@@ -4909,7 +4898,7 @@ class LocalPhaseExecutionOwner {
       'renderMode': renderMode,
       'qualityMetrics': <String, dynamic>{
         'decisionParseSuccess': decisionParseSuccess,
-        'renderFallback': renderFallback,
+        'renderFallback': renderFallbackFlag,
         'heuristicFallbackUsed': heuristicFallbackUsed,
         'evidenceSufficient': retrievalOutcome.retrievalReady,
         'freshnessSatisfied':

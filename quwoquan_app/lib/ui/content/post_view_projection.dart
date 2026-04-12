@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -14,6 +15,17 @@ PostSummaryView projectPostMap(
 }) {
   final dto = postBaseDtoFromMap(raw);
   return PostSummaryView.fromDto(dto, surfaceId: surfaceId, wire: raw);
+}
+
+/// 自 [ContentRepository.getPost] 返回的 [ContentPostDetailPayload] 投射（优先于裸 Map）。
+ArticleDetailView projectArticleDetailViewFromPayload(
+  ContentPostDetailPayload payload, {
+  required String fallbackArticleId,
+}) {
+  return projectArticleDetailView(
+    payload.mergedArticleWireMap,
+    fallbackArticleId: fallbackArticleId,
+  );
 }
 
 /// 文章详情投射：raw post map → [ArticleDetailView]（供 ArticleDetailPage 消费）

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 可选度量：助手相关目录中弱类型命中（不含 generated）。
+# 更完整标签统计见同目录 count_weak_types_in_assistant.sh。
 # - dynamic：关键字行数
 # - Object? / "Object " 形参：Codec/边界常见，单独计数便于趋势观察
 # 不作为硬 CI 门禁；新增裸 dynamic 建议按 assistant_dynamic_typing_policy.md 加 ASSISTANT_WEAK_TYPE 注释。

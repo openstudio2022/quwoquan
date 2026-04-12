@@ -14,6 +14,11 @@ type AssistantUiReferenceWireDto struct {
 
 type AssistantStructuredResponseWire struct {
 	QualityMetrics json.RawMessage `json:"qualityMetrics"`
+	DecisionParseSuccess bool `json:"decisionParseSuccess"`
+	HardCutSource string `json:"hardCutSource"`
+	AnswerGateReady bool `json:"answerGateReady"`
+	AnswerGateReasonCode string `json:"answerGateReasonCode"`
+	DialogueDomainId string `json:"dialogueDomainId"`
 	DialogueRuntime json.RawMessage `json:"dialogueRuntime"`
 	UiReferences []AssistantUiReferenceWireDto `json:"uiReferences"`
 }

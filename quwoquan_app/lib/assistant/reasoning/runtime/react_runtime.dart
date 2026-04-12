@@ -86,7 +86,7 @@ class ReactRuntime {
       'assets/assistant/config/user_phase_hints.json';
   ReactPolicy _reactPolicy = ReactPolicy.defaults;
   Future<void>? _reactPolicyLoading;
-  Map<String, dynamic> _phaseHintsConfig = const <String, dynamic>{};
+  Map<String, dynamic> _phaseHintsConfig = const <String, Object?>{};
   Future<void>? _phaseHintsLoading;
   static const int _maxConsecutiveEmptyIterations = 2;
 
@@ -108,8 +108,8 @@ class ReactRuntime {
     required List<Map<String, dynamic>> messages,
     required void Function(String delta) onDelta,
     List<String> streamJsonFieldPaths = const <String>[],
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'synthesizer.final_answer',
     String templateVersion = '',
     String sessionId = '',
@@ -210,8 +210,8 @@ class ReactRuntime {
       'retrievalProcessing.processingSummary',
       'answerProcessing.readinessSummary',
     ],
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'synthesizer.final_answer',
     String templateVersion = '',
     String sessionId = '',
@@ -245,8 +245,8 @@ class ReactRuntime {
     required int maxIterations,
     String goal = '',
     List<String>? availableToolNamesOverride,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    Map<String, dynamic> templateContext = const <String, Object?>{},
+    Map<String, dynamic> templateVariables = const <String, Object?>{},
     String templateId = 'planner.global_plan',
     String templateVersion = '',
     String sessionId = '',
@@ -421,7 +421,9 @@ class ReactRuntime {
             if (output.reasoningText.trim().isNotEmpty)
               'providerReasoningContinuation': output.reasoningText.trim(),
             if (output.usageEntries.isNotEmpty)
-              'usageEntries': output.usageEntries,
+              'usageEntries': output.usageEntries
+                  .map((e) => e.toJson())
+                  .toList(growable: false),
           },
         ),
       );
@@ -485,7 +487,7 @@ class ReactRuntime {
               if (call.arguments['queryNormalization'] is Map)
                 'queryNormalization':
                     (call.arguments['queryNormalization'] as Map)
-                        .cast<String, dynamic>(),
+                        .cast<String, Object?>(),
             },
           ),
         );
@@ -557,9 +559,9 @@ class ReactRuntime {
       if (output.rawAssistantToolCallsMessage != null) {
         // 原始 assistant message 已含 tool_calls，直接加入（用 Map 类型）
         final rawMsg = output.rawAssistantToolCallsMessage!;
-        final rawToolCalls =
-            (rawMsg['tool_calls'] as List?)?.cast<dynamic>() ??
-            const <dynamic>[];
+        final rawToolCalls = (rawMsg['tool_calls'] as List?) != null
+            ? List<Object?>.from(rawMsg['tool_calls'] as List)
+            : const <Object?>[];
         final sanitizedToolCalls = rawToolCalls
             .asMap()
             .entries
@@ -571,10 +573,10 @@ class ReactRuntime {
                   : null;
               if (sanitized == null) return item;
               final function =
-                  (item['function'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
+                  (item['function'] as Map?)?.cast<String, Object?>() ??
+                  const <String, Object?>{};
               return <String, dynamic>{
-                ...item.cast<String, dynamic>(),
+                ...item.cast<String, Object?>(),
                 'function': <String, dynamic>{
                   ...function,
                   'arguments': jsonEncode(sanitized.arguments),
@@ -784,7 +786,7 @@ class ReactRuntime {
                 'toolName': step.toolName,
                 'referenceCount': refs,
                 'references':
-                    (result.data?['references'] as List?) ?? const <dynamic>[],
+                    (result.data?['references'] as List?) ?? const <Object?>[],
                 'problemClass': executionShell.problemClass,
                 'qualityScore':
                     (result.data?['qualityScore'] as num?)?.toDouble() ?? 0.0,
@@ -826,8 +828,8 @@ class ReactRuntime {
         // Layer 3 反思循环：当检索工具质量评分不足时，注入反思提示驱动 LLM 重写查询
         if (_isRetrievalLikeTool(step.toolName) && isOk) {
           final data =
-              (result.data as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+              (result.data as Map?)?.cast<String, Object?>() ??
+              const <String, Object?>{};
           final qualityScore =
               (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
           final reflectionRound = state.openQuestions
@@ -1043,8 +1045,8 @@ class ReactRuntime {
   ) {
     final raw =
         (templateVariables['answerBoundaryPolicy'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            ?.cast<String, Object?>() ??
+        const <String, Object?>{};
     if (raw.isEmpty) {
       return const AnswerBoundaryPolicy();
     }
@@ -1073,8 +1075,8 @@ class ReactRuntime {
     required AssistantToolResult result,
   }) {
     final data =
-        (result.data as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (result.data as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
     return <String, dynamic>{
       'toolName': toolName,
       'ok': result.success == true,
@@ -1181,21 +1183,21 @@ class ReactRuntime {
   ) {
     final raw = templateVariables[key];
     if (raw is Map) {
-      return raw.cast<String, dynamic>();
+      return raw.cast<String, Object?>();
     }
     if (raw is String) {
       final text = raw.trim();
-      if (text.isEmpty) return const <String, dynamic>{};
+      if (text.isEmpty) return const <String, Object?>{};
       try {
         final decoded = jsonDecode(text);
         if (decoded is Map) {
-          return decoded.cast<String, dynamic>();
+          return decoded.cast<String, Object?>();
         }
       } catch (_) {
-        return const <String, dynamic>{};
+        return const <String, Object?>{};
       }
     }
-    return const <String, dynamic>{};
+    return const <String, Object?>{};
   }
 
   List<AssistantToolCall> _sanitizeToolCalls(
@@ -1265,7 +1267,7 @@ class ReactRuntime {
         (sanitized.isEmpty || hasContextCall);
     if (shouldAutoInjectRetrieval) {
       final queryTasks = _buildSearchQueryTasks(
-        args: const <String, dynamic>{},
+        args: const <String, Object?>{},
         shell: shell,
       );
       if (queryTasks.isNotEmpty) {
@@ -1315,8 +1317,8 @@ class ReactRuntime {
     required _RuntimeExecutionShell shell,
   }) {
     final queryNormalization =
-        (args['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        (args['queryNormalization'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
     final commonTaskMetadata = <String, dynamic>{
       if (_RuntimeExecutionShell._stringList(
         queryNormalization['entityAnchors'],
@@ -1378,11 +1380,11 @@ class ReactRuntime {
     if (raw is List) {
       return raw
           .whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
+          .map((item) => item.cast<String, Object?>())
           .toList(growable: false);
     }
     if (raw is Map) {
-      return <Map<String, dynamic>>[raw.cast<String, dynamic>()];
+      return <Map<String, dynamic>>[raw.cast<String, Object?>()];
     }
     final text = raw?.toString().trim() ?? '';
     if (text.isEmpty) return const <Map<String, dynamic>>[];
@@ -1398,7 +1400,7 @@ class ReactRuntime {
 
   List<Map<String, dynamic>> _normalizeSearchTasks(
     List<Map<String, dynamic>> tasks, {
-    Map<String, dynamic> commonMetadata = const <String, dynamic>{},
+    Map<String, dynamic> commonMetadata = const <String, Object?>{},
   }) {
     final normalized = <Map<String, dynamic>>[];
     final seen = <String>{};
@@ -1451,9 +1453,9 @@ class ReactRuntime {
     required Map<String, dynamic> data,
   }) {
     final metadata = _toolMetadataRegistry;
-    if (metadata == null) return const <String, dynamic>{};
+    if (metadata == null) return const <String, Object?>{};
     final slotOutputs = metadata.slotOutputsByToolName(toolName);
-    if (slotOutputs.isEmpty) return const <String, dynamic>{};
+    if (slotOutputs.isEmpty) return const <String, Object?>{};
     final delta = <String, dynamic>{};
     for (final slotOutput in slotOutputs) {
       final slotId = (slotOutput['slotId'] as String?)?.trim() ?? '';
@@ -1516,7 +1518,7 @@ class ReactRuntime {
       if (toolName.isEmpty) continue;
       final rawArgs = item['arguments'];
       final args = rawArgs is Map
-          ? rawArgs.cast<String, dynamic>()
+          ? rawArgs.cast<String, Object?>()
           : <String, dynamic>{
               for (final entry in item.entries)
                 if (entry.key != 'toolName' &&
@@ -1576,7 +1578,7 @@ class ReactRuntime {
     if (_jsonOnlyTemplateIds.contains(phase)) return '';
 
     final phases = _phaseHintsConfig['phases'] as Map?;
-    final phaseConfig = (phases?[phase] as Map?)?.cast<String, dynamic>();
+    final phaseConfig = (phases?[phase] as Map?)?.cast<String, Object?>();
     final baseHint = (phaseConfig?['systemHint'] as String?) ?? '';
     const userFacingNarrativeHint =
         '过程说明只用用户能听懂的话，重点解释为什么现在这样做、这一步能帮用户减少什么不确定性、信息是否已经够答。'
@@ -1610,10 +1612,10 @@ class ReactRuntime {
         final raw = await rootBundle.loadString(_phaseHintsPath);
         final decoded = jsonDecode(raw);
         if (decoded is Map) {
-          _phaseHintsConfig = decoded.cast<String, dynamic>();
+          _phaseHintsConfig = decoded.cast<String, Object?>();
         }
       } catch (_) {
-        _phaseHintsConfig = const <String, dynamic>{};
+        _phaseHintsConfig = const <String, Object?>{};
       }
     }();
     await _phaseHintsLoading;
@@ -1630,7 +1632,7 @@ class ReactRuntime {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
-        final payload = decoded.cast<String, dynamic>();
+        final payload = decoded.cast<String, Object?>();
         final turn = tryParseAssistantTurnOutput(payload);
         final rs = turn?.reasonShort.trim() ?? '';
         if (rs.isNotEmpty) {
@@ -1700,7 +1702,7 @@ class _RuntimeExecutionShell {
     final tasks = rawTasks is List
         ? rawTasks
               .whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => item.cast<String, Object?>())
               .toList(growable: false)
         : const <Map<String, dynamic>>[];
     return _RuntimeExecutionShell(

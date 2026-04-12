@@ -10,7 +10,7 @@ func dartMutationWireFieldType(field string) string {
 	case "tags", "mediaUrls", "circleIds":
 		return "List<String>?"
 	case "articleDocument", "location", "primaryHomepageSnapshot", "deviceInfo", "publishLocation":
-		return "Map<String, dynamic>?"
+		return "CloudJsonMap?"
 	default:
 		return "String?"
 	}
@@ -24,8 +24,9 @@ func writeContentPostMutationWires(outPath string, svc *serviceFile) {
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
 	b.WriteString("// Source: contracts/metadata/content/post/service.yaml (writable_fields per operation).\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
+	b.WriteString("import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';\n\n")
 
-	b.WriteString(`Map<String, dynamic> _mutationPutOpt(Map<String, dynamic> m, String k, Object? v) {
+	b.WriteString(`CloudJsonMap _mutationPutOpt(CloudJsonMap m, String k, Object? v) {
   if (v == null) return m;
   m[k] = v;
   return m;
@@ -39,9 +40,9 @@ List<String>? _mutationStringList(Object? v) {
   return null;
 }
 
-Map<String, dynamic>? _mutationStringKeyedMap(Object? v) {
+CloudJsonMap? _mutationStringKeyedMap(Object? v) {
   if (v is! Map) return null;
-  return Map<String, dynamic>.from(v as Map);
+  return Map<String, dynamic>.from(v);
 }
 
 `)
@@ -91,11 +92,11 @@ func renderMutationWireClass(b *strings.Builder, className string, fields []stri
 	for _, f := range ordered {
 		fmt.Fprintf(b, "  final %s %s;\n", dartMutationWireFieldType(f), f)
 	}
-	b.WriteString("\n  Map<String, dynamic> toWire() {\n    final m = <String, dynamic>{};\n")
+	b.WriteString("\n  CloudJsonMap toWire() {\n    final m = <String, dynamic>{};\n")
 	for _, f := range ordered {
 		t := dartMutationWireFieldType(f)
 		switch t {
-		case "List<String>?", "Map<String, dynamic>?":
+		case "List<String>?", "CloudJsonMap?":
 			fmt.Fprintf(b, "    if (%s != null) m['%s'] = %s!;\n", f, f, f)
 		default:
 			fmt.Fprintf(b, "    _mutationPutOpt(m, '%s', %s);\n", f, f)
@@ -105,7 +106,7 @@ func renderMutationWireClass(b *strings.Builder, className string, fields []stri
 
 	b.WriteString("  factory ")
 	b.WriteString(className)
-	b.WriteString(".fromMap(Map<String, dynamic> m) {\n    return ")
+	b.WriteString(".fromMap(CloudJsonMap m) {\n    return ")
 	b.WriteString(className)
 	b.WriteString("(\n")
 	for _, f := range ordered {
@@ -113,7 +114,7 @@ func renderMutationWireClass(b *strings.Builder, className string, fields []stri
 		switch t {
 		case "List<String>?":
 			fmt.Fprintf(b, "      %s: _mutationStringList(m['%s']),\n", f, f)
-		case "Map<String, dynamic>?":
+		case "CloudJsonMap?":
 			fmt.Fprintf(b, "      %s: _mutationStringKeyedMap(m['%s']),\n", f, f)
 		default:
 			fmt.Fprintf(b, "      %s: m['%s']?.toString(),\n", f, f)

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
@@ -46,9 +47,7 @@ class BootstrapPhase implements Phase {
 
   @override
   Future<PhaseOutput> run(PhaseInput input) async {
-    final request = input.request is AssistantRunRequest
-        ? input.request as AssistantRunRequest
-        : AssistantRunRequest.fromJson((input.request as dynamic).toJson());
+    final request = coerceAssistantRunRequest(input.request);
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
@@ -312,7 +311,7 @@ class BootstrapPhase implements Phase {
     required String sessionId,
     required String runId,
     required String traceId,
-    void Function(dynamic event)? onTraceEvent,
+    AssistantTraceEventSink? onTraceEvent,
   }) async {
     final result = await runtime.run(
       messages: <Map<String, dynamic>>[

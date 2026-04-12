@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_run_structured_bundle.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
@@ -54,8 +55,11 @@ class FinalizeRunner {
         runId;
     final completedArtifact = response.runArtifacts;
     final structuredResponse = response.structuredResponse;
-    final structuredRunArtifacts =
-        (structuredResponse['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+    final structuredBundle =
+        AssistantRunStructuredBundle.fromStructuredResponseRoot(
+      structuredResponse,
+    );
+    final structuredRunArtifacts = structuredBundle.runArtifacts?.toJson() ??
         const <String, dynamic>{};
     final canonicalDisplayState = resolveAssistantDisplayStateFromRunResponse(
       response,

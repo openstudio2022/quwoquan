@@ -21,7 +21,8 @@ class ArticleDocumentWireDto {
   final String? titleStyle;
 
   factory ArticleDocumentWireDto.fromMap(Map<String, dynamic> m) {
-    final rawNodes = (m['nodes'] as List?) ?? const <Object?>[];
+    final rawNodes =
+        (m['nodes'] as List?) ?? (m['blocks'] as List?) ?? const <Object?>[];
     final nodes = rawNodes
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
