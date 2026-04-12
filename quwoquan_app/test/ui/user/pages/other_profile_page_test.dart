@@ -214,6 +214,9 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
+  @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }

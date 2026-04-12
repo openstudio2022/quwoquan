@@ -49,8 +49,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
-    final mode = ref.read(appDataSourceModeProvider);
-    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+    if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
+        activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
     return activeContext;

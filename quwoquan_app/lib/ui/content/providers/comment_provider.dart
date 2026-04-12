@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -63,8 +62,8 @@ class CommentNotifier extends Notifier<CommentState> {
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
-    final mode = ref.read(appDataSourceModeProvider);
-    if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+    if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
+        activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
     return activeContext;

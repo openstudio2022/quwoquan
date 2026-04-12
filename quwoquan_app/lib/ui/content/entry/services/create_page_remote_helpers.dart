@@ -142,8 +142,8 @@ Future<Map<String, Object?>> attachActivePersonaToCreatePayload(
   Map<String, Object?> payload,
 ) async {
   final activeContext = await ref.read(activePersonaContextProvider.future);
-  final mode = ref.read(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote && activeContext.isFallback) {
+  if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
+      activeContext.isFallback) {
     throw StateError('active persona context unavailable');
   }
   return <String, Object?>{

@@ -1,0 +1,12 @@
+name: quwoquan_cloud_contracts
+description: Repository abstract contracts for quwoquan_app (decouples API from Mock/Remote).
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+
+dependencies:
+  meta: ^1.15.0
+  quwoquan_app:
+    path: ../../quwoquan_app

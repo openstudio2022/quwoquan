@@ -1104,10 +1104,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           hasVideo: state.hasVideo,
           locationService: _locationService,
           joinedCircles: joinedCircles,
-          recommendedCircles:
-              ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock
-              ? mockRecommendedCircles
-              : const <CreateCircleOption>[],
+          recommendedCircles: publishFlowRecommendedCircleOptions(
+            ref.read(circleRepositoryProvider),
+          ),
         ),
       ),
     );

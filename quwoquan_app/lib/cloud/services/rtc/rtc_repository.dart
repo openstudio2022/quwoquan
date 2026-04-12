@@ -57,6 +57,9 @@ abstract class RtcRepository {
     required String callId,
     required List<String> inviteeIds,
   });
+
+  /// 是否可在 Debug 下展示通话本地模拟控件（内嵌 RTC 桩为 true）。
+  bool get supportsDevCallSimulation;
 }
 
 class MockRtcRepository implements RtcRepository {
@@ -151,6 +154,9 @@ class MockRtcRepository implements RtcRepository {
     required String callId,
     required List<String> inviteeIds,
   }) async {}
+
+  @override
+  bool get supportsDevCallSimulation => true;
 }
 
 class RemoteRtcRepository implements RtcRepository {
@@ -387,4 +393,7 @@ class RemoteRtcRepository implements RtcRepository {
       body: RtcInviteToCallRequestWire(inviteeIds: inviteeIds).toJson(),
     );
   }
+
+  @override
+  bool get supportsDevCallSimulation => false;
 }

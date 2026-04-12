@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "buckets": {
+    "ui": {
+      "mock_enum_hits": 0,
+      "provider_hits": 0
+    }
+  },
+  "exempt_paths_relative_to_lib": [
+    "ui/settings/pages/developer_settings_page.dart"
+  ],
+  "notes": "Ratchet: mock_enum_hits or provider_hits must not increase vs baseline until intentionally updated."
+}

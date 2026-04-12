@@ -57,6 +57,8 @@
 | **P3 身份与全局** | `currentUserIdProvider` 等与 Auth 对齐 | 不依赖 `ChatMockData.currentUserProfileId` |
 | **P4 发行剥离** | prod flavor / 条件编译 | Release 包体与入口满足 §5 |
 
+**Mock/远端与生产包完全分离（契约包、Mock→`test/`、双 pubspec 等）**：**暂缓**，触发条件与清单见 **[`mock_production_separation_backlog.md`](mock_production_separation_backlog.md)**（与 P4 互补；非当前必做项）。
+
 ---
 
 ## 4. 目录与依赖红线（强制）
@@ -127,15 +129,25 @@
 
 ## 6. 命令与本地自检
 
+**与 CI `gate_repo.sh --scope app` 对齐的 Python 门禁（建议本地改 UI 前必跑）：**
+
 ```bash
 # 横向看护（UI/App/Core 不得直连 cloud …/mock/）
 python3 scripts/verify_ui_mock_isolation.py
 
-# 与仓库 app gate 一致（含本脚本）
+# lib 内测试专用符号（createForTest 等，见 lib_test_only_symbols_allowlist.yaml）
+python3 scripts/verify_lib_no_test_only_symbols.py
+
+# UI 层 AppDataSourceMode.mock / appDataSourceModeProvider 引用棘轮（只降不升，见 ui_app_data_source_mode_baseline.json）
+python3 scripts/verify_ui_app_data_source_mode_ratchet.py
+
+# 与仓库 app gate 一致（含 flutter analyze、上述脚本、flutter test 等）
 bash scripts/gate_repo.sh --scope app
 ```
 
-建议在 CI 正式构建前增加：
+**Makefile 等价目标（节选）：** `make verify-app-mock-isolation`、`make verify-app-lib-test-only-symbols`、`make verify-app-ui-app-data-source-mode-ratchet`。
+
+**正式构建（与 §5.1 R5、`main_prod` 入口一致）：** CI 生成上架/交付用二进制时 **必须** 传入 `--dart-define=APP_DATA_SOURCE=remote`，与 [`quwoquan_app/lib/main_prod.dart`](../../quwoquan_app/lib/main_prod.dart) 中锁 Remote 的 Provider override 一致。
 
 ```bash
 flutter build ipa --dart-define=APP_DATA_SOURCE=remote
@@ -152,6 +164,8 @@ flutter build ipa --dart-define=APP_DATA_SOURCE=remote
 |------|------|
 | [`ui_mock_isolation_allowlist.yaml`](./ui_mock_isolation_allowlist.yaml) | 过渡期豁免；**清理后须删行** |
 | [`scripts/verify_ui_mock_isolation.py`](../../scripts/verify_ui_mock_isolation.py) | 门禁实现 |
+| [`scripts/verify_ui_app_data_source_mode_ratchet.py`](../../scripts/verify_ui_app_data_source_mode_ratchet.py) | UI 数据源分支棘轮（[`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)） |
+| [`scripts/verify_lib_no_test_only_symbols.py`](../../scripts/verify_lib_no_test_only_symbols.py) | lib 内测试专用符号 |
 | [`.cursor/rules/08-mock-data-isolation.mdc`](../../.cursor/rules/08-mock-data-isolation.mdc) | Agent / 人工规则 |
 | [`page_horizontal_quality_pr_checklist.md`](./page_horizontal_quality_pr_checklist.md) | PR 勾选 **Mock 隔离** |
 | [`CR-20260329-007-mock-data-isolation-gate.yaml`](../changelog/CR-20260329-007-mock-data-isolation-gate.yaml) | 变更登记 |
@@ -238,3 +252,5 @@ quwoquan_app/test/support/
 | 2026-03-29 | 增补 §4.1：禁止 lib 内业务与测试/夹具同文件混写；阶段 P0b；后续 verify_lib_no_test_only_symbols 建议 |
 | 2026-03-29 | 新增 §9：Mock/Remote/配置目录目标；`test/support` 隔离根与移植速查表 |
 | 2026-03-30 | **§5.1 功能规格**：冻结「发布态 R1–R6 / 开发测试态 D1–D4 / 测试代码用语边界」验收表；明确 R1–R6 为运行时与工程边界、物理零 Mock 属 P4 |
+| 2026-04-12 | §6 增补：`verify_ui_app_data_source_mode_ratchet`、`verify_lib_no_test_only_symbols`、Makefile 目标与正式构建 define；索引表增加棘轮脚本 |
+| 2026-04-12 | **P1 进展**：`mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider` 收敛于 [`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart)；`lib/ui/**`（豁免开发者设置页）对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线已 **清零**（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)）；[`app_content_repository_provider`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart) 改为依 `remoteDataSourceActiveProvider` 选型 |

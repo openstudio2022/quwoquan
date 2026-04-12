@@ -245,10 +245,11 @@ class _ResonancePageState extends ConsumerState<ResonancePage> {
   }
 
   Widget _buildRecommendTab(Color fg, Color fgSecondary) {
-    final demoBuddies =
-        ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock
-            ? ResonanceBuddyViewData.prototype
-            : const <ResonanceBuddyViewData>[];
+    final demoBuddies = ref
+        .watch(userProfileRepositoryProvider)
+        .resonanceBuddyPreviewWireRows()
+        .map(ResonanceBuddyViewData.fromWireMap)
+        .toList(growable: false);
     return ListView(
       padding: EdgeInsets.all(
         AppSpacing.semantic[DesignSemanticConstants

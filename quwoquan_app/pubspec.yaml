@@ -76,6 +76,10 @@ dependencies:
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.4.0+2
 
+  # Repository 抽象（Mock/Remote 共用）；见 packages/quwoquan_cloud_contracts
+  quwoquan_cloud_contracts:
+    path: ../packages/quwoquan_cloud_contracts
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

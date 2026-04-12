@@ -99,9 +99,11 @@ run_app() {
     python3 scripts/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 scripts/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 scripts/verify_ui_mock_isolation.py || exit 1
+    python3 scripts/verify_lib_no_import_test_tree.py || exit 1
+    python3 scripts/verify_ui_app_data_source_mode_ratchet.py || exit 1
     python3 scripts/verify_lib_no_test_only_symbols.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_lib_no_test_only_symbols"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)

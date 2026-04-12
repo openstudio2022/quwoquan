@@ -47,19 +47,19 @@ final appDataSourceModeProvider =
 /// 聊天 / 圈子 / 助理 Tab 原型数据均为 **codegen DTO 或显式原型模型**，不再对外暴露 `List<Map<String,dynamic>>`。
 abstract class AppContentRepository {
   @Deprecated(
-    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+    '发现区列表请使用 ContentRepository；内嵌目录数据见 ContentMockData（仅组合根/Repository 实现侧）。',
   )
   List<FeedItemDto> get discoveryMomentData;
   @Deprecated(
-    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+    '发现区列表请使用 ContentRepository；内嵌目录数据见 ContentMockData（仅组合根/Repository 实现侧）。',
   )
   List<FeedItemDto> get discoveryPhotoData;
   @Deprecated(
-    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+    '发现区列表请使用 ContentRepository；内嵌目录数据见 ContentMockData（仅组合根/Repository 实现侧）。',
   )
   List<FeedItemDto> get discoveryArticleData;
   @Deprecated(
-    '发现区 fallback 请使用 mockDiscoveryWireFallback + ContentMockData（见 discovery_wire_lookup.dart）；列表态请用 ContentRepository。',
+    '发现区列表请使用 ContentRepository；内嵌目录数据见 ContentMockData（仅组合根/Repository 实现侧）。',
   )
   List<FeedItemDto> get discoveryVideoData;
   @Deprecated(
@@ -69,7 +69,7 @@ abstract class AppContentRepository {
 
   /// 发现 Feed 原型数据中按 postId 定位单行 Map（分享模板圈名/tags 等扩展字段；非 codegen DTO）。
   @Deprecated(
-    '请使用 prototypeDiscoveryWireRowForMock + lookupCanonicalDiscoveryWireRowByPostId（discovery_wire_lookup.dart）。',
+    '请使用 ContentRepository.discoveryPresentationWireForPost；或 lookupCanonicalDiscoveryWireRowByPostId（非 UI）。',
   )
   Map<String, dynamic>? discoveryFeedWireRowByPostId(String postId);
 

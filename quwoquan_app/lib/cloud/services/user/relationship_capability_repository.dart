@@ -234,11 +234,17 @@ class RelationshipCapabilityDto {
 ///   GET /v1/user/{userId}/relationship/capability
 abstract class RelationshipCapabilityRepository {
   Future<RelationshipCapabilityDto> getCapability(String targetUserId);
+
+  /// 是否与全局关系态对齐能力位（内嵌目录为 true；云侧以接口为准）。
+  bool get reconcilesCapabilityWithSharedRelationshipState;
 }
 
 /// Mock 实现：返回本地推导的能力位（用于本地开发和测试）
 class MockRelationshipCapabilityRepository
     extends RelationshipCapabilityRepository {
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => true;
+
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final relationState = UserProfileMockData.relationStateFor(targetUserId);
@@ -261,6 +267,9 @@ class RemoteRelationshipCapabilityRepository
 
   final http.Client _client;
   final String _baseUrl;
+
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {

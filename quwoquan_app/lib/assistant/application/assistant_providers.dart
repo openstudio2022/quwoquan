@@ -278,8 +278,7 @@ final assistantSyncModeProvider = Provider<AssistantSyncMode>((ref) {
   final cfg = ref.watch(assistantConfigurationCenterProvider);
   final rawMode = cfg.readString('sync.mode', 'auto').trim().toLowerCase();
   if (rawMode.isEmpty || rawMode == 'auto') {
-    final dataSourceMode = ref.watch(appDataSourceModeProvider);
-    return dataSourceMode == AppDataSourceMode.remote
+    return ref.watch(contentRepositoryProvider).usesCloudAssistantEdgeSync
         ? AssistantSyncMode.remote
         : AssistantSyncMode.localMock;
   }

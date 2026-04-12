@@ -23,9 +23,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -550,8 +548,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   Map<String, Object?>? _rawPostById(String postId) {
     final external = widget.rawPostsById[postId];
     if (external != null) return external.toObjectMap();
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final wire = prototypeDiscoveryWireRowForMock(isMock, postId);
+    final wire = ref
+        .read(contentRepositoryProvider)
+        .discoveryPresentationWireForPost(postId);
     if (wire == null) return null;
     return Map<String, Object?>.from(wire);
   }

@@ -16,9 +16,7 @@ import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
-import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -78,17 +76,17 @@ class MomentSocialFeed extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final discoveryState = ref.watch(discoveryStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final fallbackRaw = mockDiscoveryMomentWireFallback(isMock);
-    final fallbackArticleRaw = mockDiscoveryArticleWireFallback(isMock);
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final articleDistributionEnabled = ref.watch(
       contentFeatureFlagProvider('enable_article_distribution_profiles'),
     );
+    final embeddedCatalog = ref
+        .watch(contentRepositoryProvider)
+        .usesEmbeddedContentCatalog;
     final shouldShowFollowingArticles =
         feedTabId == 'following' &&
         articleDistributionEnabled &&
-        ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
+        embeddedCatalog;
 
     if (!feedMap.containsKey(feedTabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -96,17 +94,14 @@ class MomentSocialFeed extends ConsumerWidget {
       });
     }
 
-    final dtos =
-        feedAsync.value?.items ??
-        fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
+    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
     final moments = dtos
         .where((post) => post.identity == 'moment')
         .toList(growable: false);
     final articleFallback = shouldShowFollowingArticles
-        ? fallbackArticleRaw
-              .map(postBaseDtoFromMap)
-              .where((post) => post.isArticleLike)
-              .toList(growable: false)
+        ? ref
+              .read(contentRepositoryProvider)
+              .embeddedDiscoveryArticlePostsForFollowingMix()
         : const <PostBaseDto>[];
     final articlesById = <String, PostBaseDto>{
       for (final article in articleFallback) article.id: article,
@@ -413,8 +408,9 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   Map<String, dynamic>? _rawDiscoveryItem(WidgetRef ref, String postId) {
-    final isMock = ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    return prototypeDiscoveryWireRowForMock(isMock, postId);
+    return ref
+        .read(contentRepositoryProvider)
+        .discoveryPresentationWireForPost(postId);
   }
 
   String _extractKeyword(String text) {

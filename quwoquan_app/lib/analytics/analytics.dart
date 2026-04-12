@@ -42,7 +42,10 @@ class AnalyticsService {
     OpsEventRepository? eventRepository,
     AppLogService? appLogService,
   }) : _mode = mode,
-       _eventRepository = eventRepository ?? MockOpsEventRepository(),
+       _eventRepository = eventRepository ??
+           (mode == AppDataSourceMode.remote
+               ? RemoteOpsEventRepository()
+               : MockOpsEventRepository()),
        _appLogService = appLogService ?? AppLogService.instance;
 
   final AppDataSourceMode _mode;

@@ -11,6 +11,9 @@ import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
+  @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }

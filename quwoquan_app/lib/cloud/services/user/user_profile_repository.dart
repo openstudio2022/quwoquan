@@ -25,6 +25,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/ui/user/models/resonance_buddy_view_data.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -163,6 +164,9 @@ abstract class UserProfileRepository {
       limit: limit,
     );
   }
+
+  /// 「我的交集」内嵌预览行；云侧未接 API 时为 empty。
+  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows();
 }
 
 /// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [ProfileSubjectWireDto]。
@@ -682,6 +686,13 @@ class MockUserProfileRepository extends UserProfileRepository {
       'isFollowedBy': UserProfileMockData.targetFollowsViewer(profileSubjectId),
       'isMutual': relationState == 'mutual',
     };
+  }
+
+  @override
+  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows() {
+    return ResonanceBuddyViewData.prototype
+        .map((e) => e.toWireMap())
+        .toList(growable: false);
   }
 }
 
@@ -1369,6 +1380,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       throw Exception('activatePersona failed: ${resp.statusCode}');
     }
   }
+
+  @override
+  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows() => const [];
 
   // ── Private helpers ───────────────────────────────────────────────────────
 

@@ -11,7 +11,6 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
@@ -311,10 +310,8 @@ class _HomePageState extends ConsumerState<HomePage>
     if (viewerPosts.isEmpty) {
       return;
     }
-    final isMock =
-        ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
     final rawPostsById = homeFollowingMediaViewerRaws(
-      isMock: isMock,
+      content: ref.read(contentRepositoryProvider),
       viewerPosts: viewerPosts,
     );
     final postViews = viewerPosts

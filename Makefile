@@ -1,5 +1,6 @@
 .PHONY: gate
 .PHONY: verify-app-mock-isolation
+.PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
 .PHONY: verify-app-page-abc-governance
 .PHONY: verify-app-page-abc-governance-enforce-a
@@ -9,6 +10,7 @@
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-session-b-legacy
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
+.PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -27,6 +29,14 @@ verify-app-mock-isolation:
 
 verify-app-lib-test-only-symbols:
 	@python3 scripts/verify_lib_no_test_only_symbols.py
+
+# lib 不得 import test/ 树（见 specs/gates/mock_test_separation_roadmap.md）
+verify-app-lib-no-test-import:
+	@python3 scripts/verify_lib_no_import_test_tree.py
+
+# UI 层 AppDataSourceMode.mock / appDataSourceModeProvider 引用棘轮（见 specs/gates/ui_app_data_source_mode_baseline.json）
+verify-app-ui-app-data-source-mode-ratchet:
+	@python3 scripts/verify_ui_app_data_source_mode_ratchet.py
 
 # 页面横向质量：矩阵列合法 + 磁盘路径与矩阵一致 + P2 清单 ⊆（与 gate app 段同向子集）
 verify-app-page-horizontal-quality:

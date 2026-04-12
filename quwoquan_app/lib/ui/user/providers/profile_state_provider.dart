@@ -104,13 +104,14 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final profileSubjectId = profile.profileSubjectId.isNotEmpty
           ? profile.profileSubjectId
           : _userId;
-      final isRemote =
-          ref.read(appDataSourceModeProvider) == AppDataSourceMode.remote;
+      final reconcileCap = ref
+          .read(relationshipCapabilityRepositoryProvider)
+          .reconcilesCapabilityWithSharedRelationshipState;
       RelationshipCapabilityDto? seededCapability;
       final sharedFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(profileSubjectId);
-      if (!isRemote) {
+      if (reconcileCap) {
         try {
           seededCapability = await ref
               .read(relationshipCapabilityRepositoryProvider)
@@ -159,7 +160,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .isFollowing(targetUserId);
       final capRepo = ref.read(relationshipCapabilityRepositoryProvider);
       var cap = await capRepo.getCapability(targetUserId);
-      if (ref.read(appDataSourceModeProvider) != AppDataSourceMode.remote &&
+      if (ref
+              .read(relationshipCapabilityRepositoryProvider)
+              .reconcilesCapabilityWithSharedRelationshipState &&
           seededFollowing &&
           !cap.viewerFollowsTarget) {
         cap = _copyCapabilityWithFollowState(cap, true);

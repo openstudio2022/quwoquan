@@ -41,6 +41,7 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
+import 'package:quwoquan_app/core/di/cloud_repository_binding.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -869,10 +870,11 @@ final clientStateSyncOutboxProvider =
 
 final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteAssistantRepository();
-  }
-  return MockAssistantRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteAssistantRepository.new,
+    mock: MockAssistantRepository.new,
+  );
 });
 
 final personalContentAccessProvider =
@@ -897,35 +899,41 @@ final assistantContentIdentityIndexEnabledProvider = Provider<bool>((ref) {
 /// Content Repository（按业务对象组织的端侧入口）
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteContentRepository();
-  }
-  return MockContentRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteContentRepository.new,
+    mock: MockContentRepository.new,
+  );
 });
 
 /// Homepage Repository（共享主页搜索、详情、认领与治理）
 final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteHomepageRepository()
-      : MockHomepageRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteHomepageRepository.new,
+    mock: MockHomepageRepository.new,
+  );
 });
 
 /// Integration Repository（外部能力集成：位置 nearby / search）
 final integrationRepositoryProvider = Provider<IntegrationRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteIntegrationRepository()
-      : const MockIntegrationRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteIntegrationRepository.new,
+    mock: () => const MockIntegrationRepository(),
+  );
 });
 
 /// Chat Repository（按业务对象组织的端侧入口）
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteChatRepository();
-  }
-  return MockChatRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteChatRepository.new,
+    mock: MockChatRepository.new,
+  );
 });
 
 /// 会话缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
@@ -958,10 +966,11 @@ final localCircleGroupSnapshotStoreProvider =
 /// User Repository（按业务对象组织的端侧入口）
 final userRepositoryProvider = Provider<UserRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteUserRepository();
-  }
-  return MockUserRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteUserRepository.new,
+    mock: MockUserRepository.new,
+  );
 });
 
 /// 当前活动分身上下文。mock 模式下允许回退；remote 模式由调用方自行决定是否 fail-closed。
@@ -994,19 +1003,21 @@ final activePersonaContextProvider =
 /// Auth Repository（登录/凭证/子账号管理）
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteAuthRepository();
-  }
-  return MockAuthRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteAuthRepository.new,
+    mock: MockAuthRepository.new,
+  );
 });
 
 /// Invite Repository（邀请归因）
 final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteInviteRepository();
-  }
-  return MockInviteRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteInviteRepository.new,
+    mock: MockInviteRepository.new,
+  );
 });
 
 /// Behavior Repository（行为上报，驱动实时推荐）
@@ -1027,50 +1038,62 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
 /// UserProfile Repository（用户主页：帖子 / 作品集 / 生活记录）
 final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteUserProfileRepository()
-      : const MockUserProfileRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteUserProfileRepository.new,
+    mock: () => const MockUserProfileRepository(),
+  );
 });
 
 /// ContentInteraction Repository（like/unlike/favorite/unfavorite）
 final contentInteractionRepositoryProvider =
     Provider<ContentInteractionRepository>((ref) {
       final mode = ref.watch(appDataSourceModeProvider);
-      return mode == AppDataSourceMode.remote
-          ? RemoteContentInteractionRepository()
-          : MockContentInteractionRepository();
+      return cloudRepositoryImplForMode(
+        mode,
+        remote: RemoteContentInteractionRepository.new,
+        mock: MockContentInteractionRepository.new,
+      );
     });
 
 /// Block Repository（拉黑/取消拉黑用户）
 final blockRepositoryProvider = Provider<BlockRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteBlockRepository()
-      : MockBlockRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteBlockRepository.new,
+    mock: MockBlockRepository.new,
+  );
 });
 
 /// Report Repository（内容举报）
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteReportRepository()
-      : MockReportRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteReportRepository.new,
+    mock: MockReportRepository.new,
+  );
 });
 
 /// KeywordBlock Repository（屏蔽词设置）
 final keywordBlockRepositoryProvider = Provider<KeywordBlockRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteKeywordBlockRepository()
-      : MockKeywordBlockRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteKeywordBlockRepository.new,
+    mock: MockKeywordBlockRepository.new,
+  );
 });
 
 /// Circle Repository（圈子管理、成员、存储、Feed）
 final circleRepositoryProvider = Provider<CircleRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteCircleRepository()
-      : MockCircleRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteCircleRepository.new,
+    mock: MockCircleRepository.new,
+  );
 });
 
 final activePersonaContextLoaderProvider = Provider<PersonaContextLoader>((
@@ -1106,43 +1129,53 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
 /// RTC Repository（实时通话：发起、接听、挂断、录制等）
 final rtcRepositoryProvider = Provider<RtcRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteRtcRepository()
-      : MockRtcRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteRtcRepository.new,
+    mock: MockRtcRepository.new,
+  );
 });
 
 /// RelationshipCapability Repository（关系能力位投影，用户主页五态按钮矩阵 + RTC 门禁）
 final relationshipCapabilityRepositoryProvider =
     Provider<RelationshipCapabilityRepository>((ref) {
       final mode = ref.watch(appDataSourceModeProvider);
-      return mode == AppDataSourceMode.remote
-          ? RemoteRelationshipCapabilityRepository()
-          : MockRelationshipCapabilityRepository();
+      return cloudRepositoryImplForMode(
+        mode,
+        remote: RemoteRelationshipCapabilityRepository.new,
+        mock: MockRelationshipCapabilityRepository.new,
+      );
     });
 
 /// CallSettings Repository（来电铃声与响铃偏好）
 final callSettingsRepositoryProvider = Provider<CallSettingsRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteCallSettingsRepository()
-      : MockCallSettingsRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteCallSettingsRepository.new,
+    mock: MockCallSettingsRepository.new,
+  );
 });
 
 /// AppearanceSettings Repository（外观与字号偏好）
 final appearanceSettingsRepositoryProvider =
     Provider<AppearanceSettingsRepository>((ref) {
       final mode = ref.watch(appDataSourceModeProvider);
-      return mode == AppDataSourceMode.remote
-          ? RemoteAppearanceSettingsRepository()
-          : MockAppearanceSettingsRepository();
+      return cloudRepositoryImplForMode(
+        mode,
+        remote: RemoteAppearanceSettingsRepository.new,
+        mock: MockAppearanceSettingsRepository.new,
+      );
     });
 
 /// Greeting Repository（打招呼请求箱）
 final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteGreetingRepository()
-      : MockGreetingRepository();
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteGreetingRepository.new,
+    mock: MockGreetingRepository.new,
+  );
 });
 
 /// Media Upload Manager（统一媒体上传队列 + 并发 + 重试 + 离线恢复）

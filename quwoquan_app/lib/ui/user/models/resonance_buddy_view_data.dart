@@ -17,6 +17,24 @@ class ResonanceBuddyViewData {
   final String bio;
   final int resonancePoints;
 
+  Map<String, dynamic> toWireMap() => <String, dynamic>{
+    'profileSubjectId': profileSubjectId,
+    'displayName': displayName,
+    'avatarUrl': avatarUrl,
+    'bio': bio,
+    'resonancePoints': resonancePoints,
+  };
+
+  factory ResonanceBuddyViewData.fromWireMap(Map<String, dynamic> m) {
+    return ResonanceBuddyViewData(
+      profileSubjectId: (m['profileSubjectId'] ?? '').toString(),
+      displayName: (m['displayName'] ?? '').toString(),
+      avatarUrl: (m['avatarUrl'] ?? '').toString(),
+      bio: (m['bio'] ?? '').toString(),
+      resonancePoints: (m['resonancePoints'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   /// 与历史 ResonanceDashboard 一致的演示数据（Remote 未接交集 API 前）。
   static const List<ResonanceBuddyViewData> prototype = <ResonanceBuddyViewData>[
     ResonanceBuddyViewData(

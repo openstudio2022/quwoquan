@@ -11,8 +11,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
@@ -388,11 +386,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildVideoImmersionView(bool isDark, {String tabId = 'video'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final fallbackRaw = mockDiscoveryVideoWireFallback(isMock);
-    final dtos =
-        feedAsync.value?.items ??
-        fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
+    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
     final videos = dtos;
     final hasError = feedAsync.value?.error != null;
     if (!feedMap.containsKey(tabId)) {
@@ -561,11 +555,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildMomentContent(bool isDark, {String tabId = 'moment'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final fallbackRaw = mockDiscoveryMomentWireFallback(isMock);
-    final dtos =
-        feedAsync.value?.items ??
-        fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
+    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
     final moments = dtos
         .where((post) => post.identity == 'moment')
         .toList(growable: false);
@@ -640,11 +630,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildArticleContent(bool isDark, {String tabId = 'article'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final fallbackRaw = mockDiscoveryArticleWireFallback(isMock);
-    final dtos =
-        feedAsync.value?.items ??
-        fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
+    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
     final articles = dtos
         .where((post) => post.isArticleLike)
         .toList(growable: false);
@@ -761,11 +747,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final homeState = ref.watch(discoveryStateProvider);
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final isMock = ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final fallbackRaw = mockDiscoveryPhotoWireFallback(isMock);
-    final dtos =
-        feedAsync.value?.items ??
-        fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
+    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
     final photos = dtos
         .where(
           (post) => post.identity == 'work' && post.displayFormat == 'image',
@@ -961,9 +943,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
-    final isMock = ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
     final raw =
-        prototypeDiscoveryWireRowForMock(isMock, post.id) ?? post.toMap();
+        ref.read(contentRepositoryProvider).discoveryPresentationWireForPost(
+              post.id,
+            ) ??
+            post.toMap();
     final tags =
         (raw['tags'] as List?)
             ?.map((item) => item.toString().trim())
@@ -984,8 +968,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   String _sourceCircleNameForPost(PostBaseDto post) {
-    final isMock = ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
-    final raw = prototypeDiscoveryWireRowForMock(isMock, post.id);
+    final raw = ref
+        .read(contentRepositoryProvider)
+        .discoveryPresentationWireForPost(post.id);
     return raw?['circleName']?.toString().trim() ?? '';
   }
 

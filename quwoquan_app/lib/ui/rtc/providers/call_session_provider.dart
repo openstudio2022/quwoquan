@@ -8,7 +8,6 @@ import 'package:quwoquan_app/cloud/rtc/models/call_session_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
@@ -103,8 +102,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
   RtcRepository get _repo => ref.read(rtcRepositoryProvider);
   LiveKitRoomService get _lkRoom => ref.read(liveKitRoomServiceProvider);
-  bool get _isMockMode =>
-      ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
+  bool get _usesLocalRtcSimulation =>
+      ref.read(rtcRepositoryProvider).supportsDevCallSimulation;
 
   String get _livekitUrl {
     final base = CloudRuntimeConfig.gatewayBaseUrl;
@@ -303,7 +302,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     required String callType,
     String? conversationId,
   }) {
-    if (!_isMockMode) return;
+    if (!_usesLocalRtcSimulation) return;
     final session = CallSessionDto(
       id: callId,
       callType: callType,
@@ -336,7 +335,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   void debugSimulateRemoteAnswer() {
-    if (!_isMockMode) return;
+    if (!_usesLocalRtcSimulation) return;
     final session = state.session;
     if (session == null) return;
     final answered = session.copyWith(
@@ -357,7 +356,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   void debugSimulateRejected({bool timeout = false}) {
-    if (!_isMockMode) return;
+    if (!_usesLocalRtcSimulation) return;
     final session = state.session;
     if (session == null) {
       state = state.copyWith(status: CallStatus.ended, isLoading: false);

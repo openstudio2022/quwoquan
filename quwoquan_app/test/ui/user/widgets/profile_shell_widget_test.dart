@@ -19,6 +19,9 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 /// 在 UI 测试中使 capability 保持 null（legacy 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
+  @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }

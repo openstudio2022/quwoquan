@@ -180,6 +180,9 @@ class _EmptyMessagesChatRepository extends MockChatRepository {
 
 class _SameInterestCapabilityRepository extends RelationshipCapabilityRepository {
   @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
+  @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
       'viewerSubAccountId': 'user_001',
@@ -198,6 +201,9 @@ class _SameInterestCapabilityRepository extends RelationshipCapabilityRepository
 }
 
 class _FollowingOnlyCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{

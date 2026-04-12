@@ -3,8 +3,7 @@ import 'package:quwoquan_app/cloud/services/app_content/app_content_repository_m
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 final appContentRepositoryProvider = Provider<AppContentRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
+  if (ref.watch(appDataSourceModeProvider) == AppDataSourceMode.remote) {
     return RemoteAppContentRepository();
   }
   return MockAppContentRepository();

@@ -174,26 +174,21 @@ class CreateCircleService {
   }
 }
 
-/// 仅 `AppDataSourceMode.mock` 下由发布确认页展示；Remote/Release 默认不传（见 [CreatePage]）。
-const List<CreateCircleOption> mockRecommendedCircles = <CreateCircleOption>[
-  CreateCircleOption(
-    id: 'rec-city',
-    name: '城市探索',
-    memberCount: 890,
-    postCount: 126,
-    coverUrl:
-        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400',
-    recommendationReason: '与你兴趣相似',
-    isJoined: false,
-  ),
-  CreateCircleOption(
-    id: 'rec-run',
-    name: '跑步日记',
-    memberCount: 312,
-    postCount: 58,
-    coverUrl:
-        'https://images.unsplash.com/photo-1486218119243-13883505764c?q=80&w=400',
-    recommendationReason: '同城热门',
-    isJoined: false,
-  ),
-];
+/// 发布确认页推荐圈：数据来自 [CircleRepository.publishFlowRecommendedCircles]（内嵌目录有值，云侧为空）。
+List<CreateCircleOption> publishFlowRecommendedCircleOptions(CircleRepository circles) {
+  final dtos = circles.publishFlowRecommendedCircles();
+  if (dtos.isEmpty) return const <CreateCircleOption>[];
+  const reasons = <String, String>{
+    'rec-city': '与你兴趣相似',
+    'rec-run': '同城热门',
+  };
+  return dtos
+      .map(
+        (dto) => CreateCircleOption.fromCircleDto(
+          dto,
+          isJoined: false,
+          recommendationReason: reasons[dto.id],
+        ),
+      )
+      .toList(growable: false);
+}
