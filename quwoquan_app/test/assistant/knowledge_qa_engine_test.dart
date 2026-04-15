@@ -11,13 +11,13 @@ class _MockWebSearchTool implements AssistantTool {
   String get name => 'web_search';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final provider = (arguments['provider'] as String?) ?? 'perplexity';
     if (provider == 'perplexity') {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: true,
         message: 'ok',
-        data: <String, dynamic>{
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
           'references': <Map<String, dynamic>>[
             <String, dynamic>{
               'title': '综合天气摘要',
@@ -25,14 +25,14 @@ class _MockWebSearchTool implements AssistantTool {
               'url': '',
             },
           ],
-        },
+        }),
       );
     }
     if (provider == 'brave') {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: true,
         message: 'ok',
-        data: <String, dynamic>{
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
           'references': <Map<String, dynamic>>[
             <String, dynamic>{
               'title': '杭州天气预报',
@@ -40,7 +40,7 @@ class _MockWebSearchTool implements AssistantTool {
               'url': 'https://example.com/weather',
             },
           ],
-        },
+        }),
       );
     }
     return const AssistantToolResult(

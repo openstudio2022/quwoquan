@@ -7,7 +7,7 @@
 - 从问句、历史记忆、local_context 补全关键槽位。
 
 ## S2_工具执行
-- 按 toolPlan 调用工具并收集观测。
+- 按 toolCalls 调用工具并收集观测。
 
 ## S3_结果渲染
 - 输出标准 JSON 与 Markdown。

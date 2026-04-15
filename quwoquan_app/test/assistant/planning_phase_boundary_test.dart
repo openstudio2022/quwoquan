@@ -67,7 +67,7 @@ void main() {
                     '{}',
               )
               as Map<String, dynamic>;
-      expect(searchIterationState['maxIterations'], 6);
+      expect(searchIterationState['maxIterations'], 5);
       expect(searchIterationState['currentIteration'], 1);
       final understandState = understandOutput.state;
       expect(understandState, isNotNull);
@@ -255,7 +255,6 @@ class _CapturePlannerProvider implements AssistantLlmProvider {
           'userFacingSummary': '我先核对深圳今天的实时天气。',
           'intentSummary': '用户需要实时天气结论。',
           'concernPoints': <String>['天气现状', '体感'],
-          'queryDesignSummary': '优先检索最新天气实况。',
         },
         'intentGraph': const <String, dynamic>{
           'userGoal': '获取深圳今天实时天气',

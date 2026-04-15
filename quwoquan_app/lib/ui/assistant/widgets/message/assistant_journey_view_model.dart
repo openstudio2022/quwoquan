@@ -7,7 +7,12 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
-enum AssistantJourneyBlockKind { narrative, searchSummary, verificationSummary }
+enum AssistantJourneyBlockKind {
+  narrative,
+  referenceStats,
+  searchSummary,
+  verificationSummary,
+}
 
 class AssistantJourneyReferenceViewModel {
   const AssistantJourneyReferenceViewModel({
@@ -331,8 +336,6 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
               .toList(growable: false);
           if (frame.stepId == ProcessStepId.retrievalProcessing &&
               refs.isNotEmpty) {
-            // 仅按「消息级」检索摘要去重：journey fallback 会在帧内把 processingSummary
-            // 设成与 headline 相同，若再用帧内 summary 剥离会把整条 headline 清空。
             final summary = retrievalProcessing.processingSummary.trim();
             if (summary.isNotEmpty) {
               headline = _stripRetrievalProcessingSummaryFromCopy(
@@ -343,6 +346,9 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
                 detail,
                 retrievalProcessing.processingSummary,
               );
+            }
+            if (headline.isEmpty && summary.isNotEmpty) {
+              headline = summary;
             }
           }
           return AssistantJourneyBlockViewModel(
@@ -367,98 +373,15 @@ List<AssistantJourneyBlockViewModel> _buildBlocksFromDisplayState({
   required AssistantProcessDisplayState process,
   required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
-  final grouped = <ProcessStepId, List<AssistantProcessDisplayBlock>>{};
-  for (final block in process.blocks.where(_hasVisibleProcessBlockForUi)) {
-    grouped
-        .putIfAbsent(block.stepId, () => <AssistantProcessDisplayBlock>[])
-        .add(block);
-  }
-  final orderedSteps = grouped.keys.toList(growable: false)
-    ..sort(
-      (a, b) =>
-          assistantProcessStepOrder(a).compareTo(assistantProcessStepOrder(b)),
-    );
-  return orderedSteps
-      .map((stepId) {
-        final stepBlocks =
-            grouped[stepId] ?? const <AssistantProcessDisplayBlock>[];
-        var headline = '';
-        var detail = '';
-        final items = <String>[];
-        final references = <AssistantJourneyReferenceViewModel>[];
-        for (final block in stepBlocks) {
-          final title = _sanitizeProcessText(
-            block.title.trim(),
-            stepId: stepId,
-          );
-          final body = _sanitizeProcessText(block.body.trim(), stepId: stepId);
-          if (headline.isEmpty) {
-            if (title.isNotEmpty) {
-              headline = title;
-            } else if (body.isNotEmpty) {
-              headline = body;
-            }
-          } else if (detail.isEmpty && body.isNotEmpty && body != headline) {
-            detail = body;
-          }
-          items.addAll(
-            block.items
-                .map(
-                  (item) => _sanitizeProcessText(
-                    _displayItemText(item),
-                    stepId: stepId,
-                  ),
-                )
-                .where((item) => item.isNotEmpty),
-          );
-          references.addAll(
-            block.references
-                .map(
-                  (reference) => AssistantJourneyReferenceViewModel(
-                    title: reference.title.trim(),
-                    url: reference.url.trim(),
-                    source: reference.source.trim(),
-                  ),
-                )
-                .where(
-                  (reference) =>
-                      reference.title.isNotEmpty || reference.url.isNotEmpty,
-                ),
-          );
-        }
-        final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
-            ? retrievalProcessing.acceptedDocumentCount
-            : references.length;
-        final processedCount = retrievalProcessing.processedDocumentCount > 0
-            ? retrievalProcessing.processedDocumentCount
-            : acceptedCount;
-        if (stepId == ProcessStepId.retrievalProcessing &&
-            references.isNotEmpty) {
-          headline = _stripRetrievalProcessingSummaryFromCopy(
-            headline,
-            retrievalProcessing.processingSummary,
-          );
-          detail = _stripRetrievalProcessingSummaryFromCopy(
-            detail,
-            retrievalProcessing.processingSummary,
-          );
-        }
-        return AssistantJourneyBlockViewModel(
-          kind: stepId == ProcessStepId.retrievalProcessing
-              ? AssistantJourneyBlockKind.searchSummary
-              : AssistantJourneyBlockKind.narrative,
-          stageId: stepId,
-          headline: headline,
-          detail: detail,
-          items: items,
-          referenceLabel: references.isNotEmpty
-              ? UITextConstants.assistantProcessReferenceDigestTemplate
-                    .replaceFirst('%s', processedCount.toString())
-                    .replaceFirst('%s', acceptedCount.toString())
-              : '',
-          references: references,
-        );
-      })
+  return process.blocks
+      .where(_hasVisibleProcessBlockForUi)
+      .map(
+        (block) => _buildJourneyBlockFromDisplayStateBlock(
+          block: block,
+          retrievalProcessing: retrievalProcessing,
+        ),
+      )
+      .whereType<AssistantJourneyBlockViewModel>()
       .toList(growable: false);
 }
 
@@ -572,6 +495,9 @@ String _resolveSummary({
 
 String _summaryForProcessBlocks(List<AssistantProcessDisplayBlock> blocks) {
   for (final block in blocks) {
+    if (_isReferenceStatsProcessBlock(block)) {
+      continue;
+    }
     if (block.title.trim().isNotEmpty) {
       return block.title.trim();
     }
@@ -580,6 +506,112 @@ String _summaryForProcessBlocks(List<AssistantProcessDisplayBlock> blocks) {
     }
   }
   return '';
+}
+
+AssistantJourneyBlockViewModel? _buildJourneyBlockFromDisplayStateBlock({
+  required AssistantProcessDisplayBlock block,
+  required RetrievalProcessingSnapshot retrievalProcessing,
+}) {
+  final stepId = block.stepId;
+  final references = block.references
+      .map(
+        (reference) => AssistantJourneyReferenceViewModel(
+          title: reference.title.trim(),
+          url: reference.url.trim(),
+          source: reference.source.trim(),
+        ),
+      )
+      .where(
+        (reference) => reference.title.isNotEmpty || reference.url.isNotEmpty,
+      )
+      .toList(growable: false);
+  if (_isReferenceStatsProcessBlock(block)) {
+    final explicitLabel = _sanitizeProcessText(
+      block.title.trim(),
+      stepId: stepId,
+    );
+    final statsLabel = explicitLabel.isNotEmpty
+        ? explicitLabel
+        : _referenceDigestLabel(
+            retrievalProcessing: retrievalProcessing,
+            references: references,
+          );
+    if (statsLabel.isEmpty && references.isEmpty) {
+      return null;
+    }
+    return AssistantJourneyBlockViewModel(
+      kind: AssistantJourneyBlockKind.referenceStats,
+      stageId: stepId,
+      headline: statsLabel,
+      references: references,
+    );
+  }
+
+  final title = _sanitizeProcessText(block.title.trim(), stepId: stepId);
+  final body = _sanitizeProcessText(block.body.trim(), stepId: stepId);
+  final items = block.items
+      .map(
+        (item) => _sanitizeProcessText(
+          _displayItemText(item),
+          stepId: stepId,
+        ),
+      )
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  var headline = '';
+  var detail = '';
+  if (title.isNotEmpty) {
+    headline = title;
+    if (body.isNotEmpty && body != title) {
+      detail = body;
+    }
+  } else if (body.isNotEmpty) {
+    headline = body;
+  }
+  if (headline.isEmpty &&
+      detail.isEmpty &&
+      items.isEmpty &&
+      references.isEmpty) {
+    return null;
+  }
+  return AssistantJourneyBlockViewModel(
+    kind: stepId == ProcessStepId.retrievalProcessing
+        ? AssistantJourneyBlockKind.searchSummary
+        : AssistantJourneyBlockKind.narrative,
+    stageId: stepId,
+    headline: headline,
+    detail: detail,
+    items: items,
+    referenceLabel: references.isNotEmpty
+        ? _referenceDigestLabel(
+            retrievalProcessing: retrievalProcessing,
+            references: references,
+          )
+        : '',
+    references: references,
+  );
+}
+
+bool _isReferenceStatsProcessBlock(AssistantProcessDisplayBlock block) {
+  return block.blockId == 'retrieval_reference_stats';
+}
+
+String _referenceDigestLabel({
+  required RetrievalProcessingSnapshot retrievalProcessing,
+  required List<AssistantJourneyReferenceViewModel> references,
+}) {
+  final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
+      ? retrievalProcessing.acceptedDocumentCount
+      : references.length;
+  final processedCount = retrievalProcessing.processedDocumentCount > 0
+      ? retrievalProcessing.processedDocumentCount
+      : acceptedCount;
+  if (processedCount <= 0 && acceptedCount <= 0) {
+    return '';
+  }
+  return UITextConstants.assistantProcessReferenceDigestTemplate
+      .replaceFirst('%s', processedCount.toString())
+      .replaceFirst('%s', acceptedCount.toString());
 }
 
 JourneyStageStatus _statusForProcessBlocks(
@@ -710,19 +742,16 @@ String _headlineForFrame(ProcessTimelineFrame? frame) {
   if (frame == null) return '';
   final lines = _sanitizeProcessLines(frame.headline, stepId: frame.stepId);
   if (lines.isNotEmpty) {
-    return lines.first;
+    return lines.join('\n');
   }
   final detailLines = _sanitizeProcessLines(frame.detail, stepId: frame.stepId);
-  return detailLines.isNotEmpty ? detailLines.first : '';
+  return detailLines.isNotEmpty ? detailLines.join('\n') : '';
 }
 
 String _detailForFrame(
   ProcessTimelineFrame frame, {
   required RetrievalProcessingSnapshot fallbackRetrievalProcessing,
 }) {
-  if (frame.stepId == ProcessStepId.understanding) {
-    return '';
-  }
   if (frame.stepId == ProcessStepId.retrievalProcessing &&
       !_retrievalFrameHasSnapshotFallbackSignals(frame)) {
     return '';
@@ -817,7 +846,8 @@ String _sanitizeProcessSingleLine(String raw, {required ProcessStepId stepId}) {
   return normalized;
 }
 
-/// 引用块已足够表达检索结果时，不在 headline/detail 重复展示 [RetrievalProcessingSnapshot.processingSummary] 类低信号成答前状态句。
+/// 当 headline 与 processingSummary 完全相同时剥除避免重复；
+/// 若 processingSummary 是有实质叙事内容的子串（>15 字且非计数模板），保留 headline 不剥离。
 String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
   final t = text.trim();
   final s = summary.trim();
@@ -826,9 +856,6 @@ String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
   }
   if (t == s) {
     return '';
-  }
-  if (t.contains(s)) {
-    return t.replaceAll(s, '').trim();
   }
   return t;
 }

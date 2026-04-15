@@ -9,7 +9,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/components/pageflip_book/pageflip_book.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 const _artifactDirectory =
@@ -36,8 +35,6 @@ void main() {
               paperTexture: ArticlePaperTexture.eyeCare,
               showFooterPageLabel: false,
               pagePadding: EdgeInsets.zero,
-              preferSoftBackwardFlip: true,
-              useForwardMirroredBackwardPath: true,
               metrics: ArticleCanvasMetrics(
                 aspectRatio: 0.72,
                 outerPadding: EdgeInsets.all(8),
@@ -80,12 +77,11 @@ void main() {
     await gesture.moveBy(const Offset(72, -8));
     await tester.pump(const Duration(milliseconds: 64));
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
-    expect(find.byType(ArticlePageCurlRenderer), findsOneWidget);
     await _takeAndPersistScreenshot(binding, 'm2_typography_backward_quarter');
 
     await gesture.moveBy(const Offset(76, -10));
     await tester.pump(const Duration(milliseconds: 64));
-    expect(find.byType(ArticlePageCurlRenderer), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
     await _takeAndPersistScreenshot(binding, 'm2_typography_backward_half');
 
     await gesture.moveBy(const Offset(80, -10));

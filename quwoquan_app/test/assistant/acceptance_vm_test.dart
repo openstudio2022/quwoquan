@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -172,7 +172,7 @@ class _DeterministicWebSearchTool implements AssistantTool {
       'Deterministic web search stub for VM acceptance tests.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
       return const AssistantToolResult(
@@ -184,7 +184,7 @@ class _DeterministicWebSearchTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message: '检索结果：杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'stub',
         'summary': '杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
         'raw': <String, dynamic>{
@@ -201,7 +201,7 @@ class _DeterministicWebSearchTool implements AssistantTool {
             },
           ],
         },
-      },
+      }),
     );
   }
 }
@@ -214,7 +214,7 @@ class _DeterministicSearchTool implements AssistantTool {
   String get description => 'Deterministic unified search stub for VM tests.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
       return const AssistantToolResult(
@@ -226,7 +226,7 @@ class _DeterministicSearchTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message: '统一检索完成',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'summary': '统一检索命中：杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
         'results': <Map<String, dynamic>>[
           <String, dynamic>{
@@ -235,7 +235,7 @@ class _DeterministicSearchTool implements AssistantTool {
             'url': 'https://example.com/search/weather/hangzhou',
           },
         ],
-      },
+      }),
     );
   }
 }

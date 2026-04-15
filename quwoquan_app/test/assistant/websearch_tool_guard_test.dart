@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 void main() {
   test('已配置代理时优先使用可配置 provider 而不是直接回退 duckduckgo', () async {
@@ -34,7 +35,9 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{'query': '深圳天气'});
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{'query': '深圳天气'}),
+    );
 
     expect(result.success, isTrue);
     expect(
@@ -72,12 +75,14 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': '深圳今天天气怎么样',
-      'domainId': 'weather',
-      'referenceNowIso': '2026-04-09T10:30:00.000',
-      'timezone': 'Asia/Shanghai',
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': '深圳今天天气怎么样',
+        'domainId': 'weather',
+        'referenceNowIso': '2026-04-09T10:30:00.000',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(result.success, isTrue);
     expect(capturedQuery, contains('深圳'));
@@ -115,12 +120,14 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': '深圳今天天气怎么样',
-      'domainId': 'weather',
-      'referenceNowIso': '2026-04-09T10:30:00.000',
-      'timezone': 'Asia/Shanghai',
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': '深圳今天天气怎么样',
+        'domainId': 'weather',
+        'referenceNowIso': '2026-04-09T10:30:00.000',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(result.success, isTrue);
     final refs =
@@ -177,11 +184,13 @@ void main() {
         }),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '今天A股为什么大涨 2024年10月28日',
-        'referenceNowIso': '2026-04-09T10:30:00+08:00',
-        'timezone': 'Asia/Shanghai',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '今天A股为什么大涨 2024年10月28日',
+          'referenceNowIso': '2026-04-09T10:30:00+08:00',
+          'timezone': 'Asia/Shanghai',
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(capturedQuery, contains('2026-04-09'));
@@ -233,13 +242,15 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': 'A股为什么大涨 2024年10月',
-      'timeScope': 'year_month_day',
-      'timePoint': '2026-04-07',
-      'referenceNowIso': '2026-04-08T10:30:00.000',
-      'timezone': 'Asia/Shanghai',
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': 'A股为什么大涨 2024年10月',
+        'timeScope': 'year_month_day',
+        'timePoint': '2026-04-07',
+        'referenceNowIso': '2026-04-08T10:30:00.000',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(result.success, isTrue);
     expect(capturedQuery, contains('2026-04-07'));
@@ -279,27 +290,33 @@ void main() {
       }),
     );
 
-    final first = await tool.execute(<String, dynamic>{
-      'query': 'A股为什么大涨',
-      'timeScope': 'year_month_day',
-      'timePoint': '2026-04-07',
-      'referenceNowIso': '2026-04-08T10:30:00+08:00',
-      'timezone': 'Asia/Shanghai',
-    });
-    final second = await tool.execute(<String, dynamic>{
-      'query': 'A股为什么大涨',
-      'timeScope': 'year_month_day',
-      'timePoint': '2026-04-07',
-      'referenceNowIso': '2026-04-08T10:30:00+08:00',
-      'timezone': 'Asia/Shanghai',
-    });
-    final third = await tool.execute(<String, dynamic>{
-      'query': 'A股为什么大涨',
-      'timeScope': 'year_month_day',
-      'timePoint': '2026-04-07',
-      'referenceNowIso': '2026-04-09T10:30:00+08:00',
-      'timezone': 'Asia/Shanghai',
-    });
+    final first = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': 'A股为什么大涨',
+        'timeScope': 'year_month_day',
+        'timePoint': '2026-04-07',
+        'referenceNowIso': '2026-04-08T10:30:00+08:00',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
+    final second = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': 'A股为什么大涨',
+        'timeScope': 'year_month_day',
+        'timePoint': '2026-04-07',
+        'referenceNowIso': '2026-04-08T10:30:00+08:00',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
+    final third = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': 'A股为什么大涨',
+        'timeScope': 'year_month_day',
+        'timePoint': '2026-04-07',
+        'referenceNowIso': '2026-04-09T10:30:00+08:00',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(first.success, isTrue);
     expect(second.success, isTrue);
@@ -350,11 +367,13 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': '深圳今天天气怎么样',
-      'referenceNowIso': '2026-04-09T10:30:00.000',
-      'timezone': 'Asia/Shanghai',
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': '深圳今天天气怎么样',
+        'referenceNowIso': '2026-04-09T10:30:00.000',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(result.success, isTrue);
     final refs =
@@ -400,7 +419,9 @@ void main() {
         }),
       );
 
-      final result = await tool.execute(<String, dynamic>{'query': 'A股为什么大涨'});
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{'query': 'A股为什么大涨'}),
+      );
 
       expect(result.success, isTrue);
       final refs =
@@ -440,10 +461,12 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': '政策通告',
-      'authorityDomains': <String>['gov.cn'],
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': '政策通告',
+        'authorityDomains': <String>['gov.cn'],
+      }),
+    );
 
     expect(result.success, isTrue);
     expect(result.data?['authoritySatisfied'], isTrue);
@@ -482,17 +505,19 @@ void main() {
         }),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '昨天A股为什么大涨',
-        'domainId': 'finance_consumer',
-        'queryTasks': <Map<String, dynamic>>[
-          <String, dynamic>{'id': 'q1', 'query': '2026-04-09 A股 大涨 原因'},
-          <String, dynamic>{'id': 'q2', 'query': '2026-04-09 中国股市 表现'},
-          <String, dynamic>{'id': 'q3', 'query': '2026-04-09 A股 领涨板块'},
-        ],
-        'referenceNowIso': '2026-04-10T10:30:00.000',
-        'timezone': 'Asia/Shanghai',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '昨天A股为什么大涨',
+          'domainId': 'finance_consumer',
+          'queryTasks': <Map<String, dynamic>>[
+            <String, dynamic>{'id': 'q1', 'query': '2026-04-09 A股 大涨 原因'},
+            <String, dynamic>{'id': 'q2', 'query': '2026-04-09 中国股市 表现'},
+            <String, dynamic>{'id': 'q3', 'query': '2026-04-09 A股 领涨板块'},
+          ],
+          'referenceNowIso': '2026-04-10T10:30:00.000',
+          'timezone': 'Asia/Shanghai',
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(capturedQueries, hasLength(2));
@@ -536,15 +561,17 @@ void main() {
       }),
     );
 
-    final result = await tool.execute(<String, dynamic>{
-      'query': '昨天A股为什么大涨',
-      'domainId': 'finance_consumer',
-      'queryTaskId': 'stock_reason',
-      'queryTaskLabel': '上涨原因',
-      'entityAnchors': <String>['A股'],
-      'referenceNowIso': '2026-04-10T10:30:00.000',
-      'timezone': 'Asia/Shanghai',
-    });
+    final result = await tool.execute(
+      AssistantToolArguments.fromJson(<String, dynamic>{
+        'query': '昨天A股为什么大涨',
+        'domainId': 'finance_consumer',
+        'queryTaskId': 'stock_reason',
+        'queryTaskLabel': '上涨原因',
+        'entityAnchors': <String>['A股'],
+        'referenceNowIso': '2026-04-10T10:30:00.000',
+        'timezone': 'Asia/Shanghai',
+      }),
+    );
 
     expect(result.success, isTrue);
     final refs =

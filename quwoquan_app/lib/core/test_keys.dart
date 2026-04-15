@@ -171,6 +171,9 @@ class TestKeys {
   static const assistantProcessHeader = ValueKey<String>(
     'assistant_process_header',
   );
+  static const assistantProcessBody = ValueKey<String>(
+    'assistant_process_body',
+  );
 
   // ── Assistant Internal Tabs ─────────────────────────────────────────
   static const assistantScheduleTab = ValueKey<String>(

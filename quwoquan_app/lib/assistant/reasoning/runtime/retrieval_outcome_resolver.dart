@@ -86,7 +86,7 @@ class RetrievalOutcomeResolver {
                       missingDimensions.isEmpty)) &&
               relevanceSatisfied;
     final summary = _firstNonEmpty(<String>[
-      !relevanceSatisfied ? '当前资料命中度还不够高，先不按稳定成答放行。' : '',
+      !relevanceSatisfied ? '当前检索到的资料与问题核心关联度不够，需要补充更有针对性的证据后再给出结论。' : '',
       synthesisReadiness.ready ? evidenceEvaluation.summary : '',
       retrievalProcessing.processingSummary,
       synthesisReadiness.reason,

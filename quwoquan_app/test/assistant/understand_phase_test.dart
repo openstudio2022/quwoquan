@@ -248,7 +248,6 @@ class _WeatherPlannerProvider implements AssistantLlmProvider {
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先把天气问题落到具体日期再检索。',
-          'queryDesignSummary': '先确定时间和地点，再给出最终检索词。',
         },
         'intentGraph': <String, dynamic>{
           'userGoal': '获取天气预报',
@@ -318,7 +317,6 @@ class _PlannerRecentRoundsCaptureProvider implements AssistantLlmProvider {
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先沿用最近一轮上下文继续理解。',
-          'queryDesignSummary': '先承接上一轮锚点，再决定检索词。',
         },
         'intentGraph': const <String, dynamic>{
           'userGoal': '沿着上一轮上下文继续追问',

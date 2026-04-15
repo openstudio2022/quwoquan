@@ -438,10 +438,10 @@ class AssistantStreamingAnswerDecoder {
   }
 
   static final _jsonEnvelopeFragmentRe = RegExp(
-    r'"?(contractId|assistant_turn|decision|toolPlan|nextAction|userMarkdown)"?\s*:',
+    r'"?(contractId|assistant_turn|decision|toolCalls|nextAction|userMarkdown)"?\s*:',
   );
   static final _jsonKeyFragmentRe = RegExp(
-    r'"?(contractId|decision|nextAction|toolPlan|'
+    r'"?(contractId|decision|nextAction|toolCalls|'
     r'userMarkdown|messageKind|slotFillPlan|queryNormalization|'
     r'selfCheck|diagnostics|reasoningBasis|'
     r'queryTasks|contextSlots|subagentPlan|evidence|result|'

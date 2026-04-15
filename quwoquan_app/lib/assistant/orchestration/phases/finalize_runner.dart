@@ -16,7 +16,7 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 
-typedef ObservabilityPayloadBuilder =
+typedef ObservabilityPayloadBuilderFn =
     Map<String, dynamic> Function({
       required AssistantRunResponse response,
       required AssistantRunRequest request,
@@ -31,7 +31,7 @@ class FinalizeRunner {
 
   final AssistantSessionManager sessionManager;
   final AssistantMemoryRepository memoryRepository;
-  final ObservabilityPayloadBuilder buildObservabilityPayload;
+  final ObservabilityPayloadBuilderFn buildObservabilityPayload;
 
   Future<AssistantRunResponse> finalize(
     AssistantRunRequest request, {

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dar
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_draft.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 
@@ -21,6 +22,7 @@ class AssistantBootstrapContext {
     this.sessionId = 'default',
     this.latestUserQuery = '',
     this.historySummary = '',
+    // ASSISTANT_WEAK_TYPE: LLM serde boundary — session messages
     this.recentDialogueRounds = const <Map<String, dynamic>>[],
     this.recentDialogueRoundsLimit = 5,
     this.recalledTexts = const <String>[],
@@ -45,6 +47,7 @@ class AssistantBootstrapContext {
   final String sessionId;
   final String latestUserQuery;
   final String historySummary;
+  // ASSISTANT_WEAK_TYPE: LLM serde boundary — session message list from persistence
   final List<Map<String, dynamic>> recentDialogueRounds;
   final int recentDialogueRoundsLimit;
   final List<String> recalledTexts;
@@ -55,6 +58,7 @@ class AssistantBootstrapContext {
   final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
   final String providerReasoningContinuation;
   final ContextContinuityPolicy contextContinuityPolicy;
+  // ASSISTANT_WEAK_TYPE: LLM serde boundary — continuity slot overrides from model
   final Map<String, dynamic> continuityOverrideSlots;
   final RecallResult recallResult;
   final bool forceRefreshCatalog;
@@ -77,6 +81,7 @@ class AssistantBootstrapContext {
     RunArtifactsHistoricalThinkingSnapshot? historicalThinkingSnapshot,
     String? providerReasoningContinuation,
     ContextContinuityPolicy? contextContinuityPolicy,
+    // ASSISTANT_WEAK_TYPE: LLM serde boundary — continuity overrides
     Map<String, dynamic>? continuityOverrideSlots,
     RecallResult? recallResult,
     bool? forceRefreshCatalog,
@@ -165,6 +170,7 @@ class AssistantExecutionPreparation {
       previousSlotState.missingSlots.isNotEmpty ||
       previousDomainPolicyBundle != null;
 
+  // ASSISTANT_WEAK_TYPE: JSON serde boundary
   factory AssistantExecutionPreparation.fromJson(Map<String, dynamic> json) {
     return AssistantExecutionPreparation(
       domainId: (json['domainId'] as String?)?.trim() ?? '',
@@ -213,6 +219,7 @@ class AssistantExecutionPreparation {
     );
   }
 
+  // ASSISTANT_WEAK_TYPE: JSON serde boundary
   Map<String, dynamic> toJson() => <String, dynamic>{
     'domainId': domainId,
     'modeDecision': modeDecision.toJson(),
@@ -277,6 +284,7 @@ class AgentExecutionState {
     this.bootstrapContext,
     this.executionPreparation,
     this.executionBridgeSnapshot = const <String, dynamic>{},
+    this.executionPhaseSnapshot,
     this.intentGraph,
     this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
     this.retrievalProcessing = const RetrievalProcessingSnapshot(),
@@ -300,7 +308,9 @@ class AgentExecutionState {
 
   final AssistantBootstrapContext? bootstrapContext;
   final AssistantExecutionPreparation? executionPreparation;
+  @Deprecated('Use executionPhaseSnapshot instead')
   final Map<String, dynamic> executionBridgeSnapshot;
+  final ExecutionPhaseSnapshot? executionPhaseSnapshot;
   final IntentGraph? intentGraph;
   final RunArtifactsUnderstandingSnapshot understandingSnapshot;
   final RetrievalProcessingSnapshot retrievalProcessing;
@@ -324,7 +334,9 @@ class AgentExecutionState {
   AgentExecutionState copyWith({
     AssistantBootstrapContext? bootstrapContext,
     AssistantExecutionPreparation? executionPreparation,
+    @Deprecated('Use executionPhaseSnapshot')
     Map<String, dynamic>? executionBridgeSnapshot,
+    ExecutionPhaseSnapshot? executionPhaseSnapshot,
     IntentGraph? intentGraph,
     RunArtifactsUnderstandingSnapshot? understandingSnapshot,
     RetrievalProcessingSnapshot? retrievalProcessing,
@@ -350,6 +362,8 @@ class AgentExecutionState {
       executionPreparation: executionPreparation ?? this.executionPreparation,
       executionBridgeSnapshot:
           executionBridgeSnapshot ?? this.executionBridgeSnapshot,
+      executionPhaseSnapshot:
+          executionPhaseSnapshot ?? this.executionPhaseSnapshot,
       intentGraph: intentGraph ?? this.intentGraph,
       understandingSnapshot: understandingSnapshot ?? this.understandingSnapshot,
       retrievalProcessing: retrievalProcessing ?? this.retrievalProcessing,

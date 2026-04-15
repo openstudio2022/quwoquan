@@ -12,7 +12,7 @@ import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -51,7 +51,16 @@ const String _synthesisRenderableReplanEnvelope =
     '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"need_more_evidence","decision":{"nextAction":"replan"},"userMarkdown":"根据当前预报，深圳明天有降雨概率，建议带伞和薄外套。","result":{"text":"根据当前预报，深圳明天有降雨概率，建议带伞和薄外套。","summary":"深圳明天可能下雨，带伞和薄外套更稳妥","interpretation":"bounded_answer"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}';
 
 const String _synthesisStructuredDecisionEnvelope =
-    '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"bounded_ready","decision":{"nextAction":"answer"},"answerGateAssessment":{"canAnswerNow":true,"answerMode":"bounded_answer","replanNeeded":false,"replanReason":"","convergenceStatus":"improving","attemptsUsed":1,"maxAttempts":2},"retrievalProcessing":{"processingSummary":"围绕明天深圳天气，已经接纳了能直接支撑判断的线索。","acceptedDocumentCount":2,"acceptedReferences":[{"title":"深圳天气预报","url":"https://weather.example.com/shenzhen","source":"weather.example.com","snippet":"2026-04-10 深圳有降雨概率，气温偏暖。"}]},"answerProcessing":{"readinessSummary":"这版会先给出是否需要带伞，再补一条穿衣建议。","keyFacts":["降雨概率偏高","气温偏暖"],"missingDimensions":[],"retrieveMoreReason":""},"userMarkdown":"深圳明天有降雨概率，建议带伞，薄外套即可。","result":{"text":"深圳明天有降雨概率，建议带伞，薄外套即可。","summary":"深圳明天可能下雨，建议带伞","interpretation":"bounded_answer"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}';
+    '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"bounded_ready","decision":{"nextAction":"answer"},"retrievalProcessing":{"processingSummary":"围绕明天深圳天气，已经接纳了能直接支撑判断的线索。","acceptedDocumentCount":2,"acceptedReferences":[{"title":"深圳天气预报","url":"https://weather.example.com/shenzhen","source":"weather.example.com","snippet":"2026-04-10 深圳有降雨概率，气温偏暖。"}]},"answerProcessing":{"readinessSummary":"这版会先给出是否需要带伞，再补一条穿衣建议。","keyFacts":["降雨概率偏高","气温偏暖"],"missingDimensions":[],"retrieveMoreReason":""},"userMarkdown":"深圳明天有降雨概率，建议带伞，薄外套即可。","result":{"text":"深圳明天有降雨概率，建议带伞，薄外套即可。","summary":"深圳明天可能下雨，建议带伞","interpretation":"bounded_answer"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}';
+
+const String _synthesisCompatAnswerJson =
+    '{"decision":{"nextAction":"answer"},"userMarkdown":"深圳明天有降雨概率，建议带伞，薄外套即可。","retrievalProcessing":{"processingSummary":"已经拿到能支撑结论的天气线索。","acceptedDocumentCount":1},"answerProcessing":{"readinessSummary":"先给出是否带伞，再补穿衣建议。","keyFacts":["明天有降雨概率","气温偏暖"],"missingDimensions":[],"retrieveMoreReason":""}}';
+
+const String _phaseOneCompatToolCallJson =
+    '{"decision":{"nextAction":"tool_call"},"messageKind":"progress","phaseId":"understanding","userMarkdown":"我先补查昨天A股盘面和主线。"}';
+
+const String _phaseOneDegradedAnswerLikeText =
+    '深圳今天气温约24到28摄氏度，体感偏暖，带一件薄外套更稳妥。';
 
 class _TemplateResponseProvider implements AssistantLlmProvider {
   _TemplateResponseProvider({
@@ -182,14 +191,7 @@ void main() {
           'supplementalTraces': const <AssistantTraceEvent>[],
           'understandingSnapshot': const <String, dynamic>{
             'userFacingSummary': '我先确认你想追的是昨天盘面的原因。',
-            'queryDesignSummary': '我会先锁定对应交易日，再核对盘面主线。',
-            'queryGroups': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'dimension': '交易日确认',
-                'queries': <String>['2026-04-07 A股 大涨 原因'],
-                'why': '先把相对时间落成具体日期。',
-              },
-            ],
+            'intentSummary': '我会先锁定对应交易日，再核对盘面主线。',
           },
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '当前证据时效性还不够稳定。',
@@ -290,7 +292,6 @@ void main() {
           'supplementalTraces': const <AssistantTraceEvent>[],
           'understandingSnapshot': const <String, dynamic>{
             'userFacingSummary': '我先确认今天深圳的实时天气，再判断是否需要外套。',
-            'queryDesignSummary': '我会先看实时温度和体感，再给穿衣建议。',
           },
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '当前证据还不够稳定，但已能进入整理答案。',
@@ -311,6 +312,293 @@ void main() {
         equals('formal_synthesis'),
       );
       expect(provider.callCount, greaterThan(0));
+    },
+  );
+
+  test(
+    'formal synthesis 返回非 canonical assistant_turn JSON 时，会继续修复并产出可展示答案',
+    () async {
+      final provider = _TemplateResponseProvider(
+        synthesisEnvelopeText: _synthesisCompatAnswerJson,
+        streamedDelta: '深圳明天有降雨概率，建议带伞，薄外套即可。',
+      );
+      final owner = LocalPhaseExecutionOwner(
+        ReactRuntime(
+          llmProvider: provider,
+          toolRegistry: AssistantToolRegistry(),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      );
+      final request = const AssistantRunRequest(
+        sessionId: 'compat_synthesis_repair',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '明天深圳天气怎么样，要不要带伞？'),
+        ],
+      );
+
+      final response = await owner.synthesizeBridge(
+        request,
+        executionSnapshot: <String, dynamic>{
+          'runId': 'run_compat_synthesis_repair',
+          'traceId': 'trace_compat_synthesis_repair',
+          'sessionId': 'compat_synthesis_repair',
+          'latestUserQuery': '明天深圳天气怎么样，要不要带伞？',
+          'domainId': 'weather',
+          'contextAssembly': const ContextAssemblyResult(),
+          'intentGraph': const IntentGraph(
+            userGoal: '判断明天深圳天气以及是否需要带伞',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'weather',
+            problemClass: ProblemClass.realtimeInfo,
+            freshnessNeed: FreshnessNeed.recent,
+            requiresExternalEvidence: true,
+            queryTasks: <QueryTask>[
+              QueryTask(
+                id: 'weather_tomorrow',
+                query: '深圳 2026-04-10 天气 预报',
+                dimension: QueryTaskDimension.currentState,
+                timeScope: 'year_month_day',
+                timePoint: '2026-04-10',
+                timezone: 'Asia/Shanghai',
+              ),
+            ],
+          ),
+          'dialogueRoundScript': const DialogueRoundScript(domainId: 'weather'),
+          'domainCatalog': const <String>['weather'],
+          'domainCatalogVersion': 'test',
+          'executionShell': const SkillExecutionShell(),
+          'previousSlotState': const SlotStateSnapshot(domainId: 'weather'),
+          'retrievalPolicy': const <String, dynamic>{},
+          'answerBoundaryPolicy': const AnswerBoundaryPolicy(
+            evidenceRequired: false,
+            allowBoundedAnswer: true,
+          ).toJson(),
+          'templateVariables': const <String, dynamic>{},
+          'messages': const <Map<String, dynamic>>[
+            <String, dynamic>{'role': 'user', 'content': '明天深圳天气怎么样，要不要带伞？'},
+          ],
+          'synthTemplateVersion': 'test',
+          'phaseOneResult': const ReactRuntimeResult(
+            finalText: '',
+            traces: <AssistantTraceEvent>[],
+          ),
+          'synthesisReadiness': const SynthesisReadinessResult(
+            ready: true,
+            reason: 'ok',
+          ),
+          'supplementalTraces': const <AssistantTraceEvent>[],
+          'understandingSnapshot': const <String, dynamic>{
+            'userFacingSummary': '我先确认明天深圳的降雨概率和温度，再判断是否需要带伞。',
+          },
+          'retrievalProcessing': const <String, dynamic>{
+            'processingSummary': '已经拿到能支撑结论的天气线索。',
+          },
+        },
+      );
+
+      expect(response.displayMarkdown, contains('2026年4月10日'));
+      expect(response.displayMarkdown, contains('带伞'));
+      expect(response.finalText, isNot(contains('这次生成答案失败')));
+      expect(response.answerGateDecision.renderable, isTrue);
+      expect(response.structuredResponse['finalAnswerMode'], equals('bounded_answer'));
+    },
+  );
+
+  test(
+    'phase one 非 canonical tool_call/progress JSON 不会被当作最终答案，会继续 formal synthesis',
+    () async {
+      final provider = _TemplateResponseProvider(
+        synthesisEnvelopeText: _synthesisWeatherAnswerEnvelope,
+        streamedDelta: '深圳今天气温约24-28°C，体感偏暖，带一件薄外套更稳妥。',
+      );
+      final owner = LocalPhaseExecutionOwner(
+        ReactRuntime(
+          llmProvider: provider,
+          toolRegistry: AssistantToolRegistry(),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      );
+      final request = const AssistantRunRequest(
+        sessionId: 'compat_tool_call_not_answer',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '深圳今天天气怎么样？需要带外套吗？'),
+        ],
+      );
+
+      final response = await owner.synthesizeBridge(
+        request,
+        executionSnapshot: <String, dynamic>{
+          'runId': 'run_compat_tool_call_not_answer',
+          'traceId': 'trace_compat_tool_call_not_answer',
+          'sessionId': 'compat_tool_call_not_answer',
+          'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
+          'domainId': 'weather',
+          'contextAssembly': const ContextAssemblyResult(),
+          'intentGraph': const IntentGraph(
+            userGoal: '了解深圳今天的天气并判断是否需要带外套',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'weather',
+            problemClass: ProblemClass.realtimeInfo,
+            freshnessNeed: FreshnessNeed.realtime,
+            requiresExternalEvidence: true,
+            queryTasks: <QueryTask>[
+              QueryTask(
+                id: 'weather_today',
+                query: '深圳 2026-04-09 实时天气',
+                dimension: QueryTaskDimension.currentState,
+                timeScope: 'today',
+                timePoint: '2026-04-09',
+                timezone: 'Asia/Shanghai',
+              ),
+            ],
+          ),
+          'dialogueRoundScript': const DialogueRoundScript(domainId: 'weather'),
+          'domainCatalog': const <String>['weather'],
+          'domainCatalogVersion': 'test',
+          'executionShell': const SkillExecutionShell(),
+          'previousSlotState': const SlotStateSnapshot(domainId: 'weather'),
+          'retrievalPolicy': const <String, dynamic>{},
+          'answerBoundaryPolicy': const AnswerBoundaryPolicy(
+            evidenceRequired: false,
+            allowBoundedAnswer: true,
+          ).toJson(),
+          'templateVariables': const <String, dynamic>{},
+          'messages': const <Map<String, dynamic>>[
+            <String, dynamic>{'role': 'user', 'content': '深圳今天天气怎么样？需要带外套吗？'},
+          ],
+          'synthTemplateVersion': 'test',
+          'phaseOneResult': const ReactRuntimeResult(
+            finalText: _phaseOneCompatToolCallJson,
+            traces: <AssistantTraceEvent>[],
+          ),
+          'synthesisReadiness': const SynthesisReadinessResult(
+            ready: true,
+            reason: 'ok',
+          ),
+          'supplementalTraces': const <AssistantTraceEvent>[],
+          'understandingSnapshot': const <String, dynamic>{
+            'userFacingSummary': '我先确认今天深圳的实时天气，再判断是否需要外套。',
+          },
+          'retrievalProcessing': const <String, dynamic>{
+            'processingSummary': '当前证据还不够稳定，但已能进入整理答案。',
+          },
+        },
+      );
+
+      expect(response.displayMarkdown, contains('薄外套'));
+      expect(provider.callCount, greaterThan(0));
+      expect(
+        ((response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
+            ?.cast<String, dynamic>())?['route'],
+        equals('formal_synthesis'),
+      );
+    },
+  );
+
+  test(
+    'phase one degraded 的类答案文本不会再绕过 synthesis 直接成答',
+    () async {
+      final provider = _TemplateResponseProvider(
+        synthesisEnvelopeText: _synthesisWeatherAnswerEnvelope,
+        streamedDelta: '深圳今天气温约24-28°C，体感偏暖，带一件薄外套更稳妥。',
+      );
+      final owner = LocalPhaseExecutionOwner(
+        ReactRuntime(
+          llmProvider: provider,
+          toolRegistry: AssistantToolRegistry(),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      );
+      final request = const AssistantRunRequest(
+        sessionId: 'degraded_phase_one_requires_synthesis',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '深圳今天天气怎么样？需要带外套吗？'),
+        ],
+      );
+
+      final response = await owner.synthesizeBridge(
+        request,
+        executionSnapshot: <String, dynamic>{
+          'runId': 'run_degraded_phase_one_requires_synthesis',
+          'traceId': 'trace_degraded_phase_one_requires_synthesis',
+          'sessionId': 'degraded_phase_one_requires_synthesis',
+          'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
+          'domainId': 'weather',
+          'contextAssembly': const ContextAssemblyResult(),
+          'intentGraph': const IntentGraph(
+            userGoal: '了解深圳今天的天气并判断是否需要带外套',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'weather',
+            problemClass: ProblemClass.realtimeInfo,
+            freshnessNeed: FreshnessNeed.realtime,
+            requiresExternalEvidence: true,
+            queryTasks: <QueryTask>[
+              QueryTask(
+                id: 'weather_today',
+                query: '深圳 2026-04-09 实时天气',
+                dimension: QueryTaskDimension.currentState,
+                timeScope: 'today',
+                timePoint: '2026-04-09',
+                timezone: 'Asia/Shanghai',
+              ),
+            ],
+          ),
+          'dialogueRoundScript': const DialogueRoundScript(domainId: 'weather'),
+          'domainCatalog': const <String>['weather'],
+          'domainCatalogVersion': 'test',
+          'executionShell': const SkillExecutionShell(),
+          'previousSlotState': const SlotStateSnapshot(domainId: 'weather'),
+          'retrievalPolicy': const <String, dynamic>{},
+          'answerBoundaryPolicy': const AnswerBoundaryPolicy(
+            evidenceRequired: false,
+            allowBoundedAnswer: true,
+          ).toJson(),
+          'templateVariables': const <String, dynamic>{},
+          'messages': const <Map<String, dynamic>>[
+            <String, dynamic>{'role': 'user', 'content': '深圳今天天气怎么样？需要带外套吗？'},
+          ],
+          'synthTemplateVersion': 'test',
+          'phaseOneResult': const ReactRuntimeResult(
+            finalText: _phaseOneDegradedAnswerLikeText,
+            traces: <AssistantTraceEvent>[],
+            degraded: true,
+            failureCode: 'answer_organization_failed',
+          ),
+          'synthesisReadiness': const SynthesisReadinessResult(
+            ready: true,
+            reason: 'ok',
+          ),
+          'supplementalTraces': const <AssistantTraceEvent>[],
+          'understandingSnapshot': const <String, dynamic>{
+            'userFacingSummary': '我先确认今天深圳的实时天气，再判断是否需要外套。',
+          },
+          'retrievalProcessing': const <String, dynamic>{
+            'processingSummary': '当前证据还不够稳定，但已能进入整理答案。',
+          },
+        },
+      );
+
+      expect(response.displayMarkdown, contains('薄外套'));
+      expect(provider.callCount, greaterThan(0));
+      expect(
+        ((response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
+            ?.cast<String, dynamic>())?['route'],
+        equals('formal_synthesis'),
+      );
+      expect(
+        ((response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
+            ?.cast<String, dynamic>())?['directAnswerReason'],
+        equals('phase_one_artifact_ignored'),
+      );
     },
   );
 
@@ -391,7 +679,6 @@ void main() {
           'supplementalTraces': const <AssistantTraceEvent>[],
           'understandingSnapshot': const <String, dynamic>{
             'userFacingSummary': '我先确认明天的降雨概率和温度，再判断带伞还是外套。',
-            'queryDesignSummary': '我会先看明天降水与气温，再给出出行建议。',
           },
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '已经拿到首轮天气证据，可以开始整理答案。',
@@ -410,7 +697,7 @@ void main() {
   );
 
   test(
-    '显式 answerGateAssessment 与 searchIterationState 会透传到 synthesis 结果',
+    'decision / finalAnswerMode 与 searchIterationState 会透传到 synthesis 结果',
     () async {
       final provider = _TemplateResponseProvider(
         synthesisEnvelopeText: _synthesisStructuredDecisionEnvelope,
@@ -484,7 +771,6 @@ void main() {
           'supplementalTraces': const <AssistantTraceEvent>[],
           'understandingSnapshot': const <String, dynamic>{
             'userFacingSummary': '我先确认明天深圳的降雨概率和温度，再判断是否需要带伞。',
-            'queryDesignSummary': '先看明天降雨与温度，再给出出行建议。',
           },
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '已经拿到首轮天气候选，可以整理答案。',

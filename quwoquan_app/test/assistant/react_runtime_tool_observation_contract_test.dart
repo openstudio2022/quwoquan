@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:test/test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -8,6 +7,7 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _SequenceProvider implements AssistantLlmProvider {
   int _callCount = 0;
@@ -42,10 +42,55 @@ class _SequenceProvider implements AssistantLlmProvider {
     );
     _callCount += 1;
     if (_callCount == 1) {
-      return const AssistantModelOutput(
+      return AssistantModelOutput(
         text: '先调用工具',
         toolCalls: <AssistantToolCall>[
           AssistantToolCall(name: 'web_search', arguments: <String, dynamic>{}),
+        ],
+      );
+    }
+    return const AssistantModelOutput(text: '最终回答');
+  }
+}
+
+class _PhaseHintCaptureProvider implements AssistantLlmProvider {
+  int callCount = 0;
+  final List<List<Map<String, dynamic>>> capturedMessages =
+      <List<Map<String, dynamic>>>[];
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    callCount += 1;
+    capturedMessages.add(
+      messages
+          .map(
+            (item) => <String, dynamic>{
+              'role': item['role'],
+              'content': item['content'],
+            },
+          )
+          .toList(growable: false),
+    );
+    if (callCount == 1) {
+      return AssistantModelOutput(
+        text: '先调用工具',
+        toolCalls: <AssistantToolCall>[
+          AssistantToolCall(
+            name: 'web_search',
+            arguments: <String, dynamic>{'query': '深圳天气 最新情况'},
+          ),
         ],
       );
     }
@@ -63,16 +108,16 @@ class _FakeWebSearchTool implements AssistantTool {
   String get description => 'fake web search';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
-    return const AssistantToolResult(
+    return AssistantToolResult(
       success: true,
       message: '检索结果：ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'duckduckgo',
         'summary': 'ok',
         'references': <Map<String, dynamic>>[],
-      },
+      }),
     );
   }
 }
@@ -96,7 +141,7 @@ class _FastConvergenceProvider implements AssistantLlmProvider {
   }) async {
     _callCount += 1;
     if (_callCount == 1) {
-      return const AssistantModelOutput(
+      return AssistantModelOutput(
         text: '先调用工具',
         toolCalls: <AssistantToolCall>[
           AssistantToolCall(
@@ -121,11 +166,11 @@ class _CoverageLowSearchTool implements AssistantTool {
   String get description => 'fake web search';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    return const AssistantToolResult(
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    return AssistantToolResult(
       success: true,
       message: '检索结果：ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'duckduckgo',
         'summary': 'ok',
         'coverage': 0.2,
@@ -139,7 +184,7 @@ class _CoverageLowSearchTool implements AssistantTool {
           {'title': 'C', 'url': 'https://c.example.com'},
           {'title': 'D', 'url': 'https://d.example.com'},
         ],
-      },
+      }),
     );
   }
 }
@@ -155,13 +200,13 @@ class _ArgumentCaptureSearchTool implements AssistantTool {
   String get description => 'capture web search args';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
-    lastArguments = Map<String, dynamic>.from(arguments);
-    return const AssistantToolResult(
+    lastArguments = Map<String, dynamic>.from(arguments.toJson());
+    return AssistantToolResult(
       success: true,
       message: '检索结果：ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'duckduckgo',
         'summary': 'ok',
         'coverage': 0.9,
@@ -173,7 +218,7 @@ class _ArgumentCaptureSearchTool implements AssistantTool {
           {'title': 'A', 'url': 'https://a.example.com'},
           {'title': 'B', 'url': 'https://b.example.com'},
         ],
-      },
+      }),
     );
   }
 }
@@ -189,13 +234,13 @@ class _ArgumentCaptureUnifiedSearchTool implements AssistantTool {
   String get description => 'capture unified search args';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
-    lastArguments = Map<String, dynamic>.from(arguments);
-    return const AssistantToolResult(
+    lastArguments = Map<String, dynamic>.from(arguments.toJson());
+    return AssistantToolResult(
       success: true,
       message: '统一检索结果：ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'summary': 'ok',
         'sections': <Map<String, dynamic>>[],
         'hits': <Map<String, dynamic>>[],
@@ -203,7 +248,7 @@ class _ArgumentCaptureUnifiedSearchTool implements AssistantTool {
         'qualityScore': 0.9,
         'queryCount': 1,
         'referenceCount': 0,
-      },
+      }),
     );
   }
 }
@@ -266,7 +311,7 @@ class _ForceAnswerOnlyProvider implements AssistantLlmProvider {
           .toList(growable: false),
     );
     if (callCount == 1) {
-      return const AssistantModelOutput(
+      return AssistantModelOutput(
         text: '先调用工具',
         toolCalls: <AssistantToolCall>[
           AssistantToolCall(
@@ -280,7 +325,7 @@ class _ForceAnswerOnlyProvider implements AssistantLlmProvider {
       );
     }
     if (availableTools.isNotEmpty) {
-      return const AssistantModelOutput(
+      return AssistantModelOutput(
         text: '继续补充资料',
         toolCalls: <AssistantToolCall>[
           AssistantToolCall(
@@ -325,6 +370,8 @@ class _ThinkingDeltaProvider implements AssistantLlmProvider {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test(
     'react runtime emits structured tool_observation on validation error',
     () async {
@@ -366,6 +413,42 @@ void main() {
       expect(observation['retryable'], isFalse);
     },
   );
+
+  test('第二轮已有检索结果时会注入处理问题阶段提示', () async {
+    final provider = _PhaseHintCaptureProvider();
+    final metadata = ToolMetadataRegistry();
+    await metadata.ensureLoaded();
+    final registry = AssistantToolRegistry(metadataRegistry: metadata);
+    registry.register(_CoverageLowSearchTool());
+    final runtime = ReactRuntime(
+      llmProvider: provider,
+      toolRegistry: registry,
+      toolMetadataRegistry: metadata,
+    );
+
+    await runtime.run(
+      messages: <Map<String, dynamic>>[
+        const <String, dynamic>{'role': 'user', 'content': '深圳天气怎么样'},
+      ],
+      maxIterations: 2,
+      goal: '深圳天气怎么样',
+    );
+
+    expect(provider.capturedMessages.length, greaterThanOrEqualTo(2));
+    final secondCallSystemMessages = provider.capturedMessages[1]
+        .where((item) => item['role'] == 'system')
+        .map((item) => (item['content'] as String?) ?? '')
+        .toList(growable: false);
+    expect(
+      secondCallSystemMessages.any(
+        (content) => content.contains('[阶段提示：处理并生成答案]'),
+      ),
+      isTrue,
+      reason:
+          '第二轮已有工具结果时，runtime 应命中 analyzing 阶段提示，而不是退化成通用叙事提示。\n'
+          '实际 system messages:\n${secondCallSystemMessages.join('\n---\n')}',
+    );
+  });
 
   test(
     'fast convergence result no longer emits contradictory replan',

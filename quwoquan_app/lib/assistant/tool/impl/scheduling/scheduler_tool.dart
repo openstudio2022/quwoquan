@@ -16,7 +16,7 @@ class SchedulerTool implements AssistantTool {
       'Create, query, or modify calendar events and reminders on the device.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final action = (arguments['action'] as String?)?.trim() ?? '';
     if (action.isEmpty) {
       return const AssistantToolResult(
@@ -55,7 +55,7 @@ class SchedulerTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: _actionSummary(action, result),
-        data: result,
+        data: AssistantToolResultData.fromJson(result),
       );
     } catch (error) {
       return AssistantToolResult(

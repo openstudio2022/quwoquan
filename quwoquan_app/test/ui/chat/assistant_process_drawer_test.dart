@@ -5,6 +5,7 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
 
@@ -349,7 +350,7 @@ void main() {
       expect(viewModel.blocks, isEmpty);
     });
 
-    testWidgets('长等待且无进展时展示 reassurance', (tester) async {
+    testWidgets('长等待且无进展时顶部栏展示耗时', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -360,13 +361,10 @@ void main() {
         ),
       );
 
-      expect(
-        find.text(UITextConstants.assistantProcessLongWaitReassurance),
-        findsOneWidget,
-      );
+      expect(find.text('耗时 7 秒'), findsOneWidget);
     });
 
-    testWidgets('三阶段已出现时不在头部插入 reassurance', (tester) async {
+    testWidgets('两阶段已出现时不在头部插入 reassurance', (tester) async {
       const journey = AssistantJourney(
         stages: <AssistantJourneyStage>[
           AssistantJourneyStage(
@@ -417,7 +415,7 @@ void main() {
       );
     });
 
-    testWidgets('短等待时不展示 reassurance', (tester) async {
+    testWidgets('短等待时顶部栏也会展示耗时', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -432,9 +430,10 @@ void main() {
         find.text(UITextConstants.assistantProcessLongWaitReassurance),
         findsNothing,
       );
+      expect(find.text('耗时 2 秒'), findsOneWidget);
     });
 
-    testWidgets('运行中最小态不再展示耗时秒数', (tester) async {
+    testWidgets('运行中顶部栏展示耗时而不展示阶段结果', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -445,10 +444,12 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('耗时'), findsNothing);
+      expect(find.text(UITextConstants.assistantProcessRunningSummary), findsOneWidget);
+      expect(find.text('耗时 9 秒'), findsOneWidget);
+      expect(find.text(UITextConstants.assistantProcessStageUnderstand), findsNothing);
     });
 
-    testWidgets('更长等待时升级为 handoff 与 recovery 提示', (tester) async {
+    testWidgets('更长等待时顶部栏继续展示耗时而不是 reassurance', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -466,17 +467,33 @@ void main() {
         ),
       );
 
-      expect(
-        find.text(UITextConstants.assistantProcessHandoffReassurance),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.assistantProcessRecoveryReassurance),
-        findsOneWidget,
-      );
+      expect(find.text('耗时 13 秒'), findsOneWidget);
+      expect(find.text('耗时 21 秒'), findsOneWidget);
     });
 
-    testWidgets('journey 会展示阶段轨道与来源列表', (tester) async {
+    testWidgets('展开后会渲染独立的过程正文容器', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AssistantProcessDrawer(
+              viewModel: _viewModel(
+                journey: _referenceJourney,
+                isRunning: false,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(TestKeys.assistantProcessBody), findsNothing);
+
+      await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(TestKeys.assistantProcessBody), findsOneWidget);
+    });
+
+    testWidgets('journey 会展示两段叙事与来源列表', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -492,14 +509,16 @@ void main() {
       );
 
       expect(find.text('我先把问题立住'), findsOneWidget);
+      expect(find.text('处理 1 篇'), findsOneWidget);
+      expect(find.text('接纳 1 篇'), findsOneWidget);
       expect(find.textContaining('处理了 1 篇'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
-        findsAtLeastNWidgets(1),
+        findsNothing,
       );
       expect(
         find.text(UITextConstants.assistantProcessStageRetrievalProcessing),
-        findsAtLeastNWidgets(1),
+        findsNothing,
       );
       expect(
         find.text(UITextConstants.assistantProcessStageAnswer),
@@ -510,7 +529,7 @@ void main() {
       expect(find.text('整理回答'), findsNothing);
       expect(find.text('来源：官方'), findsNothing);
 
-      await tester.tap(find.textContaining('处理了 1 篇'));
+      await tester.tap(find.textContaining('处理了 1 篇').last);
       await tester.pump();
 
       expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
@@ -607,7 +626,7 @@ void main() {
       );
     });
 
-    test('三阶段内容会按理解、检索、接纳文档、成答顺序归位', () {
+    test('两阶段内容会按理解、处理并生成答案顺序归位', () {
       const journey = AssistantJourney(
         stages: <AssistantJourneyStage>[
           AssistantJourneyStage(
@@ -688,19 +707,19 @@ void main() {
         equals(const <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
+          ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.searchSummary);
-      expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
-      expect(viewModel.blocks[1].items, isEmpty);
-      expect(viewModel.blocks[1].referenceLabel, '处理了 10 篇，接纳了 3 篇');
+      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.referenceStats);
+      expect(viewModel.blocks[1].headline, '处理了 10 篇，接纳了 3 篇');
       expect(viewModel.blocks[1].references, hasLength(3));
-      expect(viewModel.blocks[2].headline, contains('已获取深圳官方及权威气象站的实时天气数据'));
-      expect(viewModel.blocks[2].headline, isNot(contains('Shenzhen tian qi')));
+      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.searchSummary);
+      expect(viewModel.blocks[2].headline, contains('围绕深圳实时天气'));
+      expect(viewModel.blocks[2].items, isEmpty);
+      expect(viewModel.blocks[2].referenceLabel, isEmpty);
     });
 
-    test('canonical 四阶段过程轨会折叠成可见三阶段，且第一阶段只展示稳定主字段', () {
+    test('canonical 四阶段过程轨会折叠成可见两阶段，且第一阶段只展示稳定主字段', () {
       final built = _viewModel(
         processTimeline: <ProcessTimelineFrame>[
           buildProcessTimelineFrame(
@@ -719,7 +738,7 @@ void main() {
             status: JourneyStageStatus.completed,
             headline: '我会先按天气现状和出门建议两路来核对。',
             understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-              queryDesignSummary: '我会先按天气现状和出门建议两路来核对。',
+              intentSummary: '我会先按天气现状和出门建议两路来核对。',
             ),
           ),
           buildProcessTimelineFrame(
@@ -730,14 +749,6 @@ void main() {
               processingSummary: '能直接回答的关键信息已经收拢好了。',
             ),
           ),
-          buildProcessTimelineFrame(
-            stepId: ProcessStepId.answerOrganization,
-            status: JourneyStageStatus.completed,
-            headline: '我把结果压成一句直接结论和一条简洁建议。',
-            answerProcessing: const RunArtifactsAnswerProcessing(
-              readinessSummary: '我把结果压成一句直接结论和一条简洁建议。',
-            ),
-          ),
         ],
       );
 
@@ -746,10 +757,57 @@ void main() {
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ]),
       );
-      expect(built.blocks.first.detail, isEmpty);
+      expect(built.blocks.first.detail, isNotEmpty);
+    });
+
+    test('两段叙事会连续带出检索词设计与成答组织', () {
+      const designNarrative =
+          '我会先沿着天气现状这一条线继续核对，先锁定最新天气面，检索词会围绕“深圳 实时天气”、“深圳 降雨 概率”展开。';
+      final built = buildAssistantJourneyViewModel(
+        journey: const AssistantJourney(),
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'r',
+            stepId: ProcessStepId.retrievalProcessing,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        isRunning: false,
+        understandingSnapshot: RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '我先把问题边界收清。$designNarrative',
+        ),
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processedDocumentCount: 3,
+          acceptedDocumentCount: 1,
+          processingSummary: '我已经把能直接支撑回答的资料筛出来。',
+          selectedKeyPoints: <String>['结果更新时间一致'],
+        ),
+        answerProcessing: const RunArtifactsAnswerProcessing(
+          readinessSummary: '接下来把资料整理成最终回答。',
+          keyFacts: <String>['先说结论再补建议'],
+        ),
+      );
+
+      expect(built.blocks.first.headline, contains('我先把问题边界收清'));
+      expect(built.blocks.first.items, isEmpty);
+      expect(built.blocks.first.headline, contains(designNarrative));
+      expect(built.blocks[1].kind, AssistantJourneyBlockKind.referenceStats);
+      expect(built.blocks[2].items, isEmpty);
+      expect(
+        built.blocks[2].detail,
+        contains('我先把结果更新时间一致这些能直接支撑回答的点拎出来。'),
+      );
+      expect(
+        built.blocks[2].detail,
+        contains('回答会先围绕先说结论再补建议展开。'),
+      );
     });
 
     test('检索引用块不会混入低信号系统状态文案', () {
@@ -771,26 +829,10 @@ void main() {
       );
 
       expect(
-        built.blocks.any(
-          (block) =>
-              block.headline.contains('已完成资料筛选') ||
-              block.detail.contains('已完成资料筛选'),
-        ),
-        isFalse,
-      );
-      expect(
         built.blocks.where(
           (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
         ),
         hasLength(1),
-      );
-      expect(
-        built.blocks
-            .singleWhere(
-              (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
-            )
-            .detail,
-        isEmpty,
       );
     });
 
@@ -848,11 +890,9 @@ void main() {
 
       expect(find.text('已完成深度思考'), findsOneWidget);
       expect(find.text('先把问题主线立住'), findsOneWidget);
-      expect(find.text('已为你整理好'), findsAtLeastNWidgets(1));
-      expect(find.text('我把重点条件和答案边界一起收拢了。'), findsOneWidget);
     });
 
-    testWidgets('完成态首行摘要使用统一整秒模板', (tester) async {
+    testWidgets('完成态顶部栏使用统计与耗时模板，不展示结果摘要', (tester) async {
       const completedJourney = AssistantJourney(
         stages: <AssistantJourneyStage>[
           AssistantJourneyStage(
@@ -929,7 +969,11 @@ void main() {
         ),
       );
 
-      expect(find.text('已完成深度思考，处理 2 篇文档，耗时 4 秒'), findsOneWidget);
+      expect(find.text('已完成深度思考'), findsOneWidget);
+      expect(find.text('处理 2 篇'), findsOneWidget);
+      expect(find.text('接纳 2 篇'), findsOneWidget);
+      expect(find.text('耗时 4 秒'), findsOneWidget);
+      expect(find.text('已核对 2 个来源'), findsNothing);
       expect(find.textContaining('4.2'), findsNothing);
     });
   });

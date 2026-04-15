@@ -144,8 +144,6 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                             enablePageCurl: enablePageCurl,
                             pagePadding: EdgeInsets.zero,
                             showFooterPageLabel: false,
-                            preferSoftBackwardFlip: true,
-                            useForwardMirroredBackwardPath: true,
                             onPageChanged: (int i) {
                               if (i >= 0 && i < pages.length) {
                                 ref

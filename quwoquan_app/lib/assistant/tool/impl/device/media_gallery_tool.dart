@@ -13,7 +13,7 @@ class MediaGalleryTool implements AssistantTool {
   String get description => 'Access gallery metadata with user permissions.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final result = await _channelAdapter.invoke('queryGallery', arguments);
     if (result.containsKey('error')) {
       return AssistantToolResult(
@@ -26,7 +26,7 @@ class MediaGalleryTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message: 'Gallery query success',
-      data: result,
+      data: AssistantToolResultData.fromJson(result),
     );
   }
 }

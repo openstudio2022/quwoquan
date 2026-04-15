@@ -2,17 +2,19 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/contracts/pageflip_book_contracts.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/core/pageflip_book_controller.dart';
+import 'package:quwoquan_app/components/pageflip_book_isolated/src/engine_v2/animation_plan_v2.dart';
+import 'package:quwoquan_app/components/pageflip_book_isolated/src/render/high_fidelity/pageflip_book_high_fidelity_facade.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/render/mesh/pageflip_book_mesh_builder.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/render/mesh/pageflip_book_mesh_renderer.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/scene/pageflip_book_scene.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/snapshot/pageflip_book_texture_session.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_light_model.dart';
 import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 
@@ -45,12 +47,17 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     with SingleTickerProviderStateMixin {
   static final ArticlePageCurlLightConfig _defaultLightConfig =
       ArticlePageCurlLightConfig(
-    shadowColor: AppColors.black.withValues(alpha: 0x5C / 255.0),
-    highlightColor: AppColors.white.withValues(alpha: 0x45 / 255.0),
-    paperTintColor: AppColors.iosProfileSurfaceLight,
-    ambientOcclusionColor: AppColors.black.withValues(alpha: 0x26 / 255.0),
-  );
+        shadowColor: AppColors.black.withValues(alpha: 0.82),
+        highlightColor: AppColors.white.withValues(alpha: 0.22),
+        paperTintColor: Color.alphaBlend(
+          AppColors.white.withValues(alpha: 0.14),
+          ArticlePaperPaletteColors.creamStageLight,
+        ).withValues(alpha: 0.24),
+        ambientOcclusionColor: AppColors.black.withValues(alpha: 0.22),
+      );
 
+  final PageflipBookIsolatedHighFidelityFacade _highFidelityFacade =
+      const PageflipBookIsolatedHighFidelityFacade();
   final PageflipBookIsolatedMeshBuilder _meshBuilder =
       const PageflipBookIsolatedMeshBuilder();
   final Map<int, GlobalKey> _captureBoundaryKeys = <int, GlobalKey>{};
@@ -64,7 +71,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
   late AnimationController _animationController;
 
   PageflipBookIsolatedTextureSession? _activeTextureSession;
-  StPageFlipAnimationPlan? _activeAnimationPlan;
+  PageflipBookIsolatedAnimationPlan? _activeAnimationPlan;
   ui.FragmentProgram? _lightingProgram;
   ui.FragmentProgram? _backfaceProgram;
 
@@ -136,8 +143,12 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
         if (scene == null) {
           return ColoredBox(color: widget.stageColor);
         }
-        final meshScene = scene.isInteractive ? _buildMeshScene(scene) : null;
-        final interactionBinding = _activeTextureSession?.binding;
+        final highFidelityState = scene.isInteractive
+            ? _resolveHighFidelityState(scene)
+            : null;
+        final meshScene = scene.isInteractive
+            ? _buildMeshScene(scene, highFidelityState)
+            : null;
         if (_pendingCaptureIndices.isNotEmpty) {
           _scheduleCapture();
         }
@@ -147,17 +158,20 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
           child: Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              if (meshScene == null || interactionBinding == null)
-                _buildStaticPage(
-                  scene.pageRect,
-                  scene.legacyScene.currentPageIndex,
+              if (meshScene != null)
+                Positioned.fromRect(
+                  rect: scene.pageRect,
+                  child: const ColoredBox(
+                    color: ArticlePaperPaletteColors.creamStageLight,
+                  ),
                 )
               else
-                ..._buildInteractionStaticLayers(scene, interactionBinding),
+                _buildStaticPage(scene.pageRect, scene.currentPageIndex),
               if (meshScene != null)
                 Positioned.fill(
                   child: IgnorePointer(
                     child: PageflipBookIsolatedMeshRenderer(
+                      key: PageflipBookIsolatedTestKeys.meshRenderer,
                       scene: meshScene,
                       lightingProgram: _lightingProgram,
                       backfaceProgram: _backfaceProgram,
@@ -220,102 +234,33 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
 
   Widget _buildStaticPage(Rect pageRect, int pageIndex) {
     final pageSize = pageRect.size;
-    return Positioned.fromRect(
-      rect: pageRect,
-      child: KeyedSubtree(
-        key: PageflipBookIsolatedTestKeys.staticPage,
-        child: _buildPageSurface(pageIndex, pageSize),
-      ),
-    );
-  }
-
-  List<Widget> _buildInteractionStaticLayers(
-    PageflipBookIsolatedScene scene,
-    PageflipBookIsolatedSheetBinding binding,
-  ) {
-    final pageRect = scene.pageRect;
-    final pageRectPath = Path()..addRect(pageRect);
-    final bottomPath = scene.buildBottomClipPath();
-    final topPath = Path.combine(
-      PathOperation.difference,
-      pageRectPath,
-      bottomPath,
-    );
-    switch (binding.direction) {
-      case PageflipBookIsolatedDirection.forward:
-        return <Widget>[
-          _buildClippedStaticPage(
-            rect: pageRect,
-            pageIndex: binding.bottomPageIndex,
-            clipPath: bottomPath,
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: EdgeInsets.only(left: pageRect.left, top: pageRect.top),
+        child: SizedBox.fromSize(
+          size: pageSize,
+          child: KeyedSubtree(
+            key: PageflipBookIsolatedTestKeys.staticPage,
+            child: _buildPageSurface(pageIndex, pageSize),
           ),
-          _buildClippedStaticPage(
-            rect: pageRect,
-            pageIndex: scene.legacyScene.currentPageIndex,
-            clipPath: topPath,
-          ),
-        ];
-      case PageflipBookIsolatedDirection.backward:
-        return <Widget>[
-          _buildClippedStaticPage(
-            rect: pageRect,
-            pageIndex: scene.legacyScene.currentPageIndex,
-            clipPath: bottomPath,
-          ),
-          _buildClippedStaticPage(
-            rect: pageRect,
-            pageIndex: binding.rectoPageIndex,
-            clipPath: topPath,
-          ),
-        ];
-    }
-  }
-
-  Widget _buildClippedStaticPage({
-    required Rect rect,
-    required int pageIndex,
-    required Path clipPath,
-  }) {
-    return Positioned.fromRect(
-      rect: rect,
-      child: ClipPath(
-        clipper: _RelativePathClipper(
-          clipPath.shift(Offset(-rect.left, -rect.top)),
         ),
-        child: _buildPageSurface(pageIndex, rect.size),
       ),
     );
   }
 
   Widget _buildCaptureLayer(Size pageSize, Size stageSize) {
-    final pendingPages = _pendingCaptureIndices.toSet().toList(growable: false);
+    final pendingPages = _pendingCaptureIndices.take(3).toList(growable: false);
+    if (pendingPages.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Transform.translate(
       offset: Offset(stageSize.width + pageSize.width + 48, 0),
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: pageSize.width,
-          height: pageSize.height,
-          child: Stack(
-            children: pendingPages
-                .map(
-                  (pageIndex) => RepaintBoundary(
-                    key: _captureBoundaryKeys.putIfAbsent(
-                      pageIndex,
-                      () => GlobalKey(
-                        debugLabel: 'pageflip_isolated_capture_$pageIndex',
-                      ),
-                    ),
-                    child: SizedBox(
-                      width: pageSize.width,
-                      height: pageSize.height,
-                      child: _buildPageSurface(pageIndex, pageSize),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ),
+      child: _StableTextureCaptureLayer(
+        capturePages: pendingPages,
+        pageSize: pageSize,
+        boundaryKeys: _captureBoundaryKeys,
+        buildPage: (pageIndex) => _buildPageSurface(pageIndex, pageSize),
       ),
     );
   }
@@ -330,16 +275,113 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
 
   PageflipBookIsolatedMeshRenderScene? _buildMeshScene(
     PageflipBookIsolatedScene scene,
+    PageflipBookIsolatedHighFidelityState? highFidelityState,
   ) {
-    final textureSession = _activeTextureSession;
-    if (textureSession == null || !textureSession.isReadyForMesh) {
+    if (highFidelityState == null || !highFidelityState.usesMesh) {
       return null;
     }
     return _meshBuilder.build(
       scene: scene,
-      textures: textureSession.bundle!,
+      textures: highFidelityState.bundle!,
       lightConfig: _defaultLightConfig,
     );
+  }
+
+  PageflipBookIsolatedHighFidelityState _resolveHighFidelityState(
+    PageflipBookIsolatedScene scene,
+  ) {
+    final state = _computeHighFidelityState(scene);
+    _applyResolvedHighFidelityState(state);
+    return state;
+  }
+
+  PageflipBookIsolatedHighFidelityState _computeHighFidelityState(
+    PageflipBookIsolatedScene scene,
+  ) {
+    return _highFidelityFacade.resolve(
+      scene: scene,
+      snapshots: _pageSnapshots,
+      existingSession: _activeTextureSession,
+      supportsAdvancedPageCurl: _supportsAdvancedPageCurl,
+      freezeBinding: _shouldFreezeTextureSession(scene),
+    );
+  }
+
+  void _applyResolvedHighFidelityState(
+    PageflipBookIsolatedHighFidelityState state,
+  ) {
+    _activeTextureSession = state.textureSession;
+    _queueTextureIndices(state.prioritizedPageIndices, prioritize: true);
+  }
+
+  void _syncActiveTextureSession(PageflipBookIsolatedScene scene) {
+    _applyResolvedHighFidelityState(_computeHighFidelityState(scene));
+  }
+
+  void _syncActiveTextureSessionForCurrentScene() {
+    final stageSize = _lastStageSize;
+    if (stageSize == null) {
+      return;
+    }
+    final scene = _controller.sceneForStage(stageSize);
+    if (scene == null) {
+      return;
+    }
+    _syncActiveTextureSession(scene);
+  }
+
+  void _clearActiveTextureSession() {
+    _activeTextureSession = null;
+  }
+
+  bool get _supportsAdvancedPageCurl =>
+      _lightingProgram != null && _backfaceProgram != null;
+
+  bool _shouldFreezeTextureSession(PageflipBookIsolatedScene scene) {
+    return _dragActive ||
+        _animationController.isAnimating ||
+        scene.isInteractive;
+  }
+
+  void _queueTextureIndices(
+    Iterable<int> pageIndices, {
+    bool prioritize = false,
+  }) {
+    var added = false;
+    final orderedIndices = pageIndices.toList(growable: false);
+    final iteration = prioritize ? orderedIndices.reversed : orderedIndices;
+    for (final pageIndex in iteration) {
+      if (pageIndex < 0 || pageIndex >= widget.pageCount) {
+        continue;
+      }
+      if (_pageSnapshots.containsKey(pageIndex)) {
+        continue;
+      }
+      final alreadyPending = _pendingCaptureIndices.contains(pageIndex);
+      if (alreadyPending && !prioritize) {
+        continue;
+      }
+      _pendingCaptureIndices.remove(pageIndex);
+      if (prioritize) {
+        _pendingCaptureIndices.addFirst(pageIndex);
+      } else {
+        _pendingCaptureIndices.addLast(pageIndex);
+      }
+      added = added || !alreadyPending;
+      _captureBoundaryKeys.putIfAbsent(
+        pageIndex,
+        () => GlobalKey(debugLabel: 'pageflip_isolated_capture_$pageIndex'),
+      );
+    }
+    if (added) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {});
+      });
+      _scheduleCapture();
+    }
   }
 
   void _updateViewport({required Size stageSize, required Size pageSize}) {
@@ -377,16 +419,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
 
   void _queueCurrentTextureWindow() {
     final current = _controller.currentPageIndex;
-    for (final candidate in <int>[current - 1, current, current + 1]) {
-      if (candidate < 0 || candidate >= widget.pageCount) {
-        continue;
-      }
-      if (_pageSnapshots.containsKey(candidate) ||
-          _pendingCaptureIndices.contains(candidate)) {
-        continue;
-      }
-      _pendingCaptureIndices.add(candidate);
-    }
+    _queueTextureIndices(<int>[current - 1, current, current + 1]);
   }
 
   void _handleTap(Offset localPosition) {
@@ -411,13 +444,9 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
       _controller.cancelInteraction();
       return;
     }
-    final scene = _controller.sceneForStage(stageSize);
-    if (scene == null || !_prepareTextureSession(scene, freezeBinding: false)) {
-      _controller.cancelInteraction();
-      _activeTextureSession = null;
-      return;
-    }
     _dragActive = true;
+    _controller.fold(localPosition);
+    _syncActiveTextureSessionForCurrentScene();
     setState(() {});
   }
 
@@ -431,11 +460,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
       return;
     }
     _controller.fold(localPosition);
-    final scene = _controller.sceneForStage(stageSize);
-    if (scene == null || !_prepareTextureSession(scene, freezeBinding: true)) {
-      _handlePanCancel();
-      return;
-    }
+    _syncActiveTextureSessionForCurrentScene();
     setState(() {});
   }
 
@@ -447,7 +472,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     final plan = _controller.stopMove();
     if (plan == null) {
       _controller.cancelInteraction();
-      _activeTextureSession = null;
+      _clearActiveTextureSession();
       setState(() {});
       return;
     }
@@ -457,7 +482,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
   void _handlePanCancel() {
     _dragActive = false;
     _controller.cancelInteraction();
-    _activeTextureSession = null;
+    _clearActiveTextureSession();
     if (mounted) {
       setState(() {});
     }
@@ -471,21 +496,11 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     if (plan == null) {
       return;
     }
-    final stageSize = _lastStageSize;
-    if (stageSize == null) {
-      _controller.cancelInteraction();
-      return;
-    }
-    final scene = _controller.sceneForStage(stageSize);
-    if (scene == null || !_prepareTextureSession(scene, freezeBinding: false)) {
-      _controller.cancelInteraction();
-      _activeTextureSession = null;
-      return;
-    }
     _startAnimation(plan);
   }
 
-  void _startAnimation(StPageFlipAnimationPlan plan) {
+  void _startAnimation(PageflipBookIsolatedAnimationPlan plan) {
+    _syncActiveTextureSessionForCurrentScene();
     _activeAnimationPlan = plan;
     _lastAnimationFrameIndex = -1;
     _animationController.duration = plan.duration;
@@ -505,19 +520,8 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     if (nextIndex == _lastAnimationFrameIndex) {
       return;
     }
-    _controller.applyAnimationFrame(
-      plan.frames[nextIndex],
-      reversePose:
-          plan.reversePoses != null && nextIndex < plan.reversePoses!.length
-          ? plan.reversePoses![nextIndex]
-          : null,
-    );
-    final scene = _controller.sceneForStage(stageSize);
-    if (scene == null || !_prepareTextureSession(scene, freezeBinding: true)) {
-      _animationController.stop();
-      _handlePanCancel();
-      return;
-    }
+    _controller.applyAnimationFrame(plan.frames[nextIndex]);
+    _syncActiveTextureSessionForCurrentScene();
     _lastAnimationFrameIndex = nextIndex;
     if (mounted) {
       setState(() {});
@@ -538,7 +542,7 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
       }
     }
     _activeAnimationPlan = null;
-    _activeTextureSession = null;
+    _clearActiveTextureSession();
     _lastAnimationFrameIndex = -1;
     _queueCurrentTextureWindow();
     if (mounted) {
@@ -546,61 +550,19 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     }
   }
 
-  bool _prepareTextureSession(
-    PageflipBookIsolatedScene scene, {
-    required bool freezeBinding,
-  }) {
-    final binding = scene.sheetBinding;
-    if (binding == null || !_shadersReady) {
-      return false;
-    }
-    final bundle = _resolveTextureBundle(binding);
-    _activeTextureSession = resolvePageflipBookIsolatedTextureSession(
-      existing: _activeTextureSession,
-      binding: binding,
-      resolvedBundle: bundle,
-      freezeBinding: freezeBinding,
-    );
-    return _activeTextureSession?.isReadyForMesh ?? false;
-  }
-
-  ArticlePageTextureBundle? _resolveTextureBundle(
-    PageflipBookIsolatedSheetBinding binding,
-  ) {
-    final recto = _pageSnapshots[binding.rectoPageIndex];
-    final verso = _pageSnapshots[binding.versoPageIndex];
-    final bottom = _pageSnapshots[binding.bottomPageIndex];
-    for (final index in binding.prioritizedPageIndices) {
-      if (_pageSnapshots.containsKey(index) ||
-          _pendingCaptureIndices.contains(index)) {
-        continue;
-      }
-      _pendingCaptureIndices.add(index);
-    }
-    if (recto == null || verso == null || bottom == null) {
-      return null;
-    }
-    return ArticlePageTextureBundle(recto: recto, verso: verso, bottom: bottom);
-  }
-
   bool _isDirectionReady(PageflipBookIsolatedDirection direction) {
-    if (!_shadersReady) {
-      return false;
-    }
+    final missing = <int>[];
     for (final pageIndex in _controller.textureWindowForDirection(direction)) {
       if (!_pageSnapshots.containsKey(pageIndex)) {
-        if (!_pendingCaptureIndices.contains(pageIndex)) {
-          _pendingCaptureIndices.add(pageIndex);
-          _scheduleCapture();
-        }
-        return false;
+        missing.add(pageIndex);
       }
+    }
+    if (missing.isNotEmpty) {
+      _queueTextureIndices(missing, prioritize: true);
+      return false;
     }
     return true;
   }
-
-  bool get _shadersReady =>
-      _lightingProgram != null && _backfaceProgram != null;
 
   Future<void> _loadShaders() async {
     try {
@@ -613,17 +575,17 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
       if (!mounted) {
         return;
       }
-      setState(() {
-        _lightingProgram = lighting;
-        _backfaceProgram = backface;
-      });
+      _lightingProgram = lighting;
+      _backfaceProgram = backface;
+      _queueCurrentTextureWindow();
+      setState(() {});
     } catch (_) {
-      // 隔离组件不提供用户可见 fallback；shader 未就绪时直接阻止翻页启动。
+      // shader 是可选增强效果；V2 mesh 不依赖它才能运行。
     }
   }
 
   void _scheduleCapture() {
-    if (_captureScheduled) {
+    if (_captureScheduled || _pendingCaptureIndices.isEmpty || !mounted) {
       return;
     }
     _captureScheduled = true;
@@ -633,40 +595,72 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
     });
   }
 
+  double _capturePixelRatio(BuildContext context) {
+    final view = View.maybeOf(context);
+    final pixelRatio =
+        view?.devicePixelRatio ??
+        MediaQuery.maybeOf(context)?.devicePixelRatio ??
+        1.0;
+    return pixelRatio.clamp(1.0, 2.0).toDouble();
+  }
+
   Future<void> _capturePendingTextures() async {
-    final pageSize = _lastPageSize;
-    if (!mounted || pageSize == null || _pendingCaptureIndices.isEmpty) {
+    if (!mounted || _pendingCaptureIndices.isEmpty) {
       return;
     }
-    final pixelRatio =
-        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
-    final pendingNow = _pendingCaptureIndices.toList(growable: false);
+    final pendingNow = _pendingCaptureIndices.take(3).toList(growable: false);
+    var capturedAny = false;
     for (final pageIndex in pendingNow) {
       final boundaryKey = _captureBoundaryKeys[pageIndex];
       final boundaryContext = boundaryKey?.currentContext;
-      final boundary =
-          boundaryContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null || boundary.debugNeedsPaint) {
-        _scheduleCapture();
-        return;
+      if (boundaryContext == null || !boundaryContext.mounted) {
+        continue;
       }
-      final image = await boundary.toImage(pixelRatio: pixelRatio);
-      final retired = _pageSnapshots.remove(pageIndex);
-      if (retired != null) {
-        _retiredSnapshots.add(retired);
+      RenderRepaintBoundary? boundary;
+      try {
+        final renderObject = boundaryContext.findRenderObject();
+        if (renderObject is RenderRepaintBoundary) {
+          boundary = renderObject;
+        }
+      } catch (_) {
+        continue;
       }
-      _pageSnapshots[pageIndex] = ArticlePageTextureSnapshot(
-        image: image,
-        logicalSize: pageSize,
-        pixelRatio: pixelRatio,
-      );
-      _pendingCaptureIndices.remove(pageIndex);
-      if (!mounted) {
-        return;
+      if (boundary == null ||
+          !boundary.attached ||
+          !boundary.hasSize ||
+          boundary.size.isEmpty ||
+          boundary.debugNeedsPaint) {
+        continue;
+      }
+      final logicalSize = boundary.size;
+      final pixelRatio = _capturePixelRatio(boundaryContext);
+      try {
+        final image = await boundary.toImage(pixelRatio: pixelRatio);
+        if (!mounted) {
+          image.dispose();
+          return;
+        }
+        final retired = _pageSnapshots.remove(pageIndex);
+        if (retired != null) {
+          _retiredSnapshots.add(retired);
+        }
+        _pageSnapshots[pageIndex] = ArticlePageTextureSnapshot(
+          image: image,
+          logicalSize: logicalSize,
+          pixelRatio: pixelRatio,
+        );
+        _pendingCaptureIndices.remove(pageIndex);
+        capturedAny = true;
+      } catch (_) {
+        // Capture can temporarily fail while the hidden layer is rebuilding.
       }
     }
-    if (mounted) {
+    if (capturedAny && mounted) {
+      _syncActiveTextureSessionForCurrentScene();
       setState(() {});
+    }
+    if (_pendingCaptureIndices.isNotEmpty) {
+      _scheduleCapture();
     }
   }
 
@@ -694,16 +688,87 @@ class _PageflipBookIsolatedState extends State<PageflipBookIsolated>
   }
 }
 
-class _RelativePathClipper extends CustomClipper<Path> {
-  const _RelativePathClipper(this.path);
+class _StableTextureCaptureLayer extends StatefulWidget {
+  const _StableTextureCaptureLayer({
+    required this.capturePages,
+    required this.pageSize,
+    required this.boundaryKeys,
+    required this.buildPage,
+  });
 
-  final Path path;
+  final List<int> capturePages;
+  final Size pageSize;
+  final Map<int, GlobalKey> boundaryKeys;
+  final Widget Function(int index) buildPage;
 
   @override
-  Path getClip(Size size) => path;
+  State<_StableTextureCaptureLayer> createState() =>
+      _StableTextureCaptureLayerState();
+}
+
+class _StableTextureCaptureLayerState
+    extends State<_StableTextureCaptureLayer> {
+  late List<int> _capturePages;
+  late Map<int, Widget> _cachedWidgets;
 
   @override
-  bool shouldReclip(covariant _RelativePathClipper oldClipper) {
-    return oldClipper.path != path;
+  void initState() {
+    super.initState();
+    _capturePages = List<int>.of(widget.capturePages);
+    _rebuildCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StableTextureCaptureLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(widget.capturePages, _capturePages) ||
+        widget.pageSize != oldWidget.pageSize) {
+      _capturePages = List<int>.of(widget.capturePages);
+      _rebuildCache();
+    }
+  }
+
+  void _rebuildCache() {
+    _cachedWidgets = {
+      for (final index in _capturePages) index: widget.buildPage(index),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _capturePages
+          .map((index) {
+            return RepaintBoundary(
+              key: widget.boundaryKeys.putIfAbsent(
+                index,
+                () => GlobalKey(debugLabel: 'pageflip_isolated_capture_$index'),
+              ),
+              child: SizedBox(
+                width: widget.pageSize.width,
+                height: widget.pageSize.height,
+                child: _cachedWidgets[index] ?? const SizedBox.shrink(),
+              ),
+            );
+          })
+          .toList(growable: false),
+    );
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: widget.pageSize.width,
+            maxWidth: widget.pageSize.width,
+            minHeight: widget.pageSize.height,
+            maxHeight: widget.pageSize.height * _capturePages.length,
+            child: column,
+          ),
+        ),
+      ),
+    );
   }
 }

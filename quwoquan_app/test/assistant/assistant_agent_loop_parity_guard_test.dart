@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart'
     as phase_owner;
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
@@ -36,7 +36,6 @@ Map<String, dynamic> _intentEnvelope({
       'intentSummary': '用户当前要一个能直接使用的深圳天气判断。',
       'concernPoints': const <String>['实时天气', '是否适合出门'],
       'emotionSignal': 'neutral',
-      'queryDesignSummary': '优先核对最新天气实况，再补对出行判断最关键的体感信息。',
     },
     'userMarkdown': '我先聚焦你的问题主线，再开始处理。',
     'result': <String, dynamic>{
@@ -131,7 +130,6 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
               'intentSummary': '先拿到能直接回答当前问题的实时天气依据。',
               'concernPoints': <String>['天气实况', '体感与出行影响'],
               'emotionSignal': 'neutral',
-              'queryDesignSummary': '优先检索最新天气实况，再核对关键体感指标。',
             },
             'toolCalls': const <Map<String, dynamic>>[
               <String, dynamic>{
@@ -144,7 +142,7 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
               },
             ],
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -219,18 +217,18 @@ class _FakeWeatherSearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    return const AssistantToolResult(
+    return AssistantToolResult(
       success: true,
       message: '搜索完成',
-      data: <String, dynamic>{
+      data: AssistantToolResultData(<String, Object?>{
         'provider': 'duckduckgo',
         'summary': '深圳今天天气晴朗，温度25°C',
         'qualityScore': 0.92,
         'authorityScore': 0.96,
         'freshnessHours': 1,
         'totalReferences': 1,
-        'references': <Map<String, dynamic>>[
-          <String, dynamic>{
+        'references': <Map<String, Object?>>[
+          <String, Object?>{
             'title': '深圳天气预报 - 中国气象局',
             'url': 'https://weather.cma.cn/shenzhen',
             'source': '中国气象局',
@@ -239,7 +237,7 @@ class _FakeWeatherSearchTool implements AssistantTool {
             'freshnessHours': 1,
           },
         ],
-      },
+      }),
     );
   }
 }

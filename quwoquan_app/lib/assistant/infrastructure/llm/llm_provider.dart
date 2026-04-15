@@ -138,7 +138,6 @@ class LlmCallOptions {
       timeoutSeconds = 45,
       streamJsonFieldPaths = const <String>[
         'retrievalProcessing.processingSummary',
-        'answerProcessing.readinessSummary',
       ];
 
   /// Default planning / ReAct stage defaults (mirrors legacy hard-coded values).
@@ -249,7 +248,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       ],
       templateContext: templateContext,
     );
-    final toolSchemas = _buildToolSchemas(availableTools);
+    final toolSchemas = _buildOpenAiToolSchemas(availableTools);
     final enableTools = toolSchemas.isNotEmpty;
 
     if (onDelta != null) {
@@ -1066,7 +1065,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     if (!t.startsWith('{') && !t.startsWith('```')) return false;
     return t.contains('"contractId"') ||
         t.contains('"decision"') ||
-        t.contains('"toolPlan"') ||
+        t.contains('"toolCalls"') ||
         t.contains('"nextAction"');
   }
 
@@ -1183,12 +1182,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         onDelta(fallbackVisible.substring(emittedVisibleText.length));
       }
       if (rawOutput.trim().isEmpty) {
-        onFailure?.call(AssistantFailureCode.modelResponseInvalid, <String, dynamic>{
-          'reason': 'empty_stream_payload',
-          'templateId': templateId,
-          'templateVersion': templateVersion,
-          'modelId': modelId,
-        });
+        onFailure
+            ?.call(AssistantFailureCode.modelResponseInvalid, <String, dynamic>{
+              'reason': 'empty_stream_payload',
+              'templateId': templateId,
+              'templateVersion': templateVersion,
+              'modelId': modelId,
+            });
       }
       return rawOutput;
     } catch (error) {
@@ -1284,7 +1284,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     await appendLayer('stack.safety');
     await appendLayer('stack.model_thinking_policy');
     final hasConversationSpine =
-        (templateVariables['conversationSpine'] as String?)?.trim().isNotEmpty ==
+        (templateVariables['conversationSpine'] as String?)
+            ?.trim()
+            .isNotEmpty ==
         true;
     if (hasConversationSpine) {
       await appendLayer('stack.conversation_spine');
@@ -1401,7 +1403,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     final content = (message['content'] as String?)?.trim() ?? '';
     final profile = ModelCapabilityProfile.forModelRef(modelRef);
     final reasoning = profile.supportsReasoningField
-        ? _extractReasoningField(message.cast<String, Object?>(), profile).trim()
+        ? _extractReasoningField(
+            message.cast<String, Object?>(),
+            profile,
+          ).trim()
         : '';
     final toolCallsRaw = message['tool_calls'];
     final toolCalls = <AssistantToolCall>[];
@@ -1615,10 +1620,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     return (normalized.length / 4).ceil();
   }
 
-  List<Map<String, dynamic>> _buildToolSchemas(List<String> availableTools) {
+  List<Map<String, dynamic>> _buildOpenAiToolSchemas(
+    List<String> availableTools,
+  ) {
     final schemas = <Map<String, dynamic>>[];
     for (final name in availableTools) {
-      final schema = toolMetadataRegistry?.openAiFunctionSchemaByName(name);
+      final schema = toolMetadataRegistry?.openAiToolSchemaByName(name);
       if (schema != null) {
         schemas.add(schema);
       }
@@ -1634,8 +1641,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         .map((message) => _normalizeMessageForProfile(message))
         .toList(growable: true);
     final continuation =
-        (templateContext['providerReasoningContinuation'] as String?)
-            ?.trim() ??
+        (templateContext['providerReasoningContinuation'] as String?)?.trim() ??
         '';
     if (continuation.isEmpty || !_profile.supportsReasoningField) {
       return normalized;
@@ -1665,7 +1671,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     return normalized;
   }
 
-  Map<String, dynamic> _normalizeMessageForProfile(Map<String, dynamic> message) {
+  Map<String, dynamic> _normalizeMessageForProfile(
+    Map<String, dynamic> message,
+  ) {
     final normalized = <String, dynamic>{};
     final role = (message['role'] as String?)?.trim() ?? '';
     if (role.isNotEmpty) {
@@ -1693,13 +1701,16 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         role == 'assistant' &&
         continuation.isNotEmpty) {
       normalized[_profile.reasoningFieldName.isNotEmpty
-          ? _profile.reasoningFieldName
-          : 'reasoning_content'] = continuation;
+              ? _profile.reasoningFieldName
+              : 'reasoning_content'] =
+          continuation;
     }
     return normalized;
   }
 
-  Map<String, dynamic> _reasoningRequestEntries(ModelCapabilityProfile profile) {
+  Map<String, dynamic> _reasoningRequestEntries(
+    ModelCapabilityProfile profile,
+  ) {
     if (profile.reasoningRequestObject.isEmpty) {
       return const <String, Object?>{};
     }
@@ -1874,6 +1885,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       emittedDelta = true;
       onDelta(delta);
     }
+
     void forwardStructured(String fieldPath, String delta) {
       if (delta.trim().isEmpty) return;
       emittedStructuredDelta = true;
@@ -2305,4 +2317,3 @@ List<Map<String, dynamic>> _openAiToolCallsWireFromAssistantCalls(
       )
       .toList(growable: false);
 }
-

@@ -7,7 +7,7 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 void main() {
   group('process timeline projection', () {
-    test('canonical 4-step timeline 会投影成可见 3-step timeline', () {
+    test('canonical 4-step timeline 会投影成可见 2-step timeline', () {
       final canonical = _canonicalFourStepTimeline();
 
       final visible = buildVisibleProcessTimeline(canonical);
@@ -17,17 +17,16 @@ void main() {
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ]),
       );
       expect(visible.first.detail, contains('关注点：天气现状、出门体感'));
       expect(
-        visible.first.understandingSnapshot.queryDesignSummary,
-        '我会先按天气现状和出门建议两路来核对。',
+        visible.first.understandingSnapshot.intentSummary,
+        contains('我会先按天气现状和出门建议两路来核对'),
       );
     });
 
-    test('持久化消息读取时 UI timeline 只恢复 3-step，但 canonical 仍保留 4-step', () {
+    test('持久化消息读取时 UI timeline 只恢复 2-step，但 canonical 仍保留 4-step', () {
       final canonical = _canonicalFourStepTimeline();
       final message = <String, dynamic>{
         'role': 'assistant',
@@ -64,7 +63,6 @@ void main() {
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ]),
       );
       expect(persistedVisible.first.detail, contains('关注点：天气现状、出门体感'));
@@ -124,7 +122,7 @@ List<ProcessTimelineFrame> _canonicalFourStepTimeline() {
       headline: '我先确认你现在最需要的是实时天气结果。',
       detail: '关注点：天气现状、出门体感',
       understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-        intentSummary: '我先确认你现在最需要的是实时天气结果。',
+        intentSummary: '',
         userFacingSummary: '我先确认你现在最需要的是实时天气结果。',
         concernPoints: <String>['天气现状', '出门体感'],
       ),
@@ -135,19 +133,7 @@ List<ProcessTimelineFrame> _canonicalFourStepTimeline() {
       headline: '我会先按天气现状和出门建议两路来核对。',
       detail: '天气现状：深圳 实时天气\n出门建议：体感温度 / 降雨概率',
       understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-        queryDesignSummary: '我会先按天气现状和出门建议两路来核对。',
-        queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-          RunArtifactsUnderstandingQueryGroup(
-            dimension: '天气现状',
-            queries: <String>['深圳 实时天气'],
-            why: '先确认当前天气和温度。',
-          ),
-          RunArtifactsUnderstandingQueryGroup(
-            dimension: '出门建议',
-            queries: <String>['深圳 体感温度', '深圳 降雨概率'],
-            why: '再判断是否需要携带雨具与增减衣物。',
-          ),
-        ],
+        intentSummary: '我会先按天气现状和出门建议两路来核对。',
       ),
     ),
     buildProcessTimelineFrame(

@@ -483,10 +483,17 @@ class BootstrapPhase implements Phase {
         previousIntentGraph != null ||
         previousAnswerSummary.trim().isNotEmpty ||
         _latestAssistantMessage(sessionHistory) != null;
-    if (!hasPriorTurn || !_looksLikeFollowUpQuery(query)) {
+    final referenceQueries = _recentUserQueries(sessionHistory);
+    final implicitFollowUp =
+        _looksLikeFollowUpQuery(query) ||
+        _looksLikeImplicitSameTopicFollowUp(
+          query,
+          previousIntentGraph: previousIntentGraph,
+          referenceQueries: referenceQueries,
+        );
+    if (!hasPriorTurn || !implicitFollowUp) {
       return seeded;
     }
-    final referenceQueries = _recentUserQueries(sessionHistory);
     return ContextContinuityPolicy(
       queryIntent: seeded.queryIntent,
       problemClass:
@@ -524,6 +531,50 @@ class BootstrapPhase implements Phase {
       r'([A-Za-z]{3,}|[\u4e00-\u9fff]{2,}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
     ).hasMatch(compact);
     return (referentialCue || refinementCue) && !explicitAnchor;
+  }
+
+  bool _looksLikeImplicitSameTopicFollowUp(
+    String query, {
+    required IntentGraph? previousIntentGraph,
+    required List<String> referenceQueries,
+  }) {
+    final normalizedQuery = _normalizeImplicitFollowUpTopic(query);
+    if (normalizedQuery.isEmpty || normalizedQuery.length > 12) {
+      return false;
+    }
+    final candidates = <String>[
+      previousIntentGraph?.userGoal ?? '',
+      previousIntentGraph?.targetObject ?? '',
+      ...?previousIntentGraph?.entityAnchors,
+      ...referenceQueries,
+    ]
+        .map(_normalizeImplicitFollowUpTopic)
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    for (final candidate in candidates) {
+      if (candidate.contains(normalizedQuery) ||
+          normalizedQuery.contains(candidate)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _normalizeImplicitFollowUpTopic(String raw) {
+    var normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) return '';
+    normalized = normalized
+        .replaceAll(RegExp(r'[Aa]股'), '股票')
+        .replaceAll('中国股市', '股票')
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(
+          RegExp(
+            r'(昨天|今天|明天|后天|周一|周二|周三|周四|周五|周六|周日|最近|请问|一下|一下子|是什么|为什么|怎么|如何|原因|呢|吗|呀|啊|吧)',
+          ),
+          '',
+        )
+        .replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+    return normalized;
   }
 
   bool _shouldCarryLocationHints(

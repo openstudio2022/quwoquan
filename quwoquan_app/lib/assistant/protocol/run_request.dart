@@ -16,13 +16,7 @@ class AssistantRunMessage {
   }
 }
 
-enum RewriteMode {
-  regenerate,
-  concise,
-  detailed,
-  casual,
-  deepThink,
-}
+enum RewriteMode { regenerate, concise, detailed, casual, deepThink }
 
 class RewriteInstruction {
   const RewriteInstruction({
@@ -77,6 +71,11 @@ class RewriteInstruction {
 }
 
 class AssistantRunRequest {
+  static const int defaultNormalModelStageBudget = 2;
+  static const int defaultTotalModelStageBudget = 5;
+  static const int defaultMaxRequeryRounds =
+      defaultTotalModelStageBudget - defaultNormalModelStageBudget;
+
   const AssistantRunRequest({
     required this.messages,
     this.sessionId,
@@ -90,7 +89,7 @@ class AssistantRunRequest {
     this.gpsLocation = const <String, dynamic>{},
     this.channel = 'app',
     this.traceId,
-    this.maxIterations = 6,
+    this.maxIterations = defaultTotalModelStageBudget,
     this.capabilityCatalog = const <String>[],
     this.contextScopeHint = const <String, dynamic>{},
     this.privacyProfile = 'default',
@@ -134,6 +133,21 @@ class AssistantRunRequest {
 
   bool get shouldSkipSearch =>
       isRewrite && rewriteInstruction!.mode != RewriteMode.deepThink;
+
+  int get totalModelStageBudget =>
+      maxIterations > 0 ? maxIterations : defaultTotalModelStageBudget;
+
+  int get plannerStageBudget => 1;
+
+  int get answerStageBudget {
+    final remaining = totalModelStageBudget - plannerStageBudget;
+    return remaining > 0 ? remaining : 1;
+  }
+
+  int get maxRequeryRounds {
+    final remaining = totalModelStageBudget - defaultNormalModelStageBudget;
+    return remaining > 0 ? remaining : 0;
+  }
 
   Map<String, dynamic> toJson() {
     final out = <String, dynamic>{
@@ -194,14 +208,17 @@ class AssistantRunRequest {
     'fromGlobalSearch',
   };
 
-  /// HTTP 网关等入口：与 [fromJson] 一致，默认 [maxIterations] 为 8（与本地网关历史行为对齐）。
+  /// HTTP 网关等入口：默认总模型阶段预算与 [fromJson] 一致。
   factory AssistantRunRequest.fromGatewayBody(Map<String, dynamic> payload) {
-    return AssistantRunRequest.fromJson(payload, defaultMaxIterations: 8);
+    return AssistantRunRequest.fromJson(
+      payload,
+      defaultMaxIterations: defaultTotalModelStageBudget,
+    );
   }
 
   factory AssistantRunRequest.fromJson(
     Map<String, dynamic> json, {
-    int defaultMaxIterations = 6,
+    int defaultMaxIterations = defaultTotalModelStageBudget,
   }) {
     final ext = <String, dynamic>{};
     for (final e in json.entries) {

@@ -82,14 +82,6 @@ void main() {
                 'intentSummary': '用户要判断今晚深圳是否适合出门，重点是实时天气和降雨变化。',
                 'concernPoints': const <String>['实时天气', '降雨风险'],
                 'emotionSignal': 'neutral',
-                'queryDesignSummary': '优先核对实时天气、小时降雨和预警变化。',
-                'queryGroups': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'dimension': '实时天气',
-                    'queries': const <String>['深圳 今晚 小时天气'],
-                    'why': '先补最影响出门判断的条件',
-                  },
-                ],
               },
             }),
             fieldPath: 'understandingSnapshot.userFacingSummary',
@@ -180,7 +172,6 @@ void main() {
                 'intentSummary': '用户想确认深圳现在适不适合出门。',
                 'concernPoints': const <String>['实时天气', '降雨变化'],
                 'emotionSignal': 'neutral',
-                'queryDesignSummary': '先核对实时天气与降雨变化。',
               },
             }),
             fieldPath: 'understandingSnapshot.userFacingSummary',
@@ -230,7 +221,7 @@ void main() {
       'evidence digest phase 在普通 ready 链路只缓存 fallback processingSummary，不单独发流式过程事件',
       () async {
         const expectedSummary =
-            '围绕你刚才最关心的降雨风险、体感温度，现在已经能直接确认的是：今晚前半夜降雨概率低，体感温度适中。其余背景线索我不会直接带进最终答案。';
+            '降雨风险、体感温度方面，已有可信证据指向以下判断：今晚前半夜降雨概率低，体感温度适中。';
         final traces = <AssistantTraceEvent>[];
         final phase = EvidenceDigestPhase();
         final phaseOneResult = ReactRuntimeResult(

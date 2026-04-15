@@ -782,8 +782,6 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
     this.onPageCurlAborted,
     this.showFooterPageLabel = true,
     this.paperTexture,
-    this.preferSoftBackwardFlip = false,
-    this.useForwardMirroredBackwardPath = false,
   });
 
   /// 超大文档安全网阈值。
@@ -813,8 +811,6 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
 
   /// 非 null 时与创作态纸张质感一致，驱动页壳色与只读正文字形/色。
   final ArticlePaperTexture? paperTexture;
-  final bool preferSoftBackwardFlip;
-  final bool useForwardMirroredBackwardPath;
 
   @override
   State<ArticleReadOnlyBookDeck> createState() =>
@@ -946,10 +942,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         widget.metrics != oldWidget.metrics ||
         widget.coverUrl != oldWidget.coverUrl ||
         widget.showFooterPageLabel != oldWidget.showFooterPageLabel ||
-        widget.paperTexture != oldWidget.paperTexture ||
-        widget.preferSoftBackwardFlip != oldWidget.preferSoftBackwardFlip ||
-        widget.useForwardMirroredBackwardPath !=
-            oldWidget.useForwardMirroredBackwardPath) {
+        widget.paperTexture != oldWidget.paperTexture) {
       _pageSurfaceCache.clear();
       _resetPageTextureSnapshots();
       _clearActiveTextureSession();
@@ -1034,20 +1027,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       _singleBackwardInteractionController.state;
 
   bool _isSingleBackwardRuntimeEnabledForController() {
-    return widget.preferSoftBackwardFlip &&
-        widget.useForwardMirroredBackwardPath &&
-        _configuredDisplayMode == PageflipBookDisplayMode.single &&
-        _pageFlipController?.layout.orientation ==
-            StPageFlipOrientation.portrait;
+    return false;
   }
 
   bool _supportsSingleBackwardInteraction(Size stageSize) {
-    final bookController = PageflipBookController(
-      config: _buildPageflipBookConfig(stageSize),
-    );
-    return widget.preferSoftBackwardFlip &&
-        widget.useForwardMirroredBackwardPath &&
-        bookController.resolvesToSinglePortrait(stageSize);
+    return false;
   }
 
   Rect? _singleBackwardPageRect() {
@@ -1103,7 +1087,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? PageflipBookDisplayMode.spread
           : PageflipBookDisplayMode.single,
       enablePageCurl: widget.enablePageCurl,
-      useForwardMirroredBackwardPath: widget.useForwardMirroredBackwardPath,
     );
   }
 
@@ -1168,7 +1151,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         pageHeight: pageSize.height,
         initialPage: _currentPage,
         displayMode: displayMode,
-        useForwardMirroredBackwardPath: widget.useForwardMirroredBackwardPath,
       );
       return;
     }
@@ -1384,17 +1366,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (_disableAdvancedPageCurlForTest) {
       return false;
     }
-    if (_usesBackwardLeafContract(scene)) {
-      return true;
-    }
     return _lightingShaderProgram != null && _backfaceShaderProgram != null;
   }
 
   bool _usesBackwardLeafContract(StPageFlipScene scene) {
-    return widget.preferSoftBackwardFlip &&
-        widget.useForwardMirroredBackwardPath &&
-        scene.direction == StPageFlipDirection.back &&
-        scene.flippingPageIndex != null;
+    return false;
   }
 
   PageflipBookSurfaceRoleBinding? _surfaceRoleBindingForScene(
@@ -1458,19 +1434,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }
 
   PageflipBookRenderDecision _resolveRenderDecision(StPageFlipScene scene) {
-    final usesBackwardLeafContract = _usesBackwardLeafContract(scene);
-    final sheetBinding = _sheetBindingForScene(scene);
     final textureSession = _textureSessionContractForScene(scene);
     return resolvePageflipBookRenderDecision(
       hasDirection: _sceneRenderDirection(scene) != null,
       hasCorner: (scene.renderFrame?.corner ?? scene.corner) != null,
       supportsAdvancedPageCurl: _supportsAdvancedPageCurl(scene),
-      usesBackwardLeafContract: usesBackwardLeafContract,
-      backwardLeafMeshEnabled: !usesBackwardLeafContract || sheetBinding != null,
-      backwardLeafMeshPhaseReady: !usesBackwardLeafContract || sheetBinding != null,
-      hasTextureBinding: usesBackwardLeafContract
-          ? sheetBinding != null
-          : _textureBindingForScene(scene) != null,
+      hasTextureBinding: _textureBindingForScene(scene) != null,
       textureSession: textureSession,
     );
   }
@@ -2201,10 +2170,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final dragRatio = (directionalDistance / controller.layout.bounds.pageWidth)
         .clamp(0.0, 1.0)
         .toDouble();
-    final usesMirroredBackwardReplay =
-        widget.preferSoftBackwardFlip &&
-        widget.useForwardMirroredBackwardPath &&
-        direction == StPageFlipDirection.back;
+    const usesMirroredBackwardReplay = false;
     final elapsedMs = dragStartedAt == null
         ? 0
         : DateTime.now().difference(dragStartedAt).inMilliseconds;
@@ -3011,13 +2977,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }) {
     final palette = resolveArticleTemplatePalette(context, widget.template);
     // 前翻：翻过 8% 后显示背面（镜像内容），模拟纸张翻转后看到背面。
-    // typography 单页回翻：按前翻镜像回放，在大部分路径显示叶片背面，
-    // 仅在即将落平时切回正面。
     final showBackside = direction == StPageFlipDirection.forward
         ? progress > 0.08
-        : widget.preferSoftBackwardFlip &&
-              widget.useForwardMirroredBackwardPath &&
-              progress < 0.92;
+        : false;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[

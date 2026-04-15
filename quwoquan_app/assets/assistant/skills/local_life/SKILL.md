@@ -41,7 +41,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 decision、toolPlan、slotState
+1. 机器轨 JSON：包含 decision、toolCalls、slotState
 2. 用户轨 Markdown：简短说明当前执行进度
 
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出本地生活卡片。
@@ -56,7 +56,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "category": {"value": "", "source": "user_query|memory|unknown"},
     "budget": {"value": "", "source": "user_query|memory|unknown"}
   },
-  "toolPlan": [
+  "toolCalls": [
     {"toolName": "local_context", "arguments": {"requestedFields": ["location"]}},
     {"toolName": "web_search", "arguments": {"query": "深圳福田区 川菜馆 推荐 2025", "freshnessHoursMax": 168}}
   ],

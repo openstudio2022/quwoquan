@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';

@@ -37,7 +37,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 decision、toolPlan、slotState
+1. 机器轨 JSON：包含 decision、toolCalls、slotState
 2. 用户轨 Markdown：简短说明当前执行进度
 
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出最终学习卡片。
@@ -52,7 +52,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "targetExam": {"value": "", "source": "user_query|memory|unknown"},
     "daysLeft": {"value": "", "source": "user_query|memory|unknown"}
   },
-  "toolPlan": [
+  "toolCalls": [
     {"toolName": "web_search", "arguments": {"query": "示例查询"}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},

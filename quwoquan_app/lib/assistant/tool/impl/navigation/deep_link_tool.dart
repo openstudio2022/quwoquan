@@ -22,7 +22,7 @@ class DeepLinkTool implements AssistantTool {
   };
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final url = (arguments['url'] as String?)?.trim() ?? '';
     if (url.isEmpty) {
       return const AssistantToolResult(
@@ -79,7 +79,10 @@ class DeepLinkTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: '已打开: $url',
-        data: <String, dynamic>{'url': url, 'scheme': uri.scheme},
+        data: AssistantToolResultData(<String, Object?>{
+          'url': url,
+          'scheme': uri.scheme,
+        }),
       );
     } catch (error) {
       return AssistantToolResult(

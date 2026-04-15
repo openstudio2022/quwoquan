@@ -5,8 +5,11 @@ import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 /// Orchestrates phases in order: bootstrap → understand → retrieval-design →
-/// execution → synthesis → finalize. Execution phase delegates to legacy until
-/// migration completes.
+/// execution → synthesis → finalize.
+///
+/// Execution and synthesis already enter through typed pipeline phases; the
+/// heavy bridge logic still lives in `assistant_pipeline_engine.dart` during the
+/// migration window.
 class PhaseOrchestrator {
   PhaseOrchestrator({required List<Phase> phases})
     : _phases = List<Phase>.unmodifiable(phases);

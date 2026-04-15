@@ -218,8 +218,6 @@ Map<String, dynamic> _compactUnderstandingSnapshot(
   return <String, dynamic>{
     if (snapshot.userFacingSummary.trim().isNotEmpty)
       'userFacingSummary': snapshot.userFacingSummary.trim(),
-    if (snapshot.queryDesignSummary.trim().isNotEmpty)
-      'queryDesignSummary': snapshot.queryDesignSummary.trim(),
     if (snapshot.resolutionItems.isNotEmpty)
       'resolutionItems': snapshot.resolutionItems
           .where(

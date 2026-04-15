@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -73,7 +73,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '用户想了解深圳天气，先搜索最新信息。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{'query': '深圳 今天 天气 实时'},
@@ -101,7 +101,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '搜索到气象局页面，深入阅读获取详细天气数据。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_fetch',
               arguments: <String, dynamic>{
@@ -361,9 +361,11 @@ void main() {
 
     test('memory_search 工具可独立执行', () async {
       final memoryTool = MemorySearchTool(memoryRepository: memoryRepo);
-      final result = await memoryTool.execute(<String, dynamic>{
-        'query': '用户住在哪里',
-      });
+      final result = await memoryTool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '用户住在哪里',
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['resultCount'], greaterThan(0));
       final results = result.data?['results'] as List;
@@ -380,9 +382,11 @@ void main() {
         );
       });
       final fetchTool = WebFetchTool(client: mockClient);
-      final result = await fetchTool.execute(<String, dynamic>{
-        'url': 'https://example.com/test',
-      });
+      final result = await fetchTool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/test',
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['title'], '测试页面');
       expect(result.data?['content'], contains('测试内容'));
@@ -446,7 +450,7 @@ class _FakeWebSearchTool implements AssistantTool {
   String get description => '网络搜索';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
 
     // Check cache
@@ -455,7 +459,10 @@ class _FakeWebSearchTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: cached['message'] as String? ?? '缓存命中',
-        data: <String, dynamic>{...cached, 'cacheHit': true},
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
+          ...cached,
+          'cacheHit': true,
+        }),
       );
     }
 
@@ -487,7 +494,7 @@ class _FakeWebSearchTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message: '检索结果：深圳今天天气晴朗，温度25°C',
-      data: resultData,
+      data: AssistantToolResultData.fromJson(resultData),
     );
   }
 }

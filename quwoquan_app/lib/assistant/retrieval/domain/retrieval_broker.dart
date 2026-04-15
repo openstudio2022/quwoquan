@@ -62,26 +62,30 @@ class RetrievalFetchRequest {
   const RetrievalFetchRequest({
     required this.url,
     this.maxChars,
-    this.arguments = const <String, dynamic>{},
+    this.queryTaskId = '',
+    this.dimension = '',
   });
 
   final String url;
   final int? maxChars;
-  final Map<String, dynamic> arguments;
+  final String queryTaskId;
+  final String dimension;
 
   factory RetrievalFetchRequest.fromToolArguments(Map<String, dynamic> arguments) {
     final rawMaxChars = arguments['maxChars'];
     return RetrievalFetchRequest(
       url: (arguments['url'] as String?)?.trim() ?? '',
       maxChars: rawMaxChars is num ? rawMaxChars.toInt() : null,
-      arguments: Map<String, dynamic>.from(arguments),
+      queryTaskId: (arguments['queryTaskId'] as String?)?.trim() ?? '',
+      dimension: (arguments['dimension'] as String?)?.trim() ?? '',
     );
   }
 
   Map<String, dynamic> toToolArguments() => <String, dynamic>{
-        ...arguments,
         'url': url,
         if (maxChars != null) 'maxChars': maxChars,
+        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+        if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
       };
 }
 
@@ -96,7 +100,7 @@ class RetrievalSearchResult {
 
   final bool success;
   final String message;
-  final Map<String, dynamic>? data;
+  final AssistantToolResultData? data;
   final AssistantErrorCode errorCode;
   final bool degraded;
 
@@ -147,45 +151,191 @@ class BrokerWebSearchResultDataView {
   }
 }
 
-/// Typed read surface for `web_fetch` entries in [RetrievalFetchResult.data]
-/// (broker → tool boundary).
-class BrokerWebFetchResultDataView {
-  BrokerWebFetchResultDataView(Map<String, dynamic> data)
-    : _data = Map<String, dynamic>.from(data);
+class RetrievalFetchReference {
+  const RetrievalFetchReference({
+    this.url = '',
+    this.title = '',
+    this.source = '',
+    this.sourceHost = '',
+    this.snippet = '',
+    this.sourceTier = '',
+    this.queryTaskId = '',
+    this.dimension = '',
+    this.retrievedAt = '',
+  });
 
-  final Map<String, dynamic> _data;
+  final String url;
+  final String title;
+  final String source;
+  final String sourceHost;
+  final String snippet;
+  final String sourceTier;
+  final String queryTaskId;
+  final String dimension;
+  final String retrievedAt;
 
-  Map<String, dynamic> get raw => _data;
+  factory RetrievalFetchReference.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return RetrievalFetchReference(
+      url: payload.stringField('url') ?? '',
+      title: payload.stringField('title') ?? '',
+      source: payload.stringField('source') ?? '',
+      sourceHost: payload.stringField('sourceHost') ?? '',
+      snippet: payload.stringField('snippet') ?? '',
+      sourceTier: payload.stringField('sourceTier') ?? '',
+      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      dimension: payload.stringField('dimension') ?? '',
+      retrievedAt: payload.stringField('retrievedAt') ?? '',
+    );
+  }
 
-  String valueOf(String key) =>
-      (_data[key] as Object?)?.toString().trim() ?? '';
+  static List<RetrievalFetchReference> listFromJson(Object? raw) {
+    if (raw is! List) {
+      return const <RetrievalFetchReference>[];
+    }
+    return raw
+        .map(RetrievalFetchReference.fromJson)
+        .where(
+          (item) =>
+              item.url.trim().isNotEmpty || item.title.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+  }
 
-  Object? get content => _data['content'];
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      if (url.trim().isNotEmpty) 'url': url.trim(),
+      if (title.trim().isNotEmpty) 'title': title.trim(),
+      if (source.trim().isNotEmpty) 'source': source.trim(),
+      if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
+      if (snippet.trim().isNotEmpty) 'snippet': snippet.trim(),
+      if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
+      if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+      if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
+      if (retrievedAt.trim().isNotEmpty) 'retrievedAt': retrievedAt.trim(),
+    };
+  }
+}
 
-  String get title => valueOf('title');
+class RetrievalFetchResultPayload {
+  const RetrievalFetchResultPayload({
+    this.url = '',
+    this.title = '',
+    this.source = '',
+    this.sourceHost = '',
+    this.content = '',
+    this.summary = '',
+    this.sourceTier = '',
+    this.queryTaskId = '',
+    this.dimension = '',
+    this.contentType = '',
+    this.charCount,
+    this.truncated,
+    this.references = const <RetrievalFetchReference>[],
+  });
 
-  String get url => valueOf('url');
+  final String url;
+  final String title;
+  final String source;
+  final String sourceHost;
+  final String content;
+  final String summary;
+  final String sourceTier;
+  final String queryTaskId;
+  final String dimension;
+  final String contentType;
+  final int? charCount;
+  final bool? truncated;
+  final List<RetrievalFetchReference> references;
 
-  String get source => valueOf('source');
+  factory RetrievalFetchResultPayload.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return RetrievalFetchResultPayload(
+      url: payload.stringField('url') ?? '',
+      title: payload.stringField('title') ?? '',
+      source: payload.stringField('source') ?? '',
+      sourceHost: payload.stringField('sourceHost') ?? '',
+      content: payload['content']?.toString().trim() ?? '',
+      summary: payload.stringField('summary') ?? '',
+      sourceTier: payload.stringField('sourceTier') ?? '',
+      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      dimension: payload.stringField('dimension') ?? '',
+      contentType: payload.stringField('contentType') ?? '',
+      charCount: payload.intField('charCount'),
+      truncated: payload.boolField('truncated'),
+      references: RetrievalFetchReference.listFromJson(payload['references']),
+    );
+  }
 
-  String get sourceHost => valueOf('sourceHost');
+  bool get isEmpty =>
+      url.trim().isEmpty &&
+      title.trim().isEmpty &&
+      source.trim().isEmpty &&
+      content.trim().isEmpty &&
+      summary.trim().isEmpty &&
+      references.isEmpty;
 
-  String get summary => valueOf('summary');
+  RetrievalFetchResultPayload copyWith({
+    String? url,
+    String? title,
+    String? source,
+    String? sourceHost,
+    String? content,
+    String? summary,
+    String? sourceTier,
+    String? queryTaskId,
+    String? dimension,
+    String? contentType,
+    int? charCount,
+    bool? truncated,
+    List<RetrievalFetchReference>? references,
+  }) {
+    return RetrievalFetchResultPayload(
+      url: url ?? this.url,
+      title: title ?? this.title,
+      source: source ?? this.source,
+      sourceHost: sourceHost ?? this.sourceHost,
+      content: content ?? this.content,
+      summary: summary ?? this.summary,
+      sourceTier: sourceTier ?? this.sourceTier,
+      queryTaskId: queryTaskId ?? this.queryTaskId,
+      dimension: dimension ?? this.dimension,
+      contentType: contentType ?? this.contentType,
+      charCount: charCount ?? this.charCount,
+      truncated: truncated ?? this.truncated,
+      references: references ?? this.references,
+    );
+  }
 
-  String get sourceTier => valueOf('sourceTier');
-
-  List<Map<String, dynamic>> get referenceMaps =>
-      (_data['references'] as List?)
-          ?.whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false) ??
-      const <Map<String, dynamic>>[];
+  AssistantToolResultData toResultData() {
+    return AssistantToolResultData(
+      <String, Object?>{
+        if (url.trim().isNotEmpty) 'url': url.trim(),
+        if (title.trim().isNotEmpty) 'title': title.trim(),
+        if (source.trim().isNotEmpty) 'source': source.trim(),
+        if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
+        if (content.trim().isNotEmpty) 'content': content.trim(),
+        if (summary.trim().isNotEmpty) 'summary': summary.trim(),
+        if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
+        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+        if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
+        if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
+        if (charCount != null) 'charCount': charCount,
+        if (truncated != null) 'truncated': truncated,
+        if (references.isNotEmpty)
+          'references': references
+              .map((item) => item.toJson())
+              .toList(growable: false),
+      },
+    );
+  }
 }
 
 class RetrievalFetchResult {
   const RetrievalFetchResult({
     required this.success,
     required this.message,
+    this.payload,
     this.data,
     this.errorCode = AssistantErrorCode.none,
     this.degraded = false,
@@ -193,7 +343,8 @@ class RetrievalFetchResult {
 
   final bool success;
   final String message;
-  final Map<String, dynamic>? data;
+  final RetrievalFetchResultPayload? payload;
+  final AssistantToolResultData? data;
   final AssistantErrorCode errorCode;
   final bool degraded;
 
@@ -201,16 +352,47 @@ class RetrievalFetchResult {
     return RetrievalFetchResult(
       success: result.success,
       message: result.message,
+      payload: (() {
+        final payload = RetrievalFetchResultPayload.fromJson(result.data);
+        return payload.isEmpty ? null : payload;
+      })(),
       data: result.data,
       errorCode: result.errorCode,
       degraded: result.degraded,
     );
   }
 
+  RetrievalFetchResultPayload? get payloadOrNull {
+    final current = payload;
+    if (current != null && !current.isEmpty) {
+      return current;
+    }
+    final parsed = RetrievalFetchResultPayload.fromJson(data);
+    return parsed.isEmpty ? null : parsed;
+  }
+
+  RetrievalFetchResult copyWith({
+    bool? success,
+    String? message,
+    RetrievalFetchResultPayload? payload,
+    AssistantToolResultData? data,
+    AssistantErrorCode? errorCode,
+    bool? degraded,
+  }) {
+    return RetrievalFetchResult(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      payload: payload ?? this.payload,
+      data: data ?? this.data,
+      errorCode: errorCode ?? this.errorCode,
+      degraded: degraded ?? this.degraded,
+    );
+  }
+
   AssistantToolResult toToolResult() => AssistantToolResult(
         success: success,
         message: message,
-        data: data,
+        data: payloadOrNull?.toResultData() ?? data,
         errorCode: errorCode,
         degraded: degraded,
       );

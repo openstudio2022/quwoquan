@@ -21,15 +21,116 @@ AssistantTurnOutput? tryParseAssistantTurnOutput(Map<String, dynamic> json) {
   final contractId = (json['contractId'] as String?)?.trim() ?? '';
   if (contractId != kAssistantTurnCurrentContractId) return null;
   if (json['decision'] is! Map) return null;
-  final messageKind = (json['messageKind'] as String?)?.trim() ?? '';
+  final normalized = _normalizeAssistantTurnJson(json);
+  final messageKind = (normalized['messageKind'] as String?)?.trim() ?? '';
   if (messageKind.isEmpty ||
       parseMessageKind(messageKind) == AssistantMessageKind.unknown) {
     return null;
   }
   try {
-    return AssistantTurnOutput.fromJson(json);
+    return AssistantTurnOutput.fromJson(normalized);
   } catch (_) {
     return null;
+  }
+}
+
+Map<String, dynamic> _normalizeAssistantTurnJson(Map<String, dynamic> json) {
+  final normalized = Map<String, dynamic>.from(json);
+  final normalizedToolCalls = _normalizeAssistantTurnToolCalls(normalized);
+  if (normalizedToolCalls.isNotEmpty) {
+    normalized['toolCalls'] = normalizedToolCalls;
+  }
+  final resultMap =
+      (normalized['result'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final nextAction =
+      (((normalized['decision'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{})['nextAction']
+              as String?)
+          ?.trim() ??
+      '';
+  final currentMessageKind =
+      (normalized['messageKind'] as String?)?.trim() ?? '';
+  if (currentMessageKind.isEmpty) {
+    normalized['messageKind'] = _inferAssistantTurnMessageKind(
+      nextAction: nextAction,
+      normalizedToolCalls: normalizedToolCalls,
+      userMarkdown: (normalized['userMarkdown'] as String?)?.trim() ?? '',
+      resultText: (resultMap['text'] as String?)?.trim() ?? '',
+    );
+  }
+  final userMarkdown = (normalized['userMarkdown'] as String?)?.trim() ?? '';
+  final resultText = (resultMap['text'] as String?)?.trim() ?? '';
+  if (userMarkdown.isEmpty &&
+      resultText.isNotEmpty &&
+      parseNextAction(nextAction) == AssistantNextAction.answer) {
+    normalized['userMarkdown'] = resultText;
+  }
+  return normalized;
+}
+
+List<Map<String, dynamic>> _normalizeAssistantTurnToolCalls(
+  Map<String, dynamic> json,
+) {
+  final primary = json['toolCalls'];
+  final rawCalls = primary is List ? primary : const <Object?>[];
+  final normalized = <Map<String, dynamic>>[];
+  for (final item in rawCalls.whereType<Map>()) {
+    final toolName =
+        (item['toolName'] as String?)?.trim() ??
+        (item['name'] as String?)?.trim() ??
+        '';
+    if (toolName.isEmpty) continue;
+    final rawArguments = item['arguments'];
+    final arguments = rawArguments is Map
+        ? rawArguments.cast<String, dynamic>()
+        : <String, dynamic>{
+            for (final entry in item.entries)
+              if (entry.key != 'toolName' &&
+                  entry.key != 'name' &&
+                  entry.key != 'toolCallId' &&
+                  entry.key != 'id')
+                '${entry.key}': entry.value,
+          };
+    normalized.add(<String, dynamic>{
+      'toolName': toolName,
+      'arguments': arguments,
+    });
+  }
+  return normalized;
+}
+
+String _inferAssistantTurnMessageKind({
+  required String nextAction,
+  required List<Map<String, dynamic>> normalizedToolCalls,
+  required String userMarkdown,
+  required String resultText,
+}) {
+  final actionType = parseNextAction(nextAction);
+  final hasRenderableAnswer =
+      userMarkdown.trim().isNotEmpty || resultText.trim().isNotEmpty;
+  switch (actionType) {
+    case AssistantNextAction.toolCall:
+      return AssistantMessageKind.progress.wireName;
+    case AssistantNextAction.askUser:
+      return AssistantMessageKind.askUser.wireName;
+    case AssistantNextAction.answer:
+      return hasRenderableAnswer
+          ? AssistantMessageKind.answer.wireName
+          : AssistantMessageKind.fallback.wireName;
+    case AssistantNextAction.retry:
+    case AssistantNextAction.replan:
+      return AssistantMessageKind.progress.wireName;
+    case AssistantNextAction.abort:
+      return AssistantMessageKind.fallback.wireName;
+    case AssistantNextAction.unknown:
+      if (normalizedToolCalls.isNotEmpty) {
+        return AssistantMessageKind.progress.wireName;
+      }
+      if (hasRenderableAnswer) {
+        return AssistantMessageKind.answer.wireName;
+      }
+      return AssistantMessageKind.progress.wireName;
   }
 }
 

@@ -180,19 +180,11 @@ subcontracts:
       - { name: userFacingSummary, type: string, default: '' }
       - { name: concernPoints, type: list<string>, default: [] }
       - { name: emotionSignal, type: string, default: '' }
-      - { name: queryDesignSummary, type: string, default: '' }
-      - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
       - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }
       - { name: assumptions, type: list<string>, default: [] }
       - { name: mismatchSignal, type: string, default: '' }
       - { name: carryForwardFacts, type: list<string>, default: [] }
       - { name: discardedAssumptions, type: list<string>, default: [] }
-  understanding_query_group:
-    class_name: RunArtifactsUnderstandingQueryGroup
-    fields:
-      - { name: dimension, type: string, default: '' }
-      - { name: queries, type: list<string>, default: [] }
-      - { name: why, type: string, default: '' }
   understanding_resolution_item:
     class_name: RunArtifactsUnderstandingResolutionItem
     fields:

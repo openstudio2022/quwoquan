@@ -33,24 +33,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     _expanded = widget.initiallyExpanded;
   }
 
-  bool get _isLongWaitWithoutProgress {
-    if (!_viewModel.isRunning) return false;
-    return _viewModel.elapsedMs >= 6000 &&
-        _viewModel.stages.isEmpty &&
-        _viewModel.blocks.isEmpty;
-  }
-
-  String _waitReassuranceText() {
-    final elapsed = _viewModel.elapsedMs;
-    if (elapsed >= 20000) {
-      return UITextConstants.assistantProcessRecoveryReassurance;
-    }
-    if (elapsed >= 12000) {
-      return UITextConstants.assistantProcessHandoffReassurance;
-    }
-    return UITextConstants.assistantProcessLongWaitReassurance;
-  }
-
   int _elapsedSeconds() {
     final elapsed = _viewModel.elapsedMs;
     if (elapsed <= 0) return 0;
@@ -65,73 +47,46 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     );
   }
 
-  int _summaryDocumentCount() {
-    if (_viewModel.processedDocumentCount > 0) {
-      return _viewModel.processedDocumentCount;
+  List<String> _headerMetricTexts() {
+    final metrics = <String>[];
+    final acceptedCount = _viewModel.acceptedDocumentCount > 0
+        ? _viewModel.acceptedDocumentCount
+        : _viewModel.referenceCount;
+    final processedCount = _viewModel.processedDocumentCount > 0
+        ? _viewModel.processedDocumentCount
+        : acceptedCount;
+    if (processedCount > 0) {
+      metrics.add(
+        UITextConstants.assistantProcessProcessedCountTemplate.replaceFirst(
+          '%s',
+          processedCount.toString(),
+        ),
+      );
     }
-    if (_viewModel.acceptedDocumentCount > 0) {
-      return _viewModel.acceptedDocumentCount;
+    if (acceptedCount > 0) {
+      metrics.add(
+        UITextConstants.assistantProcessAcceptedCountChipTemplate.replaceFirst(
+          '%s',
+          acceptedCount.toString(),
+        ),
+      );
     }
-    return _viewModel.referenceCount;
-  }
-
-  String _summaryHeaderLabel() {
-    if (!_viewModel.isRunning && _viewModel.finalAnswerReady) {
-      final documentCount = _summaryDocumentCount();
-      final elapsedSeconds = _elapsedSeconds();
-      if (documentCount > 0 && elapsedSeconds > 0) {
-        return UITextConstants.assistantProcessCompletedSummaryFullTemplate
-            .replaceFirst('%s', documentCount.toString())
-            .replaceFirst('%s', elapsedSeconds.toString());
-      }
-      if (documentCount > 0) {
-        return UITextConstants
-            .assistantProcessCompletedSummaryReferencesTemplate
-            .replaceFirst('%s', documentCount.toString());
-      }
-      if (elapsedSeconds > 0) {
-        return UITextConstants.assistantProcessCompletedSummaryElapsedTemplate
-            .replaceFirst('%s', elapsedSeconds.toString());
-      }
-      return UITextConstants.assistantProcessCompletedSummary;
+    if (_viewModel.elapsedMs >= 1000) {
+      metrics.add(
+        UITextConstants.assistantProcessElapsedTemplate.replaceFirst(
+          '%s',
+          _elapsedSeconds().toString(),
+        ),
+      );
     }
-    if (_viewModel.summary.isNotEmpty) {
-      return _viewModel.referenceCount > 0
-          ? '${_viewModel.summary} · ${_referenceCountLabel(_viewModel.referenceCount)}'
-          : _viewModel.summary;
-    }
-    if (_viewModel.referenceCount > 0) {
-      return _referenceCountLabel(_viewModel.referenceCount);
-    }
-    return _viewModel.activeStageLabel.isNotEmpty
-        ? _viewModel.activeStageLabel
-        : UITextConstants.assistantPhaseCompleted;
+    return metrics;
   }
 
   String _headerLabel() {
     if (_viewModel.isRunning) {
       return UITextConstants.assistantProcessRunningSummary;
     }
-    if (!_viewModel.isRunning && _viewModel.finalAnswerReady) {
-      return _summaryHeaderLabel();
-    }
-    if (_viewModel.summary.isNotEmpty) {
-      return _viewModel.summary;
-    }
-    return _summaryHeaderLabel();
-  }
-
-  String _headerSubtitle() {
-    if (_isLongWaitWithoutProgress) {
-      return _waitReassuranceText();
-    }
-    if (_viewModel.isRunning) {
-      final phase = _viewModel.activeStageLabel.trim();
-      if (phase.isNotEmpty) {
-        return phase;
-      }
-    }
-    return '';
+    return UITextConstants.assistantProcessCompletedSummary;
   }
 
   @override
@@ -155,10 +110,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       ColorType.foregroundSecondary,
     );
     final surfaceTint = secondaryTextColor.withValues(
-      alpha: isDark ? 0.12 : 0.04,
+      alpha: isDark ? 0.08 : 0.03,
+    );
+    final bodySurfaceTint = secondaryTextColor.withValues(
+      alpha: isDark ? 0.12 : 0.05,
     );
     return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      margin: EdgeInsets.only(bottom: AppSpacing.intraGroupLg),
       decoration: BoxDecoration(
         color: Color.alphaBlend(surfaceTint, bgColor),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
@@ -173,9 +131,25 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             secondaryTextColor: secondaryTextColor,
           ),
           if (_expanded)
-            _buildBody(
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
+            Container(
+              key: TestKeys.assistantProcessBody,
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(bodySurfaceTint, bgColor),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(AppSpacing.borderRadius),
+                  bottomRight: Radius.circular(AppSpacing.borderRadius),
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: borderColor.withValues(alpha: 0.9),
+                    width: AppSpacing.one / 2,
+                  ),
+                ),
+              ),
+              child: _buildBody(
+                textColor: textColor,
+                secondaryTextColor: secondaryTextColor,
+              ),
             ),
         ],
       ),
@@ -187,7 +161,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color secondaryTextColor,
   }) {
     final monochrome = secondaryTextColor.withValues(alpha: 0.8);
-    final subtitle = _headerSubtitle();
+    final metricTexts = _headerMetricTexts();
     return GestureDetector(
       key: TestKeys.assistantProcessHeader,
       onTap: () => setState(() => _expanded = !_expanded),
@@ -195,7 +169,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.sm,
+          vertical: AppSpacing.intraGroupLg,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -230,16 +204,20 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                       height: AppTypography.bodyLineHeight,
                     ),
                   ),
-                  if (subtitle.isNotEmpty)
+                  if (metricTexts.isNotEmpty)
                     Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.one),
-                      child: Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: secondaryTextColor.withValues(alpha: 0.9),
-                          height: AppTypography.bodyLineHeight,
-                        ),
+                      padding: EdgeInsets.only(top: AppSpacing.xs),
+                      child: Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: metricTexts
+                            .map(
+                              (metric) => _buildHeaderMetricChip(
+                                label: metric,
+                                secondaryTextColor: secondaryTextColor,
+                              ),
+                            )
+                            .toList(growable: false),
                       ),
                     ),
                 ],
@@ -266,7 +244,8 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       padding: EdgeInsets.only(
         left: AppSpacing.containerSm,
         right: AppSpacing.containerSm,
-        bottom: AppSpacing.sm,
+        top: AppSpacing.intraGroupLg,
+        bottom: AppSpacing.intraGroupLg,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,10 +269,25 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color textColor,
     required Color secondaryTextColor,
   }) {
+    if (block.kind == AssistantJourneyBlockKind.referenceStats) {
+      return _buildReferenceStatsBlock(
+        index: index,
+        block: block,
+        textColor: textColor,
+        secondaryTextColor: secondaryTextColor,
+      );
+    }
     final bulletLines = block.items.isNotEmpty
-        ? block.items
+        ? const <String>[]
         : _bulletLines(block.detail);
     final paragraphLines = _paragraphLines(block.detail);
+    if (block.headline.isEmpty &&
+        paragraphLines.isEmpty &&
+        bulletLines.isEmpty &&
+        block.items.isEmpty &&
+        !block.hasReferences) {
+      return const SizedBox.shrink();
+    }
     final isExpanded = _expandedBlockIndices.contains(index);
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.sm),
@@ -301,17 +295,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildStageHeading(
-            label: _stageLabelFor(block.stageId),
-            secondaryTextColor: secondaryTextColor,
-          ),
           if (block.headline.isNotEmpty) ...[
-            SizedBox(height: AppSpacing.one),
             Text(
               block.headline,
               style: TextStyle(
                 fontSize: AppTypography.base,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.w500,
                 color: textColor,
                 height: AppTypography.lineHeightRelaxed,
               ),
@@ -327,7 +316,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     fontWeight: FontWeight.w400,
-                    color: textColor.withValues(alpha: 0.88),
+                    color: textColor.withValues(alpha: 0.9),
                     height: AppTypography.lineHeightRelaxed,
                   ),
                 ),
@@ -344,48 +333,34 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     fontWeight: FontWeight.w400,
-                    color: textColor.withValues(alpha: 0.88),
+                    color: textColor.withValues(alpha: 0.9),
                     height: AppTypography.lineHeightRelaxed,
                   ),
                 ),
               ),
             ),
           ],
+          if (block.items.isNotEmpty) ...[
+            SizedBox(height: AppSpacing.one),
+            ...block.items.map(
+              (item) => Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.xs),
+                child: _buildNarrativeItemRow(
+                  item,
+                  textColor: textColor,
+                  secondaryTextColor: secondaryTextColor,
+                ),
+              ),
+            ),
+          ],
           if (block.hasReferences) ...[
             SizedBox(height: AppSpacing.one),
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  if (isExpanded) {
-                    _expandedBlockIndices.remove(index);
-                  } else {
-                    _expandedBlockIndices.add(index);
-                  }
-                });
-              },
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _referenceSummaryLabel(block),
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w400,
-                        color: textColor.withValues(alpha: 0.88),
-                        height: AppTypography.lineHeightRelaxed,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    isExpanded
-                        ? CupertinoIcons.chevron_up
-                        : CupertinoIcons.chevron_down,
-                    size: AppTypography.xsPlus,
-                    color: secondaryTextColor.withValues(alpha: 0.72),
-                  ),
-                ],
-              ),
+            _buildReferenceSummaryRow(
+              index: index,
+              block: block,
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              isExpanded: isExpanded,
             ),
             if (isExpanded) ...[
               SizedBox(height: AppSpacing.one),
@@ -426,17 +401,148 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     );
   }
 
-  Widget _buildStageHeading({
+  Widget _buildHeaderMetricChip({
     required String label,
     required Color secondaryTextColor,
   }) {
-    return Text(
-      label,
-      style: TextStyle(
-        fontSize: AppTypography.base,
-        fontWeight: FontWeight.w400,
-        color: secondaryTextColor.withValues(alpha: 0.82),
-        height: AppTypography.bodyLineHeight,
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupSm,
+        vertical: AppSpacing.one,
+      ),
+      decoration: BoxDecoration(
+        color: secondaryTextColor.withValues(alpha: 0.06),
+        border: Border.all(
+          color: secondaryTextColor.withValues(alpha: 0.12),
+          width: AppSpacing.one / 2,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: AppTypography.sm,
+          fontWeight: FontWeight.w500,
+          color: secondaryTextColor.withValues(alpha: 0.82),
+          height: AppTypography.bodyLineHeight,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReferenceStatsBlock({
+    required int index,
+    required AssistantJourneyBlockViewModel block,
+    required Color textColor,
+    required Color secondaryTextColor,
+  }) {
+    if (block.headline.isEmpty && !block.hasReferences) {
+      return const SizedBox.shrink();
+    }
+    final isExpanded = _expandedBlockIndices.contains(index);
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildReferenceSummaryRow(
+            index: index,
+            block: block,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+            isExpanded: isExpanded,
+            fallbackLabel: block.headline,
+          ),
+          if (isExpanded && block.hasReferences) ...[
+            SizedBox(height: AppSpacing.one),
+            ...List<Widget>.generate(block.references.length, (refIndex) {
+              final reference = block.references[refIndex];
+              final sourceSuffix = reference.source.trim().isNotEmpty
+                  ? ' · ${reference.source.trim()}'
+                  : '';
+              return GestureDetector(
+                onTap: reference.url.isNotEmpty
+                    ? () => widget.onReferenceTap?.call(
+                          AssistantCitation(
+                            url: reference.url,
+                            title: reference.title,
+                            source: reference.source,
+                          ),
+                        )
+                    : null,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.one),
+                  child: Text(
+                    '${refIndex + 1}. ${reference.title}$sourceSuffix',
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: FontWeight.w400,
+                      color: textColor.withValues(alpha: 0.88),
+                      height: AppTypography.lineHeightRelaxed,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferenceSummaryRow({
+    required int index,
+    required AssistantJourneyBlockViewModel block,
+    required Color textColor,
+    required Color secondaryTextColor,
+    required bool isExpanded,
+    String fallbackLabel = '',
+  }) {
+    final label = block.referenceLabel.trim().isNotEmpty
+        ? block.referenceLabel.trim()
+        : (fallbackLabel.trim().isNotEmpty
+              ? fallbackLabel.trim()
+              : _referenceSummaryLabel(block));
+    if (label.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return GestureDetector(
+      onTap: block.hasReferences
+          ? () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedBlockIndices.remove(index);
+                } else {
+                  _expandedBlockIndices.add(index);
+                }
+              });
+            }
+          : null,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                fontWeight: FontWeight.w400,
+                color: textColor.withValues(alpha: 0.88),
+                height: AppTypography.lineHeightRelaxed,
+              ),
+            ),
+          ),
+          if (block.hasReferences)
+            Icon(
+              isExpanded
+                  ? CupertinoIcons.chevron_up
+                  : CupertinoIcons.chevron_down,
+              size: AppTypography.xsPlus,
+              color: secondaryTextColor.withValues(alpha: 0.72),
+            ),
+        ],
       ),
     );
   }
@@ -448,19 +554,102 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     return _referenceCountLabel(block.references.length);
   }
 
-  String _stageLabelFor(ProcessStepId stageId) {
-    switch (stageId) {
-      case ProcessStepId.understanding:
-        return UITextConstants.assistantProcessStageUnderstand;
-      case ProcessStepId.retrievalDesign:
-        return UITextConstants.assistantProcessStageUnderstand;
-      case ProcessStepId.retrievalProcessing:
-        return UITextConstants.assistantProcessStageRetrievalProcessing;
-      case ProcessStepId.answerOrganization:
-        return UITextConstants.assistantProcessStageAnswer;
-      case ProcessStepId.unknown:
-        return UITextConstants.assistantProcessStageUnderstand;
+  Widget _buildNarrativeItemRow(
+    String item, {
+    required Color textColor,
+    required Color secondaryTextColor,
+  }) {
+    final parts = _splitItemLabel(item);
+    if (parts == null) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+            ),
+            child: Container(
+              width: AppSpacing.xs,
+              height: AppSpacing.xs,
+              decoration: BoxDecoration(
+                color: secondaryTextColor.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              item,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                fontWeight: FontWeight.w400,
+                color: textColor.withValues(alpha: 0.88),
+                height: AppTypography.lineHeightRelaxed,
+              ),
+            ),
+          ),
+        ],
+      );
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.one,
+          ),
+          decoration: BoxDecoration(
+            color: secondaryTextColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          ),
+          child: Text(
+            parts.label,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              fontWeight: FontWeight.w600,
+              color: secondaryTextColor.withValues(alpha: 0.92),
+              height: AppTypography.bodyLineHeight,
+            ),
+          ),
+        ),
+        if (parts.body.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: AppSpacing.one),
+            child: Text(
+              parts.body,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                fontWeight: FontWeight.w400,
+                color: textColor.withValues(alpha: 0.88),
+                height: AppTypography.lineHeightRelaxed,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  _NarrativeItemParts? _splitItemLabel(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final fullWidthIndex = trimmed.indexOf('：');
+    final asciiIndex = trimmed.indexOf(':');
+    final splitIndex = fullWidthIndex >= 0 ? fullWidthIndex : asciiIndex;
+    if (splitIndex <= 0 || splitIndex >= trimmed.length - 1) {
+      return null;
+    }
+    final label = trimmed.substring(0, splitIndex).trim();
+    final body = trimmed.substring(splitIndex + 1).trim();
+    if (label.isEmpty || body.isEmpty) {
+      return null;
+    }
+    return _NarrativeItemParts(label: label, body: body);
   }
 
   List<String> _paragraphLines(String detail) {
@@ -480,6 +669,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         .where((line) => line.isNotEmpty)
         .toList(growable: false);
   }
+}
+
+class _NarrativeItemParts {
+  const _NarrativeItemParts({required this.label, required this.body});
+
+  final String label;
+  final String body;
 }
 
 class _BreathingCapsule extends StatefulWidget {

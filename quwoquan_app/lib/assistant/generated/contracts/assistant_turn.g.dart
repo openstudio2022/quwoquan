@@ -11,58 +11,6 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 
-class AssistantTurnAnswerGateAssessment {
-  const AssistantTurnAnswerGateAssessment({
-    this.canAnswerNow = false,
-    this.answerMode = "",
-    this.replanNeeded = false,
-    this.replanReason = "",
-    this.convergenceStatus = SearchIterationConvergenceStatus.unknown,
-    this.attemptsUsed = 0,
-    this.maxAttempts = 0,
-  });
-
-  final bool canAnswerNow;
-  final String answerMode;
-  final bool replanNeeded;
-  final String replanReason;
-  final SearchIterationConvergenceStatus convergenceStatus;
-  final int attemptsUsed;
-  final int maxAttempts;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'canAnswerNow': canAnswerNow,
-        'answerMode': answerMode,
-        'replanNeeded': replanNeeded,
-        'replanReason': replanReason,
-        'convergenceStatus': convergenceStatus.wireName,
-        'attemptsUsed': attemptsUsed,
-        'maxAttempts': maxAttempts,
-      };
-
-  factory AssistantTurnAnswerGateAssessment.fromJson(Map<String, dynamic> json) {
-    return AssistantTurnAnswerGateAssessment(
-      canAnswerNow: json['canAnswerNow'] == true,
-      answerMode: (json['answerMode'] as String?)?.trim() ?? "",
-      replanNeeded: json['replanNeeded'] == true,
-      replanReason: (json['replanReason'] as String?)?.trim() ?? "",
-      convergenceStatus: parseSearchIterationConvergenceStatus((json['convergenceStatus'] as String?)?.trim() ?? ""),
-      attemptsUsed: (json['attemptsUsed'] as num?)?.toInt() ?? 0,
-      maxAttempts: (json['maxAttempts'] as num?)?.toInt() ?? 0,
-    );
-  }
-}
-
-class AssistantTurnAnswerGateAssessmentFields {
-  static const String canAnswerNow = 'canAnswerNow';
-  static const String answerMode = 'answerMode';
-  static const String replanNeeded = 'replanNeeded';
-  static const String replanReason = 'replanReason';
-  static const String convergenceStatus = 'convergenceStatus';
-  static const String attemptsUsed = 'attemptsUsed';
-  static const String maxAttempts = 'maxAttempts';
-}
-
 class AssistantTurnAnswerProcessing {
   const AssistantTurnAnswerProcessing({
     this.readinessSummary = "",
@@ -527,28 +475,20 @@ class AssistantTurnSelfCheckFields {
 class AssistantTurnToolCall {
   const AssistantTurnToolCall({
     this.toolName = "",
-    this.name = "",
-    this.toolCallId = "",
     this.arguments = const <String, dynamic>{},
   });
 
   final String toolName;
-  final String name;
-  final String toolCallId;
   final Map<String, dynamic> arguments;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'toolName': toolName,
-        'name': name,
-        'toolCallId': toolCallId,
         'arguments': arguments,
       };
 
   factory AssistantTurnToolCall.fromJson(Map<String, dynamic> json) {
     return AssistantTurnToolCall(
       toolName: (json['toolName'] as String?)?.trim() ?? "",
-      name: (json['name'] as String?)?.trim() ?? "",
-      toolCallId: (json['toolCallId'] as String?)?.trim() ?? "",
       arguments: (json['arguments'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
     );
   }
@@ -556,48 +496,7 @@ class AssistantTurnToolCall {
 
 class AssistantTurnToolCallFields {
   static const String toolName = 'toolName';
-  static const String name = 'name';
-  static const String toolCallId = 'toolCallId';
   static const String arguments = 'arguments';
-}
-
-class AssistantTurnUnderstandingQueryGroup {
-  const AssistantTurnUnderstandingQueryGroup({
-    this.dimension = "",
-    this.queries = const <String>[],
-    this.why = "",
-  });
-
-  final String dimension;
-  final List<String> queries;
-  final String why;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'dimension': dimension,
-        'queries': queries,
-        'why': why,
-      };
-
-  factory AssistantTurnUnderstandingQueryGroup.fromJson(Map<String, dynamic> json) {
-    return AssistantTurnUnderstandingQueryGroup(
-      dimension: (json['dimension'] as String?)?.trim() ?? "",
-      queries: _assistantStringList(json['queries']),
-      why: (json['why'] as String?)?.trim() ?? "",
-    );
-  }
-
-  static List<String> _assistantStringList(Object? value) {
-    if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
-    }
-    return const <String>[];
-  }
-}
-
-class AssistantTurnUnderstandingQueryGroupFields {
-  static const String dimension = 'dimension';
-  static const String queries = 'queries';
-  static const String why = 'why';
 }
 
 class AssistantTurnUnderstandingResolutionItem {
@@ -663,8 +562,6 @@ class AssistantTurnUnderstandingSnapshot {
     this.userFacingSummary = "",
     this.concernPoints = const <String>[],
     this.emotionSignal = "",
-    this.queryDesignSummary = "",
-    this.queryGroups = const <AssistantTurnUnderstandingQueryGroup>[],
     this.resolutionItems = const <AssistantTurnUnderstandingResolutionItem>[],
     this.assumptions = const <String>[],
     this.mismatchSignal = "",
@@ -676,8 +573,6 @@ class AssistantTurnUnderstandingSnapshot {
   final String userFacingSummary;
   final List<String> concernPoints;
   final String emotionSignal;
-  final String queryDesignSummary;
-  final List<AssistantTurnUnderstandingQueryGroup> queryGroups;
   final List<AssistantTurnUnderstandingResolutionItem> resolutionItems;
   final List<String> assumptions;
   final String mismatchSignal;
@@ -689,8 +584,6 @@ class AssistantTurnUnderstandingSnapshot {
         'userFacingSummary': userFacingSummary,
         'concernPoints': concernPoints,
         'emotionSignal': emotionSignal,
-        'queryDesignSummary': queryDesignSummary,
-        'queryGroups': queryGroups.map((item) => item.toJson()).toList(growable: false),
         'resolutionItems': resolutionItems.map((item) => item.toJson()).toList(growable: false),
         'assumptions': assumptions,
         'mismatchSignal': mismatchSignal,
@@ -704,8 +597,6 @@ class AssistantTurnUnderstandingSnapshot {
       userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
       concernPoints: _assistantStringList(json['concernPoints']),
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
-      queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
-      queryGroups: (json['queryGroups'] as List?)?.whereType<Map>().map((item) => AssistantTurnUnderstandingQueryGroup.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnUnderstandingQueryGroup>[],
       resolutionItems: (json['resolutionItems'] as List?)?.whereType<Map>().map((item) => AssistantTurnUnderstandingResolutionItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnUnderstandingResolutionItem>[],
       assumptions: _assistantStringList(json['assumptions']),
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
@@ -727,8 +618,6 @@ class AssistantTurnUnderstandingSnapshotFields {
   static const String userFacingSummary = 'userFacingSummary';
   static const String concernPoints = 'concernPoints';
   static const String emotionSignal = 'emotionSignal';
-  static const String queryDesignSummary = 'queryDesignSummary';
-  static const String queryGroups = 'queryGroups';
   static const String resolutionItems = 'resolutionItems';
   static const String assumptions = 'assumptions';
   static const String mismatchSignal = 'mismatchSignal';
@@ -740,8 +629,8 @@ class AssistantTurnOutput {
   const AssistantTurnOutput({
     required this.contractId,
     this.decision = const AssistantTurnDecisionPayload(),
-    required this.messageKind,
-    required this.userMarkdown,
+    this.messageKind = AssistantMessageKind.unknown,
+    this.userMarkdown = "",
     this.result = const AssistantTurnResult(),
     this.displayState = const AssistantDisplayState(),
     this.evidence = const <AssistantTurnEvidenceItem>[],
@@ -757,7 +646,6 @@ class AssistantTurnOutput {
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
     this.journey = const AssistantJourney(),
-    this.toolPlan = const <AssistantTurnToolCall>[],
     this.missingContextSlots = const <String>[],
     this.fillGuidance = const <AssistantTurnFillGuidanceItem>[],
     this.followupPrompt = "",
@@ -768,7 +656,6 @@ class AssistantTurnOutput {
     this.understandingSnapshot = const AssistantTurnUnderstandingSnapshot(),
     this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.answerProcessing = const AssistantTurnAnswerProcessing(),
-    this.answerGateAssessment = const AssistantTurnAnswerGateAssessment(),
     this.historicalThinkingSnapshot = const AssistantTurnHistoricalThinkingSnapshot(),
     this.sessionPreferenceFacts = const <PreferenceFact>[],
     this.longTermPreferenceFacts = const <PreferenceFact>[],
@@ -793,7 +680,6 @@ class AssistantTurnOutput {
   final List<SkillRun> skillRuns;
   final AggregationState? aggregationState;
   final AssistantJourney journey;
-  final List<AssistantTurnToolCall> toolPlan;
   final List<String> missingContextSlots;
   final List<AssistantTurnFillGuidanceItem> fillGuidance;
   final String followupPrompt;
@@ -804,7 +690,6 @@ class AssistantTurnOutput {
   final AssistantTurnUnderstandingSnapshot understandingSnapshot;
   final RetrievalProcessingSnapshot retrievalProcessing;
   final AssistantTurnAnswerProcessing answerProcessing;
-  final AssistantTurnAnswerGateAssessment answerGateAssessment;
   final AssistantTurnHistoricalThinkingSnapshot historicalThinkingSnapshot;
   final List<PreferenceFact> sessionPreferenceFacts;
   final List<PreferenceFact> longTermPreferenceFacts;
@@ -829,7 +714,6 @@ class AssistantTurnOutput {
         'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
         'aggregationState': aggregationState?.toJson(),
         'journey': journey.toJson(),
-        'toolPlan': toolPlan.map((item) => item.toJson()).toList(growable: false),
         'missingContextSlots': missingContextSlots,
         'fillGuidance': fillGuidance.map((item) => item.toJson()).toList(growable: false),
         'followupPrompt': followupPrompt,
@@ -840,7 +724,6 @@ class AssistantTurnOutput {
         'understandingSnapshot': understandingSnapshot.toJson(),
         'retrievalProcessing': retrievalProcessing.toJson(),
         'answerProcessing': answerProcessing.toJson(),
-        'answerGateAssessment': answerGateAssessment.toJson(),
         'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
         'sessionPreferenceFacts': sessionPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
         'longTermPreferenceFacts': longTermPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
@@ -867,7 +750,6 @@ class AssistantTurnOutput {
       skillRuns: (json['skillRuns'] as List?)?.whereType<Map>().map((item) => SkillRun.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SkillRun>[],
       aggregationState: json['aggregationState'] is Map ? AggregationState.fromJson((json['aggregationState'] as Map).cast<String, dynamic>()) : null,
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
-      toolPlan: (json['toolPlan'] as List?)?.whereType<Map>().map((item) => AssistantTurnToolCall.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnToolCall>[],
       missingContextSlots: _assistantStringList(json['missingContextSlots']),
       fillGuidance: (json['fillGuidance'] as List?)?.whereType<Map>().map((item) => AssistantTurnFillGuidanceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnFillGuidanceItem>[],
       followupPrompt: (json['followupPrompt'] as String?)?.trim() ?? "",
@@ -878,7 +760,6 @@ class AssistantTurnOutput {
       understandingSnapshot: json['understandingSnapshot'] is Map ? AssistantTurnUnderstandingSnapshot.fromJson((json['understandingSnapshot'] as Map).cast<String, dynamic>()) : const AssistantTurnUnderstandingSnapshot(),
       retrievalProcessing: json['retrievalProcessing'] is Map ? RetrievalProcessingSnapshot.fromJson((json['retrievalProcessing'] as Map).cast<String, dynamic>()) : const RetrievalProcessingSnapshot(),
       answerProcessing: json['answerProcessing'] is Map ? AssistantTurnAnswerProcessing.fromJson((json['answerProcessing'] as Map).cast<String, dynamic>()) : const AssistantTurnAnswerProcessing(),
-      answerGateAssessment: json['answerGateAssessment'] is Map ? AssistantTurnAnswerGateAssessment.fromJson((json['answerGateAssessment'] as Map).cast<String, dynamic>()) : const AssistantTurnAnswerGateAssessment(),
       historicalThinkingSnapshot: json['historicalThinkingSnapshot'] is Map ? AssistantTurnHistoricalThinkingSnapshot.fromJson((json['historicalThinkingSnapshot'] as Map).cast<String, dynamic>()) : const AssistantTurnHistoricalThinkingSnapshot(),
       sessionPreferenceFacts: (json['sessionPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
       longTermPreferenceFacts: (json['longTermPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
@@ -913,7 +794,6 @@ class AssistantTurnOutputFields {
   static const String skillRuns = 'skillRuns';
   static const String aggregationState = 'aggregationState';
   static const String journey = 'journey';
-  static const String toolPlan = 'toolPlan';
   static const String missingContextSlots = 'missingContextSlots';
   static const String fillGuidance = 'fillGuidance';
   static const String followupPrompt = 'followupPrompt';
@@ -924,7 +804,6 @@ class AssistantTurnOutputFields {
   static const String understandingSnapshot = 'understandingSnapshot';
   static const String retrievalProcessing = 'retrievalProcessing';
   static const String answerProcessing = 'answerProcessing';
-  static const String answerGateAssessment = 'answerGateAssessment';
   static const String historicalThinkingSnapshot = 'historicalThinkingSnapshot';
   static const String sessionPreferenceFacts = 'sessionPreferenceFacts';
   static const String longTermPreferenceFacts = 'longTermPreferenceFacts';

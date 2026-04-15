@@ -45,7 +45,7 @@ void main() {
     const legacyHelperFiles = <String>[
       'lib/assistant/protocol/assistant_display_text_resolver.dart',
       'lib/assistant/application/assistant_journey_projector.dart',
-      'lib/assistant/orchestration/local_phase_execution_owner.dart',
+      'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
     ];
 
     const removedLegacyHelpers = <String>[

@@ -94,16 +94,16 @@ Map<String, dynamic>? _normalizeResolutionItem(Object? raw) {
 String _fallbackResolutionTitle(String detail) {
   final normalized = detail.trim();
   if (normalized.contains('时间')) {
-    return '时间锚点';
+    return '时间确认';
   }
   if (normalized.contains('城市') ||
       normalized.contains('地点') ||
       normalized.contains('地理') ||
       normalized.contains('市场')) {
-    return '地理锚点';
+    return '范围确认';
   }
   if (normalized.contains('补充') || normalized.contains('澄清')) {
-    return '补充信息';
+    return '补充说明';
   }
   return '理解说明';
 }

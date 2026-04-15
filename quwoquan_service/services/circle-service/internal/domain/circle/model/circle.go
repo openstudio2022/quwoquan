@@ -243,6 +243,14 @@ type Circle struct {
 	UpdatedAt            time.Time                `json:"updatedAt" bson:"updatedAt"`
 }
 
+// CircleBehaviorReport domain model.
+type CircleBehaviorReport struct {
+	UserID    string `json:"userId" bson:"userId"`
+	CircleID  string `json:"circleId" bson:"circleId"`
+	EventType string `json:"eventType" bson:"eventType"`
+	SessionID string `json:"sessionId" bson:"sessionId"`
+}
+
 // CircleFile domain model.
 type CircleFile struct {
 	ID             string           `json:"_id" bson:"_id"`

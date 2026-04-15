@@ -13,7 +13,6 @@ void main() {
         pageWidth: 320,
         pageHeight: 500,
         initialPage: 2,
-        useForwardMirroredBackwardPath: true,
       );
 
       expect(controller.currentPageIndex, 2);
@@ -87,8 +86,6 @@ void main() {
           PageflipBookLegacyAdapter.resolveBackwardSurfaceBindingForScene(scene);
       final roleBinding =
           PageflipBookLegacyAdapter.resolveSurfaceRoleBindingForScene(scene);
-      final softFrame =
-          PageflipBookLegacyAdapter.resolveSingleBackwardSoftFrameForScene(scene);
       final textureBinding =
           PageflipBookLegacyAdapter.resolveTextureBindingForScene(scene);
 
@@ -106,14 +103,11 @@ void main() {
         roleBinding?.pageIndexFor(PageflipBookSurfaceRole.turningBack),
         2,
       );
-      expect(softFrame, isNotNull);
-      expect(softFrame!.curlWidthNormalized, greaterThan(0));
-      expect(softFrame.laidDownWidthNormalized, inInclusiveRange(0.0, 1.0));
       expect(textureBinding?.rectoPageIndex, 1);
       expect(textureBinding?.bottomPageIndex, 2);
     });
 
-    test('spread backward binding covers current right page and stays off soft-single path', () {
+    test('spread backward binding covers current right page on shared contract', () {
       final controller = PageflipBookLegacyAdapter.createController(
         pageCount: 6,
         showCover: false,
@@ -122,7 +116,6 @@ void main() {
         pageHeight: 500,
         initialPage: 2,
         displayMode: PageflipBookDisplayMode.spread,
-        useForwardMirroredBackwardPath: true,
       );
 
       final plan = controller.flipPrev(StPageFlipCorner.bottom);
@@ -131,8 +124,6 @@ void main() {
       final scene = controller.scene;
       final roleBinding =
           PageflipBookLegacyAdapter.resolveSurfaceRoleBindingForScene(scene);
-      final softFrame =
-          PageflipBookLegacyAdapter.resolveSingleBackwardSoftFrameForScene(scene);
 
       expect(roleBinding, isNotNull);
       expect(roleBinding!.pageIndexFor(PageflipBookSurfaceRole.staticLeft), 2);
@@ -141,7 +132,6 @@ void main() {
       expect(roleBinding.pageIndexFor(PageflipBookSurfaceRole.turningFront), 1);
       expect(roleBinding.pageIndexFor(PageflipBookSurfaceRole.turningBack), 3);
       expect(roleBinding.pageIndexFor(PageflipBookSurfaceRole.nextUnder), 3);
-      expect(softFrame, isNull);
     });
 
     test('spread forward binding keeps current spread static roles and target under page', () {

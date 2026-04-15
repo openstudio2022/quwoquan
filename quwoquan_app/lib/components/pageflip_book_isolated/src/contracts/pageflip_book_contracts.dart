@@ -2,6 +2,12 @@ import 'package:flutter/widgets.dart';
 
 enum PageflipBookIsolatedDirection { forward, backward }
 
+extension PageflipBookIsolatedDirectionX on PageflipBookIsolatedDirection {
+  bool get isForward => this == PageflipBookIsolatedDirection.forward;
+}
+
+enum PageflipBookIsolatedCorner { top, bottom }
+
 typedef PageflipBookIsolatedPageBuilder =
     Widget Function(BuildContext context, int pageIndex, Size pageSize);
 
@@ -61,5 +67,8 @@ abstract final class PageflipBookIsolatedTestKeys {
   );
   static const staticPage = ValueKey<String>(
     'pageflip_book_isolated.static_page',
+  );
+  static const meshRenderer = ValueKey<String>(
+    'pageflip_book_isolated.mesh_renderer',
   );
 }

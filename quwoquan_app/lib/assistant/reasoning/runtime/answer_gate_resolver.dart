@@ -22,10 +22,7 @@ class AnswerGateResolver {
       return false;
     }
     if (policy.evidenceRequired &&
-        !retrievalOutcome.hasToolResult &&
-        retrievalOutcome.referenceCount <= 0 &&
-        retrievalOutcome.processedDocumentCount <= 0 &&
-        retrievalOutcome.acceptedDocumentCount <= 0) {
+        !_hasRequiredEvidencePayload(retrievalOutcome)) {
       return false;
     }
     return retrievalOutcome.retrievalReady;
@@ -56,18 +53,34 @@ class AnswerGateResolver {
         !effectiveDegraded &&
         effectiveTerminalPayloadComplete &&
         retrievalOutcome.retrievalReady;
-    final eligible =
-        retrievalReady &&
+    final hasRequiredEvidencePayload = _hasRequiredEvidencePayload(
+      retrievalOutcome,
+    );
+    final boundedDeliveryAllowedByState =
+        !effectiveDegraded &&
         renderableAnswer &&
         effectiveTerminalPayloadComplete &&
-        nextAction == AssistantNextAction.answer.wireName;
+        nextAction == AssistantNextAction.answer.wireName &&
+        answerEligibility == AnswerEligibility.eligible.wireName &&
+        (!retrievalOutcome.evidenceRequired || hasRequiredEvidencePayload) &&
+        conversationStateDecision?.finalAnswerModeType ==
+            FinalAnswerMode.boundedAnswer;
+    final eligible =
+        boundedDeliveryAllowedByState ||
+        (renderableAnswer &&
+            effectiveTerminalPayloadComplete &&
+            nextAction == AssistantNextAction.answer.wireName &&
+            answerEligibility == AnswerEligibility.eligible.wireName &&
+            retrievalReady);
     final reasonCode = _reasonCode(
       retrievalOutcome: retrievalOutcome,
+      eligible: eligible,
       retrievalReady: retrievalReady,
       renderableAnswer: renderableAnswer,
       degraded: effectiveDegraded,
       terminalPayloadComplete: effectiveTerminalPayloadComplete,
       nextAction: nextAction,
+      boundedDeliveryAllowedByState: boundedDeliveryAllowedByState,
     );
     final reason = _reasonMessage(
       reasonCode: reasonCode,
@@ -99,15 +112,6 @@ class AnswerGateResolver {
     RunArtifacts? runArtifacts,
     bool degraded = false,
   }) {
-    final raw = (structured[assistantAnswerGateDecisionField] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        return AnswerGateDecision.fromJson(raw);
-      } catch (_) {
-        // Fall through to derived decision.
-      }
-    }
     final retrievalOutcome = _retrievalOutcomeResolver.resolveFromStructured(
       structured: structured,
       runArtifacts: runArtifacts,
@@ -119,22 +123,37 @@ class AnswerGateResolver {
           structured['decision'],
     );
     final renderableAnswer = _hasRenderableAnswer(structured, runArtifacts);
-    return resolve(
+    final derived = resolve(
       retrievalOutcome: retrievalOutcome,
       conversationStateDecision: conversationStateDecision,
       renderableAnswer: renderableAnswer,
       degraded: degraded,
       terminalPayloadComplete: retrievalOutcome.terminalPayloadComplete,
     );
+    final raw = (structured[assistantAnswerGateDecisionField] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        return _reconcileParsedGate(
+          parsed: AnswerGateDecision.fromJson(raw),
+          derived: derived,
+        );
+      } catch (_) {
+        // Fall through to derived decision.
+      }
+    }
+    return derived;
   }
 
   String _reasonCode({
     required RetrievalOutcome retrievalOutcome,
+    required bool eligible,
     required bool retrievalReady,
     required bool renderableAnswer,
     required bool degraded,
     required bool terminalPayloadComplete,
     required String nextAction,
+    required bool boundedDeliveryAllowedByState,
   }) {
     if (degraded) {
       return terminalPayloadComplete
@@ -142,12 +161,14 @@ class AnswerGateResolver {
           : 'incomplete_response';
     }
     if (!terminalPayloadComplete) return 'missing_terminal_payload';
+    if (eligible) {
+      return boundedDeliveryAllowedByState && !retrievalReady
+          ? 'bounded_delivery'
+          : 'evidence_ready';
+    }
     if (!retrievalReady) {
       if (retrievalOutcome.evidenceRequired &&
-          !retrievalOutcome.hasToolResult &&
-          retrievalOutcome.referenceCount <= 0 &&
-          retrievalOutcome.processedDocumentCount <= 0 &&
-          retrievalOutcome.acceptedDocumentCount <= 0) {
+          !_hasRequiredEvidencePayload(retrievalOutcome)) {
         return 'missing_required_evidence';
       }
       if (retrievalOutcome.authorityRequired &&
@@ -184,6 +205,31 @@ class AnswerGateResolver {
     return 'evidence_ready';
   }
 
+  bool _hasRequiredEvidencePayload(RetrievalOutcome retrievalOutcome) {
+    return retrievalOutcome.referenceCount > 0 ||
+        retrievalOutcome.acceptedDocumentCount > 0;
+  }
+
+  AnswerGateDecision _reconcileParsedGate({
+    required AnswerGateDecision parsed,
+    required AnswerGateDecision derived,
+  }) {
+    final parsedWidensReadiness =
+        (parsed.finalAnswerReady && !derived.finalAnswerReady) ||
+        (parsed.eligible && !derived.eligible) ||
+        (parsed.retrievalReady && !derived.retrievalReady) ||
+        (parsed.terminalPayloadComplete && !derived.terminalPayloadComplete) ||
+        (!parsed.degraded && derived.degraded) ||
+        (parsed.nextAction == AssistantNextAction.answer.wireName &&
+            derived.nextAction != AssistantNextAction.answer.wireName) ||
+        (parsed.answerEligibility == AnswerEligibility.eligible.wireName &&
+            derived.answerEligibility != AnswerEligibility.eligible.wireName);
+    if (parsedWidensReadiness) {
+      return derived;
+    }
+    return parsed;
+  }
+
   String _reasonMessage({
     required String reasonCode,
     required RetrievalOutcome retrievalOutcome,
@@ -197,6 +243,10 @@ class AnswerGateResolver {
         return retrievalOutcome.summary.trim().isNotEmpty
             ? retrievalOutcome.summary.trim()
             : '当前证据已满足成答条件。';
+      case 'bounded_delivery':
+        return retrievalOutcome.summary.trim().isNotEmpty
+            ? retrievalOutcome.summary.trim()
+            : '已基于当前可确认信息整理答案；如果还要继续补齐更多依据，可以再补查。';
       case 'missing_terminal_payload':
         return '远端流式结果缺少终态 payload，当前只保留可见增量，不按成功完成处理。';
       case 'incomplete_response':

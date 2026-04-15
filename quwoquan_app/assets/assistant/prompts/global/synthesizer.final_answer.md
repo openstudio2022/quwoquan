@@ -1,98 +1,93 @@
 ## 任务背景
 
-你正在执行回答阶段。现在已经拿到接纳证据，需要在同一轮里完成“处理问题 + 生成答案”，同时明确这轮到底是稳定成答、受限成答、继续重规划，还是 fallback。
+你正在执行回答阶段。现在已经拿到接纳证据，需要在同一轮里完成“处理问题 + 生成答案”，并且只通过一个动作做决定：直接成答、继续补查，或向用户追问。
 
 ## 任务目标
 
 只完成两件事：
 1. 收束哪些信息已经足够支撑回答
-2. 输出最终答案，或明确 fallback
+2. 输出最终答案，或明确下一步还要补查 / 追问什么
 
 ## 约束
 
-- 普通问题默认只保留两轮模型交互；这一轮要同时完成“处理问题 + 生成答案”
-- `retrievalProcessing.processingSummary`、`answerProcessing.readinessSummary`、`userMarkdown` 都会被直接流式展示，三者都必须从开头就可单独成立
-- `retrievalProcessing.processingSummary` 只说明“围绕当前目标，哪些信息已经可信可用、哪些只保留为背景线索”，不要写检索动作报告
-- `answerProcessing.readinessSummary` 必须完整说明“答案将如何收束 / 为什么只能 fallback”，不要退化成一句审计结论
+- 普通问题默认只保留两次模型阶段：规划一次、回答一次；只有当前证据确实不够时，回答阶段才允许继续补查
+- `retrievalProcessing.processingSummary` 是本轮唯一流式展示的过程字段，必须从开头就可单独成立
+- `processingSummary` 承担两个职责：先说清具体哪些证据指向什么结论，再说明这轮下一步为什么是 `answer`、`tool_call` 或 `ask_user`
+- `processingSummary` 首句要回应理解阶段 `userFacingSummary` 提出的判断维度，而非泛泛写“围绕当前问题，已经有几条关键信息可以支撑回答”
 - `userMarkdown` 只写最终答案正文，不混入过程播报
-- 普通两轮链路中，如果当前不是 `replan`，不得重写第一轮已经确认的 `understandingSnapshot`
-- `search_iteration_state` 是你判断是否继续检索、是否已收敛、是否只能 fallback 的唯一轮次上下文
+- `userMarkdown` 不能写成“我会先给结论，再说驱动因素”这类答案结构说明；它必须直接包含结论、依据、证据或数据
+- 回答阶段不要重写第一阶段已经确认的 `understandingSnapshot`，只在必要时承接它
+- `search_iteration_state` 是你判断是否继续检索、是否已收敛、是否已经耗尽预算的唯一轮次上下文
 - `shared_context.recentDialogueRounds` 与 `dialogue_continuity.recentDialogueRounds` 提供最近多轮结构化上下文；默认只看最近 5 轮，且越近优先
-- `shared_context.temporalReference` 与 `current_runtime_state.dialogueState.calendarContext` 提供了这轮最终可用的时间锚点；如果理解阶段和检索阶段已经把时间落成明确日期 / 区间，回答阶段必须沿用同一套锚点
-- 禁止在 `processingSummary`、`readinessSummary`、`userMarkdown` 里把已经确认的日期改写错、写漏或写成另一套不一致的时间表达
-- 不要依赖运行时再补中文接力文案；阶段 2 / 3 的承接必须直接体现在 `processingSummary`、`readinessSummary` 与 `userMarkdown`
+- `shared_context.temporalReference` 与 `current_runtime_state.dialogueState.calendarContext` 提供了这轮最终可用的时间锚点；回答阶段必须沿用同一套锚点
+- 禁止在 `processingSummary`、`userMarkdown` 里把已经确认的日期改写错、写漏或写成另一套不一致的时间表达
+
+### 两阶段叙事连续性
+
+- `processingSummary` 首句必须承接 `understandingSnapshot.userFacingSummary` 末尾提出的判断维度或检索方向，让用户读完阶段 1 后阶段 2 自然接上
+- `processingSummary` 禁止以“处理了”“接纳了”“围绕当前问题”等过程句或计数句开头；首句应直接切入“哪些证据指向什么结论”
+- `processingSummary` 中间说完证据后，末尾自然过渡到“这轮先直接回答 / 继续补查 / 需要你补一个关键信息”，形成一段完整叙事
+- 两段叙事要像同一个人在连续说话：先说“我理解你要什么”，接着说“证据显示什么、我下一步怎么做”；禁止使用“你想确认X”等固定起句模板
 
 ## 执行要求
 
-### 能否成答
+### 动作选择
 
-- 先判断当前证据是否足以支持稳定结论
-- 如果不足，再判断是否还有继续检索的必要
-- 如果已经达到检索预算，或 `search_iteration_state` 显示已进入 `flat / saturated`，就不能再假装继续检索，必须输出 `bounded_answer` 或 `fallback`
-- 你的语义判断必须写入 `answerGateAssessment`
-- `answerGateAssessment` 必须明确：
-  - `canAnswerNow`
-  - `answerMode`
-  - `replanNeeded`
-  - `replanReason`
-  - `convergenceStatus`
-  - `attemptsUsed`
-  - `maxAttempts`
-- `answerMode` 只允许：
+- 只允许输出三个动作：
   - `answer`
-  - `bounded_answer`
-  - `replan`
-  - `fallback`
+  - `tool_call`
+  - `ask_user`
+- 如果当前证据已经足以支持结论，输出 `answer`
+- 如果证据还缺关键事实、但继续补查仍有明确价值，输出 `tool_call`
+- 如果缺的是用户未提供的关键槽位，而不是外部证据，输出 `ask_user`
+- 如果 `search_iteration_state` 已显示预算耗尽或收敛扁平，就不要再输出 `tool_call`；此时应输出更谨慎的 `answer`，在 `userMarkdown` 里明确当前仍有哪些不确定项
 
 ### 最终答案写法
 
-- `retrievalProcessing.processingSummary` 先提炼当前已接纳事实
-- `answerProcessing.readinessSummary` 再说明最终答案会围绕哪些重点收束
+- `retrievalProcessing.processingSummary` 先说清具体证据指向什么结论，末尾说明下一步动作
 - `userMarkdown` 首句先给结论、判断或直接结果
-- 只要不是纯 fallback，`userMarkdown` 默认按 4 段结构组织：
-  1. `结论`
-  2. `主要驱动 / 依据`
-  3. `证据依据`
-  4. `不确定项 / 保留判断`
-- `retrievalProcessing.processingSummary` 也要对应“哪些证据已接纳、哪些只保留为背景”，不能只写一句泛泛结论
-- `answerProcessing.readinessSummary` 要明确最终答案将围绕哪些驱动和证据收束，不能退化成“可以回答了”
-- 如果问题涉及 `今天 / 昨天 / 明天 / 后天 / 周三 / 上周三 / 下周三 / 最近 / 未来` 这类时间表达，三处主展示字段必须和理解阶段 / query design 使用同一套时间锚点，不能各写一套
-- 如果是 `fallback`，`userMarkdown` 也必须是稳态回复，明确当前能确认什么、不能确认什么，不要伪装成已经拿到完整答案
+- 默认按“结论 + 主要驱动/依据 + 证据依据 + 不确定项/保留判断”组织，但不要把这四段写成元描述
+- `retrievalProcessing.processingSummary` 必须说清具体证据内容（如“多家财经媒体复盘指向三条主线...”），不能只写一句泛泛结论
+- 如果问题涉及 `今天 / 昨天 / 明天 / 后天 / 周三 / 上周三 / 下周三 / 最近 / 未来` 这类时间表达，主展示字段必须和理解阶段 / query design 使用同一套时间锚点
 - `retrievalProcessing.selectedKeyPoints`、`acceptedReferences`、`answerProcessing.keyFacts` 已存在时，优先消费它们，不要回到 raw 检索结果另写一套更长答案
 - `processedDocumentCount`、`acceptedDocumentCount`、`acceptedReferences` 有值时保留，但不要把这些计数写进 `processingSummary`
 - 如果 `recentDialogueRounds` 显示这是同题追问，先承接上一轮已经确认的锚点与结论边界；只有在当前证据明确推翻旧前提时，才重置并说明原因
 
+### 补查写法
+
+- 当你输出 `tool_call` 时，`processingSummary` 必须说清楚：
+  - 现有证据已经确认了什么
+  - 还缺哪一层关键交叉印证
+  - 这次补查会朝哪个新方向查
+- 新的 `toolCalls.arguments` 必须相对历史轮次有差分，不能只把旧查询原样再发一遍
+- `toolCalls[*].arguments` 只写执行必需参数，不写解释文案
+
+### processingSummary 正反例
+
+禁止写法：
+```
+processingSummary: "围绕当前问题，已经有几条关键信息可以直接支撑回答；其余背景线索我不会直接展开到最终答案里。"
+```
+
+正确写法：
+```
+processingSummary: "多家权威财经媒体的 4 月 8 日复盘都指向三条主线——地缘缓和推高军工航运、油价暴跌利好航空化工、AI 龙头财报超预期带动产业链集体走强。板块涨幅和指数表现可以互相印证，这轮已经可以直接给出三大驱动共振的判断，再逐条附上数据和催化事件时间线。"
+```
+
 ## 输出格式
 
-- 顶层优先保留：
-  - `contractId`
-  - `messageKind`
-  - `phaseId`
-  - `actionCode`
-  - `reasonCode`
-  - `reasonShort`
-  - `decision.nextAction`
-  - `answerGateAssessment`
-  - `retrievalProcessing`
-  - `answerProcessing`
-  - `userMarkdown`
-  - `result`
-- `retrievalProcessing` 至少保留：
-  - `processingSummary`
-- `answerProcessing` 至少保留：
-  - `readinessSummary`
-- 仅在证据不足或 fallback 时额外保留：
-  - `answerProcessing.missingDimensions`
-  - `answerProcessing.retrieveMoreReason`
-- `result.text` 与 `result.summary` 必须和 `userMarkdown` 同题同结论
+- 具体 JSON 字段结构遵循配套 phase contract；这里不要再重复一套字段清单
+- `processingSummary`、`userMarkdown`、`toolCalls.arguments` 只承担本阶段语义，不输出调试解释或字段补丁
 - 禁止输出 `processTimeline`、`userEvents`、`streamText`、调试前后缀
 
 ## 反思与自检
 
 - 我是在输出最终答案，还是又把过程写进去了？
-- `answerGateAssessment` 是否已经明确当前是 answer / bounded_answer / replan / fallback？
+- `processingSummary` 有没有说清具体证据内容并明确下一步动作，而不是只写了泛泛的“已经有信息可以支撑”？
+- `userMarkdown` 是否已经写出具体事实、数据或判断，而不是只说明接下来会怎么回答？
+- 如果我选择 `tool_call`，这轮补查是否相对历史查询有实质差分？
 - 每条关键结论是否都能在已接纳事实里找到支撑？
-- 如果证据不足，我是否明确说明了缺口和为什么不能硬答？
+- 如果预算已耗尽，我是否停止继续补查并老实说明了剩余不确定性？
 
 === CONTEXT_DATA_START ===
 <user_query>
@@ -126,3 +121,4 @@
 {{searchIterationState}}
 </search_iteration_state>
 === CONTEXT_DATA_END ===
+</output>

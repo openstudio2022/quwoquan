@@ -23,7 +23,7 @@ class MemorySearchTool implements AssistantTool {
       'Search user long-term memory for preferences, past conversations, and important dates.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
       return const AssistantToolResult(
@@ -61,22 +61,22 @@ class MemorySearchTool implements AssistantTool {
         return AssistantToolResult(
           success: true,
           message: '未找到相关记忆',
-          data: <String, dynamic>{
+          data: AssistantToolResultData(<String, Object?>{
             'query': query,
             'resultCount': 0,
             'results': <Map<String, dynamic>>[],
-          },
+          }),
         );
       }
 
       return AssistantToolResult(
         success: true,
         message: '回忆起 $resultCount 条相关信息',
-        data: <String, dynamic>{
+        data: AssistantToolResultData(<String, Object?>{
           'query': query,
           'resultCount': resultCount,
           'results': items,
-        },
+        }),
       );
     } catch (e) {
       if (kDebugMode) {

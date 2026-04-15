@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -305,11 +305,13 @@ void main() {
     final timeline =
         response.runArtifacts?.processTimeline ??
         const <ProcessTimelineFrame>[];
-    final answerFrame = timeline.lastWhere(
-      (frame) => frame.stepId == ProcessStepId.answerOrganization,
+    final blockedFrame = timeline.lastWhere(
+      (frame) =>
+          frame.stepId == ProcessStepId.retrievalProcessing ||
+          frame.stepId == ProcessStepId.answerOrganization,
     );
-    expect(answerFrame.status, JourneyStageStatus.blocked);
-    expect(answerFrame.headline, contains('这次生成答案失败'));
+    expect(blockedFrame.status, JourneyStageStatus.blocked);
+    expect(blockedFrame.headline, contains('这次生成答案失败'));
   });
 
   test('injects inline evidence links into streamed final markdown', () async {

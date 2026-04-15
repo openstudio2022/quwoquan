@@ -150,7 +150,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
     "location": { "status": "missing", "source": "none", "confidence": 0.0 },
     "time_range": { "status": "filled", "value": "today", "source": "query", "confidence": 0.9 }
   },
-  "tool_plan": [
+  "toolCalls": [
     {
       "tool_name": "local_context",
       "args": {},

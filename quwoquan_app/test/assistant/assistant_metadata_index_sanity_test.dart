@@ -17,7 +17,7 @@ void main() {
         .where((f) => f.existsSync())
         .toList(growable: false);
 
-    expect(schemas.length, 21);
+    expect(schemas.length, 23);
 
     for (final file in schemas) {
       final doc = loadYaml(file.readAsStringSync());

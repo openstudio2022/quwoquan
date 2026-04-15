@@ -102,7 +102,7 @@ UI(聊天/时间线/动作卡片)
 
 每轮必须双轨输出：
 
-- 机器轨 JSON：`decision/slotState/toolPlan/askUser`
+- 机器轨 JSON：`decision/slotState/toolCalls/askUser`
 - 用户轨 Markdown：`userMarkdown`（进度或最终卡片）
 
 ### 4.2 工具观察：`tool_observation_v1`
@@ -188,7 +188,7 @@ UI(聊天/时间线/动作卡片)
 
 ### 7.2 双轨输出要求
 
-- `tool_call` 轮：JSON 给 toolPlan；Markdown 给进度说明
+- `tool_call` 轮：JSON 给 `toolCalls`（数组，每项指明工具与参数）；Markdown 给进度说明
 - `answer` 轮：JSON 标记完成；Markdown 给精美结果卡片
 
 ---

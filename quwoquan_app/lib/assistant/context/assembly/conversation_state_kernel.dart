@@ -6,7 +6,6 @@ import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_value_codec.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
@@ -167,10 +166,6 @@ class ConversationStateKernel {
         explicitAskUserPayload.slotId.trim().isNotEmpty ||
         explicitAskUserPayload.prompt.trim().isNotEmpty ||
         explicitAskUserPayload.suggestions.isNotEmpty;
-    final modelGateAssessment = _parseAnswerGateAssessment(
-      parsedTurn?.answerGateAssessment.toJson() ??
-          answerPayload['answerGateAssessment'],
-    );
     final evidenceStatusType =
         evidenceEvaluation.status != EvidenceStatus.unknown
         ? evidenceEvaluation.status
@@ -182,48 +177,96 @@ class ConversationStateKernel {
         queryTasks.isNotEmpty ||
         intentGraph.requiresExternalEvidence ||
         intentGraph.mustVerifyClaims;
+    final hasGroundingEvidence =
+        evidenceEvaluation.entries.isNotEmpty ||
+        aggregationState.canGivePartialAnswer ||
+        !requiresEvidenceContinuation;
+    final modelNextAction = turnDecision.nextAction;
+    final resultInterpretation =
+        (answerPayload['result'] as Map?)?['interpretation']
+            ?.toString()
+            .trim()
+            .toLowerCase() ??
+        '';
+    final explicitBlockedPayload =
+        modelNextAction == AssistantNextAction.abort ||
+        turnDecision.messageKind == AssistantMessageKind.fallback ||
+        resultInterpretation == 'fallback' ||
+        resultInterpretation == 'retrieval_processing_blocked';
     late final AssistantNextAction nextActionType;
     late final FinalAnswerMode finalAnswerModeType;
-    if (missingCriticalSlots.isNotEmpty || explicitAskUser) {
+    if (missingCriticalSlots.isNotEmpty ||
+        explicitAskUser ||
+        modelNextAction == AssistantNextAction.askUser) {
       nextActionType = AssistantNextAction.askUser;
       finalAnswerModeType = FinalAnswerMode.clarify;
-    } else if (_hasExplicitAnswerGateAssessment(modelGateAssessment)) {
-      final explicitMode = _normalizedAnswerMode(modelGateAssessment!);
-      if (explicitMode == 'replan' && modelGateAssessment.replanNeeded) {
-        nextActionType = AssistantNextAction.replan;
+    } else if (modelNextAction == AssistantNextAction.toolCall) {
+      nextActionType = AssistantNextAction.toolCall;
+      finalAnswerModeType = FinalAnswerMode.replan;
+    } else if (modelNextAction == AssistantNextAction.replan) {
+      nextActionType = AssistantNextAction.toolCall;
+      finalAnswerModeType = FinalAnswerMode.replan;
+    } else if (explicitBlockedPayload) {
+      if (aggregationState.needExpansion || requiresEvidenceContinuation) {
+        nextActionType = AssistantNextAction.toolCall;
         finalAnswerModeType = FinalAnswerMode.replan;
-      } else if (explicitMode == 'bounded_answer' ||
-          explicitMode == 'fallback') {
-        nextActionType = AssistantNextAction.answer;
-        finalAnswerModeType = FinalAnswerMode.boundedAnswer;
+      } else {
+        nextActionType = AssistantNextAction.abort;
+        finalAnswerModeType = FinalAnswerMode.blocked;
+      }
+    } else if (modelNextAction == AssistantNextAction.answer) {
+      final shouldPreferReplan =
+          !evidenceEvaluation.passed &&
+          (aggregationState.needExpansion ||
+              evidenceStatusType == EvidenceStatus.retry ||
+              (!hasGroundingEvidence && requiresEvidenceContinuation) ||
+              (requiresEvidenceContinuation &&
+                  !aggregationState.canGivePartialAnswer &&
+                  evidenceStatusType != EvidenceStatus.bounded));
+      if (shouldPreferReplan) {
+        nextActionType = AssistantNextAction.toolCall;
+        finalAnswerModeType = FinalAnswerMode.replan;
       } else {
         nextActionType = AssistantNextAction.answer;
-        finalAnswerModeType = FinalAnswerMode.full;
+        finalAnswerModeType =
+            evidenceStatusType == EvidenceStatus.full ||
+                evidenceStatusType == EvidenceStatus.notRequired
+            ? FinalAnswerMode.full
+            : FinalAnswerMode.boundedAnswer;
       }
     } else if (evidenceStatusType == EvidenceStatus.full ||
         evidenceStatusType == EvidenceStatus.notRequired) {
       nextActionType = AssistantNextAction.answer;
       finalAnswerModeType = FinalAnswerMode.full;
     } else if (evidenceStatusType == EvidenceStatus.bounded) {
-      nextActionType = AssistantNextAction.answer;
-      finalAnswerModeType = FinalAnswerMode.boundedAnswer;
-    } else if (!evidenceEvaluation.passed) {
-      if (evidenceEvaluation.entries.isNotEmpty ||
-          aggregationState.canGivePartialAnswer ||
-          evidenceStatusType == EvidenceStatus.bounded) {
+      if (hasGroundingEvidence) {
         nextActionType = AssistantNextAction.answer;
         finalAnswerModeType = FinalAnswerMode.boundedAnswer;
-      } else if (aggregationState.needExpansion ||
-          requiresEvidenceContinuation) {
-        nextActionType = AssistantNextAction.replan;
-        finalAnswerModeType = FinalAnswerMode.replan;
       } else {
+        nextActionType = AssistantNextAction.toolCall;
+        finalAnswerModeType = FinalAnswerMode.replan;
+      }
+    } else if (!evidenceEvaluation.passed) {
+      final shouldPreferReplan =
+          aggregationState.needExpansion ||
+          evidenceStatusType == EvidenceStatus.retry ||
+          !hasGroundingEvidence ||
+          (requiresEvidenceContinuation &&
+              !aggregationState.canGivePartialAnswer &&
+              evidenceStatusType != EvidenceStatus.bounded);
+      if (shouldPreferReplan) {
+        nextActionType = AssistantNextAction.toolCall;
+        finalAnswerModeType = FinalAnswerMode.replan;
+      } else if (hasGroundingEvidence) {
         nextActionType = AssistantNextAction.answer;
         finalAnswerModeType = FinalAnswerMode.boundedAnswer;
+      } else {
+        nextActionType = AssistantNextAction.toolCall;
+        finalAnswerModeType = FinalAnswerMode.replan;
       }
     } else if (aggregationState.needExpansion &&
         !aggregationState.finalAnswerReady) {
-      nextActionType = AssistantNextAction.replan;
+      nextActionType = AssistantNextAction.toolCall;
       finalAnswerModeType = FinalAnswerMode.replan;
     } else {
       nextActionType = AssistantNextAction.answer;
@@ -278,42 +321,6 @@ class ConversationStateKernel {
       qualityGates: qualityGates,
       finalAnswerReady: finalAnswerReady,
     );
-  }
-
-  AssistantTurnAnswerGateAssessment? _parseAnswerGateAssessment(Object? raw) {
-    if (raw is! Map) return null;
-    try {
-      return AssistantTurnAnswerGateAssessment.fromJson(
-        raw.cast<String, dynamic>(),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool _hasExplicitAnswerGateAssessment(
-    AssistantTurnAnswerGateAssessment? assessment,
-  ) {
-    if (assessment == null) {
-      return false;
-    }
-    return assessment.answerMode.trim().isNotEmpty ||
-        assessment.canAnswerNow ||
-        assessment.replanNeeded ||
-        assessment.replanReason.trim().isNotEmpty ||
-        assessment.attemptsUsed > 0 ||
-        assessment.maxAttempts > 0;
-  }
-
-  String _normalizedAnswerMode(AssistantTurnAnswerGateAssessment assessment) {
-    final raw = assessment.answerMode.trim().toLowerCase();
-    if (raw.isEmpty) {
-      if (assessment.replanNeeded) {
-        return 'replan';
-      }
-      return assessment.canAnswerNow ? 'answer' : 'fallback';
-    }
-    return raw;
   }
 
   SlotValueSnapshot _normalizePayloadSlot(String slotId, Object? raw) {

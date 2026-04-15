@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 void main() {
   test('phase owner observability payload includes required fields', () {
     final file = File(
-      'lib/assistant/orchestration/local_phase_execution_owner.dart',
+      'lib/assistant/orchestration/pipelines/observability_payload_builder.dart',
     );
     expect(file.existsSync(), isTrue);
     final text = file.readAsStringSync();

@@ -287,7 +287,7 @@ void main() {
       // ready 链路不再单独插入 retrieval_processing 过程帧（证据摘要进 journey / answer 前快照）。
       const expectedSteps = <ProcessStepId>[
         ProcessStepId.understanding,
-        ProcessStepId.answerOrganization,
+        ProcessStepId.retrievalProcessing,
       ];
 
       final firstSeenIndex = <ProcessStepId, int>{};
@@ -317,7 +317,7 @@ void main() {
         expect(
           firstSeenIndex[expectedSteps[i]]!,
           lessThan(firstSeenIndex[expectedSteps[i + 1]]!),
-          reason: '可见阶段必须按 understanding → answer_organization 顺序首次出现',
+          reason: '可见阶段必须按 understanding → retrieval_processing 顺序首次出现',
         );
       }
 
@@ -353,17 +353,17 @@ void main() {
           reason: 'journey 不应再抢占过程主轨，最终更新应晚于 processTimeline',
         );
       }
-      final answerStageStreamIndex = events.indexWhere((event) {
+      final retrievalStageStreamIndex = events.indexWhere((event) {
         if (event.type != AssistantRunStreamEventType.processTimelineUpdate) {
           return false;
         }
         final frames = event.processTimeline ?? const <ProcessTimelineFrame>[];
-        return frames.any((frame) => frame.stepId == ProcessStepId.answerOrganization);
+        return frames.any((frame) => frame.stepId == ProcessStepId.retrievalProcessing);
       });
       expect(
-        answerStageStreamIndex,
+        retrievalStageStreamIndex,
         inInclusiveRange(0, completedIndex - 1),
-        reason: 'answer_organization 必须在 completed 之前进入流式过程轨',
+        reason: 'retrieval_processing 必须在 completed 之前进入流式过程轨',
       );
 
       final streamedFinalTimeline =
@@ -371,7 +371,7 @@ void main() {
       expect(
         streamedFinalTimeline.map((frame) => frame.stepId).toList(growable: false),
         orderedEquals(expectedSteps),
-        reason: '最终流式过程轨应完整包含 3 个可见阶段',
+        reason: '最终流式过程轨应完整包含 2 个可见阶段',
       );
 
       for (final frame in streamedFinalTimeline) {
@@ -467,7 +467,7 @@ void _expectUserFacingProcessFrame(ProcessTimelineFrame frame) {
     expect(
       text.contains(forbidden),
       isFalse,
-      reason: '3 阶段可见过程轨不应暴露内部协议字段 "$forbidden"',
+      reason: '可见过程轨不应暴露内部协议字段 "$forbidden"',
     );
   }
 }

@@ -67,7 +67,7 @@ flutter analyze \
   lib/assistant/infrastructure/llm/llm_provider.dart \
   lib/assistant/infrastructure/openclaw_bridge.dart \
   lib/assistant/orchestration/execution_preparation_resolver.dart \
-  lib/assistant/orchestration/local_phase_execution_owner.dart \
+  lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart \
   lib/assistant/runtime/assistant_runtime.dart \
   lib/ui/chat/pages/chat_detail_page.dart \
   test/assistant/prompt_v2_e2e_test.dart \

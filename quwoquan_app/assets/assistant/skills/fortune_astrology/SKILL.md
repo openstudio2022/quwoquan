@@ -44,7 +44,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 `decision`、`toolPlan`、`slotState`
+1. 机器轨 JSON：包含 `decision`、`toolCalls`、`slotState`
 2. 用户轨 Markdown：自然语言说明正在补充外部信息或上下文
 
 若 nextAction 为 answer，机器轨输出完整结构化字段，Markdown 侧保持有仪式感但不过度确定。

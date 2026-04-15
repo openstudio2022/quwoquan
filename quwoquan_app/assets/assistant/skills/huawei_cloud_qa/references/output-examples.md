@@ -13,7 +13,7 @@
     "level": {"value": "L1", "source": "classified"},
     "subtype": {"value": "entity", "source": "classified"}
   },
-  "toolPlan": [],
+  "toolCalls": [],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "（见下方 Markdown）"
 }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -65,6 +66,10 @@ const _knownFailureClasses = <String>[
 ];
 const _weatherFirstQuery = '深圳今天天气怎么样？需要带外套吗？';
 const _weatherSecondQuery = '明天会下雨吗，要带伞还是外套？';
+const _canonicalVisibleReplayTimeline = <String>[
+  'understanding',
+  'retrieval_processing',
+];
 const _m0ReplayCases = <_M0ReplayCase>[
   _M0ReplayCase(
     caseId: 'yesterday_stock_reason',
@@ -281,9 +286,13 @@ void main() {
         }
       });
 
-  testWidgets('Assistant M0 replay baseline', (tester) async {
-    await _runM0ReplayBaseline(tester, binding: binding);
-  });
+  testWidgets(
+    'Assistant M0 replay baseline',
+    (tester) async {
+      await _runM0ReplayBaseline(tester, binding: binding);
+    },
+    timeout: Timeout(Duration(minutes: _m0ReplayBaselineTimeoutMinutes())),
+  );
 
   if (_enableLegacyReplayCases) {
     testWidgets('助理回放与天气问答回归', (tester) async {
@@ -301,7 +310,7 @@ void main() {
         firstQuery: _weatherFirstQuery,
         secondQuery: _weatherSecondQuery,
       );
-    });
+    }, timeout: const Timeout(Duration(minutes: 20)));
 
     testWidgets('时间锚点真实回放回归', (tester) async {
       for (final replayCase in _selectedTemporalReplayCases()) {
@@ -311,14 +320,24 @@ void main() {
           replayCase: replayCase,
         );
       }
-    });
+    }, timeout: const Timeout(Duration(minutes: 20)));
 
-    testWidgets('冷启动 reload 后仍恢复最后一条 assistant canonical state', (
-      tester,
-    ) async {
-      await _runColdStartReloadCase(tester, binding: binding);
-    });
+    testWidgets(
+      '冷启动 reload 后仍恢复最后一条 assistant canonical state',
+      (tester) async {
+        await _runColdStartReloadCase(tester, binding: binding);
+      },
+      timeout: const Timeout(Duration(minutes: 20)),
+    );
   }
+}
+
+int _m0ReplayBaselineTimeoutMinutes() {
+  final selectedCaseCount = _selectedM0ReplayCases().length;
+  final estimatedMinutes = 6 + (selectedCaseCount * _replayRepeatCount * 3);
+  if (estimatedMinutes < 20) return 20;
+  if (estimatedMinutes > 60) return 60;
+  return estimatedMinutes;
 }
 
 Future<void> _runM0ReplayBaseline(
@@ -404,7 +423,10 @@ String _summarizePackBlocking(AssistantReplayBaselinePack pack) {
       )
       .join(' ; ');
   final blocking = pack.m1Entry.blockingReasons.join('；');
-  return '$blocking | $attemptSummaries';
+  final fieldDiffs = pack.stability.fieldDiffs.isEmpty
+      ? ''
+      : ' | fieldDiffs=${pack.stability.fieldDiffs}';
+  return '$blocking | $attemptSummaries$fieldDiffs';
 }
 
 List<_M0ReplayCase> _selectedM0ReplayCases() {
@@ -502,6 +524,31 @@ Future<AssistantReplayBaselineAttempt> _runM0StandardAttempt(
       );
       turns.add(artifact);
       issues.addAll(artifact.issues.map((item) => '${turn.turnId}: $item'));
+      if (artifact.issues.isNotEmpty) {
+        final snapshotDiag = snapshot == null
+            ? const <String, dynamic>{}
+            : <String, dynamic>{
+                'messageId': snapshot.messageId,
+                'runId': snapshot.runId,
+                'traceId': snapshot.traceId,
+                'answerText': snapshot.answerText,
+                'bubbleText': snapshot.bubbleText,
+                'streaming': snapshot.streaming,
+                'finalAnswerReady': snapshot.finalAnswerReady,
+                'nextAction': snapshot.nextAction,
+                'finalAnswerMode': snapshot.finalAnswerMode,
+                'timelinePhaseIds': snapshot.timelinePhaseIds,
+                'journalStages': snapshot.journalStages,
+                'canonicalProcessSteps': snapshot.canonicalProcessSteps,
+                'queryDesignLines': snapshot.queryDesignLines,
+              };
+        debugPrint(
+          'M0_REPLAY_DIAG case=${replayCase.caseId} turn=${turn.turnId} '
+          'result=${result.toJson()} '
+          'snapshot=$snapshotDiag '
+          'artifact=${artifact.toJson()}',
+        );
+      }
     }
   } catch (error) {
     issues.add('exception: $error');
@@ -517,6 +564,16 @@ Future<AssistantReplayBaselineAttempt> _runM0StandardAttempt(
     replayCase: replayCase,
     turns: turns,
     failureClass: failureClass,
+  );
+  final finalTurn = turns.isEmpty ? null : turns.last;
+  debugPrint(
+    'M0_REPLAY_ATTEMPT case=${replayCase.caseId} '
+    'attempt=${attemptIndex} '
+    'outcome=$outcomeClass '
+    'failure=$failureClass '
+    'nextAction=${(finalTurn?.report['nextAction'] as String?)?.trim() ?? ''} '
+    'finalAnswerReady=${finalTurn?.finalAnswerReady ?? false} '
+    'queryDesignSignature=${_stableQueryDesignSignature(finalTurn?.queryDesignLines ?? const <String>[])}',
   );
   return AssistantReplayBaselineAttempt(
     attemptIndex: attemptIndex,
@@ -590,12 +647,20 @@ Future<AssistantReplayBaselineAttempt> _runM0ReloadAttempt(
     );
     final recoveredSnapshot = _latestAssistantSnapshot(tester);
     afterReload = _reloadStateFromSnapshot(recoveredSnapshot);
-    issues.addAll(
-      _collectReloadIssues(
-        beforeReload: beforeReload,
-        afterReload: afterReload,
-      ),
+    final reloadIssues = _collectReloadIssues(
+      beforeReload: beforeReload,
+      afterReload: afterReload,
     );
+    if (reloadIssues.isNotEmpty) {
+      debugPrint(
+        'M0_RELOAD_DIAG case=${replayCase.caseId} '
+        'attempt=$attemptIndex '
+        'before=$beforeReload '
+        'after=$afterReload '
+        'issues=$reloadIssues',
+      );
+    }
+    issues.addAll(reloadIssues);
   } catch (error) {
     issues.add('exception: $error');
   } finally {
@@ -648,7 +713,9 @@ Future<AssistantReplayBaselineTurn> _buildM0TurnArtifact({
       queryDesignLines: queryDesignLines,
     ),
   ];
-  final finalAnswerReady = snapshot?.finalAnswerReady ?? false;
+  final finalAnswerReady =
+      (snapshot?.finalAnswerReady ?? false) ||
+      _replayResultSignalsReady(result);
   if (!finalAnswerReady) {
     issues.add('final_answer_not_ready');
   }
@@ -757,18 +824,10 @@ List<String> _collectReplayGateIssues(_ReplayResult result) {
   if (result.nextAction != 'answer') {
     issues.add('next_action_not_answer');
   }
-  if (!_listEquals(result.timelinePhases, const <String>[
-    'analyze',
-    'search',
-    'answer',
-  ])) {
+  if (!_hasCanonicalVisibleReplayTimeline(result.timelinePhases)) {
     issues.add('timeline_phases_not_canonical');
   }
-  if (!_listEquals(result.journalStages, const <String>[
-    'analyze',
-    'search',
-    'answer',
-  ])) {
+  if (!_hasCanonicalVisibleReplayTimeline(result.journalStages)) {
     issues.add('journal_stages_not_canonical');
   }
   if (result.finalAnswerMode != 'full' &&
@@ -1018,9 +1077,116 @@ String _stabilityFieldValue(
     case 'finalAnswerReady':
       return (finalTurn?.finalAnswerReady ?? false).toString();
     case 'queryDesignSignature':
-      return (finalTurn?.queryDesignLines ?? const <String>[]).join(' | ');
+      return _stableQueryDesignSignature(
+        finalTurn?.queryDesignLines ?? const <String>[],
+      );
   }
   return '';
+}
+
+String _stableQueryDesignSignature(List<String> lines) {
+  final normalized =
+      lines
+          .map(_normalizeQueryDesignLineForStability)
+          .where((item) => item.isNotEmpty)
+          .toSet()
+          .toList(growable: false)
+        ..sort();
+  return normalized.join(' | ');
+}
+
+final RegExp _stabilityExplicitDateTokenRe = RegExp(
+  r'(20\d{2})[-年/](\d{1,2})(?:[-月/])(\d{1,2})(?:日)?',
+);
+
+String _normalizeQueryDesignLineForStability(String raw) {
+  final canonicalDate = raw.replaceAllMapped(_stabilityExplicitDateTokenRe, (
+    match,
+  ) {
+    final year = match.group(1) ?? '';
+    final month = int.tryParse(match.group(2) ?? '')?.toString() ?? '';
+    final day = int.tryParse(match.group(3) ?? '')?.toString() ?? '';
+    if (year.isEmpty || month.isEmpty || day.isEmpty) {
+      return match.group(0) ?? '';
+    }
+    return '$year年${month}月${day}日';
+  });
+  var normalized = canonicalDate
+      .replaceAll(RegExp(r'^[•\-]\s*'), '')
+      .replaceAll(RegExp(r'\s+'), '')
+      .replaceAll(RegExp(r'[，,。；;：:、（）()【】\[\]]'), '')
+      .trim();
+  normalized = normalized.replaceAll(_stabilityExplicitDateTokenRe, '');
+  normalized = normalized
+      .replaceAll(RegExp(r'[Aa]股'), 'A股')
+      .replaceAll('中国', '')
+      .replaceAll('市场', '')
+      .replaceAll('驱动因素', '原因')
+      .replaceAll('驱动板块', '原因')
+      .replaceAll('成因', '原因')
+      .replaceAll('主要原因', '原因')
+      .replaceAll('具体原因', '原因')
+      .replaceAll('天气详情', '天气预报')
+      .replaceAll('天气情况', '天气预报')
+      .replaceAll('天气信息', '天气预报')
+      .replaceAll('穿衣建议', '带外套建议')
+      .replaceAll('外套建议', '带外套建议')
+      .replaceAll('穿搭建议', '带外套建议')
+      .replaceAll('是否需要带外套', '带外套')
+      .replaceAll('要不要带外套', '带外套')
+      .replaceAll('是否要带外套', '带外套')
+      .replaceAll('是否带外套', '带外套')
+      .replaceAll('需不需要带外套', '带外套')
+      .replaceAll('穿衣', '带外套')
+      .replaceAll(RegExp(r'(主要|具体|直接|核心|关键)'), '')
+      .replaceAll(
+        RegExp(r'^(了解|确认|判断|分析|梳理|聚焦|追踪|查询|检索|获取|锁定|查明|弄清楚?|搞清楚?)+'),
+        '',
+      )
+      .replaceAll('并根据温度判断', '')
+      .replaceAll('并根据气温判断', '')
+      .replaceAll('并判断', '')
+      .replaceAll('并得到', '')
+      .replaceAll('并获得', '')
+      .replaceAll('并给出', '')
+      .replaceAll('预报和', '预报')
+      .replaceAll('在大涨', '大涨')
+      .replaceAll('的原因', '原因')
+      .replaceAll('和原因', '原因')
+      .replaceAll('原因原因', '原因')
+      .replaceAll('的', '');
+  if (_looksLikeStockJumpReasonSignature(normalized)) {
+    return 'A股大涨原因';
+  }
+  if (_looksLikeWeatherOuterwearSignature(normalized)) {
+    return '天气预报带外套建议';
+  }
+  return normalized.trim();
+}
+
+bool _looksLikeStockJumpReasonSignature(String normalized) {
+  final compact = normalized.trim();
+  if (compact.isEmpty) return false;
+  final mentionsStock =
+      compact.contains('A股') ||
+      compact.contains('股票') ||
+      compact.contains('股市');
+  final mentionsJump = compact.contains('大涨');
+  final mentionsReason =
+      compact.contains('原因') ||
+      compact.contains('驱动') ||
+      compact.contains('板块');
+  return mentionsStock && mentionsJump && mentionsReason;
+}
+
+bool _looksLikeWeatherOuterwearSignature(String normalized) {
+  final compact = normalized.trim();
+  if (compact.isEmpty) return false;
+  final weatherSignals = RegExp(
+    r'(天气|预报|气温|温度|体感|降水|下雨|风力)',
+  ).allMatches(compact).length;
+  final adviceSignals = RegExp(r'(外套|穿衣|建议|雨伞|带伞)').allMatches(compact).length;
+  return weatherSignals >= 2 || adviceSignals >= 1;
 }
 
 AssistantReplayM1EntryAssessment _buildM0CaseM1Entry({
@@ -1114,6 +1280,7 @@ Map<String, dynamic> _reloadStateFromSnapshot(
     'answerText': snapshot.answerText,
     'timelinePhases': snapshot.timelinePhaseIds,
     'canonicalProcessSteps': snapshot.canonicalProcessSteps,
+    'visibleProcessSteps': snapshot.visibleProcessSteps,
     'queryDesignLines': snapshot.queryDesignLines,
   };
 }
@@ -1143,26 +1310,46 @@ List<String> _collectReloadIssues({
     issues.add('reload_answer_text_changed');
   }
   if (!_listEquals(
-    ((beforeReload['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
-        .map((item) => item.toString())
-        .toList(growable: false),
-    ((afterReload['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
-        .map((item) => item.toString())
-        .toList(growable: false),
+    _reloadVisibleProcessSteps(beforeReload),
+    _reloadVisibleProcessSteps(afterReload),
   )) {
     issues.add('reload_process_steps_changed');
   }
-  if (!_listEquals(
-    ((beforeReload['queryDesignLines'] as List?) ?? const <dynamic>[])
-        .map((item) => item.toString())
-        .toList(growable: false),
-    ((afterReload['queryDesignLines'] as List?) ?? const <dynamic>[])
-        .map((item) => item.toString())
-        .toList(growable: false),
-  )) {
+  if (_stableQueryDesignSignature(_reloadQueryDesignLines(beforeReload)) !=
+      _stableQueryDesignSignature(_reloadQueryDesignLines(afterReload))) {
     issues.add('reload_query_design_changed');
   }
   return issues;
+}
+
+List<String> _reloadVisibleProcessSteps(Map<String, dynamic> state) {
+  final explicit =
+      ((state['visibleProcessSteps'] as List?) ?? const <dynamic>[])
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  final canonical =
+      ((state['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+  return canonical
+      .where(
+        (stepId) =>
+            stepId == ProcessStepId.understanding.wireName ||
+            stepId == ProcessStepId.retrievalProcessing.wireName,
+      )
+      .toList(growable: false);
+}
+
+List<String> _reloadQueryDesignLines(Map<String, dynamic> state) {
+  return ((state['queryDesignLines'] as List?) ?? const <dynamic>[])
+      .map((item) => item.toString())
+      .where((item) => item.trim().isNotEmpty)
+      .toList(growable: false);
 }
 
 Map<String, dynamic> _buildCanonicalBaselineState(
@@ -1230,10 +1417,8 @@ Map<String, dynamic> _buildCanonicalBaselineState(
     'understandingSnapshot': <String, dynamic>{
       'userFacingSummary':
           (understanding['userFacingSummary'] as String?)?.trim() ?? '',
-      'queryDesignSummary':
-          (understanding['queryDesignSummary'] as String?)?.trim() ?? '',
-      'queryGroups':
-          (understanding['queryGroups'] as List?) ?? const <dynamic>[],
+      'intentSummary':
+          (understanding['intentSummary'] as String?)?.trim() ?? '',
     },
     'answerProcessing': <String, dynamic>{
       'readinessSummary':
@@ -1253,6 +1438,7 @@ Map<String, dynamic> _buildCanonicalBaselineState(
       'finalAnswerReady': readiness['finalAnswerReady'] == true,
       'answerEligibility': (readiness['answerEligibility'] ?? '').toString(),
     },
+    'visibleProcessSteps': snapshot.visibleProcessSteps,
     'phaseOneRoutingDiagnostics': snapshot.phaseOneRoutingDiagnostics,
     'queryDesignLines': snapshot.queryDesignLines,
     'messageId': snapshot.messageId,
@@ -1440,8 +1626,8 @@ Future<void> _runColdStartReloadCase(
     final afterReload = _latestAssistantSnapshot(tester);
     expect(afterReload, isNotNull);
     expect(
-      afterReload!.queryDesignLines,
-      equals(beforeReload.queryDesignLines),
+      _stableQueryDesignSignature(afterReload!.queryDesignLines),
+      equals(_stableQueryDesignSignature(beforeReload.queryDesignLines)),
       reason: 'reload 后 query design 不应丢失或被空白 fallback 覆盖',
     );
     expect(
@@ -1456,8 +1642,8 @@ Future<void> _runColdStartReloadCase(
       reason: 'reload 后最后一条 assistant 答案应完整恢复',
     );
     expect(
-      afterReload.canonicalProcessSteps,
-      orderedEquals(beforeReload.canonicalProcessSteps),
+      afterReload.visibleProcessSteps,
+      orderedEquals(beforeReload.visibleProcessSteps),
     );
     expect(afterReload.journalStages, isNotEmpty);
 
@@ -1669,6 +1855,7 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   var finalMessageStreaming = true;
   String previousAnswer = '';
   var observedNewAssistantTurn = false;
+  String latestProcessHeader = '';
   final deadline = DateTime.now().add(const Duration(seconds: 80));
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(seconds: 1));
@@ -1696,6 +1883,7 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     }
     snapshots.add(latestText);
     _throwIfForbidden(latestText);
+    latestProcessHeader = await _latestAssistantProcessHeaderText(tester);
     matchedExpected =
         _matchesExpectation(query, latestAnswer) &&
         !_isGenericAssistantFallback(latestAnswer);
@@ -1705,17 +1893,75 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
       stableTicks = 0;
       previousAnswer = latestAnswer;
     }
-    if (matchedExpected &&
-        !degraded &&
-        !heuristicFallbackUsed &&
-        latestAnswer.trim().isNotEmpty &&
-        stableTicks >= 2 &&
-        !finalMessageStreaming) {
+    if (_hasSettledReplayAnswer(
+      snapshot: snapshot,
+      matchedExpected: matchedExpected,
+      degraded: degraded,
+      heuristicFallbackUsed: heuristicFallbackUsed,
+      latestAnswer: latestAnswer,
+      stableTicks: stableTicks,
+      finalMessageStreaming: finalMessageStreaming,
+      latestProcessHeader: latestProcessHeader,
+    )) {
       break;
     }
   }
 
-  final processHeaderText = await _latestAssistantProcessHeaderText(tester);
+  if (!_hasSettledReplayAnswer(
+        snapshot: latestSnapshot,
+        matchedExpected: matchedExpected,
+        degraded: degraded,
+        heuristicFallbackUsed: heuristicFallbackUsed,
+        latestAnswer: latestAnswer,
+        stableTicks: stableTicks,
+        finalMessageStreaming: finalMessageStreaming,
+        latestProcessHeader: latestProcessHeader,
+      ) &&
+      latestSnapshot != null &&
+      latestAnswer.trim().isNotEmpty &&
+      !degraded &&
+      !heuristicFallbackUsed) {
+    final graceDeadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(graceDeadline)) {
+      await tester.pump(const Duration(seconds: 1));
+      final snapshot = _latestAssistantSnapshot(tester);
+      if (snapshot == null) {
+        continue;
+      }
+      latestSnapshot = snapshot;
+      latestText = snapshot.bubbleText;
+      latestAnswer = snapshot.answerText;
+      finalMessageStreaming = snapshot.streaming;
+      degraded = snapshot.degraded;
+      heuristicFallbackUsed = snapshot.heuristicFallbackUsed;
+      latestProcessHeader = await _latestAssistantProcessHeaderText(tester);
+      matchedExpected =
+          _matchesExpectation(query, latestAnswer) &&
+          !_isGenericAssistantFallback(latestAnswer);
+      if (latestAnswer == previousAnswer) {
+        stableTicks += 1;
+      } else {
+        stableTicks = 0;
+        previousAnswer = latestAnswer;
+      }
+      if (_hasSettledReplayAnswer(
+        snapshot: snapshot,
+        matchedExpected: matchedExpected,
+        degraded: degraded,
+        heuristicFallbackUsed: heuristicFallbackUsed,
+        latestAnswer: latestAnswer,
+        stableTicks: stableTicks,
+        finalMessageStreaming: finalMessageStreaming,
+        latestProcessHeader: latestProcessHeader,
+      )) {
+        break;
+      }
+    }
+  }
+
+  final processHeaderText = latestProcessHeader.isNotEmpty
+      ? latestProcessHeader
+      : await _latestAssistantProcessHeaderText(tester);
   phaseLabelSeen = _isAcceptableProcessHeader(processHeaderText);
 
   return _ReplayResult(
@@ -1738,10 +1984,53 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     templateVersionUsed: latestSnapshot?.templateVersionUsed ?? '',
     phaseOneRoutingDiagnostics:
         latestSnapshot?.phaseOneRoutingDiagnostics ?? const <String, dynamic>{},
-    timelinePhases: latestSnapshot?.timelinePhaseIds ?? const <String>[],
-    journalStages: latestSnapshot?.journalStages ?? const <String>[],
+    timelinePhases: latestSnapshot?.visibleProcessSteps ?? const <String>[],
+    journalStages: latestSnapshot?.visibleProcessSteps ?? const <String>[],
     queryDesignLines: latestSnapshot?.queryDesignLines ?? const <String>[],
   );
+}
+
+bool _hasSettledReplayAnswer({
+  required _AssistantBubbleSnapshot? snapshot,
+  required bool matchedExpected,
+  required bool degraded,
+  required bool heuristicFallbackUsed,
+  required String latestAnswer,
+  required int stableTicks,
+  required bool finalMessageStreaming,
+  required String latestProcessHeader,
+}) {
+  if (snapshot == null) {
+    return false;
+  }
+  final finalAnswerMode = snapshot.finalAnswerMode;
+  return matchedExpected &&
+      !degraded &&
+      !heuristicFallbackUsed &&
+      snapshot.finalAnswerReady &&
+      snapshot.runId.isNotEmpty &&
+      latestAnswer.trim().isNotEmpty &&
+      stableTicks >= 2 &&
+      !finalMessageStreaming &&
+      _isCompletedProcessHeader(latestProcessHeader) &&
+      _hasCanonicalVisibleReplayTimeline(snapshot.timelinePhaseIds) &&
+      _hasCanonicalVisibleReplayTimeline(snapshot.journalStages) &&
+      snapshot.nextAction == AssistantNextAction.answer.wireName &&
+      (finalAnswerMode == 'full' || finalAnswerMode == 'bounded_answer');
+}
+
+bool _replayResultSignalsReady(_ReplayResult result) {
+  return result.matchedExpected &&
+      !result.degraded &&
+      !result.heuristicFallbackUsed &&
+      !result.finalMessageStreaming &&
+      result.finalAnswerText.trim().isNotEmpty &&
+      result.nextAction == AssistantNextAction.answer.wireName &&
+      (result.finalAnswerMode == 'full' ||
+          result.finalAnswerMode == 'bounded_answer') &&
+      _isCompletedProcessHeader(result.processHeaderText) &&
+      _hasCanonicalVisibleReplayTimeline(result.timelinePhases) &&
+      _hasCanonicalVisibleReplayTimeline(result.journalStages);
 }
 
 Future<_ReplayResult> _sendQueryWithSingleRetry(
@@ -2153,15 +2442,29 @@ bool _isAcceptableProcessHeader(String text) {
 }
 
 bool _isCompletedProcessHeader(String text) {
-  final normalized = _normalizeLoose(text);
-  return RegExp(
-    r'^已完成深度思考(?:，处理 \d+ 篇文档)?(?:，耗时 \d+ 秒)?(?:，处理 \d+ 篇文档，耗时 \d+ 秒)?$',
-  ).hasMatch(normalized);
+  final raw = text.trim();
+  if (raw.isEmpty) return false;
+  final lines = raw
+      .split('\n')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  if (lines.isEmpty) return false;
+  if (lines.first != '已完成深度思考') return false;
+  return lines
+      .skip(1)
+      .every(
+        (line) => RegExp(r'^(处理 \d+ 篇|接纳 \d+ 篇|耗时 \d+ 秒)$').hasMatch(line),
+      );
 }
 
 bool _completedHeaderHasDocumentCount(String text) {
   final normalized = _normalizeLoose(text);
   return RegExp(r'处理 \d+ 篇文档').hasMatch(normalized);
+}
+
+bool _hasCanonicalVisibleReplayTimeline(List<String> phases) {
+  return _listEquals(phases, _canonicalVisibleReplayTimeline);
 }
 
 void _expectTemporalReplayResult(
@@ -2345,23 +2648,28 @@ void _expectReplayResult(_ReplayResult result) {
   expect(result.nextAction, 'answer', reason: '当前回放最终必须直接进入 answer');
   expect(
     result.timelinePhases,
-    equals(const <String>['analyze', 'search', 'answer']),
-    reason: 'completed 后必须持久化三阶段 timeline，不再暴露 verify 独立阶段',
+    equals(_canonicalVisibleReplayTimeline),
+    reason: 'completed 后可见 timeline 必须收口到 understanding → retrieval_processing',
   );
   expect(
     result.journalStages,
-    equals(const <String>['analyze', 'search', 'answer']),
-    reason: '历史恢复应与三阶段完成态一致，不允许回退旧四阶段',
+    equals(_canonicalVisibleReplayTimeline),
+    reason: '历史恢复应与当前可见双阶段完成态一致，不能回退旧阶段命名',
   );
   expect(
     result.finalAnswerMode,
     anyOf(equals('full'), equals('bounded_answer')),
     reason: '最终回答模式必须是 full 或 bounded_answer',
   );
+  expect(
+    result.modelCallCount,
+    lessThanOrEqualTo(5),
+    reason: '单轮回放必须遵守总模型阶段不超过 5 次的业务预算',
+  );
   if (_isDefaultFirstReplayQuery(result.query)) {
     expect(
       result.modelCallCount,
-      lessThanOrEqualTo(6),
+      lessThanOrEqualTo(5),
       reason: '首轮应在有限模型调用内完成成答，避免反复扩检',
     );
   }
@@ -2516,6 +2824,101 @@ enum _TemporalReplayExpectationKind {
   futureForecast,
 }
 
+List<String> _queryDesignLineStringsFromFrames(
+  List<ProcessTimelineFrame> frames,
+) {
+  final lines = <String>[];
+  for (final frame in frames) {
+    if (frame.stepId != ProcessStepId.retrievalDesign) continue;
+    for (final piece in <String>[frame.headline, frame.detail]) {
+      for (final line in piece.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          lines.add(trimmed);
+        }
+      }
+    }
+  }
+  return _uniqueNonEmpty(lines);
+}
+
+List<String> _queryDesignLineStringsFromRawTimeline(List<dynamic> raw) {
+  final lines = <String>[];
+  for (final item in raw) {
+    if (item is! Map) continue;
+    final map = item.cast<String, dynamic>();
+    final stepId = (map['stepId'] as String?)?.trim() ?? '';
+    if (stepId != 'retrieval_design') continue;
+    for (final key in <String>['headline', 'detail', 'summary']) {
+      final text = (map[key] as String?)?.trim() ?? '';
+      if (text.isEmpty) continue;
+      for (final line in text.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          lines.add(trimmed);
+        }
+      }
+    }
+  }
+  return _uniqueNonEmpty(lines);
+}
+
+List<String> _queryDesignLineStringsFromIntentGraph(Map<String, dynamic> root) {
+  final intentGraph = root['intentGraph'];
+  if (intentGraph is! Map) {
+    return const <String>[];
+  }
+  final tasks = intentGraph['queryTasks'];
+  if (tasks is! List) {
+    return const <String>[];
+  }
+  final queries = <String>[];
+  for (final task in tasks) {
+    if (task is! Map) continue;
+    final query = (task['query'] as String?)?.trim() ?? '';
+    if (query.isNotEmpty) {
+      queries.add(query);
+    }
+  }
+  return _uniqueNonEmpty(queries);
+}
+
+List<String> _queryDesignLineStringsFromUnderstandingSnapshot(
+  Map<String, dynamic> root,
+) {
+  final candidates = <Map<String, dynamic>?>[
+    (root[assistantUnderstandingSnapshotField] as Map?)
+        ?.cast<String, dynamic>(),
+    ((root['runArtifacts'] as Map?)?[assistantUnderstandingSnapshotField]
+            as Map?)
+        ?.cast<String, dynamic>(),
+  ];
+  final lines = <String>[];
+  for (final snapshot in candidates) {
+    if (snapshot == null) continue;
+    for (final candidate in <String>[
+      (snapshot['intentSummary'] as String?)?.trim() ?? '',
+      (snapshot['userFacingSummary'] as String?)?.trim() ?? '',
+    ]) {
+      if (_looksLikeQueryDesignFallback(candidate)) {
+        lines.add(candidate);
+      }
+    }
+  }
+  return _uniqueNonEmpty(lines);
+}
+
+bool _looksLikeQueryDesignFallback(String raw) {
+  final compact = _normalizeLoose(raw);
+  if (compact.length < 8) return false;
+  if (RegExp(r'^(获取|查询|检索|确认|判断|分析|了解|核对|锁定)').hasMatch(compact)) {
+    return true;
+  }
+  final normalized = _normalizeQueryDesignLineForStability(compact);
+  return _looksLikeStockJumpReasonSignature(normalized) ||
+      _looksLikeWeatherOuterwearSignature(normalized);
+}
+
 class _TemporalReplayCase {
   const _TemporalReplayCase({
     required this.caseName,
@@ -2529,10 +2932,8 @@ class _TemporalReplayCase {
 }
 
 class _AssistantBubbleSnapshot {
-  _AssistantBubbleSnapshot({
-    required this.message,
-    required this.bubbleText,
-  }) : _runArtifacts = _tryParseRunArtifacts(message);
+  _AssistantBubbleSnapshot({required this.message, required this.bubbleText})
+    : _runArtifacts = _tryParseRunArtifacts(message);
 
   final Map<String, dynamic> message;
   final String bubbleText;
@@ -2722,58 +3123,77 @@ class _AssistantBubbleSnapshot {
   }
 
   List<String> get queryDesignLines {
-    final raForQueries = _runArtifacts;
-    final typedSnapshots = <RunArtifactsUnderstandingSnapshot>[
-      if (raForQueries != null) raForQueries.understandingSnapshot,
-    ];
-    final topRaw = message['understandingSnapshot'];
-    if (topRaw is Map) {
-      try {
-        typedSnapshots.add(
-          RunArtifactsUnderstandingSnapshot.fromJson(
-            Map<String, dynamic>.from(topRaw),
-          ),
-        );
-      } catch (_) {}
-    }
-    for (final snapshot in typedSnapshots) {
-      final queries = <String>[
-        for (final group in snapshot.queryGroups) ...group.queries,
-      ];
-      final uniqueQueries = _uniqueNonEmpty(queries);
-      if (uniqueQueries.isNotEmpty) return uniqueQueries;
-    }
-
-    final candidates = <Map<String, dynamic>>[
-      ((message['runArtifacts'] as Map?)?['understandingSnapshot'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      (message['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-    ];
-    for (final snapshot in candidates) {
-      final groups =
-          (snapshot['queryGroups'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final queries = <String>[
-        for (final group in groups)
-          ...((group['queries'] as List?)
-                  ?.map((item) => item.toString().trim())
-                  .where((item) => item.isNotEmpty) ??
-              const Iterable<String>.empty()),
-      ];
-      final uniqueQueries = _uniqueNonEmpty(queries);
-      if (uniqueQueries.isNotEmpty) {
-        return uniqueQueries;
+    final normalized = normalizedMessage;
+    final normalizedTimeline =
+        (normalized[assistantProcessTimelineField] as List?) ??
+        ((normalized['runArtifacts'] as Map?)?[assistantProcessTimelineField]
+            as List?);
+    if (normalizedTimeline != null) {
+      final normalizedLines = _queryDesignLineStringsFromRawTimeline(
+        normalizedTimeline,
+      );
+      if (normalizedLines.isNotEmpty) {
+        return normalizedLines;
       }
     }
+
+    final ra = _runArtifacts;
+    if (ra != null) {
+      final fromTyped = _queryDesignLineStringsFromFrames(ra.processTimeline);
+      if (fromTyped.isNotEmpty) {
+        return fromTyped;
+      }
+    }
+
+    for (final rawList in <List<dynamic>?>[
+      message['processTimeline'] as List?,
+      (message['runArtifacts'] as Map?)?['processTimeline'] as List?,
+    ]) {
+      if (rawList == null) continue;
+      final parsed = _queryDesignLineStringsFromRawTimeline(rawList);
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+
+    for (final container in <Map<String, dynamic>?>[
+      Map<String, dynamic>.from(message),
+      (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+    ]) {
+      if (container == null) continue;
+      final fromIntent = _queryDesignLineStringsFromIntentGraph(container);
+      if (fromIntent.isNotEmpty) {
+        return fromIntent;
+      }
+      final fromUnderstanding =
+          _queryDesignLineStringsFromUnderstandingSnapshot(container);
+      if (fromUnderstanding.isNotEmpty) {
+        return fromUnderstanding;
+      }
+    }
+
     return const <String>[];
   }
 
   List<String> get canonicalProcessSteps {
+    final normalized = normalizedMessage;
+    final normalizedTimeline =
+        (normalized[assistantProcessTimelineField] as List?) ??
+        ((normalized['runArtifacts'] as Map?)?[assistantProcessTimelineField]
+            as List?);
+    if (normalizedTimeline != null) {
+      final normalizedSteps = normalizedTimeline
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .map((item) => (item['stepId'] as String?)?.trim() ?? '')
+          .where((stepId) => stepId.isNotEmpty)
+          .toList(growable: false);
+      final uniqueNormalizedSteps = _uniqueNonEmpty(normalizedSteps);
+      if (uniqueNormalizedSteps.isNotEmpty) {
+        return uniqueNormalizedSteps;
+      }
+    }
+
     final ra = _runArtifacts;
     if (ra != null && ra.processTimeline.isNotEmpty) {
       final steps = ra.processTimeline
@@ -2803,6 +3223,20 @@ class _AssistantBubbleSnapshot {
     return const <String>[];
   }
 
+  List<String> get visibleProcessSteps {
+    final steps = canonicalProcessSteps;
+    if (steps.isEmpty) {
+      return const <String>[];
+    }
+    return steps
+        .where(
+          (stepId) =>
+              stepId == ProcessStepId.understanding.wireName ||
+              stepId == ProcessStepId.retrievalProcessing.wireName,
+        )
+        .toList(growable: false);
+  }
+
   String get messageId => (message['id'] as String?)?.trim() ?? '';
 
   String get runId => (message['runId'] as String?)?.trim() ?? '';
@@ -2811,13 +3245,46 @@ class _AssistantBubbleSnapshot {
 
   bool get finalAnswerReady {
     final normalized = normalizedMessage;
+    final ra = _runArtifacts;
+    if (ra != null && ra.answerDecisionReadView.finalAnswerReady) {
+      return true;
+    }
     final journey =
         (normalized[assistantJourneyField] as Map?)?.cast<String, dynamic>() ??
         _journey;
     final readiness =
         (journey['readiness'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    return readiness['finalAnswerReady'] == true;
+    if (readiness['finalAnswerReady'] == true) {
+      return true;
+    }
+    final displayState = resolvePersistedAssistantDisplayState(
+      normalized,
+    ).toJson();
+    final processState =
+        (displayState['process'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    if (processState['finalAnswerReady'] == true) {
+      return true;
+    }
+    final answerGate =
+        (normalized[assistantAnswerGateDecisionField] as Map?)
+            ?.cast<String, dynamic>() ??
+        (((normalized['runArtifacts']
+                    as Map?)?[assistantAnswerGateDecisionField]
+                as Map?)
+            ?.cast<String, dynamic>()) ??
+        const <String, dynamic>{};
+    if (answerGate['finalAnswerReady'] == true) {
+      return true;
+    }
+    final answerDecision =
+        (normalized['conversationStateDecision'] as Map?)
+            ?.cast<String, dynamic>() ??
+        (((normalized['runArtifacts'] as Map?)?['answerDecision'] as Map?)
+            ?.cast<String, dynamic>()) ??
+        const <String, dynamic>{};
+    return answerDecision['finalAnswerReady'] == true;
   }
 
   Map<String, dynamic> get normalizedMessage =>

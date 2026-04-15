@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 
-/// 锁定 [local_phase_execution_owner] 等处对 `answerDecision` / `diagnostics`
+/// 锁定 [assistant_pipeline_engine] 等处对 `answerDecision` / `diagnostics`
 /// 的 spread 合并语义：后写覆盖同键，且保留先写独有键。
 void main() {
   test('decision map spread: later map wins on key collision', () {

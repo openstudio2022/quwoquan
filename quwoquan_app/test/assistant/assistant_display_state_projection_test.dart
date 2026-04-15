@@ -14,6 +14,14 @@ void main() {
             status: JourneyStageStatus.completed,
           ),
           ProcessTimelineFrame(
+            frameId: 'rd',
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            headline: '我会先按关键信号拆开检索。',
+            detail:
+                '检索词会围绕“昨天A股 大涨 原因”、“昨日 A股 涨停 板块”展开',
+          ),
+          ProcessTimelineFrame(
             frameId: 'r',
             stepId: ProcessStepId.retrievalProcessing,
             status: JourneyStageStatus.completed,
@@ -27,7 +35,6 @@ void main() {
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
           userFacingSummary: '我先确认你的核心问题和约束。',
           concernPoints: <String>['先看事实', '再看建议'],
-          queryDesignSummary: '我会先按关键信号拆开检索。',
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
               kind: 'geo_default',
@@ -36,13 +43,6 @@ void main() {
               resolvedValue: '深圳',
               defaultApplied: true,
               visibleInUnderstanding: true,
-            ),
-          ],
-          queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-            RunArtifactsUnderstandingQueryGroup(
-              dimension: '市场异动',
-              queries: <String>['昨天A股 大涨 原因', '昨日 A股 涨停 板块'],
-              why: '先确认对应交易日的主线和板块扩散。',
             ),
           ],
         ),
@@ -68,33 +68,47 @@ void main() {
       );
 
       expect(state.process.activeStepId, ProcessStepId.answerOrganization);
-      expect(state.process.blocks.length, 6);
-      expect(state.process.blocks.first.title, '我先确认你的核心问题和约束。');
       expect(
-        state.process.blocks.any(
-          (block) =>
-              block.blockId == 'understanding_resolution_items' &&
-              block.items.any((item) => item.body.contains('深圳')),
-        ),
-        isTrue,
+        state.process.blocks.first.title,
+        contains('我先确认你的核心问题和约束'),
+      );
+      expect(
+        state.process.blocks.first.title,
+        contains('深圳'),
+        reason:
+            'resolution items 的地理信息应融入 summary 叙事中',
+      );
+      final understandingBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(
+        understandingBlock.body,
+        contains('检索词会围绕“昨天A股 大涨 原因”、“昨日 A股 涨停 板块”展开'),
+      );
+      final statsBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'retrieval_reference_stats',
+      );
+      expect(statsBlock.title, '处理了 4 篇，接纳了 2 篇');
+      final retrievalNarrativeBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'retrieval_narrative',
+      );
+      expect(retrievalNarrativeBlock.title, contains('能直接支撑结论'));
+      expect(retrievalNarrativeBlock.body, contains('整理成回答'));
+      expect(
+        retrievalNarrativeBlock.body,
+        contains('我先把结果更新时间一致、关键数值可交叉验证这些能直接支撑回答的点拎出来。'),
+      );
+      expect(
+        retrievalNarrativeBlock.body,
+        contains('回答会按先说结论、再补充建议的顺序展开。'),
       );
       expect(
         state.process.blocks.any(
-          (block) =>
-              block.kind == ProcessDisplayBlockKind.points &&
-              block.stepId == ProcessStepId.retrievalProcessing &&
-              block.items.any(
-                (item) =>
-                    item.title == '检索设计' && item.body.contains('我会先按关键信号拆开检索。'),
-              ),
+          (block) => block.blockId == 'understanding_resolution_items',
         ),
-        isTrue,
-      );
-      expect(
-        state.process.blocks.any(
-          (block) => block.kind == ProcessDisplayBlockKind.points,
-        ),
-        isTrue,
+        isFalse,
+        reason:
+            '不应再有独立的 resolution items 列表块，信息已融入 summary',
       );
       expect(
         state.process.blocks.any(
@@ -206,13 +220,13 @@ void main() {
       );
     });
 
-    test('显式 process blocks 只有局部时，不再从 queryGroups 回填 retrieval query design', () {
+    test('显式 process blocks 只有局部时，不因 orphan understanding 再生成检索词设计块', () {
       final state = buildAssistantDisplayState(
         explicitState: const AssistantDisplayState(
           process: AssistantProcessDisplayState(
             blocks: <AssistantProcessDisplayBlock>[
               AssistantProcessDisplayBlock(
-                blockId: 'retrieval_summary',
+                blockId: 'retrieval_narrative',
                 stepId: ProcessStepId.retrievalProcessing,
                 status: JourneyStageStatus.completed,
                 kind: ProcessDisplayBlockKind.summary,
@@ -234,13 +248,7 @@ void main() {
           ),
         ],
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-          queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-            RunArtifactsUnderstandingQueryGroup(
-              dimension: '交易日确认',
-              queries: <String>['2026-04-07 A股 大涨 原因'],
-              why: '先把相对时间落成具体日期。',
-            ),
-          ],
+          intentSummary: '若误入快照的噪声检索词：2026-04-07 A股 大涨 原因',
         ),
         retrievalProcessing: const RetrievalProcessingSnapshot(
           processingSummary: '已经把可用结果筛过一轮。',
@@ -250,32 +258,41 @@ void main() {
       expect(
         state.process.blocks.any(
           (block) =>
-              block.blockId == 'retrieval_summary' &&
+              block.blockId == 'retrieval_narrative' &&
               block.title.contains('对应交易日'),
         ),
         isTrue,
       );
       expect(
         state.process.blocks.any(
-          (block) =>
-              block.blockId == 'retrieval_query_design' &&
-              block.items.any(
-                (item) =>
-                    item.title == '检索设计' &&
-                    item.body.contains('2026-04-07 A股 大涨 原因'),
-              ),
+          (block) => block.blockId == 'retrieval_query_design',
         ),
         isFalse,
       );
+      final narrative = state.process.blocks
+          .where((block) => block.blockId == 'understanding_narrative')
+          .map((block) => '${block.title}\n${block.body}')
+          .join('\n');
+      expect(
+        narrative,
+        isNot(contains('2026-04-07 A股 大涨 原因')),
+        reason: 'intentSummary 不参与过程叙事，避免噪声检索词污染',
+      );
     });
 
-    test('query design 与已有总结重复时会跳过额外展示块', () {
+    test('retrieval design 与已有总结重复时不会在叙事中重复堆叠 headline', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
             frameId: 'u',
             stepId: ProcessStepId.understanding,
             status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'rd',
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            headline: '我会先锁定对应交易日，再核对市场主线。',
           ),
           ProcessTimelineFrame(
             frameId: 'r',
@@ -285,18 +302,227 @@ void main() {
         ],
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
           userFacingSummary: '我会先锁定对应交易日，再核对市场主线。',
-          queryDesignSummary: '我会先锁定对应交易日，再核对市场主线。',
         ),
         retrievalProcessing: const RetrievalProcessingSnapshot(
           processingSummary: '我会先锁定对应交易日，再核对市场主线。',
         ),
       );
 
+      final narrative = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
       expect(
-        state.process.blocks.where(
-          (block) => block.blockId == 'retrieval_query_design',
+        narrative.body,
+        isNot(contains('我会先锁定对应交易日，再核对市场主线')),
+        reason: '与主 summary 重复的 retrieval design headline 应被去重',
+      );
+    });
+
+    test('summary 很短但有 resolution items 时，信息融入 summary 叙事', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '获取深圳今日天气',
+          resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'temporal_anchor',
+              title: '时间确认',
+              detail: '今天对应2026年4月13日（周日）',
+              visibleInUnderstanding: true,
+            ),
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'geo_anchor',
+              title: '区域确认',
+              detail: '默认采用深圳',
+              visibleInUnderstanding: true,
+            ),
+          ],
         ),
-        isEmpty,
+      );
+
+      final summaryBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(
+        summaryBlock.title,
+        contains('获取深圳今日天气'),
+        reason: '原始 summary 应保留',
+      );
+      expect(
+        summaryBlock.title,
+        contains('2026年4月13日'),
+        reason: 'resolution items 的时间信息应融入 summary',
+      );
+      expect(
+        state.process.blocks.any(
+          (block) => block.blockId == 'understanding_resolution_items',
+        ),
+        isFalse,
+        reason: '不应有独立列表块',
+      );
+    });
+
+    test('summary 已包含 resolution 信息时，不重复追加', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary:
+              '你想了解深圳今天的天气。我把今天对齐到2026年4月13日，查询范围为深圳。',
+          resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'temporal_anchor',
+              title: '时间确认',
+              detail: '今天对应2026年4月13日',
+              visibleInUnderstanding: true,
+            ),
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'geo_anchor',
+              title: '区域确认',
+              detail: '深圳',
+              visibleInUnderstanding: true,
+            ),
+          ],
+        ),
+      );
+
+      final summaryBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(
+        summaryBlock.title,
+        equals(
+          '你想了解深圳今天的天气。我把今天对齐到2026年4月13日，查询范围为深圳。',
+        ),
+        reason: 'summary 已包含 resolution 信息，不应追加额外内容',
+      );
+    });
+
+    test('summary 已含地理但缺日期时，只追加日期不重复地理', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '获取深圳今日天气及穿衣、出行建议',
+          resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'temporal_anchor',
+              title: '时间确认',
+              detail: '查询时间对齐到2026-04-13',
+              visibleInUnderstanding: true,
+            ),
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'geo_anchor',
+              title: '区域确认',
+              detail: '查询范围为深圳',
+              visibleInUnderstanding: true,
+            ),
+          ],
+        ),
+      );
+
+      final summaryBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(
+        summaryBlock.title,
+        contains('2026-04-13'),
+        reason: '日期信息应追加到叙事中',
+      );
+      final occurrences = '深圳'
+          .allMatches(summaryBlock.title)
+          .length;
+      expect(
+        occurrences,
+        equals(1),
+        reason:
+            'summary 已含深圳，不应重复追加地理信息'
+            '（实际: "${summaryBlock.title}"）',
+      );
+    });
+
+    test('summary 为空时，从 resolution items 构建叙事', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '',
+          resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'temporal_anchor',
+              title: '时间确认',
+              detail: '今天对应2026年4月13日（周日）',
+              visibleInUnderstanding: true,
+            ),
+            RunArtifactsUnderstandingResolutionItem(
+              kind: 'geo_anchor',
+              title: '区域确认',
+              detail: '默认采用深圳',
+              visibleInUnderstanding: true,
+            ),
+          ],
+        ),
+      );
+
+      final summaryBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(summaryBlock.title, contains('2026年4月13日'));
+      expect(summaryBlock.title, contains('深圳'));
+      expect(summaryBlock.kind, ProcessDisplayBlockKind.summary);
+    });
+
+    test('retrieval design timeline 会并入 understanding 叙事并带出检索线索', () {
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'u',
+            stepId: ProcessStepId.understanding,
+            status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'rd',
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            headline: '沿着交易日确认几个维度把检索线索铺开',
+            detail:
+                '我会先沿着交易日确认这一条线继续核对，先把相对时间落成具体日期\n检索词会围绕“2026-04-07 A股 大涨 原因”展开',
+          ),
+        ],
+        understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
+          userFacingSummary: '',
+        ),
+      );
+
+      final summaryBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'understanding_narrative',
+      );
+      expect(summaryBlock.title, contains('沿着交易日确认几个维度把检索线索铺开'));
+      expect(summaryBlock.body, contains('我会先沿着交易日确认这一条线继续核对，先把相对时间落成具体日期'));
+      expect(
+        summaryBlock.body,
+        contains('检索词会围绕“2026-04-07 A股 大涨 原因”展开'),
       );
     });
   });

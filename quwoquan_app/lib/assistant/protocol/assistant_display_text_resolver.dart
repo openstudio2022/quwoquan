@@ -131,7 +131,6 @@ abstract final class AssistantDisplayTextResolver {
       skillRuns: turn.skillRuns,
       aggregationState: turn.aggregationState,
       journey: turn.journey,
-      toolPlan: turn.toolPlan,
       missingContextSlots: turn.missingContextSlots,
       fillGuidance: turn.fillGuidance,
       followupPrompt: turn.followupPrompt,

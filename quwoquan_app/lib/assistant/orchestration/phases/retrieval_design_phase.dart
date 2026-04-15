@@ -1,11 +1,9 @@
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_value_codec.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
@@ -157,7 +155,7 @@ class RetrievalDesignPhase implements Phase {
       input.onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.searchQueryGenerated,
-          message: updatedUnderstandingSnapshot.queryDesignSummary.trim(),
+          message: updatedUnderstandingSnapshot.userFacingSummary.trim(),
           timestamp: DateTime.now(),
           runId: input.runId,
           traceId: input.traceId,
@@ -187,55 +185,17 @@ class RetrievalDesignPhase implements Phase {
     required RunArtifactsUnderstandingSnapshot current,
     required List<QueryTask> queryTasks,
   }) {
-    final canonicalQueryGroups = _buildQueryGroups(queryTasks);
-    final queryGroups = canonicalQueryGroups.isNotEmpty
-        ? canonicalQueryGroups
-        : current.queryGroups;
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: current.intentSummary,
       userFacingSummary: current.userFacingSummary,
       concernPoints: current.concernPoints,
       emotionSignal: current.emotionSignal,
-      queryDesignSummary: current.queryDesignSummary.trim(),
-      queryGroups: queryGroups,
       resolutionItems: current.resolutionItems,
       assumptions: current.assumptions,
       mismatchSignal: current.mismatchSignal,
       carryForwardFacts: current.carryForwardFacts,
       discardedAssumptions: current.discardedAssumptions,
     );
-  }
-
-  List<RunArtifactsUnderstandingQueryGroup> _buildQueryGroups(
-    List<QueryTask> queryTasks,
-  ) {
-    final grouped = <String, List<String>>{};
-    final reasons = <String, String>{};
-    for (final task in queryTasks) {
-      final dimension = task.dimensionLabel.trim().isNotEmpty
-          ? task.dimensionLabel.trim()
-          : (deriveQueryTaskFocusLabel(task).trim().isNotEmpty
-                ? deriveQueryTaskFocusLabel(task).trim()
-                : '综合');
-      final query = task.query.trim();
-      if (query.isEmpty) {
-        continue;
-      }
-      grouped.putIfAbsent(dimension, () => <String>[]).add(query);
-      final reason = deriveQueryTaskFocusReason(task).trim();
-      if (reason.isNotEmpty) {
-        reasons[dimension] = reason;
-      }
-    }
-    return grouped.entries
-        .map(
-          (entry) => RunArtifactsUnderstandingQueryGroup(
-            dimension: entry.key,
-            queries: entry.value.toSet().take(2).toList(growable: false),
-            why: reasons[entry.key]?.trim() ?? '',
-          ),
-        )
-        .toList(growable: false);
   }
 
   List<QueryTask> _normalizeDomainQueryTasks({

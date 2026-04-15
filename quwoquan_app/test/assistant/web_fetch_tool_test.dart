@@ -18,16 +18,18 @@ void main() {
 
     test('rejects empty url', () async {
       tool = WebFetchTool();
-      final result = await tool.execute(<String, dynamic>{});
+      final result = await tool.execute(AssistantToolArguments());
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
     });
 
     test('rejects non-http scheme', () async {
       tool = WebFetchTool();
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'ftp://example.com',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'ftp://example.com',
+        }),
+      );
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
     });
@@ -42,9 +44,11 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/page?utm_source=newsletter',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/page?utm_source=newsletter',
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['title'], 'Test Page');
       expect(result.data?['content'], contains('Hello world'));
@@ -73,9 +77,11 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://api.example.com/data',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://api.example.com/data',
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['content'], contains('sunny'));
     });
@@ -90,10 +96,12 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/long',
-        'maxChars': 100,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/long',
+          'maxChars': 100,
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['truncated'], true);
       expect(result.data?['charCount'], 100);
@@ -104,9 +112,11 @@ void main() {
         return http.Response('Not found', 404);
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/missing',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/missing',
+        }),
+      );
       expect(result.success, false);
       expect(result.data?['statusCode'], 404);
     });
@@ -116,9 +126,11 @@ void main() {
         return http.Response('Too many requests', 429);
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/rate-limited',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/rate-limited',
+        }),
+      );
 
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.rateLimited);
@@ -130,9 +142,11 @@ void main() {
         return http.Response('Service unavailable', 503);
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/unavailable',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/unavailable',
+        }),
+      );
 
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.networkUnavailable);
@@ -148,9 +162,11 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/file.bin',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/file.bin',
+        }),
+      );
       expect(result.success, false);
       expect(result.message, contains('Unsupported content type'));
       expect(result.errorCode, AssistantErrorCode.unsupportedTarget);
@@ -165,9 +181,11 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/entities',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com/entities',
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['content'], contains('Tom & Jerry'));
     });
@@ -181,9 +199,11 @@ void main() {
         );
       });
       tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com',
+        }),
+      );
       expect(result.success, true);
       final data = result.data!;
       expect(data.containsKey('url'), true);

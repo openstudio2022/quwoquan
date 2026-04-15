@@ -999,45 +999,6 @@ class SlotValueSnapshotFields {
   static const String evidenceIds = 'evidenceIds';
 }
 
-class RunArtifactsUnderstandingQueryGroup {
-  const RunArtifactsUnderstandingQueryGroup({
-    this.dimension = "",
-    this.queries = const <String>[],
-    this.why = "",
-  });
-
-  final String dimension;
-  final List<String> queries;
-  final String why;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'dimension': dimension,
-        'queries': queries,
-        'why': why,
-      };
-
-  factory RunArtifactsUnderstandingQueryGroup.fromJson(Map<String, dynamic> json) {
-    return RunArtifactsUnderstandingQueryGroup(
-      dimension: (json['dimension'] as String?)?.trim() ?? "",
-      queries: _assistantStringList(json['queries']),
-      why: (json['why'] as String?)?.trim() ?? "",
-    );
-  }
-
-  static List<String> _assistantStringList(Object? value) {
-    if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
-    }
-    return const <String>[];
-  }
-}
-
-class RunArtifactsUnderstandingQueryGroupFields {
-  static const String dimension = 'dimension';
-  static const String queries = 'queries';
-  static const String why = 'why';
-}
-
 class RunArtifactsUnderstandingResolutionItem {
   const RunArtifactsUnderstandingResolutionItem({
     this.kind = "",
@@ -1101,8 +1062,6 @@ class RunArtifactsUnderstandingSnapshot {
     this.userFacingSummary = "",
     this.concernPoints = const <String>[],
     this.emotionSignal = "",
-    this.queryDesignSummary = "",
-    this.queryGroups = const <RunArtifactsUnderstandingQueryGroup>[],
     this.resolutionItems = const <RunArtifactsUnderstandingResolutionItem>[],
     this.assumptions = const <String>[],
     this.mismatchSignal = "",
@@ -1114,8 +1073,6 @@ class RunArtifactsUnderstandingSnapshot {
   final String userFacingSummary;
   final List<String> concernPoints;
   final String emotionSignal;
-  final String queryDesignSummary;
-  final List<RunArtifactsUnderstandingQueryGroup> queryGroups;
   final List<RunArtifactsUnderstandingResolutionItem> resolutionItems;
   final List<String> assumptions;
   final String mismatchSignal;
@@ -1127,8 +1084,6 @@ class RunArtifactsUnderstandingSnapshot {
         'userFacingSummary': userFacingSummary,
         'concernPoints': concernPoints,
         'emotionSignal': emotionSignal,
-        'queryDesignSummary': queryDesignSummary,
-        'queryGroups': queryGroups.map((item) => item.toJson()).toList(growable: false),
         'resolutionItems': resolutionItems.map((item) => item.toJson()).toList(growable: false),
         'assumptions': assumptions,
         'mismatchSignal': mismatchSignal,
@@ -1142,8 +1097,6 @@ class RunArtifactsUnderstandingSnapshot {
       userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
       concernPoints: _assistantStringList(json['concernPoints']),
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
-      queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
-      queryGroups: (json['queryGroups'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingQueryGroup.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingQueryGroup>[],
       resolutionItems: (json['resolutionItems'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingResolutionItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingResolutionItem>[],
       assumptions: _assistantStringList(json['assumptions']),
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
@@ -1165,8 +1118,6 @@ class RunArtifactsUnderstandingSnapshotFields {
   static const String userFacingSummary = 'userFacingSummary';
   static const String concernPoints = 'concernPoints';
   static const String emotionSignal = 'emotionSignal';
-  static const String queryDesignSummary = 'queryDesignSummary';
-  static const String queryGroups = 'queryGroups';
   static const String resolutionItems = 'resolutionItems';
   static const String assumptions = 'assumptions';
   static const String mismatchSignal = 'mismatchSignal';

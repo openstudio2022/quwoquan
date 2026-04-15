@@ -192,6 +192,56 @@ void main() {
       expect(decision.answerEligibility, AnswerEligibility.eligible);
     });
 
+    test('ConversationStateKernel 在零证据 bounded 状态下必须回到 replan', () {
+      const kernel = ConversationStateKernel();
+      final slotSchema = kernel.defaultSlotSchema(
+        domainId: 'finance_consumer',
+        problemClass: 'evidence_lookup',
+        dialogueRoundScript: _dialogueScript(),
+      );
+      final decision = kernel.evaluate(
+        domainId: 'finance_consumer',
+        problemClass: 'evidence_lookup',
+        intentGraph: const IntentGraph(
+          userGoal: 'A股大涨原因',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'finance_consumer',
+          problemClass: ProblemClass.evidenceLookup,
+          requiresExternalEvidence: true,
+          mustVerifyClaims: true,
+        ),
+        queryTasks: const <QueryTask>[
+          QueryTask(
+            id: 'stock_reason',
+            query: 'A股大涨原因',
+            dimension: QueryTaskDimension.latestSignal,
+          ),
+        ],
+        dialogueRoundScript: _dialogueScript(),
+        aggregationState: const AggregationState(
+          canGivePartialAnswer: false,
+          finalAnswerReady: false,
+        ),
+        answerPayload: const <String, dynamic>{
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+        },
+        previousSlotState: const SlotStateSnapshot(),
+        evidenceEvaluation: const EvidenceEvaluationResult(
+          status: EvidenceStatus.bounded,
+          evidenceRequired: true,
+          passed: false,
+          entries: <EvidenceLedgerEntry>[],
+          missingDimensions: <String>['latest_signal'],
+        ),
+        slotSchema: slotSchema,
+      );
+
+      expect(decision.nextAction, AssistantNextAction.toolCall);
+      expect(decision.finalAnswerMode, FinalAnswerMode.replan);
+      expect(decision.finalAnswerReady, isFalse);
+      expect(decision.answerEligibility, AnswerEligibility.blocked);
+    });
+
     test('bounded_answer 展示不再复用阻塞式 freshness 文案', () {
       const resolver = AnswerGateResolver();
       final decision = resolver.resolve(

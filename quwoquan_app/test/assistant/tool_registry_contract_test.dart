@@ -7,7 +7,7 @@ class _FakeTool implements AssistantTool {
   _FakeTool({required this.toolName, required this.resultFactory});
 
   final String toolName;
-  final AssistantToolResult Function(Map<String, dynamic> args) resultFactory;
+  final AssistantToolResult Function(AssistantToolArguments args) resultFactory;
   int executeCount = 0;
 
   @override
@@ -17,7 +17,7 @@ class _FakeTool implements AssistantTool {
   String get description => 'fake';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
     return resultFactory(arguments);
   }
@@ -31,14 +31,14 @@ void main() {
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
       final fakeWeb = _FakeTool(
         toolName: 'web_search',
-        resultFactory: (_) => const AssistantToolResult(
+        resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
-          data: <String, dynamic>{
+          data: AssistantToolResultData.fromJson(<String, dynamic>{
             'provider': 'duckduckgo',
             'summary': 'ok',
             'references': <Map<String, dynamic>>[],
-          },
+          }),
         ),
       );
       registry.register(fakeWeb);
@@ -57,15 +57,15 @@ void main() {
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
       final fakeLocal = _FakeTool(
         toolName: 'local_context',
-        resultFactory: (_) => const AssistantToolResult(
+        resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
-          data: <String, dynamic>{
+          data: AssistantToolResultData.fromJson(<String, dynamic>{
             // Missing required "contextVersion"
             'location': <String, dynamic>{'city': '深圳'},
             'permissions': <String, dynamic>{'location': true},
             'media': <String, dynamic>{'included': false},
-          },
+          }),
         ),
       );
       registry.register(fakeLocal);
@@ -86,15 +86,15 @@ void main() {
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
       final fakeLocal = _FakeTool(
         toolName: 'local_context',
-        resultFactory: (_) => const AssistantToolResult(
+        resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
-          data: <String, dynamic>{
+          data: AssistantToolResultData.fromJson(<String, dynamic>{
             'contextVersion': 'local_context_v1',
             'location': <String, dynamic>{'city': '深圳'},
             'permissions': <String, dynamic>{'location': true},
             'media': <String, dynamic>{'included': false},
-          },
+          }),
         ),
       );
       registry.register(fakeLocal);
@@ -113,14 +113,14 @@ void main() {
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
       final fakeSearch = _FakeTool(
         toolName: 'search',
-        resultFactory: (_) => const AssistantToolResult(
+        resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
-          data: <String, dynamic>{
+          data: AssistantToolResultData.fromJson(<String, dynamic>{
             'summary': 'ok',
             'sections': <Map<String, dynamic>>[],
             'hits': <Map<String, dynamic>>[],
-          },
+          }),
         ),
       );
       registry.register(fakeSearch);
@@ -155,14 +155,14 @@ void main() {
                 degraded: true,
               );
             }
-            return const AssistantToolResult(
+            return AssistantToolResult(
               success: true,
               message: 'ok',
-              data: <String, dynamic>{
+              data: AssistantToolResultData.fromJson(<String, dynamic>{
                 'provider': 'duckduckgo',
                 'summary': 'recovered',
                 'references': <Map<String, dynamic>>[],
-              },
+              }),
             );
           },
         );
@@ -196,14 +196,14 @@ void main() {
               degraded: true,
             );
           }
-          return const AssistantToolResult(
+          return AssistantToolResult(
             success: true,
             message: 'ok',
-            data: <String, dynamic>{
+            data: AssistantToolResultData.fromJson(<String, dynamic>{
               'summary': 'recovered',
               'sections': <Map<String, dynamic>>[],
               'hits': <Map<String, dynamic>>[],
-            },
+            }),
           );
         },
       );

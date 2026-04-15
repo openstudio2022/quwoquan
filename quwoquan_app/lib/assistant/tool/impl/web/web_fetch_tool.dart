@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/web_fetch_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 
@@ -30,14 +31,14 @@ class WebFetchTool implements AssistantTool {
       'Fetch URL content and convert to readable markdown.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    final request = WebFetchToolArgs.fromAssistantArguments(arguments);
     final broker = _broker;
     if (broker != null) {
-      final request = RetrievalFetchRequest.fromToolArguments(arguments);
-      final result = await broker.fetch(request);
+      final result = await broker.fetch(request.toRetrievalFetchRequest());
       return _sanitizeBrokerFetchResult(request: request, result: result);
     }
-    final url = (arguments['url'] as String?)?.trim() ?? '';
+    final url = request.url.trim();
     if (url.isEmpty) {
       return const AssistantToolResult(
         success: false,
@@ -47,7 +48,7 @@ class WebFetchTool implements AssistantTool {
     }
 
     final maxChars =
-        (arguments['maxChars'] as int?)?.clamp(100, _absoluteMaxChars) ??
+        request.maxChars?.clamp(100, _absoluteMaxChars) ??
         _defaultMaxChars;
 
     try {
@@ -74,10 +75,10 @@ class WebFetchTool implements AssistantTool {
           message: _statusCodeToMessage(response.statusCode, url),
           errorCode: errorCode,
           degraded: errorCode != AssistantErrorCode.invalidArguments,
-          data: <String, dynamic>{
-            'statusCode': response.statusCode,
-            'retryable': _isRetryableStatusCode(response.statusCode),
-          },
+          data: WebFetchFailurePayload(
+            statusCode: response.statusCode,
+            retryable: _isRetryableStatusCode(response.statusCode),
+          ).toResultData(),
         );
       }
 
@@ -94,7 +95,7 @@ class WebFetchTool implements AssistantTool {
           message: 'Unsupported content type: $contentType',
           errorCode: AssistantErrorCode.unsupportedTarget,
           degraded: true,
-          data: <String, dynamic>{'contentType': contentType},
+          data: WebFetchFailurePayload(contentType: contentType).toResultData(),
         );
       }
 
@@ -105,8 +106,8 @@ class WebFetchTool implements AssistantTool {
       final content = truncated ? bodyText.substring(0, maxChars) : bodyText;
       final charCount = content.length;
       final sourceHost = uri.host.toLowerCase().trim();
-      final queryTaskId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
-      final dimension = (arguments['dimension'] as String?)?.trim() ?? '';
+      final queryTaskId = request.queryTaskId.trim();
+      final dimension = request.dimension.trim();
       final snippet = content.length <= 180
           ? content
           : '${content.substring(0, 180)}...';
@@ -130,34 +131,37 @@ class WebFetchTool implements AssistantTool {
           (safeReference?['source'] as String?)?.trim() ?? sourceHost;
       final canonicalSourceHost =
           (safeReference?['sourceHost'] as String?)?.trim() ?? sourceHost;
+      final retrievedAt = DateTime.now().toIso8601String();
+      final references = safeReference == null
+          ? const <WebFetchReference>[]
+          : <WebFetchReference>[
+              WebFetchReference.fromJson(<String, Object?>{
+                ...safeReference,
+                'sourceTier': 'page',
+                'queryTaskId': queryTaskId,
+                'dimension': dimension,
+                'retrievedAt': retrievedAt,
+              }),
+            ];
+      final payload = WebFetchToolSuccessPayload(
+        url: canonicalUrl,
+        title: canonicalTitle,
+        source: canonicalSource,
+        content: content,
+        summary: snippet,
+        charCount: charCount,
+        truncated: truncated,
+        contentType: contentType,
+        sourceHost: canonicalSourceHost,
+        sourceTier: 'page',
+        queryTaskId: queryTaskId,
+        dimension: dimension,
+        references: references,
+      );
       return AssistantToolResult(
         success: true,
         message: '已阅读 $charCount 字内容${truncated ? "（已截断）" : ""}',
-        data: <String, dynamic>{
-          'url': canonicalUrl,
-          'title': canonicalTitle,
-          'source': canonicalSource,
-          'content': content,
-          'summary': snippet,
-          'charCount': charCount,
-          'truncated': truncated,
-          'contentType': contentType,
-          'sourceHost': canonicalSourceHost,
-          'sourceTier': 'page',
-          'queryTaskId': queryTaskId,
-          'dimension': dimension,
-          'references': safeReference == null
-              ? const <Map<String, dynamic>>[]
-              : <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    ...safeReference,
-                    'sourceTier': 'page',
-                    'queryTaskId': queryTaskId,
-                    'dimension': dimension,
-                    'retrievedAt': DateTime.now().toIso8601String(),
-                  },
-                ],
-        },
+        data: payload.toResultData(),
       );
     } on FormatException {
       return AssistantToolResult(
@@ -184,7 +188,7 @@ class WebFetchTool implements AssistantTool {
         message: '网页读取失败，网络连接异常',
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
-        data: <String, dynamic>{'detail': e.message},
+        data: WebFetchFailurePayload(detail: e.message).toResultData(),
       );
     } catch (e) {
       if (kDebugMode) {
@@ -200,113 +204,135 @@ class WebFetchTool implements AssistantTool {
   }
 
   AssistantToolResult _sanitizeBrokerFetchResult({
-    required RetrievalFetchRequest request,
+    required WebFetchToolArgs request,
     required RetrievalFetchResult result,
   }) {
-    final toolResult = result.toToolResult();
-    final rawData = toolResult.data;
-    if (rawData == null || rawData.isEmpty) return toolResult;
-    final sanitizedData = Map<String, dynamic>.from(rawData);
-    final references = _sanitizeBrokerFetchReferences(
-      data: sanitizedData,
-      fallbackUrl: request.url,
-      queryTaskId: (request.arguments['queryTaskId'] as String?)?.trim() ?? '',
-      dimension: (request.arguments['dimension'] as String?)?.trim() ?? '',
-    );
-    if (references.isNotEmpty) {
-      final primary = references.first;
-      sanitizedData['references'] = references;
-      sanitizedData['url'] = (primary['url'] as String?)?.trim() ?? request.url;
-      sanitizedData['title'] = (primary['title'] as String?)?.trim() ?? '';
-      sanitizedData['source'] = (primary['source'] as String?)?.trim() ?? '';
-      sanitizedData['sourceHost'] =
-          (primary['sourceHost'] as String?)?.trim() ?? '';
-      sanitizedData['summary'] = (primary['snippet'] as String?)?.trim() ?? '';
-      sanitizedData['queryTaskId'] =
-          (primary['queryTaskId'] as String?)?.trim() ??
-          ((sanitizedData['queryTaskId'] as String?)?.trim() ?? '');
-      sanitizedData['dimension'] =
-          (primary['dimension'] as String?)?.trim() ??
-          ((sanitizedData['dimension'] as String?)?.trim() ?? '');
-      sanitizedData['sourceTier'] =
-          (primary['sourceTier'] as String?)?.trim().isNotEmpty == true
-          ? (primary['sourceTier'] as String).trim()
-          : ((sanitizedData['sourceTier'] as String?)?.trim().isNotEmpty == true
-                ? (sanitizedData['sourceTier'] as String).trim()
-                : 'page');
+    final brokerPayload = result.payloadOrNull;
+    if (brokerPayload == null) {
+      return result.toToolResult();
     }
+    final sanitizedPayload = _sanitizeBrokerFetchPayload(
+      request: request,
+      payload: brokerPayload,
+    );
     return AssistantToolResult(
-      success: toolResult.success,
-      message: toolResult.message,
-      data: sanitizedData,
-      errorCode: toolResult.errorCode,
-      degraded: toolResult.degraded,
+      success: result.success,
+      message: result.message,
+      data: sanitizedPayload.toResultData(),
+      errorCode: result.errorCode,
+      degraded: result.degraded,
     );
   }
 
-  List<Map<String, dynamic>> _sanitizeBrokerFetchReferences({
-    required Map<String, dynamic> data,
-    required String fallbackUrl,
-    required String queryTaskId,
-    required String dimension,
+  WebFetchToolSuccessPayload _sanitizeBrokerFetchPayload({
+    required WebFetchToolArgs request,
+    required RetrievalFetchResultPayload payload,
   }) {
-    final view = BrokerWebFetchResultDataView(data);
-    final rawRefs = view.referenceMaps;
-    final normalizedRefs = rawRefs
+    final fallbackSnippet = payload.summary.trim().isNotEmpty
+        ? payload.summary.trim()
+        : _snippetOfFetchContent(payload.content);
+    final normalizedRefs = payload.references
         .map(
           (item) => _normalizeFetchReference(
-            raw: item,
-            fallbackUrl: fallbackUrl,
-            fallbackTitle: view.title,
-            fallbackSource: view.source.isNotEmpty
-                ? view.source
-                : view.sourceHost,
-            fallbackSnippet:
-                (item['snippet'] as String?)?.trim().isNotEmpty == true
-                ? (item['snippet'] as String).trim()
-                : (view.summary.isNotEmpty
-                      ? view.summary
-                      : _snippetOfFetchContent(view.content)),
-            queryTaskId:
-                (item['queryTaskId'] as String?)?.trim().isNotEmpty == true
-                ? (item['queryTaskId'] as String).trim()
-                : queryTaskId,
-            dimension: (item['dimension'] as String?)?.trim().isNotEmpty == true
-                ? (item['dimension'] as String).trim()
-                : dimension,
-            sourceTier:
-                (item['sourceTier'] as String?)?.trim().isNotEmpty == true
-                ? (item['sourceTier'] as String).trim()
-                : (view.sourceTier.isNotEmpty ? view.sourceTier : 'page'),
-            retrievedAt:
-                (item['retrievedAt'] as String?)?.trim().isNotEmpty == true
-                ? (item['retrievedAt'] as String).trim()
+            raw: WebFetchReference.fromRetrievalReference(item),
+            fallbackUrl: payload.url.trim().isNotEmpty ? payload.url : request.url,
+            fallbackTitle: payload.title,
+            fallbackSource: payload.source.trim().isNotEmpty
+                ? payload.source
+                : payload.sourceHost,
+            fallbackSnippet: item.snippet.trim().isNotEmpty
+                ? item.snippet
+                : fallbackSnippet,
+            queryTaskId: item.queryTaskId.trim().isNotEmpty
+                ? item.queryTaskId
+                : (payload.queryTaskId.trim().isNotEmpty
+                      ? payload.queryTaskId
+                      : request.queryTaskId),
+            dimension: item.dimension.trim().isNotEmpty
+                ? item.dimension
+                : (payload.dimension.trim().isNotEmpty
+                      ? payload.dimension
+                      : request.dimension),
+            sourceTier: item.sourceTier.trim().isNotEmpty
+                ? item.sourceTier
+                : (payload.sourceTier.trim().isNotEmpty
+                      ? payload.sourceTier
+                      : 'page'),
+            retrievedAt: item.retrievedAt.trim().isNotEmpty
+                ? item.retrievedAt
                 : DateTime.now().toIso8601String(),
           ),
         )
-        .whereType<Map<String, dynamic>>()
+        .whereType<WebFetchReference>()
         .toList(growable: false);
-    if (normalizedRefs.isNotEmpty) return normalizedRefs;
-    final fallback = _normalizeFetchReference(
-      raw: const <String, dynamic>{},
-      fallbackUrl: view.url.isNotEmpty ? view.url : fallbackUrl,
-      fallbackTitle: view.title,
-      fallbackSource: view.source.isNotEmpty ? view.source : view.sourceHost,
-      fallbackSnippet: view.summary.isNotEmpty
-          ? view.summary
-          : _snippetOfFetchContent(view.content),
-      queryTaskId: queryTaskId,
-      dimension: dimension,
-      sourceTier: view.sourceTier.isNotEmpty ? view.sourceTier : 'page',
-      retrievedAt: DateTime.now().toIso8601String(),
+    final references = normalizedRefs.isNotEmpty
+        ? normalizedRefs
+        : (() {
+            final fallback = _normalizeFetchReference(
+              raw: const WebFetchReference(),
+              fallbackUrl: payload.url.trim().isNotEmpty
+                  ? payload.url
+                  : request.url,
+              fallbackTitle: payload.title,
+              fallbackSource: payload.source.trim().isNotEmpty
+                  ? payload.source
+                  : payload.sourceHost,
+              fallbackSnippet: fallbackSnippet,
+              queryTaskId: payload.queryTaskId.trim().isNotEmpty
+                  ? payload.queryTaskId
+                  : request.queryTaskId,
+              dimension: payload.dimension.trim().isNotEmpty
+                  ? payload.dimension
+                  : request.dimension,
+              sourceTier: payload.sourceTier.trim().isNotEmpty
+                  ? payload.sourceTier
+                  : 'page',
+              retrievedAt: DateTime.now().toIso8601String(),
+            );
+            return fallback == null
+                ? const <WebFetchReference>[]
+                : <WebFetchReference>[fallback];
+          })();
+    final primary = references.isNotEmpty ? references.first : null;
+    return WebFetchToolSuccessPayload(
+      url: primary?.url.trim().isNotEmpty == true
+          ? primary!.url
+          : (payload.url.trim().isNotEmpty ? payload.url : request.url),
+      title: primary?.title.trim().isNotEmpty == true
+          ? primary!.title
+          : payload.title,
+      source: primary?.source.trim().isNotEmpty == true
+          ? primary!.source
+          : payload.source,
+      content: payload.content,
+      summary: primary?.snippet.trim().isNotEmpty == true
+          ? primary!.snippet
+          : fallbackSnippet,
+      charCount: payload.charCount ?? payload.content.length,
+      truncated: payload.truncated,
+      contentType: payload.contentType,
+      sourceHost: primary?.sourceHost.trim().isNotEmpty == true
+          ? primary!.sourceHost
+          : payload.sourceHost,
+      sourceTier: primary?.sourceTier.trim().isNotEmpty == true
+          ? primary!.sourceTier
+          : (payload.sourceTier.trim().isNotEmpty ? payload.sourceTier : 'page'),
+      queryTaskId: primary?.queryTaskId.trim().isNotEmpty == true
+          ? primary!.queryTaskId
+          : (payload.queryTaskId.trim().isNotEmpty
+                ? payload.queryTaskId
+                : request.queryTaskId),
+      dimension: primary?.dimension.trim().isNotEmpty == true
+          ? primary!.dimension
+          : (payload.dimension.trim().isNotEmpty
+                ? payload.dimension
+                : request.dimension),
+      references: references,
     );
-    return fallback == null
-        ? const <Map<String, dynamic>>[]
-        : <Map<String, dynamic>>[fallback];
   }
 
-  Map<String, dynamic>? _normalizeFetchReference({
-    required Map<String, dynamic> raw,
+  WebFetchReference? _normalizeFetchReference({
+    required WebFetchReference raw,
     required String fallbackUrl,
     required String fallbackTitle,
     required String fallbackSource,
@@ -317,33 +343,25 @@ class WebFetchTool implements AssistantTool {
     required String retrievedAt,
   }) {
     final normalized = SafeReferenceNormalizer.normalize(<String, dynamic>{
-      ...raw,
-      'url': (raw['url'] as String?)?.trim().isNotEmpty == true
-          ? (raw['url'] as String).trim()
-          : fallbackUrl,
-      'title': (raw['title'] as String?)?.trim().isNotEmpty == true
-          ? (raw['title'] as String).trim()
-          : fallbackTitle,
-      'source': (raw['source'] as String?)?.trim().isNotEmpty == true
-          ? (raw['source'] as String).trim()
-          : fallbackSource,
-      'snippet': (raw['snippet'] as String?)?.trim().isNotEmpty == true
-          ? (raw['snippet'] as String).trim()
+      'url': raw.url.trim().isNotEmpty ? raw.url.trim() : fallbackUrl,
+      'title': raw.title.trim().isNotEmpty ? raw.title.trim() : fallbackTitle,
+      'source': raw.source.trim().isNotEmpty ? raw.source.trim() : fallbackSource,
+      'snippet': raw.snippet.trim().isNotEmpty
+          ? raw.snippet.trim()
           : fallbackSnippet,
     });
     if (normalized == null) return null;
-    return <String, dynamic>{
-      ...raw,
+    return WebFetchReference.fromJson(<String, Object?>{
       ...normalized,
       'sourceTier': sourceTier,
       'queryTaskId': queryTaskId,
       'dimension': dimension,
       'retrievedAt': retrievedAt,
-    };
+    });
   }
 
-  String _snippetOfFetchContent(Object? raw) {
-    final content = raw?.toString().trim() ?? '';
+  String _snippetOfFetchContent(String raw) {
+    final content = raw.trim();
     if (content.isEmpty) return '';
     if (content.length <= 180) return content;
     return '${content.substring(0, 180)}...';

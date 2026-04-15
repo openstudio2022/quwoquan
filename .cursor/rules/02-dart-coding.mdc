@@ -209,11 +209,10 @@ final slotState = turn?.slotState ?? const {};
 | `selfCheck` | `Map<String, dynamic>` | 自检结果 |
 | `diagnostics` | `Map<String, dynamic>` | 含 `emergedTags` |
 | `modelSelfScore` | `Map<String, dynamic>` | 含 `score`、`reason` |
-| `toolCalls` | `List<Map>` | 含 `toolName`/`name`、`arguments`、`toolCallId` |
+| `toolCalls` | `List<Map>` | 待执行工具调用序列；每项含 `toolName`/`name`、`arguments`、`toolCallId` |
 | `slotState` | `Map<String, dynamic>` | 槽位状态 |
 | `askUser` | `Map<String, dynamic>` | 追问信息 |
 | `subagentPlan` | `List<Map>` | 含 `goal` |
-| `toolPlan` | `List<Map>` | 含 `tool`、`arguments` |
 | `missingContextSlots` | `List<String>` | 缺失上下文槽 |
 | `fillGuidance` | `List<Map>` | 含 `guidance` |
 | `followupPrompt` | `String` | 追问提示 |

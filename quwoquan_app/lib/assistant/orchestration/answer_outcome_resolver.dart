@@ -164,20 +164,24 @@ class AnswerOutcomeResolver {
             : null) ??
         runArtifacts?.domainPolicyBundle ??
         fallbackDomainPolicyBundle;
-    final retrievalOutcome = (_hasOutcomeField(rawOutcome, 'retrievalOutcome')
+    final retrievalOutcome =
+        (_hasOutcomeField(rawOutcome, 'retrievalOutcome')
             ? _parseRetrievalOutcome(rawOutcome!['retrievalOutcome'])
             : null) ??
         _retrievalOutcomeResolver.resolveFromStructured(
           structured: structured,
           runArtifacts: runArtifacts,
         );
-    final answerGateDecision = (_hasOutcomeField(rawOutcome, 'answerGateDecision')
-            ? _parseAnswerGateDecision(rawOutcome!['answerGateDecision'])
-            : null) ??
-        _answerGateResolver.resolveFromStructured(
-          structured: structured,
-          runArtifacts: runArtifacts,
-        );
+    final answerGateDecision = _answerGateResolver.resolve(
+      retrievalOutcome: retrievalOutcome,
+      conversationStateDecision: conversationStateDecision,
+      renderableAnswer: _hasRenderableAnswer(
+        structured: structured,
+        runArtifacts: runArtifacts,
+      ),
+      degraded: retrievalOutcome.degraded,
+      terminalPayloadComplete: retrievalOutcome.terminalPayloadComplete,
+    );
     final journey =
         (_hasOutcomeField(rawOutcome, 'journey')
             ? _parseJourney(rawOutcome!['journey'])
@@ -356,15 +360,6 @@ class AnswerOutcomeResolver {
     }
   }
 
-  AnswerGateDecision? _parseAnswerGateDecision(Object? raw) {
-    if (raw is! Map) return null;
-    try {
-      return AnswerGateDecision.fromJson(raw.cast<String, dynamic>());
-    } catch (_) {
-      return null;
-    }
-  }
-
   AssistantJourney? _parseJourney(Object? raw) {
     if (raw is! Map) return null;
     try {
@@ -380,5 +375,23 @@ class AnswerOutcomeResolver {
         .map((item) => item.toString().trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
+  }
+
+  bool _hasRenderableAnswer({
+    required Map<String, dynamic> structured,
+    required RunArtifacts? runArtifacts,
+  }) {
+    final structuredResult = structured['result'];
+    final structuredText = structuredResult is Map
+        ? ((structuredResult['text'] as String?)?.trim() ?? '')
+        : '';
+    final structuredSummary = structuredResult is Map
+        ? ((structuredResult['summary'] as String?)?.trim() ?? '')
+        : '';
+    return (runArtifacts?.displayMarkdown.trim().isNotEmpty ?? false) ||
+        (runArtifacts?.displayPlainText.trim().isNotEmpty ?? false) ||
+        ((structured['userMarkdown'] as String?)?.trim().isNotEmpty ?? false) ||
+        structuredText.isNotEmpty ||
+        structuredSummary.isNotEmpty;
   }
 }

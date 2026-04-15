@@ -21,7 +21,7 @@ class IntentBridgeTool implements AssistantTool {
       'Bridge assistant skill into iOS AppIntent or Android Intent.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final target = (arguments['target'] as String?)?.trim() ?? '';
     try {
       Map<String, dynamic> result;
@@ -56,7 +56,7 @@ class IntentBridgeTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: 'Intent execution success',
-        data: result,
+        data: AssistantToolResultData.fromJson(result),
       );
     } catch (error) {
       return AssistantToolResult(

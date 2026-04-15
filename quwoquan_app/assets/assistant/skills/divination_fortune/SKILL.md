@@ -37,7 +37,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 decision、toolPlan、slotState
+1. 机器轨 JSON：包含 decision、toolCalls、slotState
 2. 用户轨 Markdown：简短说明"正在补充外部信息并生成今日运势"
 
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出最终运势卡片。
@@ -51,7 +51,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "birthDate": {"value": "", "source": "profile|memory|user_query|unknown"},
     "focusArea": {"value": "overall", "source": "user_query|default"}
   },
-  "toolPlan": [
+  "toolCalls": [
     {"toolName": "search", "arguments": {"query": "今日黄历 节气 信息", "mode": "result"}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},

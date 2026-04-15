@@ -16,12 +16,14 @@ void main() {
         webSearchTool: _FakeWebSearchTool(),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '摄影',
-        'mode': 'result',
-        'objectTypes': <String>['web.document', 'content.post'],
-        'limit': 5,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '摄影',
+          'mode': 'result',
+          'objectTypes': <String>['web.document', 'content.post'],
+          'limit': 5,
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(result.data?['mode'], equals('result'));
@@ -41,25 +43,27 @@ void main() {
         webSearchTool: _FakeWebSearchTool(),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '摄影',
-        'mode': 'result',
-        'objectTypes': <String>['web.document', 'content.post'],
-        'queryTasks': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'facts',
-            'label': '关键事实',
-            'dimension': '关键事实',
-            'query': '摄影 关键事实',
-          },
-          <String, dynamic>{
-            'id': 'risks',
-            'label': '风险边界',
-            'dimension': '风险边界',
-            'query': '摄影 风险 注意事项',
-          },
-        ],
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '摄影',
+          'mode': 'result',
+          'objectTypes': <String>['web.document', 'content.post'],
+          'queryTasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'facts',
+              'label': '关键事实',
+              'dimension': '关键事实',
+              'query': '摄影 关键事实',
+            },
+            <String, dynamic>{
+              'id': 'risks',
+              'label': '风险边界',
+              'dimension': '风险边界',
+              'query': '摄影 风险 注意事项',
+            },
+          ],
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(result.data?['queryCount'], equals(2));
@@ -77,12 +81,14 @@ void main() {
         webSearchTool: _FakeWebSearchTool(),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        SearchToolFieldNames.query: '摄影',
-        SearchToolFieldNames.mode: 'unexpected_mode',
-        SearchToolFieldNames.objectTypes: <String>['content.post'],
-        SearchToolFieldNames.conversationType: 'broadcast',
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          SearchToolFieldNames.query: '摄影',
+          SearchToolFieldNames.mode: 'unexpected_mode',
+          SearchToolFieldNames.objectTypes: <String>['content.post'],
+          SearchToolFieldNames.conversationType: 'broadcast',
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(repository.lastRequest, isNotNull);
@@ -100,10 +106,12 @@ void main() {
         webSearchTool: _FakeWebSearchTool(),
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        SearchToolFieldNames.query: '西湖',
-        SearchToolFieldNames.mode: SearchMode.result.wireValue,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          SearchToolFieldNames.query: '西湖',
+          SearchToolFieldNames.mode: SearchMode.result.wireValue,
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(repository.lastRequest, isNotNull);
@@ -140,7 +148,7 @@ class _FakeSearchRepository implements SearchRepository {
               title: '摄影入门',
               subtitle: '站内内容',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: const SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadLegacy(<String, dynamic>{
                 'postId': 'post_1',
                 'contentType': 'article',
                 'title': '摄影入门',
@@ -169,11 +177,11 @@ class _FakeWebSearchTool extends WebSearchTool {
   _FakeWebSearchTool();
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    return const AssistantToolResult(
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    return AssistantToolResult(
       success: true,
       message: 'ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'references': <Map<String, dynamic>>[
           <String, dynamic>{
             'title': '摄影百科',
@@ -182,7 +190,7 @@ class _FakeWebSearchTool extends WebSearchTool {
             'snippet': '网页资料',
           },
         ],
-      },
+      }),
     );
   }
 }

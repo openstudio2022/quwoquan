@@ -2,6 +2,7 @@ import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.da
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_provider.dart';
 import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 class WebRetrievalProvider implements AssistantRetrievalProvider {
   WebRetrievalProvider({WebSearchTool? tool}) : _tool = tool ?? WebSearchTool();
@@ -18,12 +19,12 @@ class WebRetrievalProvider implements AssistantRetrievalProvider {
 
   @override
   Future<AssistantRetrievalResult> retrieve(AssistantRetrievalRequest request) async {
-    final result = await _tool.execute(<String, dynamic>{
+    final result = await _tool.execute(AssistantToolArguments(<String, Object?>{
       'query': request.query,
       if (request.providerHint != null && request.providerHint!.trim().isNotEmpty)
         'provider': request.providerHint,
       'count': request.maxItems,
-    });
+    }));
     if (!result.success) {
       return AssistantRetrievalResult(
         success: false,

@@ -39,7 +39,8 @@ class AssistantToolRegistry {
       );
     }
     await _metadataRegistry?.ensureLoaded();
-    final argCheck = _validateArguments(name: name, arguments: arguments);
+    final typedArguments = AssistantToolArguments.fromJson(arguments);
+    final argCheck = _validateArguments(name: name, arguments: typedArguments);
     if (argCheck != null) return argCheck;
 
     // before_tool_call hook: record call + loop detection
@@ -52,11 +53,11 @@ class AssistantToolRegistry {
         message: loopCheck.message,
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
-        data: <String, dynamic>{
+        data: AssistantToolResultData(<String, Object?>{
           'loopDetected': true,
           'loopPattern': loopCheck.pattern,
           'loopStreak': loopCheck.streak,
-        },
+        }),
       );
     }
 
@@ -64,7 +65,7 @@ class AssistantToolRegistry {
       final result = await _executeWithResilience(
         tool: tool,
         name: name,
-        arguments: arguments,
+        arguments: typedArguments,
       );
 
       // after_tool_call hook: record outcome
@@ -91,7 +92,7 @@ class AssistantToolRegistry {
           message: result.message,
           errorCode: result.errorCode,
           degraded: result.degraded,
-          data: augmentedData,
+          data: AssistantToolResultData.fromJson(augmentedData),
         );
       }
 
@@ -110,7 +111,7 @@ class AssistantToolRegistry {
   Future<AssistantToolResult> _executeWithResilience({
     required AssistantTool tool,
     required String name,
-    required Map<String, dynamic> arguments,
+    required AssistantToolArguments arguments,
   }) async {
     final policy = _resilienceManager.policyFor(name);
     final breakerResult = policy?.checkBeforeExecute(name);
@@ -173,13 +174,13 @@ class AssistantToolRegistry {
       message: result.message,
       errorCode: result.errorCode,
       degraded: result.degraded,
-      data: <String, dynamic>{
+      data: AssistantToolResultData(<String, Object?>{
         ...?result.data,
         'retry': <String, dynamic>{
           'attempts': attempts,
           'recovered': recovered,
         },
-      },
+      }),
     );
   }
 
@@ -198,19 +199,13 @@ class AssistantToolRegistry {
 
   AssistantToolResult? _validateArguments({
     required String name,
-    required Map<String, dynamic> arguments,
+    required AssistantToolArguments arguments,
   }) {
     final parameters = _metadataRegistry?.functionParametersByToolName(name);
-    if (parameters == null || parameters.isEmpty) return null;
-    final requiredKeys =
-        (parameters['required'] as List?)?.whereType<String>().toList(
-          growable: false,
-        ) ??
-        const <String>[];
-    final properties =
-        (parameters['properties'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final normalizedArgs = <String, dynamic>{};
+    if (parameters == null || parameters.isEmptyPayload) return null;
+    final requiredKeys = parameters.requiredFields;
+    final properties = parameters.properties;
+    final normalizedArgs = <String, Object?>{};
     for (final entry in arguments.entries) {
       if (entry.key.startsWith('__')) continue;
       normalizedArgs[entry.key] = entry.value;
@@ -235,10 +230,9 @@ class AssistantToolRegistry {
       }
     }
     for (final entry in normalizedArgs.entries) {
-      final schema = properties[entry.key];
-      if (schema is! Map) continue;
-      final typedSchema = schema.cast<String, dynamic>();
-      final expectedType = (typedSchema['type'] as String?)?.trim() ?? '';
+      final typedSchema = properties[entry.key];
+      if (typedSchema == null) continue;
+      final expectedType = typedSchema.type;
       if (expectedType.isEmpty) continue;
       if (!_matchesType(expectedType, entry.value)) {
         return AssistantToolResult(
@@ -270,7 +264,7 @@ class AssistantToolRegistry {
         _metadataRegistry?.requiredOutputPathsByToolName(name) ??
         const <String>[];
     if (requiredPaths.isEmpty) return null;
-    final data = result.data ?? const <String, dynamic>{};
+    final data = result.data?.toDynamicJson() ?? const <String, dynamic>{};
     for (final path in requiredPaths) {
       if (!_hasPath(data, path)) {
         return AssistantToolResult(
@@ -305,12 +299,10 @@ class AssistantToolRegistry {
 
   AssistantToolResult? _validateEnum({
     required String key,
-    required Map<String, dynamic> schema,
+    required AssistantToolSchemaField schema,
     required Object? value,
   }) {
-    final enumValues =
-        (schema['enum'] as List?)?.whereType<String>().toSet() ??
-        const <String>{};
+    final enumValues = schema.enumValues.toSet();
     if (enumValues.isNotEmpty) {
       if (value is! String || !enumValues.contains(value)) {
         return AssistantToolResult(
@@ -322,15 +314,15 @@ class AssistantToolRegistry {
         );
       }
     }
-    final expectedType = (schema['type'] as String?)?.trim() ?? '';
+    final expectedType = schema.type;
     if (expectedType != 'array' || value is! List) {
       return null;
     }
-    final itemSchema = (schema['items'] as Map?)?.cast<String, dynamic>();
+    final itemSchema = schema.items;
     if (itemSchema == null) {
       return null;
     }
-    final itemType = (itemSchema['type'] as String?)?.trim() ?? '';
+    final itemType = itemSchema.type;
     if (itemType.isNotEmpty &&
         value.any((item) => !_matchesType(itemType, item))) {
       return AssistantToolResult(
@@ -341,9 +333,7 @@ class AssistantToolRegistry {
         degraded: true,
       );
     }
-    final itemEnums =
-        (itemSchema['enum'] as List?)?.whereType<String>().toSet() ??
-        const <String>{};
+    final itemEnums = itemSchema.enumValues.toSet();
     if (itemEnums.isNotEmpty &&
         value.any((item) => item is! String || !itemEnums.contains(item))) {
       return AssistantToolResult(
@@ -427,10 +417,10 @@ class _ToolResiliencePolicy {
         message: '$toolName 当前处于短暂保护期，请在 ${remainingSeconds}s 后重试。',
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
-        data: <String, dynamic>{
+        data: AssistantToolResultData(<String, Object?>{
           'breakerOpen': true,
           'retryAfterSeconds': remainingSeconds,
-        },
+        }),
       );
     }
     if (_breakerOpenUntil != null && !now.isBefore(_breakerOpenUntil!)) {

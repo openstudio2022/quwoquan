@@ -67,7 +67,7 @@ class SimpleSkillExecutor {
       return AssistantToolResult(
         success: true,
         message: report.answer,
-        data: report.toJson(),
+        data: AssistantToolResultData.fromJson(report.toJson()),
         degraded: report.degraded,
         errorCode: report.degraded
             ? AssistantErrorCode.executionFailed

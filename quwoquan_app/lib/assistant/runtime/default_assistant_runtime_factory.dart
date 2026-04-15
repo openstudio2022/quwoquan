@@ -11,6 +11,7 @@ import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_executor.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -24,10 +25,13 @@ import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_sto
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 
+final SearchResultCache _sharedAssistantSearchCache = SearchResultCache();
+
 AssistantRuntime createDefaultAssistantRuntime() {
   return _createAssistantRuntime(
     memoryStore: ObjectBoxVectorStore(),
     registerSyncConfig: true,
+    searchCache: _sharedAssistantSearchCache,
   );
 }
 
@@ -38,12 +42,14 @@ AssistantRuntime createTestAssistantRuntime({String? storagePath}) {
   return _createAssistantRuntime(
     memoryStore: ObjectBoxVectorStore(storagePath: path),
     registerSyncConfig: true,
+    searchCache: SearchResultCache(),
   );
 }
 
 AssistantRuntime _createAssistantRuntime({
   required ObjectBoxVectorStore memoryStore,
   required bool registerSyncConfig,
+  required SearchResultCache searchCache,
 }) {
   final channelAdapter = MethodChannelAdapter();
   final iosAdapter = IOSIntentAdapter(channelAdapter);
@@ -52,7 +58,10 @@ AssistantRuntime _createAssistantRuntime({
   final memoryRepository = AssistantMemoryRepository(memoryStore);
   final toolMetadataRegistry = ToolMetadataRegistry();
   final retrievalBroker = ToolRetrievalBroker();
-  final webSearchTool = WebSearchTool(broker: retrievalBroker);
+  final webSearchTool = WebSearchTool(
+    broker: retrievalBroker,
+    searchCache: searchCache,
+  );
   final conversationCache = ConversationCacheService();
   final chatRepository = RemoteChatRepository();
   final circleRepository = RemoteCircleRepository();

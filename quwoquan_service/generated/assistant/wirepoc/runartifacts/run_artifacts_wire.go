@@ -140,12 +140,6 @@ type DomainPolicyBundle struct {
 	NarrativePolicy json.RawMessage `json:"narrativePolicy"`
 }
 
-type RunArtifactsUnderstandingQueryGroup struct {
-	Dimension string `json:"dimension"`
-	Queries []string `json:"queries"`
-	Why string `json:"why"`
-}
-
 type RunArtifactsUnderstandingResolutionItem struct {
 	Kind string `json:"kind"`
 	Title string `json:"title"`
@@ -162,8 +156,6 @@ type RunArtifactsUnderstandingSnapshot struct {
 	UserFacingSummary string `json:"userFacingSummary"`
 	ConcernPoints []string `json:"concernPoints"`
 	EmotionSignal string `json:"emotionSignal"`
-	QueryDesignSummary string `json:"queryDesignSummary"`
-	QueryGroups []RunArtifactsUnderstandingQueryGroup `json:"queryGroups"`
 	ResolutionItems []RunArtifactsUnderstandingResolutionItem `json:"resolutionItems"`
 	Assumptions []string `json:"assumptions"`
 	MismatchSignal string `json:"mismatchSignal"`

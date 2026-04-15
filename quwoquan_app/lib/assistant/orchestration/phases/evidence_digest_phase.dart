@@ -394,32 +394,31 @@ class EvidenceDigestPhase implements Phase {
     if (concerns.isEmpty) {
       return '';
     }
-    var confirm = '';
-    for (final ref in references) {
-      final snippet = ref.snippet.trim();
-      if (snippet.length >= 6) {
-        confirm = snippet;
-        break;
+    final evidencePoints = <String>[];
+    for (final point in keyPoints) {
+      final trimmed = point.trim();
+      if (trimmed.length >= 6 && evidencePoints.length < 2) {
+        final punctuated = trimmed.endsWith('。') ||
+                trimmed.endsWith('！') ||
+                trimmed.endsWith('？')
+            ? trimmed
+            : '$trimmed';
+        evidencePoints.add(punctuated);
       }
     }
-    if (confirm.isEmpty) {
-      for (final point in keyPoints) {
-        final trimmed = point.trim();
-        if (trimmed.length >= 6) {
-          confirm = trimmed;
-          break;
+    if (evidencePoints.isEmpty) {
+      for (final ref in references) {
+        final snippet = ref.snippet.trim();
+        if (snippet.length >= 6 && evidencePoints.length < 2) {
+          evidencePoints.add(snippet);
         }
       }
     }
-    if (confirm.isEmpty) {
+    if (evidencePoints.isEmpty) {
       return '';
     }
-    final punctuated = confirm.endsWith('。') ||
-            confirm.endsWith('！') ||
-            confirm.endsWith('？')
-        ? confirm
-        : '$confirm。';
     final joined = concerns.join('、');
-    return '围绕你刚才最关心的$joined，现在已经能直接确认的是：$punctuated其余背景线索我不会直接带进最终答案。';
+    final evidence = evidencePoints.join('；');
+    return '$joined方面，已有可信证据指向以下判断：$evidence。';
   }
 }

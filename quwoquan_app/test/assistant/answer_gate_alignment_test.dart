@@ -7,6 +7,7 @@ import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
@@ -105,6 +106,163 @@ void main() {
 
     expect(gate.finalAnswerReady, isTrue);
     expect(gate.reasonCode, equals('evidence_ready'));
+  });
+
+  test('bounded answer 一旦被状态机选中就不再被 gate 回退成未完成', () {
+    const gateResolver = AnswerGateResolver();
+    const outcome = RetrievalOutcome(
+      status: 'need_more_evidence',
+      summary: '已基于当前可确认信息整理答案；如果还要继续补齐更多依据，可以再补查。',
+      evidenceRequired: true,
+      authorityRequired: true,
+      authoritySatisfied: false,
+      freshnessSatisfied: true,
+      hasToolResult: true,
+      referenceCount: 2,
+      processedDocumentCount: 2,
+      acceptedDocumentCount: 2,
+      terminalPayloadComplete: true,
+    );
+
+    final gate = gateResolver.resolve(
+      retrievalOutcome: outcome,
+      conversationStateDecision: const ConversationStateDecision(
+        nextAction: AssistantNextAction.answer,
+        finalAnswerMode: FinalAnswerMode.boundedAnswer,
+        answerEligibility: AnswerEligibility.eligible,
+        finalAnswerReady: true,
+      ),
+      renderableAnswer: true,
+    );
+
+    expect(gate.finalAnswerReady, isTrue);
+    expect(gate.reasonCode, equals('bounded_delivery'));
+    expect(gate.reason, equals(outcome.summary));
+  });
+
+  test('零结果工具调用也不能把 bounded answer 误判为 ready', () {
+    const gateResolver = AnswerGateResolver();
+    const outcome = RetrievalOutcome(
+      status: 'need_more_evidence',
+      summary: '当前还没有拿到可支撑结论的外部证据。',
+      evidenceRequired: true,
+      authorityRequired: true,
+      authoritySatisfied: false,
+      freshnessSatisfied: false,
+      hasToolResult: true,
+      referenceCount: 0,
+      processedDocumentCount: 0,
+      acceptedDocumentCount: 0,
+      terminalPayloadComplete: true,
+    );
+
+    final gate = gateResolver.resolve(
+      retrievalOutcome: outcome,
+      conversationStateDecision: const ConversationStateDecision(
+        nextAction: AssistantNextAction.answer,
+        finalAnswerMode: FinalAnswerMode.boundedAnswer,
+        answerEligibility: AnswerEligibility.eligible,
+        finalAnswerReady: true,
+      ),
+      renderableAnswer: true,
+    );
+
+    expect(gate.finalAnswerReady, isFalse);
+    expect(gate.eligible, isFalse);
+    expect(gate.reasonCode, equals('missing_required_evidence'));
+  });
+
+  test('resolveFromStructured 不再信任放宽后的 answerGateDecision', () {
+    const gateResolver = AnswerGateResolver();
+    final decision = gateResolver.resolveFromStructured(
+      structured: <String, dynamic>{
+        assistantRetrievalOutcomeField: <String, dynamic>{
+          'status': 'need_more_evidence',
+          'summary': '当前还没有拿到可支撑结论的外部证据。',
+          'evidenceRequired': true,
+          'authorityRequired': true,
+          'authoritySatisfied': false,
+          'hasToolResult': false,
+          'referenceCount': 0,
+          'processedDocumentCount': 0,
+          'acceptedDocumentCount': 0,
+          'terminalPayloadComplete': true,
+        },
+        assistantAnswerGateDecisionField: <String, dynamic>{
+          'eligible': true,
+          'finalAnswerReady': true,
+          'reasonCode': 'bounded_delivery',
+          'reason': '旧 gate 误判可成答。',
+          'nextAction': AssistantNextAction.answer.wireName,
+          'answerEligibility': AnswerEligibility.eligible.wireName,
+          'renderable': true,
+          'retrievalReady': false,
+          'terminalPayloadComplete': true,
+          'degraded': false,
+          'incomplete': false,
+        },
+        'conversationStateDecision': const ConversationStateDecision(
+          nextAction: AssistantNextAction.answer,
+          finalAnswerMode: FinalAnswerMode.boundedAnswer,
+          answerEligibility: AnswerEligibility.eligible,
+          finalAnswerReady: true,
+        ).toDecisionMap(),
+        'userMarkdown': '目前我还没查到昨天 A 股大涨的具体原因。',
+      },
+    );
+
+    expect(decision.finalAnswerReady, isFalse);
+    expect(decision.eligible, isFalse);
+    expect(decision.reasonCode, equals('missing_required_evidence'));
+  });
+
+  test('AnswerOutcomeResolver 不再信任 rawOutcome 里的宽松 gate', () {
+    const resolver = AnswerOutcomeResolver();
+    final snapshot = resolver.resolve(
+      structured: <String, dynamic>{
+        'userMarkdown': '目前我还没查到昨天 A 股大涨的具体原因。',
+        'answerOutcome': <String, dynamic>{
+          'retrievalOutcome': <String, dynamic>{
+            'status': 'need_more_evidence',
+            'summary': '当前还没有拿到可支撑结论的外部证据。',
+            'evidenceRequired': true,
+            'authorityRequired': true,
+            'authoritySatisfied': false,
+            'hasToolResult': false,
+            'referenceCount': 0,
+            'processedDocumentCount': 0,
+            'acceptedDocumentCount': 0,
+            'terminalPayloadComplete': true,
+          },
+          'conversationStateDecision': const ConversationStateDecision(
+            nextAction: AssistantNextAction.answer,
+            finalAnswerMode: FinalAnswerMode.boundedAnswer,
+            answerEligibility: AnswerEligibility.eligible,
+            finalAnswerReady: true,
+          ).toDecisionMap(),
+          'answerGateDecision': <String, dynamic>{
+            'eligible': true,
+            'finalAnswerReady': true,
+            'reasonCode': 'bounded_delivery',
+            'reason': '旧 gate 误判可成答。',
+            'nextAction': AssistantNextAction.answer.wireName,
+            'answerEligibility': AnswerEligibility.eligible.wireName,
+            'renderable': true,
+            'retrievalReady': false,
+            'terminalPayloadComplete': true,
+            'degraded': false,
+            'incomplete': false,
+          },
+        },
+      },
+    );
+
+    expect(snapshot.answerGateDecision.finalAnswerReady, isFalse);
+    expect(snapshot.answerGateDecision.eligible, isFalse);
+    expect(
+      snapshot.answerGateDecision.reasonCode,
+      equals('missing_required_evidence'),
+    );
   });
 
   test('实时 query 仍然保持严格 freshness gate', () {
@@ -304,7 +462,7 @@ void main() {
 
     expect(outcome.evidencePassed, isFalse);
     expect(outcome.status, equals('need_more_evidence'));
-    expect(outcome.summary, contains('命中度'));
+    expect(outcome.summary, contains('关联度'));
   });
 
   test('historical 判定会优先使用 referenceNowIso 而不是当前墙钟时间', () {

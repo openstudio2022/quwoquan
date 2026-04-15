@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
+import 'package:quwoquan_app/assistant/tool/impl/device/local_context_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 class LocalContextTool implements AssistantTool {
@@ -13,36 +14,40 @@ class LocalContextTool implements AssistantTool {
   String get description => '获取设备上下文与地理位置信息（不包含相册数据）。';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    final result = await _channelAdapter.invoke(
-      'getLocalContext',
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    final request = LocalContextToolArgumentsContract.fromAssistantArguments(
       arguments,
     );
+    final result = await _channelAdapter.invoke(
+      'getLocalContext',
+      request.toAssistantArguments().toDynamicJson(),
+    );
     if (result.containsKey('error')) {
+      final failure = LocalContextToolFailureData(
+        userMessage: '本地上下文暂不可用',
+        internalError: (result['error'] ?? '').toString().trim(),
+      );
       return AssistantToolResult(
         success: false,
-        message: '本地上下文暂不可用',
+        message: failure.userMessage,
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
-        data: <String, dynamic>{
-          'userMessage': '本地上下文暂不可用',
-          'internalError': result['error'],
-        },
+        data: failure.toResultData(),
       );
     }
     final normalized = _normalizeContextResult(result);
-    final city = _extractCity(normalized);
+    final city = normalized.city.trim();
     final message = city.isEmpty
         ? 'Local context fetched'
         : 'Local context fetched: city=$city';
     return AssistantToolResult(
       success: true,
       message: message,
-      data: normalized,
+      data: normalized.toResultData(),
     );
   }
 
-  Map<String, dynamic> _normalizeContextResult(Map<String, dynamic> raw) {
+  LocalContextToolSuccessData _normalizeContextResult(Map<String, dynamic> raw) {
     final locationRaw = (raw['location'] as Map?)?.cast<String, dynamic>() ??
         (raw['gpsLocation'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -51,80 +56,78 @@ class LocalContextTool implements AssistantTool {
             const <String, dynamic>{};
     final deviceRaw = (raw['device'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final city = _firstNonEmpty(<Object?>[
-      raw['city'],
-      locationRaw['city'],
-      raw['currentCity'],
+    final city = _firstNonEmpty(<String?>[
+      raw['city']?.toString(),
+      locationRaw['city']?.toString(),
+      raw['currentCity']?.toString(),
     ]);
-    return <String, dynamic>{
-      'contextVersion': 'local_context_v1',
-      'city': city,
-      'location': <String, dynamic>{
-        'city': city,
-        'latitude': _toDouble(locationRaw['latitude'] ?? locationRaw['lat']),
-        'longitude': _toDouble(locationRaw['longitude'] ?? locationRaw['lon']),
-        'accuracyM':
-            _toDouble(locationRaw['accuracyM'] ?? locationRaw['accuracy']),
-        'source': _firstNonEmpty(<Object?>[
-          locationRaw['source'],
-          raw['locationSource'],
-        ]),
-      },
-      'permissions': <String, dynamic>{
-        'location': _toBool(permissionsRaw['location']),
-        'photos': _toBool(permissionsRaw['photos']),
-        'camera': _toBool(permissionsRaw['camera']),
-        'notification': _toBool(permissionsRaw['notification']),
-      },
-      'device': <String, dynamic>{
-        'os': _firstNonEmpty(<Object?>[deviceRaw['os'], raw['os']]),
-        'model': _firstNonEmpty(<Object?>[deviceRaw['model'], raw['model']]),
-        'locale': _firstNonEmpty(<Object?>[deviceRaw['locale'], raw['locale']]),
-        'timezone': _firstNonEmpty(
-          <Object?>[deviceRaw['timezone'], raw['timezone']],
+    return LocalContextToolSuccessData(
+      city: city,
+      location: LocalContextLocationSnapshot(
+        city: city,
+        latitude: _toDouble(
+          locationRaw['latitude']?.toString() ?? locationRaw['lat']?.toString(),
         ),
-      },
+        longitude: _toDouble(
+          locationRaw['longitude']?.toString() ?? locationRaw['lon']?.toString(),
+        ),
+        accuracyM: _toDouble(
+          locationRaw['accuracyM']?.toString() ??
+              locationRaw['accuracy']?.toString(),
+        ),
+        source: _firstNonEmpty(<String?>[
+          locationRaw['source']?.toString(),
+          raw['locationSource']?.toString(),
+        ]),
+      ),
+      permissions: LocalContextPermissionSnapshot(
+        location: _toBool(permissionsRaw['location']?.toString()),
+        photos: _toBool(permissionsRaw['photos']?.toString()),
+        camera: _toBool(permissionsRaw['camera']?.toString()),
+        notification: _toBool(permissionsRaw['notification']?.toString()),
+      ),
+      device: LocalContextDeviceSnapshot(
+        os: _firstNonEmpty(<String?>[
+          deviceRaw['os']?.toString(),
+          raw['os']?.toString(),
+        ]),
+        model: _firstNonEmpty(<String?>[
+          deviceRaw['model']?.toString(),
+          raw['model']?.toString(),
+        ]),
+        locale: _firstNonEmpty(<String?>[
+          deviceRaw['locale']?.toString(),
+          raw['locale']?.toString(),
+        ]),
+        timezone: _firstNonEmpty(<String?>[
+          deviceRaw['timezone']?.toString(),
+          raw['timezone']?.toString(),
+        ]),
+      ),
       // 显式声明边界：local_context 不返回相册内容。
-      'media': const <String, dynamic>{'included': false},
-    };
+      media: const LocalContextMediaBoundary(included: false),
+    );
   }
 
-  String _extractCity(Map<String, dynamic> data) {
-    final top = (data['city'] ?? '').toString().trim();
-    if (top.isNotEmpty) return top;
-    final location = data['location'];
-    if (location is Map) {
-      final nested = (location['city'] ?? '').toString().trim();
-      if (nested.isNotEmpty) return nested;
-    }
-    final gps = data['gpsLocation'];
-    if (gps is Map) {
-      final nested = (gps['city'] ?? '').toString().trim();
-      if (nested.isNotEmpty) return nested;
-    }
-    return '';
-  }
-
-  String _firstNonEmpty(List<Object?> candidates) {
+  String _firstNonEmpty(List<String?> candidates) {
     for (final value in candidates) {
-      final text = (value ?? '').toString().trim();
+      final text = (value ?? '').trim();
       if (text.isNotEmpty) return text;
     }
     return '';
   }
 
-  bool? _toBool(Object? value) {
-    if (value is bool) return value;
-    if (value == null) return null;
-    final text = value.toString().trim().toLowerCase();
+  bool? _toBool(String? value) {
+    final text = (value ?? '').trim().toLowerCase();
+    if (text.isEmpty) return null;
     if (text == 'true' || text == '1' || text == 'granted') return true;
     if (text == 'false' || text == '0' || text == 'denied') return false;
     return null;
   }
 
-  double? _toDouble(Object? value) {
-    if (value is num) return value.toDouble();
-    final parsed = double.tryParse((value ?? '').toString().trim());
-    return parsed;
+  double? _toDouble(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    return double.tryParse(text);
   }
 }

@@ -67,7 +67,7 @@ class AssistantSkillExecutor {
         return AssistantToolResult(
           success: true,
           message: 'iOS intent success',
-          data: result,
+          data: AssistantToolResultData.fromJson(result),
         );
       case SkillExecutionTarget.androidIntent:
         final result = await _androidIntentAdapter.invokeIntent(
@@ -87,7 +87,7 @@ class AssistantSkillExecutor {
         return AssistantToolResult(
           success: true,
           message: 'Android intent success',
-          data: result,
+          data: AssistantToolResultData.fromJson(result),
         );
       case SkillExecutionTarget.nativeApi:
         final result = await _methodChannelAdapter.invoke(skill.id, arguments);
@@ -102,7 +102,7 @@ class AssistantSkillExecutor {
         return AssistantToolResult(
           success: true,
           message: 'Native API success',
-          data: result,
+          data: AssistantToolResultData.fromJson(result),
         );
       case SkillExecutionTarget.toolChain:
       case SkillExecutionTarget.unknown:
@@ -174,7 +174,7 @@ class AssistantSkillExecutor {
         return AssistantToolResult(
           success: false,
           message: 'Tool-chain stopped at $toolName: ${result.message}',
-          data: <String, dynamic>{'steps': aggregated},
+          data: AssistantToolResultData(<String, Object?>{'steps': aggregated}),
           errorCode: result.errorCode,
           degraded: true,
         );
@@ -184,7 +184,7 @@ class AssistantSkillExecutor {
     return AssistantToolResult(
       success: true,
       message: 'Tool-chain success',
-      data: <String, dynamic>{'steps': aggregated},
+      data: AssistantToolResultData(<String, Object?>{'steps': aggregated}),
     );
   }
 
@@ -223,7 +223,7 @@ class AssistantSkillExecutor {
     return AssistantToolResult(
       success: true,
       message: report.answer,
-      data: report.toJson(),
+      data: AssistantToolResultData.fromJson(report.toJson()),
       degraded: report.degraded,
       errorCode: report.degraded
           ? AssistantErrorCode.executionFailed

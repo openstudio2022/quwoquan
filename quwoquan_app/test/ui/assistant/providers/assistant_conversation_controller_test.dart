@@ -171,7 +171,7 @@ void main() {
     });
 
     testWidgets(
-      'sendMessage 会把可见 3 阶段过程轨展示给 UI，同时保留 canonical 4 阶段到最终 assistant 消息',
+      'sendMessage 会把可见 2 阶段过程轨展示给 UI，同时保留 canonical 4 阶段到最终 assistant 消息',
       (tester) async {
         final gateway = _FastAssistantGateway();
         final entry = _FakeStreamingLocalAssistantEntry();
@@ -210,13 +210,11 @@ void main() {
         const expectedVisibleSteps = <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ];
         const expectedCanonicalSteps = <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ];
 
         expect(controller.assistantResponding, isFalse);
@@ -319,7 +317,6 @@ void main() {
             ProcessStepId.understanding,
             ProcessStepId.retrievalDesign,
             ProcessStepId.retrievalProcessing,
-            ProcessStepId.answerOrganization,
           ]),
         );
         expect(
@@ -511,6 +508,121 @@ void main() {
       expect(_messageMaps(controller).last['content'], isNotEmpty);
     });
 
+    testWidgets('流式正文一出现就会打开 UI answer gate', (tester) async {
+      final gateway = _FastAssistantGateway();
+      final entry = _FakeStreamingLocalAssistantEntry(
+        completedFinalAnswerReady: false,
+        answerChunkDelay: const Duration(milliseconds: 120),
+        completedEventDelay: const Duration(milliseconds: 300),
+      );
+      final controller = await _mountController(
+        tester,
+        overrides: [
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(gateway),
+          localAssistantEntryProvider.overrideWithValue(entry),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'user_test',
+              ownerUserId: 'user_test',
+              subAccountId: '',
+              subjectType: 'owner',
+              displayName: '我',
+              avatarUrl: '',
+              personaContextVersion: 'test',
+            );
+          }),
+        ],
+      );
+
+      unawaited(controller.sendMessage(text: '深圳天气怎么样', viewportWidth: 390));
+      final streamingDeadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(streamingDeadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (controller.assistantResponding && controller.answerGateOpen) {
+          break;
+        }
+      }
+
+      expect(controller.assistantResponding, isTrue);
+      expect(controller.answerGateOpen, isTrue);
+      final streamingMessage = _messageMaps(controller).last;
+      final streamingDisplayState = resolvePersistedAssistantDisplayState(
+        streamingMessage,
+      );
+      expect(
+        renderAnswerBlocksToMarkdown(streamingDisplayState.answer.blocks),
+        contains('深圳今天晴'),
+      );
+
+      final completedDeadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(completedDeadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      expect(controller.answerGateOpen, isFalse);
+      expect(_messageMaps(controller).last['content'], isNotEmpty);
+    });
+
+    testWidgets('sendMessage 在学习记录失败时不会追加错误消息或覆盖最终答案', (
+      tester,
+    ) async {
+      final gateway = _FastAssistantGateway();
+      final entry = _FakeStreamingLocalAssistantEntry();
+      final controller = await _mountController(
+        tester,
+        learningService: _ThrowingAssistantLearningService(),
+        overrides: [
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(gateway),
+          localAssistantEntryProvider.overrideWithValue(entry),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'user_test',
+              ownerUserId: 'user_test',
+              subAccountId: '',
+              subjectType: 'owner',
+              displayName: '我',
+              avatarUrl: '',
+              personaContextVersion: 'test',
+            );
+          }),
+        ],
+      );
+
+      unawaited(controller.sendMessage(text: '深圳天气怎么样', viewportWidth: 390));
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      final assistantMessages = _messageMaps(controller)
+          .where(
+            (item) => item['senderId'] == AppConceptConstants.assistantSenderId,
+          )
+          .toList(growable: false);
+      expect(assistantMessages, hasLength(1));
+      expect(assistantMessages.single['content'], contains('深圳今天晴'));
+      expect(
+        assistantMessages.any(
+          (item) => (item['content'] as String).contains('助手异常'),
+        ),
+        isFalse,
+      );
+    });
+
     testWidgets('sendMessage 在稀疏 blocked 终态下仍保留已流式展示的 query design 与答案正文', (
       tester,
     ) async {
@@ -574,13 +686,12 @@ void main() {
           ProcessStepId.understanding,
           ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
-          ProcessStepId.answerOrganization,
         ]),
       );
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'understanding_summary' &&
+              block.blockId == 'understanding_narrative' &&
               block.title.contains('实时天气结果'),
         ),
         isTrue,
@@ -588,8 +699,8 @@ void main() {
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'retrieval_query_design' &&
-              block.items.any((item) => item.body.contains('天气现状和出门建议两路来核对')),
+              block.blockId == 'understanding_narrative' &&
+              block.body.contains('天气现状和出门建议两路来核对'),
         ),
         isTrue,
       );
@@ -711,12 +822,10 @@ void main() {
           );
       expect(
         displayState.process.blocks.any(
-          (block) =>
-              block.blockId == 'understanding_resolution_items' &&
-              block.items.any((item) => item.body.contains('2026年4月9日')) &&
-              block.items.any((item) => item.body.contains('中国股市/A股')),
+          (block) => block.blockId == 'understanding_resolution_items',
         ),
-        isTrue,
+        isFalse,
+        reason: 'resolution items 信息已融入 summary 叙事，不应有独立列表块',
       );
       expect(
         understandingSnapshot.resolutionItems.any(
@@ -823,14 +932,13 @@ void main() {
             ProcessStepId.understanding,
             ProcessStepId.retrievalDesign,
             ProcessStepId.retrievalProcessing,
-            ProcessStepId.answerOrganization,
           ]),
         );
         expect(
           reloadedDisplayState.process.blocks.any(
             (block) =>
-                block.blockId == 'retrieval_query_design' &&
-                block.items.any((item) => item.body.contains('天气现状和出门建议两路来核对')),
+                block.blockId == 'understanding_narrative' &&
+                block.body.contains('天气现状和出门建议两路来核对'),
           ),
           isTrue,
         );
@@ -903,8 +1011,8 @@ void main() {
         expect(
           displayState.process.blocks.any(
             (block) =>
-                block.blockId == 'retrieval_query_design' &&
-                block.items.any((item) => item.body.contains('天气现状和出门建议两路来核对')),
+                block.blockId == 'understanding_narrative' &&
+                block.body.contains('天气现状和出门建议两路来核对'),
           ),
           isTrue,
         );
@@ -980,7 +1088,7 @@ void main() {
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'understanding_summary' &&
+              block.blockId == 'understanding_narrative' &&
               block.title.contains('实时天气结果'),
         ),
         isTrue,
@@ -988,14 +1096,195 @@ void main() {
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'retrieval_query_design' &&
-              block.items.any((item) => item.body.contains('天气现状和出门建议两路来核对')),
+              block.blockId == 'understanding_narrative' &&
+              block.body.contains('天气现状和出门建议两路来核对'),
         ),
         isTrue,
       );
       expect(
         renderAnswerBlocksToMarkdown(displayState.answer.blocks),
         isNotEmpty,
+      );
+    });
+
+    testWidgets('sendRewrite 在 failed 事件下仍会收口为可展示 assistant 消息', (
+      tester,
+    ) async {
+      final gateway = _FastAssistantGateway();
+      final entry = _FakeStreamingLocalAssistantEntry(
+        streamedChunks: const <String>[],
+        failedMessage: '上游暂时不可用',
+        emitCompleted: false,
+      );
+      final controller = await _mountController(
+        tester,
+        overrides: [
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(gateway),
+          localAssistantEntryProvider.overrideWithValue(entry),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'user_test',
+              ownerUserId: 'user_test',
+              subAccountId: '',
+              subjectType: 'owner',
+              displayName: '我',
+              avatarUrl: '',
+              personaContextVersion: 'test',
+            );
+          }),
+        ],
+      );
+
+      unawaited(
+        controller.sendRewrite(
+          query: '深圳天气怎么样',
+          rewrite: const RewriteInstruction(
+            mode: RewriteMode.concise,
+            originalQuery: '深圳天气怎么样',
+            previousAnswer: '上一版回答',
+          ),
+        ),
+      );
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      final finalAssistantMessage = _messageMaps(controller).last;
+      final displayState = resolvePersistedAssistantDisplayState(
+        finalAssistantMessage,
+      );
+      expect(finalAssistantMessage['senderId'], AppConceptConstants.assistantSenderId);
+      expect(finalAssistantMessage['content'], isNotEmpty);
+      expect(
+        renderAnswerBlocksToMarkdown(displayState.answer.blocks),
+        isNotEmpty,
+      );
+    });
+
+    testWidgets('sendRewrite 在无 completed 返回时仍保留已流式展示的答案正文', (
+      tester,
+    ) async {
+      final gateway = _FastAssistantGateway();
+      final entry = _FakeStreamingLocalAssistantEntry(
+        completedFinalAnswerReady: false,
+        emitCompleted: false,
+      );
+      final controller = await _mountController(
+        tester,
+        overrides: [
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(gateway),
+          localAssistantEntryProvider.overrideWithValue(entry),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'user_test',
+              ownerUserId: 'user_test',
+              subAccountId: '',
+              subjectType: 'owner',
+              displayName: '我',
+              avatarUrl: '',
+              personaContextVersion: 'test',
+            );
+          }),
+        ],
+      );
+
+      unawaited(
+        controller.sendRewrite(
+          query: '深圳天气怎么样',
+          rewrite: const RewriteInstruction(
+            mode: RewriteMode.concise,
+            originalQuery: '深圳天气怎么样',
+            previousAnswer: '上一版回答',
+          ),
+        ),
+      );
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      final finalAssistantMessage = _messageMaps(controller).last;
+      final displayState = resolvePersistedAssistantDisplayState(
+        finalAssistantMessage,
+      );
+      expect(controller.answerGateOpen, isFalse);
+      expect(
+        renderAnswerBlocksToMarkdown(displayState.answer.blocks),
+        contains('深圳今天晴'),
+      );
+    });
+
+    testWidgets('sendRewrite 在流式抛错时仍保留已流式展示的答案正文', (
+      tester,
+    ) async {
+      final gateway = _FastAssistantGateway();
+      final entry = _FakeStreamingLocalAssistantEntry(
+        completedFinalAnswerReady: false,
+        throwBeforeCompleted: true,
+      );
+      final controller = await _mountController(
+        tester,
+        overrides: [
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(gateway),
+          localAssistantEntryProvider.overrideWithValue(entry),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'user_test',
+              ownerUserId: 'user_test',
+              subAccountId: '',
+              subjectType: 'owner',
+              displayName: '我',
+              avatarUrl: '',
+              personaContextVersion: 'test',
+            );
+          }),
+        ],
+      );
+
+      unawaited(
+        controller.sendRewrite(
+          query: '深圳天气怎么样',
+          rewrite: const RewriteInstruction(
+            mode: RewriteMode.concise,
+            originalQuery: '深圳天气怎么样',
+            previousAnswer: '上一版回答',
+          ),
+        ),
+      );
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      final finalAssistantMessage = _messageMaps(controller).last;
+      final displayState = resolvePersistedAssistantDisplayState(
+        finalAssistantMessage,
+      );
+      expect(
+        renderAnswerBlocksToMarkdown(displayState.answer.blocks),
+        contains('深圳今天晴'),
       );
     });
 
@@ -1025,44 +1314,24 @@ void main() {
               stepId: ProcessStepId.retrievalProcessing,
               status: JourneyStageStatus.completed,
             ),
-            ProcessTimelineFrame(
-              frameId: 'a',
-              stepId: ProcessStepId.answerOrganization,
-              status: JourneyStageStatus.completed,
-            ),
           ],
           isRunning: false,
           understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-            queryDesignSummary: '交易日确认：先把相对时间落成具体日期。',
-            queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-              RunArtifactsUnderstandingQueryGroup(
-                dimension: '交易日确认',
-                queries: <String>['2026-04-07 A股 大涨 原因'],
-                why: '先把相对时间落成具体日期。',
-              ),
-            ],
+            userFacingSummary: '交易日确认：先把相对时间落成具体日期。',
           ),
           retrievalProcessing: const RetrievalProcessingSnapshot(
             processingSummary: '已经筛出可直接支撑结论的线索。',
             acceptedDocumentCount: 1,
           ),
-          answerProcessing: const RunArtifactsAnswerProcessing(
-            readinessSummary: '我开始把已确认的信息整理成回答。',
-          ),
+          answerProcessing: const RunArtifactsAnswerProcessing(),
         );
 
         expect(viewModel.displayState.process.finalAnswerReady, isTrue);
         expect(
           viewModel.displayState.process.blocks.any(
-            (block) => block.blockId == 'retrieval_query_design',
-          ),
-          isTrue,
-        );
-        expect(
-          viewModel.displayState.process.blocks.any(
             (block) =>
-                block.blockId == 'answer_summary' &&
-                block.title.contains('整理成回答'),
+                block.blockId == 'understanding_narrative' &&
+                block.title.contains('交易日确认：先把相对时间落成具体日期'),
           ),
           isTrue,
         );
@@ -1089,6 +1358,7 @@ void main() {
 Future<AssistantConversationController> _mountController(
   WidgetTester tester, {
   required dynamic overrides,
+  AssistantLearningService? learningService,
 }) async {
   final completer = Completer<AssistantConversationController>();
 
@@ -1096,7 +1366,7 @@ Future<AssistantConversationController> _mountController(
     ProviderScope(
       overrides: [
         assistantLearningServiceProvider.overrideWithValue(
-          _NoopAssistantLearningService(),
+          learningService ?? _NoopAssistantLearningService(),
         ),
         ...overrides,
       ],
@@ -1261,6 +1531,36 @@ class _NoopAssistantLearningService extends AssistantLearningService {
   }
 }
 
+class _ThrowingAssistantLearningService extends _NoopAssistantLearningService {
+  @override
+  Future<void> recordInteraction({
+    required String runId,
+    required String traceId,
+    required String userId,
+    required String sessionId,
+    required String pageType,
+    required String queryText,
+    required String answerText,
+    required List<String> userTags,
+    required int durationMs,
+    String domainId = '',
+    String explicitThumb = 'none',
+    List<String> explicitReasonCodes = const <String>[],
+    bool copiedAnswer = false,
+    bool sharedAnswer = false,
+    bool favoritedAnswer = false,
+    bool regeneratedAnswer = false,
+    bool styleAdjusted = false,
+    bool modelSwitched = false,
+    bool referenceOpened = false,
+    bool interrupted = false,
+    String feedbackTargetMessageId = '',
+    String correctionText = '',
+  }) async {
+    throw StateError('learning_record_failed');
+  }
+}
+
 class _NoopAssistantSyncAdapter extends AssistantSyncAdapter {
   _NoopAssistantSyncAdapter();
 
@@ -1324,6 +1624,11 @@ class _FakeStreamingLocalAssistantEntry extends LocalAssistantEntry {
     this.completedDisplayMarkdown,
     this.completedDisplayPlainText,
     this.completedFinalAnswerReady = true,
+    this.answerChunkDelay = Duration.zero,
+    this.completedEventDelay = Duration.zero,
+    this.emitCompleted = true,
+    this.failedMessage,
+    this.throwBeforeCompleted = false,
   }) : super(
          assistantGateway: _FastAssistantGateway(),
          requestPolicy: const AssistantRequestPolicy(),
@@ -1338,6 +1643,11 @@ class _FakeStreamingLocalAssistantEntry extends LocalAssistantEntry {
   final String? completedDisplayMarkdown;
   final String? completedDisplayPlainText;
   final bool completedFinalAnswerReady;
+  final Duration answerChunkDelay;
+  final Duration completedEventDelay;
+  final bool emitCompleted;
+  final String? failedMessage;
+  final bool throwBeforeCompleted;
 
   @override
   Stream<AssistantRunStreamEvent> runStream({
@@ -1352,6 +1662,24 @@ class _FakeStreamingLocalAssistantEntry extends LocalAssistantEntry {
     }
     for (final chunk in streamedChunks) {
       yield AssistantRunStreamEvent.answerDelta(chunk);
+      if (answerChunkDelay > Duration.zero) {
+        await Future<void>.delayed(answerChunkDelay);
+      }
+    }
+    if (completedEventDelay > Duration.zero) {
+      await Future<void>.delayed(completedEventDelay);
+    }
+    if (throwBeforeCompleted) {
+      throw StateError('fake_stream_before_completed');
+    }
+    if ((failedMessage ?? '').isNotEmpty) {
+      yield AssistantRunStreamEvent.failed(failedMessage!);
+      if (!emitCompleted) {
+        return;
+      }
+    }
+    if (!emitCompleted) {
+      return;
     }
     yield AssistantRunStreamEvent.completed(
       _completedAssistantRunResponse(
@@ -1378,6 +1706,11 @@ class _FakeStreamingRemoteAssistantEntry extends RemoteAssistantEntry {
     this.completedDisplayMarkdown,
     this.completedDisplayPlainText,
     this.completedFinalAnswerReady = true,
+    this.answerChunkDelay = Duration.zero,
+    this.completedEventDelay = Duration.zero,
+    this.emitCompleted = true,
+    this.failedMessage,
+    this.throwBeforeCompleted = false,
   }) : super(
          openClawBridge: OpenClawBridge(baseUrl: ''),
          requestPolicy: const AssistantRequestPolicy(),
@@ -1392,6 +1725,11 @@ class _FakeStreamingRemoteAssistantEntry extends RemoteAssistantEntry {
   final String? completedDisplayMarkdown;
   final String? completedDisplayPlainText;
   final bool completedFinalAnswerReady;
+  final Duration answerChunkDelay;
+  final Duration completedEventDelay;
+  final bool emitCompleted;
+  final String? failedMessage;
+  final bool throwBeforeCompleted;
 
   @override
   Stream<AssistantRunStreamEvent> runStream({
@@ -1406,6 +1744,24 @@ class _FakeStreamingRemoteAssistantEntry extends RemoteAssistantEntry {
     }
     for (final chunk in streamedChunks) {
       yield AssistantRunStreamEvent.answerDelta(chunk);
+      if (answerChunkDelay > Duration.zero) {
+        await Future<void>.delayed(answerChunkDelay);
+      }
+    }
+    if (completedEventDelay > Duration.zero) {
+      await Future<void>.delayed(completedEventDelay);
+    }
+    if (throwBeforeCompleted) {
+      throw StateError('fake_stream_before_completed');
+    }
+    if ((failedMessage ?? '').isNotEmpty) {
+      yield AssistantRunStreamEvent.failed(failedMessage!);
+      if (!emitCompleted) {
+        return;
+      }
+    }
+    if (!emitCompleted) {
+      return;
     }
     yield AssistantRunStreamEvent.completed(
       _completedAssistantRunResponse(
@@ -1510,15 +1866,9 @@ List<List<ProcessTimelineFrame>> _fourStageTimelines() {
     stepId: ProcessStepId.retrievalDesign,
     status: JourneyStageStatus.completed,
     headline: '我会先按天气现状和出门建议两路来核对。',
+    detail: '深圳 实时天气、深圳 当前体感',
     understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-      queryDesignSummary: '我会先按天气现状和出门建议两路来核对。',
-      queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-        RunArtifactsUnderstandingQueryGroup(
-          dimension: '天气现状',
-          queries: <String>['深圳 实时天气', '深圳 当前体感'],
-          why: '先确认现在的天气和出门体感。',
-        ),
-      ],
+      intentSummary: '我会先按天气现状和出门建议两路来核对。',
     ),
   );
   final retrievalProcessing = buildProcessTimelineFrame(
@@ -1529,23 +1879,9 @@ List<List<ProcessTimelineFrame>> _fourStageTimelines() {
       processingSummary: '能直接回答的关键信息已经收拢好了。',
     ),
   );
-  final answerOrganization = buildProcessTimelineFrame(
-    stepId: ProcessStepId.answerOrganization,
-    status: JourneyStageStatus.completed,
-    headline: '我把结果压成一句直接结论和一条简洁建议。',
-    answerProcessing: const RunArtifactsAnswerProcessing(
-      readinessSummary: '我把结果压成一句直接结论和一条简洁建议。',
-    ),
-  );
   return <List<ProcessTimelineFrame>>[
     <ProcessTimelineFrame>[understanding],
     <ProcessTimelineFrame>[understanding, retrievalDesign],
     <ProcessTimelineFrame>[understanding, retrievalDesign, retrievalProcessing],
-    <ProcessTimelineFrame>[
-      understanding,
-      retrievalDesign,
-      retrievalProcessing,
-      answerOrganization,
-    ],
   ];
 }

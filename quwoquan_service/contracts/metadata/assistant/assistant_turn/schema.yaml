@@ -20,10 +20,10 @@ fields:
   - name: messageKind
     type: enum
     enum_ref: AssistantMessageKind
-    required: true
+    default: ''
   - name: userMarkdown
     type: string
-    required: true
+    default: ''
   - name: result
     type: object
     ref: result
@@ -82,10 +82,6 @@ fields:
     type: object
     ref: AssistantJourney
     default: {}
-  - name: toolPlan
-    type: list<object>
-    ref: tool_call
-    default: []
   - name: missingContextSlots
     type: list<string>
     default: []
@@ -122,10 +118,6 @@ fields:
   - name: answerProcessing
     type: object
     ref: answer_processing
-    default: {}
-  - name: answerGateAssessment
-    type: object
-    ref: answer_gate_assessment
     default: {}
   - name: historicalThinkingSnapshot
     type: object
@@ -166,8 +158,6 @@ subcontracts:
     class_name: AssistantTurnToolCall
     fields:
       - { name: toolName, type: string, default: '' }
-      - { name: name, type: string, default: '' }
-      - { name: toolCallId, type: string, default: '' }
       - { name: arguments, type: map, default: {} }
   evidence_item:
     class_name: AssistantTurnEvidenceItem
@@ -218,19 +208,11 @@ subcontracts:
       - { name: userFacingSummary, type: string, default: '' }
       - { name: concernPoints, type: list<string>, default: [] }
       - { name: emotionSignal, type: string, default: '' }
-      - { name: queryDesignSummary, type: string, default: '' }
-      - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
       - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }
       - { name: assumptions, type: list<string>, default: [] }
       - { name: mismatchSignal, type: string, default: '' }
       - { name: carryForwardFacts, type: list<string>, default: [] }
       - { name: discardedAssumptions, type: list<string>, default: [] }
-  understanding_query_group:
-    class_name: AssistantTurnUnderstandingQueryGroup
-    fields:
-      - { name: dimension, type: string, default: '' }
-      - { name: queries, type: list<string>, default: [] }
-      - { name: why, type: string, default: '' }
   understanding_resolution_item:
     class_name: AssistantTurnUnderstandingResolutionItem
     fields:
@@ -249,21 +231,6 @@ subcontracts:
       - { name: keyFacts, type: list<string>, default: [] }
       - { name: missingDimensions, type: list<string>, default: [] }
       - { name: retrieveMoreReason, type: string, default: '' }
-  answer_gate_assessment:
-    class_name: AssistantTurnAnswerGateAssessment
-    fields:
-      - { name: canAnswerNow, type: bool, default: false }
-      - { name: answerMode, type: string, default: '' }
-      - { name: replanNeeded, type: bool, default: false }
-      - { name: replanReason, type: string, default: '' }
-      - {
-          name: convergenceStatus,
-          type: enum,
-          enum_ref: SearchIterationConvergenceStatus,
-          default: '',
-        }
-      - { name: attemptsUsed, type: int, default: 0 }
-      - { name: maxAttempts, type: int, default: 0 }
   historical_thinking_snapshot:
     class_name: AssistantTurnHistoricalThinkingSnapshot
     fields:

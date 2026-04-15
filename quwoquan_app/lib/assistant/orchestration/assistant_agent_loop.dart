@@ -7,8 +7,13 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart'
     as phase_owner;
+import 'package:quwoquan_app/assistant/orchestration/pipelines/execution_pipeline.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/synthesis_pipeline.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/response_materializer.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/observability_payload_builder.dart';
+import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/evidence_digest_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/execution_phase.dart';
@@ -36,6 +41,7 @@ class AssistantAgentLoop {
     final recallCoordinator = RecallCoordinator();
     const skillLoader = PersonalAssistantSkillLoader();
     const skillRouter = PersonalAssistantSkillRouter();
+
     final owner = phase_owner.LocalPhaseExecutionOwner(
       runtime,
       sessionManager: sessionManager,
@@ -48,6 +54,17 @@ class AssistantAgentLoop {
       skillLoader: skillLoader,
       skillRouter: skillRouter,
     );
+
+    final executionPipeline = ExecutionPipeline(owner: owner);
+    final synthesisPipeline = SynthesisPipeline(owner: owner);
+    final responseMaterializer = ResponseMaterializer(owner: owner);
+    final finalizeRunner = FinalizeRunner(
+      sessionManager: sessionManager,
+      memoryRepository: memoryRepository,
+      buildObservabilityPayload:
+          const ObservabilityPayloadBuilder().call,
+    );
+
     final orchestrator = PhaseOrchestrator(
       phases: [
         BootstrapPhase(
@@ -72,13 +89,19 @@ class AssistantAgentLoop {
           skillLoader: skillLoader,
           skillRouter: skillRouter,
         ),
-        ExecutionPhase(owner),
+        ExecutionPhase(executionPipeline),
         const EvidenceDigestPhase(),
-        SynthesisPhase(owner),
-        FinalizePhase(owner),
+        SynthesisPhase(
+          synthesisPipeline: synthesisPipeline,
+          responseMaterializer: responseMaterializer,
+        ),
+        FinalizePhase(runner: finalizeRunner),
       ],
     );
-    return AssistantAgentLoop._(owner: owner, orchestrator: orchestrator);
+    return AssistantAgentLoop._(
+      owner: owner,
+      orchestrator: orchestrator,
+    );
   }
 
   AssistantAgentLoop._({
@@ -130,19 +153,42 @@ class AssistantAgentLoop {
   Future<String> classifyDomain(
     String query,
     Map<String, dynamic> contextScopeHint,
-  ) {
-    return _owner.classifyDomain(query, contextScopeHint);
+  ) async {
+    await _owner.domainRouter.ensureLoaded();
+    return _owner.domainRouter.fallbackDomainId;
   }
 
   Future<List<AssistantSessionDescriptor>> listSessions() async {
-    return _owner.listSessions();
+    await _owner.sessionManager.load();
+    _owner.sessionManager.ensureAssistantActiveSession();
+    return _owner.sessionManager.listSessionDescriptors();
   }
 
   Future<AssistantSessionWireDetail?> sessionDetail(String sessionId) async {
-    return _owner.sessionDetail(sessionId);
+    await _owner.sessionManager.load();
+    final messages = _owner.sessionManager.sessions[sessionId];
+    if (messages == null) return null;
+    return AssistantSessionWireDetail(
+      sessionId: sessionId,
+      summary: _owner.sessionManager.summarizeRecent(sessionId),
+      topicTitle: _owner.sessionManager.topicTitleOf(sessionId),
+      messages: messages
+          .map(AssistantSessionWireMessage.fromJson)
+          .toList(growable: false),
+      sessionPreferenceFacts: _owner.sessionManager
+          .sessionPreferenceFactsOf(sessionId)
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      longTermPreferenceFacts: _owner.sessionManager
+          .longTermPreferenceFactsOf(sessionId)
+          .map((item) => item.toJson())
+          .toList(growable: false),
+    );
   }
 
-  Future<void> switchSession(String sessionId) {
-    return _owner.switchSession(sessionId);
+  Future<void> switchSession(String sessionId) async {
+    await _owner.sessionManager.load();
+    _owner.sessionManager.switchAssistantSession(sessionId);
+    await _owner.sessionManager.save();
   }
 }

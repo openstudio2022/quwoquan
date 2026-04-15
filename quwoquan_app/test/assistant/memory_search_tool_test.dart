@@ -30,13 +30,15 @@ void main() {
     });
 
     test('rejects empty query', () async {
-      final result = await tool.execute(<String, dynamic>{});
+      final result = await tool.execute(AssistantToolArguments());
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
     });
 
     test('returns empty results when no memories exist', () async {
-      final result = await tool.execute(<String, dynamic>{'query': '用户喜欢什么'});
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{'query': '用户喜欢什么'}),
+      );
       expect(result.success, true);
       expect(result.data?['resultCount'], 0);
       expect(result.data?['results'], isEmpty);
@@ -54,10 +56,12 @@ void main() {
         metadata: <String, dynamic>{'type': 'location'},
       );
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '用户的饮食偏好',
-        'maxResults': 3,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '用户的饮食偏好',
+          'maxResults': 3,
+        }),
+      );
       expect(result.success, true);
       expect(result.data?['resultCount'], greaterThan(0));
       final results = result.data?['results'] as List;
@@ -70,17 +74,21 @@ void main() {
         await memoryRepo.rememberText(id: 'mem-$i', text: '记忆条目 $i 关于深圳天气');
       }
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '深圳天气',
-        'maxResults': 3,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '深圳天气',
+          'maxResults': 3,
+        }),
+      );
       expect(result.success, true);
       final results = result.data?['results'] as List;
       expect(results.length, lessThanOrEqualTo(3));
     });
 
     test('output has required fields: query, resultCount', () async {
-      final result = await tool.execute(<String, dynamic>{'query': '任何查询'});
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{'query': '任何查询'}),
+      );
       expect(result.success, true);
       expect(result.data?['query'], '任何查询');
       expect(result.data?.containsKey('resultCount'), true);

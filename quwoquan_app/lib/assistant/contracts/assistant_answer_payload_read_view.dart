@@ -78,12 +78,6 @@ class AssistantAnswerPayloadReadView {
 
   Map<String, dynamic> get selfCheckMap => asTypedOutput.selfCheck.toJson();
 
-  Map<String, dynamic>? get answerGateAssessmentMapOrNull {
-    final v = _raw['answerGateAssessment'];
-    if (v is! Map) return null;
-    return v.cast<String, dynamic>();
-  }
-
   String get followupPromptTrimmed => asTypedOutput.followupPrompt.trim();
 
   bool get hasNonEmptyContractId => asTypedOutput.contractId.trim().isNotEmpty;

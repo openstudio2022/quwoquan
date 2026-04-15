@@ -36,7 +36,7 @@
   - 直接读取 `answerPayload['...']`、`parsed['...']`、`payload['...']`
   - 直接读取 `decision`、`messageKind`、`phaseId`、`actionCode`、`reasonCode`
 - `lib/personal_assistant/engine/react_runtime.dart`
-  - 直接解析原始 JSON 里的 `decision`、`toolPlan`、`queryTasks`、`queryNormalization`
+  - 直接解析原始 JSON 里的 `decision`、`toolCalls`、`queryTasks`、`queryNormalization`
 - `lib/personal_assistant/engine/default_processing/problem_framer.dart`
   - 仍承载一部分结构化 query frame 规则
 - `lib/personal_assistant/engine/default_processing/retrieval_planner.dart`

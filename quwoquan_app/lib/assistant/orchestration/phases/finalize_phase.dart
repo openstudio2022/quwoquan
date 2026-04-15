@@ -1,13 +1,19 @@
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart'
     as phase_owner;
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 
 /// Finalize: persist session, learning, return response.
 class FinalizePhase implements Phase {
-  FinalizePhase(
+  /// Preferred pipeline-based constructor.
+  const FinalizePhase({required FinalizeRunner runner}) : _runner = runner;
+
+  /// Legacy constructor for backward compatibility with tests.
+  @Deprecated('Use the named-parameter pipeline constructor')
+  FinalizePhase.fromOwner(
     phase_owner.LocalPhaseExecutionOwner owner, {
     FinalizeRunner? runner,
   }) : _runner = runner ?? owner.buildFinalizeRunner();
@@ -23,9 +29,14 @@ class FinalizePhase implements Phase {
     if (pendingResponse == null) {
       return PhaseOutput(state: input.state);
     }
-    if (input.state.executionBridgeSnapshot.isEmpty) {
+    final snapshot = input.state.executionPhaseSnapshot;
+    // ignore: deprecated_member_use_from_same_package
+    final hasExecution = snapshot is ExecutionPhaseSuccess ||
+        input.state.executionBridgeSnapshot.isNotEmpty;
+    if (!hasExecution) {
       return PhaseOutput(state: input.state, response: pendingResponse);
     }
+    // ignore: deprecated_member_use_from_same_package
     final finalizedResponse = await _runner.finalize(
       coerceAssistantRunRequest(input.request),
       executionSnapshot: input.state.executionBridgeSnapshot,

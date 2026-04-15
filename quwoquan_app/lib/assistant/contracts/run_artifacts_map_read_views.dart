@@ -2,7 +2,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart'
 
 // ASSISTANT_WEAK_TYPE: READ_VIEW — `partitioned_map` 已提供 `core`/`extensions`；ReadView 仍基于合并后的 wire Map，供遗留路径使用。
 
-/// 只读：`RunArtifacts.answerDecision` 中编排层常用键（与 `local_phase_execution_owner` spread 对齐，非穷尽）。
+/// 只读：`RunArtifacts.answerDecision` 中编排层常用键（与 `assistant_pipeline_engine` spread 对齐，非穷尽）。
 class RunArtifactsAnswerDecisionReadView {
   RunArtifactsAnswerDecisionReadView(Map<String, dynamic> map)
     : _m = Map<String, dynamic>.from(map);

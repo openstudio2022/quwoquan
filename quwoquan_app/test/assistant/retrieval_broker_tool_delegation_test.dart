@@ -7,18 +7,21 @@ import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
 class _FakeRetrievalBroker implements RetrievalBroker {
   RetrievalSearchRequest? lastSearchRequest;
   RetrievalFetchRequest? lastFetchRequest;
-  RetrievalSearchResult searchResult = const RetrievalSearchResult(
+  RetrievalSearchResult searchResult = RetrievalSearchResult(
     success: true,
     message: 'search ok',
-    data: <String, dynamic>{
+    data: AssistantToolResultData.fromJson(<String, dynamic>{
       'provider': 'fake',
       'references': <Map<String, dynamic>>[],
-    },
+    }),
   );
-  RetrievalFetchResult fetchResult = const RetrievalFetchResult(
+  RetrievalFetchResult fetchResult = RetrievalFetchResult(
     success: true,
     message: 'fetch ok',
-    data: <String, dynamic>{'url': 'https://example.com', 'content': 'hello'},
+    data: AssistantToolResultData.fromJson(<String, dynamic>{
+      'url': 'https://example.com',
+      'content': 'hello',
+    }),
   );
 
   @override
@@ -38,10 +41,10 @@ void main() {
   group('RetrievalBroker bootstrap delegation', () {
     test('WebSearchTool 可委派给 broker', () async {
       final broker = _FakeRetrievalBroker();
-      broker.searchResult = const RetrievalSearchResult(
+      broker.searchResult = RetrievalSearchResult(
         success: true,
         message: 'search ok',
-        data: <String, dynamic>{
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
           'provider': 'fake',
           'references': <Map<String, dynamic>>[
             <String, dynamic>{
@@ -52,14 +55,16 @@ void main() {
               'snippet': '深圳今天晴，约 25°C。',
             },
           ],
-        },
+        }),
       );
       final tool = WebSearchTool(broker: broker);
 
-      final result = await tool.execute(<String, dynamic>{
-        'query': '深圳天气',
-        'count': 3,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'query': '深圳天气',
+          'count': 3,
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(result.message, equals('search ok'));
@@ -82,23 +87,25 @@ void main() {
 
     test('WebFetchTool 可委派给 broker', () async {
       final broker = _FakeRetrievalBroker();
-      broker.fetchResult = const RetrievalFetchResult(
+      broker.fetchResult = RetrievalFetchResult(
         success: true,
         message: 'fetch ok',
-        data: <String, dynamic>{
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
           'url':
               'https://duckduckgo.com/l/?uddg=https%3A%2F%2Fweather.cma.cn%2Fforecast%3Futm_medium%3Dcard',
           'title': '深圳天气预报',
           'source': '中国气象局',
           'content': '深圳今天晴，约 25°C。',
-        },
+        }),
       );
       final tool = WebFetchTool(broker: broker);
 
-      final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com',
-        'maxChars': 1200,
-      });
+      final result = await tool.execute(
+        AssistantToolArguments.fromJson(<String, dynamic>{
+          'url': 'https://example.com',
+          'maxChars': 1200,
+        }),
+      );
 
       expect(result.success, isTrue);
       expect(result.message, equals('fetch ok'));

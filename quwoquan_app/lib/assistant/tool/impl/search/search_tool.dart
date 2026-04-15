@@ -1,6 +1,7 @@
 // ASSISTANT_WEAK_TYPE: VENDOR_JSON — 站内/聚合搜索桥接；结果归一化后进入工具协议。
 
 import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
+import 'package:quwoquan_app/assistant/tool/impl/search/search_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
@@ -24,282 +25,53 @@ class SearchTool implements AssistantTool {
   String get description => SearchToolContract.description;
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    final queryTasks = _normalizeQueryTasks(
-      arguments[SearchToolFieldNames.queryTasks],
-    );
-    final queryVariants =
-        (arguments[SearchToolFieldNames.queryVariants] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    final request = SearchToolArgumentsContract.fromAssistantArguments(arguments);
+    final queryTasks = request.queryTasks;
+    final queryVariants = request.queryVariants;
     if (queryTasks.length >= 2) {
-      return _executeMultiQuery(arguments, queryTasks);
+      return _executeMultiQuery(request, queryTasks);
     }
     if (queryTasks.isEmpty && queryVariants.isNotEmpty) {
-      final variantTasks = _queryTasksFromSeeds(
-        (arguments[SearchToolFieldNames.query] as String?)?.trim() ?? '',
-        queryVariants,
-      );
+      final variantTasks = _queryTasksFromSeeds(request.query, queryVariants);
       if (variantTasks.length >= 2) {
-        return _executeMultiQuery(arguments, variantTasks);
+        return _executeMultiQuery(request, variantTasks);
       }
     }
     final singleTask = queryTasks.isNotEmpty ? queryTasks.first : null;
-    return _executeSingleQuery(arguments, queryTask: singleTask);
-  }
-
-  SearchRequest _requestFromArguments(Map<String, dynamic> arguments) {
-    final rawObjectTypes =
-        (arguments[SearchToolFieldNames.objectTypes] as List?)
-            ?.whereType<String>()
-            .map(SearchObjectType.fromWire)
-            .whereType<SearchObjectType>()
-            .toSet() ??
-        const <SearchObjectType>{};
-    final rawContentTypes =
-        (arguments[SearchToolFieldNames.contentTypes] as List?)
-            ?.whereType<String>()
-            .map(SearchContentTypeFilter.fromWire)
-            .whereType<SearchContentTypeFilter>()
-            .toSet() ??
-        const <SearchContentTypeFilter>{};
-    return SearchRequest(
-      query: (arguments[SearchToolFieldNames.query] as String?)?.trim() ?? '',
-      mode: _modeFromArguments(arguments),
-      objectTypes: rawObjectTypes,
-      limit:
-          (arguments[SearchToolFieldNames.limit] as num?)?.toInt() ??
-          SearchContractDefaults.assistantLimit,
-      conversationType: _conversationTypeFromArguments(arguments),
-      contentTypes: rawContentTypes,
-      categoryId: (arguments[SearchToolFieldNames.categoryId] as String?)
-          ?.trim(),
-      subCategory: (arguments[SearchToolFieldNames.subCategory] as String?)
-          ?.trim(),
-    );
-  }
-
-  SearchMode _modeFromArguments(Map<String, dynamic> arguments) {
-    final raw = (arguments[SearchToolFieldNames.mode] as String?)?.trim();
-    if (raw == null || raw.isEmpty) {
-      return SearchMode.result;
-    }
-    for (final mode in SearchMode.values) {
-      if (mode.wireValue == raw) {
-        return mode;
-      }
-    }
-    return SearchMode.result;
-  }
-
-  String? _conversationTypeFromArguments(Map<String, dynamic> arguments) {
-    final raw = (arguments[SearchToolFieldNames.conversationType] as String?)
-        ?.trim();
-    if (raw == null || raw.isEmpty) {
-      return null;
-    }
-    return SearchConversationType.fromWire(raw)?.wireValue;
+    return _executeSingleQuery(request, queryTask: singleTask);
   }
 
   Future<AssistantToolResult> _executeSingleQuery(
-    Map<String, dynamic> arguments, {
-    Map<String, dynamic>? queryTask,
+    SearchToolArgumentsContract arguments, {
+    SearchToolQueryTask? queryTask,
   }) async {
-    final request = _requestFromArguments(arguments);
-    final normalized = request.normalized();
-    if (normalized.query.isEmpty) {
-      return const AssistantToolResult(
-        success: false,
-        message: 'Missing query',
-        errorCode: AssistantErrorCode.invalidArguments,
-      );
-    }
-
-    final effectiveObjectTypes = normalized.objectTypes.isNotEmpty
-        ? normalized.objectTypes
-        : _defaultObjectTypes(normalized.mode);
-    final internalObjectTypes = effectiveObjectTypes
-        .where((item) => item != SearchObjectType.webDocument)
-        .toSet();
-    final includesWeb = effectiveObjectTypes.contains(
-      SearchObjectType.webDocument,
-    );
-    final sections = <Map<String, dynamic>>[];
-    final hits = <Map<String, dynamic>>[];
-    final references = <Map<String, dynamic>>[];
-    final degradeSignals = <Map<String, dynamic>>[];
-    SearchResponse? internalResponse;
-    AssistantToolResult? webResult;
-    AssistantErrorCode failureCode = AssistantErrorCode.executionFailed;
-    var degraded = false;
-    var provider = '';
-
-    if (internalObjectTypes.isNotEmpty) {
-      internalResponse = await _searchRepository.search(
-        SearchRequest(
-          query: normalized.query,
-          mode: normalized.mode,
-          objectTypes: internalObjectTypes,
-          limit: normalized.limit,
-          conversationType: normalized.conversationType,
-          contentTypes: normalized.contentTypes,
-          categoryId: normalized.categoryId,
-          subCategory: normalized.subCategory,
-        ),
-      );
-      _mergeSectionMaps(
-        sections: sections,
-        incoming: internalResponse.sections.map((item) => item.toMap()),
-      );
-      _mergeMapList(
-        target: hits,
-        incoming: internalResponse.hits.map((item) => item.toMap()),
-        keyOf: _hitKey,
-      );
-      _mergeMapList(
-        target: degradeSignals,
-        incoming: internalResponse.degradeSignals.map((item) => item.toMap()),
-        keyOf: _degradeKey,
-      );
-      degraded = degraded || internalResponse.degradeSignals.isNotEmpty;
-    }
-
-    if (includesWeb) {
-      webResult = await _webSearchTool.execute(<String, dynamic>{
-        ...arguments,
-        SearchToolFieldNames.query: normalized.query,
-        'count': normalized.limit,
-      });
-      final webData = webResult.data ?? const <String, Object?>{};
-      provider = (webData['provider'] as String?)?.trim() ?? '';
-      final webReferences =
-          (webData['references'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, Object?>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      _mergeMapList(
-        target: references,
-        incoming: webReferences,
-        keyOf: _referenceKey,
-      );
-      final webHits = webReferences
-          .map(_webReferenceToHit)
-          .map((item) => item.toMap())
-          .toList(growable: false);
-      if (webHits.isNotEmpty) {
-        _mergeSectionMaps(
-          sections: sections,
-          incoming: <Map<String, dynamic>>[
-            SearchSection(
-              id: 'web',
-              title: '网页',
-              objectTypes: const <SearchObjectType>[
-                SearchObjectType.webDocument,
-              ],
-              hits: webReferences
-                  .map(_webReferenceToHit)
-                  .toList(growable: false),
-              resolvedFrom: SearchResolvedFrom.remote,
-            ).toMap(),
-          ],
-        );
-        _mergeMapList(target: hits, incoming: webHits, keyOf: _hitKey);
-      }
-      if (!webResult.success) {
-        degraded = true;
-        failureCode = webResult.errorCode;
-        degradeSignals.add(<String, dynamic>{
-          'code': 'web_search_failed',
-          'message': webResult.message,
-          'objectType': SearchObjectType.webDocument.wireValue,
-        });
-      } else if (webResult.degraded) {
-        degraded = true;
-      }
-    }
-
-    final success = hits.isNotEmpty || references.isNotEmpty;
-    final coveredDimensions = success
-        ? _taskDimensions(queryTask)
-        : const <String>[];
-    final summary = _buildSingleQuerySummary(
-      hitCount: hits.length,
-      referenceCount: references.length,
-      webSummary:
-          (((webResult?.data ?? const <String, Object?>{})['summary'])
-                  as String?)
-              ?.trim() ??
-          '',
-      includesWeb: includesWeb,
-      includesInternal: internalObjectTypes.isNotEmpty,
-    );
-    final qualityScore = _qualityScore(
-      hitCount: hits.length,
-      referenceCount: references.length,
-      queryCount: 1,
-      includesWeb: includesWeb,
-      includesInternal: internalObjectTypes.isNotEmpty,
-    );
-    final queryLabels = _taskLabels(queryTask);
-    return AssistantToolResult(
-      success: success,
-      message: success ? '已完成统一检索' : '未找到相关结果',
-      degraded: degraded,
-      data: <String, dynamic>{
-        SearchToolFieldNames.query: normalized.query,
-        SearchToolFieldNames.mode: normalized.mode.wireValue,
-        SearchToolFieldNames.objectTypes: effectiveObjectTypes
-            .map((item) => item.wireValue)
-            .toList(growable: false),
-        'sections': sections,
-        'hits': hits,
-        'references': references,
-        'degradeSignals': degradeSignals,
-        'summary': summary,
-        'qualityScore': qualityScore,
-        'queryCount': 1,
-        'queryLabels': queryLabels,
-        'coveredDimensions': coveredDimensions,
-        'missingDimensions': const <String>[],
-        'referenceCount': references.length,
-        'totalReferences': references.length,
-        'queriesUsed': <String>[normalized.query],
-        if (provider.isNotEmpty) 'provider': provider,
-        if (queryTask != null)
-          SearchToolFieldNames.queryTasks: <Map<String, dynamic>>[queryTask],
-        if (internalResponse != null) 'internal': internalResponse.toMap(),
-      },
-      errorCode: success ? AssistantErrorCode.none : failureCode,
-    );
+    final outcome = await _runSingleQuery(arguments, queryTask: queryTask);
+    return outcome.toToolResult();
   }
 
   Future<AssistantToolResult> _executeMultiQuery(
-    Map<String, dynamic> arguments,
-    List<Map<String, dynamic>> queryTasks,
+    SearchToolArgumentsContract arguments,
+    List<SearchToolQueryTask> queryTasks,
   ) async {
-    final tasks = _normalizeQueryTasks(queryTasks);
-    final taskResults = await Future.wait<AssistantToolResult>(
+    final tasks = queryTasks
+        .where((item) => item.query.trim().isNotEmpty)
+        .toList(growable: false);
+    final taskResults = await Future.wait<_SearchToolExecutionOutcome>(
       tasks.map((task) {
-        final singleArgs =
-            <String, dynamic>{
-                ...arguments,
-                SearchToolFieldNames.query:
-                    (task['query'] as String?)?.trim() ?? '',
-              }
-              ..remove(SearchToolFieldNames.queryTasks)
-              ..remove(SearchToolFieldNames.queryVariants);
-        return _executeSingleQuery(singleArgs, queryTask: task);
+        final singleArgs = arguments.copyWith(
+          query: task.query,
+          queryTasks: const <SearchToolQueryTask>[],
+          queryVariants: const <String>[],
+        );
+        return _runSingleQuery(singleArgs, queryTask: task);
       }),
       eagerError: false,
     );
-    final sections = <Map<String, dynamic>>[];
-    final hits = <Map<String, dynamic>>[];
-    final references = <Map<String, dynamic>>[];
-    final degradeSignals = <Map<String, dynamic>>[];
+    final sections = <SearchSection>[];
+    final hits = <SearchHit>[];
+    final references = <SearchToolReference>[];
+    final degradeSignals = <SearchDegradeSignal>[];
     final coveredDimensions = <String>{};
     final queryLabels = <String>[];
     final queriesUsed = <String>[];
@@ -310,58 +82,27 @@ class SearchTool implements AssistantTool {
 
     for (var i = 0; i < taskResults.length; i += 1) {
       final result = taskResults[i];
-      final data = result.data ?? const <String, Object?>{};
-      final task = i < tasks.length ? tasks[i] : const <String, Object?>{};
-      _mergeSectionMaps(
-        sections: sections,
-        incoming:
-            (data['sections'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, Object?>(),
-            ) ??
-            const <Map<String, dynamic>>[],
-      );
-      _mergeMapList(
-        target: hits,
-        incoming:
-            (data['hits'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, Object?>(),
-            ) ??
-            const <Map<String, dynamic>>[],
-        keyOf: _hitKey,
-      );
-      _mergeMapList(
-        target: references,
-        incoming:
-            (data['references'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, Object?>(),
-            ) ??
-            const <Map<String, dynamic>>[],
-        keyOf: _referenceKey,
-      );
-      _mergeMapList(
+      final payload = result.payload;
+      final task = i < tasks.length ? tasks[i] : const SearchToolQueryTask(query: '');
+      _mergeSections(sections: sections, incoming: payload.sections);
+      _mergeHits(target: hits, incoming: payload.hits);
+      _mergeReferences(target: references, incoming: payload.references);
+      _mergeDegradeSignals(
         target: degradeSignals,
-        incoming:
-            (data['degradeSignals'] as List?)?.whereType<Map>().map(
-              (item) => item.cast<String, Object?>(),
-            ) ??
-            const <Map<String, dynamic>>[],
-        keyOf: _degradeKey,
+        incoming: payload.degradeSignals,
       );
       degraded = degraded || result.degraded;
       if (provider.isEmpty) {
-        provider = (data['provider'] as String?)?.trim() ?? '';
+        provider = payload.provider.trim();
       }
-      final referencesCount =
-          (data['references'] as List?)?.whereType<Map>().length ?? 0;
-      final hitCount = (data['hits'] as List?)?.whereType<Map>().length ?? 0;
-      if (result.success || referencesCount > 0 || hitCount > 0) {
+      if (result.success || payload.references.isNotEmpty || payload.hits.isNotEmpty) {
         anySuccess = true;
         coveredDimensions.addAll(_taskDimensions(task));
       } else {
         failureCode = result.errorCode;
       }
       queryLabels.addAll(_taskLabels(task));
-      final query = (task['query'] as String?)?.trim() ?? '';
+      final query = task.query.trim();
       if (query.isNotEmpty) {
         queriesUsed.add(query);
       }
@@ -374,7 +115,7 @@ class SearchTool implements AssistantTool {
         )
         .toSet()
         .toList(growable: false);
-    final normalizedRequest = _requestFromArguments(arguments).normalized();
+    final normalizedRequest = arguments.toSearchRequest().normalized();
     final effectiveObjectTypes = normalizedRequest.objectTypes.isNotEmpty
         ? normalizedRequest.objectTypes
         : _defaultObjectTypes(normalizedRequest.mode);
@@ -385,46 +126,40 @@ class SearchTool implements AssistantTool {
       hitCount: hits.length,
       referenceCount: references.length,
     );
-    return AssistantToolResult(
+    return _SearchToolExecutionOutcome(
       success: anySuccess,
       message: anySuccess ? '已完成多轮统一检索' : '未找到相关结果',
       degraded: degraded,
-      data: <String, dynamic>{
-        SearchToolFieldNames.query: queriesUsed.isNotEmpty
-            ? queriesUsed.first
-            : '',
-        SearchToolFieldNames.mode: normalizedRequest.mode.wireValue,
-        SearchToolFieldNames.objectTypes: effectiveObjectTypes
-            .map((item) => item.wireValue)
-            .toList(growable: false),
-        'sections': sections,
-        'hits': hits,
-        'references': references,
-        'degradeSignals': degradeSignals,
-        'summary': summary,
-        'qualityScore': _qualityScore(
+      errorCode: anySuccess ? AssistantErrorCode.none : failureCode,
+      payload: SearchToolResultPayload(
+        query: queriesUsed.isNotEmpty ? queriesUsed.first : '',
+        mode: normalizedRequest.mode,
+        objectTypes: effectiveObjectTypes,
+        sections: sections,
+        hits: hits,
+        references: references,
+        degradeSignals: degradeSignals,
+        summary: summary,
+        qualityScore: _qualityScore(
           hitCount: hits.length,
           referenceCount: references.length,
           queryCount: tasks.length,
           includesWeb: references.isNotEmpty,
           includesInternal: hits.any(
-            (item) =>
-                (item['objectType']?.toString() ?? '') !=
-                SearchObjectType.webDocument.wireValue,
+            (item) => item.objectType != SearchObjectType.webDocument,
           ),
         ),
-        'queryCount': tasks.length,
-        'queryLabels': queryLabels,
-        'coveredDimensions': coveredDimensions.toList(growable: false),
-        'missingDimensions': missingDimensions,
-        SearchToolFieldNames.queryTasks: tasks,
-        'referenceCount': references.length,
-        'totalReferences': references.length,
-        'queriesUsed': queriesUsed,
-        if (provider.isNotEmpty) 'provider': provider,
-      },
-      errorCode: anySuccess ? AssistantErrorCode.none : failureCode,
-    );
+        queryCount: tasks.length,
+        queryLabels: queryLabels,
+        coveredDimensions: coveredDimensions.toList(growable: false),
+        missingDimensions: missingDimensions,
+        queryTasks: tasks,
+        referenceCount: references.length,
+        totalReferences: references.length,
+        queriesUsed: queriesUsed,
+        provider: provider,
+      ),
+    ).toToolResult();
   }
 
   Set<SearchObjectType> _defaultObjectTypes(SearchMode mode) {
@@ -448,24 +183,172 @@ class SearchTool implements AssistantTool {
     };
   }
 
-  List<Map<String, dynamic>> _normalizeQueryTasks(Object? raw) {
-    if (raw is! List) {
-      return const <Map<String, dynamic>>[];
+  Future<_SearchToolExecutionOutcome> _runSingleQuery(
+    SearchToolArgumentsContract arguments, {
+    SearchToolQueryTask? queryTask,
+  }) async {
+    final request = arguments.toSearchRequest();
+    final normalized = request.normalized();
+    if (normalized.query.isEmpty) {
+      return const _SearchToolExecutionOutcome(
+        success: false,
+        message: 'Missing query',
+        errorCode: AssistantErrorCode.invalidArguments,
+        payload: SearchToolResultPayload(
+          query: '',
+          mode: SearchMode.result,
+          objectTypes: <SearchObjectType>{},
+        ),
+      );
     }
-    return raw
-        .whereType<Map>()
-        .map((item) => item.cast<String, Object?>())
-        .where(
-          (item) => ((item['query'] as String?)?.trim().isNotEmpty ?? false),
-        )
-        .toList(growable: false);
+
+    final effectiveObjectTypes = normalized.objectTypes.isNotEmpty
+        ? normalized.objectTypes
+        : _defaultObjectTypes(normalized.mode);
+    final internalObjectTypes = effectiveObjectTypes
+        .where((item) => item != SearchObjectType.webDocument)
+        .toSet();
+    final includesWeb = effectiveObjectTypes.contains(
+      SearchObjectType.webDocument,
+    );
+    final sections = <SearchSection>[];
+    final hits = <SearchHit>[];
+    final references = <SearchToolReference>[];
+    final degradeSignals = <SearchDegradeSignal>[];
+    SearchResponse? internalResponse;
+    AssistantToolResult? webResult;
+    var webPayload = const SearchToolWebSearchPayload();
+    AssistantErrorCode failureCode = AssistantErrorCode.executionFailed;
+    var degraded = false;
+    var provider = '';
+
+    if (internalObjectTypes.isNotEmpty) {
+      internalResponse = await _searchRepository.search(
+        SearchRequest(
+          query: normalized.query,
+          mode: normalized.mode,
+          objectTypes: internalObjectTypes,
+          limit: normalized.limit,
+          conversationType: normalized.conversationType,
+          contentTypes: normalized.contentTypes,
+          categoryId: normalized.categoryId,
+          subCategory: normalized.subCategory,
+        ),
+      );
+      _mergeSections(sections: sections, incoming: internalResponse.sections);
+      _mergeHits(target: hits, incoming: internalResponse.hits);
+      _mergeDegradeSignals(
+        target: degradeSignals,
+        incoming: internalResponse.degradeSignals,
+      );
+      degraded = degraded || internalResponse.degradeSignals.isNotEmpty;
+    }
+
+    if (includesWeb) {
+      webResult = await _webSearchTool.execute(
+        arguments.toWebSearchArguments(
+          query: normalized.query,
+          count: normalized.limit,
+          queryTasks: queryTask == null
+              ? const <SearchToolQueryTask>[]
+              : <SearchToolQueryTask>[queryTask],
+          queryVariants: queryTask == null
+              ? arguments.queryVariants
+              : const <String>[],
+        ),
+      );
+      webPayload = SearchToolWebSearchPayload.fromToolResult(webResult);
+      provider = webPayload.provider.trim();
+      _mergeReferences(target: references, incoming: webPayload.references);
+      final webHits = webPayload.references
+          .map((item) => item.toSearchHit())
+          .toList(growable: false);
+      if (webHits.isNotEmpty) {
+        _mergeSections(
+          sections: sections,
+          incoming: <SearchSection>[
+            SearchSection(
+              id: 'web',
+              title: '网页',
+              objectTypes: const <SearchObjectType>[
+                SearchObjectType.webDocument,
+              ],
+              hits: webHits,
+              resolvedFrom: SearchResolvedFrom.remote,
+            ),
+          ],
+        );
+        _mergeHits(target: hits, incoming: webHits);
+      }
+      if (!webResult.success) {
+        degraded = true;
+        failureCode = webResult.errorCode;
+        degradeSignals.add(
+          const SearchDegradeSignal(
+            code: 'web_search_failed',
+            message: '网页检索失败',
+            objectType: SearchObjectType.webDocument,
+          ),
+        );
+      } else if (webResult.degraded) {
+        degraded = true;
+      }
+    }
+
+    final success = hits.isNotEmpty || references.isNotEmpty;
+    final coveredDimensions = success
+        ? _taskDimensions(queryTask)
+        : const <String>[];
+    final summary = _buildSingleQuerySummary(
+      hitCount: hits.length,
+      referenceCount: references.length,
+      webSummary: webPayload.summary,
+      includesWeb: includesWeb,
+      includesInternal: internalObjectTypes.isNotEmpty,
+    );
+    final queryLabels = _taskLabels(queryTask);
+    return _SearchToolExecutionOutcome(
+      success: success,
+      message: success ? '已完成统一检索' : '未找到相关结果',
+      degraded: degraded,
+      errorCode: success ? AssistantErrorCode.none : failureCode,
+      payload: SearchToolResultPayload(
+        query: normalized.query,
+        mode: normalized.mode,
+        objectTypes: effectiveObjectTypes,
+        sections: sections,
+        hits: hits,
+        references: references,
+        degradeSignals: degradeSignals,
+        summary: summary,
+        qualityScore: _qualityScore(
+          hitCount: hits.length,
+          referenceCount: references.length,
+          queryCount: 1,
+          includesWeb: includesWeb,
+          includesInternal: internalObjectTypes.isNotEmpty,
+        ),
+        queryCount: 1,
+        queryLabels: queryLabels,
+        coveredDimensions: coveredDimensions,
+        missingDimensions: const <String>[],
+        referenceCount: references.length,
+        totalReferences: references.length,
+        queriesUsed: <String>[normalized.query],
+        provider: provider,
+        queryTasks: queryTask == null
+            ? const <SearchToolQueryTask>[]
+            : <SearchToolQueryTask>[queryTask],
+        internalResponse: internalResponse,
+      ),
+    );
   }
 
-  List<Map<String, dynamic>> _queryTasksFromSeeds(
+  List<SearchToolQueryTask> _queryTasksFromSeeds(
     String query,
     List<String> queryVariants,
   ) {
-    final tasks = <Map<String, dynamic>>[];
+    final tasks = <SearchToolQueryTask>[];
     final seen = <String>{};
     final seeds = <String>[query.trim(), ...queryVariants];
     for (var i = 0; i < seeds.length; i += 1) {
@@ -473,81 +356,67 @@ class SearchTool implements AssistantTool {
       if (item.isEmpty || !seen.add(item)) {
         continue;
       }
-      tasks.add(<String, dynamic>{
-        'id': 'query_${i + 1}',
-        'label': '检索${i + 1}',
-        'dimension': 'query_${i + 1}',
-        'query': item,
-      });
+      tasks.add(
+        SearchToolQueryTask(
+          id: 'query_${i + 1}',
+          label: '检索${i + 1}',
+          dimension: 'query_${i + 1}',
+          query: item,
+        ),
+      );
     }
     return tasks;
   }
 
-  void _mergeSectionMaps({
-    required List<Map<String, dynamic>> sections,
-    required Iterable<Map<String, dynamic>> incoming,
+  void _mergeSections({
+    required List<SearchSection> sections,
+    required Iterable<SearchSection> incoming,
   }) {
     final index = <String, int>{
       for (var i = 0; i < sections.length; i += 1)
-        (sections[i]['id'] as String?)?.trim() ?? '': i,
+        sections[i].id.trim(): i,
     };
     for (final raw in incoming) {
-      final id = (raw['id'] as String?)?.trim() ?? '';
+      final id = raw.id.trim();
       if (id.isEmpty) {
         continue;
       }
-      final rawHits =
-          (raw['hits'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, Object?>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final rawObjectTypes =
-          (raw['objectTypes'] as List?)?.whereType<String>().toSet() ??
-          const <String>{};
       if (!index.containsKey(id)) {
-        sections.add(<String, dynamic>{
-          ...raw,
-          'objectTypes': rawObjectTypes.toList(growable: false),
-          'hits': rawHits,
-        });
+        sections.add(raw);
         index[id] = sections.length - 1;
         continue;
       }
-      final existing = sections[index[id]!]
-        ..putIfAbsent('hits', () => <Object?>[]);
-      final mergedHits =
-          (existing['hits'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, Object?>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final mergedObjectTypes =
-          (existing['objectTypes'] as List?)?.whereType<String>().toSet() ??
-          <String>{};
-      mergedObjectTypes.addAll(rawObjectTypes);
-      final dedupedHits = <Map<String, dynamic>>[];
-      _mergeMapList(
-        target: dedupedHits,
-        incoming: <Map<String, dynamic>>[...mergedHits, ...rawHits],
-        keyOf: _hitKey,
+      final existing = sections[index[id]!];
+      final mergedHits = <SearchHit>[...existing.hits];
+      _mergeHits(target: mergedHits, incoming: raw.hits);
+      final mergedDegradeSignals = <SearchDegradeSignal>[
+        ...existing.degradeSignals,
+      ];
+      _mergeDegradeSignals(
+        target: mergedDegradeSignals,
+        incoming: raw.degradeSignals,
       );
-      sections[index[id]!] = <String, dynamic>{
-        ...existing,
-        'objectTypes': mergedObjectTypes.toList(growable: false),
-        'hits': dedupedHits,
-      };
+      sections[index[id]!] = SearchSection(
+        id: existing.id,
+        title: existing.title.trim().isNotEmpty ? existing.title : raw.title,
+        objectTypes: <SearchObjectType>{
+          ...existing.objectTypes,
+          ...raw.objectTypes,
+        }.toList(growable: false),
+        hits: mergedHits,
+        resolvedFrom: existing.resolvedFrom,
+        degradeSignals: mergedDegradeSignals,
+      );
     }
   }
 
-  void _mergeMapList({
-    required List<Map<String, dynamic>> target,
-    required Iterable<Map<String, dynamic>> incoming,
-    required String Function(Map<String, dynamic>) keyOf,
+  void _mergeHits({
+    required List<SearchHit> target,
+    required Iterable<SearchHit> incoming,
   }) {
-    final seen = <String>{for (final item in target) keyOf(item)};
+    final seen = <String>{for (final item in target) _hitKey(item)};
     for (final item in incoming) {
-      final key = keyOf(item);
+      final key = _hitKey(item);
       if (key.isEmpty || !seen.add(key)) {
         continue;
       }
@@ -555,42 +424,62 @@ class SearchTool implements AssistantTool {
     }
   }
 
-  String _hitKey(Map<String, dynamic> hit) {
-    return '${hit['objectType']}:${hit['objectId']}';
+  void _mergeReferences({
+    required List<SearchToolReference> target,
+    required Iterable<SearchToolReference> incoming,
+  }) {
+    final seen = <String>{for (final item in target) _referenceKey(item)};
+    for (final item in incoming) {
+      final key = _referenceKey(item);
+      if (key.isEmpty || !seen.add(key)) {
+        continue;
+      }
+      target.add(item);
+    }
   }
 
-  String _referenceKey(Map<String, dynamic> reference) {
-    final url = (reference['url'] ?? '').toString().trim();
+  void _mergeDegradeSignals({
+    required List<SearchDegradeSignal> target,
+    required Iterable<SearchDegradeSignal> incoming,
+  }) {
+    final seen = <String>{for (final item in target) _degradeKey(item)};
+    for (final item in incoming) {
+      final key = _degradeKey(item);
+      if (key.isEmpty || !seen.add(key)) {
+        continue;
+      }
+      target.add(item);
+    }
+  }
+
+  String _hitKey(SearchHit hit) {
+    return '${hit.objectType.wireValue}:${hit.objectId}';
+  }
+
+  String _referenceKey(SearchToolReference reference) {
+    final url = reference.url.trim();
     if (url.isNotEmpty) {
       return url;
     }
-    return '${reference['title']}:${reference['source']}';
+    return '${reference.title.trim()}:${reference.source.trim()}';
   }
 
-  String _degradeKey(Map<String, dynamic> signal) {
-    return '${signal['code']}:${signal['objectType']}';
+  String _degradeKey(SearchDegradeSignal signal) {
+    return '${signal.code}:${signal.objectType?.wireValue ?? ""}';
   }
 
-  List<String> _taskDimensions(Map<String, dynamic>? queryTask) {
+  List<String> _taskDimensions(SearchToolQueryTask? queryTask) {
     if (queryTask == null) {
       return const <String>[];
     }
-    final dimension = (queryTask['dimension'] as String?)?.trim() ?? '';
-    final label = (queryTask['label'] as String?)?.trim() ?? '';
-    return <String>[
-      if (dimension.isNotEmpty) dimension else if (label.isNotEmpty) label,
-    ];
+    return queryTask.dimensionLabels();
   }
 
-  List<String> _taskLabels(Map<String, dynamic>? queryTask) {
+  List<String> _taskLabels(SearchToolQueryTask? queryTask) {
     if (queryTask == null) {
       return const <String>[];
     }
-    final label = (queryTask['label'] as String?)?.trim() ?? '';
-    if (label.isEmpty) {
-      return const <String>[];
-    }
-    return <String>[label];
+    return queryTask.labels();
   }
 
   String _buildSingleQuerySummary({
@@ -657,20 +546,30 @@ class SearchTool implements AssistantTool {
     }
     return score;
   }
+}
 
-  SearchHit _webReferenceToHit(Map<String, dynamic> reference) {
-    final url = (reference['url'] ?? '').toString().trim();
-    final title = (reference['title'] ?? url).toString().trim();
-    final snippet = (reference['snippet'] ?? reference['summary'])?.toString();
-    return SearchHit(
-      objectType: SearchObjectType.webDocument,
-      objectId: url.isNotEmpty ? url : title,
-      title: title.isNotEmpty ? title : '网页结果',
-      subtitle: (reference['source'] ?? reference['sourceDomain'])?.toString(),
-      snippet: snippet,
-      resolvedFrom: SearchResolvedFrom.remote,
-      matchedField: 'query',
-      payload: SearchHitPayloadLegacy(reference),
+class _SearchToolExecutionOutcome {
+  const _SearchToolExecutionOutcome({
+    required this.success,
+    required this.message,
+    required this.errorCode,
+    required this.payload,
+    this.degraded = false,
+  });
+
+  final bool success;
+  final String message;
+  final AssistantErrorCode errorCode;
+  final bool degraded;
+  final SearchToolResultPayload payload;
+
+  AssistantToolResult toToolResult() {
+    return AssistantToolResult(
+      success: success,
+      message: message,
+      errorCode: errorCode,
+      degraded: degraded,
+      data: payload.toAssistantToolResultData(),
     );
   }
 }

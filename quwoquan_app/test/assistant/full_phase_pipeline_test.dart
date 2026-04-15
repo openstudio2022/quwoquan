@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -160,7 +160,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '用户想了解深圳天气，我需要搜索最新的天气信息。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -261,7 +261,6 @@ class _ThreeSectionNormalizationWeatherLlm implements AssistantLlmProvider {
             'intentSummary': '你现在主要想确认深圳今天的天气和出门准备',
             'concernPoints': <String>['是否会下雨', '要不要带伞'],
             'emotionSignal': 'neutral',
-            'queryDesignSummary': '优先确认今天的降雨情况与出门判断最相关的天气变化。',
           },
         }),
       );
@@ -286,7 +285,7 @@ class _ThreeSectionNormalizationWeatherLlm implements AssistantLlmProvider {
             },
           ],
         }),
-        toolCalls: const <AssistantToolCall>[
+        toolCalls: <AssistantToolCall>[
           AssistantToolCall(
             name: 'web_search',
             arguments: <String, dynamic>{
@@ -450,7 +449,7 @@ class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
               },
             ],
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -503,13 +502,13 @@ class _FakeWeatherSearchTool implements AssistantTool {
   String get description => '网络搜索';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
-    lastArguments = Map<String, dynamic>.from(arguments);
-    return const AssistantToolResult(
+    lastArguments = arguments.toDynamicJson();
+    return AssistantToolResult(
       success: true,
       message: '搜索完成',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'duckduckgo',
         'qualityScore': 0.85,
         'summary': '深圳今天天气晴朗，温度25°C',
@@ -533,7 +532,7 @@ class _FakeWeatherSearchTool implements AssistantTool {
             'snippet': '深圳当前温度25°C，湿度65%，东南风3级。',
           },
         ],
-      },
+      }),
     );
   }
 }
@@ -618,7 +617,7 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
             },
           ],
         }),
-        toolCalls: const <AssistantToolCall>[
+        toolCalls: <AssistantToolCall>[
           AssistantToolCall(
             name: 'web_search',
             arguments: <String, dynamic>{
@@ -728,7 +727,7 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
             },
           ],
         }),
-        toolCalls: const <AssistantToolCall>[
+        toolCalls: <AssistantToolCall>[
           AssistantToolCall(
             name: 'web_search',
             arguments: <String, dynamic>{'query': '深圳 今天 天气 实时'},
@@ -806,7 +805,7 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '我先收集今天的科技新闻和 AI 行业动态，再做对比整理。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -889,7 +888,7 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
             },
           ],
         }),
-        toolCalls: const <AssistantToolCall>[
+        toolCalls: <AssistantToolCall>[
           AssistantToolCall(
             name: 'web_search',
             arguments: <String, dynamic>{'query': '深圳 今天 天气 实时'},
@@ -977,7 +976,7 @@ class _PhaseOneProcessLeakLlm implements AssistantLlmProvider {
             },
           ],
         }),
-        toolCalls: const <AssistantToolCall>[
+        toolCalls: <AssistantToolCall>[
           AssistantToolCall(
             name: 'web_search',
             arguments: <String, dynamic>{
@@ -1321,7 +1320,7 @@ class _FailingWeatherSearchTool implements AssistantTool {
   String get description => '网络搜索';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
     return const AssistantToolResult(
       success: false,
@@ -1496,7 +1495,7 @@ class _JourneyReplaySearchTool implements AssistantTool {
   String get description => '网络搜索';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     executeCount += 1;
     final query = (arguments['query'] as String?)?.trim() ?? '';
     final tasks =
@@ -1518,7 +1517,7 @@ class _JourneyReplaySearchTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: '搜索完成',
-        data: <String, dynamic>{
+        data: AssistantToolResultData.fromJson(<String, dynamic>{
           'provider': 'mock_search',
           'qualityScore': 0.93,
           'summary': '九寨沟方向可以作为川西主线的备选，关键在路线取舍、住宿节点和观景时间。',
@@ -1554,14 +1553,14 @@ class _JourneyReplaySearchTool implements AssistantTool {
               'dimension': '观景时间',
             },
           ],
-        },
+        }),
       );
     }
 
     return AssistantToolResult(
       success: true,
       message: '搜索完成',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'mock_search',
         'qualityScore': 0.9,
         'summary': '土拨鼠更适合在草甸返青后、天气稳定的窗口观察。',
@@ -1589,7 +1588,7 @@ class _JourneyReplaySearchTool implements AssistantTool {
             'dimension': dimensions.length > 1 ? dimensions[1] : '天气窗口',
           },
         ],
-      },
+      }),
     );
   }
 }
@@ -2808,7 +2807,7 @@ void main() {
           (travelRun['shell'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       expect(travelShell['problemClass'], equals('complex_reasoning'));
-      expect(travelShell['maxIterations'], equals(2));
+      expect(travelShell['maxIterations'], equals(4));
       expect(travelShell['toolBudget'], equals(2));
       expect(travelShell['variantBudget'], equals(1));
       expect(travelShell['reflectionBudget'], equals(1));

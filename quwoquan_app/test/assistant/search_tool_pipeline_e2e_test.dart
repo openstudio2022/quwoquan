@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -65,7 +65,7 @@ class _SearchFirstLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '先用统一检索同时拉取网页与站内资料。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'search',
               arguments: <String, dynamic>{
@@ -146,7 +146,7 @@ class _FakeSearchRepository implements SearchRepository {
               title: '摄影入门：曝光三要素',
               subtitle: '站内内容',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: const SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadLegacy(<String, dynamic>{
                 'postId': 'post_1',
                 'contentType': 'article',
                 'title': '摄影入门：曝光三要素',
@@ -165,11 +165,11 @@ class _FakeWebSearchTool extends WebSearchTool {
   _FakeWebSearchTool();
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    return const AssistantToolResult(
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    return AssistantToolResult(
       success: true,
       message: 'ok',
-      data: <String, dynamic>{
+      data: AssistantToolResultData.fromJson(<String, dynamic>{
         'provider': 'duckduckgo',
         'summary': '摄影入门资料',
         'references': <Map<String, dynamic>>[
@@ -180,7 +180,7 @@ class _FakeWebSearchTool extends WebSearchTool {
             'snippet': '网页资料',
           },
         ],
-      },
+      }),
     );
   }
 }

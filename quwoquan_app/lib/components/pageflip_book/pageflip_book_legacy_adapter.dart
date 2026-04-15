@@ -51,7 +51,6 @@ class PageflipBookLegacyAdapter {
     PageflipBookDisplayMode? displayMode,
     int flippingTimeMs = 1000,
     double maxShadowOpacity = 1.0,
-    bool useForwardMirroredBackwardPath = false,
   }) {
     return StPageFlipController(
       spreadModel: createSpreadModel(
@@ -68,7 +67,6 @@ class PageflipBookLegacyAdapter {
       initialPage: initialPage,
       flippingTimeMs: flippingTimeMs,
       maxShadowOpacity: maxShadowOpacity,
-      useForwardMirroredBackwardPath: useForwardMirroredBackwardPath,
     );
   }
 

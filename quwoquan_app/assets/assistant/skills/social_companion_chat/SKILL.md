@@ -33,7 +33,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 decision、toolPlan、slotState
+1. 机器轨 JSON：包含 decision、toolCalls、slotState
 2. 用户轨 Markdown：轻松过渡语（"让我感受一下现在的氛围…"）
 
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出闲聊回复。
@@ -44,7 +44,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {},
-  "toolPlan": [
+  "toolCalls": [
     {"toolName": "local_context", "arguments": {"requestedFields": ["time", "location"]}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},

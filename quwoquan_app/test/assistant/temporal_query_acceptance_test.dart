@@ -7,6 +7,7 @@ import 'package:quwoquan_app/assistant/orchestration/phases/retrieval_design_pha
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
@@ -138,18 +139,23 @@ void main() {
       }
 
       final displayState = buildAssistantDisplayState(
-        processTimeline: const <ProcessTimelineFrame>[
-          ProcessTimelineFrame(
-            frameId: 'u',
+        processTimeline: <ProcessTimelineFrame>[
+          buildProcessTimelineFrame(
             stepId: ProcessStepId.understanding,
             status: JourneyStageStatus.completed,
+            understandingSnapshot: retrievalState.understandingSnapshot,
           ),
-          ProcessTimelineFrame(
+          buildProcessTimelineFrame(
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            detail: '执行检索：${retrievalState.queryTasks.first.query}',
+          ),
+          const ProcessTimelineFrame(
             frameId: 'r',
             stepId: ProcessStepId.retrievalProcessing,
             status: JourneyStageStatus.completed,
           ),
-          ProcessTimelineFrame(
+          const ProcessTimelineFrame(
             frameId: 'a',
             stepId: ProcessStepId.answerOrganization,
             status: JourneyStageStatus.completed,
@@ -166,20 +172,13 @@ void main() {
         finalAnswerReady: true,
       );
 
+      final narrative = displayState.process.blocks
+          .where((block) => block.blockId == 'understanding_narrative')
+          .map((block) => '${block.title}\n${block.body}')
+          .join('\n');
       expect(
-        retrievalState.understandingSnapshot.queryGroups.any(
-          (group) => group.queries.any(
-            (query) => query.contains(testCase.expectedQuery),
-          ),
-        ),
-        isTrue,
-        reason: testCase.query,
-      );
-      expect(
-        displayState.process.blocks.any(
-          (block) => block.blockId == 'retrieval_query_design',
-        ),
-        isTrue,
+        narrative,
+        contains(testCase.expectedQuery),
         reason: testCase.query,
       );
       expect(displayState.answer.blocks, isNotEmpty, reason: testCase.query);
@@ -190,7 +189,7 @@ void main() {
     }
   });
 
-  test('模型回传错误 queryGroups 时，展示仍以 canonical queryTasks 为准', () async {
+  test('模型回传错误 retrieval design 时，展示仍以 canonical queryTasks 为准', () async {
     final provider = _ConflictingTemporalQueryGroupProvider();
     final toolRegistry = AssistantToolRegistry()
       ..register(_NoopWebSearchTool());
@@ -225,14 +224,20 @@ void main() {
         traceId: 'trace_conflicting_query_groups',
       ),
     );
+    final canonicalQuery = retrievalOutput.state!.queryTasks.first.query;
     final displayState = buildAssistantDisplayState(
-      processTimeline: const <ProcessTimelineFrame>[
-        ProcessTimelineFrame(
-          frameId: 'u',
+      processTimeline: <ProcessTimelineFrame>[
+        buildProcessTimelineFrame(
           stepId: ProcessStepId.understanding,
           status: JourneyStageStatus.completed,
+          understandingSnapshot: retrievalOutput.state!.understandingSnapshot,
         ),
-        ProcessTimelineFrame(
+        buildProcessTimelineFrame(
+          stepId: ProcessStepId.retrievalDesign,
+          status: JourneyStageStatus.completed,
+          detail: '执行检索：$canonicalQuery',
+        ),
+        const ProcessTimelineFrame(
           frameId: 'r',
           stepId: ProcessStepId.retrievalProcessing,
           status: JourneyStageStatus.completed,
@@ -244,25 +249,14 @@ void main() {
       ),
     );
 
-    expect(
-      retrievalOutput.state!.understandingSnapshot.queryGroups.any(
-        (group) => group.queries.any((query) => query.contains('2026-04-08')),
-      ),
-      isTrue,
-    );
-    expect(
-      retrievalOutput.state!.understandingSnapshot.queryGroups.any(
-        (group) =>
-            group.queries.any((query) => query.contains('2026-04-09 A股 大涨 原因')),
-      ),
-      isFalse,
-    );
-    expect(
-      displayState.process.blocks.any(
-        (block) => block.blockId == 'retrieval_query_design',
-      ),
-      isTrue,
-    );
+    expect(canonicalQuery, contains('2026-04-08'));
+    expect(canonicalQuery, isNot(contains('2026-04-09 A股 大涨 原因')));
+    final narrative = displayState.process.blocks
+        .where((block) => block.blockId == 'understanding_narrative')
+        .map((block) => '${block.title}\n${block.body}')
+        .join('\n');
+    expect(narrative, contains('2026-04-08 A股 大涨 原因'));
+    expect(narrative, isNot(contains('2026-04-09 A股 大涨 原因')));
   });
 }
 
@@ -312,7 +306,6 @@ class _DeterministicPlannerProvider implements AssistantLlmProvider {
           'userFacingSummary': '我先把问题里的时间指向具体日历点。',
           'intentSummary': '用户需要实时/指定日期的信息结论。',
           'concernPoints': <String>['时间落点', '外部证据'],
-          'queryDesignSummary': '模型会直接给出带明确时间锚点的最终检索词。',
         },
         'intentGraph': <String, dynamic>{
           'userGoal': '获取相对时间对应的外部结论',
@@ -381,17 +374,6 @@ class _ConflictingTemporalQueryGroupProvider implements AssistantLlmProvider {
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先把周三对应到具体交易日，再组织检索。',
-          'queryDesignSummary': '我会先核对对应交易日，再看盘面主线。',
-          'queryGroups': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'dimension': '市场热点与政策',
-              'queries': <String>[
-                '2026-04-09 A股 大涨 原因 政策 消息',
-                '周三A股 热点板块 领涨原因',
-              ],
-              'why': '先确认是否有突发政策或行业利好驱动上涨。',
-            },
-          ],
         },
         'intentGraph': <String, dynamic>{
           'userGoal': '获取周三A股上涨原因',

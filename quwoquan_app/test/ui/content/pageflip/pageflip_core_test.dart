@@ -195,6 +195,64 @@ void main() {
     expect(frame.bottomClipArea, isNotEmpty);
   });
 
+  test('FlipController 的前翻 renderFrame 锁定长文前翻金标准契约', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 4),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
+
+    expect(controller.start(const Offset(410, 650)), isTrue);
+    controller.fold(const Offset(256, 528));
+
+    final scene = controller.scene;
+    final renderFrame = scene.renderFrame;
+    expect(renderFrame, isNotNull);
+    expect(renderFrame!.direction, StPageFlipDirection.forward);
+    expect(renderFrame.renderDirection, StPageFlipDirection.forward);
+    expect(renderFrame.reversePose, isNull);
+    expect(renderFrame.backwardLeafFrame, isNull);
+    expect(renderFrame.timeline.mirrored, isFalse);
+    expect(scene.flippingPageIndex, 1);
+    expect(scene.bottomPageIndex, 2);
+
+    final binding = resolveArticlePageTextureBinding(
+      direction: scene.direction,
+      flippingPageIndex: scene.flippingPageIndex,
+      bottomPageIndex: scene.bottomPageIndex,
+      currentPageIndex: scene.currentPageIndex,
+    );
+    expect(binding, isNotNull);
+    expect(binding!.rectoPageIndex, 1);
+    expect(binding.versoPageIndex, 2);
+    expect(binding.bottomPageIndex, 2);
+
+    final meshFrame = const ArticlePageCurlMeshBuilder().build(
+      pageRect: Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: Size(398, 553),
+      // 故意传入与 renderFrame 不一致的参数，锁住 mesh 必须消费 renderFrame。
+      dragPoint: Offset(12, 40),
+      progress: 0.92,
+      direction: StPageFlipDirection.back,
+      corner: StPageFlipCorner.top,
+      renderFrame: renderFrame,
+    );
+
+    expect(meshFrame.frontSurface, isNotNull);
+    expect(meshFrame.backSurface, isNotNull);
+    expect(
+      meshFrame.rollProgress,
+      closeTo(renderFrame.timeline.rollProgress, 0.0001),
+    );
+    expect(meshFrame.cylinderProgress, 0);
+    expect(meshFrame.unfoldProgress, 0);
+  });
+
   test('FlipController 的 portrait 回翻 render frame 会切到三阶段主线', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
@@ -216,12 +274,15 @@ void main() {
     expect(frame.renderDirection, StPageFlipDirection.forward);
     expect(frame.reversePose, isNotNull);
     expect(frame.timeline.rollProgress, greaterThan(0));
-    // 新方案：回翻复用前翻 timeline（时间反转+镜像），
-    // cylinderProgress/unfoldProgress 不再独立使用。
+    expect(
+      frame.timeline.cylinderProgress + frame.timeline.unfoldProgress,
+      greaterThan(0),
+      reason: '三阶段回翻 timeline 应显式携带 cylinder/unfold 进度',
+    );
     expect(frame.timeline.mirrored, isTrue);
   });
 
-  test('FlipController 可选地让 portrait 回翻复用前翻镜像软路径', () {
+  test('FlipController 的 portrait 回翻固定走 shared backward engine', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -231,7 +292,6 @@ void main() {
         usePortrait: true,
       ),
       initialPage: 1,
-      useForwardMirroredBackwardPath: true,
     );
 
     expect(controller.start(const Offset(18, 650)), isTrue);
@@ -239,19 +299,18 @@ void main() {
 
     final frame = controller.scene.renderFrame;
     expect(frame, isNotNull);
-    expect(controller.scene.calculation, isA<StPageFlipCalculation>());
-    expect(controller.scene.calculation, isNot(isA<ReverseCurlCalculation>()));
+    expect(controller.scene.calculation, isA<ReverseCurlCalculation>());
     expect(frame!.direction, StPageFlipDirection.back);
-    expect(frame.renderDirection, StPageFlipDirection.back);
-    expect(frame.reversePose, isNull);
+    expect(frame.renderDirection, StPageFlipDirection.forward);
+    expect(frame.reversePose, isNotNull);
     expect(frame.timeline.mirrored, isTrue);
-    expect(frame.backwardLeafFrame, isNull);
+    expect(frame.backwardLeafFrame, isNotNull);
     expect(frame.flippingClipArea, isNotEmpty);
     expect(frame.bottomClipArea, isNotEmpty);
   });
 
   test(
-    'CurlMeshBuilder 会优先消费 canonical backward render frame 的镜像 timeline',
+    'CurlMeshBuilder 在 portrait 回翻时仍消费 shared backward timeline',
     () {
       final controller = StPageFlipController(
         spreadModel: StPageFlipSpreadModel(pageCount: 3),
@@ -262,7 +321,6 @@ void main() {
           usePortrait: true,
         ),
         initialPage: 1,
-        useForwardMirroredBackwardPath: true,
       );
 
       expect(controller.start(const Offset(18, 650)), isTrue);
@@ -271,7 +329,7 @@ void main() {
       final renderFrame = controller.scene.renderFrame;
       expect(renderFrame, isNotNull);
       expect(renderFrame!.timeline.mirrored, isTrue);
-      expect(renderFrame.backwardLeafFrame, isNull);
+      expect(renderFrame.backwardLeafFrame, isNotNull);
 
       final builder = ArticlePageCurlMeshBuilder();
       final meshFrame = builder.build(
@@ -301,7 +359,54 @@ void main() {
     },
   );
 
-  test('FlipController 的前翻不会被 backward mirrored 开关污染', () {
+  test('CurlMeshBuilder 在回翻三阶段 renderFrame 下仍消费统一 timeline', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
+
+    expect(controller.start(const Offset(18, 650)), isTrue);
+    controller.applyAnimationFrame(const Offset(120, 510));
+
+    final renderFrame = controller.scene.renderFrame;
+    expect(renderFrame, isNotNull);
+    expect(renderFrame!.direction, StPageFlipDirection.back);
+    expect(renderFrame.backwardLeafFrame, isNotNull);
+    expect(renderFrame.reversePose, isNotNull);
+
+    final builder = ArticlePageCurlMeshBuilder();
+    final meshFrame = builder.build(
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: const Size(398, 553),
+      dragPoint: renderFrame.localPagePoint,
+      progress: renderFrame.progress,
+      direction: renderFrame.direction,
+      corner: renderFrame.corner,
+      reversePose: renderFrame.reversePose,
+      renderFrame: renderFrame,
+    );
+
+    expect(
+      meshFrame.rollProgress,
+      closeTo(renderFrame.timeline.rollProgress, 0.0001),
+    );
+    expect(
+      meshFrame.cylinderProgress,
+      closeTo(renderFrame.timeline.cylinderProgress, 0.0001),
+    );
+    expect(
+      meshFrame.unfoldProgress,
+      closeTo(renderFrame.timeline.unfoldProgress, 0.0001),
+    );
+  });
+
+  test('FlipController 的前翻不会被 backward shared engine 污染', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -311,7 +416,6 @@ void main() {
         usePortrait: true,
       ),
       initialPage: 0,
-      useForwardMirroredBackwardPath: true,
     );
 
     expect(controller.start(const Offset(400, 650)), isTrue);
@@ -649,7 +753,12 @@ void main() {
     expect(frame.rollProgress, closeTo(0.74, 0.0001));
     expect(frame.cylinderProgress, equals(0));
     expect(frame.unfoldProgress, equals(0));
-    expect(frame.bottomClipPath.getBounds(), equals(clipPath.getBounds()));
+    final clipBounds = clipPath.getBounds();
+    final resolvedBounds = frame.bottomClipPath.getBounds();
+    expect(resolvedBounds.left, greaterThan(clipBounds.left));
+    expect(resolvedBounds.right, equals(clipBounds.right));
+    expect(resolvedBounds.top, equals(clipBounds.top));
+    expect(resolvedBounds.bottom, equals(clipBounds.bottom));
   });
 
   test('CurlMeshBuilder 在回翻时产生与前翻对称的镜像卷曲', () {

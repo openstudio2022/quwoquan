@@ -22,7 +22,7 @@ class AppActionTool implements AssistantTool {
   };
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final action = (arguments['action'] as String?)?.trim() ?? '';
     if (!_allowedActions.contains(action)) {
       return AssistantToolResult(
@@ -88,7 +88,7 @@ class AppActionTool implements AssistantTool {
           return AssistantToolResult(
             success: true,
             message: '已复制到剪贴板',
-            data: <String, dynamic>{'length': text.length},
+            data: AssistantToolResultData(<String, Object?>{'length': text.length}),
           );
         default:
           return const AssistantToolResult(
@@ -143,7 +143,7 @@ class AppActionTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message: '已打开$label',
-      data: <String, dynamic>{'uri': uri.toString()},
+      data: AssistantToolResultData(<String, Object?>{'uri': uri.toString()}),
     );
   }
 }

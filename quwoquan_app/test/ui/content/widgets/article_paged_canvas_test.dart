@@ -451,7 +451,7 @@ void main() {
     expect(find.text('第二页正文'), findsOneWidget);
   });
 
-  testWidgets('book deck 在 typography backward flags 开启时前翻仍保持可用', (
+  testWidgets('book deck 前翻仍保持 shared forward 可用', (
     tester,
   ) async {
     final commits = <ArticleReaderPageFlipCommit>[];
@@ -471,8 +471,6 @@ void main() {
                 pages: pages,
                 template: ArticleTemplatePreset.journal,
                 fontPreset: ArticleFontPreset.clean,
-                preferSoftBackwardFlip: true,
-                useForwardMirroredBackwardPath: true,
                 metrics: const ArticleCanvasMetrics(
                   aspectRatio: 0.72,
                   outerPadding: EdgeInsets.all(8),
@@ -507,9 +505,7 @@ void main() {
     expect(commits.last.toPage, equals(1));
   });
 
-  testWidgets(
-    'book deck 在 typography backward flags 开启时回翻仍保持 staged curl layer',
-    (tester) async {
+  testWidgets('book deck 回翻仍保持 staged curl layer', (tester) async {
       const pages = <ArticlePageData>[
         ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
         ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
@@ -527,8 +523,6 @@ void main() {
                   pages: pages,
                   template: ArticleTemplatePreset.journal,
                   fontPreset: ArticleFontPreset.clean,
-                  preferSoftBackwardFlip: true,
-                  useForwardMirroredBackwardPath: true,
                   metrics: ArticleCanvasMetrics(
                     aspectRatio: 0.72,
                     outerPadding: EdgeInsets.all(8),
@@ -931,7 +925,7 @@ void main() {
     expect(aborted!.corner, contains('left'));
   });
 
-  testWidgets('book deck typography 回翻镜像软路径在短拖拽时保持当前页', (tester) async {
+  testWidgets('book deck typography 回翻短拖拽沿 shared path 提交上一页', (tester) async {
     const pages = <ArticlePageData>[
       ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
       ArticlePageData(id: 'page_2', title: '第二页标题', body: '第二页正文'),
@@ -949,8 +943,6 @@ void main() {
                 pages: pages,
                 template: ArticleTemplatePreset.journal,
                 fontPreset: ArticleFontPreset.clean,
-                preferSoftBackwardFlip: true,
-                useForwardMirroredBackwardPath: true,
                 metrics: ArticleCanvasMetrics(
                   aspectRatio: 0.72,
                   outerPadding: EdgeInsets.all(8),
@@ -993,8 +985,8 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('第二页正文'), findsOneWidget);
-    expect(find.text('第一页正文'), findsNothing);
+    expect(find.text('第一页正文'), findsOneWidget);
+    expect(find.text('第二页正文'), findsNothing);
   });
 
   testWidgets('book deck typography 回翻中途保持连续 curl layer 可见', (tester) async {
@@ -1015,8 +1007,6 @@ void main() {
                 pages: pages,
                 template: ArticleTemplatePreset.journal,
                 fontPreset: ArticleFontPreset.clean,
-                preferSoftBackwardFlip: true,
-                useForwardMirroredBackwardPath: true,
                 metrics: ArticleCanvasMetrics(
                   aspectRatio: 0.72,
                   outerPadding: EdgeInsets.all(8),
@@ -1060,7 +1050,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('book deck typography 左侧点击通过 single backward runtime 返回上一页', (
+  testWidgets('book deck typography 左侧点击通过 shared backward path 返回上一页', (
     tester,
   ) async {
     const pages = <ArticlePageData>[
@@ -1080,8 +1070,6 @@ void main() {
                 pages: pages,
                 template: ArticleTemplatePreset.journal,
                 fontPreset: ArticleFontPreset.clean,
-                preferSoftBackwardFlip: true,
-                useForwardMirroredBackwardPath: true,
                 metrics: ArticleCanvasMetrics(
                   aspectRatio: 0.72,
                   outerPadding: EdgeInsets.all(8),

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 void main() {
   testWidgets(
-    'single-page backward drag exposes debug metrics that change with drag progress',
+    'single-page backward drag stays on shared curl path without legacy debug overlay',
     (tester) async {
       const pages = <ArticlePageData>[
         ArticlePageData(id: 'page_1', title: '第一页标题', body: '第一页正文'),
@@ -27,8 +27,6 @@ void main() {
                   initialPage: 1,
                   template: ArticleTemplatePreset.journal,
                   fontPreset: ArticleFontPreset.clean,
-                  preferSoftBackwardFlip: true,
-                  useForwardMirroredBackwardPath: true,
                   metrics: ArticleCanvasMetrics(
                     aspectRatio: 0.72,
                     outerPadding: EdgeInsets.all(8),
@@ -56,20 +54,15 @@ void main() {
       await gesture.moveBy(const Offset(40, -8));
       await tester.pump();
 
-      expect(find.byType(PageflipBookBackwardDebugOverlay), findsOneWidget);
+      expect(find.byType(PageflipBookBackwardDebugOverlay), findsNothing);
+      expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
       expect(find.text('第一页正文'), findsWidgets);
       expect(find.text('第二页正文'), findsWidgets);
-
-      final firstMetrics = tester.widget<Text>(
-        find.byKey(PageflipBookBackwardDebugOverlay.metricsKey),
-      );
       await gesture.moveBy(const Offset(80, -10));
       await tester.pump();
 
-      final secondMetrics = tester.widget<Text>(
-        find.byKey(PageflipBookBackwardDebugOverlay.metricsKey),
-      );
-      expect(secondMetrics.data, isNot(equals(firstMetrics.data)));
+      expect(find.byType(PageflipBookBackwardDebugOverlay), findsNothing);
+      expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
       expect(find.text('第一页正文'), findsWidgets);
       expect(find.text('第二页正文'), findsWidgets);
 

@@ -3,6 +3,7 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — transitional, will migrate to ExecutionPhaseSnapshot
 typedef BuildSynthesisDraft =
     Future<SynthesisDraft> Function(
       AssistantRunRequest request, {
@@ -26,6 +27,7 @@ class SynthesisRunner {
   final BuildSynthesisDraft buildDraft;
   final MaterializeSynthesisDraft materialize;
 
+  // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — transitional, will migrate to ExecutionPhaseSnapshot
   Future<AssistantRunResponse> synthesize(
     AssistantRunRequest request, {
     required Map<String, dynamic> executionSnapshot,

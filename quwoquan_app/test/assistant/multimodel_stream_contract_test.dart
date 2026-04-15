@@ -68,14 +68,14 @@ void main() {
   });
 
   group('LlmCallOptions', () {
-    test('synthesis defaults register answer organization stream field', () {
+    test('synthesis defaults register retrieval processing stream field only', () {
       expect(
         const LlmCallOptions.synthesis().streamJsonFieldPaths,
         contains('retrievalProcessing.processingSummary'),
       );
       expect(
         const LlmCallOptions.synthesis().streamJsonFieldPaths,
-        contains('answerProcessing.readinessSummary'),
+        isNot(contains('answerProcessing.readinessSummary')),
       );
     });
   });

@@ -554,6 +554,8 @@ class UITextConstants {
   static const String assistantProcessStatusCompleted = '已完成';
   static const String assistantProcessStatusSkipped = '已跳过';
   static const String assistantProcessStatusFailed = '待补稳';
+  static const String assistantProcessProcessedCountTemplate = '处理 %s 篇';
+  static const String assistantProcessAcceptedCountChipTemplate = '接纳 %s 篇';
   static const String assistantProcessReferenceCountTemplate = '接纳 %s 篇资料';
   static const String assistantProcessReferenceDigestTemplate =
       '处理了 %s 篇，接纳了 %s 篇';
@@ -569,9 +571,9 @@ class UITextConstants {
   static const String assistantProcessStageUnderstand = '理解问题';
   static const String assistantProcessStageSearch = '理解问题';
   static const String assistantProcessStageRetrievalDesign = '理解问题';
-  static const String assistantProcessStageRetrievalProcessing = '处理问题';
-  static const String assistantProcessStageAnalyze = '处理问题';
-  static const String assistantProcessStageVerify = '处理问题';
+  static const String assistantProcessStageRetrievalProcessing = '处理并生成答案';
+  static const String assistantProcessStageAnalyze = '处理并生成答案';
+  static const String assistantProcessStageVerify = '处理并生成答案';
   static const String assistantProcessStageAnswer = '生成答案';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验

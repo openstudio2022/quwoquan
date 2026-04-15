@@ -1,11 +1,11 @@
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 typedef ExecuteBridgeFromState =
-    Future<Map<String, dynamic>> Function(
+    Future<ExecutionPhaseSnapshot> Function(
       AssistantRunRequest request, {
       required AgentExecutionState state,
       String? runId,
@@ -20,7 +20,7 @@ class ExecutionRunner {
 
   Future<PhaseOutput> run(PhaseInput input) async {
     final request = coerceAssistantRunRequest(input.request);
-    final executionSnapshot = await executeBridgeFromState(
+    final snapshot = await executeBridgeFromState(
       request,
       state: input.state,
       runId: input.runId,
@@ -29,21 +29,21 @@ class ExecutionRunner {
           ? null
           : (event) => input.onTraceEvent!(event),
     );
-    final shortCircuitResponse =
-        executionSnapshot['shortCircuitResponse'] as AssistantRunResponse?;
-    if (shortCircuitResponse != null) {
-      return PhaseOutput(
+    return switch (snapshot) {
+      ExecutionPhaseShortCircuit(:final response) => PhaseOutput(
         state: input.state.copyWith(
-          pendingResponse: shortCircuitResponse,
+          pendingResponse: response,
+          executionPhaseSnapshot: snapshot,
           executionBridgeSnapshot: const <String, dynamic>{},
         ),
-      );
-    }
-    return PhaseOutput(
-      state: input.state.copyWith(
-        executionBridgeSnapshot: executionSnapshot,
-        synthesisReadiness: executionSnapshot['synthesisReadiness'] as dynamic,
       ),
-    );
+      ExecutionPhaseSuccess() => PhaseOutput(
+        state: input.state.copyWith(
+          executionPhaseSnapshot: snapshot,
+          executionBridgeSnapshot: snapshot.toLegacyMap(),
+          synthesisReadiness: snapshot.synthesisReadiness,
+        ),
+      ),
+    };
   }
 }

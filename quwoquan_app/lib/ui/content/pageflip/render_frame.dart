@@ -139,14 +139,13 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
               emergedCurlWidth)
           .clamp(0.04, 0.24)
           .toDouble();
-  final curlWidth = (ui.lerpDouble(rollingCurlWidth, 0.0, settleProgress) ??
-          rollingCurlWidth)
-      .clamp(0.0, 0.26)
-      .toDouble();
-  final laidDownBeforeSettle =
-      (ui.lerpDouble(0.0, 0.76, unrollProgress) ?? 0.0)
-          .clamp(0.0, 0.82)
+  final curlWidth =
+      (ui.lerpDouble(rollingCurlWidth, 0.0, settleProgress) ?? rollingCurlWidth)
+          .clamp(0.0, 0.26)
           .toDouble();
+  final laidDownBeforeSettle = (ui.lerpDouble(0.0, 0.76, unrollProgress) ?? 0.0)
+      .clamp(0.0, 0.82)
+      .toDouble();
   final laidDownWidth =
       (ui.lerpDouble(
                 laidDownBeforeSettle,
@@ -161,8 +160,9 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
     curlWidth * (0.18 + unrollProgress * 0.28),
     curlWidth * 0.42,
   );
-  final curlPivotNormalized =
-      (laidDownWidth + curlWidth * 0.5).clamp(0.0, 1.0).toDouble();
+  final curlPivotNormalized = (laidDownWidth + curlWidth * 0.5)
+      .clamp(0.0, 1.0)
+      .toDouble();
   final edgeLift =
       ((ui.lerpDouble(0.12, 0.34, emergenceProgress) ?? 0.18) *
               (1 - settleProgress * 0.55))
@@ -241,11 +241,11 @@ StPageFlipTimeline _resolveForwardTimeline({
   final curlWidth = math.max(1.0, pageSize.width - localDragX);
   final diagonalExtent =
       ui.lerpDouble(
-        pageSize.width * 0.06,
-        pageSize.width * 0.32,
+        pageSize.width * 0.02,
+        pageSize.width * 0.12,
         Curves.easeOutCubic.transform(progress),
       ) ??
-      (pageSize.width * 0.18);
+      (pageSize.width * 0.08);
   final radiusBase =
       ui.lerpDouble(
         math.max(curlWidth / math.pi, pageSize.width * 0.085),
@@ -256,7 +256,7 @@ StPageFlipTimeline _resolveForwardTimeline({
   final sheetShift =
       -(ui.lerpDouble(
             0.0,
-            pageSize.width * 0.18,
+            pageSize.width * 0.06,
             Curves.easeOut.transform(progress),
           ) ??
           0.0);
@@ -267,11 +267,11 @@ StPageFlipTimeline _resolveForwardTimeline({
     leadingRadius: radiusBase * 1.12,
     trailingRadius: radiusBase * 0.72,
     sheetShift: sheetShift,
-    perspective: pageSize.width * 2.7,
+    perspective: pageSize.width * 4.0,
     rollProgress: progress,
     cylinderProgress: 0.0,
     unfoldProgress: 0.0,
-    heightLiftBias: 0.22,
+    heightLiftBias: 0.1,
     cylinderRadiusNormalized: (radiusBase / pageSize.width)
         .clamp(0.0, 1.0)
         .toDouble(),
@@ -318,47 +318,61 @@ StPageFlipTimeline _resolveThreeStageBackwardTimeline({
   required ReverseFlipPose reversePose,
   required ui.Size pageSize,
 }) {
-  // 回翻 = 前翻的时间反转 + 水平镜像。
-  //
-  // 前翻物理过程：
-  //   progress 0→1, dragX 从 pageWidth→0, basePivot 从 pageWidth→0
-  //   pivot 右侧的纸卷起来，页面从右向左翻过去
-  //
-  // 回翻物理过程（前翻的逆向）：
-  //   progress 0→1, 但对应前翻的 progress 1→0
-  //   也就是：回翻初始 = 前翻完成（整页卷着），回翻完成 = 前翻初始（整页平躺）
-  //   方向镜像：前翻从右向左卷，回翻从左向右展开
-  //
-  // 实现：用 (1 - progress) 采样前翻 timeline，然后设 mirrored: true。
-  final invertedProgress = (1.0 - reversePose.progress).clamp(0.0, 1.0);
-
-  // 前翻中 dragX ≈ pageWidth * (1 - progress)，
-  // 所以 invertedProgress 对应的 dragX = pageWidth * (1 - invertedProgress)
-  //                                    = pageWidth * reversePose.progress
-  final forwardDragX =
-      (pageSize.width * (1.0 - invertedProgress)).clamp(0.0, pageSize.width);
-
-  final forwardTimeline = _resolveForwardTimeline(
-    progress: invertedProgress,
-    localPagePoint: ui.Offset(forwardDragX, pageSize.height / 2),
-    pageSize: pageSize,
+  final coveredWidth = reversePose.coveredWidth
+      .clamp(0.0, pageSize.width)
+      .toDouble();
+  final flatWidth = reversePose.unrollWidth.clamp(0.0, coveredWidth).toDouble();
+  final cylinderRadius = reversePose.cylinderRadius
+      .clamp(pageSize.width * 0.02, pageSize.width * 0.16)
+      .toDouble();
+  final curlWidth = math.max(
+    coveredWidth - flatWidth,
+    reversePose.cylinderArcWidth.clamp(0.0, pageSize.width),
   );
-
-  // 镜像前翻 timeline：mirrored: true + sheetShift 取反。
+  final diagonalExtent =
+      ((ui.lerpDouble(
+                    pageSize.width * 0.05,
+                    pageSize.width * 0.16,
+                    reversePose.emergenceProgress,
+                  ) ??
+                  (pageSize.width * 0.09)) *
+              (1 - reversePose.unrollProgress * 0.28))
+          .clamp(pageSize.width * 0.03, pageSize.width * 0.18)
+          .toDouble();
+  final heightLiftBias =
+      (ui.lerpDouble(0.22, 0.08, reversePose.unrollProgress) ?? 0.14)
+          .clamp(0.08, 0.22)
+          .toDouble();
+  final effectiveRadius = math.max(cylinderRadius, curlWidth / math.pi);
   return StPageFlipTimeline(
     mirrored: true,
-    basePivot: forwardTimeline.basePivot,
-    diagonalExtent: forwardTimeline.diagonalExtent,
-    leadingRadius: forwardTimeline.leadingRadius,
-    trailingRadius: forwardTimeline.trailingRadius,
-    sheetShift: -forwardTimeline.sheetShift,
-    perspective: forwardTimeline.perspective,
-    rollProgress: forwardTimeline.rollProgress,
-    cylinderProgress: forwardTimeline.cylinderProgress,
-    unfoldProgress: forwardTimeline.unfoldProgress,
-    heightLiftBias: forwardTimeline.heightLiftBias,
-    cylinderRadiusNormalized: forwardTimeline.cylinderRadiusNormalized,
-    unrollWidthNormalized: forwardTimeline.unrollWidthNormalized,
-    bottomGapNormalized: forwardTimeline.bottomGapNormalized,
+    basePivot: (pageSize.width - reversePose.leadingEdgeX)
+        .clamp(0.0, pageSize.width)
+        .toDouble(),
+    diagonalExtent: diagonalExtent,
+    leadingRadius: effectiveRadius,
+    trailingRadius: math.max(pageSize.width * 0.02, cylinderRadius * 0.86),
+    sheetShift:
+        (ui.lerpDouble(
+                  0.0,
+                  pageSize.width * 0.04,
+                  reversePose.cylinderProgress,
+                ) ??
+                0.0)
+            .toDouble(),
+    perspective: pageSize.width * 10.0,
+    rollProgress: reversePose.emergenceProgress.clamp(0.0, 1.0).toDouble(),
+    cylinderProgress: reversePose.cylinderProgress.clamp(0.0, 1.0).toDouble(),
+    unfoldProgress: reversePose.unrollProgress.clamp(0.0, 1.0).toDouble(),
+    heightLiftBias: heightLiftBias,
+    cylinderRadiusNormalized: (cylinderRadius / pageSize.width)
+        .clamp(0.0, 1.0)
+        .toDouble(),
+    unrollWidthNormalized: (flatWidth / pageSize.width)
+        .clamp(0.0, 1.0)
+        .toDouble(),
+    bottomGapNormalized: ((pageSize.width - coveredWidth) / pageSize.width)
+        .clamp(0.0, 1.0)
+        .toDouble(),
   );
 }

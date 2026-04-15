@@ -659,30 +659,20 @@ class AssistantConversationController extends ChangeNotifier {
         _assistantTopicTitle = activeTopicTitle;
       }
       _stopAssistantProgress();
-      final userTags = contextScopeView.normalizedUserTags;
       _storeAssistantReplayRecord(
         messageId: completedAssistantRow.id,
         query: trimmed,
         response: runResponse,
       );
       _notify();
-      await _ref
-          .read(assistantLearningServiceProvider)
-          .recordInteraction(
-            runId:
-                runResponse.runId ??
-                'run_${DateTime.now().millisecondsSinceEpoch}',
-            traceId:
-                runResponse.traceId ??
-                'trace_${DateTime.now().millisecondsSinceEpoch}',
-            userId: activeContext.profileSubjectId,
-            sessionId: effectiveAssistantSessionId,
-            pageType: contextScopeView.pageType,
-            queryText: trimmed,
-            answerText: _resolveAssistantDisplayPlainText(runResponse),
-            userTags: userTags,
-            durationMs: elapsedMs,
-          );
+      await _recordAssistantInteractionSafely(
+        runResponse: runResponse,
+        activeContext: activeContext,
+        contextScopeView: contextScopeView,
+        trimmedQuery: trimmed,
+        elapsedMs: elapsedMs,
+        sessionId: effectiveAssistantSessionId,
+      );
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('[AssistantConversation] assistant run failed: $e');
@@ -693,6 +683,7 @@ class AssistantConversationController extends ChangeNotifier {
       _assistantResponding = false;
       _assistantPhaseLabel = '';
       _activeAssistantStreamingMessageId = null;
+      _answerGateOpen = true;
       _transcriptRows.removeWhere(
         (item) => item.id == streamingAssistantMessageId,
       );
@@ -784,35 +775,61 @@ class AssistantConversationController extends ChangeNotifier {
           }
         }
       }
-      await for (final streamEvent in _runAssistantStream(request)) {
-        switch (streamEvent.type) {
-          case AssistantRunStreamEventType.journeyUpdate:
-            final journey = streamEvent.journey;
-            if (journey != null) {
-              _consumeJourneyUpdate(journey);
-            }
-            continue;
-          case AssistantRunStreamEventType.chunk:
-          case AssistantRunStreamEventType.answerDelta:
-            if ((streamEvent.chunkText ?? '').isNotEmpty) {
-              _appendStreamingAnswerChunk(streamEvent.chunkText!);
-            }
-            continue;
-          case AssistantRunStreamEventType.processTimelineUpdate:
-            final processTimeline = streamEvent.processTimeline;
-            if (processTimeline != null) {
-              _consumeProcessTimelineUpdate(processTimeline);
-            }
-            continue;
-          case AssistantRunStreamEventType.completed:
-            if (streamEvent.response != null) response = streamEvent.response;
-            break;
-          default:
-            continue;
+      try {
+        await for (final streamEvent in _runAssistantStream(request)) {
+          switch (streamEvent.type) {
+            case AssistantRunStreamEventType.trace:
+              continue;
+            case AssistantRunStreamEventType.failed:
+              response = AssistantRunResponse(
+                finalText: streamEvent.errorMessage ?? '助手流式调用失败',
+                degraded: true,
+                errorCode: 'stream_failed',
+                traces: const <AssistantTraceEvent>[],
+              );
+              break;
+            case AssistantRunStreamEventType.journeyUpdate:
+              final journey = streamEvent.journey;
+              if (journey != null) {
+                _consumeJourneyUpdate(journey);
+              }
+              continue;
+            case AssistantRunStreamEventType.chunk:
+            case AssistantRunStreamEventType.answerDelta:
+              if ((streamEvent.chunkText ?? '').isNotEmpty) {
+                _appendStreamingAnswerChunk(streamEvent.chunkText!);
+              }
+              continue;
+            case AssistantRunStreamEventType.processTimelineUpdate:
+              final processTimeline = streamEvent.processTimeline;
+              if (processTimeline != null) {
+                _consumeProcessTimelineUpdate(processTimeline);
+              }
+              continue;
+            case AssistantRunStreamEventType.completed:
+              if (streamEvent.response != null) response = streamEvent.response;
+              break;
+          }
+          if (response != null) break;
         }
-        if (response != null) break;
+      } catch (streamError) {
+        if (kDebugMode) {
+          debugPrint('[AssistantConversation] rewrite stream error: $streamError');
+        }
+        response = AssistantRunResponse(
+          finalText: '助手初始化异常: ${streamError.runtimeType}',
+          degraded: true,
+          errorCode: 'provider_or_stream_error',
+          traces: const <AssistantTraceEvent>[],
+        );
       }
-      if (response != null && !_disposed) {
+      response ??= const AssistantRunResponse(
+        finalText: '助手未返回有效响应',
+        degraded: true,
+        errorCode: 'no_response',
+        traces: <AssistantTraceEvent>[],
+      );
+      if (!_disposed) {
         final finalResponse = response;
         final finalAnswerReady = _responseMarksFinalAnswerReady(finalResponse);
         final structuredRead = AssistantStructuredRunResponseReadView(
@@ -927,8 +944,12 @@ class AssistantConversationController extends ChangeNotifier {
         }
         _answerGateOpen = finalAnswerReady;
       }
-    } catch (_) {
-      // Preserve streamed fallback content when rewrite fails midway.
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[AssistantConversation] rewrite failed: $e');
+        debugPrint('$st');
+      }
+      _answerGateOpen = true;
     } finally {
       _resetStreamingAnswerDecoder();
       _assistantResponding = false;
@@ -936,6 +957,42 @@ class AssistantConversationController extends ChangeNotifier {
       _activeAssistantStreamingMessageId = null;
       _stopAssistantProgress();
       _notify();
+    }
+  }
+
+  Future<void> _recordAssistantInteractionSafely({
+    required AssistantRunResponse runResponse,
+    required ActivePersonaContextViewData activeContext,
+    required AssistantContextScopeReadView contextScopeView,
+    required String trimmedQuery,
+    required int elapsedMs,
+    required String sessionId,
+  }) async {
+    try {
+      await _ref
+          .read(assistantLearningServiceProvider)
+          .recordInteraction(
+            runId:
+                runResponse.runId ??
+                'run_${DateTime.now().millisecondsSinceEpoch}',
+            traceId:
+                runResponse.traceId ??
+                'trace_${DateTime.now().millisecondsSinceEpoch}',
+            userId: activeContext.profileSubjectId,
+            sessionId: sessionId,
+            pageType: contextScopeView.pageType,
+            queryText: trimmedQuery,
+            answerText: _resolveAssistantDisplayPlainText(runResponse),
+            userTags: contextScopeView.normalizedUserTags,
+            durationMs: elapsedMs,
+          );
+    } catch (error, st) {
+      if (kDebugMode) {
+        debugPrint(
+          '[AssistantConversation] learning record failed, keep answer row: $error',
+        );
+        debugPrint('$st');
+      }
     }
   }
 
@@ -1227,9 +1284,9 @@ class AssistantConversationController extends ChangeNotifier {
     }
     try {
       final result = await _localContextTool
-          .execute(const <String, dynamic>{})
+          .execute(AssistantToolArguments())
           .timeout(const Duration(seconds: 2));
-      final data = result.data ?? const <String, dynamic>{};
+      final data = result.data?.toDynamicJson() ?? const <String, dynamic>{};
       final geoCatalog = await GeoResolutionCatalog.load();
       final resolved = _AssistantGeoRuntimeContext(
         gpsLocation: _buildGpsLocationFromLocalContext(data),
@@ -1489,12 +1546,13 @@ class AssistantConversationController extends ChangeNotifier {
   ) {
     if (_disposed || !_assistantResponding) return;
     final messageId = _activeAssistantStreamingMessageId;
-    _currentProcessTimeline = buildVisibleProcessTimeline(processTimeline);
-    _currentCanonicalProcessTimeline =
-        rebuildCanonicalProcessTimelineFromVisible(
-          visibleProcessTimeline: _currentProcessTimeline,
-          seedProcessTimeline: _currentCanonicalProcessTimeline,
-        );
+    _currentCanonicalProcessTimeline = rebuildCanonicalProcessTimelineFromVisible(
+      visibleProcessTimeline: processTimeline,
+      seedProcessTimeline: _currentCanonicalProcessTimeline,
+    );
+    _currentProcessTimeline = buildVisibleProcessTimeline(
+      _currentCanonicalProcessTimeline,
+    );
     final retrievalProcessing = _retrievalProcessingFromTimeline(
       _currentCanonicalProcessTimeline,
     );
@@ -1584,13 +1642,6 @@ class AssistantConversationController extends ChangeNotifier {
     RunArtifactsUnderstandingSnapshot snapshot,
   ) {
     return snapshot.userFacingSummary.trim().isNotEmpty ||
-        snapshot.queryDesignSummary.trim().isNotEmpty ||
-        snapshot.queryGroups.any(
-          (group) =>
-              group.dimension.trim().isNotEmpty ||
-              group.queries.any((query) => query.trim().isNotEmpty) ||
-              group.why.trim().isNotEmpty,
-        ) ||
         snapshot.concernPoints.any((item) => item.trim().isNotEmpty) ||
         snapshot.resolutionItems.any(
           (item) =>
@@ -1844,14 +1895,6 @@ class AssistantConversationController extends ChangeNotifier {
           merged.emotionSignal,
           candidate.emotionSignal,
         ),
-        queryDesignSummary: _preferRicherText(
-          merged.queryDesignSummary,
-          candidate.queryDesignSummary,
-        ),
-        queryGroups: _mergeUnderstandingQueryGroups(
-          merged.queryGroups,
-          candidate.queryGroups,
-        ),
         resolutionItems: _mergeUnderstandingResolutionItems(
           merged.resolutionItems,
           candidate.resolutionItems,
@@ -1953,35 +1996,6 @@ class AssistantConversationController extends ChangeNotifier {
       );
     }
     return merged;
-  }
-
-  List<RunArtifactsUnderstandingQueryGroup> _mergeUnderstandingQueryGroups(
-    List<RunArtifactsUnderstandingQueryGroup> existing,
-    List<RunArtifactsUnderstandingQueryGroup> incoming,
-  ) {
-    final merged = <String, RunArtifactsUnderstandingQueryGroup>{};
-    for (final group in <RunArtifactsUnderstandingQueryGroup>[
-      ...existing,
-      ...incoming,
-    ]) {
-      final key = group.dimension.trim().isNotEmpty
-          ? group.dimension.trim()
-          : group.queries.map((item) => item.trim()).join('|');
-      if (key.isEmpty) {
-        continue;
-      }
-      final current = merged[key];
-      if (current == null) {
-        merged[key] = group;
-        continue;
-      }
-      merged[key] = RunArtifactsUnderstandingQueryGroup(
-        dimension: _preferRicherText(current.dimension, group.dimension),
-        queries: _mergeStringList(current.queries, group.queries),
-        why: _preferRicherText(current.why, group.why),
-      );
-    }
-    return merged.values.toList(growable: false);
   }
 
   List<RunArtifactsUnderstandingResolutionItem>
@@ -2157,6 +2171,9 @@ class AssistantConversationController extends ChangeNotifier {
       _transcriptRows[existingIndex] = _patchRow(existingRow, {
         assistantDisplayStateField: mergedDisplayState.toJson(),
       });
+      if (nextMarkdown.trim().isNotEmpty) {
+        _answerGateOpen = true;
+      }
     } else {
       final initialDisplayState = _streamingAnswerDisplayState(value);
       _transcriptRows.add(
@@ -2166,6 +2183,11 @@ class AssistantConversationController extends ChangeNotifier {
           initialDisplayState: initialDisplayState,
         ),
       );
+      if (renderAnswerBlocksToMarkdown(initialDisplayState.answer.blocks)
+          .trim()
+          .isNotEmpty) {
+        _answerGateOpen = true;
+      }
     }
     if (_shouldOpenAnswerGateForJourney(_currentJourney)) {
       _answerGateOpen = true;

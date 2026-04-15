@@ -37,9 +37,6 @@ PageflipBookRenderDecision resolvePageflipBookRenderDecision({
   required bool hasDirection,
   required bool hasCorner,
   required bool supportsAdvancedPageCurl,
-  required bool usesBackwardLeafContract,
-  required bool backwardLeafMeshEnabled,
-  required bool backwardLeafMeshPhaseReady,
   required bool hasTextureBinding,
   required PageflipBookTextureSessionContract? textureSession,
 }) {
@@ -63,60 +60,41 @@ PageflipBookRenderDecision resolvePageflipBookRenderDecision({
     return PageflipBookRenderDecision(pipeline: pipeline, reason: reason);
   }
 
-  final fallbackPipeline = usesBackwardLeafContract
-      ? PageflipBookRenderPipeline.soft
-      : PageflipBookRenderPipeline.legacy;
-
   if (!supportsAdvancedPageCurl) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.advancedPageCurlUnavailable,
     );
   }
   if (!hasTextureBinding) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.missingTextureBinding,
     );
   }
   if (textureSession == null) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.missingTextureSession,
     );
   }
   if (!textureSession.hasMatchingBinding) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.textureBindingMismatch,
     );
   }
   if (!textureSession.hasResolvedBundle) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.missingResolvedTextureBundle,
     );
   }
   if (!textureSession.preferHighFidelity) {
     return withFallback(
-      fallbackPipeline,
+      PageflipBookRenderPipeline.legacy,
       PageflipBookRenderDecisionReason.highFidelityNotPreferred,
     );
-  }
-
-  if (usesBackwardLeafContract) {
-    if (!backwardLeafMeshEnabled) {
-      return withFallback(
-        PageflipBookRenderPipeline.soft,
-        PageflipBookRenderDecisionReason.backwardLeafMeshUnavailable,
-      );
-    }
-    if (!backwardLeafMeshPhaseReady) {
-      return withFallback(
-        PageflipBookRenderPipeline.soft,
-        PageflipBookRenderDecisionReason.backwardLeafMeshDeferred,
-      );
-    }
   }
 
   return const PageflipBookRenderDecision(

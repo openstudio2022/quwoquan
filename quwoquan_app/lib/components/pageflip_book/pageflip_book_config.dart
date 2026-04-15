@@ -12,7 +12,6 @@ class PageflipBookConfig {
     this.enablePageCurl = true,
     this.flippingTimeMs = 1000,
     this.maxShadowOpacity = 1.0,
-    this.useForwardMirroredBackwardPath = false,
   }) : assert(pageCount >= 0);
 
   final int pageCount;
@@ -23,7 +22,6 @@ class PageflipBookConfig {
   final bool enablePageCurl;
   final int flippingTimeMs;
   final double maxShadowOpacity;
-  final bool useForwardMirroredBackwardPath;
 
   PageflipBookDisplayMode displayModeForOrientation(
     PageflipBookOrientation orientation,

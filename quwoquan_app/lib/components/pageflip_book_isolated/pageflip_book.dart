@@ -1,6 +1,11 @@
 export 'pageflip_book_diagnostics.dart';
 export 'src/contracts/pageflip_book_contracts.dart';
 export 'src/core/pageflip_book_controller.dart';
+export 'src/engine_v2/animation_plan_v2.dart';
+export 'src/engine_v2/fold_axis_state_v2.dart';
+export 'src/engine_v2/leaf_coverage_v2.dart';
+export 'src/engine_v2/leaf_pose_v2.dart';
+export 'src/engine_v2/page_touch_state_v2.dart';
 export 'src/render/mesh/pageflip_book_mesh_builder.dart';
 export 'src/render/mesh/pageflip_book_mesh_renderer.dart';
 export 'src/scene/pageflip_book_scene.dart';

@@ -93,36 +93,37 @@ class WebSearchTool implements AssistantTool {
   String get description => 'Search web content for latest information.';
 
   @override
-  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+  Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
+    final rawArguments = arguments.toDynamicJson();
     final broker = _broker;
     if (broker != null) {
-      final request = RetrievalSearchRequest.fromToolArguments(arguments);
+      final request = RetrievalSearchRequest.fromToolArguments(rawArguments);
       final result = await broker.search(request);
       return _sanitizeBrokerSearchResult(request: request, result: result);
     }
-    final args = AssistantToolArgumentsMap(arguments);
+    final args = arguments;
     final rawQuery = args.stringField('query') ?? '';
-    final queryTasks = _normalizeQueryTasks(arguments['queryTasks']);
+    final queryTasks = _normalizeQueryTasks(rawArguments['queryTasks']);
     final variants =
-        (arguments['queryVariants'] as List?)
+        (rawArguments['queryVariants'] as List?)
             ?.whereType<String>()
             .map((v) => v.trim())
             .where((v) => v.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
     if (queryTasks.length >= 2) {
-      return _executeMultiQuery(arguments, queryTasks);
+      return _executeMultiQuery(rawArguments, queryTasks);
     }
     if (queryTasks.isEmpty && variants.isNotEmpty) {
       final variantTasks = _queryTasksFromSeeds(rawQuery, variants);
       if (variantTasks.length >= 2) {
-        return _executeMultiQuery(arguments, variantTasks);
+        return _executeMultiQuery(rawArguments, variantTasks);
       }
     }
     final singleTaskQuery = queryTasks.length == 1
         ? ((queryTasks.first['query'] as String?)?.trim() ?? '')
         : '';
-    final queryNorm = arguments['queryNormalization'];
+    final queryNorm = rawArguments['queryNormalization'];
     final normalizedQuery = singleTaskQuery.isNotEmpty
         ? singleTaskQuery
         : queryNorm is Map
@@ -136,7 +137,7 @@ class WebSearchTool implements AssistantTool {
     );
     final effectiveArguments = _withResolvedGeoArguments(
       arguments: _withResolvedTemporalArguments(
-        arguments: arguments,
+        arguments: rawArguments,
         queryTask: queryTask,
         query: query,
       ),
@@ -210,7 +211,10 @@ class WebSearchTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: cachedData['message'] as String? ?? '检索结果（缓存）',
-        data: <String, dynamic>{...cachedData, 'cacheHit': true},
+        data: AssistantToolResultData(<String, Object?>{
+          ...cachedData,
+          'cacheHit': true,
+        }),
       );
     }
 
@@ -279,7 +283,9 @@ class WebSearchTool implements AssistantTool {
         message:
             'Web search error: 未发现可用搜索 provider。会优先使用显式配置 provider，其次 SerpApi / Brave / OpenClaw / Perplexity，'
             '最后才回退到 DuckDuckGo 公共检索。请检查对应 key 或代理配置。',
-        data: <String, dynamic>{'diagnostics': runtimeConfig.toDiagnostics()},
+        data: AssistantToolResultData(<String, Object?>{
+          'diagnostics': runtimeConfig.toDiagnostics(),
+        }),
         errorCode: AssistantErrorCode.invalidArguments,
         degraded: true,
       );
@@ -350,7 +356,7 @@ class WebSearchTool implements AssistantTool {
             evidenceStats: evidenceStats,
             timeConstraint: timeConstraint,
           ),
-          data: <String, dynamic>{
+          data: AssistantToolResultData(<String, Object?>{
             'provider': provider.name,
             'summary': summary,
             'references': enrichedReferences,
@@ -368,7 +374,7 @@ class WebSearchTool implements AssistantTool {
             'diagnostics': runtimeConfig.toDiagnostics(
               selectedProvider: provider.name,
             ),
-          },
+          }),
         );
       }
       final resultData = <String, dynamic>{
@@ -394,7 +400,7 @@ class WebSearchTool implements AssistantTool {
       return AssistantToolResult(
         success: true,
         message: message,
-        data: resultData,
+        data: AssistantToolResultData.fromJson(resultData),
       );
     } catch (error) {
       final classifiedError = _classifySearchError(error);
@@ -468,7 +474,7 @@ class WebSearchTool implements AssistantTool {
               evidenceStats: evidenceStats,
               timeConstraint: timeConstraint,
             ),
-            data: <String, dynamic>{
+            data: AssistantToolResultData(<String, Object?>{
               'provider': fallback.providerLabel,
               'summary': fallback.summary,
               'references': enrichedFallbackReferences,
@@ -488,13 +494,13 @@ class WebSearchTool implements AssistantTool {
               'diagnostics': runtimeConfig.toDiagnostics(
                 selectedProvider: fallback.providerLabel,
               ),
-            },
+            }),
           );
         }
         return AssistantToolResult(
           success: true,
           message: fallbackMessage,
-          data: <String, dynamic>{
+          data: AssistantToolResultData(<String, Object?>{
             'provider': fallback.providerLabel,
             'summary': fallback.summary,
             'references': enrichedFallbackReferences,
@@ -513,7 +519,7 @@ class WebSearchTool implements AssistantTool {
             'diagnostics': runtimeConfig.toDiagnostics(
               selectedProvider: fallback.providerLabel,
             ),
-          },
+          }),
         );
       }
       await _logSearchInteraction(
@@ -542,14 +548,14 @@ class WebSearchTool implements AssistantTool {
       return AssistantToolResult(
         success: false,
         message: classifiedError.message,
-        data: <String, dynamic>{
+        data: AssistantToolResultData(<String, Object?>{
           'provider': provider.name,
           'retryable': classifiedError.retryable,
           'rawError': error.toString(),
           'diagnostics': runtimeConfig.toDiagnostics(
             selectedProvider: provider.name,
           ),
-        },
+        }),
         errorCode: classifiedError.errorCode,
         degraded: true,
       );
@@ -663,7 +669,7 @@ class WebSearchTool implements AssistantTool {
     return AssistantToolResult(
       success: toolResult.success,
       message: toolResult.message,
-      data: sanitizedData,
+      data: AssistantToolResultData.fromJson(sanitizedData),
       errorCode: toolResult.errorCode,
       degraded: toolResult.degraded,
     );
@@ -3011,7 +3017,7 @@ class WebSearchTool implements AssistantTool {
             ..['timezone'] = (task['timezone'] as String?)?.trim() ?? ''
             ..remove('queryVariants')
             ..remove('queryTasks');
-          return execute(singleArgs);
+          return execute(AssistantToolArguments.fromJson(singleArgs));
         })
         .toList(growable: false);
     final results = await Future.wait(futures, eagerError: false);
@@ -3131,7 +3137,7 @@ class WebSearchTool implements AssistantTool {
       success: true,
       message:
           '并行检索完成（${labels.isNotEmpty ? labels.length : allQueries.length} 个方向），找到 ${mergedRefs.length} 条参考资料。',
-      data: <String, dynamic>{
+      data: AssistantToolResultData(<String, Object?>{
         'provider': bestProvider,
         'summary': effectiveSummary,
         'references': mergedRefs.take(10).toList(growable: false),
@@ -3157,7 +3163,7 @@ class WebSearchTool implements AssistantTool {
             evidenceStats['retrievalInsufficient'] == true ||
             missingDimensions.isNotEmpty,
         'message': '多路检索完成。',
-      },
+      }),
     );
   }
 
@@ -3912,26 +3918,26 @@ class WebSearchTool implements AssistantTool {
     required _SearchTimeConstraint timeConstraint,
   }) {
     if (temporalGuard.blocked) {
-      return '检索完成，但问题中混入了超出当前时间范围的历史日期，先不按实时结论放行。';
+      return '已有检索结果，但涉及的时间范围跨越了当前参考窗口，需要进一步核实后再作结论。';
     }
     if (evidenceStats['authoritySatisfied'] != true) {
-      return '检索完成，但权威来源命中不足：已保留当前结果，后续由成答阶段决定是否继续扩检或给出 bounded answer。';
+      return '已有检索结果，但尚未命中足够权威的来源，需要补充更可靠的证据再给出稳定判断。';
     }
     if (timeConstraint.isHistoricalLike &&
         evidenceStats['freshnessKnown'] != true) {
-      return '检索完成，但资料缺少足够时间锚点，先不把它当成目标时间窗的确定依据。';
+      return '已有检索结果，但资料缺少明确的时间标注，暂时无法确认它属于目标时间段。';
     }
     if (timeConstraint.isHistoricalLike &&
         evidenceStats['freshnessSatisfied'] != true) {
-      return '检索完成，但资料还没充分命中目标时间窗，先不按该时段结论放行。';
+      return '已有检索结果，但未充分覆盖目标时间段的关键信息，需要继续补充对应时段的证据。';
     }
     if (evidenceStats['freshnessKnown'] != true) {
-      return '检索完成，但资料缺少明确时间信号，先不按最新结论放行。';
+      return '已有检索结果，但缺少明确的发布时间，暂时无法确认信息时效性。';
     }
     if (evidenceStats['freshnessSatisfied'] != true) {
-      return '检索完成，但资料时效不足，先不按最新结论放行。';
+      return '已有检索结果，但信息时效性不足，需要获取更新的数据来源。';
     }
-    return '检索完成，但当前证据仍不足以直接放行成答。';
+    return '已有检索结果，但当前证据尚不足以直接支撑稳定结论。';
   }
 
   _TemporalGuardAssessment _temporalGuardFromData(Map<String, dynamic> data) {

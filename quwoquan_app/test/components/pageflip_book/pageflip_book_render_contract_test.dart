@@ -29,9 +29,6 @@ void main() {
         hasDirection: true,
         hasCorner: true,
         supportsAdvancedPageCurl: true,
-        usesBackwardLeafContract: false,
-        backwardLeafMeshEnabled: false,
-        backwardLeafMeshPhaseReady: false,
         hasTextureBinding: true,
         textureSession: buildSession(),
       );
@@ -45,9 +42,6 @@ void main() {
         hasDirection: true,
         hasCorner: true,
         supportsAdvancedPageCurl: false,
-        usesBackwardLeafContract: false,
-        backwardLeafMeshEnabled: false,
-        backwardLeafMeshPhaseReady: false,
         hasTextureBinding: true,
         textureSession: buildSession(),
       );
@@ -64,9 +58,6 @@ void main() {
         hasDirection: true,
         hasCorner: true,
         supportsAdvancedPageCurl: true,
-        usesBackwardLeafContract: false,
-        backwardLeafMeshEnabled: false,
-        backwardLeafMeshPhaseReady: false,
         hasTextureBinding: true,
         textureSession: buildSession(hasMatchingBinding: false),
       );
@@ -78,57 +69,51 @@ void main() {
       );
     });
 
-    test('keeps backward leaf on soft path until guarded mesh is ready', () {
+    test('falls back to legacy when texture session is missing', () {
       final decision = resolvePageflipBookRenderDecision(
         hasDirection: true,
         hasCorner: true,
         supportsAdvancedPageCurl: true,
-        usesBackwardLeafContract: true,
-        backwardLeafMeshEnabled: true,
-        backwardLeafMeshPhaseReady: false,
         hasTextureBinding: true,
-        textureSession: buildSession(),
+        textureSession: null,
       );
 
-      expect(decision.pipeline, PageflipBookRenderPipeline.soft);
+      expect(decision.pipeline, PageflipBookRenderPipeline.legacy);
       expect(
         decision.reason,
-        PageflipBookRenderDecisionReason.backwardLeafMeshDeferred,
+        PageflipBookRenderDecisionReason.missingTextureSession,
       );
     });
 
-    test('uses mesh for backward leaf once guarded HF path is ready', () {
+    test('falls back to legacy when texture bundle is unresolved', () {
       final decision = resolvePageflipBookRenderDecision(
         hasDirection: true,
         hasCorner: true,
         supportsAdvancedPageCurl: true,
-        usesBackwardLeafContract: true,
-        backwardLeafMeshEnabled: true,
-        backwardLeafMeshPhaseReady: true,
-        hasTextureBinding: true,
-        textureSession: buildSession(),
-      );
-
-      expect(decision.pipeline, PageflipBookRenderPipeline.mesh);
-      expect(decision.reason, isNull);
-    });
-
-    test('falls back to soft when backward leaf textures are unavailable', () {
-      final decision = resolvePageflipBookRenderDecision(
-        hasDirection: true,
-        hasCorner: true,
-        supportsAdvancedPageCurl: true,
-        usesBackwardLeafContract: true,
-        backwardLeafMeshEnabled: true,
-        backwardLeafMeshPhaseReady: true,
         hasTextureBinding: true,
         textureSession: buildSession(hasResolvedBundle: false),
       );
 
-      expect(decision.pipeline, PageflipBookRenderPipeline.soft);
+      expect(decision.pipeline, PageflipBookRenderPipeline.legacy);
       expect(
         decision.reason,
         PageflipBookRenderDecisionReason.missingResolvedTextureBundle,
+      );
+    });
+
+    test('falls back to legacy when HF is not preferred', () {
+      final decision = resolvePageflipBookRenderDecision(
+        hasDirection: true,
+        hasCorner: true,
+        supportsAdvancedPageCurl: true,
+        hasTextureBinding: true,
+        textureSession: buildSession(preferHighFidelity: false),
+      );
+
+      expect(decision.pipeline, PageflipBookRenderPipeline.legacy);
+      expect(
+        decision.reason,
+        PageflipBookRenderDecisionReason.highFidelityNotPreferred,
       );
     });
   });

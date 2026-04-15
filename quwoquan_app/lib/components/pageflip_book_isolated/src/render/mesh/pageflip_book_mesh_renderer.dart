@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/contracts/pageflip_book_contracts.dart';
 import 'package:quwoquan_app/components/pageflip_book_isolated/src/render/mesh/pageflip_book_mesh_builder.dart';
-import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
+import 'package:quwoquan_app/components/pageflip_book_isolated/src/render_v2/leaf_renderer_v2.dart';
 
 class PageflipBookIsolatedMeshRenderer extends StatelessWidget {
   const PageflipBookIsolatedMeshRenderer({
@@ -21,8 +21,8 @@ class PageflipBookIsolatedMeshRenderer extends StatelessWidget {
   Widget build(BuildContext context) {
     return KeyedSubtree(
       key: PageflipBookIsolatedTestKeys.meshLayer,
-      child: ArticlePageCurlRenderer(
-        scene: scene.legacyScene,
+      child: IsolatedLeafRendererV2(
+        scene: scene.renderScene,
         lightingProgram: lightingProgram,
         backfaceProgram: backfaceProgram,
       ),

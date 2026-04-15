@@ -37,14 +37,7 @@ AssistantRunResponse _buildFinalizeResponse({required bool includeAnswer}) {
   const blockedReason = '当前证据时效性不满足要求，还不能直接 fully 放行。';
   const understandingSnapshot = RunArtifactsUnderstandingSnapshot(
     userFacingSummary: '我先确认你想追的是昨天盘面的原因。',
-    queryDesignSummary: '我会先锁定对应交易日，再核对盘面主线。',
-    queryGroups: <RunArtifactsUnderstandingQueryGroup>[
-      RunArtifactsUnderstandingQueryGroup(
-        dimension: '交易日确认',
-        queries: <String>['2026-04-07 A股 大涨 原因'],
-        why: '先把相对时间落成具体日期。',
-      ),
-    ],
+    intentSummary: '我会先锁定对应交易日，再核对盘面主线。',
   );
   const retrievalProcessing = RetrievalProcessingSnapshot(
     processingSummary: '当前证据时效性还不够稳定。',
@@ -88,6 +81,12 @@ AssistantRunResponse _buildFinalizeResponse({required bool includeAnswer}) {
       status: JourneyStageStatus.completed,
       headline: understandingSnapshot.userFacingSummary,
       understandingSnapshot: understandingSnapshot,
+    ),
+    buildProcessTimelineFrame(
+      stepId: ProcessStepId.retrievalDesign,
+      status: JourneyStageStatus.completed,
+      headline: understandingSnapshot.intentSummary,
+      detail: '执行检索：2026-04-07 A股 大涨 原因',
     ),
     buildProcessTimelineFrame(
       stepId: ProcessStepId.retrievalProcessing,
@@ -390,7 +389,6 @@ void main() {
         'userMarkdown': '昨天（2026年4月9日）A股上涨与情绪修复有关。',
         assistantUnderstandingSnapshotField: <String, dynamic>{
           'userFacingSummary': '我先把相对时间和市场范围落清。',
-          'queryDesignSummary': '我会先锁定交易日，再核对盘面主线。',
           'resolutionItems': <String>[
             '时间锚点：昨天已对齐到2026年4月9日。',
             '地理锚点：默认按中国股市/A股理解。',
@@ -425,11 +423,10 @@ void main() {
     expect(understanding.resolutionItems.first.title, equals('时间锚点'));
     expect(
       displayState.process.blocks.any(
-        (block) =>
-            block.blockId == 'understanding_resolution_items' &&
-            block.items.any((item) => item.body.contains('2026年4月9日')),
+        (block) => block.blockId == 'understanding_resolution_items',
       ),
-      isTrue,
+      isFalse,
+      reason: 'resolution items 信息已融入 summary 叙事，不应有独立列表块',
     );
   });
 }

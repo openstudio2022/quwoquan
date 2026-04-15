@@ -68,7 +68,7 @@ void main() {
 
     test('phase owner 不再使用 realtimeTokens 关键词数组做实时判断', () {
       final content = _read(
-        'lib/assistant/orchestration/local_phase_execution_owner.dart',
+        'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
       );
 
       expect(content, isNot(contains('const realtimeTokens')));
@@ -106,7 +106,7 @@ void main() {
 
     test('phase owner 使用 typed nextAction/messageKind 合同而非裸字符串比较', () {
       final content = _read(
-        'lib/assistant/orchestration/local_phase_execution_owner.dart',
+        'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
       );
 
       expect(content, contains('parseNextAction('));
@@ -201,7 +201,7 @@ void main() {
 
     test('phase owner 不再使用 fallbackFrame 回填 intent graph 关键字段', () {
       final content = _read(
-        'lib/assistant/orchestration/local_phase_execution_owner.dart',
+        'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
       );
 
       expect(content, isNot(contains('fallbackFrame.targetObject')));
@@ -409,7 +409,7 @@ void main() {
       );
 
       final phaseOwner = _read(
-        'lib/assistant/orchestration/local_phase_execution_owner.dart',
+        'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
       );
       expect(phaseOwner, isNot(contains('DEPRECATED compatibility fallback')));
     });

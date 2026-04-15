@@ -1,12 +1,26 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_light_model.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
-import 'package:vector_math/vector_math_64.dart';
+
+@immutable
+class ArticlePageCurlRenderConfig {
+  const ArticlePageCurlRenderConfig({
+    this.enableBackPaperWash = true,
+    this.enableBackCreaseOcclusion = true,
+    this.enableBottomProjection = true,
+    this.enableSpineAmbient = true,
+  });
+
+  final bool enableBackPaperWash;
+  final bool enableBackCreaseOcclusion;
+  final bool enableBottomProjection;
+  final bool enableSpineAmbient;
+}
 
 @immutable
 class ArticlePageCurlRenderScene {
@@ -19,6 +33,7 @@ class ArticlePageCurlRenderScene {
     required this.lightState,
     required this.direction,
     required this.corner,
+    this.renderConfig = const ArticlePageCurlRenderConfig(),
   });
 
   final Size stageSize;
@@ -29,6 +44,7 @@ class ArticlePageCurlRenderScene {
   final ArticlePageCurlLightState lightState;
   final StPageFlipDirection direction;
   final StPageFlipCorner corner;
+  final ArticlePageCurlRenderConfig renderConfig;
 }
 
 class ArticlePageCurlRenderer extends StatelessWidget {
@@ -72,10 +88,14 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _drawBottomPage(canvas);
-    _drawBottomProjection(canvas);
+    if (scene.renderConfig.enableBottomProjection) {
+      _drawBottomProjection(canvas);
+    }
     _drawBackSurface(canvas);
     _drawFrontSurface(canvas);
-    _drawSpineAmbient(canvas);
+    if (scene.renderConfig.enableSpineAmbient) {
+      _drawSpineAmbient(canvas);
+    }
   }
 
   void _drawBottomPage(Canvas canvas) {
@@ -99,6 +119,12 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     }
     canvas.save();
     canvas.clipPath(scene.meshFrame.bottomClipPath);
+    final projectionBand = _bottomProjectionBand();
+    if (projectionBand.width <= 0 || projectionBand.height <= 0) {
+      canvas.restore();
+      return;
+    }
+    canvas.clipRect(projectionBand);
     final shader = lightingProgram!.fragmentShader();
     _setLightingUniforms(
       shader,
@@ -124,14 +150,27 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     canvas.restore();
   }
 
+  Rect _bottomProjectionBand() {
+    final foldX =
+        scene.pageRect.left + scene.pageRect.width * scene.meshFrame.foldXNormalized;
+    final halfWidth = math.max(scene.pageRect.width * 0.16, 24.0).toDouble();
+    final left = math.max(scene.pageRect.left, foldX - halfWidth).toDouble();
+    final right = math.min(scene.pageRect.right, foldX + halfWidth).toDouble();
+    return Rect.fromLTRB(left, scene.pageRect.top, right, scene.pageRect.bottom);
+  }
+
   void _drawBackSurface(Canvas canvas) {
     final backSurface = scene.meshFrame.backSurface;
     if (backSurface == null) {
       return;
     }
     _drawBackAlbedo(canvas, backSurface);
-    _drawBackPaperWash(canvas, backSurface);
-    _drawBackCreaseOcclusion(canvas, backSurface);
+    if (scene.renderConfig.enableBackPaperWash) {
+      _drawBackPaperWash(canvas, backSurface);
+    }
+    if (scene.renderConfig.enableBackCreaseOcclusion) {
+      _drawBackCreaseOcclusion(canvas, backSurface);
+    }
   }
 
   void _drawBackAlbedo(Canvas canvas, ArticlePageCurlMeshSurface backSurface) {
@@ -233,12 +272,11 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       snapshot.image,
       ui.TileMode.clamp,
       ui.TileMode.clamp,
-      (Matrix4.identity()..scale(
-            snapshot.pixelWidthPerLogical,
-            snapshot.pixelHeightPerLogical,
-            1.0,
-          ))
-          .storage,
+      Matrix4.diagonal3Values(
+        snapshot.pixelWidthPerLogical,
+        snapshot.pixelHeightPerLogical,
+        1.0,
+      ).storage,
     );
     canvas.drawVertices(
       surface.vertices,

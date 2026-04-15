@@ -173,19 +173,21 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('正在交叉核实关键结论'), findsOneWidget);
+    expect(find.text(UITextConstants.assistantProcessCompletedSummary), findsOneWidget);
+    expect(find.text('耗时 4 秒'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
       find.text(UITextConstants.assistantProcessStageUnderstand),
-      findsAtLeastNWidgets(1),
+      findsNothing,
     );
     expect(
       find.text(UITextConstants.assistantProcessStageSearch),
-      findsAtLeastNWidgets(1),
+      findsNothing,
     );
+    expect(find.textContaining('正在交叉核实关键结论'), findsAtLeastNWidgets(1));
     expect(
       find.text(UITextConstants.assistantProcessStageAnswer),
       findsNothing,
@@ -252,11 +254,15 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('正在整理可直接参考的结论'), findsOneWidget);
+    expect(find.text(UITextConstants.assistantProcessCompletedSummary), findsOneWidget);
+    expect(find.text('处理 1 篇'), findsOneWidget);
+    expect(find.text('接纳 1 篇'), findsOneWidget);
+    expect(find.text('耗时 4 秒'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.textContaining('处理了 1 篇'));
+    expect(find.textContaining('正在整理可直接参考的结论'), findsAtLeastNWidgets(1));
+    await tester.tap(find.textContaining('处理了 1 篇').last);
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('1. 中国气象局 · weather.cma.cn'), findsOneWidget);
@@ -391,13 +397,13 @@ void main() {
 
     expect(
       find.text(UITextConstants.assistantProcessStageUnderstand),
-      findsAtLeastNWidgets(1),
+      findsNothing,
     );
+    expect(find.textContaining('先拆清楚天气和出游两个判断面'), findsAtLeastNWidgets(1));
     expect(
-      find.text(UITextConstants.assistantProcessStageSearch),
+      find.textContaining('已经交叉核实关键差异'),
       findsAtLeastNWidgets(1),
     );
-    expect(find.textContaining('已汇总成最终建议'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('助理 Markdown 与 card block 按层次渲染', (tester) async {
@@ -510,10 +516,6 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('九寨沟方向备选方案'), findsAtLeastNWidgets(1));
-    expect(
-      find.text(UITextConstants.assistantProcessStageAnswer),
-      findsAtLeastNWidgets(1),
-    );
   });
 
   testWidgets('assistant 流式中会直接渲染 displayState answer 预览', (tester) async {
@@ -571,10 +573,75 @@ void main() {
 
     expect(find.textContaining('经典线更稳妥', findRichText: true), findsWidgets);
     expect(find.textContaining('旧的完成态答案', findRichText: true), findsNothing);
-    expect(
-      find.text(UITextConstants.assistantProcessStageAnswer),
-      findsAtLeastNWidgets(1),
+  });
+
+  testWidgets('assistant 流式中 answer gate 关闭时不会渲染 displayState answer 预览', (
+    tester,
+  ) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_streaming_preview_blocked',
+      content: '旧的完成态答案',
+      extra: {
+        assistantDisplayStateField: const AssistantDisplayState(
+          answer: AssistantAnswerDisplayState(
+            blocks: <AssistantAnswerDisplayBlock>[
+              AssistantAnswerDisplayBlock(
+                blockId: 'streaming_answer_preview_blocked',
+                kind: DisplayBlockKind.markdown,
+                body: '这段流式答案不应在 gate 关闭时提前露出。',
+              ),
+            ],
+          ),
+        ).toJson(),
+      },
     );
+
+    await tester.pumpWidget(
+      _bubbleHarness(
+        message,
+        journeyViewModel: buildAssistantJourneyViewModel(
+          journey: const AssistantJourney(
+            stages: <AssistantJourneyStage>[
+              AssistantJourneyStage(
+                stageId: JourneyStageId.answer,
+                status: JourneyStageStatus.active,
+                order: 3,
+                summary: '我在组织最终回答',
+              ),
+            ],
+            entries: <AssistantJourneyEntry>[
+              AssistantJourneyEntry(
+                entryId: 'journey.answer.streaming.blocked',
+                stageId: JourneyStageId.answer,
+                kind: JourneyEntryKind.narrative,
+                status: JourneyStageStatus.active,
+                order: 0,
+                headline: '我在组织最终回答',
+              ),
+            ],
+          ),
+          processTimeline: const <ProcessTimelineFrame>[
+            ProcessTimelineFrame(
+              frameId: 'streaming_gate_closed_understanding',
+              stepId: ProcessStepId.understanding,
+              status: JourneyStageStatus.active,
+              headline: '我在继续收清问题边界',
+            ),
+          ],
+          isRunning: true,
+        ),
+        answerGateOpen: false,
+        isAssistantRunning: true,
+        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining('这段流式答案不应在 gate 关闭时提前露出。', findRichText: true),
+      findsNothing,
+    );
+    expect(find.textContaining('旧的完成态答案', findRichText: true), findsNothing);
   });
 
   testWidgets('completed displayMarkdown 会优先渲染自然最终成答并保留引用', (tester) async {

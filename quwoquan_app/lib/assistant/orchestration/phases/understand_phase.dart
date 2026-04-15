@@ -22,7 +22,6 @@ import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_run
 import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
-import 'package:quwoquan_app/assistant/orchestration/understanding_user_facing_summary.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
@@ -36,6 +35,10 @@ import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 
 const RelativeTimeResolver _relativeTimeResolver = RelativeTimeResolver();
+final RegExp _relativeTemporalTokenRe = RegExp(
+  r'(昨天|昨日|明天|后天|今天|周[一二三四五六日天]|上周[一二三四五六日天]|下周[一二三四五六日天]|最近)',
+);
+final RegExp _relativeDayTokenRe = RegExp(r'(昨天|昨日|明天|后天|今天)');
 
 /// Understand: intent graph, domain selection, dialogue round script.
 class UnderstandPhase implements Phase {
@@ -832,8 +835,6 @@ class UnderstandPhase implements Phase {
       ),
       concernPoints: parsedSnapshot.concernPoints,
       emotionSignal: parsedSnapshot.emotionSignal,
-      queryDesignSummary: parsedSnapshot.queryDesignSummary,
-      queryGroups: parsedSnapshot.queryGroups,
       resolutionItems: parsedSnapshot.resolutionItems,
       assumptions: parsedSnapshot.assumptions,
       mismatchSignal: parsedSnapshot.mismatchSignal,
@@ -869,8 +870,6 @@ class UnderstandPhase implements Phase {
       userFacingSummary: fallbackIntentSummary,
       concernPoints: concernPoints,
       emotionSignal: 'neutral',
-      queryDesignSummary: '',
-      queryGroups: _buildUnderstandingQueryGroups(intentGraph.queryTasks),
     );
   }
 
@@ -896,36 +895,37 @@ class UnderstandPhase implements Phase {
     AvailableGeoContext? availableGeoContext,
     IntentGraph? previousIntentGraph,
   }) {
-    final normalizedIntent = snapshot.intentSummary.trim().isNotEmpty
-        ? snapshot.intentSummary.trim()
-        : (intentGraph.userGoal.trim().isNotEmpty
-              ? intentGraph.userGoal.trim()
-              : latestUserQuery);
-    final normalizedConcernPoints = snapshot.concernPoints
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .take(3)
-        .toList(growable: false);
-    final normalizedQueryDesign = snapshot.queryDesignSummary.trim();
-    final normalizedQueryGroups = _resolveUnderstandingQueryGroups(
-      snapshot: snapshot,
-      intentGraph: intentGraph,
-    );
     final normalizedResolutionItems = _normalizeResolutionItems(
       snapshot: snapshot,
       intentGraph: intentGraph,
       availableGeoContext: availableGeoContext ?? const AvailableGeoContext(),
       previousIntentGraph: previousIntentGraph,
     );
+    final normalizedIntent = _normalizeUnderstandingSummaryWithTemporalAnchor(
+      base: snapshot.intentSummary.trim().isNotEmpty
+          ? snapshot.intentSummary.trim()
+          : (intentGraph.userGoal.trim().isNotEmpty
+                ? intentGraph.userGoal.trim()
+                : latestUserQuery),
+      intentGraph: intentGraph,
+    );
+    final normalizedConcernPoints = snapshot.concernPoints
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    final normalizedUserFacingSummary =
+        _normalizeUnderstandingSummaryWithTemporalAnchor(
+          base: snapshot.userFacingSummary.trim().isNotEmpty
+              ? snapshot.userFacingSummary.trim()
+              : normalizedIntent,
+          intentGraph: intentGraph,
+        );
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: normalizedIntent,
-      userFacingSummary: snapshot.userFacingSummary.trim().isNotEmpty
-          ? snapshot.userFacingSummary.trim()
-          : normalizedIntent,
+      userFacingSummary: normalizedUserFacingSummary,
       concernPoints: normalizedConcernPoints,
       emotionSignal: snapshot.emotionSignal,
-      queryDesignSummary: normalizedQueryDesign,
-      queryGroups: normalizedQueryGroups,
       resolutionItems: normalizedResolutionItems,
       assumptions: snapshot.assumptions,
       mismatchSignal: snapshot.mismatchSignal,
@@ -934,16 +934,90 @@ class UnderstandPhase implements Phase {
     );
   }
 
-  List<RunArtifactsUnderstandingQueryGroup> _resolveUnderstandingQueryGroups({
-    required RunArtifactsUnderstandingSnapshot snapshot,
+  String _normalizeUnderstandingSummaryWithTemporalAnchor({
+    required String base,
     required IntentGraph intentGraph,
   }) {
-    final canonical = _buildUnderstandingQueryGroups(intentGraph.queryTasks);
-    if (canonical.isNotEmpty) {
-      return canonical;
+    final trimmed = base.trim();
+    if (trimmed.isEmpty) {
+      return '';
     }
-    return snapshot.queryGroups.isNotEmpty ? snapshot.queryGroups : canonical;
+    if (!_relativeTemporalTokenRe.hasMatch(trimmed)) {
+      return _canonicalizeExplicitDateAnchors(trimmed);
+    }
+    final queryNormalization = intentGraph.queryNormalization;
+    final fallbackDate = _firstUnderstandingExplicitDate(intentGraph);
+    final rewritten = _relativeTimeResolver
+        .resolve(
+          query: trimmed,
+          referenceNowIso: queryNormalization.referenceNowIso,
+          timezone: queryNormalization.timezone,
+          timeScope: queryNormalization.timeScope,
+          timeRangeStart: queryNormalization.timeRangeStart,
+          timeRangeEnd: queryNormalization.timeRangeEnd,
+          timePoint: queryNormalization.timePoint.isNotEmpty
+              ? queryNormalization.timePoint
+              : fallbackDate,
+        )
+        .rewrittenQuery
+        .trim();
+    if (rewritten.isNotEmpty &&
+        rewritten != trimmed &&
+        !_relativeDayTokenRe.hasMatch(rewritten)) {
+      return _canonicalizeExplicitDateAnchors(rewritten);
+    }
+    if (fallbackDate.isNotEmpty && _relativeDayTokenRe.hasMatch(trimmed)) {
+      return _canonicalizeExplicitDateAnchors(
+        trimmed.replaceAllMapped(_relativeDayTokenRe, (_) => fallbackDate),
+      );
+    }
+    return _canonicalizeExplicitDateAnchors(
+      rewritten.isNotEmpty ? rewritten : trimmed,
+    );
   }
+
+  String _firstUnderstandingExplicitDate(IntentGraph intentGraph) {
+    final queryNormalization = intentGraph.queryNormalization;
+    final normalizedCandidates = <String>[
+      queryNormalization.timePoint.trim(),
+      queryNormalization.timeRangeStart.trim(),
+      queryNormalization.timeRangeEnd.trim(),
+    ].where((item) => item.isNotEmpty);
+    if (normalizedCandidates.isNotEmpty) {
+      return _canonicalDateToken(normalizedCandidates.first);
+    }
+    for (final task in intentGraph.queryTasks) {
+      if (task.timePoint.trim().isNotEmpty) {
+        return _canonicalDateToken(task.timePoint.trim());
+      }
+      final match = RegExp(
+        r'(\d{4})[-年/](\d{1,2})[-月/](\d{1,2})',
+      ).firstMatch(task.query);
+      if (match != null) {
+        return _canonicalDateToken(match.group(0)?.trim() ?? '');
+      }
+    }
+    return '';
+  }
+
+  static final RegExp _explicitDateTokenRe = RegExp(
+    r'(\d{4})[-年/](\d{1,2})(?:[-月/])(\d{1,2})(?:日)?',
+  );
+
+  String _canonicalizeExplicitDateAnchors(String text) {
+    return text.replaceAllMapped(_explicitDateTokenRe, (match) {
+      final year = match.group(1) ?? '';
+      final month = int.tryParse(match.group(2) ?? '')?.toString() ?? '';
+      final day = int.tryParse(match.group(3) ?? '')?.toString() ?? '';
+      if (year.isEmpty || month.isEmpty || day.isEmpty) {
+        return match.group(0) ?? '';
+      }
+      return '$year年${month}月${day}日';
+    });
+  }
+
+  String _canonicalDateToken(String value) =>
+      _canonicalizeExplicitDateAnchors(value.trim());
 
   List<RunArtifactsUnderstandingResolutionItem> _normalizeResolutionItems({
     required RunArtifactsUnderstandingSnapshot snapshot,
@@ -1193,38 +1267,6 @@ class UnderstandPhase implements Phase {
       }
     }
     return 0;
-  }
-
-  List<RunArtifactsUnderstandingQueryGroup> _buildUnderstandingQueryGroups(
-    List<QueryTask> queryTasks,
-  ) {
-    final grouped = <String, List<String>>{};
-    final reasons = <String, String>{};
-    for (final task in queryTasks) {
-      final dimension = task.dimensionLabel.trim().isNotEmpty
-          ? task.dimensionLabel.trim()
-          : (deriveQueryTaskFocusLabel(task).trim().isNotEmpty
-                ? deriveQueryTaskFocusLabel(task).trim()
-                : '综合');
-      final query = task.query.trim();
-      if (query.isEmpty) {
-        continue;
-      }
-      grouped.putIfAbsent(dimension, () => <String>[]).add(query);
-      final reason = deriveQueryTaskFocusReason(task).trim();
-      if (reason.isNotEmpty) {
-        reasons[dimension] = reason;
-      }
-    }
-    return grouped.entries
-        .map(
-          (entry) => RunArtifactsUnderstandingQueryGroup(
-            dimension: entry.key,
-            queries: entry.value.toSet().take(2).toList(growable: false),
-            why: reasons[entry.key]?.trim() ?? '',
-          ),
-        )
-        .toList(growable: false);
   }
 
   void _emitUnderstandingSnapshot({
@@ -1908,6 +1950,9 @@ class UnderstandPhase implements Phase {
     required String latestUserQuery,
     required AssistantBootstrapContext? bootstrapContext,
   }) {
+    final previousNormalization =
+        bootstrapContext?.previousIntentGraph?.queryNormalization ??
+        const QueryNormalization();
     final hints = <String>{
       ...queryNormalization.hints.map((item) => item.trim()),
     };
@@ -1926,6 +1971,28 @@ class UnderstandPhase implements Phase {
       issues: queryNormalization.issues,
       language: queryNormalization.language,
       hints: hints.where((item) => item.isNotEmpty).toList(growable: false),
+      referenceNowIso: queryNormalization.referenceNowIso.trim().isNotEmpty
+          ? queryNormalization.referenceNowIso.trim()
+          : previousNormalization.referenceNowIso.trim(),
+      timezone: queryNormalization.timezone.trim().isNotEmpty
+          ? queryNormalization.timezone.trim()
+          : previousNormalization.timezone.trim(),
+      resolvedTemporalHints:
+          queryNormalization.resolvedTemporalHints.isNotEmpty
+          ? queryNormalization.resolvedTemporalHints
+          : previousNormalization.resolvedTemporalHints,
+      timeScope: queryNormalization.timeScope.trim().isNotEmpty
+          ? queryNormalization.timeScope.trim()
+          : previousNormalization.timeScope.trim(),
+      timeRangeStart: queryNormalization.timeRangeStart.trim().isNotEmpty
+          ? queryNormalization.timeRangeStart.trim()
+          : previousNormalization.timeRangeStart.trim(),
+      timeRangeEnd: queryNormalization.timeRangeEnd.trim().isNotEmpty
+          ? queryNormalization.timeRangeEnd.trim()
+          : previousNormalization.timeRangeEnd.trim(),
+      timePoint: queryNormalization.timePoint.trim().isNotEmpty
+          ? queryNormalization.timePoint.trim()
+          : previousNormalization.timePoint.trim(),
     );
   }
 

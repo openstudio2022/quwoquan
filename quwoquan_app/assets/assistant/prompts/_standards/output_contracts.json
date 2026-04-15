@@ -3,19 +3,12 @@
     "assistant_turn": {
       "required": [
         "contractId",
-        "decision",
-        "messageKind",
-        "phaseId",
-        "actionCode",
-        "reasonCode"
+        "decision"
       ],
       "decisionNextActionEnum": [
         "tool_call",
         "answer",
-        "ask_user",
-        "replan",
-        "retry",
-        "abort"
+        "ask_user"
       ],
       "messageKindEnum": [
         "progress",
@@ -26,8 +19,6 @@
       ],
       "toolCallFields": [
         "toolName",
-        "name",
-        "toolCallId",
         "arguments"
       ],
       "askUserFields": [

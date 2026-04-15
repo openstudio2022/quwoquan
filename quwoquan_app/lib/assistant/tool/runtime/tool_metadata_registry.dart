@@ -1,10 +1,11 @@
-// ASSISTANT_WEAK_TYPE: VENDOR_JSON — 工具元数据 JSON 资产加载；运行时 Map 仅作注册表索引。
+// ASSISTANT_WEAK_TYPE: VENDOR_JSON — 工具元数据 JSON 资产加载；读取后立即转为 typed catalog entity。
 
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 /// Permission config for a tool, sourced from [tool_permissions.json].
 class ToolPermissionConfig {
@@ -17,6 +18,185 @@ class ToolPermissionConfig {
   final List<String> allowedSchemes;
 }
 
+AssistantToolPayload? _nonEmptyPayload(Object? raw) {
+  final payload = AssistantToolPayload.fromJson(raw);
+  return payload.isEmptyPayload ? null : payload;
+}
+
+class _ToolCatalog {
+  const _ToolCatalog({
+    this.tools = const <_ToolCatalogEntry>[],
+    this.domainToolMatrix = const <_ToolDomainToolMatrixEntry>[],
+  });
+
+  factory _ToolCatalog.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    final tools = payload
+        .listField('tools')
+        .map(_ToolCatalogEntry.fromJson)
+        .where((item) => item.toolName.isNotEmpty)
+        .toList(growable: false);
+    final domainToolMatrix = payload
+        .listField('domainToolMatrix')
+        .map(_ToolDomainToolMatrixEntry.fromJson)
+        .where((item) => item.domainId.isNotEmpty)
+        .toList(growable: false);
+    return _ToolCatalog(tools: tools, domainToolMatrix: domainToolMatrix);
+  }
+
+  final List<_ToolCatalogEntry> tools;
+  final List<_ToolDomainToolMatrixEntry> domainToolMatrix;
+
+  _ToolCatalogEntry? toolByName(String toolName) {
+    final normalized = toolName.trim();
+    if (normalized.isEmpty) return null;
+    for (final tool in tools) {
+      if (tool.toolName == normalized) return tool;
+    }
+    return null;
+  }
+}
+
+class _ToolCatalogEntry {
+  _ToolCatalogEntry({
+    required this.toolName,
+    required this.purpose,
+    required this.whenToUse,
+    required this.parameterSummary,
+    required this.supportedSkills,
+    required this.requiredOutputPaths,
+    required this.routing,
+    required this.uiContribution,
+    required this.slotOutputs,
+    required this.userInteraction,
+    required this.openAiFunction,
+  });
+
+  factory _ToolCatalogEntry.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return _ToolCatalogEntry(
+      toolName: payload.stringField('toolName') ?? '',
+      purpose: payload.stringField('purpose') ?? '',
+      whenToUse: payload.stringListField('whenToUse'),
+      parameterSummary: payload
+          .listField('parameterSummary')
+          .map(AssistantToolPayload.fromJson)
+          .where((item) => !item.isEmptyPayload)
+          .toList(growable: false),
+      supportedSkills: payload.stringListField('supportedSkills'),
+      requiredOutputPaths: payload.stringListField('requiredOutputPaths'),
+      routing: _ToolRouting.fromJson(payload['routing']),
+      uiContribution: _ToolUiContribution.fromJson(payload['uiContribution']),
+      slotOutputs: payload
+          .listField('slotOutputs')
+          .map(AssistantToolPayload.fromJson)
+          .where((item) => !item.isEmptyPayload)
+          .toList(growable: false),
+      userInteraction: _nonEmptyPayload(payload['userInteraction']),
+      openAiFunction: _ToolOpenAiFunction.fromJson(payload['openAiFunction']),
+    );
+  }
+
+  final String toolName;
+  final String purpose;
+  final List<String> whenToUse;
+  final List<AssistantToolPayload> parameterSummary;
+  final List<String> supportedSkills;
+  final List<String> requiredOutputPaths;
+  final _ToolRouting routing;
+  final _ToolUiContribution uiContribution;
+  final List<AssistantToolPayload> slotOutputs;
+  final AssistantToolPayload? userInteraction;
+  final _ToolOpenAiFunction? openAiFunction;
+}
+
+class _ToolOpenAiFunction {
+  const _ToolOpenAiFunction({
+    required this.name,
+    required this.description,
+    required this.parameters,
+  });
+
+  factory _ToolOpenAiFunction.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    final name = payload.stringField('name') ?? '';
+    final parameters = AssistantToolInputSchema.fromJson(payload['parameters']);
+    if (name.isEmpty || parameters.isEmptyPayload) {
+      return const _ToolOpenAiFunction(
+        name: '',
+        description: '',
+        parameters: null,
+      );
+    }
+    return _ToolOpenAiFunction(
+      name: name,
+      description: payload.stringField('description') ?? '',
+      parameters: parameters,
+    );
+  }
+
+  final String name;
+  final String description;
+  final AssistantToolInputSchema? parameters;
+}
+
+class _ToolRouting {
+  const _ToolRouting({
+    this.toolKind = '',
+    this.supportsQueryTasks = false,
+    this.internalOnlyParameters = const <String>[],
+  });
+
+  factory _ToolRouting.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return _ToolRouting(
+      toolKind: payload.stringField('toolKind') ?? '',
+      supportsQueryTasks: payload.boolField('supportsQueryTasks') ?? false,
+      internalOnlyParameters: payload.stringListField('internalOnlyParameters'),
+    );
+  }
+
+  final String toolKind;
+  final bool supportsQueryTasks;
+  final List<String> internalOnlyParameters;
+}
+
+class _ToolUiContribution {
+  const _ToolUiContribution({
+    this.references = false,
+    this.locationContext = false,
+  });
+
+  factory _ToolUiContribution.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return _ToolUiContribution(
+      references: payload.boolField('references') ?? false,
+      locationContext: payload.boolField('locationContext') ?? false,
+    );
+  }
+
+  final bool references;
+  final bool locationContext;
+}
+
+class _ToolDomainToolMatrixEntry {
+  const _ToolDomainToolMatrixEntry({
+    required this.domainId,
+    required this.allowedTools,
+  });
+
+  factory _ToolDomainToolMatrixEntry.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return _ToolDomainToolMatrixEntry(
+      domainId: payload.stringField('domainId') ?? '',
+      allowedTools: payload.stringListField('allowedTools'),
+    );
+  }
+
+  final String domainId;
+  final List<String> allowedTools;
+}
+
 class ToolMetadataRegistry {
   ToolMetadataRegistry({
     this.manifestAssetPath = 'assets/assistant/tools/manifest.json',
@@ -26,7 +206,7 @@ class ToolMetadataRegistry {
 
   final String manifestAssetPath;
   final String permissionsAssetPath;
-  Map<String, dynamic> _catalog = const <String, dynamic>{};
+  _ToolCatalog _catalog = const _ToolCatalog();
   Map<String, ToolPermissionConfig> _permissions =
       const <String, ToolPermissionConfig>{};
   Future<void>? _loadingFuture;
@@ -44,7 +224,7 @@ class ToolMetadataRegistry {
       await _loadPermissions();
       _loaded = true;
     } catch (_) {
-      _catalog = const <String, dynamic>{};
+      _catalog = const _ToolCatalog();
       _permissions = const <String, ToolPermissionConfig>{};
       _loaded = true;
     }
@@ -54,22 +234,18 @@ class ToolMetadataRegistry {
     final manifestRaw = await _loadText(manifestAssetPath);
     final manifestDecoded = jsonDecode(manifestRaw);
     if (manifestDecoded is! Map) {
-      _catalog = const <String, dynamic>{};
+      _catalog = const _ToolCatalog();
       return;
     }
     final catalogPath =
         (manifestDecoded['catalogPath'] as String?)?.trim() ?? '';
     if (catalogPath.isEmpty) {
-      _catalog = const <String, dynamic>{};
+      _catalog = const _ToolCatalog();
       return;
     }
     final catalogRaw = await _loadText(catalogPath);
     final catalogDecoded = jsonDecode(catalogRaw);
-    if (catalogDecoded is! Map) {
-      _catalog = const <String, dynamic>{};
-      return;
-    }
-    _catalog = catalogDecoded.cast<String, dynamic>();
+    _catalog = _ToolCatalog.fromJson(catalogDecoded);
   }
 
   Future<void> _loadPermissions() async {
@@ -85,15 +261,14 @@ class ToolMetadataRegistry {
         if (name.isEmpty) continue;
         final val = entry.value;
         if (val is! Map) continue;
-        final requireConfirmation =
-            val['requireConfirmation'] == true;
+        final requireConfirmation = val['requireConfirmation'] == true;
         final allowedRaw = val['allowedActions'] ?? val['allowedSchemes'];
         final allowed = allowedRaw is List
             ? allowedRaw
-                .whereType<String>()
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList(growable: false)
+                  .whereType<String>()
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList(growable: false)
             : const <String>[];
         out[name] = ToolPermissionConfig(
           requireConfirmation: requireConfirmation,
@@ -117,10 +292,9 @@ class ToolMetadataRegistry {
   }
 
   List<String> allToolNames() {
-    final tools = (_catalog['tools'] as List?)?.whereType<Map>() ?? const <Map>[];
-    return tools
-        .map((item) => (item['toolName'] as String?)?.trim() ?? '')
-        .where((item) => item.isNotEmpty)
+    return _catalog.tools
+        .map((item) => item.toolName)
+        .where((item) => item.trim().isNotEmpty)
         .toList(growable: false);
   }
 
@@ -128,103 +302,89 @@ class ToolMetadataRegistry {
     required String domainId,
     required List<String> fallbackNames,
   }) {
-    final matrix = (_catalog['domainToolMatrix'] as List?)?.whereType<Map>() ??
-        const <Map>[];
-    for (final item in matrix) {
-      final id = (item['domainId'] as String?)?.trim() ?? '';
-      if (id != domainId) continue;
-      final allowed = (item['allowedTools'] as List?)
-              ?.whereType<String>()
-              .map((name) => name.trim())
-              .where((name) => name.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
-      if (allowed.isNotEmpty) return allowed;
+    for (final item in _catalog.domainToolMatrix) {
+      if (item.domainId != domainId) continue;
+      if (item.allowedTools.isNotEmpty) return item.allowedTools;
     }
     return fallbackNames;
   }
 
-  List<Map<String, dynamic>> invocationGuidelinesForTools(List<String> toolNames) {
-    final tools = (_catalog['tools'] as List?)?.whereType<Map>() ?? const <Map>[];
+  List<Map<String, dynamic>> invocationGuidelinesForTools(
+    List<String> toolNames,
+  ) {
     final out = <Map<String, dynamic>>[];
     for (final name in toolNames) {
-      final matched = tools.firstWhere(
-        (item) => ((item['toolName'] as String?)?.trim() ?? '') == name,
-        orElse: () => const <String, dynamic>{},
-      );
-      if (matched.isEmpty) continue;
+      final matched = _catalog.toolByName(name);
+      if (matched == null) continue;
       out.add(<String, dynamic>{
         'toolName': name,
-        'purpose': (matched['purpose'] as String?)?.trim() ?? '',
-        'whenToUse':
-            (matched['whenToUse'] as List?)?.whereType<String>().toList(growable: false) ??
-                const <String>[],
-        'parameterSummary':
-            (matched['parameterSummary'] as List?)
-                    ?.whereType<Map>()
-                    .map((item) => item.cast<String, dynamic>())
-                    .toList(growable: false) ??
-                const <Map<String, dynamic>>[],
-        'supportedSkills':
-            (matched['supportedSkills'] as List?)?.whereType<String>().toList(growable: false) ??
-                const <String>[],
+        'purpose': matched.purpose,
+        'whenToUse': matched.whenToUse,
+        'parameterSummary': matched.parameterSummary
+            .map((item) => item.toDynamicJson())
+            .toList(growable: false),
+        'supportedSkills': matched.supportedSkills,
       });
     }
     return out;
   }
 
-  Map<String, dynamic>? openAiFunctionSchemaByName(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return null;
-    final schema = matched['openAiFunction'];
-    if (schema is! Map) return null;
-    return <String, dynamic>{
-      'type': 'function',
-      'function': schema.cast<String, dynamic>(),
-    };
+  AssistantToolSpec? canonicalToolSpecByName(String toolName) {
+    final matched = _catalog.toolByName(toolName);
+    final openAiFunction = matched?.openAiFunction;
+    final schemaName =
+        openAiFunction?.name.trim().isNotEmpty == true
+        ? openAiFunction!.name.trim()
+        : toolName.trim();
+    final description =
+        (openAiFunction?.description.trim().isNotEmpty == true
+            ? openAiFunction!.description.trim()
+            : matched?.purpose ?? '');
+    final parameters = openAiFunction?.parameters;
+    if (schemaName.isEmpty || parameters == null || parameters.isEmptyPayload) {
+      return null;
+    }
+    return AssistantToolSpec(
+      name: schemaName,
+      description: description,
+      inputSchema: parameters,
+    );
   }
 
-  Map<String, dynamic>? functionParametersByToolName(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return null;
-    final schema = matched['openAiFunction'];
-    if (schema is! Map) return null;
-    final parameters = schema['parameters'];
-    if (parameters is! Map) return null;
-    return parameters.cast<String, dynamic>();
+  Map<String, dynamic>? openAiFunctionSchemaByName(String toolName) {
+    return openAiToolSchemaByName(toolName);
+  }
+
+  Map<String, dynamic>? openAiToolSchemaByName(String toolName) {
+    final spec = canonicalToolSpecByName(toolName);
+    return spec?.toOpenAiToolWire();
+  }
+
+  Map<String, dynamic>? anthropicToolSchemaByName(String toolName) {
+    final spec = canonicalToolSpecByName(toolName);
+    return spec?.toAnthropicToolWire();
+  }
+
+  AssistantToolInputSchema? functionParametersByToolName(String toolName) {
+    return canonicalToolSpecByName(toolName)?.inputSchema;
   }
 
   List<String> requiredOutputPathsByToolName(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return const <String>[];
-    return _requiredStringList(matched['requiredOutputPaths']);
+    return _catalog.toolByName(toolName)?.requiredOutputPaths ??
+        const <String>[];
   }
 
   String toolKindByName(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return '';
-    final routing =
-        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return (routing['toolKind'] as String?)?.trim() ?? '';
+    return _catalog.toolByName(toolName)?.routing.toolKind ?? '';
   }
 
   bool supportsQueryTasks(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return false;
-    final routing =
-        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return routing['supportsQueryTasks'] == true;
+    return _catalog.toolByName(toolName)?.routing.supportsQueryTasks ?? false;
   }
 
   List<String> internalOnlyParameters(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return const <String>[];
-    final routing =
-        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return _requiredStringList(routing['internalOnlyParameters']);
+    return _catalog.toolByName(toolName)?.routing.internalOnlyParameters ??
+        const <String>[];
   }
 
   bool isRetrievalLikeTool(String toolName) {
@@ -235,47 +395,37 @@ class ToolMetadataRegistry {
     String toolName, {
     required bool allowLocationContext,
   }) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return false;
-    final uiContribution =
-        (matched['uiContribution'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    if (uiContribution['references'] == true) return true;
-    return allowLocationContext && uiContribution['locationContext'] == true;
+    final contribution = _catalog.toolByName(toolName)?.uiContribution;
+    if (contribution == null) return false;
+    if (contribution.references) return true;
+    return allowLocationContext && contribution.locationContext;
   }
 
   List<Map<String, dynamic>> slotOutputsByToolName(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return const <Map<String, dynamic>>[];
-    return (matched['slotOutputs'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+    final matched = _catalog.toolByName(toolName);
+    if (matched == null) return const <Map<String, dynamic>>[];
+    return matched.slotOutputs
+        .map((item) => item.toDynamicJson())
+        .toList(growable: false);
   }
 
   /// Returns the full [userInteraction] block for [toolName], or null.
   Map<String, dynamic>? userInteractionForTool(String toolName) {
-    final matched = _toolByName(toolName);
-    if (matched.isEmpty) return null;
-    final ui = matched['userInteraction'];
-    if (ui is! Map) return null;
-    return ui.cast<String, dynamic>();
+    return _catalog.toolByName(toolName)?.userInteraction?.toDynamicJson();
   }
 
   /// Returns the [reasoning.promptHint] string for [toolName], or null.
   String? promptHintForTool(String toolName) {
-    final ui = userInteractionForTool(toolName);
-    if (ui == null) return null;
-    final reasoning = ui['reasoning'];
-    if (reasoning is! Map) return null;
-    return (reasoning['promptHint'] as String?)?.trim();
+    final interaction = _catalog.toolByName(toolName)?.userInteraction;
+    if (interaction == null) return null;
+    final reasoning = interaction.payloadField('reasoning');
+    return reasoning.stringField('promptHint');
   }
 
   JourneyStageId journeyStageIdForTool(String toolName) {
-    final ui = userInteractionForTool(toolName);
-    if (ui == null) return JourneyStageId.unknown;
-    return parseJourneyStageId((ui['journeyStageId'] as String?)?.trim() ?? '');
+    final interaction = _catalog.toolByName(toolName)?.userInteraction;
+    if (interaction == null) return JourneyStageId.unknown;
+    return parseJourneyStageId(interaction.stringField('journeyStageId') ?? '');
   }
 
   /// Returns permission config for [toolName] from tool_permissions.json.
@@ -286,14 +436,13 @@ class ToolMetadataRegistry {
   /// Resolves a template string containing `{{key}}` placeholders against
   /// the supplied [variables] map. Unknown placeholders fail closed.
   String resolveTemplate(String template, Map<String, dynamic> variables) {
-    return template.replaceAllMapped(
-      RegExp(r'\{\{(\w+(?:\.\w+)*)\}\}'),
-      (match) {
-        final key = match.group(1)!;
-        final value = _resolveNestedKey(variables, key);
-        return value?.toString() ?? '';
-      },
-    );
+    return template.replaceAllMapped(RegExp(r'\{\{(\w+(?:\.\w+)*)\}\}'), (
+      match,
+    ) {
+      final key = match.group(1)!;
+      final value = _resolveNestedKey(variables, key);
+      return value?.toString() ?? '';
+    });
   }
 
   /// Returns true only when all placeholders in [template] can be resolved to
@@ -328,25 +477,4 @@ class ToolMetadataRegistry {
     }
     return current;
   }
-
-  Map<String, dynamic> _toolByName(String toolName) {
-    final tools = (_catalog['tools'] as List?)?.whereType<Map>() ?? const <Map>[];
-    final matched = tools.firstWhere(
-      (item) => ((item['toolName'] as String?)?.trim() ?? '') == toolName,
-      orElse: () => const <String, dynamic>{},
-    );
-    if (matched is Map<String, dynamic>) return matched;
-    return matched.cast<String, dynamic>();
-  }
-
-  List<String> _requiredStringList(Object? raw) {
-    return (raw as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-  }
-
 }
-

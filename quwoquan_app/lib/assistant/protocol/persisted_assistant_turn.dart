@@ -42,7 +42,6 @@ Map<String, dynamic>? assistantJsonAsStringKeyedMap(Object? value) {
 const List<JourneyStageId> assistantPrimaryJourneyStages = <JourneyStageId>[
   JourneyStageId.analyze,
   JourneyStageId.search,
-  JourneyStageId.answer,
 ];
 
 AssistantJourney resolvePersistedAssistantJourney(
@@ -102,19 +101,25 @@ List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
   if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
     return const <ProcessTimelineFrame>[];
   }
-  final direct = _parseProcessTimelineList(
-    message[assistantProcessTimelineField],
-  );
-  if (hasStructuredProcessTimeline(direct)) {
-    return direct;
-  }
+  final direct = _parseProcessTimelineList(message[assistantProcessTimelineField]);
   final runArtifacts = (message['runArtifacts'] as Map?)
       ?.cast<String, dynamic>();
   final nested = _parseProcessTimelineList(
     runArtifacts?[assistantProcessTimelineField],
   );
-  if (hasStructuredProcessTimeline(nested)) {
-    return nested;
+  final baseTimeline = hasStructuredProcessTimeline(direct)
+      ? direct
+      : (hasStructuredProcessTimeline(nested)
+            ? nested
+            : const <ProcessTimelineFrame>[]);
+  final supplemented = buildProcessTimelineFromSnapshots(
+    processTimeline: baseTimeline,
+    understandingSnapshot: resolvePersistedAssistantUnderstandingSnapshot(message),
+    retrievalProcessing: resolvePersistedAssistantRetrievalProcessing(message),
+    answerProcessing: resolvePersistedAssistantAnswerProcessing(message),
+  );
+  if (hasStructuredProcessTimeline(supplemented)) {
+    return supplemented;
   }
   return const <ProcessTimelineFrame>[];
 }
@@ -488,13 +493,13 @@ AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
       ),
     );
   }
-  final finalAnswerReady = visibleTimeline.any(
-    (frame) =>
-        frame.stepId == ProcessStepId.answerOrganization &&
-        frame.status == JourneyStageStatus.completed,
-  );
+  final effectiveFinalAnswerReady =
+      fallbackJourney.readiness.finalAnswerReady ||
+      visibleTimeline.every(
+        (frame) => frame.status == JourneyStageStatus.completed,
+      );
   final summary = _firstNonEmpty(<String>[
-    if (finalAnswerReady)
+    if (effectiveFinalAnswerReady)
       ...visibleTimeline.reversed.map((frame) => frame.headline.trim()),
     fallbackJourney.summary,
     visibleTimeline.last.headline.trim(),
@@ -508,17 +513,16 @@ AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
       references: references,
     ),
     readiness: AssistantJourneyReadiness(
-      nextAction: finalAnswerReady
+      nextAction: effectiveFinalAnswerReady
           ? AssistantNextAction.answer
-          : fallbackJourney.readiness.nextAction,
-      finalAnswerMode: finalAnswerReady
+          : AssistantNextAction.unknown,
+      finalAnswerMode: effectiveFinalAnswerReady
           ? FinalAnswerMode.full
           : fallbackJourney.readiness.finalAnswerMode,
-      answerEligibility: finalAnswerReady
+      answerEligibility: effectiveFinalAnswerReady
           ? AnswerEligibility.eligible
           : fallbackJourney.readiness.answerEligibility,
-      finalAnswerReady:
-          finalAnswerReady || fallbackJourney.readiness.finalAnswerReady,
+      finalAnswerReady: effectiveFinalAnswerReady,
       clarificationNeeded: fallbackJourney.readiness.clarificationNeeded,
       needExpansion: fallbackJourney.readiness.needExpansion,
     ),

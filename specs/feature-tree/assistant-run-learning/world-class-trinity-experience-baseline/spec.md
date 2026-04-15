@@ -330,7 +330,7 @@
 ### 1) 回合输出契约
 
 - 运行时必须支持 `assistant_turn_v2`（或等价版本）：
-  - machine channel: JSON 决策（nextAction/toolPlan/slotState/askUser/processSummary/preferenceFacts）
+  - machine channel: JSON 决策（nextAction/toolCalls/slotState/askUser/processSummary/preferenceFacts）
   - user channel: Markdown 展示（summary/evidence/action/follow-up）
 
 ### 2) 工具观测契约

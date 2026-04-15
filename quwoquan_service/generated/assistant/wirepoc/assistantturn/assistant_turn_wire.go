@@ -4,16 +4,6 @@ package assistantturn
 
 import "encoding/json"
 
-type AssistantTurnAnswerGateAssessment struct {
-	CanAnswerNow bool `json:"canAnswerNow"`
-	AnswerMode string `json:"answerMode"`
-	ReplanNeeded bool `json:"replanNeeded"`
-	ReplanReason string `json:"replanReason"`
-	ConvergenceStatus string `json:"convergenceStatus"`
-	AttemptsUsed int `json:"attemptsUsed"`
-	MaxAttempts int `json:"maxAttempts"`
-}
-
 type AssistantTurnAnswerProcessing struct {
 	ReadinessSummary string `json:"readinessSummary"`
 	KeyFacts []string `json:"keyFacts"`
@@ -94,15 +84,7 @@ type AssistantTurnSelfCheck struct {
 
 type AssistantTurnToolCall struct {
 	ToolName string `json:"toolName"`
-	Name string `json:"name"`
-	ToolCallId string `json:"toolCallId"`
 	Arguments json.RawMessage `json:"arguments"`
-}
-
-type AssistantTurnUnderstandingQueryGroup struct {
-	Dimension string `json:"dimension"`
-	Queries []string `json:"queries"`
-	Why string `json:"why"`
 }
 
 type AssistantTurnUnderstandingResolutionItem struct {
@@ -121,8 +103,6 @@ type AssistantTurnUnderstandingSnapshot struct {
 	UserFacingSummary string `json:"userFacingSummary"`
 	ConcernPoints []string `json:"concernPoints"`
 	EmotionSignal string `json:"emotionSignal"`
-	QueryDesignSummary string `json:"queryDesignSummary"`
-	QueryGroups []AssistantTurnUnderstandingQueryGroup `json:"queryGroups"`
 	ResolutionItems []AssistantTurnUnderstandingResolutionItem `json:"resolutionItems"`
 	Assumptions []string `json:"assumptions"`
 	MismatchSignal string `json:"mismatchSignal"`
@@ -150,7 +130,6 @@ type AssistantTurnOutput struct {
 	SkillRuns []json.RawMessage `json:"skillRuns"`
 	AggregationState json.RawMessage `json:"aggregationState,omitempty"`
 	Journey json.RawMessage `json:"journey"`
-	ToolPlan []AssistantTurnToolCall `json:"toolPlan"`
 	MissingContextSlots []string `json:"missingContextSlots"`
 	FillGuidance []AssistantTurnFillGuidanceItem `json:"fillGuidance"`
 	FollowupPrompt string `json:"followupPrompt"`
@@ -161,7 +140,6 @@ type AssistantTurnOutput struct {
 	UnderstandingSnapshot *AssistantTurnUnderstandingSnapshot `json:"understandingSnapshot"`
 	RetrievalProcessing json.RawMessage `json:"retrievalProcessing"`
 	AnswerProcessing *AssistantTurnAnswerProcessing `json:"answerProcessing"`
-	AnswerGateAssessment *AssistantTurnAnswerGateAssessment `json:"answerGateAssessment"`
 	HistoricalThinkingSnapshot *AssistantTurnHistoricalThinkingSnapshot `json:"historicalThinkingSnapshot"`
 	SessionPreferenceFacts []json.RawMessage `json:"sessionPreferenceFacts"`
 	LongTermPreferenceFacts []json.RawMessage `json:"longTermPreferenceFacts"`

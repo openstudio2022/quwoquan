@@ -229,8 +229,7 @@ class AssistantApiGateway {
         );
         return;
       }
-      if (method == 'POST' &&
-          _matchesPath(path, '/v1/assistant/logs/export')) {
+      if (method == 'POST' && _matchesPath(path, '/v1/assistant/logs/export')) {
         final payload = await _decodeBody(request);
         final exportBody = AssistantGatewayLogsExportBody.fromJson(payload);
         final result = await _assistantGateway.exportLogsToWorkspace(
@@ -243,8 +242,7 @@ class AssistantApiGateway {
         );
         return;
       }
-      if (method == 'POST' &&
-          _matchesPath(path, '/v1/assistant/logs/boost')) {
+      if (method == 'POST' && _matchesPath(path, '/v1/assistant/logs/boost')) {
         final payload = await _decodeBody(request);
         final boostBody = AssistantGatewayLogsBoostBody.fromJson(payload);
         if (boostBody.clear) {
@@ -269,8 +267,7 @@ class AssistantApiGateway {
         );
         return;
       }
-      if (method == 'POST' &&
-          _matchesPath(path, '/v1/assistant/alerts/test')) {
+      if (method == 'POST' && _matchesPath(path, '/v1/assistant/alerts/test')) {
         final payload = await _decodeBody(request);
         final alertBody = AssistantGatewayAlertsTestBody.fromJson(payload);
         final alert = await _alertDispatcher.dispatchSynthetic(
@@ -395,8 +392,9 @@ class AssistantApiGateway {
         }
         final runStartedAt = DateTime.now();
         final runRes = await _assistantGateway.run(runReq);
-        final elapsedMs =
-            DateTime.now().difference(runStartedAt).inMilliseconds;
+        final elapsedMs = DateTime.now()
+            .difference(runStartedAt)
+            .inMilliseconds;
         final providerId =
             selectedProvider?.id ??
             _assistantGateway.currentModel() ??
@@ -476,8 +474,7 @@ class AssistantApiGateway {
         );
         return;
       }
-      if (method == 'POST' &&
-          _matchesPath(path, '/v1/assistant/runs/stream')) {
+      if (method == 'POST' && _matchesPath(path, '/v1/assistant/runs/stream')) {
         final payload = await _decodeBody(request);
         final runReq = AssistantRunRequest.fromGatewayBody(payload);
         final runRes = await _assistantGateway.run(runReq);
@@ -534,11 +531,12 @@ class AssistantApiGateway {
           messages: <AssistantRunMessage>[
             AssistantRunMessage(role: 'user', content: text),
           ],
-          sessionId: 'channel_${adapterId}_${DateTime.now().millisecondsSinceEpoch}',
+          sessionId:
+              'channel_${adapterId}_${DateTime.now().millisecondsSinceEpoch}',
           userId: 'channel_user',
           channel: adapterId,
           deviceProfile: 'pc',
-          maxIterations: 8,
+          maxIterations: AssistantRunRequest.defaultTotalModelStageBudget,
         );
         final runRes = await _assistantGateway.run(runReq);
         final dispatch = await _adapterRuntime.dispatch(

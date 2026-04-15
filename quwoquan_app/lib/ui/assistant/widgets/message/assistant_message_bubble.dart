@@ -487,6 +487,8 @@ class AssistantMessageBubble extends StatelessWidget {
                 stageId: resolvedJourneyViewModel.activeStageId,
                 textColor: textColor,
               ),
+            if (showProcessDrawer && showAnswerBubble)
+              SizedBox(height: AppSpacing.intraGroupMd),
             if (showAnswerBubble)
               Row(
                 mainAxisSize: MainAxisSize.min,

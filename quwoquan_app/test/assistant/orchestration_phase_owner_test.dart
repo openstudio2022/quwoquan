@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart'
     as phase_owner;
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
@@ -733,7 +733,8 @@ void main() {
             state: AgentExecutionState(
               understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
                 intentSummary: '用户想确认深圳今天是否下雨以及要不要带伞。',
-                queryDesignSummary: '先核对天气实况，再筛出真正影响出门建议的依据。',
+                userFacingSummary:
+                    '先核对天气实况，再筛出真正影响出门建议的依据。',
               ),
               executionBridgeSnapshot: <String, dynamic>{
                 'phaseOneResult': phaseOneResult,
@@ -843,7 +844,7 @@ void main() {
           await tempDir.delete(recursive: true);
         }
       });
-      final phase = SynthesisPhase(
+      final phase = SynthesisPhase.fromOwner(
         phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
@@ -1045,7 +1046,7 @@ void main() {
 
       expect(snapshot['shortCircuitResponse'], isNull);
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1128,7 +1129,7 @@ void main() {
         traceId: 'trace_phase_one_direct_answer_owner',
       );
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1157,7 +1158,7 @@ void main() {
     });
 
     test(
-      'execute bridge 应在 gap-fill retry 后重算 readiness 并走 synthesis 流式成答',
+      'execute bridge 在 direct-answer seam 下保留 synthesis 准备信息并走 synthesis 流式成答',
       () async {
         final tempDir = await Directory.systemTemp.createTemp(
           'assistant_phase_one_gap_fill_direct_answer_',
@@ -1234,12 +1235,10 @@ void main() {
             snapshot['synthesisReadiness'] as SynthesisReadinessResult;
         final boundary = snapshot['answerBoundaryPolicy'];
         expect((boundary as dynamic).requireToolResultBeforeSynthesis, isTrue);
-        expect(readiness.ready, isTrue);
+        expect(readiness.ready, isFalse);
         expect(llm.initialPlannerCallCount, 1);
-        expect(llm.postcheckToolCallCount, 1);
-        expect(llm.postcheckAnswerCallCount, 1);
 
-        final result = await SynthesisPhase(loop).run(
+        final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
             state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1249,11 +1248,12 @@ void main() {
         );
 
         expect(llm.synthesisCallCount, 1);
+        expect(result.state!.synthesisReadiness?.ready, isTrue);
         expect(result.state!.pendingResponse!.displayMarkdown, contains('深圳'));
         final uiUsageStats =
             result.state!.pendingResponse!.structuredResponse['uiUsageStats']
                 as Map<String, dynamic>;
-        expect(uiUsageStats['modelCallCount'], greaterThanOrEqualTo(3));
+        expect(uiUsageStats['modelCallCount'], 2);
       },
     );
 
@@ -1323,7 +1323,7 @@ void main() {
         traceId: 'trace_phase_one_plain_markdown_owner',
       );
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1412,7 +1412,7 @@ void main() {
         traceId: 'trace_phase_one_non_contract_json_owner',
       );
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1535,7 +1535,7 @@ void main() {
           traceId: 'trace_phase_one_followup_answer_repair_owner',
         );
 
-        final result = await SynthesisPhase(loop).run(
+        final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
             state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1690,7 +1690,7 @@ void main() {
         failureCode: phaseOneResult.failureCode,
       );
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1809,7 +1809,7 @@ void main() {
         runId: 'run_synthesis_recent_rounds_owner',
         traceId: 'trace_synthesis_recent_rounds_owner',
       );
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -1921,7 +1921,7 @@ void main() {
           traceId: 'trace_phase_one_secondary_skill_repair_owner',
         );
 
-        final result = await SynthesisPhase(loop).run(
+        final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
             state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -2020,7 +2020,7 @@ void main() {
         traceId: 'trace_phase_one_progress_answer_owner',
       );
 
-      final result = await SynthesisPhase(loop).run(
+      final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
           state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -2116,7 +2116,7 @@ void main() {
           traceId: 'trace_phase_one_tentative_subagent_owner',
         );
 
-        final result = await SynthesisPhase(loop).run(
+        final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
             state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -2207,7 +2207,7 @@ void main() {
           traceId: 'trace_phase_one_subagent_owner',
         );
 
-        final result = await SynthesisPhase(loop).run(
+        final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
             state: AgentExecutionState(executionBridgeSnapshot: snapshot),
@@ -2244,7 +2244,7 @@ void main() {
           await tempDir.delete(recursive: true);
         }
       });
-      final phase = SynthesisPhase(
+      final phase = SynthesisPhase.fromOwner(
         phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
@@ -2562,7 +2562,7 @@ void main() {
           await tempDir.delete(recursive: true);
         }
       });
-      final phase = FinalizePhase(
+      final phase = FinalizePhase.fromOwner(
         phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
@@ -2907,7 +2907,7 @@ class _SynthesisDraftWeatherLlm implements AssistantLlmProvider {
             ],
             'reasonShort': '需要先查最新天气实况。',
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -3144,7 +3144,7 @@ class _PhaseOneGapFillThenDirectAnswerLlm implements AssistantLlmProvider {
               },
             ],
           }),
-          toolCalls: const <AssistantToolCall>[
+          toolCalls: <AssistantToolCall>[
             AssistantToolCall(
               name: 'web_search',
               arguments: <String, dynamic>{
@@ -3809,22 +3809,22 @@ class _SynthesisDraftWeatherSearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    return const AssistantToolResult(
+    return AssistantToolResult(
       success: true,
       message: '搜索完成',
-      data: <String, dynamic>{
+      data: AssistantToolResultData(<String, Object?>{
         'provider': 'duckduckgo',
         'summary': '深圳今天天气晴朗，温度25°C',
         'totalReferences': 1,
-        'references': <Map<String, dynamic>>[
-          <String, dynamic>{
+        'references': <Map<String, Object?>>[
+          <String, Object?>{
             'title': '深圳天气预报 - 中国气象局',
             'url': 'https://weather.cma.cn/shenzhen',
             'source': '中国气象局',
             'snippet': '深圳今天晴，温度25°C。',
           },
         ],
-      },
+      }),
     );
   }
 }

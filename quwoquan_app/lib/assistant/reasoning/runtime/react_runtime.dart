@@ -449,7 +449,7 @@ class ReactRuntime {
         );
       }
       // 当模型不走 native function calling（如 mimo-v2-flash），尝试从 JSON 正文
-      // 的 toolPlan / nextAction='tool_call' 字段里解析工具调用。
+      // 的 toolCalls / nextAction='tool_call' 字段里解析工具调用。
       // 合成阶段（availableToolNames 为空）不解析 JSON 工具调用，
       // 防止模型输出 nextAction='tool_call' 时误触发工具执行。
       // For models without native function calling, also check reasoning text
@@ -467,6 +467,9 @@ class ReactRuntime {
         shell: executionShell,
         availableToolNames: availableToolNames,
       );
+      if (effectiveToolCalls.isNotEmpty && output.text.trim().isNotEmpty) {
+        finalText = output.text;
+      }
       for (final call in effectiveToolCalls) {
         if (!_isRetrievalLikeTool(call.name)) continue;
         final plannedTasks = _coerceSearchTasks(call.arguments['queryTasks']);
@@ -1492,7 +1495,7 @@ class ReactRuntime {
     return current;
   }
 
-  /// 从模型输出的 JSON 正文里解析 toolPlan / nextAction='tool_call' 字段，
+  /// 从模型输出的 JSON 正文里解析 toolCalls / nextAction='tool_call' 字段，
   /// 用于不支持 native function calling 的模型（如 mimo-v2-flash）。
   List<AssistantToolCall> _extractToolCallsFromJsonText(String text) {
     if (text.trim().isEmpty) return const <AssistantToolCall>[];
@@ -1506,27 +1509,17 @@ class ReactRuntime {
     final nextAction = turn?.nextAction ?? view.nextAction;
     if (nextAction != 'tool_call') return const <AssistantToolCall>[];
 
-    final toolPlan = turn?.toolPlan ?? payload['toolPlan'];
-    if (toolPlan is! List) return const <AssistantToolCall>[];
+    final rawToolCalls = (turn?.toolCalls.isNotEmpty ?? false)
+        ? turn!.toolCalls.map((item) => item.toJson()).toList(growable: false)
+        : ((payload['toolCalls'] as List?) ?? const <Object?>[]);
+    if (rawToolCalls is! List) return const <AssistantToolCall>[];
 
     final calls = <AssistantToolCall>[];
-    for (final item in toolPlan) {
+    for (final item in rawToolCalls) {
       if (item is! Map) continue;
-      final toolName =
-          (item['toolName'] as String? ?? item['name'] as String?)?.trim() ??
-          '';
-      if (toolName.isEmpty) continue;
-      final rawArgs = item['arguments'];
-      final args = rawArgs is Map
-          ? rawArgs.cast<String, Object?>()
-          : <String, dynamic>{
-              for (final entry in item.entries)
-                if (entry.key != 'toolName' &&
-                    entry.key != 'name' &&
-                    entry.key != 'toolCallId')
-                  '${entry.key}': entry.value,
-            };
-      calls.add(AssistantToolCall(name: toolName, arguments: args));
+      final call = AssistantToolCall.fromJson(item.cast<String, dynamic>());
+      if (call.name.trim().isEmpty) continue;
+      calls.add(call);
     }
 
     return calls;
@@ -1552,7 +1545,7 @@ class ReactRuntime {
       return 'answering';
     }
     if (hasPrecomputedSearch && state.iteration == 1 && state.usedTools == 0) {
-      return 'search';
+      return 'analyzing';
     }
     if (normalizedTemplateId == 'planner.global_plan' &&
         state.iteration == 1 &&
@@ -1565,10 +1558,10 @@ class ReactRuntime {
       return 'understanding';
     }
     if (state.evidences.isNotEmpty || state.usedTools > 0) {
-      return 'search';
+      return 'analyzing';
     }
     if (state.iteration > 1 && availableToolNames.isNotEmpty) {
-      return 'search';
+      return 'analyzing';
     }
     return 'understanding';
   }
@@ -1669,7 +1662,6 @@ class ReactRuntime {
     if (fromReasoningJson.isNotEmpty) return fromReasoningJson;
     return '';
   }
-
 }
 
 class _RuntimeExecutionShell {

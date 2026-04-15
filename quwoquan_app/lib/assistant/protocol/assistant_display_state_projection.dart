@@ -1,8 +1,18 @@
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 const String assistantDisplayStateField = 'displayState';
+
+class _ProcessNarrativeParts {
+  const _ProcessNarrativeParts({this.title = '', this.body = ''});
+
+  final String title;
+  final String body;
+
+  bool get hasVisibleText => title.trim().isNotEmpty || body.trim().isNotEmpty;
+}
 
 bool hasAssistantDisplayState(AssistantDisplayState state) {
   return state.process.blocks.isNotEmpty ||
@@ -108,9 +118,8 @@ AssistantProcessDisplayState _resolveProcessDisplayState({
     ..._buildRetrievalBlocks(
       processTimeline,
       retrievalProcessing,
-      understandingSnapshot,
+      answerProcessing,
     ),
-    ..._buildAnswerOrganizationBlocks(processTimeline, answerProcessing),
   ];
   final mergedBlocks = _mergeProcessBlocks(
     preferred: explicitBlocks,
@@ -198,6 +207,7 @@ List<AssistantProcessDisplayBlock> _buildUnderstandingBlocks(
   RunArtifactsUnderstandingSnapshot snapshot,
 ) {
   final frame = _frameForStep(processTimeline, ProcessStepId.understanding);
+  final designFrame = _frameForStep(processTimeline, ProcessStepId.retrievalDesign);
   final status = frame?.status ?? JourneyStageStatus.pending;
   final summary = snapshot.userFacingSummary.trim();
   final resolutionItems = snapshot.resolutionItems
@@ -208,51 +218,95 @@ List<AssistantProcessDisplayBlock> _buildUnderstandingBlocks(
                 item.resolvedValue.trim().isNotEmpty),
       )
       .toList(growable: false);
-  if (summary.isEmpty && resolutionItems.isEmpty) {
+  final enriched = _enrichSummaryWithResolutions(summary, resolutionItems);
+  final designSummary = designFrame?.headline.trim() ?? '';
+  final designDetail = designFrame?.detail.trim() ?? '';
+  if (summary.isEmpty &&
+      resolutionItems.isEmpty &&
+      designSummary.isEmpty &&
+      designDetail.isEmpty) {
     return const <AssistantProcessDisplayBlock>[];
   }
-  final blocks = <AssistantProcessDisplayBlock>[];
-  if (summary.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'understanding_summary',
-        stepId: ProcessStepId.understanding,
-        status: status,
-        kind: ProcessDisplayBlockKind.summary,
-        title: summary,
-      ),
-    );
+  final narrative = _buildNarrativeParts(
+    primary: enriched.isNotEmpty ? enriched : designSummary,
+    secondary: _composeNarrativeSegments(<String>[
+      if (enriched.isNotEmpty) designSummary,
+      designDetail,
+    ]),
+  );
+  if (!narrative.hasVisibleText) {
+    return const <AssistantProcessDisplayBlock>[];
   }
-  if (resolutionItems.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'understanding_resolution_items',
-        stepId: ProcessStepId.understanding,
-        status: status,
-        kind: ProcessDisplayBlockKind.points,
-        items: resolutionItems
-            .asMap()
-            .entries
-            .map(
-              (entry) => AssistantDisplayItem(
-                itemId: 'understanding_resolution_${entry.key}',
-                title: entry.value.title.trim(),
-                body: entry.value.detail.trim().isNotEmpty
-                    ? entry.value.detail.trim()
-                    : entry.value.resolvedValue.trim(),
-              ),
-            )
-            .toList(growable: false),
-      ),
-    );
+  return <AssistantProcessDisplayBlock>[
+    AssistantProcessDisplayBlock(
+      blockId: 'understanding_narrative',
+      stepId: ProcessStepId.understanding,
+      status: status,
+      kind: ProcessDisplayBlockKind.summary,
+      title: narrative.title,
+      body: narrative.body,
+    ),
+  ];
+}
+
+String _enrichSummaryWithResolutions(
+  String summary,
+  List<RunArtifactsUnderstandingResolutionItem> resolutionItems,
+) {
+  if (resolutionItems.isEmpty) return summary;
+  final details = resolutionItems
+      .map(
+        (item) => item.detail.trim().isNotEmpty
+            ? item.detail.trim()
+            : item.resolvedValue.trim(),
+      )
+      .where((d) => d.isNotEmpty)
+      .toList(growable: false);
+  if (details.isEmpty) return summary;
+  if (summary.isEmpty) {
+    return details.join('；');
   }
-  return blocks;
+  final uncovered = details
+      .where((d) => !_summaryCoversDetail(summary, d))
+      .toList(growable: false);
+  if (uncovered.isEmpty) return summary;
+  final base =
+      summary.endsWith('。') || summary.endsWith('.')
+          ? summary.substring(0, summary.length - 1)
+          : summary;
+  return '$base。${uncovered.join('；')}。';
+}
+
+bool _summaryCoversDetail(String summary, String detail) {
+  final s = summary.replaceAll(RegExp(r'\s+'), '');
+  final d = detail.replaceAll(RegExp(r'\s+'), '');
+  if (d.length <= 6) return s.contains(d);
+  final datePattern = RegExp(r'\d{4}[-年/]\d{1,2}[-月/日]?\d{0,2}');
+  final detailDates =
+      datePattern.allMatches(d).map((m) => m.group(0)!).toList();
+  for (final date in detailDates) {
+    if (!s.contains(date)) return false;
+  }
+  if (detailDates.isNotEmpty) return true;
+  final segments = d.split(RegExp(r'[，,。；;、\s]+'));
+  for (final seg in segments) {
+    if (seg.length >= 2 && seg.length <= 6 && s.contains(seg)) return true;
+  }
+  const knownGeoNames = <String>[
+    '深圳', '北京', '上海', '广州', '杭州', '成都', '武汉', '南京',
+    '重庆', '天津', '苏州', '西安', '长沙', '东莞', '青岛', '郑州',
+    '中国', '美国', '日本', '香港', '台湾', '新加坡',
+  ];
+  for (final geo in knownGeoNames) {
+    if (d.contains(geo) && s.contains(geo)) return true;
+  }
+  return false;
 }
 
 List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   List<ProcessTimelineFrame> processTimeline,
   RetrievalProcessingSnapshot snapshot,
-  RunArtifactsUnderstandingSnapshot understandingSnapshot,
+  RunArtifactsAnswerProcessing answerProcessing,
 ) {
   final frame = _frameForStep(
     processTimeline,
@@ -268,71 +322,142 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
       )
       .toList(growable: false);
   final summary = _resolveRetrievalSummary(frame: frame, snapshot: snapshot);
-  final blocks = <AssistantProcessDisplayBlock>[];
-  if (summary.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'retrieval_summary',
-        stepId: ProcessStepId.retrievalProcessing,
-        status: status,
-        kind: ProcessDisplayBlockKind.summary,
-        title: summary,
-      ),
-    );
-  }
-  final queryDesignItems = _buildRetrievalQueryDesignItems(
-    understandingSnapshot,
-    retrievalSummary: summary,
+  final readinessNarrative = answerProcessing.readinessSummary.trim().isNotEmpty
+      ? answerProcessing.readinessSummary.trim()
+      : _fallbackRetrievalReadinessNarrative(
+          snapshot: snapshot,
+          answerProcessing: answerProcessing,
+        );
+  final continuationNarrative = _buildRetrievalContinuationNarrative(
+    snapshot: snapshot,
+    answerProcessing: answerProcessing,
+    existingTexts: <String>[summary, readinessNarrative],
   );
-  if (queryDesignItems.isNotEmpty) {
+  final narrative = _buildNarrativeParts(
+    primary: summary.isNotEmpty ? summary : readinessNarrative,
+    secondary: _composeNarrativeSegments(<String>[
+      if (summary.isNotEmpty) readinessNarrative,
+      continuationNarrative,
+    ]),
+  );
+  final acceptedCount = snapshot.acceptedDocumentCount > 0
+      ? snapshot.acceptedDocumentCount
+      : refs.length;
+  final processedCount = snapshot.processedDocumentCount > 0
+      ? snapshot.processedDocumentCount
+      : acceptedCount;
+  final statsLabel = (processedCount > 0 || acceptedCount > 0)
+      ? UITextConstants.assistantProcessReferenceDigestTemplate
+            .replaceFirst('%s', processedCount.toString())
+            .replaceFirst('%s', acceptedCount.toString())
+      : '';
+  final blocks = <AssistantProcessDisplayBlock>[];
+  if (statsLabel.isNotEmpty || refs.isNotEmpty) {
     blocks.add(
       AssistantProcessDisplayBlock(
-        blockId: 'retrieval_query_design',
-        stepId: ProcessStepId.retrievalProcessing,
-        status: status,
-        kind: ProcessDisplayBlockKind.points,
-        items: queryDesignItems,
-      ),
-    );
-  }
-  if (refs.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'retrieval_references',
+        blockId: 'retrieval_reference_stats',
         stepId: ProcessStepId.retrievalProcessing,
         status: status,
         kind: ProcessDisplayBlockKind.references,
+        title: statsLabel,
         references: refs,
+      ),
+    );
+  }
+  if (narrative.hasVisibleText) {
+    blocks.add(
+      AssistantProcessDisplayBlock(
+        blockId: 'retrieval_narrative',
+        stepId: ProcessStepId.retrievalProcessing,
+        status: status,
+        kind: ProcessDisplayBlockKind.summary,
+        title: narrative.title,
+        body: narrative.body,
       ),
     );
   }
   return blocks;
 }
 
-List<AssistantDisplayItem> _buildRetrievalQueryDesignItems(
-  RunArtifactsUnderstandingSnapshot snapshot, {
-  String retrievalSummary = '',
+String _buildRetrievalContinuationNarrative({
+  required RetrievalProcessingSnapshot snapshot,
+  required RunArtifactsAnswerProcessing answerProcessing,
+  required Iterable<String> existingTexts,
 }) {
-  final preferredSummary = snapshot.queryDesignSummary.trim();
-  if (preferredSummary.isEmpty) {
-    return const <AssistantDisplayItem>[];
+  final segments = <String>[];
+  final visibleKeyPoints = snapshot.selectedKeyPoints
+      .map((item) => item.trim())
+      .where(
+        (item) => item.isNotEmpty &&
+            !_isDuplicateNarrativeText(item, existing: existingTexts),
+      )
+      .toList(growable: false);
+  if (visibleKeyPoints.isNotEmpty) {
+    segments.add('我先把${visibleKeyPoints.join('、')}这些能直接支撑回答的点拎出来。');
   }
-  if (_isDuplicateQueryDesignText(
-    preferredSummary,
-    existing: <String>[retrievalSummary, snapshot.userFacingSummary.trim()],
-  )) {
-    return const <AssistantDisplayItem>[];
+  final visibleKeyFacts = answerProcessing.keyFacts
+      .map((item) => item.trim())
+      .where(
+        (item) => item.isNotEmpty &&
+            !_isDuplicateNarrativeText(item, existing: existingTexts),
+      )
+      .toList(growable: false);
+  if (visibleKeyFacts.isNotEmpty) {
+    if (visibleKeyFacts.length == 1) {
+      segments.add('回答会先围绕${visibleKeyFacts.first}展开。');
+    } else {
+      segments.add('回答会按${visibleKeyFacts.join('、')}的顺序展开。');
+    }
   }
-  return <AssistantDisplayItem>[
-    AssistantDisplayItem(
-      itemId: 'retrieval_query_design_summary',
-      title: '检索设计',
-      body: preferredSummary,
-    ),
-  ];
+  return segments.join('\n');
 }
 
-bool _isDuplicateQueryDesignText(
+String _fallbackRetrievalReadinessNarrative({
+  required RetrievalProcessingSnapshot snapshot,
+  required RunArtifactsAnswerProcessing answerProcessing,
+}) {
+  if (answerProcessing.keyFacts.isNotEmpty) {
+    return '我会先把关键点排好顺序，再把回答写清楚。';
+  }
+  if (snapshot.selectedKeyPoints.isNotEmpty) {
+    return '我先把能直接回答你的关键信息收拢起来。';
+  }
+  return '';
+}
+
+String _composeNarrativeSegments(Iterable<String> segments) {
+  return segments
+      .map((segment) => segment.trim())
+      .where((segment) => segment.isNotEmpty)
+      .join('\n');
+}
+
+_ProcessNarrativeParts _buildNarrativeParts({
+  required String primary,
+  String secondary = '',
+}) {
+  final normalizedPrimary = primary.trim();
+  final normalizedSecondary = secondary.trim();
+  if (normalizedPrimary.isEmpty && normalizedSecondary.isEmpty) {
+    return const _ProcessNarrativeParts();
+  }
+  if (normalizedPrimary.isEmpty) {
+    return _ProcessNarrativeParts(title: normalizedSecondary);
+  }
+  if (normalizedSecondary.isEmpty ||
+      _isDuplicateNarrativeText(
+        normalizedSecondary,
+        existing: <String>[normalizedPrimary],
+      )) {
+    return _ProcessNarrativeParts(title: normalizedPrimary);
+  }
+  return _ProcessNarrativeParts(
+    title: normalizedPrimary,
+    body: normalizedSecondary,
+  );
+}
+
+bool _isDuplicateNarrativeText(
   String candidate, {
   required Iterable<String> existing,
 }) {
@@ -375,31 +500,6 @@ String _resolveRetrievalSummary({
     return frameDetail;
   }
   return snapshot.processingSummary.trim();
-}
-
-List<AssistantProcessDisplayBlock> _buildAnswerOrganizationBlocks(
-  List<ProcessTimelineFrame> processTimeline,
-  RunArtifactsAnswerProcessing snapshot,
-) {
-  final frame = _frameForStep(
-    processTimeline,
-    ProcessStepId.answerOrganization,
-  );
-  final status = frame?.status ?? JourneyStageStatus.pending;
-  final summary = snapshot.readinessSummary.trim();
-  final blocks = <AssistantProcessDisplayBlock>[];
-  if (summary.isNotEmpty) {
-    blocks.add(
-      AssistantProcessDisplayBlock(
-        blockId: 'answer_summary',
-        stepId: ProcessStepId.answerOrganization,
-        status: status,
-        kind: ProcessDisplayBlockKind.summary,
-        title: summary,
-      ),
-    );
-  }
-  return blocks;
 }
 
 ProcessTimelineFrame? _frameForStep(
@@ -462,8 +562,6 @@ String _resolveProcessSummary({
         frame.understandingSnapshot.userFacingSummary,
       ProcessStepId.retrievalProcessing =>
         frame.retrievalProcessing.processingSummary,
-      ProcessStepId.answerOrganization =>
-        frame.answerProcessing.readinessSummary,
       _ => '',
     }.trim();
     if (snapshotSummary.isNotEmpty) {
@@ -478,10 +576,10 @@ List<AssistantProcessDisplayBlock> _mergeProcessBlocks({
   required List<AssistantProcessDisplayBlock> fallback,
 }) {
   final merged = <AssistantProcessDisplayBlock>[];
-  final seen = <String>{};
+  final indexByKey = <String, int>{};
 
   String blockKey(AssistantProcessDisplayBlock block) {
-    final blockId = block.blockId.trim();
+    final blockId = _canonicalProcessBlockId(block.blockId);
     if (blockId.isNotEmpty) {
       return blockId;
     }
@@ -490,17 +588,156 @@ List<AssistantProcessDisplayBlock> _mergeProcessBlocks({
 
   for (final block in preferred) {
     final key = blockKey(block);
-    if (_hasVisibleProcessBlock(block) && seen.add(key)) {
+    if (_hasVisibleProcessBlock(block)) {
+      indexByKey[key] = merged.length;
       merged.add(block);
     }
   }
   for (final block in fallback) {
     final key = blockKey(block);
-    if (_hasVisibleProcessBlock(block) && seen.add(key)) {
-      merged.add(block);
+    if (!_hasVisibleProcessBlock(block)) {
+      continue;
     }
+    final existingIndex = indexByKey[key];
+    if (existingIndex == null) {
+      indexByKey[key] = merged.length;
+      merged.add(block);
+      continue;
+    }
+    merged[existingIndex] = _mergeProcessBlock(
+      existing: merged[existingIndex],
+      incoming: block,
+    );
   }
   return merged;
+}
+
+AssistantProcessDisplayBlock _mergeProcessBlock({
+  required AssistantProcessDisplayBlock existing,
+  required AssistantProcessDisplayBlock incoming,
+}) {
+  return AssistantProcessDisplayBlock(
+    blockId: existing.blockId.trim().isNotEmpty
+        ? existing.blockId
+        : incoming.blockId,
+    stepId: existing.stepId != ProcessStepId.unknown
+        ? existing.stepId
+        : incoming.stepId,
+    status: _mergeProcessBlockStatus(existing.status, incoming.status),
+    kind: existing.kind != ProcessDisplayBlockKind.unknown
+        ? existing.kind
+        : incoming.kind,
+    title: _preferRicherProcessText(existing.title, incoming.title),
+    body: _preferRicherProcessText(existing.body, incoming.body),
+    items: _mergeProcessDisplayItems(existing.items, incoming.items),
+    references: _mergeRetrievalReferences(existing.references, incoming.references),
+  );
+}
+
+JourneyStageStatus _mergeProcessBlockStatus(
+  JourneyStageStatus existing,
+  JourneyStageStatus incoming,
+) {
+  if (incoming == JourneyStageStatus.blocked ||
+      incoming == JourneyStageStatus.completed) {
+    return incoming;
+  }
+  if (existing == JourneyStageStatus.blocked ||
+      existing == JourneyStageStatus.completed) {
+    return existing;
+  }
+  if (incoming == JourneyStageStatus.active) {
+    return JourneyStageStatus.active;
+  }
+  if (existing == JourneyStageStatus.active) {
+    return JourneyStageStatus.active;
+  }
+  if (incoming != JourneyStageStatus.unknown &&
+      incoming != JourneyStageStatus.pending) {
+    return incoming;
+  }
+  return existing;
+}
+
+String _preferRicherProcessText(String existing, String incoming) {
+  final current = existing.trim();
+  final next = incoming.trim();
+  if (current.isEmpty) {
+    return next;
+  }
+  if (next.isEmpty) {
+    return current;
+  }
+  if (next.length > current.length) {
+    return next;
+  }
+  return current;
+}
+
+List<AssistantDisplayItem> _mergeProcessDisplayItems(
+  List<AssistantDisplayItem> existing,
+  List<AssistantDisplayItem> incoming,
+) {
+  final merged = <String, AssistantDisplayItem>{};
+  String itemKey(AssistantDisplayItem item) {
+    final itemId = item.itemId.trim();
+    if (itemId.isNotEmpty) {
+      return itemId;
+    }
+    return '${item.title.trim()}:${item.body.trim()}';
+  }
+
+  for (final item in <AssistantDisplayItem>[...existing, ...incoming]) {
+    final key = itemKey(item);
+    final current = merged[key];
+    if (current == null) {
+      merged[key] = item;
+      continue;
+    }
+    merged[key] = AssistantDisplayItem(
+      itemId: current.itemId.trim().isNotEmpty ? current.itemId : item.itemId,
+      title: _preferRicherProcessText(current.title, item.title),
+      body: _preferRicherProcessText(current.body, item.body),
+      referenceIds: <String>{
+        ...current.referenceIds,
+        ...item.referenceIds,
+      }.where((id) => id.trim().isNotEmpty).toList(growable: false),
+    );
+  }
+  return merged.values.toList(growable: false);
+}
+
+List<RetrievalProcessingReference> _mergeRetrievalReferences(
+  List<RetrievalProcessingReference> existing,
+  List<RetrievalProcessingReference> incoming,
+) {
+  final merged = <String, RetrievalProcessingReference>{};
+  for (final reference in <RetrievalProcessingReference>[
+    ...existing,
+    ...incoming,
+  ]) {
+    final key = reference.url.trim().isNotEmpty
+        ? reference.url.trim()
+        : '${reference.source.trim()}:${reference.title.trim()}';
+    if (key.trim().isEmpty || merged.containsKey(key)) {
+      continue;
+    }
+    merged[key] = reference;
+  }
+  return merged.values.toList(growable: false);
+}
+
+String _canonicalProcessBlockId(String raw) {
+  switch (raw.trim()) {
+    case 'understanding_summary':
+      return 'understanding_narrative';
+    case 'retrieval_summary':
+      return 'retrieval_narrative';
+    case 'retrieval_references':
+      return 'retrieval_reference_stats';
+    default:
+      return raw.trim();
+  }
 }
 
 bool _hasVisibleProcessBlock(AssistantProcessDisplayBlock block) {
