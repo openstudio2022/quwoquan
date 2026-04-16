@@ -140,7 +140,7 @@ class _BottomNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelStyle = TextStyle(
       fontSize: AppTypography.iosCaption2,
-      fontWeight: selected ? AppTypography.semiBold : AppTypography.medium,
+      fontWeight: AppTypography.bottomNavLabelWeight,
       color: selected ? activeColor : inactiveColor,
       height: AppTypography.lineHeightTight,
       letterSpacing: -0.08,

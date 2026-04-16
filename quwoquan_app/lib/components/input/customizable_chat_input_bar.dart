@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 /// 与 `CustomizableChatInputBar` 工具栏共享的图标规格（同文件内复用）。
-const double _kChatInputToolbarGlyphSize = AppSpacing.iconMedium + 2;
+const double _kChatInputToolbarGlyphSize = AppSpacing.iconMedium;
 const double _kChatInputSendGlyphSize = AppSpacing.iconMedium + 1;
 const IconData _kChatInputKeyboardCompactIcon = Icons.keyboard_outlined;
 const IconData _kChatInputEmojiPanelIcon = Icons.sentiment_satisfied_alt;
@@ -603,7 +603,6 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     required String semanticLabel,
     double iconSize = _kChatInputToolbarGlyphSize,
   }) {
-    final diameter = AppSpacing.iconButtonMinSizeSm;
     final fg = _foregroundPrimary(context).withValues(alpha: 0.82);
     return Semantics(
       button: true,
@@ -611,7 +610,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       child: CupertinoButton(
         key: key,
         padding: EdgeInsets.zero,
-        minimumSize: Size(diameter, diameter),
+        minimumSize: Size(AppSpacing.buttonHeightMd, AppSpacing.buttonHeightMd),
         onPressed: onTap,
         child: Icon(icon, size: iconSize, color: fg),
       ),
@@ -981,13 +980,13 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         left,
-        if (left is! SizedBox) SizedBox(width: AppSpacing.sm),
+        if (left is! SizedBox) SizedBox(width: AppSpacing.intraGroupXs),
         Expanded(
           child: _isVoiceMode
               ? _buildVoicePanel()
               : _buildTextComposerCenter(),
         ),
-        if (right.isNotEmpty) SizedBox(width: AppSpacing.sm),
+        if (right.isNotEmpty) SizedBox(width: AppSpacing.intraGroupXs),
         Row(mainAxisSize: MainAxisSize.min, children: right),
       ],
     );

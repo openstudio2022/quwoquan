@@ -295,14 +295,20 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }
 
   Widget _buildConstrainedContent(Widget child) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: AppSpacing.feedMaxContentWidth,
-        ),
-        child: child,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > AppSpacing.feedMaxContentWidth;
+        final maxWidth = isWide
+            ? constraints.maxWidth - AppSpacing.containerLg * 2
+            : AppSpacing.feedMaxContentWidth;
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: child,
+          ),
+        );
+      },
     );
   }
 

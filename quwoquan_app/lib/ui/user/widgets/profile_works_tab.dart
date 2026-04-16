@@ -80,7 +80,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                 AppSpacing.interGroupLg,
               ),
               child: MasonryGridView.count(
-                crossAxisCount: 2,
+                crossAxisCount: AppSpacing.responsiveGridColumns(context),
                 mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
                 crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                 itemCount: filtered.length,
@@ -129,7 +129,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                         AppSpacing.interGroupLg,
                       ),
                       sliver: SliverMasonryGrid.count(
-                        crossAxisCount: 2,
+                        crossAxisCount: AppSpacing.responsiveGridColumns(context),
                         mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         childCount: filtered.length,

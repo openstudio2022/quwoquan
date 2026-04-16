@@ -150,6 +150,47 @@ class AppColors {
   static const Color createMediaFallbackGradientTop = Color(0xFF343434);
   static const Color createMediaFallbackGradientBottom = Color(0xFF141414);
 
+  // ==================== Feed 卡片语义色 ====================
+
+  /// 关注流卡片浅色边框（柔和轮廓，非强分隔）
+  static const Color feedCardBorderLight = Color(0xFFE8E8ED);
+  static const Color feedCardBorderDark = Color(0xFF38383A);
+
+  /// 关注流卡片表面色（比纯白略暖，与灰底形成轻微层次）
+  static const Color feedCardSurfaceLight = Color(0xFFFFFEFD);
+  static const Color feedCardSurfaceDark = Color(0xFF1C1C1E);
+
+  /// Feed 互动图标默认色（中性灰，不喧宾夺主）
+  static const Color feedActionIconLight = Color(0xFF8E8E93);
+  static const Color feedActionIconDark = Color(0xFF98989F);
+
+  static Color feedCardBorder(BuildContext context) =>
+      CupertinoDynamicColor.resolve(
+        CupertinoDynamicColor.withBrightness(
+          color: feedCardBorderLight,
+          darkColor: feedCardBorderDark,
+        ),
+        context,
+      );
+
+  static Color feedCardSurface(BuildContext context) =>
+      CupertinoDynamicColor.resolve(
+        CupertinoDynamicColor.withBrightness(
+          color: feedCardSurfaceLight,
+          darkColor: feedCardSurfaceDark,
+        ),
+        context,
+      );
+
+  static Color feedActionIcon(BuildContext context) =>
+      CupertinoDynamicColor.resolve(
+        CupertinoDynamicColor.withBrightness(
+          color: feedActionIconLight,
+          darkColor: feedActionIconDark,
+        ),
+        context,
+      );
+
   /// 聊天页专用（1:1 图一）：对话区域背景、气泡色
   static const Color chatBackground = Color(0xFFF5F5F5);
   static const Color chatBubbleIncoming = Color(0xFFFFFFFF);

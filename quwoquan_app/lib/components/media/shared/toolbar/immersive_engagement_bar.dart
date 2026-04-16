@@ -54,19 +54,12 @@ class ImmersiveEngagementBar extends StatelessWidget {
   /// 工具栏预留高度（含内边距），供宿主布局使用。
   static const double preferredReservedHeight = 108;
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
-  static double _actionCellWidth(BuildContext ctx) =>
-      AppSpacing.responsiveValue(
-        ctx,
-        compact: 44.0,
-        regular: 52.0,
-        expanded: 60.0,
-      );
 
   static double _crossGroupGap(BuildContext ctx) => AppSpacing.responsiveValue(
     ctx,
-    compact: AppSpacing.intraGroupSm,
-    regular: AppSpacing.intraGroupMd,
-    expanded: AppSpacing.intraGroupLg,
+    compact: AppSpacing.intraGroupXs,
+    regular: AppSpacing.intraGroupSm,
+    expanded: AppSpacing.intraGroupMd,
   );
 
   static int _restNameMaxChars(BuildContext ctx) => AppSpacing.responsiveValue(
@@ -79,9 +72,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
   static int _revealNameMaxChars(BuildContext ctx) =>
       AppSpacing.responsiveValue(
         ctx,
-        compact: 3,
-        regular: 3,
-        expanded: 3,
+        compact: 4,
+        regular: 5,
+        expanded: 6,
       ).round();
 
   static double _nameVisibleWidth(
@@ -149,7 +142,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
     final revealNameSlotWidth = revealNameWidth > revealSecondaryWidth
         ? revealNameWidth
         : revealSecondaryWidth;
-    final actionCellWidth = _actionCellWidth(context);
     final crossGroupGap = _crossGroupGap(context);
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
     final showFollowLane = showFollowButton;
@@ -176,12 +168,18 @@ class ImmersiveEngagementBar extends StatelessWidget {
               bottomPadding,
             ),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
-            child: isSelfPost
-                ? SizedBox(
-                    height: AppSpacing.iconButtonMinSizeSm,
-                    child: _buildSelfActionRow(),
-                  )
-                : Row(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppSpacing.feedMaxContentWidth,
+                ),
+                child: isSelfPost
+                    ? SizedBox(
+                        height: AppSpacing.iconButtonMinSizeSm,
+                        child: _buildSelfActionRow(),
+                      )
+                    : Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       GestureDetector(
@@ -321,78 +319,49 @@ class ImmersiveEngagementBar extends StatelessWidget {
                       ),
                       SizedBox(width: crossGroupGap),
                       Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final actionGroupWidth = (actionCellWidth * 3)
-                                .clamp(0.0, constraints.maxWidth);
-                            final resolvedCellWidth = actionGroupWidth / 3;
-
-                            return Align(
-                              alignment: Alignment.centerRight,
-                              child: SizedBox(
-                                key: const ValueKey('immersive-actions-group'),
-                                width: actionGroupWidth,
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: resolvedCellWidth,
-                                      child: _action(
-                                        icon: Icon(
-                                          isLiked
-                                              ? CupertinoIcons.heart_fill
-                                              : CupertinoIcons.heart,
-                                          color: isLiked
-                                              ? AppColors.worksLike
-                                              : AppColors.worksTitle,
-                                          size: AppSpacing.iconMedium,
-                                        ),
-                                        label: formatCompactActionCount(
-                                          likeCount,
-                                        ),
-                                        onTap: onLikeTap,
-                                        alignment: Alignment.centerLeft,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: resolvedCellWidth,
-                                      child: _action(
-                                        icon: Icon(
-                                          CupertinoIcons
-                                              .arrowshape_turn_up_right,
-                                          color: AppColors.worksTitle,
-                                          size: AppSpacing.iconMedium,
-                                        ),
-                                        label: formatCompactActionCount(
-                                          shareCount,
-                                        ),
-                                        onTap: onShareTap,
-                                        alignment: Alignment.center,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: resolvedCellWidth,
-                                      child: _action(
-                                        icon: Icon(
-                                          CupertinoIcons.chat_bubble,
-                                          color: AppColors.worksTitle,
-                                          size: AppSpacing.iconMedium,
-                                        ),
-                                        label: formatCompactActionCount(
-                                          commentCount,
-                                        ),
-                                        onTap: onCommentTap,
-                                        alignment: Alignment.centerRight,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            _action(
+                              icon: Icon(
+                                isLiked
+                                    ? CupertinoIcons.heart_fill
+                                    : CupertinoIcons.heart,
+                                color: isLiked
+                                    ? AppColors.worksLike
+                                    : AppColors.worksTitle,
+                                size: AppSpacing.iconMedium,
                               ),
-                            );
-                          },
+                              label: formatCompactActionCount(likeCount),
+                              onTap: onLikeTap,
+                            ),
+                            SizedBox(width: AppSpacing.interGroupSm),
+                            _action(
+                              icon: Icon(
+                                CupertinoIcons.arrowshape_turn_up_right,
+                                color: AppColors.worksTitle,
+                                size: AppSpacing.iconMedium,
+                              ),
+                              label: formatCompactActionCount(shareCount),
+                              onTap: onShareTap,
+                            ),
+                            SizedBox(width: AppSpacing.interGroupSm),
+                            _action(
+                              icon: Icon(
+                                CupertinoIcons.chat_bubble,
+                                color: AppColors.worksTitle,
+                                size: AppSpacing.iconMedium,
+                              ),
+                              label: formatCompactActionCount(commentCount),
+                              onTap: onCommentTap,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+              ),
+            ),
           ),
         ),
       ),
@@ -519,32 +488,25 @@ class ImmersiveEngagementBar extends StatelessWidget {
   Widget _action({
     required Widget icon,
     required String label,
-    required Alignment alignment,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: double.infinity,
-        child: Align(
-          alignment: alignment,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              icon,
-              SizedBox(height: AppSpacing.intraGroupXs / 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.worksBodyText,
-                  fontSize: AppTypography.xs,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.worksBodyText,
+              fontSize: AppTypography.xs,
+              fontWeight: AppTypography.medium,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

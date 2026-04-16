@@ -67,6 +67,32 @@ class AppTypography {
   /// 底部栏字重（选中不加粗）
   static const FontWeight bottomNavLabelWeight = medium;
 
+  // ==================== Feed 正文 / 作者名响应式层级 ====================
+
+  /// 关注流 post 正文响应式字号：compact 紧凑, expanded 标准 iOS body。
+  static double feedBodyResponsive(BuildContext context) => responsive(
+    context,
+    compact: iosSubheadline,
+    regular: iosCallout,
+    expanded: iosBody,
+  );
+
+  /// 关注流 post 作者名响应式字号。
+  static double feedAuthorNameResponsive(BuildContext context) => responsive(
+    context,
+    compact: iosFootnote,
+    regular: iosSubheadline,
+    expanded: iosCallout,
+  );
+
+  /// 关注流 post 互动计数（赞/评/转）响应式字号。
+  static double feedActionCountResponsive(BuildContext context) => responsive(
+    context,
+    compact: iosCaption1,
+    regular: iosFootnote,
+    expanded: iosSubheadline,
+  );
+
   /// 欢迎页主标题（hero）
   static const double welcomeHeroTitle = 48.0;
 

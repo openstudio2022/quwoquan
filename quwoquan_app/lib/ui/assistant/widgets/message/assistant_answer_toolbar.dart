@@ -34,7 +34,7 @@ class AssistantAnswerToolbar extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.xs),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           _ToolbarIcon(
             icon: feedbackStatus == 'helpful'
@@ -44,6 +44,7 @@ class AssistantAnswerToolbar extends StatelessWidget {
             onTap: onFeedbackHelpful,
             semanticLabel: '有帮助',
           ),
+          SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
             icon: feedbackStatus == 'unhelpful'
                 ? CupertinoIcons.hand_thumbsdown_fill
@@ -52,18 +53,21 @@ class AssistantAnswerToolbar extends StatelessWidget {
             onTap: onFeedbackUnhelpful,
             semanticLabel: '没帮助',
           ),
+          SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
             icon: CupertinoIcons.doc_on_doc,
             color: iconColor,
             onTap: onCopyAnswer,
             semanticLabel: '复制',
           ),
+          SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
             icon: CupertinoIcons.arrowshape_turn_up_right,
             color: iconColor,
             onTap: onShareAnswer,
             semanticLabel: '转发',
           ),
+          SizedBox(width: AppSpacing.intraGroupMd),
           _RegenerateButton(
             iconColor: iconColor,
             onSelected: onRegenerateSelected,

@@ -200,7 +200,7 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                     ? selectedBackground
                                     : AppColors.transparent,
                                 borderRadius: BorderRadius.circular(
-                                  AppSpacing.circularBorderRadius,
+                                  AppSpacing.largeBorderRadius,
                                 ),
                                 border: Border.all(
                                   color: selected

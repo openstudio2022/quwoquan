@@ -135,7 +135,7 @@ class PostPreviewCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
+                        fontWeight: AppTypography.medium,
                         color: fgPrimary,
                       ),
                     ),

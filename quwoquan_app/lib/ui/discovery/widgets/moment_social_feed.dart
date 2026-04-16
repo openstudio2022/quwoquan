@@ -15,6 +15,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -171,109 +172,115 @@ class MomentSocialFeed extends ConsumerWidget {
       isDark,
       ColorType.pageBackground,
     );
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final wideLayout = screenWidth > AppSpacing.feedMaxContentWidth;
-    final cardWidth = wideLayout ? AppSpacing.feedMaxContentWidth : screenWidth;
+    final columns = AppSpacing.feedResponsiveColumns(context);
+    final isMultiColumn = columns > 1;
+    final horizontalPad = isMultiColumn
+        ? AppSpacing.feedContentHorizontal(context)
+        : AppSpacing.zero;
+
+    Widget buildCard(PostBaseDto dto, int index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
+      });
+      if (dto.isArticleLike && shouldShowFollowingArticles) {
+        return _FollowingArticleCard(
+          item: dto,
+          isDark: isDark,
+          summaryLineLimit:
+              _followingArticleDistributionProfile.summaryLineLimit,
+          sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+          onTap: () => onPostTap?.call(dto, 0, feedPosts: feedPosts),
+          onMoreTap: () {
+            if (onMoreTap != null) {
+              onMoreTap!(dto);
+            } else {
+              _showMoreActions(context, ref, dto);
+            }
+          },
+        );
+      }
+      return _MomentWeiboCard(
+        cardContainerKey: ValueKey<String>('moment-feed-card-$index'),
+        moreButtonKey: ValueKey<String>('moment-feed-more-$index'),
+        wideLayout: isMultiColumn,
+        item: dto,
+        isDark: isDark,
+        isLiked: discoveryState.likedPosts.contains(dto.id),
+        likeCount: (() {
+          final n = discoveryState.getPostLikesCount(dto.id);
+          return n > 0 ? n : dto.likeCount;
+        })(),
+        sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+        onUserTap: (id) => onUserTap(
+          id,
+          avatarUrl: dto.avatarUrl,
+          displayName: dto.displayName,
+          backgroundUrl: dto.authorBackgroundUrl,
+        ),
+        onImageTap: (imgIndex) =>
+            onPostTap?.call(dto, imgIndex, feedPosts: feedPosts),
+        onCommentTap: () {
+          CommentViewer.showModal(context: context, postId: dto.id);
+        },
+        onShareTap: () => _showShare(
+          context,
+          ref,
+          dto,
+          enableIdentityTemplate: ref.read(
+            contentFeatureFlagProvider(
+              'enable_identity_share_template',
+            ),
+          ),
+        ),
+        onLikeTap: () {
+          ref
+              .read(discoveryStateProvider.notifier)
+              .toggleLike(dto.id, baseLikesCount: dto.likeCount);
+        },
+        onMoreTap: () {
+          if (onMoreTap != null) {
+            onMoreTap!(dto);
+          } else {
+            _showMoreActions(context, ref, dto);
+          }
+        },
+      );
+    }
+
+    final bottomPad = MediaQuery.of(context).padding.bottom +
+        AppSpacing.bottomNavHeight;
+
+    if (isMultiColumn) {
+      return ColoredBox(
+        color: pageBackground,
+        child: MasonryGridView.count(
+          crossAxisCount: columns,
+          mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+          crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+          padding: EdgeInsets.fromLTRB(
+            horizontalPad,
+            AppSpacing.sm,
+            horizontalPad,
+            bottomPad + AppSpacing.sm,
+          ),
+          itemCount: feedPosts.length,
+          itemBuilder: (context, index) =>
+              buildCard(feedPosts[index], index),
+        ),
+      );
+    }
 
     return ColoredBox(
       color: pageBackground,
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(
-          0,
-          wideLayout ? AppSpacing.sm : 0,
-          0,
-          MediaQuery.of(context).padding.bottom +
-              AppSpacing.bottomNavHeight +
-              (wideLayout ? AppSpacing.sm : 0),
+          0, 0, 0, bottomPad,
         ),
         itemCount: feedPosts.length,
-        separatorBuilder: (context, index) => DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted),
-          ),
-          child: SizedBox(height: AppSpacing.sm),
+        separatorBuilder: (context, index) => SizedBox(
+          height: AppSpacing.intraGroupSm,
         ),
-        itemBuilder: (context, index) {
-          final dto = feedPosts[index];
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
-          });
-          if (dto.isArticleLike && shouldShowFollowingArticles) {
-            return Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: cardWidth,
-                child: _FollowingArticleCard(
-                  item: dto,
-                  isDark: isDark,
-                  summaryLineLimit:
-                      _followingArticleDistributionProfile.summaryLineLimit,
-                  sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-                  onTap: () => onPostTap?.call(dto, 0, feedPosts: feedPosts),
-                  onMoreTap: () {
-                    if (onMoreTap != null) {
-                      onMoreTap!(dto);
-                    } else {
-                      _showMoreActions(context, ref, dto);
-                    }
-                  },
-                ),
-              ),
-            );
-          }
-          return Align(
-            alignment: Alignment.topCenter,
-            child: SizedBox(
-              width: cardWidth,
-              child: _MomentWeiboCard(
-                cardContainerKey: ValueKey<String>('moment-feed-card-$index'),
-                moreButtonKey: ValueKey<String>('moment-feed-more-$index'),
-                wideLayout: wideLayout,
-                item: dto,
-                isDark: isDark,
-                isLiked: discoveryState.likedPosts.contains(dto.id),
-                likeCount: (() {
-                  final n = discoveryState.getPostLikesCount(dto.id);
-                  return n > 0 ? n : dto.likeCount;
-                })(),
-                sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-                onUserTap: (id) => onUserTap(
-                  id,
-                  avatarUrl: dto.avatarUrl,
-                  displayName: dto.displayName,
-                  backgroundUrl: dto.authorBackgroundUrl,
-                ),
-                onImageTap: (imgIndex) =>
-                    onPostTap?.call(dto, imgIndex, feedPosts: feedPosts),
-                onCommentTap: () {
-                  CommentViewer.showModal(context: context, postId: dto.id);
-                },
-                onShareTap: () => _showShare(
-                  context,
-                  ref,
-                  dto,
-                  enableIdentityTemplate: ref.read(
-                    contentFeatureFlagProvider(
-                      'enable_identity_share_template',
-                    ),
-                  ),
-                ),
-                onLikeTap: () {
-                  ref
-                      .read(discoveryStateProvider.notifier)
-                      .toggleLike(dto.id, baseLikesCount: dto.likeCount);
-                },
-                onMoreTap: () {
-                  if (onMoreTap != null) {
-                    onMoreTap!(dto);
-                  } else {
-                    _showMoreActions(context, ref, dto);
-                  }
-                },
-              ),
-            ),
-          );
-        },
+        itemBuilder: (context, index) => buildCard(feedPosts[index], index),
       ),
     );
   }
@@ -490,9 +497,6 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
   Widget build(BuildContext context) {
     final item = widget.item;
     final isDark = widget.isDark;
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.18 : 0.12);
     final fg = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -501,21 +505,21 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
       isDark,
       ColorType.foregroundSecondary,
     );
-    final bg = AppColors.iosSystemBackground(context);
+    final cardBg = AppColors.feedCardSurface(context);
+    final cardBorder = AppColors.feedCardBorder(context);
     final borderRadius = BorderRadius.circular(
       AppSpacing.contentPreviewCornerRadius,
-    );
-    final border = Border.all(
-      color: separator.withValues(alpha: widget.wideLayout ? 0.18 : 0.1),
-      width: AppSpacing.hairline,
     );
 
     return DecoratedBox(
       key: widget.cardContainerKey,
       decoration: BoxDecoration(
-        color: bg,
+        color: cardBg,
         borderRadius: borderRadius,
-        border: border,
+        border: Border.all(
+          color: cardBorder.withValues(alpha: isDark ? 0.22 : 0.38),
+          width: AppSpacing.hairline,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -527,7 +531,6 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 头像 + 作者信息行
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -536,7 +539,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                   minimumSize: Size.zero,
                   onPressed: () => widget.onUserTap(item.authorId),
                   child: CircleAvatar(
-                    radius: AppSpacing.avatarUserMd / 2,
+                    radius: AppSpacing.avatarUserSm / 2,
                     backgroundImage: item.avatarUrl.isNotEmpty
                         ? NetworkImage(item.avatarUrl)
                         : null,
@@ -544,7 +547,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                     child: item.avatarUrl.isEmpty
                         ? Icon(
                             CupertinoIcons.person_crop_circle_fill,
-                            size: AppSpacing.iconMedium,
+                            size: AppSpacing.iconSmall,
                             color: muted,
                           )
                         : null,
@@ -552,52 +555,49 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                 ),
                 SizedBox(width: AppSpacing.intraGroupMd),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosBody,
-                                  fontWeight: AppTypography.medium,
-                                  color: fg,
-                                  letterSpacing: -0.16,
-                                  height: AppSpacing.textLineHeightDense,
-                                ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.feedAuthorNameResponsive(context),
+                                fontWeight: AppTypography.medium,
+                                color: fg,
+                                letterSpacing: -0.08,
+                                height: AppSpacing.textLineHeightDense,
                               ),
                             ),
-                            SizedBox(width: AppSpacing.intraGroupXs),
-                            _MomentMoreButton(
-                              key: widget.moreButtonKey,
-                              isDark: isDark,
-                              color: muted,
-                              onPressed: widget.onMoreTap,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.two),
-                        Text(
-                          _buildMetaLine(context),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: muted,
-                            letterSpacing: -0.04,
-                            height: AppSpacing.one,
                           ),
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          _MomentMoreButton(
+                            key: widget.moreButtonKey,
+                            isDark: isDark,
+                            color: muted,
+                            onPressed: widget.onMoreTap,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.two),
+                      Text(
+                        _buildMetaLine(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosCaption1,
+                          color: muted,
+                          letterSpacing: -0.04,
+                          height: AppSpacing.one,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -812,7 +812,7 @@ class _ExpandableText extends StatelessWidget {
       ColorType.foregroundPrimary,
     );
     final textStyle = TextStyle(
-      fontSize: AppTypography.iosBody,
+      fontSize: AppTypography.feedBodyResponsive(context),
       color: fg,
       height: AppSpacing.textLineHeightBodyRelaxed,
       letterSpacing: -0.18,
@@ -1077,8 +1077,8 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tertiary = AppColors.iosTertiaryLabel(context);
-    final likeColor = isLiked ? AppColors.worksLike : tertiary;
+    final actionIconColor = AppColors.feedActionIcon(context);
+    final likeColor = isLiked ? AppColors.worksLike : actionIconColor;
 
     final likeScale = TweenSequence<double>([
       TweenSequenceItem(
@@ -1112,7 +1112,7 @@ class _ActionRow extends StatelessWidget {
               ),
             ),
             label: formatCompactActionCount(likeCount),
-            muted: tertiary,
+            muted: actionIconColor,
             onTap: onLike,
           ),
         ),
@@ -1122,10 +1122,10 @@ class _ActionRow extends StatelessWidget {
             child: Icon(
               CupertinoIcons.arrowshape_turn_up_right,
               size: _momentToolbarIconSize,
-              color: tertiary,
+              color: actionIconColor,
             ),
             label: formatCompactActionCount(item.shareCount),
-            muted: tertiary,
+            muted: actionIconColor,
             onTap: onShare,
           ),
         ),
@@ -1135,10 +1135,10 @@ class _ActionRow extends StatelessWidget {
             child: Icon(
               CupertinoIcons.chat_bubble,
               size: _momentToolbarIconSize,
-              color: tertiary,
+              color: actionIconColor,
             ),
             label: formatCompactActionCount(item.commentCount),
-            muted: tertiary,
+            muted: actionIconColor,
             onTap: onComment,
           ),
         ),
@@ -1174,9 +1174,9 @@ class _ActionRow extends StatelessWidget {
               overflow: TextOverflow.fade,
               softWrap: false,
               style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
+                fontSize: AppTypography.feedActionCountResponsive(context),
                 color: foreground,
-                fontWeight: AppTypography.medium,
+                fontWeight: AppTypography.regular,
               ),
             ),
           ],

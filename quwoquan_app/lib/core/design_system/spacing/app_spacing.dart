@@ -704,4 +704,30 @@ class AppSpacing {
     if (width >= expandedBreakpoint) return expanded;
     return regular;
   }
+
+  // ==================== 响应式内容网格 ====================
+
+  /// 瀑布流/宫格的最佳列宽（理想单列内容宽度），用于计算列数。
+  static const double _gridIdealColumnWidth = 180.0;
+
+  /// 瀑布流/宫格的最小列数。
+  static const int gridMinColumns = 2;
+
+  /// 根据可用宽度计算瀑布流/宫格列数（Pinterest 风格自适应）。
+  /// 保证至少 [gridMinColumns] 列，每列不窄于 [_gridIdealColumnWidth]。
+  static int responsiveGridColumns(BuildContext context, {double? availableWidth}) {
+    final width = availableWidth ?? MediaQuery.sizeOf(context).width;
+    final usable = width - feedContentHorizontal(context) * 2;
+    final cols = (usable / _gridIdealColumnWidth).floor();
+    return cols < gridMinColumns ? gridMinColumns : cols;
+  }
+
+  /// 关注流在宽屏下的列数（单列微博风格 → 多列卡片流过渡）。
+  /// 手机始终单列；平板 2 列；大屏 3 列。
+  static int feedResponsiveColumns(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < expandedBreakpoint) return 1;
+    if (width < 900) return 2;
+    return 3;
+  }
 }

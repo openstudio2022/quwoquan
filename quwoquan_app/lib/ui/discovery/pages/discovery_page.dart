@@ -785,7 +785,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 AppSpacing.interGroupLg,
           ),
           sliver: SliverMasonryGrid.count(
-            crossAxisCount: 2,
+            crossAxisCount: AppSpacing.responsiveGridColumns(context),
             mainAxisSpacing: AppSpacing.interGroupSm,
             crossAxisSpacing: gap,
             childCount: photos.length,

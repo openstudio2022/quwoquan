@@ -63,7 +63,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
     return SliverPadding(
       padding: const EdgeInsets.all(AppSpacing.postPreviewSectionPadding),
       sliver: SliverMasonryGrid.count(
-        crossAxisCount: 2,
+        crossAxisCount: AppSpacing.responsiveGridColumns(context),
         mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
         crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
         childCount: posts.length,
