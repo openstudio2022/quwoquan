@@ -172,7 +172,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
               alignment: Alignment.bottomCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxWidth: AppSpacing.feedMaxContentWidth,
+                  maxWidth: 500.0,
                 ),
                 child: isSelfPost
                     ? SizedBox(
@@ -335,7 +335,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                               label: formatCompactActionCount(likeCount),
                               onTap: onLikeTap,
                             ),
-                            SizedBox(width: AppSpacing.interGroupSm),
+                            SizedBox(width: AppSpacing.interGroupMd),
                             _action(
                               icon: Icon(
                                 CupertinoIcons.arrowshape_turn_up_right,
@@ -345,7 +345,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                               label: formatCompactActionCount(shareCount),
                               onTap: onShareTap,
                             ),
-                            SizedBox(width: AppSpacing.interGroupSm),
+                            SizedBox(width: AppSpacing.interGroupMd),
                             _action(
                               icon: Icon(
                                 CupertinoIcons.chat_bubble,
