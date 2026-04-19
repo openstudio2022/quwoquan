@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_composer.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/narrative_engine.dart';
@@ -63,7 +64,7 @@ class BaselineKernel {
 
   List<EvidenceLedgerEntry> buildEvidenceLedger({
     required String domainId,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required SlotStateSnapshot slotState,
     required Map<String, dynamic> retrievalPolicy,
   }) {

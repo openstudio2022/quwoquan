@@ -17,9 +17,10 @@ import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_session_transcript_loader.dart';
+import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_run_response_display_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_replay_trace_payload.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
@@ -2563,153 +2564,16 @@ class AssistantConversationController extends ChangeNotifier {
     return response.runArtifacts?.toJson() ?? const <String, dynamic>{};
   }
 
-  AssistantDisplayProjection? _assistantTurnProjectionFromMap(
-    Map<String, dynamic> payload,
-  ) {
-    if (payload.isEmpty) return null;
-    final turn = tryParseAssistantTurnOutput(payload);
-    if (turn == null) return null;
-    final projection = AssistantDisplayTextResolver.projectTurn(
-      AssistantDisplayTextResolver.normalizeTurn(turn),
-    );
-    if (!projection.hasRenderableContent) return null;
-    return projection;
-  }
-
-  AssistantDisplayProjection? _assistantTurnProjectionFromRawText(String raw) {
-    final markdown =
-        AssistantDisplayTextResolver.extractDisplayMarkdownFromStructuredText(
-          raw,
-        ).trim();
-    final plainText =
-        AssistantDisplayTextResolver.extractPlainTextFromStructuredText(
-          raw,
-        ).trim();
-    if (markdown.isEmpty && plainText.isEmpty) return null;
-    final effectiveMarkdown = markdown.isNotEmpty ? markdown : plainText;
-    final effectivePlainText = plainText.isNotEmpty
-        ? plainText
-        : AssistantDisplayTextResolver.stripMarkdown(effectiveMarkdown).trim();
-    return AssistantDisplayProjection(
-      markdown: effectiveMarkdown,
-      plainText: effectivePlainText,
-      summary: effectivePlainText.isNotEmpty
-          ? effectivePlainText
-          : effectiveMarkdown,
-    );
-  }
-
-  AssistantDisplayProjection? _structuredResponseAssistantTurnProjection(
-    AssistantRunResponse response,
-  ) {
-    final topLevel = _assistantTurnProjectionFromMap(
-      response.structuredResponse,
-    );
-    if (topLevel != null) return topLevel;
-    final nested =
-        (response.structuredResponse['answerPayload'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return _assistantTurnProjectionFromMap(nested);
-  }
-
   String _responseArtifactDisplayMarkdown(AssistantRunResponse response) {
-    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
-    if (displayState.answer.blocks.isNotEmpty) {
-      final markdown = renderAnswerBlocksToMarkdown(displayState.answer.blocks);
-      if (markdown.isNotEmpty) {
-        return _firstCompletedDisplayCandidate(<String>[markdown]);
-      }
-    }
-    final projection = _structuredResponseAssistantTurnProjection(response);
-    if (projection != null) {
-      return _firstCompletedDisplayCandidate(<String>[
-        projection.markdown,
-        projection.plainText,
-      ]);
-    }
-    final runArtifacts = _responseRunArtifactsMap(response);
-    final normalized =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '',
-          allowJsonExtraction: false,
-        );
-    if (normalized.isNotEmpty) {
-      return normalized;
-    }
-    final normalizedPlain =
-        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          (runArtifacts['displayPlainText'] as String?)?.trim() ?? '',
-          allowJsonExtraction: false,
-        );
-    if (normalizedPlain.isNotEmpty) {
-      return normalizedPlain;
-    }
-    final rawProjection = _assistantTurnProjectionFromRawText(
-      response.finalText,
+    return AssistantRunResponseDisplayProjector.resolveDisplayMarkdown(
+      response,
     );
-    if (rawProjection != null) {
-      return _firstCompletedDisplayCandidate(<String>[
-        rawProjection.markdown,
-        rawProjection.plainText,
-      ]);
-    }
-    return (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '';
   }
 
   String _responseArtifactDisplayPlainText(AssistantRunResponse response) {
-    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
-    if (displayState.answer.blocks.isNotEmpty) {
-      final plain = renderAnswerBlocksToPlainText(displayState.answer.blocks);
-      if (plain.isNotEmpty) {
-        return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          plain,
-          allowJsonExtraction: false,
-        );
-      }
-    }
-    final projection = _structuredResponseAssistantTurnProjection(response);
-    if (projection != null) {
-      final effectivePlainText = projection.plainText.trim().isNotEmpty
-          ? projection.plainText
-          : AssistantDisplayTextResolver.stripMarkdown(projection.markdown);
-      return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-        effectivePlainText,
-        allowJsonExtraction: false,
-      );
-    }
-    final runArtifacts = _responseRunArtifactsMap(response);
-    final normalizedPlain =
-        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          (runArtifacts['displayPlainText'] as String?)?.trim() ?? '',
-          allowJsonExtraction: false,
-        );
-    if (normalizedPlain.isNotEmpty) {
-      return normalizedPlain;
-    }
-    final normalizedMarkdown =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          (runArtifacts['displayMarkdown'] as String?)?.trim() ?? '',
-          allowJsonExtraction: false,
-        );
-    if (normalizedMarkdown.isNotEmpty) {
-      return AssistantDisplayTextResolver.stripMarkdown(
-        normalizedMarkdown,
-      ).trim();
-    }
-    final rawProjection = _assistantTurnProjectionFromRawText(
-      response.finalText,
+    return AssistantRunResponseDisplayProjector.resolveDisplayPlainText(
+      response,
     );
-    if (rawProjection != null) {
-      final effectivePlainText = rawProjection.plainText.trim().isNotEmpty
-          ? rawProjection.plainText
-          : AssistantDisplayTextResolver.stripMarkdown(rawProjection.markdown);
-      return AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-        effectivePlainText,
-        allowJsonExtraction: false,
-      );
-    }
-    return (runArtifacts['displayPlainText'] as String?)?.trim() ?? '';
   }
 
   String _resolveAssistantDisplayText(AssistantRunResponse response) {

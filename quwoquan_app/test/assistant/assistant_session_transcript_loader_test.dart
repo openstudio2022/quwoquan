@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_session_transcript_loader.dart';
+import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 
 void main() {

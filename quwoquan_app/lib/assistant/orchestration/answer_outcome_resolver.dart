@@ -158,6 +158,21 @@ class AnswerOutcomeResolver {
           runArtifacts: runArtifacts,
         ) ??
         const SynthesisReadinessResult();
+    final effectiveConversationStateDecision =
+        (conversationStateDecision != null &&
+            !synthesisReadiness.ready &&
+            synthesisReadiness.replanTask != null)
+        ? ConversationStateDecision(
+            nextAction: AssistantNextAction.toolCall,
+            finalAnswerMode: FinalAnswerMode.replan,
+            answerEligibility: AnswerEligibility.blocked,
+            slotState: conversationStateDecision.slotState,
+            missingCriticalSlots: conversationStateDecision.missingCriticalSlots,
+            askUser: conversationStateDecision.askUser,
+            qualityGates: conversationStateDecision.qualityGates,
+            finalAnswerReady: false,
+          )
+        : conversationStateDecision;
     final domainPolicyBundle =
         (_hasOutcomeField(rawOutcome, 'domainPolicyBundle')
             ? _parseDomainPolicyBundle(rawOutcome!['domainPolicyBundle'])
@@ -174,7 +189,7 @@ class AnswerOutcomeResolver {
         );
     final answerGateDecision = _answerGateResolver.resolve(
       retrievalOutcome: retrievalOutcome,
-      conversationStateDecision: conversationStateDecision,
+      conversationStateDecision: effectiveConversationStateDecision,
       renderableAnswer: _hasRenderableAnswer(
         structured: structured,
         runArtifacts: runArtifacts,
@@ -198,7 +213,7 @@ class AnswerOutcomeResolver {
       synthesisReadiness: synthesisReadiness,
       retrievalOutcome: retrievalOutcome,
       answerGateDecision: answerGateDecision,
-      conversationStateDecision: conversationStateDecision,
+      conversationStateDecision: effectiveConversationStateDecision,
       domainPolicyBundle: domainPolicyBundle,
       journey: journey,
     );
@@ -325,9 +340,12 @@ class AnswerOutcomeResolver {
     RunArtifacts? runArtifacts,
   }) {
     final candidate = parsed ?? fallback;
+    final journeyFinalAnswerReady =
+        runArtifacts?.journey.readiness.finalAnswerReady == true;
     final finalAnswerReady =
         conversationStateDecision?.finalAnswerReady == true ||
         aggregationState?.finalAnswerReady == true ||
+        journeyFinalAnswerReady ||
         (runArtifacts?.displayMarkdown.trim().isNotEmpty ?? false) ||
         (runArtifacts?.displayPlainText.trim().isNotEmpty ?? false);
     if (!finalAnswerReady) {

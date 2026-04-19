@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
@@ -11,6 +12,7 @@ import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_draft.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
@@ -42,6 +44,7 @@ class AssistantBootstrapContext {
     this.domainCatalogVersion = '',
     this.fullSkillCatalog = '',
     this.skillCatalog = '',
+    this.sessionHistoryState = const AssistantSessionHistoryState(),
   });
 
   final String sessionId;
@@ -66,6 +69,17 @@ class AssistantBootstrapContext {
   final String domainCatalogVersion;
   final String fullSkillCatalog;
   final String skillCatalog;
+  final AssistantSessionHistoryState sessionHistoryState;
+
+  String get compactHistorySummary {
+    if (recentDialogueRounds.isNotEmpty) {
+      return buildRecentDialogueRoundsTranscript(recentDialogueRounds);
+    }
+    if (sessionHistoryState.sessionSummary.trim().isNotEmpty) {
+      return sessionHistoryState.sessionSummary.trim();
+    }
+    return historySummary;
+  }
 
   AssistantBootstrapContext copyWith({
     String? sessionId,
@@ -89,6 +103,7 @@ class AssistantBootstrapContext {
     String? domainCatalogVersion,
     String? fullSkillCatalog,
     String? skillCatalog,
+    AssistantSessionHistoryState? sessionHistoryState,
   }) {
     return AssistantBootstrapContext(
       sessionId: sessionId ?? this.sessionId,
@@ -119,6 +134,7 @@ class AssistantBootstrapContext {
       domainCatalogVersion: domainCatalogVersion ?? this.domainCatalogVersion,
       fullSkillCatalog: fullSkillCatalog ?? this.fullSkillCatalog,
       skillCatalog: skillCatalog ?? this.skillCatalog,
+      sessionHistoryState: sessionHistoryState ?? this.sessionHistoryState,
     );
   }
 }

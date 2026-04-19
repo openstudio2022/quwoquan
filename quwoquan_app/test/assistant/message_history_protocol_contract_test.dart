@@ -3,9 +3,11 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';
+import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:test/test.dart';
@@ -319,6 +321,60 @@ void main() {
     expect(summary, contains('understanding: 第二轮理解摘要'));
     expect(summary, contains('assistant: 第二答'));
     expect(summary, isNot(contains('第一问')));
+  });
+
+  test('Rule-5c: historyState 在 sessions.json metadata 中往返保持轻量字段', () async {
+    final file = File('${tempDir.path}/sessions_history.json');
+    final sm = AssistantSessionManager(storagePath: file.path);
+    await sm.load();
+    sm.updateSessionHistoryState(
+      sessionId: 'assistant',
+      historyState: const AssistantSessionHistoryState(
+        sessionSummary: '上次已经确认了深圳天气适合出门。',
+        completedSkillSummaries: <AssistantSkillHistorySummary>[
+          AssistantSkillHistorySummary(
+            skillId: 'weather',
+            role: 'primary',
+            summary: '已确认深圳天气适合出门。',
+            status: 'complete',
+            answerReady: true,
+            acceptedEvidenceCount: 2,
+          ),
+        ],
+        pendingSkillStates: <AssistantSkillPendingState>[
+          AssistantSkillPendingState(
+            skillId: 'calendar',
+            role: 'supporting',
+            summary: '待补充明天时间范围。',
+            status: 'pending',
+            nextAction: 'ask_user',
+            missingSlots: <String>['date'],
+          ),
+        ],
+        userPreferences: <PreferenceFact>[
+          PreferenceFact(
+            factId: 'pref_1',
+            scope: 'session',
+            key: 'city',
+            value: '深圳',
+            source: 'test',
+            createdAt: '2026-04-09T10:00:00Z',
+          ),
+        ],
+        lastAcceptedEvidenceSummary: 'weather: 深圳天气',
+      ),
+    );
+    await sm.save();
+
+    final reloaded = AssistantSessionManager(storagePath: file.path);
+    await reloaded.load();
+    final historyState = reloaded.historyStateOf('assistant');
+
+    expect(historyState.sessionSummary, '上次已经确认了深圳天气适合出门。');
+    expect(historyState.completedSkillSummaries, hasLength(1));
+    expect(historyState.pendingSkillStates, hasLength(1));
+    expect(historyState.userPreferences, hasLength(1));
+    expect(historyState.lastAcceptedEvidenceSummary, contains('weather'));
   });
 
   test('Rule-6: root-level 旧历史格式不再兼容，load() 后直接清空', () async {

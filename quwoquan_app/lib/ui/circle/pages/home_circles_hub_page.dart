@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_layout.dart';
+import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_style.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
@@ -75,6 +77,10 @@ double _homeCircleChannelTileHeight(BuildContext context) {
 enum _HomeCirclesModuleTab { recommended, mine }
 
 class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
+  static const Duration _channelPanelTransitionDuration = Duration(
+    milliseconds: 220,
+  );
+
   static const Set<String> _myCircleIds = <String>{
     'c-photo-owner',
     'c-tech-admin',
@@ -113,8 +119,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         return;
       }
       setState(() {
-        _circleFeedItems =
-            feed.map(CircleHubFeedPostEntry.fromPostDto).toList(growable: true);
+        _circleFeedItems = feed
+            .map(CircleHubFeedPostEntry.fromPostDto)
+            .toList(growable: true);
       });
     } catch (_) {
       if (!mounted) {
@@ -314,6 +321,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   void _toggleChannelPanel() {
     setState(() {
       _isChannelPanelOpen = !_isChannelPanelOpen;
+      if (!_isChannelPanelOpen) {
+        _draggingChannelId = null;
+      }
     });
   }
 
@@ -507,9 +517,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     if (viewerEntries.isEmpty) return;
     final tappedDto = tapped.tryResolveDto();
     if (tappedDto == null || !_supportsViewer(tappedDto)) return;
-    final viewerDtos = viewerEntries
-        .map((e) => e.dto)
-        .toList(growable: false);
+    final viewerDtos = viewerEntries.map((e) => e.dto).toList(growable: false);
     final mediaRaws = circleHubMediaViewerRawsByPostId(viewerEntries);
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
@@ -650,7 +658,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                   onStoryTap: (item, items) => _openCircleFeedViewer(
                     context,
                     item.feedEntry,
-                    items.map((entry) => entry.feedEntry).toList(growable: false),
+                    items
+                        .map((entry) => entry.feedEntry)
+                        .toList(growable: false),
                   ),
                   onModuleTabChanged: (nextTab) {
                     if (nextTab == _activeModuleTab) return;
@@ -685,31 +695,71 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
             ],
           ),
         ),
-        if (_isChannelPanelOpen)
-          Positioned.fill(
-            child: _HomeCirclesChannelPanel(
-              isDark: isDark,
-              categoryLabelMap: _categoryLabelMap,
-              selectedIds: _manageableSelectedCategoryIds,
-              unselectedIds: _unselectedCategoryIds,
-              draggingChannelId: _draggingChannelId,
-              onClose: _toggleChannelPanel,
-              onMoveToSelected: _moveToSelected,
-              onMoveToUnselected: _moveToUnselected,
-              onReorderSelectedBefore: _reorderSelectedBefore,
-              onDragStarted: (id) {
-                setState(() {
-                  _draggingChannelId = id;
-                });
-              },
-              onDragEnded: () {
-                if (!mounted) return;
-                setState(() {
-                  _draggingChannelId = null;
-                });
-              },
-            ),
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: _channelPanelTransitionDuration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, -0.06),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+            child: _isChannelPanelOpen
+                ? AppTopModalSurface(
+                    key: const ValueKey('home-circles-channel-panel-open'),
+                    panelKey: const ValueKey('home-circles-channel-panel'),
+                    onDismiss: _toggleChannelPanel,
+                    backgroundColor: CircleChannelManageStyle.panelBackground(
+                      isDark,
+                    ),
+                    backdropColor: CircleChannelManageStyle.backdropColor(
+                      isDark,
+                    ),
+                    backdropBlurSigma:
+                        CircleChannelManageStyle.backdropBlurSigma(context),
+                    maxHeightRatio:
+                        CircleChannelManageLayout.panelMaxHeightRatio(context),
+                    child: _HomeCirclesChannelPanel(
+                      isDark: isDark,
+                      categoryLabelMap: _categoryLabelMap,
+                      selectedIds: _manageableSelectedCategoryIds,
+                      unselectedIds: _unselectedCategoryIds,
+                      draggingChannelId: _draggingChannelId,
+                      onClose: _toggleChannelPanel,
+                      onMoveToSelected: _moveToSelected,
+                      onMoveToUnselected: _moveToUnselected,
+                      onReorderSelectedBefore: _reorderSelectedBefore,
+                      onDragStarted: (id) {
+                        setState(() {
+                          _draggingChannelId = id;
+                        });
+                      },
+                      onDragEnded: () {
+                        if (!mounted) return;
+                        setState(() {
+                          _draggingChannelId = null;
+                        });
+                      },
+                    ),
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey('home-circles-channel-panel-closed'),
+                  ),
           ),
+        ),
       ],
     );
   }
@@ -1191,129 +1241,150 @@ class _HomeCirclesChannelPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
+    final fgPrimary =
+        SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
+    final fgSecondary =
+        SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
+    final horizontalPadding = AppSpacing.feedContentHorizontal(context);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onClose,
-      child: ColoredBox(
-        color: bg.withValues(alpha: 0.98),
-        child: SafeArea(
-          bottom: false,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {},
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.feedContentHorizontal(context),
-                  AppSpacing.containerMd,
-                  AppSpacing.feedContentHorizontal(context),
-                  AppSpacing.containerMd +
-                      MediaQuery.viewPaddingOf(context).bottom +
-                      AppSpacing.bottomNavHeight,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                AppSpacing.containerMd,
+                horizontalPadding,
+                AppSpacing.containerMd,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
                       children: [
-                        Text(
-                          UITextConstants.circleMyChannels,
-                          style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: AppTypography.semiBold,
-                            color: fgPrimary,
+                        Padding(
+                          padding: EdgeInsetsDirectional.only(
+                            end:
+                                AppSpacing.iconButtonMinSizeSm +
+                                AppSpacing.intraGroupSm,
+                          ),
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  UITextConstants.circleMyChannels,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.lg,
+                                    fontWeight: AppTypography.semiBold,
+                                    color: fgPrimary,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.intraGroupSm),
+                              Flexible(
+                                child: Text(
+                                  UITextConstants.circleDragToSort,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.sm,
+                                    color: fgSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                        Text(
-                          UITextConstants.circleDragToSort,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: fgSecondary,
-                          ),
-                        ),
-                        const Spacer(),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: onClose,
-                          child: Text(
-                            UITextConstants.done,
-                            style: TextStyle(
-                              fontSize: AppTypography.base,
-                              fontWeight: AppTypography.medium,
-                              color: AppColors.primaryColor,
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: CupertinoButton(
+                            key: const ValueKey('home-circles-channel-done'),
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.square(
+                              AppSpacing.iconButtonMinSizeSm,
+                            ),
+                            onPressed: onClose,
+                            child: Text(
+                              UITextConstants.done,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                fontWeight: AppTypography.medium,
+                                color: AppColors.primaryColor,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    _HomeCirclesChannelGrid(
-                      isDark: isDark,
-                      categoryLabelMap: categoryLabelMap,
-                      channelIds: selectedIds,
-                      canRemove: true,
-                      draggingChannelId: draggingChannelId,
-                      onTapIcon: onMoveToUnselected,
-                      onDragStarted: onDragStarted,
-                      onDragEnded: onDragEnded,
-                      onReorderSelectedBefore: onReorderSelectedBefore,
-                    ),
-                    SizedBox(height: AppSpacing.interGroupLg),
-                    Row(
-                      children: [
-                        Text(
+                  ),
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  _HomeCirclesChannelGrid(
+                    isDark: isDark,
+                    categoryLabelMap: categoryLabelMap,
+                    channelIds: selectedIds,
+                    canRemove: true,
+                    draggingChannelId: draggingChannelId,
+                    onTapIcon: onMoveToUnselected,
+                    onDragStarted: onDragStarted,
+                    onDragEnded: onDragEnded,
+                    onReorderSelectedBefore: onReorderSelectedBefore,
+                  ),
+                  SizedBox(height: AppSpacing.interGroupLg),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
                           UITextConstants.circleAllChannels,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: AppTypography.lg,
                             fontWeight: AppTypography.semiBold,
                             color: fgPrimary,
                           ),
                         ),
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                        Text(
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupSm),
+                      Flexible(
+                        child: Text(
                           UITextConstants.circleTapToAdd,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: AppTypography.sm,
                             color: fgSecondary,
                           ),
                         ),
-                      ],
-                    ),
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    _HomeCirclesChannelGrid(
-                      isDark: isDark,
-                      categoryLabelMap: categoryLabelMap,
-                      channelIds: unselectedIds,
-                      canRemove: false,
-                      draggingChannelId: draggingChannelId,
-                      onTapIcon: onMoveToSelected,
-                      onDragStarted: onDragStarted,
-                      onDragEnded: onDragEnded,
-                      onReorderSelectedBefore: onReorderSelectedBefore,
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  _HomeCirclesChannelGrid(
+                    isDark: isDark,
+                    categoryLabelMap: categoryLabelMap,
+                    channelIds: unselectedIds,
+                    canRemove: false,
+                    draggingChannelId: draggingChannelId,
+                    onTapIcon: onMoveToSelected,
+                    onDragStarted: onDragStarted,
+                    onDragEnded: onDragEnded,
+                    onReorderSelectedBefore: onReorderSelectedBefore,
+                  ),
+                ],
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1344,12 +1415,17 @@ class _HomeCirclesChannelGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = AppSpacing.intraGroupSm;
+    if (channelIds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final spacing = CircleChannelManageLayout.chipGridSpacing(context);
+    final columns = CircleChannelManageLayout.gridColumns(context);
     final panelTileHeight = _homeCircleChannelTileHeight(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final totalSpacing = spacing * 3;
-        final tileWidth = (constraints.maxWidth - totalSpacing) / 4;
+        final totalSpacing = spacing * (columns - 1);
+        final tileWidth = (constraints.maxWidth - totalSpacing) / columns;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
@@ -1426,19 +1502,16 @@ class _HomeCirclesChannelTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = canRemove
-        ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
-        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final borderColor = canRemove
-        ? AppColors.transparent
-        : AppColorsFunctional.getColor(
-            isDark,
-            ColorType.borderPrimary,
-          ).withValues(alpha: 0.5);
-    final fg = AppColorsFunctional.getColor(
+    final bg = CircleChannelManageStyle.chipSurface(isDark, canRemove);
+    final borderColor = CircleChannelManageStyle.chipBorderColor(
       isDark,
-      ColorType.foregroundPrimary,
+      canRemove,
     );
+    final fg = SettingsSemanticConstants.conversationSheetPrimaryLabelColor(
+      isDark,
+    );
+    final accent =
+        SettingsSemanticConstants.conversationSheetSelectionAccentColor(isDark);
     final iconBg = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundTertiary,
@@ -1456,38 +1529,75 @@ class _HomeCirclesChannelTile extends StatelessWidget {
               width: width,
               height: height,
               padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.containerSm,
-                vertical: AppSpacing.intraGroupXs,
+                horizontal: CircleChannelManageStyle.chipHorizontalPadding(
+                  width,
+                ),
+                vertical: CircleChannelManageStyle.chipVerticalPadding(width),
               ),
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(
+                  CircleChannelManageStyle.chipCornerRadius,
+                ),
+                border: Border.all(
+                  color: borderColor,
+                  width: SettingsSemanticConstants.createAddTileBorderWidth,
+                ),
               ),
               child: Center(
-                child: Text(
-                  canRemove ? label : '+ $label',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    color: fg,
-                    fontWeight: AppTypography.medium,
-                  ),
-                ),
+                child: canRemove
+                    ? Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: AppTypography.base,
+                          color: fg,
+                          fontWeight: AppTypography.medium,
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.add_circled,
+                            size: CircleChannelManageStyle.addChipIconSize(
+                              width,
+                            ),
+                            color: accent,
+                          ),
+                          SizedBox(
+                            width: CircleChannelManageStyle.chipIconLabelGap(
+                              width,
+                            ),
+                          ),
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: AppTypography.base,
+                              color: fg,
+                              fontWeight: AppTypography.medium,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
             if (canRemove)
               Positioned(
                 top: -AppSpacing.intraGroupXs,
                 right: -AppSpacing.intraGroupXs,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onIconTap,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  onPressed: onIconTap,
                   child: Container(
-                    width: AppSpacing.minInteractiveSize / 2,
-                    height: AppSpacing.minInteractiveSize / 2,
+                    width: AppSpacing.twenty,
+                    height: AppSpacing.twenty,
                     decoration: BoxDecoration(
                       color: iconBg,
                       shape: BoxShape.circle,
@@ -1495,10 +1605,10 @@ class _HomeCirclesChannelTile extends StatelessWidget {
                     child: Icon(
                       CupertinoIcons.xmark,
                       size: AppSpacing.iconSmall,
-                      color: AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundSecondary,
-                      ),
+                      color:
+                          SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
+                            isDark,
+                          ),
                     ),
                   ),
                 ),

@@ -903,7 +903,7 @@ class WebSearchTool implements AssistantTool {
         return parsed;
       }
     }
-    return _extractDateFromUrl(_stringValue(reference['url']));
+    return null;
   }
 
   List<DateTime> _resolveHistoricalDateCandidates(
@@ -929,12 +929,6 @@ class WebSearchTool implements AssistantTool {
     add(_parseDateTimeLoose(_stringValue(reference['published_at'])));
     add(_parseDateTimeLoose(_stringValue(reference['timestamp'])));
     add(_parseDateTimeLoose(_stringValue(reference['time'])));
-    add(_extractDateFromUrl(_stringValue(reference['url'])));
-    for (final parsed in _extractDateCandidatesFromText(
-      '${_stringValue(reference['title'])} ${_stringValue(reference['snippet'])}',
-    )) {
-      add(parsed);
-    }
     return out;
   }
 
@@ -945,57 +939,6 @@ class WebSearchTool implements AssistantTool {
     final parsed = DateTime.tryParse(raw.trim());
     if (parsed != null) {
       return parsed;
-    }
-    return _parseDateFromText(raw.trim());
-  }
-
-  List<DateTime> _extractDateCandidatesFromText(String text) {
-    if (text.trim().isEmpty) {
-      return const <DateTime>[];
-    }
-    final matches = RegExp(
-      r'(20\d{2}[-/年\.]\d{1,2}[-/月\.]\d{1,2}(?:日)?)|(20\d{2}[-/年\.]\d{1,2}(?:月)?)|(20\d{2}年?)',
-    ).allMatches(text);
-    final out = <DateTime>[];
-    final seen = <String>{};
-    for (final match in matches) {
-      final raw = match.group(0)?.trim() ?? '';
-      if (raw.isEmpty || !seen.add(raw)) {
-        continue;
-      }
-      final token = _buildDetectedDateToken(raw);
-      if (token != null) {
-        out.add(token.start);
-      }
-    }
-    return out;
-  }
-
-  DateTime? _extractDateFromUrl(String url) {
-    if (url.trim().isEmpty) {
-      return null;
-    }
-    final decoded = Uri.tryParse(url)?.toString() ?? url;
-    final patterns = <RegExp>[
-      RegExp(r'(20\d{2})[-_/](\d{1,2})[-_/](\d{1,2})'),
-      RegExp(r'/(20\d{2})/(\d{1,2})/(\d{1,2})/'),
-      RegExp(r'(20\d{2})(\d{2})(\d{2})'),
-    ];
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(decoded);
-      if (match == null) {
-        continue;
-      }
-      final year = int.tryParse(match.group(1) ?? '');
-      final month = int.tryParse(match.group(2) ?? '');
-      final day = int.tryParse(match.group(3) ?? '');
-      if (year == null || month == null || day == null) {
-        continue;
-      }
-      final value = DateTime(year, month, day);
-      if (value.year == year && value.month == month && value.day == day) {
-        return value;
-      }
     }
     return null;
   }
@@ -1121,22 +1064,7 @@ class WebSearchTool implements AssistantTool {
     String referenceNowIso = '',
     String timezone = '',
   }) {
-    if (query.isEmpty) return query;
-    final reference = _relativeTimeResolver.resolveReferenceContext(
-      referenceNowIso: referenceNowIso,
-      timezone: timezone,
-    );
-    final point = _resolveInlineCalendarPoint(
-      query: query,
-      now: reference.referenceNow,
-    );
-    if (point == null || !point.relativePhrase) {
-      return query;
-    }
-    final replacement = _formatIsoDate(point.date);
-    return _compressWhitespace(
-      query.replaceFirst(point.matchedToken, replacement),
-    );
+    return query;
   }
 
   _TemporalIntent _detectTemporalIntent(String query) {
@@ -1169,36 +1097,7 @@ class WebSearchTool implements AssistantTool {
     required String query,
     required _SearchTimeConstraint constraint,
   }) {
-    final normalizedQuery = _compressWhitespace(query);
-    if (normalizedQuery.isEmpty) {
-      return const _TemporalGuardAssessment(searchQuery: '');
-    }
-    final dateTokens = _extractExplicitDateTokens(normalizedQuery);
-    if (dateTokens.isEmpty) {
-      return _TemporalGuardAssessment(searchQuery: normalizedQuery);
-    }
-    final conflicting = dateTokens
-        .where((token) => !_dateTokenMatchesConstraint(token, constraint))
-        .map((token) => token.raw)
-        .toList(growable: false);
-    if (conflicting.isEmpty) {
-      return _TemporalGuardAssessment(searchQuery: normalizedQuery);
-    }
-    var sanitized = normalizedQuery;
-    for (final token in conflicting) {
-      sanitized = sanitized.replaceAll(token, ' ');
-    }
-    sanitized = _compressWhitespace(sanitized);
-    if (sanitized.isEmpty) {
-      sanitized = normalizedQuery;
-    }
-    return _TemporalGuardAssessment(
-      searchQuery: sanitized,
-      applied: true,
-      blocked: false,
-      reason: 'removed_conflicting_date_tokens',
-      conflictingDateTokens: conflicting,
-    );
+    return _TemporalGuardAssessment(searchQuery: query);
   }
 
   List<_DetectedDateToken> _extractExplicitDateTokens(String query) {
@@ -1322,33 +1221,24 @@ class WebSearchTool implements AssistantTool {
       ]),
     };
     final explicitScope = _stringValue(mergedArguments['timeScope']);
-    final temporalIntent = _detectTemporalIntent(query);
-    final inlinePoint = _resolveInlineCalendarPoint(query: query, now: now);
     final explicitRange = _resolveRangeByExplicitBounds(mergedArguments);
     final calendarPointRange = _resolveRangeByCalendarPoint(
       arguments: mergedArguments,
       now: now,
       scope: explicitScope,
     );
-    final inlineRange =
-        explicitScope.isEmpty && temporalIntent.preferredScope.isEmpty
-        ? _resolveRangeByInlineCalendarPoint(
-            point: inlinePoint,
-            scope: 'year_month_day',
-          )
-        : null;
-    final resolvedCalendarRange =
-        explicitRange ?? calendarPointRange ?? inlineRange;
+    final resolvedCalendarRange = explicitRange ?? calendarPointRange;
     final hasTemporalSignal =
         resolvedCalendarRange != null ||
         explicitScope.isNotEmpty ||
-        temporalIntent.preferredScope.isNotEmpty ||
-        domainPolicy.defaultTimeScope.isNotEmpty;
+        _firstNonEmpty(<String>[
+          domainPolicy.defaultTimeScope,
+          timeContract.defaultScope,
+        ]).isNotEmpty;
     final preferredScope = hasTemporalSignal
         ? _firstNonEmpty(<String>[
             resolvedCalendarRange?.scope ?? '',
             explicitScope,
-            temporalIntent.preferredScope,
             domainPolicy.defaultTimeScope,
             timeContract.defaultScope,
             'unspecified',
@@ -1384,7 +1274,6 @@ class WebSearchTool implements AssistantTool {
       scope: effectiveScope,
       range: effectiveRange,
       referenceNow: now,
-      temporalIntent: temporalIntent,
     );
     return _SearchTimeConstraint(
       scope: effectiveScope,
@@ -1596,7 +1485,6 @@ class WebSearchTool implements AssistantTool {
     required String scope,
     required _ResolvedTimeRange range,
     required DateTime referenceNow,
-    required _TemporalIntent temporalIntent,
   }) {
     if (_isStrictRealtimeScope(scope)) {
       return 'realtime';
@@ -1609,9 +1497,6 @@ class WebSearchTool implements AssistantTool {
       if (!range.end.isBefore(dayFloor) || range.start.isAfter(referenceNow)) {
         return 'realtime';
       }
-    }
-    if (temporalIntent.realtimeLike && scope == 'pass_through') {
-      return 'realtime';
     }
     return 'passive';
   }
@@ -1628,11 +1513,7 @@ class WebSearchTool implements AssistantTool {
     required String query,
     required _SearchTimeConstraint constraint,
   }) {
-    final hints = _timeConstraintSearchHints(constraint);
-    if (hints.isEmpty) {
-      return query;
-    }
-    return _appendDistinctSearchHints(query, hints);
+    return query;
   }
 
   List<String> _timeConstraintSearchHints(_SearchTimeConstraint constraint) {
@@ -1732,19 +1613,7 @@ class WebSearchTool implements AssistantTool {
     required Map<String, dynamic> arguments,
     required _DomainRetrievalPolicy domainPolicy,
   }) {
-    final contextConstraints =
-        (arguments['contextConstraints'] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final scopedHints = _compactSearchContextHints(<String>[
-      ...contextConstraints,
-      ...domainPolicy.contextConstraints,
-    ]);
-    if (scopedHints.isEmpty) return query;
-    return '$query ${scopedHints.join(' ')}'.trim();
+    return query;
   }
 
   List<String> _compactSearchContextHints(List<String> rawHints) {
@@ -3487,13 +3356,6 @@ class WebSearchTool implements AssistantTool {
       return arguments;
     }
     final mergedArguments = Map<String, dynamic>.from(arguments);
-    final originalQuery = _stringValue(arguments['query']);
-    if (originalQuery.isNotEmpty) {
-      mergedArguments['query'] = applyResolvedGeoToQuery(
-        originalQuery,
-        resolvedGeoScope,
-      );
-    }
     final mergedAnchors = mergeGeoAnchors(
       _stringList(arguments['entityAnchors']),
       resolvedGeoScope,
@@ -3505,22 +3367,8 @@ class WebSearchTool implements AssistantTool {
         (arguments['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     if (queryNormalization.isNotEmpty) {
-      final normalizedQuery = _stringValue(
-        queryNormalization['normalizedQuery'],
-      );
-      final rewrittenQuery = _stringValue(queryNormalization['rewrittenQuery']);
       mergedArguments['queryNormalization'] = <String, dynamic>{
         ...queryNormalization,
-        if (normalizedQuery.isNotEmpty)
-          'normalizedQuery': applyResolvedGeoToQuery(
-            normalizedQuery,
-            resolvedGeoScope,
-          ),
-        if (rewrittenQuery.isNotEmpty)
-          'rewrittenQuery': applyResolvedGeoToQuery(
-            rewrittenQuery,
-            resolvedGeoScope,
-          ),
       };
     }
     mergedArguments['resolvedGeoScope'] = resolvedGeoScope.toJson();
@@ -3540,10 +3388,6 @@ class WebSearchTool implements AssistantTool {
     }
     return <String, dynamic>{
       ...queryTask,
-      'query': applyResolvedGeoToQuery(
-        _stringValue(queryTask['query']),
-        resolvedGeoScope,
-      ),
       'entityAnchors': mergeGeoAnchors(
         _stringList(queryTask['entityAnchors']),
         resolvedGeoScope,
@@ -3752,27 +3596,15 @@ class WebSearchTool implements AssistantTool {
       _stringValue(reference['timestamp']),
       _stringValue(reference['time']),
     ]);
-    final urlDate = _extractDateFromUrl(_stringValue(reference['url']));
-    final textDateCandidates = !timeConstraint.isRealtimeLike
-        ? _extractDateCandidatesFromText(
-            '${_stringValue(reference['title'])} ${_stringValue(reference['snippet'])}',
-          )
-        : const <DateTime>[];
-    final textDate = textDateCandidates.isNotEmpty
-        ? textDateCandidates.first
-        : null;
     final derivedPublished = _firstNonEmpty(<String>[
       explicitPublished,
       explicitObserved,
       providerDate,
-      urlDate?.toIso8601String() ?? '',
-      textDate?.toIso8601String() ?? '',
     ]);
     final derivedObserved = _firstNonEmpty(<String>[
       explicitObserved,
       explicitPublished,
       providerDate,
-      urlDate?.toIso8601String() ?? '',
     ]);
     if (derivedPublished.isNotEmpty) {
       enriched['publishedAt'] = derivedPublished;

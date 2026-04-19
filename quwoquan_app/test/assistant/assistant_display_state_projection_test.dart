@@ -196,7 +196,7 @@ void main() {
       );
     });
 
-    test('显式 answer blocks 缺少日期锚点时，会补回 markdown 成答内容', () {
+    test('显式 answer blocks 保持优先，不再从 markdown 反向补结构', () {
       final state = buildAssistantDisplayState(
         explicitState: const AssistantDisplayState(
           answer: AssistantAnswerDisplayState(
@@ -213,10 +213,11 @@ void main() {
         answerMarkdown: '2026-04-10 深圳有雨，建议带伞。',
       );
 
-      expect(state.answer.blocks.length, 2);
+      expect(state.answer.blocks.length, 1);
+      expect(renderAnswerBlocksToPlainText(state.answer.blocks), contains('深圳明天有雨'));
       expect(
         renderAnswerBlocksToPlainText(state.answer.blocks),
-        contains('2026-04-10'),
+        isNot(contains('2026-04-10')),
       );
     });
 
@@ -331,15 +332,15 @@ void main() {
           userFacingSummary: '获取深圳今日天气',
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'temporal_anchor',
-              title: '时间确认',
-              detail: '今天对应2026年4月13日（周日）',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '外出建议带伞',
               visibleInUnderstanding: true,
             ),
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'geo_anchor',
-              title: '区域确认',
-              detail: '默认采用深圳',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '体感偏热',
               visibleInUnderstanding: true,
             ),
           ],
@@ -356,8 +357,8 @@ void main() {
       );
       expect(
         summaryBlock.title,
-        contains('2026年4月13日'),
-        reason: 'resolution items 的时间信息应融入 summary',
+        contains('外出建议带伞'),
+        reason: 'resolution items 的补充信息应融入 summary',
       );
       expect(
         state.process.blocks.any(
@@ -378,19 +379,18 @@ void main() {
           ),
         ],
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-          userFacingSummary:
-              '你想了解深圳今天的天气。我把今天对齐到2026年4月13日，查询范围为深圳。',
+          userFacingSummary: '你想了解天气并查看出门建议。',
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'temporal_anchor',
-              title: '时间确认',
-              detail: '今天对应2026年4月13日',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '外出建议带伞',
               visibleInUnderstanding: true,
             ),
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'geo_anchor',
-              title: '区域确认',
-              detail: '深圳',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '出行建议优先地铁',
               visibleInUnderstanding: true,
             ),
           ],
@@ -403,13 +403,13 @@ void main() {
       expect(
         summaryBlock.title,
         equals(
-          '你想了解深圳今天的天气。我把今天对齐到2026年4月13日，查询范围为深圳。',
+          '你想了解天气并查看出门建议。外出建议带伞；出行建议优先地铁。',
         ),
         reason: 'summary 已包含 resolution 信息，不应追加额外内容',
       );
     });
 
-    test('summary 已含地理但缺日期时，只追加日期不重复地理', () {
+    test('summary 已含一部分信息时，只追加缺失的补充内容', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -419,18 +419,18 @@ void main() {
           ),
         ],
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
-          userFacingSummary: '获取深圳今日天气及穿衣、出行建议',
+          userFacingSummary: '获取天气及穿衣、出行建议',
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'temporal_anchor',
-              title: '时间确认',
-              detail: '查询时间对齐到2026-04-13',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '查询范围为深圳',
               visibleInUnderstanding: true,
             ),
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'geo_anchor',
-              title: '区域确认',
-              detail: '查询范围为深圳',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '外出前查看降雨变化',
               visibleInUnderstanding: true,
             ),
           ],
@@ -442,18 +442,13 @@ void main() {
       );
       expect(
         summaryBlock.title,
-        contains('2026-04-13'),
-        reason: '日期信息应追加到叙事中',
+        contains('查询范围为深圳'),
+        reason: '缺失的补充信息应追加到叙事中',
       );
-      final occurrences = '深圳'
-          .allMatches(summaryBlock.title)
-          .length;
       expect(
-        occurrences,
-        equals(1),
-        reason:
-            'summary 已含深圳，不应重复追加地理信息'
-            '（实际: "${summaryBlock.title}"）',
+        summaryBlock.title,
+        contains('外出前查看降雨变化'),
+        reason: '补充内容应追加到叙事中',
       );
     });
 
@@ -470,15 +465,15 @@ void main() {
           userFacingSummary: '',
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'temporal_anchor',
-              title: '时间确认',
-              detail: '今天对应2026年4月13日（周日）',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '外出建议带伞',
               visibleInUnderstanding: true,
             ),
             RunArtifactsUnderstandingResolutionItem(
-              kind: 'geo_anchor',
-              title: '区域确认',
-              detail: '默认采用深圳',
+              kind: 'detail_note',
+              title: '补充说明',
+              detail: '出行建议优先地铁',
               visibleInUnderstanding: true,
             ),
           ],
@@ -488,8 +483,8 @@ void main() {
       final summaryBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'understanding_narrative',
       );
-      expect(summaryBlock.title, contains('2026年4月13日'));
-      expect(summaryBlock.title, contains('深圳'));
+      expect(summaryBlock.title, contains('外出建议带伞'));
+      expect(summaryBlock.title, contains('出行建议优先地铁'));
       expect(summaryBlock.kind, ProcessDisplayBlockKind.summary);
     });
 

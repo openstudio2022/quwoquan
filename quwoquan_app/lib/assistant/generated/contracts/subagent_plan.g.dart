@@ -9,6 +9,12 @@ class SubagentPlan {
     required this.domainId,
     required this.problemClass,
     required this.goal,
+    this.role = "supporting",
+    this.taskBrief = '',
+    this.routeNarrative = '',
+    this.localContextSeed = '',
+    this.needClarify = false,
+    this.pendingClarifications = const <String>[],
     this.mode = "qa",
     this.timeoutMs = 12000,
     this.maxIterations = 2,
@@ -26,6 +32,13 @@ class SubagentPlan {
   final String domainId;
   final String problemClass;
   final String goal;
+  final String role;
+  final String taskBrief;
+  final String routeNarrative;
+  final String localContextSeed;
+  final bool needClarify;
+  final List<String> pendingClarifications;
+
   final String mode;
   final int timeoutMs;
   final int maxIterations;
@@ -55,6 +68,12 @@ class SubagentPlan {
     'domainId': domainId,
     'problemClass': problemClass,
     'goal': goal,
+        if (role.trim().isNotEmpty) 'role': role,
+        if (taskBrief.trim().isNotEmpty) 'taskBrief': taskBrief,
+        if (routeNarrative.trim().isNotEmpty) 'routeNarrative': routeNarrative,
+        if (localContextSeed.trim().isNotEmpty) 'localContextSeed': localContextSeed,
+        if (needClarify) 'needClarify': needClarify,
+        if (pendingClarifications.isNotEmpty) 'pendingClarifications': pendingClarifications,
     'mode': mode,
     'timeoutMs': timeoutMs,
     'maxIterations': maxIterations,
@@ -74,6 +93,12 @@ class SubagentPlan {
       domainId: (json['domainId'] as String?)?.trim() ?? '',
       problemClass: (json['problemClass'] as String?)?.trim() ?? '',
       goal: (json['goal'] as String?)?.trim() ?? '',
+      role: (json['role'] as String?)?.trim() ?? "supporting",
+      taskBrief: (json['taskBrief'] as String?)?.trim() ?? '',
+      routeNarrative: (json['routeNarrative'] as String?)?.trim() ?? '',
+      localContextSeed: (json['localContextSeed'] as String?)?.trim() ?? '',
+      needClarify: json['needClarify'] == true,
+      pendingClarifications: _stringList(json['pendingClarifications']),
       mode: (json['mode'] as String?)?.trim() ?? "qa",
       timeoutMs: _positiveInt(json['timeoutMs'], fallback: 12000),
       maxIterations: _positiveInt(json['maxIterations'], fallback: 2),
@@ -98,6 +123,23 @@ class SubagentPlan {
               .toList(growable: false) ??
           const <String>[],
     );
+  }
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is List) {
+      return raw
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return raw
+          .split(RegExp(r'[\s,]+'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
   }
 
   static int _positiveInt(Object? value, {required int fallback}) {

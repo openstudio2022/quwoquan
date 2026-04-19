@@ -68,6 +68,12 @@ class ArticlePageCurlMeshBuilder {
     final effectiveDirection = effectiveFrame?.renderDirection ?? direction;
     final effectiveCorner = effectiveFrame?.corner ?? corner;
     final effectiveDragPoint = effectiveFrame?.localPagePoint ?? dragPoint;
+    final angleBand = effectiveFrame?.timeline.curlAngleBand ??
+        resolveForwardCurlAngleBand(
+          localPagePoint: effectiveDragPoint,
+          pageSize: pageSize,
+          corner: effectiveCorner,
+        );
     final settledProgress = (effectiveFrame?.progress ?? progress)
         .clamp(0.0, 1.0)
         .toDouble();
@@ -83,11 +89,13 @@ class ArticlePageCurlMeshBuilder {
               localPagePoint: effectiveDragPoint,
               pageSize: pageSize,
               corner: effectiveCorner,
+              angleBand: angleBand,
               reversePose: reversePose,
             ),
             reversePose: reversePose,
           )
         : _CurlTimeline.fromRenderFrame(effectiveFrame);
+    final foldTheta = _resolveFoldTheta(timeline);
     final pointCount = (horizontalSegments + 1) * (verticalSegments + 1);
     final points = List<_CurlMeshPoint>.filled(
       pointCount,
@@ -113,6 +121,7 @@ class ArticlePageCurlMeshBuilder {
             cornerInfluence,
           ) ??
           timeline.leadingRadius;
+      final seamX = rowPivot + foldTheta * rowRadius;
       pivotAccumulator += rowPivot;
       for (var col = 0; col <= horizontalSegments; col += 1) {
         final columnT = col / horizontalSegments;
@@ -125,6 +134,8 @@ class ArticlePageCurlMeshBuilder {
           localY: localY,
           rowPivot: rowPivot,
           rowRadius: rowRadius,
+          seamX: seamX,
+          foldTheta: foldTheta,
           corner: effectiveCorner,
           timeline: timeline,
         );
@@ -148,6 +159,7 @@ class ArticlePageCurlMeshBuilder {
           frontTexCoords: frontTexCoords,
           backPositions: backPositions,
           backTexCoords: backTexCoords,
+          timeline: timeline,
           a: topLeft,
           b: topRight,
           c: bottomRight,
@@ -157,6 +169,7 @@ class ArticlePageCurlMeshBuilder {
           frontTexCoords: frontTexCoords,
           backPositions: backPositions,
           backTexCoords: backTexCoords,
+          timeline: timeline,
           a: topLeft,
           b: bottomRight,
           c: bottomLeft,
@@ -225,12 +238,17 @@ class ArticlePageCurlMeshBuilder {
     required List<double> frontTexCoords,
     required List<double> backPositions,
     required List<double> backTexCoords,
+    required _CurlTimeline timeline,
     required _CurlMeshPoint a,
     required _CurlMeshPoint b,
     required _CurlMeshPoint c,
   }) {
     final triangle = <_CurlMeshPoint>[a, b, c];
-    final frontPolygon = _clipTriangleByTheta(triangle, keepBack: false);
+    final frontPolygon = _clipTriangleBySeam(
+      triangle,
+      keepBack: false,
+      timeline: timeline,
+    );
     if (frontPolygon.length >= 3) {
       _appendPolygon(
         frontPositions,
@@ -239,7 +257,11 @@ class ArticlePageCurlMeshBuilder {
         useVersoTexture: false,
       );
     }
-    final backPolygon = _clipTriangleByTheta(triangle, keepBack: true);
+    final backPolygon = _clipTriangleBySeam(
+      triangle,
+      keepBack: true,
+      timeline: timeline,
+    );
     if (backPolygon.length >= 3) {
       _appendPolygon(
         backPositions,
@@ -250,22 +272,22 @@ class ArticlePageCurlMeshBuilder {
     }
   }
 
-  List<_CurlMeshPoint> _clipTriangleByTheta(
+  List<_CurlMeshPoint> _clipTriangleBySeam(
     List<_CurlMeshPoint> triangle, {
     required bool keepBack,
+    required _CurlTimeline timeline,
   }) {
-    const foldTheta = math.pi / 2;
     final output = <_CurlMeshPoint>[];
     var previous = triangle.last;
     var previousInside = keepBack
-        ? previous.theta >= foldTheta
-        : previous.theta <= foldTheta;
+        ? previous.seamMetric >= 0
+        : previous.seamMetric <= 0;
     for (final current in triangle) {
       final currentInside = keepBack
-          ? current.theta >= foldTheta
-          : current.theta <= foldTheta;
+          ? current.seamMetric >= 0
+          : current.seamMetric <= 0;
       if (currentInside != previousInside) {
-        output.add(_interpolateAtTheta(previous, current, foldTheta));
+        output.add(_interpolateAtTheta(previous, current, 0));
       }
       if (currentInside) {
         output.add(current);
@@ -301,12 +323,14 @@ class ArticlePageCurlMeshBuilder {
   _CurlMeshPoint _interpolateAtTheta(
     _CurlMeshPoint from,
     _CurlMeshPoint to,
-    double targetTheta,
+    double targetSeamMetric,
   ) {
-    final thetaDelta = to.theta - from.theta;
-    final t = thetaDelta.abs() < 0.0001
+    final seamDelta = to.seamMetric - from.seamMetric;
+    final t = seamDelta.abs() < 0.0001
         ? 0.0
-        : ((targetTheta - from.theta) / thetaDelta).clamp(0.0, 1.0).toDouble();
+        : ((targetSeamMetric - from.seamMetric) / seamDelta)
+            .clamp(0.0, 1.0)
+            .toDouble();
     Offset interpolateOffset(Offset a, Offset b) {
       return Offset(
         ui.lerpDouble(a.dx, b.dx, t) ?? a.dx,
@@ -318,7 +342,8 @@ class ArticlePageCurlMeshBuilder {
       projected: interpolateOffset(from.projected, to.projected),
       rectoTexture: interpolateOffset(from.rectoTexture, to.rectoTexture),
       versoTexture: interpolateOffset(from.versoTexture, to.versoTexture),
-      theta: targetTheta,
+      theta: ui.lerpDouble(from.theta, to.theta, t) ?? from.theta,
+      seamMetric: targetSeamMetric,
       depth: ui.lerpDouble(from.depth, to.depth, t) ?? from.depth,
     );
   }
@@ -397,6 +422,8 @@ class ArticlePageCurlMeshBuilder {
     required double localY,
     required double rowPivot,
     required double rowRadius,
+    required double seamX,
+    required double foldTheta,
     required StPageFlipCorner corner,
     required _CurlTimeline timeline,
   }) {
@@ -407,22 +434,36 @@ class ArticlePageCurlMeshBuilder {
         localX: localX,
         localY: localY,
         corner: corner,
+        foldTheta: foldTheta,
         timeline: timeline,
       );
     }
     final rowCurlDistance = math.max(0.0, localX - rowPivot);
     final theta = math.min(math.pi, rowCurlDistance / math.max(rowRadius, 1.0));
-    final depth = theta <= 0 ? 0.0 : (1 - math.cos(theta)) * rowRadius;
-    final liftDepth = theta <= 0 ? 0.0 : math.sin(theta) * rowRadius;
-    final curledX = theta <= 0
-        ? localX
-        : rowPivot + math.sin(theta) * rowRadius;
+    final foldDepth =
+        theta <= 0 ? 0.0 : (1 - math.cos(foldTheta)) * rowRadius;
+    final frontDepth = theta <= foldTheta
+        ? theta <= 0
+            ? 0.0
+            : (1 - math.cos(theta)) * rowRadius
+        : foldDepth;
+    final backTravel = theta <= foldTheta
+        ? 0.0
+        : ((theta - foldTheta) / math.max(math.pi - foldTheta, 0.0001))
+            .clamp(0.0, 1.0)
+            .toDouble() *
+            rowRadius *
+            1.25;
+    final curledX = theta <= foldTheta
+        ? rowPivot - frontDepth
+        : (rowPivot - foldDepth) - backTravel;
     final cornerFactor = corner == StPageFlipCorner.top
         ? 1 - (localY / math.max(pageSize.height, 1.0))
         : localY / math.max(pageSize.height, 1.0);
+    final displayDepth = theta <= foldTheta ? frontDepth : foldDepth;
     final curlHeightOffset =
         (1 - cornerFactor) *
-        liftDepth *
+        displayDepth *
         (corner == StPageFlipCorner.top
             ? -timeline.heightLiftBias
             : timeline.heightLiftBias);
@@ -432,6 +473,7 @@ class ArticlePageCurlMeshBuilder {
     final effectiveX = timeline.mirrored ? pageSize.width - curledX : curledX;
     final rectoTexX = timeline.mirrored ? pageSize.width - localX : localX;
     final versoTexX = timeline.mirrored ? localX : pageSize.width - localX;
+    final seamMetric = localX - seamX;
     final worldX =
         pageRect.left + effectiveX + timeline.sheetShift * curlInfluence;
     final worldY = pageRect.top + localY + curlHeightOffset;
@@ -441,7 +483,8 @@ class ArticlePageCurlMeshBuilder {
       rectoTexture: Offset(rectoTexX, localY),
       versoTexture: Offset(versoTexX, localY),
       theta: theta,
-      depth: depth,
+      seamMetric: seamMetric,
+      depth: displayDepth,
     );
   }
 
@@ -451,6 +494,7 @@ class ArticlePageCurlMeshBuilder {
     required double localX,
     required double localY,
     required StPageFlipCorner corner,
+    required double foldTheta,
     required _CurlTimeline timeline,
   }) {
     final reversePose = timeline.reversePose!;
@@ -510,9 +554,21 @@ class ArticlePageCurlMeshBuilder {
       rectoTexture: Offset(localX, localY),
       versoTexture: Offset(pageSize.width - localX, localY),
       theta: theta,
+      seamMetric: theta - foldTheta,
       depth: depth,
     );
   }
+}
+
+double _resolveFoldTheta(_CurlTimeline timeline) {
+  final seamThetaBias = timeline.mirrored || timeline.reversePose != null
+      ? 0.04
+      : switch (timeline.curlAngleBand) {
+          StPageFlipCurlAngleBand.shallow => 0.045,
+          StPageFlipCurlAngleBand.mid => 0.04,
+          StPageFlipCurlAngleBand.steep => 0.035,
+        };
+  return math.pi / 2 + seamThetaBias;
 }
 
 @immutable
@@ -522,6 +578,7 @@ class _CurlMeshPoint {
     required this.rectoTexture,
     required this.versoTexture,
     required this.theta,
+    required this.seamMetric,
     required this.depth,
   });
 
@@ -530,12 +587,14 @@ class _CurlMeshPoint {
       rectoTexture = Offset.zero,
       versoTexture = Offset.zero,
       theta = 0,
+      seamMetric = 0,
       depth = 0;
 
   final Offset projected;
   final Offset rectoTexture;
   final Offset versoTexture;
   final double theta;
+  final double seamMetric;
   final double depth;
 }
 
@@ -543,6 +602,7 @@ class _CurlMeshPoint {
 class _CurlTimeline {
   const _CurlTimeline({
     required this.mirrored,
+    required this.curlAngleBand,
     required this.basePivot,
     required this.diagonalExtent,
     required this.leadingRadius,
@@ -562,6 +622,7 @@ class _CurlTimeline {
   }) {
     return _CurlTimeline(
       mirrored: timeline.mirrored,
+      curlAngleBand: timeline.curlAngleBand,
       basePivot: timeline.basePivot,
       diagonalExtent: timeline.diagonalExtent,
       leadingRadius: timeline.leadingRadius,
@@ -584,6 +645,7 @@ class _CurlTimeline {
   }
 
   final bool mirrored;
+  final StPageFlipCurlAngleBand curlAngleBand;
   final double basePivot;
   final double diagonalExtent;
   final double leadingRadius;

@@ -46,7 +46,7 @@ Offset convertBookPointToViewport(
   final activeDirection = direction ?? StPageFlipDirection.forward;
   final x = activeDirection == StPageFlipDirection.forward
       ? point.dx + bounds.left + (bounds.width / 2)
-      : bounds.width - point.dx + bounds.left;
+      : (bounds.left + (bounds.width / 2)) - point.dx;
   return Offset(x, point.dy + bounds.top);
 }
 
@@ -67,7 +67,7 @@ Offset convertViewportPointToPage(
 }) {
   final x = direction == StPageFlipDirection.forward
       ? point.dx - bounds.left - (bounds.width / 2)
-      : bounds.width - point.dx + bounds.left;
+      : (bounds.left + bounds.width / 2) - point.dx;
   return Offset(x, point.dy - bounds.top);
 }
 

@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart'
+    show SlotStateSnapshot;
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 
 /// LLM/编排 answer 载荷：与 [assistant_turn/schema.yaml] 中 `AssistantTurnOutput` 同源。
@@ -27,6 +29,29 @@ class AssistantAnswerPayloadReadView {
   Map<String, dynamic> get askUserMap =>
       (_raw['askUser'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
+
+  AssistantTurnResult get resultTyped => asTypedOutput.result;
+
+  AssistantTurnDiagnostics get diagnosticsTyped => asTypedOutput.diagnostics;
+
+  SlotStateSnapshot get slotStateTyped => asTypedOutput.slotState;
+
+  String get nextActionWireName => asTypedOutput.decision.nextAction.wireName;
+
+  String get slotStateFailureReason =>
+      (_raw['slotState'] as Map?)?['failureReason']?.toString().trim() ?? '';
+
+  String get diagnosticsFailureReason =>
+      (_raw['diagnostics'] as Map?)?['failureReason']?.toString().trim() ?? '';
+
+  List<String> get slotStateMissingSlots => asTypedOutput.slotState.missingSlots;
+
+  List<String> get topLevelMissingSlots =>
+      (_raw['missingSlots'] as List?)
+          ?.map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false) ??
+      const <String>[];
 
   /// `diagnostics.emergedTags`（与 metadata [AssistantTurnDiagnostics] 一致）。
   List<Map<String, dynamic>> get diagnosticsEmergedTagMaps =>

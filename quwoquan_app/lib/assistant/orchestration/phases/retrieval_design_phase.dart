@@ -81,10 +81,6 @@ class RetrievalDesignPhase implements Phase {
       queryTasks: seededTasks
           .map(
             (task) => task.copyWith(
-              query: applyResolvedGeoToQuery(
-                task.query,
-                temporalizedIntentGraph.resolvedGeoScope,
-              ),
               entityAnchors: task.entityAnchors.isNotEmpty
                   ? mergeGeoAnchors(
                       task.entityAnchors,

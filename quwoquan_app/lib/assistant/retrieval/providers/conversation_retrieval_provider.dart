@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_provider.dart';

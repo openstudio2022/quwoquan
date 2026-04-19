@@ -3,13 +3,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_run_structured_bundle.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';
+import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_perf_probe.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
@@ -35,22 +40,22 @@ class FinalizeRunner {
 
   Future<AssistantRunResponse> finalize(
     AssistantRunRequest request, {
-    required Map<String, dynamic> executionSnapshot,
+    required ExecutionPhaseSnapshot executionSnapshot,
     required AssistantRunResponse response,
   }) async {
+    final successSnapshot =
+        executionSnapshot is ExecutionPhaseSuccess ? executionSnapshot : null;
     final sessionId =
-        (executionSnapshot['sessionId'] as String?) ??
-        (request.sessionId ?? 'default');
-    final latestUserQuery =
-        (executionSnapshot['latestUserQuery'] as String?)?.trim() ?? '';
-    final runStartAt = executionSnapshot['runStartAt'] as DateTime?;
+        successSnapshot?.sessionId ?? (request.sessionId ?? 'default');
+    final latestUserQuery = successSnapshot?.latestUserQuery.trim() ?? '';
+    final runStartAt = successSnapshot?.runStartAt;
     final runId =
         response.runId ??
-        (executionSnapshot['runId'] as String?) ??
+        successSnapshot?.runId ??
         '${DateTime.now().millisecondsSinceEpoch}_${request.sessionId ?? 'default'}';
     final traceId =
         response.traceId ??
-        (executionSnapshot['traceId'] as String?) ??
+        successSnapshot?.traceId ??
         request.traceId ??
         runId;
     final completedArtifact = response.runArtifacts;
@@ -59,6 +64,21 @@ class FinalizeRunner {
         AssistantRunStructuredBundle.fromStructuredResponseRoot(
       structuredResponse,
     );
+    final skillSynthesisSection =
+        (structuredResponse['skillSynthesis'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final skillSynthesisInput =
+        skillSynthesisSection['input'] is Map
+        ? SkillSynthesisInput.fromJson(
+            (skillSynthesisSection['input'] as Map).cast<String, dynamic>(),
+          )
+        : null;
+    final skillSynthesisOutput =
+        skillSynthesisSection['output'] is Map
+        ? SkillSynthesisOutput.fromJson(
+            (skillSynthesisSection['output'] as Map).cast<String, dynamic>(),
+          )
+        : null;
     final structuredRunArtifacts = structuredBundle.runArtifacts?.toJson() ??
         const <String, dynamic>{};
     final canonicalDisplayState = resolveAssistantDisplayStateFromRunResponse(
@@ -141,9 +161,9 @@ class FinalizeRunner {
       displayPlainText: displayPlainText,
       followupPrompt: response.followupPrompt,
       actionHints: response.actionHints,
-      elapsedMs: executionSnapshot['elapsedMs'] is num
-          ? (executionSnapshot['elapsedMs'] as num).toInt()
-          : 0,
+      elapsedMs: runStartAt == null
+          ? 0
+          : DateTime.now().difference(runStartAt).inMilliseconds,
       displayState: canonicalDisplayState.toJson(),
       processTimeline: canonicalProcessTimeline,
       understandingSnapshot: understandingSnapshot,
@@ -206,10 +226,39 @@ class FinalizeRunner {
               const <String, dynamic>{},
           'skillRuns':
               (structuredResponse['skillRuns'] as List?) ?? const <dynamic>[],
+          AssistantPipelineStateKeys.uiTimeline:
+              (structuredResponse[AssistantPipelineStateKeys.uiTimeline]
+                  as List?) ??
+              const <dynamic>[],
+          'subagentRuns':
+              (structuredResponse['subagentRuns'] as List?) ??
+              const <dynamic>[],
+          'skillSynthesis':
+              (structuredResponse['skillSynthesis'] as Map?) ??
+              const <String, dynamic>{},
           'aggregationState':
               (structuredResponse['aggregationState'] as Map?) ??
               const <String, dynamic>{},
         },
+      );
+    }
+    final historyState = _buildHistoryState(
+      sessionId: sessionId,
+      currentSessionSummary: structuredResponse['sessionSummary'] is String
+          ? (structuredResponse['sessionSummary'] as String)
+          : '',
+      skillSynthesisInput: skillSynthesisInput,
+      skillSynthesisOutput: skillSynthesisOutput,
+      structuredResponse: structuredResponse,
+      sessionManager: sessionManager,
+    );
+    if (!historyState.isEmpty) {
+      final mergedHistoryState = sessionManager
+          .historyStateOf(sessionId)
+          .mergeWith(historyState);
+      sessionManager.updateSessionHistoryState(
+        sessionId: sessionId,
+        historyState: mergedHistoryState,
       );
     }
     await sessionManager.save();
@@ -358,6 +407,46 @@ class FinalizeRunner {
     } catch (_) {
       // Non-critical: silently ignore persistence failures.
     }
+  }
+
+  AssistantSessionHistoryState _buildHistoryState({
+    required String sessionId,
+    required String currentSessionSummary,
+    required SkillSynthesisInput? skillSynthesisInput,
+    required SkillSynthesisOutput? skillSynthesisOutput,
+    required Map<String, dynamic> structuredResponse,
+    required AssistantSessionManager sessionManager,
+  }) {
+    final sessionPreferences = <PreferenceFact>[
+      ..._preferenceFactsFromRaw(structuredResponse['sessionPreferenceFacts']),
+      ..._preferenceFactsFromRaw(structuredResponse['longTermPreferenceFacts']),
+    ];
+    final effectivePreferences = sessionPreferences.isNotEmpty
+        ? sessionPreferences
+        : <PreferenceFact>[
+            ...sessionManager.sessionPreferenceFactsOf(sessionId),
+            ...sessionManager.longTermPreferenceFactsOf(sessionId),
+          ];
+    if (skillSynthesisInput == null || skillSynthesisOutput == null) {
+      return AssistantSessionHistoryState(
+        sessionSummary: currentSessionSummary.trim(),
+        userPreferences: effectivePreferences,
+      );
+    }
+    return AssistantSessionHistoryState.fromSkillSynthesis(
+      input: skillSynthesisInput,
+      output: skillSynthesisOutput,
+      userPreferences: effectivePreferences,
+    );
+  }
+
+  List<PreferenceFact> _preferenceFactsFromRaw(Object? raw) {
+    final items = raw is List ? raw : const <dynamic>[];
+    return items
+        .whereType<Map>()
+        .map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>()))
+        .where((fact) => fact.key.trim().isNotEmpty && fact.value.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<void> _safeWriteLogEvent({

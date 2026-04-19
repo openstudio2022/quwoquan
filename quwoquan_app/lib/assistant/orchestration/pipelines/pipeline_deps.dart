@@ -10,7 +10,7 @@ import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.da
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_router.dart';
 import 'package:quwoquan_app/assistant/skill/loading/skill_loader.dart';

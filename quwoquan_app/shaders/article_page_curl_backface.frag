@@ -28,7 +28,7 @@ void main() {
   float paperWash = mix(0.9, 1.0, pageUv.y);
   float readabilityFloor = 0.008 + 0.014 * (1.0 - smoothstep(0.0, 0.28, foldDistance));
   vec4 color = vec4(0.0);
-  color += vec4(1.0, 1.0, 1.0, readabilityFloor * uTintStrength);
+  color += uPaperTint * readabilityFloor * uTintStrength;
   color += uPaperTint * tint * paperWash;
   color += uOcclusionColor * min(0.12, occlusion * 0.28);
   color += uOcclusionColor * min(0.018, edge * 0.018);

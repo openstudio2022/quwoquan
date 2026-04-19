@@ -125,8 +125,10 @@ void main() {
       expect(recentRounds.first['userQuery'], '第三问');
       expect(recentRounds.last['turnId'], 'turn_2');
       expect(
-        provider.capturedTemplateVariables['recentDialogueRoundsLimit'],
-        2,
+        provider.capturedTemplateVariables.containsKey(
+          'recentDialogueRoundsLimit',
+        ),
+        isFalse,
       );
     });
 
@@ -165,7 +167,7 @@ void main() {
       expect(state.intentGraph?.resolvedGeoScope.defaultApplied, isTrue);
       expect(
         state.intentGraph?.queryTasks.first.query,
-        contains('深圳'),
+        '2026-04-09 天气 预报',
       );
       expect(state.intentGraph?.clarificationNeeded, isFalse);
       expect(

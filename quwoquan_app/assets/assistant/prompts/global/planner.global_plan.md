@@ -12,6 +12,8 @@
 ## 约束
 
 - 这是理解问题 + 检索设计阶段，不要提前写回答阶段正文
+- 连续性判断：{{continuityMode}}
+- 已知问题类型提示：{{problemClass}}
 - 如果运行时仍把请求送到这个阶段，就默认你需要为后续执行准备下一步；不要在本阶段输出 `decision.nextAction=answer`
 - “无需检索即可直接回答”属于 runtime-owned shortcut，不属于本阶段职责
 - `understandingSnapshot.userFacingSummary` 是阶段 1 唯一主展示字段，必须是一段连贯的自然语言，像贴身助手在当面复述用户意图

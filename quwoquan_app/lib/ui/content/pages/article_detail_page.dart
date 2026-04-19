@@ -232,15 +232,19 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                       final stageHeight =
                           metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
                           pagePadding.vertical;
-                      return SizedBox(
-                        height: stageHeight,
-                        child: ArticleReadOnlyBookDeck(
-                          pages: pages,
-                          template: article.template,
-                          fontPreset: article.fontPreset,
-                          metrics: metrics,
-                          coverUrl: article.coverImage,
-                          pagePadding: pagePadding,
+                      return UnconstrainedBox(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: stageWidth,
+                          height: stageHeight,
+                          child: ArticleReadOnlyBookDeck(
+                            pages: pages,
+                            template: article.template,
+                            fontPreset: article.fontPreset,
+                            metrics: metrics,
+                            coverUrl: article.coverImage,
+                            pagePadding: pagePadding,
+                          ),
                         ),
                       );
                     },

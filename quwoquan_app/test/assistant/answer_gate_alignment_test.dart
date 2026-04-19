@@ -3,6 +3,7 @@ import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart'
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
@@ -62,9 +63,12 @@ void main() {
           timezone: 'Asia/Shanghai',
         ),
       ],
-      toolResults: <Map<String, dynamic>>[
-        <String, dynamic>{
-          'data': <String, dynamic>{
+      toolResults: <AssistantToolResultRow>[
+        AssistantToolResultRow(
+          toolName: 'web_search',
+          toolCallId: 'stock_yesterday',
+          message: '查询完成',
+          data: <String, dynamic>{
             'freshnessKnown': true,
             'freshnessSatisfied': true,
             'timeConstraint': <String, dynamic>{
@@ -82,7 +86,7 @@ void main() {
               },
             ],
           },
-        },
+        ),
       ],
     );
 
@@ -265,6 +269,27 @@ void main() {
     );
   });
 
+  test('AnswerOutcomeResolver 会把 journey readiness 视为最终成答材料化信号', () {
+    const resolver = AnswerOutcomeResolver();
+    final snapshot = resolver.resolve(
+      structured: const <String, dynamic>{
+        'answerOutcome': <String, dynamic>{},
+      },
+      runArtifacts: RunArtifacts.fromJson(
+        const <String, dynamic>{
+          'journey': <String, dynamic>{
+            'readiness': <String, dynamic>{
+              'finalAnswerReady': true,
+            },
+          },
+        },
+      ),
+    );
+
+    expect(snapshot.journey.readiness.finalAnswerReady, isTrue);
+    expect(snapshot.synthesisReadiness.ready, isTrue);
+  });
+
   test('实时 query 仍然保持严格 freshness gate', () {
     const outcomeResolver = RetrievalOutcomeResolver();
     const gateResolver = AnswerGateResolver();
@@ -299,9 +324,12 @@ void main() {
           timezone: 'Asia/Shanghai',
         ),
       ],
-      toolResults: <Map<String, dynamic>>[
-        <String, dynamic>{
-          'data': <String, dynamic>{
+      toolResults: <AssistantToolResultRow>[
+        AssistantToolResultRow(
+          toolName: 'web_search',
+          toolCallId: 'weather_today',
+          message: '查询完成',
+          data: <String, dynamic>{
             'freshnessKnown': true,
             'freshnessSatisfied': false,
             'timeConstraint': <String, dynamic>{
@@ -320,7 +348,7 @@ void main() {
               },
             ],
           },
-        },
+        ),
       ],
     );
 
@@ -379,9 +407,12 @@ void main() {
           timezone: 'Asia/Shanghai',
         ),
       ],
-      toolResults: <Map<String, dynamic>>[
-        <String, dynamic>{
-          'data': <String, dynamic>{
+      toolResults: <AssistantToolResultRow>[
+        AssistantToolResultRow(
+          toolName: 'web_search',
+          toolCallId: 'weather_tomorrow',
+          message: '查询完成',
+          data: <String, dynamic>{
             'authoritySatisfied': true,
             'timeConstraint': <String, dynamic>{
               'scope': 'year_month_day',
@@ -398,7 +429,7 @@ void main() {
               },
             ],
           },
-        },
+        ),
       ],
     );
 
@@ -443,9 +474,12 @@ void main() {
         summary: '已拿到若干网页，但命中度一般。',
       ),
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      toolResults: <Map<String, dynamic>>[
-        <String, dynamic>{
-          'data': <String, dynamic>{
+      toolResults: <AssistantToolResultRow>[
+        AssistantToolResultRow(
+          toolName: 'web_search',
+          toolCallId: 'market_analysis',
+          message: '查询完成',
+          data: <String, dynamic>{
             'authoritySatisfied': true,
             'freshnessSatisfied': true,
             'references': <Map<String, dynamic>>[
@@ -456,7 +490,7 @@ void main() {
               },
             ],
           },
-        },
+        ),
       ],
     );
 

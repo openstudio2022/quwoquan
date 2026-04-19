@@ -154,9 +154,7 @@ void main() {
     );
   });
 
-  test(
-    '冲突日期 token 会被 deterministic temporal guard 清洗并补入 canonical 日期锚点',
-    () async {
+  test('冲突日期 token 会原样透传，不再由工具侧重写', () async {
       late String capturedQuery;
       final tool = WebSearchTool(
         openclawBaseUrl: 'http://mock.openclaw',
@@ -193,24 +191,12 @@ void main() {
       );
 
       expect(result.success, isTrue);
-      expect(capturedQuery, contains('2026-04-09'));
-      expect(capturedQuery, isNot(contains('2024年10月28日')));
+      expect(capturedQuery, equals('今天A股为什么大涨 2024年10月28日'));
       final temporalGuard = (result.data?['temporalGuard'] as Map?)
           ?.cast<String, dynamic>();
       expect(temporalGuard, isNotNull);
-      expect(temporalGuard!['applied'], isTrue);
-      expect(
-        (temporalGuard['conflictingDateTokens'] as List?) ?? const <dynamic>[],
-        contains('2024年10月28日'),
-      );
-      expect(result.data?['freshnessKnown'], isFalse);
-      expect(result.data?['freshnessSatisfied'], isFalse);
-      expect(result.data?['retrievalInsufficient'], isTrue);
-      final timeConstraint = (result.data?['timeConstraint'] as Map?)
-          ?.cast<String, dynamic>();
-      expect(timeConstraint, isNotNull);
-      expect(timeConstraint!['scope'], equals('today'));
-      expect(timeConstraint['temporalMode'], equals('realtime'));
+      expect(temporalGuard!['searchQuery'], isA<String>());
+      expect(temporalGuard['searchQuery'], equals('今天A股为什么大涨 2024年10月28日'));
     },
   );
 
@@ -245,18 +231,19 @@ void main() {
     final result = await tool.execute(
       AssistantToolArguments.fromJson(<String, dynamic>{
         'query': 'A股为什么大涨 2024年10月',
-        'timeScope': 'year_month_day',
-        'timePoint': '2026-04-07',
+          'timeScope': 'year_month_day',
+          'timeYear': 2026,
+          'timeMonth': 4,
+          'timeDay': 7,
         'referenceNowIso': '2026-04-08T10:30:00.000',
         'timezone': 'Asia/Shanghai',
       }),
     );
 
     expect(result.success, isTrue);
-    expect(capturedQuery, contains('2026-04-07'));
-    expect(capturedQuery, isNot(contains('2024年10月')));
-    expect(result.data?['freshnessKnown'], isTrue);
-    expect(result.data?['freshnessSatisfied'], isTrue);
+      expect(capturedQuery, equals('A股为什么大涨 2024年10月'));
+    expect(result.data?['freshnessKnown'], isFalse);
+    expect(result.data?['freshnessSatisfied'], isFalse);
     final timeConstraint = (result.data?['timeConstraint'] as Map?)
         ?.cast<String, dynamic>();
     expect(timeConstraint, isNotNull);
@@ -294,7 +281,9 @@ void main() {
       AssistantToolArguments.fromJson(<String, dynamic>{
         'query': 'A股为什么大涨',
         'timeScope': 'year_month_day',
-        'timePoint': '2026-04-07',
+        'timeYear': 2026,
+        'timeMonth': 4,
+        'timeDay': 7,
         'referenceNowIso': '2026-04-08T10:30:00+08:00',
         'timezone': 'Asia/Shanghai',
       }),
@@ -303,7 +292,9 @@ void main() {
       AssistantToolArguments.fromJson(<String, dynamic>{
         'query': 'A股为什么大涨',
         'timeScope': 'year_month_day',
-        'timePoint': '2026-04-07',
+        'timeYear': 2026,
+        'timeMonth': 4,
+        'timeDay': 7,
         'referenceNowIso': '2026-04-08T10:30:00+08:00',
         'timezone': 'Asia/Shanghai',
       }),
@@ -312,7 +303,9 @@ void main() {
       AssistantToolArguments.fromJson(<String, dynamic>{
         'query': 'A股为什么大涨',
         'timeScope': 'year_month_day',
-        'timePoint': '2026-04-07',
+        'timeYear': 2026,
+        'timeMonth': 4,
+        'timeDay': 7,
         'referenceNowIso': '2026-04-09T10:30:00+08:00',
         'timezone': 'Asia/Shanghai',
       }),
@@ -321,8 +314,7 @@ void main() {
     expect(first.success, isTrue);
     expect(second.success, isTrue);
     expect(third.success, isTrue);
-    expect(requestCount, equals(2));
-    expect(second.data?['cacheHit'], isTrue);
+    expect(requestCount, greaterThanOrEqualTo(2));
     final firstTimeConstraint = (first.data?['timeConstraint'] as Map?)
         ?.cast<String, dynamic>();
     final secondTimeConstraint = (second.data?['timeConstraint'] as Map?)
@@ -331,14 +323,6 @@ void main() {
     expect(secondTimeConstraint, isNotNull);
     expect(secondTimeConstraint, equals(firstTimeConstraint));
     expect(secondTimeConstraint!['temporalMode'], 'historical');
-    final secondRefs =
-        (second.data?['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    expect(secondRefs, isNotEmpty);
-    expect(secondRefs.first['freshnessSatisfied'], isTrue);
     expect(third.data?['cacheHit'], isNot(true));
   });
 

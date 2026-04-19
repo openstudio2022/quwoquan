@@ -19,7 +19,8 @@ import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_builder.dart';
+import 'package:quwoquan_app/assistant/intent/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -35,10 +36,6 @@ import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 
 const RelativeTimeResolver _relativeTimeResolver = RelativeTimeResolver();
-final RegExp _relativeTemporalTokenRe = RegExp(
-  r'(昨天|昨日|明天|后天|今天|周[一二三四五六日天]|上周[一二三四五六日天]|下周[一二三四五六日天]|最近)',
-);
-final RegExp _relativeDayTokenRe = RegExp(r'(昨天|昨日|明天|后天|今天)');
 
 /// Understand: intent graph, domain selection, dialogue round script.
 class UnderstandPhase implements Phase {
@@ -654,9 +651,6 @@ class UnderstandPhase implements Phase {
         coerceRecentDialogueRounds(
           request.contextScopeHint['recentDialogueRounds'],
         );
-    final recentDialogueRoundsLimit =
-        bootstrapContext?.recentDialogueRoundsLimit ??
-        resolveRecentDialogueRoundsLimit(request.contextScopeHint);
     final conversationSpineJson = jsonEncode(
       buildConversationSpine(
         stageId: 'understanding',
@@ -718,31 +712,21 @@ class UnderstandPhase implements Phase {
       bootstrapContext: bootstrapContext,
     );
     final plannerMessagesPayload = <Map<String, dynamic>>[
-      <String, dynamic>{
-        'role': 'system',
-        'content': _buildIntentPlanningContext(
-          continuityMode: continuityMode,
-          problemClass: problemClass,
-        ),
-      },
       for (final item in plannerMessages)
         <String, dynamic>{'role': item.role, 'content': item.content},
     ];
-    final plannerTemplateVars = <String, dynamic>{
-      'userQuery': latestUserQuery,
-      'conversationSpine': conversationSpineJson,
-      'skillCatalog': bootstrapContext?.skillCatalog ?? '',
-      'sharedContext': sharedContextJson,
-      'currentRuntimeState': currentRuntimeStateJson,
-      'dialogueContinuity': dialogueContinuityJson,
-      'recentDialogueRounds': jsonEncode(recentDialogueRounds),
-      'searchIterationState': jsonEncode(searchIterationState.toJson()),
-      'temporalReference': jsonEncode(<String, dynamic>{
-        'referenceNowIso': temporalReference.referenceNowIso,
-        'timezone': temporalReference.timezone,
-      }),
-      'recentDialogueRoundsLimit': recentDialogueRoundsLimit,
-    };
+    final plannerTemplateVars = buildPlannerTemplateVariables(
+      userQuery: latestUserQuery,
+      skillCatalog: bootstrapContext?.skillCatalog ?? '',
+      conversationSpineJson: conversationSpineJson,
+      sharedContextJson: sharedContextJson,
+      currentRuntimeStateJson: currentRuntimeStateJson,
+      dialogueContinuityJson: dialogueContinuityJson,
+      recentDialogueRoundsJson: jsonEncode(recentDialogueRounds),
+      searchIterationStateJson: jsonEncode(searchIterationState.toJson()),
+      continuityMode: continuityMode,
+      problemClass: problemClass,
+    );
     var streamedUserFacingSummary = '';
     void forwardTrace(AssistantTraceEvent event) {
       onTraceEvent?.call(event.copyWith(visibility: TraceVisibility.internal));
@@ -938,42 +922,7 @@ class UnderstandPhase implements Phase {
     required String base,
     required IntentGraph intentGraph,
   }) {
-    final trimmed = base.trim();
-    if (trimmed.isEmpty) {
-      return '';
-    }
-    if (!_relativeTemporalTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeExplicitDateAnchors(trimmed);
-    }
-    final queryNormalization = intentGraph.queryNormalization;
-    final fallbackDate = _firstUnderstandingExplicitDate(intentGraph);
-    final rewritten = _relativeTimeResolver
-        .resolve(
-          query: trimmed,
-          referenceNowIso: queryNormalization.referenceNowIso,
-          timezone: queryNormalization.timezone,
-          timeScope: queryNormalization.timeScope,
-          timeRangeStart: queryNormalization.timeRangeStart,
-          timeRangeEnd: queryNormalization.timeRangeEnd,
-          timePoint: queryNormalization.timePoint.isNotEmpty
-              ? queryNormalization.timePoint
-              : fallbackDate,
-        )
-        .rewrittenQuery
-        .trim();
-    if (rewritten.isNotEmpty &&
-        rewritten != trimmed &&
-        !_relativeDayTokenRe.hasMatch(rewritten)) {
-      return _canonicalizeExplicitDateAnchors(rewritten);
-    }
-    if (fallbackDate.isNotEmpty && _relativeDayTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeExplicitDateAnchors(
-        trimmed.replaceAllMapped(_relativeDayTokenRe, (_) => fallbackDate),
-      );
-    }
-    return _canonicalizeExplicitDateAnchors(
-      rewritten.isNotEmpty ? rewritten : trimmed,
-    );
+    return base.trim();
   }
 
   String _firstUnderstandingExplicitDate(IntentGraph intentGraph) {
@@ -984,40 +933,15 @@ class UnderstandPhase implements Phase {
       queryNormalization.timeRangeEnd.trim(),
     ].where((item) => item.isNotEmpty);
     if (normalizedCandidates.isNotEmpty) {
-      return _canonicalDateToken(normalizedCandidates.first);
+      return normalizedCandidates.first;
     }
     for (final task in intentGraph.queryTasks) {
       if (task.timePoint.trim().isNotEmpty) {
-        return _canonicalDateToken(task.timePoint.trim());
-      }
-      final match = RegExp(
-        r'(\d{4})[-年/](\d{1,2})[-月/](\d{1,2})',
-      ).firstMatch(task.query);
-      if (match != null) {
-        return _canonicalDateToken(match.group(0)?.trim() ?? '');
+        return task.timePoint.trim();
       }
     }
     return '';
   }
-
-  static final RegExp _explicitDateTokenRe = RegExp(
-    r'(\d{4})[-年/](\d{1,2})(?:[-月/])(\d{1,2})(?:日)?',
-  );
-
-  String _canonicalizeExplicitDateAnchors(String text) {
-    return text.replaceAllMapped(_explicitDateTokenRe, (match) {
-      final year = match.group(1) ?? '';
-      final month = int.tryParse(match.group(2) ?? '')?.toString() ?? '';
-      final day = int.tryParse(match.group(3) ?? '')?.toString() ?? '';
-      if (year.isEmpty || month.isEmpty || day.isEmpty) {
-        return match.group(0) ?? '';
-      }
-      return '$year年${month}月${day}日';
-    });
-  }
-
-  String _canonicalDateToken(String value) =>
-      _canonicalizeExplicitDateAnchors(value.trim());
 
   List<RunArtifactsUnderstandingResolutionItem> _normalizeResolutionItems({
     required RunArtifactsUnderstandingSnapshot snapshot,
@@ -1352,15 +1276,6 @@ class UnderstandPhase implements Phase {
         'timezone': temporalReference.timezone,
         'calendarContext': calendarContext,
       },
-      'userProfileSnapshot': request.userProfileSnapshot,
-      'historicalRetrievalFeedback':
-          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
-              ?.cast<String, Object?>() ??
-          const <String, Object?>{},
-      'domainLearningSignals':
-          (request.contextScopeHint['domainLearningSignals'] as Map?)
-              ?.cast<String, Object?>() ??
-          const <String, Object?>{},
     };
   }
 
@@ -1506,20 +1421,6 @@ class UnderstandPhase implements Phase {
     };
   }
 
-  String _buildIntentPlanningContext({
-    required String continuityMode,
-    required String problemClass,
-  }) {
-    return [
-      '请先把 conversation_spine 当作当前轮唯一主线，再参考 shared_context / current_runtime_state / dialogue_continuity。',
-      if (continuityMode.isNotEmpty) '连续性判断：$continuityMode',
-      if (problemClass.isNotEmpty) '已知问题类型提示：$problemClass',
-      '如果问题带时间约束，请直接把明确时间表达写进 queryTasks.query，不要把时间语义留给运行时再改写。',
-      '如果本轮是在纠正上一轮理解，优先修正旧假设。',
-      '请直接输出 assistant_turn JSON，并把结构化意图完整放入 intentGraph。',
-    ].join('\n');
-  }
-
   Future<IntentGraph> _resolveIntentGraphGeoContext({
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
@@ -1545,8 +1446,6 @@ class UnderstandPhase implements Phase {
               const ResolvedGeoScope()
         : const ResolvedGeoScope();
     final resolvedGeoScope = resolveGeoScope(
-      userQuery: latestUserQuery,
-      domainId: domainId,
       availableGeoContext: availableGeoContext,
       current: intentGraph.resolvedGeoScope,
       previous: previousGeoScope,
@@ -1587,42 +1486,6 @@ class UnderstandPhase implements Phase {
       intentGraph.entityAnchors,
       intentGraph.resolvedGeoScope,
     );
-    final queryNormalization = QueryNormalization(
-      normalizedQuery: intentGraph.queryNormalization.normalizedQuery,
-      rewrittenQuery: applyResolvedGeoToQuery(
-        intentGraph.queryNormalization.rewrittenQuery.trim().isNotEmpty
-            ? intentGraph.queryNormalization.rewrittenQuery
-            : intentGraph.queryNormalization.normalizedQuery,
-        intentGraph.resolvedGeoScope,
-      ),
-      issues: intentGraph.queryNormalization.issues,
-      language: intentGraph.queryNormalization.language,
-      hints: intentGraph.queryNormalization.hints,
-      referenceNowIso: intentGraph.queryNormalization.referenceNowIso,
-      timezone: intentGraph.queryNormalization.timezone,
-      resolvedTemporalHints:
-          intentGraph.queryNormalization.resolvedTemporalHints,
-      timeScope: intentGraph.queryNormalization.timeScope,
-      timeRangeStart: intentGraph.queryNormalization.timeRangeStart,
-      timeRangeEnd: intentGraph.queryNormalization.timeRangeEnd,
-      timePoint: intentGraph.queryNormalization.timePoint,
-    );
-    final queryTasks = intentGraph.queryTasks
-        .map(
-          (task) => task.copyWith(
-            query: applyResolvedGeoToQuery(
-              task.query,
-              intentGraph.resolvedGeoScope,
-            ),
-            entityAnchors: mergeGeoAnchors(
-              task.entityAnchors.isNotEmpty
-                  ? task.entityAnchors
-                  : mergedEntityAnchors,
-              intentGraph.resolvedGeoScope,
-            ),
-          ),
-        )
-        .toList(growable: false);
     return IntentGraph(
       userGoal: intentGraph.userGoal,
       problemShape: intentGraph.problemShape,
@@ -1641,8 +1504,8 @@ class UnderstandPhase implements Phase {
       requiresExternalEvidence: intentGraph.requiresExternalEvidence,
       entityAnchors: mergedEntityAnchors,
       negativeKeywords: intentGraph.negativeKeywords,
-      queryNormalization: queryNormalization,
-      queryTasks: queryTasks,
+      queryNormalization: intentGraph.queryNormalization,
+      queryTasks: intentGraph.queryTasks,
       searchIterationState: intentGraph.searchIterationState,
       contextSlots: intentGraph.contextSlots,
       globalConstraints: intentGraph.globalConstraints,

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_execution_guard.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_result_assessor.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_result_truncator.dart';
+import 'package:quwoquan_app/assistant/prompt_template/runtime/prompt_snippet_renderer.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
@@ -80,6 +81,8 @@ class ReactRuntime {
   final ToolResultAssessor _assessor;
   final ToolExecutionGuard _executionGuard;
   final ToolResultTruncator _resultTruncator;
+  final PromptSnippetRenderer _promptSnippetRenderer =
+      PromptSnippetRenderer();
   static const String _reactPolicyPath =
       'assets/assistant/config/react_policy.json';
   static const String _phaseHintsPath =
@@ -819,13 +822,15 @@ class ReactRuntime {
             goal: state.goal,
             messages: messages,
           );
+          final toolFailureMessage = await _renderPromptSnippet(
+            'tool_failure_context',
+            variables: <String, dynamic>{
+              'failureContextJson': jsonEncode(failureContext),
+            },
+          );
           messages.add(<String, String>{
             'role': 'system',
-            'content':
-                '工具调用失败上下文（供下一轮决策，不直接展示给用户）：\n'
-                '${jsonEncode(failureContext)}\n'
-                '请结合历史对话决定下一步：若缺少关键槽位则优先 ask_user；'
-                '若关键槽位已齐但外部能力失败，则给出基于现有信息的稳妥降级答复，并说明是否值得重试。',
+            'content': toolFailureMessage,
           });
         }
         // Layer 3 反思循环：当检索工具质量评分不足时，注入反思提示驱动 LLM 重写查询
@@ -860,19 +865,23 @@ class ReactRuntime {
             final retryToolName = _preferredRetrievalToolName(
               availableToolNames,
             );
+            final reflectionMessage = await _renderPromptSnippet(
+              'retrieval_reflection',
+              variables: <String, dynamic>{
+                'qualityScore': qualityScore.toStringAsFixed(2),
+                'failureMessage': result.message,
+                'authorityDomains': authorityDomains.join(', '),
+                'snippets': snippets.join(' | '),
+                'reflectionRound': reflectionRound + 1,
+                'allowedReflectionRounds': allowedReflectionRounds,
+                'retryToolName': retryToolName.isNotEmpty
+                    ? retryToolName
+                    : step.toolName,
+              },
+            );
             messages.add(<String, String>{
               'role': 'system',
-              'content':
-                  '本轮搜索质量评分过低（qualityScore=${qualityScore.toStringAsFixed(2)}），'
-                  '请诊断失败原因并生成3条差异化重写查询词：\n'
-                  '失败信息: ${result.message}\n'
-                  '目标权威域: ${authorityDomains.join(", ")}\n'
-                  '已检索片段摘要: ${snippets.join(" | ")}\n'
-                  '这是第 ${reflectionRound + 1} 次反思（最多$allowedReflectionRounds次）。'
-                  '请输出 JSON：failureReason（从 authority_domain_miss/query_too_generic/time_constraint_too_strict/provider_cache_stale/language_mismatch/missing_geo_context 中选）、'
-                  'rewrittenQueries（3条，每条覆盖不同召回角度）、retryProvider。'
-                  '然后重新调用 ${retryToolName.isNotEmpty ? retryToolName : step.toolName} 工具并选用不同 provider。\n'
-                  '注意：重写查询词必须与已使用的查询词有实质性差异，避免重复失败。',
+              'content': reflectionMessage,
             });
           }
         }
@@ -880,16 +889,20 @@ class ReactRuntime {
           finalText = result.message;
         } else if (!isOk && shouldSuppressToolErrorForUser) {
           if (retrievalLike) {
-            messages.add(const <String, String>{
+            final retrievalNotice = await _renderPromptSnippet(
+              'retrieval_unavailable_notice',
+            );
+            messages.add(<String, String>{
               'role': 'system',
-              'content':
-                  '本轮外部检索能力暂不可用。若当前证据仍不足，请不要编造确定性答案。优先给出稳态降级答复，并明确说明无法拿到最新外部信息与是否值得稍后重试。',
+              'content': retrievalNotice,
             });
           } else if (toolKind == 'context') {
-            messages.add(const <String, String>{
+            final localContextNotice = await _renderPromptSnippet(
+              'local_context_unavailable_notice',
+            );
+            messages.add(<String, String>{
               'role': 'system',
-              'content':
-                  '本地上下文暂不可用，但这不等于外部检索不可用。优先利用用户已明确提供的信息继续检索或判断；只有在关键地点或设备信息仍缺失时，才改为 ask_user 澄清。',
+              'content': localContextNotice,
             });
           }
         }
@@ -970,11 +983,14 @@ class ReactRuntime {
         }
         if (!assessment.shouldContinueLoop) {
           state.forceAnswerOnly = true;
+          final forceAnswerMessage = await _renderPromptSnippet(
+            assessment.allowAnswerWithCurrentEvidence
+                ? 'force_answer_conclusion'
+                : 'force_answer_conclusion_minimal',
+          );
           messages.add(<String, String>{
             'role': 'system',
-            'content': assessment.allowAnswerWithCurrentEvidence
-                ? '当前已经拿到足够支持回答的证据。不要继续调用任何工具，直接基于已有证据输出最终 answer；如果仍有不确定点，请用 bounded answer 明确说明边界。'
-                : '当前步骤已经足够进入成答。不要继续调用任何工具，直接输出最终 answer。',
+            'content': forceAnswerMessage,
           });
           break;
         }
@@ -1573,9 +1589,8 @@ class ReactRuntime {
     final phases = _phaseHintsConfig['phases'] as Map?;
     final phaseConfig = (phases?[phase] as Map?)?.cast<String, Object?>();
     final baseHint = (phaseConfig?['systemHint'] as String?) ?? '';
-    const userFacingNarrativeHint =
-        '过程说明只用用户能听懂的话，重点解释为什么现在这样做、这一步能帮用户减少什么不确定性、信息是否已经够答。'
-        '语气要像贴身助手，简洁、自然、有陪伴感，不要输出内部步骤编号、协议字段名或生硬的系统状态播报。';
+    final userFacingNarrativeHint =
+        (_phaseHintsConfig['defaultNarrativeHint'] as String?) ?? '';
     final effectiveBaseHint = baseHint.isEmpty
         ? userFacingNarrativeHint
         : '$baseHint\n\n$userFacingNarrativeHint';
@@ -1619,6 +1634,16 @@ class ReactRuntime {
       _reactPolicy = await ReactPolicy.loadFromAsset(_reactPolicyPath);
     }();
     await _reactPolicyLoading;
+  }
+
+  Future<String> _renderPromptSnippet(
+    String snippetId, {
+    Map<String, dynamic> variables = const <String, dynamic>{},
+  }) {
+    return _promptSnippetRenderer.renderSnippet(
+      snippetId,
+      variables: variables,
+    );
   }
 
   String _extractThinkingTextFromJson(String text, {String currentPhase = ''}) {

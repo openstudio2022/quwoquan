@@ -5,7 +5,6 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
-    "conversationSpine",
     "userGoal",
     "understandingSnapshot",
     "retrievalProcessing",
@@ -13,6 +12,7 @@
     "currentRuntimeState",
     "dialogueContinuity",
     "evidenceContext",
+    "recentDialogueRounds",
     "searchIterationState"
   ],
   "outputContract": "assistant_turn",

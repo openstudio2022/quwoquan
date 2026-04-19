@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
@@ -47,7 +48,9 @@ class EvidenceDigestPhase implements Phase {
     final toolResults = executionSnapshot['toolResults'] is List
         ? (executionSnapshot['toolResults'] as List)
               .whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
+              .map((item) => AssistantToolResultRow.fromJson(
+                    item.cast<String, dynamic>(),
+                  ))
               .toList(growable: false)
         : _collectToolResults(phaseOneResult.traces);
     final fallbackSnapshot = _buildFallbackRetrievalProcessing(
@@ -156,7 +159,7 @@ class EvidenceDigestPhase implements Phase {
   }
 
   RetrievalProcessingSnapshot _buildFallbackRetrievalProcessing({
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     final acceptedReferences = _extractAcceptedReferences(toolResults);
@@ -207,29 +210,21 @@ class EvidenceDigestPhase implements Phase {
     );
   }
 
-  List<Map<String, dynamic>> _collectToolResults(
+  List<AssistantToolResultRow> _collectToolResults(
     List<AssistantTraceEvent> traces,
   ) {
     return traces
         .where((event) => event.type == AssistantTraceEventType.toolResult)
-        .map(
-          (event) => <String, dynamic>{
-            'message': event.message,
-            'data': event.data ?? const <String, dynamic>{},
-            'toolCallId': event.toolCallId ?? '',
-          },
-        )
+        .map(AssistantToolResultRow.fromTraceEvent)
         .toList(growable: false);
   }
 
   List<RetrievalProcessingReference> _extractAcceptedReferences(
-    List<Map<String, dynamic>> toolResults,
+    List<AssistantToolResultRow> toolResults,
   ) {
     final byUrl = <String, RetrievalProcessingReference>{};
     for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final data = item.dataPayload;
       final references =
           (data['references'] as List?)
               ?.whereType<Map>()
@@ -272,15 +267,13 @@ class EvidenceDigestPhase implements Phase {
   }
 
   int _resolveProcessedDocumentCount({
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required int acceptedDocumentCount,
   }) {
     var maxProcessed = acceptedDocumentCount;
     var summed = 0;
     for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final data = item.dataPayload;
       final total = (data['totalReferences'] as num?)?.toInt() ?? 0;
       if (total > maxProcessed) {
         maxProcessed = total;
@@ -295,7 +288,7 @@ class EvidenceDigestPhase implements Phase {
 
   List<String> _fallbackSelectedKeyPoints({
     required List<RetrievalProcessingReference> acceptedReferences,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
   }) {
     final points = <String>[];
     final seen = <String>{};
@@ -307,9 +300,7 @@ class EvidenceDigestPhase implements Phase {
     }
 
     for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final data = item.dataPayload;
       final summary = (data['summary'] as String?)?.trim() ?? '';
       if (summary.isNotEmpty) collect(summary);
       final hits =

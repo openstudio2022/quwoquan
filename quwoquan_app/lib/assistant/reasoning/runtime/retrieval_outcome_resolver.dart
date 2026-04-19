@@ -1,9 +1,9 @@
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 工具结果 Map 链；优先 AssistantToolResultRowView 与结构化契约字段。
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 工具结果 JSON 链；外层 typed row，内层 dataPayload 仍为结构化 JSON。
 
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row_view.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
@@ -22,7 +22,7 @@ class RetrievalOutcomeResolver {
     required EvidenceEvaluationResult evidenceEvaluation,
     required SynthesisReadinessResult synthesisReadiness,
     List<QueryTask> queryTasks = const <QueryTask>[],
-    List<Map<String, dynamic>> toolResults = const <Map<String, dynamic>>[],
+    List<AssistantToolResultRow> toolResults = const <AssistantToolResultRow>[],
     bool terminalPayloadComplete = true,
     bool degraded = false,
     String referenceNowIso = '',
@@ -197,7 +197,7 @@ class RetrievalOutcomeResolver {
 
   bool _relevanceSatisfied({
     required EvidenceEvaluationResult evidenceEvaluation,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
   }) {
     final effectiveScore = _resolveEffectiveRelevanceScore(
       evidenceEvaluation: evidenceEvaluation,
@@ -211,7 +211,7 @@ class RetrievalOutcomeResolver {
 
   double? _resolveEffectiveRelevanceScore({
     required EvidenceEvaluationResult evidenceEvaluation,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
   }) {
     if (evidenceEvaluation.entries.isNotEmpty ||
         evidenceEvaluation.relevanceScore > 0) {
@@ -224,12 +224,10 @@ class RetrievalOutcomeResolver {
     return null;
   }
 
-  double _toolResultRelevanceScore(List<Map<String, dynamic>> toolResults) {
+  double _toolResultRelevanceScore(List<AssistantToolResultRow> toolResults) {
     var bestScore = 0.0;
     for (final result in toolResults) {
-      final data =
-          (result['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+      final data = result.dataPayload;
       final qualityScore = (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
       if (qualityScore > bestScore) {
         bestScore = qualityScore;
@@ -340,15 +338,20 @@ class RetrievalOutcomeResolver {
       evidenceEvaluation: evidenceEvaluation,
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
       queryTasks: _parseQueryTasks(resultData['queryTasks']),
-      toolResults: <Map<String, dynamic>>[
-        <String, dynamic>{'data': resultData},
+      toolResults: <AssistantToolResultRow>[
+        AssistantToolResultRow(
+          toolName: '',
+          toolCallId: '',
+          message: '',
+          data: resultData,
+        ),
       ],
     );
   }
 
   /// 工具层 timeConstraint 常带 referenceNowIso（与 query 语义一致）；优先于调用方未传的墙钟缺省。
   ({String referenceNowIso, String timezone}) _temporalAnchorFromToolResults(
-    List<Map<String, dynamic>> toolResults, {
+    List<AssistantToolResultRow> toolResults, {
     required String referenceNowIso,
     required String timezone,
   }) {
@@ -356,8 +359,7 @@ class RetrievalOutcomeResolver {
     var mergedTz = timezone.trim();
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+          item.dataPayload;
       final tc =
           (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
           const <String, Object?>{};
@@ -378,7 +380,7 @@ class RetrievalOutcomeResolver {
   _TemporalAssessment _resolveTemporalAssessment({
     required AnswerBoundaryPolicy policy,
     required List<QueryTask> queryTasks,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required EvidenceEvaluationResult evidenceEvaluation,
     required String referenceNowIso,
     required String timezone,
@@ -438,7 +440,7 @@ class RetrievalOutcomeResolver {
   bool _requiresStrictFreshness({
     required AnswerBoundaryPolicy policy,
     required List<QueryTask> queryTasks,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
   }) {
     if (queryTasks.any(
       (task) =>
@@ -460,8 +462,7 @@ class RetrievalOutcomeResolver {
     }
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+          item.dataPayload;
       if (data['freshnessRequired'] == true) {
         return true;
       }
@@ -508,14 +509,13 @@ class RetrievalOutcomeResolver {
 
   bool _requiresHistoricalWindow({
     required List<QueryTask> queryTasks,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required String referenceNowIso,
     required String timezone,
   }) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+          item.dataPayload;
       final timeConstraint =
           (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
           const <String, Object?>{};
@@ -542,11 +542,10 @@ class RetrievalOutcomeResolver {
     );
   }
 
-  bool _resolveFreshnessKnown(List<Map<String, dynamic>> toolResults) {
+  bool _resolveFreshnessKnown(List<AssistantToolResultRow> toolResults) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+          item.dataPayload;
       if (data['freshnessKnown'] == true) {
         return true;
       }
@@ -570,12 +569,11 @@ class RetrievalOutcomeResolver {
   }
 
   bool _resolveTemporalSatisfiedFromToolResults(
-    List<Map<String, dynamic>> toolResults,
+    List<AssistantToolResultRow> toolResults,
   ) {
     for (final item in toolResults) {
       final data =
-          (item['data'] as Map?)?.cast<String, Object?>() ??
-          const <String, Object?>{};
+          item.dataPayload;
       if (data['freshnessSatisfied'] == true) {
         return true;
       }
@@ -701,23 +699,23 @@ class RetrievalOutcomeResolver {
   }
 
   bool _boolFromToolResults(
-    List<Map<String, dynamic>> toolResults,
+    List<AssistantToolResultRow> toolResults,
     String key,
   ) {
     for (final item in toolResults) {
-      final data = AssistantToolResultRowView(item).dataPayload;
+      final data = item.dataPayload;
       if (data[key] == true) return true;
     }
     return false;
   }
 
   int _positiveIntFromToolResults(
-    List<Map<String, dynamic>> toolResults,
+    List<AssistantToolResultRow> toolResults,
     String key,
   ) {
     var maxValue = 0;
     for (final item in toolResults) {
-      final data = AssistantToolResultRowView(item).dataPayload;
+      final data = item.dataPayload;
       final candidate = (data[key] as num?)?.toInt() ?? 0;
       if (candidate > maxValue) {
         maxValue = candidate;
@@ -882,7 +880,7 @@ class RetrievalOutcomeResolver {
     return QueryTask.normalizeList(raw);
   }
 
-  List<Map<String, dynamic>> _toolResultsFromStructured(
+  List<AssistantToolResultRow> _toolResultsFromStructured(
     Map<String, dynamic> structured,
   ) {
     final domainResults =
@@ -890,9 +888,9 @@ class RetrievalOutcomeResolver {
         const <String, Object?>{};
     return (domainResults['toolResults'] as List?)
             ?.whereType<Map>()
-            .map((item) => item.cast<String, Object?>())
+            .map((item) => AssistantToolResultRow.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
+        const <AssistantToolResultRow>[];
   }
 
   bool _terminalPayloadComplete(Map<String, dynamic> structured) {

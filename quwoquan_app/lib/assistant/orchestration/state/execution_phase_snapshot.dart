@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
@@ -17,6 +18,8 @@ import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 /// short-circuit (domain-gate blocked) path.
 sealed class ExecutionPhaseSnapshot {
   const ExecutionPhaseSnapshot();
+
+  Map<String, dynamic> toLegacyMap();
 }
 
 /// Short-circuit: the execution phase produced a response without entering
@@ -24,6 +27,11 @@ sealed class ExecutionPhaseSnapshot {
 class ExecutionPhaseShortCircuit extends ExecutionPhaseSnapshot {
   const ExecutionPhaseShortCircuit({required this.response});
   final AssistantRunResponse response;
+
+  @override
+  Map<String, dynamic> toLegacyMap() => <String, dynamic>{
+    'shortCircuitResponse': response,
+  };
 }
 
 /// Normal execution result containing all state needed by downstream phases
@@ -98,13 +106,79 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
   final EvidenceEvaluationResult evidenceEvaluation;
 
   /// LLM serde boundary: tool call results for synthesis context.
-  final List<Map<String, dynamic>> toolResults;
+  final List<AssistantToolResultRow> toolResults;
 
   final List<AssistantTraceEvent> supplementalTraces;
+
+  ExecutionPhaseSuccess copyWith({
+    String? runId,
+    String? traceId,
+    DateTime? runStartAt,
+    String? sessionId,
+    String? latestUserQuery,
+    String? domainId,
+    ContextAssemblyResult? contextAssembly,
+    IntentGraph? intentGraph,
+    DialogueRoundScript? dialogueRoundScript,
+    List<String>? domainCatalog,
+    String? domainCatalogVersion,
+    List<String>? allowedToolNames,
+    SkillExecutionShell? executionShell,
+    SlotStateSnapshot? previousSlotState,
+    DomainPolicyBundle? previousDomainPolicyBundle,
+    Map<String, dynamic>? retrievalPolicy,
+    AnswerBoundaryPolicy? answerBoundaryPolicy,
+    Map<String, dynamic>? understandingSnapshot,
+    Map<String, dynamic>? templateVariables,
+    List<Map<String, dynamic>>? messages,
+    String? synthTemplateVersion,
+    String? fusionSynthTemplateVersion,
+    ReactRuntimeResult? phaseOneResult,
+    SynthesisReadinessResult? synthesisReadiness,
+    List<EvidenceLedgerEntry>? evidenceLedger,
+    EvidenceEvaluationResult? evidenceEvaluation,
+    List<AssistantToolResultRow>? toolResults,
+    List<AssistantTraceEvent>? supplementalTraces,
+  }) {
+    return ExecutionPhaseSuccess(
+      runId: runId ?? this.runId,
+      traceId: traceId ?? this.traceId,
+      runStartAt: runStartAt ?? this.runStartAt,
+      sessionId: sessionId ?? this.sessionId,
+      latestUserQuery: latestUserQuery ?? this.latestUserQuery,
+      domainId: domainId ?? this.domainId,
+      contextAssembly: contextAssembly ?? this.contextAssembly,
+      intentGraph: intentGraph ?? this.intentGraph,
+      dialogueRoundScript: dialogueRoundScript ?? this.dialogueRoundScript,
+      domainCatalog: domainCatalog ?? this.domainCatalog,
+      domainCatalogVersion: domainCatalogVersion ?? this.domainCatalogVersion,
+      allowedToolNames: allowedToolNames ?? this.allowedToolNames,
+      executionShell: executionShell ?? this.executionShell,
+      previousSlotState: previousSlotState ?? this.previousSlotState,
+      previousDomainPolicyBundle:
+          previousDomainPolicyBundle ?? this.previousDomainPolicyBundle,
+      retrievalPolicy: retrievalPolicy ?? this.retrievalPolicy,
+      answerBoundaryPolicy: answerBoundaryPolicy ?? this.answerBoundaryPolicy,
+      understandingSnapshot:
+          understandingSnapshot ?? this.understandingSnapshot,
+      templateVariables: templateVariables ?? this.templateVariables,
+      messages: messages ?? this.messages,
+      synthTemplateVersion: synthTemplateVersion ?? this.synthTemplateVersion,
+      fusionSynthTemplateVersion:
+          fusionSynthTemplateVersion ?? this.fusionSynthTemplateVersion,
+      phaseOneResult: phaseOneResult ?? this.phaseOneResult,
+      synthesisReadiness: synthesisReadiness ?? this.synthesisReadiness,
+      evidenceLedger: evidenceLedger ?? this.evidenceLedger,
+      evidenceEvaluation: evidenceEvaluation ?? this.evidenceEvaluation,
+      toolResults: toolResults ?? this.toolResults,
+      supplementalTraces: supplementalTraces ?? this.supplementalTraces,
+    );
+  }
 
   /// Backward-compatible map representation consumed by legacy synthesis and
   /// finalize paths during the migration. Will be removed once all consumers
   /// switch to strongly-typed fields.
+  @override
   @Deprecated('Transitional: will be removed after full pipeline migration')
   Map<String, dynamic> toLegacyMap() => <String, dynamic>{
     'runId': runId,
@@ -133,7 +207,7 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
     'synthesisReadiness': synthesisReadiness,
     'evidenceLedger': evidenceLedger,
     'evidenceEvaluation': evidenceEvaluation,
-    'toolResults': toolResults,
+    'toolResults': toolResults.map((item) => item.toJson()).toList(growable: false),
     'supplementalTraces': supplementalTraces,
   };
 }

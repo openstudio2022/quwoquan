@@ -7,6 +7,12 @@ class SubagentPlan {
     required this.domainId,
     required this.problemClass,
     required this.goal,
+    this.role = 'supporting',
+    this.taskBrief = '',
+    this.routeNarrative = '',
+    this.localContextSeed = '',
+    this.needClarify = false,
+    this.pendingClarifications = const <String>[],
     this.mode = 'qa',
     this.timeoutMs = 12000,
     this.maxIterations = 2,
@@ -24,6 +30,12 @@ class SubagentPlan {
   final String domainId;
   final String problemClass;
   final String goal;
+  final String role;
+  final String taskBrief;
+  final String routeNarrative;
+  final String localContextSeed;
+  final bool needClarify;
+  final List<String> pendingClarifications;
   final String mode;
   final int timeoutMs;
   final int maxIterations;
@@ -49,50 +61,69 @@ class SubagentPlan {
       parseProviderPolicy(providerPolicy);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'subagentId': subagentId,
-    'domainId': domainId,
-    'problemClass': problemClass,
-    'goal': goal,
-    'mode': mode,
-    'timeoutMs': timeoutMs,
-    'maxIterations': maxIterations,
-    'toolBudget': toolBudget,
-    'toolWhitelist': toolWhitelist,
-    'stopPolicy': stopPolicy,
-    'searchIntensity': searchIntensity,
-    'providerPolicy': providerPolicy,
-    'freshnessHoursMax': freshnessHoursMax,
-    'answerThreshold': answerThreshold,
-    'dependencies': dependencies,
+    SubagentPlanFields.subagentId: subagentId,
+    SubagentPlanFields.domainId: domainId,
+    SubagentPlanFields.problemClass: problemClass,
+    SubagentPlanFields.goal: goal,
+    SubagentPlanFields.role: role,
+    SubagentPlanFields.taskBrief: taskBrief,
+    SubagentPlanFields.routeNarrative: routeNarrative,
+    SubagentPlanFields.localContextSeed: localContextSeed,
+    SubagentPlanFields.needClarify: needClarify,
+    SubagentPlanFields.pendingClarifications: pendingClarifications,
+    SubagentPlanFields.mode: mode,
+    SubagentPlanFields.timeoutMs: timeoutMs,
+    SubagentPlanFields.maxIterations: maxIterations,
+    SubagentPlanFields.toolBudget: toolBudget,
   };
 
   factory SubagentPlan.fromJson(Map<String, dynamic> json) {
     return SubagentPlan(
-      subagentId: (json['subagentId'] as String?)?.trim() ?? '',
-      domainId: (json['domainId'] as String?)?.trim() ?? '',
-      problemClass: (json['problemClass'] as String?)?.trim() ?? '',
-      goal: (json['goal'] as String?)?.trim() ?? '',
-      mode: (json['mode'] as String?)?.trim() ?? 'qa',
-      timeoutMs: _positiveInt(json['timeoutMs'], fallback: 12000),
-      maxIterations: _positiveInt(json['maxIterations'], fallback: 2),
-      toolBudget: _positiveInt(json['toolBudget'], fallback: 2),
+      subagentId: (json[SubagentPlanFields.subagentId] as String?)?.trim() ?? '',
+      domainId: (json[SubagentPlanFields.domainId] as String?)?.trim() ?? '',
+      problemClass:
+          (json[SubagentPlanFields.problemClass] as String?)?.trim() ?? '',
+      goal: (json[SubagentPlanFields.goal] as String?)?.trim() ?? '',
+      role: (json[SubagentPlanFields.role] as String?)?.trim() ?? 'supporting',
+      taskBrief: (json[SubagentPlanFields.taskBrief] as String?)?.trim() ?? '',
+      routeNarrative:
+          (json[SubagentPlanFields.routeNarrative] as String?)?.trim() ?? '',
+      localContextSeed:
+          (json[SubagentPlanFields.localContextSeed] as String?)?.trim() ?? '',
+      needClarify: json[SubagentPlanFields.needClarify] == true,
+      pendingClarifications:
+          (json[SubagentPlanFields.pendingClarifications] as List?)
+              ?.map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList(growable: false) ??
+          const <String>[],
+      mode: (json[SubagentPlanFields.mode] as String?)?.trim() ?? 'qa',
+      timeoutMs: _positiveInt(json[SubagentPlanFields.timeoutMs], fallback: 12000),
+      maxIterations:
+          _positiveInt(json[SubagentPlanFields.maxIterations], fallback: 2),
+      toolBudget: _positiveInt(json[SubagentPlanFields.toolBudget], fallback: 2),
       toolWhitelist:
-          (json['toolWhitelist'] as List?)
+          (json[SubagentPlanFields.toolWhitelist] as List?)
               ?.whereType<String>()
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
           const <String>[],
-      stopPolicy: (json['stopPolicy'] as String?)?.trim() ?? 'balanced',
-      searchIntensity: (json['searchIntensity'] as String?)?.trim() ?? 'medium',
-      providerPolicy: (json['providerPolicy'] as String?)?.trim() ?? '',
+      stopPolicy: (json[SubagentPlanFields.stopPolicy] as String?)?.trim() ??
+          'balanced',
+      searchIntensity:
+          (json[SubagentPlanFields.searchIntensity] as String?)?.trim() ??
+          'medium',
+      providerPolicy:
+          (json[SubagentPlanFields.providerPolicy] as String?)?.trim() ?? '',
       freshnessHoursMax: _nonNegativeInt(
-        json['freshnessHoursMax'],
+        json[SubagentPlanFields.freshnessHoursMax],
         fallback: 0,
       ),
-      answerThreshold: _normalizedThreshold(json['answerThreshold']),
+      answerThreshold:
+          _normalizedThreshold(json[SubagentPlanFields.answerThreshold]),
       dependencies:
-          (json['dependencies'] as List?)
+          (json[SubagentPlanFields.dependencies] as List?)
               ?.whereType<String>()
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
@@ -100,6 +131,18 @@ class SubagentPlan {
           const <String>[],
     );
   }
+
+  bool get hasMilestone3Inputs =>
+      domainId.trim().isNotEmpty &&
+      problemClass.trim().isNotEmpty &&
+      goal.trim().isNotEmpty &&
+      role.trim().isNotEmpty &&
+      taskBrief.trim().isNotEmpty &&
+      routeNarrative.trim().isNotEmpty &&
+      localContextSeed.trim().isNotEmpty &&
+      timeoutMs > 0 &&
+      maxIterations > 0 &&
+      toolBudget > 0;
 
   static int _positiveInt(Object? value, {required int fallback}) {
     if (value is int && value > 0) return value;
@@ -125,4 +168,28 @@ class SubagentPlan {
     if (parsed > 1) return 1.0;
     return parsed;
   }
+}
+
+class SubagentPlanFields {
+  static const String subagentId = 'subagentId';
+  static const String domainId = 'domainId';
+  static const String problemClass = 'problemClass';
+  static const String goal = 'goal';
+  static const String role = 'role';
+  static const String taskBrief = 'taskBrief';
+  static const String routeNarrative = 'routeNarrative';
+  static const String localContextSeed = 'localContextSeed';
+  static const String needClarify = 'needClarify';
+  static const String pendingClarifications = 'pendingClarifications';
+  static const String mode = 'mode';
+  static const String timeoutMs = 'timeoutMs';
+  static const String maxIterations = 'maxIterations';
+  static const String toolBudget = 'toolBudget';
+  static const String toolWhitelist = 'toolWhitelist';
+  static const String stopPolicy = 'stopPolicy';
+  static const String searchIntensity = 'searchIntensity';
+  static const String providerPolicy = 'providerPolicy';
+  static const String freshnessHoursMax = 'freshnessHoursMax';
+  static const String answerThreshold = 'answerThreshold';
+  static const String dependencies = 'dependencies';
 }

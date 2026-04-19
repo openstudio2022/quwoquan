@@ -12,7 +12,7 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
-import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
+import 'package:quwoquan_app/assistant/persistence/assistant_storage_path.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/components/assistant/petal_mark.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';

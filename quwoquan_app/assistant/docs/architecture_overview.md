@@ -123,7 +123,7 @@ LLM 从以下 15 个技能中自主选择，每个技能一行 `description` 是
 | `policy_public_service` | 政策解读、办事流程、社保公积金、政务服务 | qa | research |
 | `emotion_companion` | 情感陪伴、恋爱家庭、心理疏导、关系建议 | qa | none |
 | `fortune_astrology` | 星座运势、占卜塔罗、八字运程、趣味解读 | qa | none |
-| `fallback_general_search` | 通用搜索兜底，无明确匹配时使用 | qa | research |
+| `search_fallback` | 通用搜索兜底（系统级默认 skill），无明确匹配时使用 | qa | research |
 
 **废弃域**（已合并或下线）：`huawei_cloud_qa`、`social_companion_chat`、`relationship_matchmaking`、`family_parenting`、`divination_fortune`、`astrology_constellation`
 

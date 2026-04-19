@@ -1,17 +1,28 @@
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:test/test.dart';
 
 class _InMemoryVectorStore implements AssistantVectorStore {
@@ -30,6 +41,47 @@ class _InMemoryVectorStore implements AssistantVectorStore {
   }) async {
     return _items.take(limit).toList(growable: false);
   }
+}
+
+ExecutionPhaseSnapshot _buildExecutionSnapshot({
+  required String sessionId,
+  required String latestUserQuery,
+  required String runId,
+  required String traceId,
+}) {
+  return ExecutionPhaseSuccess(
+    runId: runId,
+    traceId: traceId,
+    runStartAt: DateTime(2026, 4, 9, 10, 0, 0),
+    sessionId: sessionId,
+    latestUserQuery: latestUserQuery,
+    domainId: 'assistant',
+    contextAssembly: const ContextAssemblyResult(),
+    intentGraph: const IntentGraph(
+      userGoal: '查昨天A股为什么大涨',
+      problemShape: ProblemShape.singleSkill,
+      primarySkill: 'assistant',
+    ),
+    dialogueRoundScript: const DialogueRoundScript(),
+    domainCatalog: const <String>[],
+    domainCatalogVersion: '',
+    allowedToolNames: const <String>[],
+    executionShell: const SkillExecutionShell(),
+    previousSlotState: const SlotStateSnapshot(),
+    retrievalPolicy: const <String, dynamic>{},
+    answerBoundaryPolicy: const AnswerBoundaryPolicy(),
+    understandingSnapshot: const <String, dynamic>{},
+    templateVariables: const <String, dynamic>{},
+    messages: const <Map<String, dynamic>>[],
+    synthTemplateVersion: '',
+    fusionSynthTemplateVersion: '',
+    phaseOneResult: const ReactRuntimeResult(finalText: '', traces: []),
+    synthesisReadiness: const SynthesisReadinessResult(),
+    evidenceLedger: const <EvidenceLedgerEntry>[],
+    evidenceEvaluation: const EvidenceEvaluationResult(),
+    toolResults: const <AssistantToolResultRow>[],
+    supplementalTraces: const <AssistantTraceEvent>[],
+  );
 }
 
 AssistantRunResponse _buildFinalizeResponse({required bool includeAnswer}) {
@@ -154,6 +206,68 @@ AssistantRunResponse _buildFinalizeResponse({required bool includeAnswer}) {
       assistantUnderstandingSnapshotField: understandingSnapshot.toJson(),
       assistantRetrievalProcessingField: retrievalProcessing.toJson(),
       assistantAnswerProcessingField: answerProcessing.toJson(),
+      'subagentRuns': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'version': 'subagent_result',
+          'subagentId': 'weather_verify',
+          'domainId': 'weather',
+          'status': 'success',
+          'goal': '核验深圳天气',
+          'mode': 'qa',
+          'problemClass': 'realtime_info',
+          'shell': const <String, dynamic>{},
+          'stopPolicy': 'balanced',
+          'searchIntensity': 'medium',
+          'providerPolicy': '',
+          'freshnessHoursMax': 6,
+          'answerThreshold': 0.7,
+          'summary': '深圳天气适合出门。',
+          'userMarkdown': '深圳天气适合出门。',
+          'result': <String, dynamic>{
+            'text': '深圳天气适合出门。',
+            'nextAction': 'answer',
+          },
+          'answerReady': true,
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '深圳天气',
+              'url': 'https://example.com/weather',
+              'source': 'web_search',
+            },
+          ],
+          'acceptedEvidence': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '深圳天气',
+              'url': 'https://example.com/weather',
+              'source': 'web_search',
+            },
+          ],
+          'rejectedEvidence': const <Map<String, dynamic>>[],
+          'nextAction': 'answer',
+          'missingSlots': const <String>[],
+          'failureReason': '',
+          'toolCallCount': 1,
+          'modelCallCount': 1,
+          'totalTokens': 120,
+          'maxTokensPerCall': 120,
+          'tokenSource': 'usage',
+          'tokenSampleCount': 1,
+          'inputTokens': 80,
+          'outputTokens': 40,
+          'usageLedger': const <Map<String, dynamic>>[],
+        },
+      ],
+      'uiTimeline': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'event': 'subagent_progress',
+          'subagentId': 'weather_verify',
+          'status': 'success',
+          'summary': '深圳天气适合出门。',
+          'acceptedEvidenceCount': 1,
+          'failureReason': '',
+          'nextAction': 'answer',
+        },
+      ],
       assistantAnswerGateDecisionField: <String, dynamic>{
         'eligible': false,
         'finalAnswerReady': false,
@@ -181,6 +295,104 @@ AssistantRunResponse _buildStructuredOnlyFinalizeResponse({
     structured[assistantDisplayMarkdownField] = '这是一版受限答案。';
     structured[assistantDisplayPlainTextField] = '这是一版受限答案。';
   }
+  return AssistantRunResponse(
+    finalText: base.finalText,
+    traces: base.traces,
+    runId: base.runId,
+    traceId: base.traceId,
+    degraded: base.degraded,
+    errorCode: base.errorCode,
+    structuredResponse: structured,
+    profileUpdateProposal: base.profileUpdateProposal,
+  );
+}
+
+AssistantRunResponse _buildHistoryFinalizeResponse() {
+  final base = _buildFinalizeResponse(includeAnswer: true);
+  final structured = Map<String, dynamic>.from(base.structuredResponse);
+  structured['sessionSummary'] = '本轮已经把天气与出行结论收束完成。';
+  structured['skillSynthesis'] = <String, dynamic>{
+    'input': <String, dynamic>{
+      'userQuery': '深圳明天适合出门吗',
+      'routeNarrative': 'weather primary',
+      'selectedTargets': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'skillId': 'weather',
+          'role': 'primary',
+          'priority': 1,
+          'reason': '天气查询',
+        },
+        <String, dynamic>{
+          'skillId': 'travel',
+          'role': 'supporting',
+          'priority': 2,
+          'reason': '出行建议',
+        },
+      ],
+      'skillResults': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'skillId': 'weather',
+          'role': 'primary',
+          'status': 'complete',
+          'summary': '深圳明天适合出门。',
+          'acceptedEvidence': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '深圳天气预报',
+              'source': 'test',
+              'snippet': '明天晴到多云。',
+            },
+          ],
+          'rejectedEvidence': const <Map<String, dynamic>>[],
+          'missingSlots': const <String>[],
+          'failureReason': '',
+          'answerReady': true,
+          'nextAction': 'answer',
+        },
+        <String, dynamic>{
+          'skillId': 'travel',
+          'role': 'supporting',
+          'status': 'pending',
+          'summary': '还需要确认具体出发时间。',
+          'acceptedEvidence': const <Map<String, dynamic>>[],
+          'rejectedEvidence': const <Map<String, dynamic>>[],
+          'missingSlots': <String>['date'],
+          'failureReason': 'missing_date',
+          'answerReady': false,
+          'nextAction': 'ask_user',
+        },
+      ],
+      'pendingClarifications': const <String>['出发日期'],
+      'sessionSummary': '本轮已经把天气与出行结论收束完成。',
+    },
+    'output': <String, dynamic>{
+      'answerMarkdown': '深圳明天适合出门。',
+      'followUpSuggestions': <String>['如果要出门，我可以继续帮你看路线。'],
+      'partialCompletionState': 'partial',
+      'unresolvedSkills': <String>['travel'],
+      'nextAction': 'answer',
+      'summary': '本轮已经把天气与出行结论收束完成。',
+    },
+  };
+  structured['sessionPreferenceFacts'] = <Map<String, dynamic>>[
+    <String, dynamic>{
+      'factId': 'session_pref_1',
+      'scope': 'session',
+      'key': 'city',
+      'value': '深圳',
+      'source': 'test',
+      'createdAt': '2026-04-09T10:00:00Z',
+    },
+  ];
+  structured['longTermPreferenceFacts'] = <Map<String, dynamic>>[
+    <String, dynamic>{
+      'factId': 'long_term_pref_1',
+      'scope': 'long_term',
+      'key': 'weather',
+      'value': '喜欢简洁结论',
+      'source': 'test',
+      'createdAt': '2026-04-09T10:00:00Z',
+    },
+  ];
   return AssistantRunResponse(
     finalText: base.finalText,
     traces: base.traces,
@@ -229,11 +441,12 @@ void main() {
 
       await runner.finalize(
         request,
-        executionSnapshot: <String, dynamic>{
-          'sessionId': 'renderable_bounded',
-          'latestUserQuery': '昨天A股为什么大涨',
-          'elapsedMs': 2300,
-        },
+        executionSnapshot: _buildExecutionSnapshot(
+          sessionId: 'renderable_bounded',
+          latestUserQuery: '昨天A股为什么大涨',
+          runId: 'renderable_bounded_run',
+          traceId: 'renderable_bounded_trace',
+        ),
         response: _buildFinalizeResponse(includeAnswer: true),
       );
 
@@ -243,6 +456,8 @@ void main() {
       expect(message[assistantDisplayMarkdownField], equals('这是一版受限答案。'));
       expect(message[assistantDisplayStateField], isA<Map<String, dynamic>>());
       expect(message[assistantProcessTimelineField], isA<List<dynamic>>());
+      expect(message['subagentRuns'], isA<List<dynamic>>());
+      expect(message['uiTimeline'], isA<List<dynamic>>());
       expect(
         ((message['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{})[assistantDisplayStateField],
@@ -279,11 +494,12 @@ void main() {
 
     await runner.finalize(
       request,
-      executionSnapshot: <String, dynamic>{
-        'sessionId': 'structured_only_turn',
-        'latestUserQuery': '昨天A股为什么大涨',
-        'elapsedMs': 2100,
-      },
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'structured_only_turn',
+        latestUserQuery: '昨天A股为什么大涨',
+        runId: 'structured_only_turn_run',
+        traceId: 'structured_only_turn_trace',
+      ),
       response: _buildStructuredOnlyFinalizeResponse(includeAnswer: true),
     );
 
@@ -293,6 +509,8 @@ void main() {
     expect(message[assistantDisplayMarkdownField], equals('这是一版受限答案。'));
     expect(message[assistantDisplayStateField], isA<Map<String, dynamic>>());
     expect(message[assistantProcessTimelineField], isA<List<dynamic>>());
+    expect(message['subagentRuns'], isA<List<dynamic>>());
+    expect(message['uiTimeline'], isA<List<dynamic>>());
     expect(
       ((message['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{})[assistantDisplayStateField],
@@ -318,6 +536,51 @@ void main() {
     );
   });
 
+  test('finalize 会把 skill 历史态写入 session metadata 并保留挂起状态', () async {
+    final storagePath = '${tempDir.path}/sessions_history.json';
+    final sessionManager = AssistantSessionManager(storagePath: storagePath);
+    await sessionManager.load();
+    final runner = FinalizeRunner(
+      sessionManager: sessionManager,
+      memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      buildObservabilityPayload: ({required response, required request}) =>
+          <String, dynamic>{},
+    );
+    const request = AssistantRunRequest(
+      sessionId: 'history_session',
+      messages: <AssistantRunMessage>[
+        AssistantRunMessage(role: 'user', content: '深圳明天适合出门吗'),
+      ],
+    );
+
+    await runner.finalize(
+      request,
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'history_session',
+        latestUserQuery: '深圳明天适合出门吗',
+        runId: 'history_session_run',
+        traceId: 'history_session_trace',
+      ),
+      response: _buildHistoryFinalizeResponse(),
+    );
+
+    final historyState = sessionManager.historyStateOf('history_session');
+    expect(historyState.sessionSummary, contains('天气与出行结论'));
+    expect(historyState.completedSkillSummaries, hasLength(1));
+    expect(historyState.completedSkillSummaries.single.skillId, 'weather');
+    expect(historyState.pendingSkillStates, hasLength(1));
+    expect(historyState.pendingSkillStates.single.skillId, 'travel');
+    expect(historyState.userPreferences, hasLength(2));
+
+    final reloadedManager = AssistantSessionManager(storagePath: storagePath);
+    await reloadedManager.load();
+    final reloadedHistoryState = reloadedManager.historyStateOf('history_session');
+    expect(reloadedHistoryState.sessionSummary, contains('天气与出行结论'));
+    expect(reloadedHistoryState.completedSkillSummaries, hasLength(1));
+    expect(reloadedHistoryState.pendingSkillStates, hasLength(1));
+    expect(reloadedHistoryState.userPreferences, hasLength(2));
+  });
+
   test('process-only blocked turn 在 append save load 后仍能回放流程状态', () async {
     final storagePath = '${tempDir.path}/sessions.json';
     final sessionManager = AssistantSessionManager(storagePath: storagePath);
@@ -337,11 +600,12 @@ void main() {
 
     await runner.finalize(
       request,
-      executionSnapshot: <String, dynamic>{
-        'sessionId': 'process_only_blocked',
-        'latestUserQuery': '昨天A股为什么大涨',
-        'elapsedMs': 1800,
-      },
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'process_only_blocked',
+        latestUserQuery: '昨天A股为什么大涨',
+        runId: 'process_only_blocked_run',
+        traceId: 'process_only_blocked_trace',
+      ),
       response: _buildFinalizeResponse(includeAnswer: false),
     );
 
@@ -402,11 +666,12 @@ void main() {
 
     await runner.finalize(
       request,
-      executionSnapshot: <String, dynamic>{
-        'sessionId': 'string_resolution_items',
-        'latestUserQuery': '昨天A股为什么大涨',
-        'elapsedMs': 1900,
-      },
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'string_resolution_items',
+        latestUserQuery: '昨天A股为什么大涨',
+        runId: 'string_resolution_items_run',
+        traceId: 'string_resolution_items_trace',
+      ),
       response: response,
     );
 

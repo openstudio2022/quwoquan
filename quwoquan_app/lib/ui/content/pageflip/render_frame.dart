@@ -7,9 +7,33 @@ import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 @immutable
+enum StPageFlipCurlAngleBand { shallow, mid, steep }
+
+StPageFlipCurlAngleBand resolveForwardCurlAngleBand({
+  required ui.Offset localPagePoint,
+  required ui.Size pageSize,
+  required StPageFlipCorner corner,
+}) {
+  final horizontalDistance = math.max(pageSize.width - localPagePoint.dx, 1.0);
+  final verticalDistance = corner == StPageFlipCorner.bottom
+      ? math.max(pageSize.height - localPagePoint.dy, 0.0)
+      : math.max(localPagePoint.dy, 0.0);
+  final angleDegrees =
+      math.atan2(verticalDistance, horizontalDistance) * 180 / math.pi;
+  if (angleDegrees < 20) {
+    return StPageFlipCurlAngleBand.shallow;
+  }
+  if (angleDegrees < 45) {
+    return StPageFlipCurlAngleBand.mid;
+  }
+  return StPageFlipCurlAngleBand.steep;
+}
+
+@immutable
 class StPageFlipTimeline {
   const StPageFlipTimeline({
     required this.mirrored,
+    required this.curlAngleBand,
     required this.basePivot,
     required this.diagonalExtent,
     required this.leadingRadius,
@@ -26,6 +50,7 @@ class StPageFlipTimeline {
   });
 
   final bool mirrored;
+  final StPageFlipCurlAngleBand curlAngleBand;
   final double basePivot;
   final double diagonalExtent;
   final double leadingRadius;
@@ -207,6 +232,7 @@ StPageFlipTimeline resolvePageCurlTimeline({
   required ui.Offset localPagePoint,
   required ui.Size pageSize,
   required StPageFlipCorner corner,
+  required StPageFlipCurlAngleBand angleBand,
   ReverseFlipPose? reversePose,
 }) {
   final settledProgress = progress.clamp(0.0, 1.0).toDouble();
@@ -216,6 +242,7 @@ StPageFlipTimeline resolvePageCurlTimeline({
     return _resolveThreeStageBackwardTimeline(
       reversePose: reversePose,
       pageSize: pageSize,
+      angleBand: angleBand,
     );
   }
   if (direction == StPageFlipDirection.back) {
@@ -223,12 +250,14 @@ StPageFlipTimeline resolvePageCurlTimeline({
       progress: settledProgress,
       localPagePoint: localPagePoint,
       pageSize: pageSize,
+      angleBand: angleBand,
     );
   }
   return _resolveForwardTimeline(
     progress: settledProgress,
     localPagePoint: localPagePoint,
     pageSize: pageSize,
+    angleBand: angleBand,
   );
 }
 
@@ -236,23 +265,49 @@ StPageFlipTimeline _resolveForwardTimeline({
   required double progress,
   required ui.Offset localPagePoint,
   required ui.Size pageSize,
+  required StPageFlipCurlAngleBand angleBand,
 }) {
   final localDragX = localPagePoint.dx.clamp(0.0, pageSize.width).toDouble();
   final curlWidth = math.max(1.0, pageSize.width - localDragX);
-  final diagonalExtent =
-      ui.lerpDouble(
-        pageSize.width * 0.02,
-        pageSize.width * 0.12,
+  final diagonalExtent = ui.lerpDouble(
+        switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => pageSize.width * 0.015,
+          StPageFlipCurlAngleBand.mid => pageSize.width * 0.018,
+          StPageFlipCurlAngleBand.steep => pageSize.width * 0.02,
+        },
+        switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => pageSize.width * 0.072,
+          StPageFlipCurlAngleBand.mid => pageSize.width * 0.078,
+          StPageFlipCurlAngleBand.steep => pageSize.width * 0.082,
+        },
         Curves.easeOutCubic.transform(progress),
       ) ??
-      (pageSize.width * 0.08);
-  final radiusBase =
-      ui.lerpDouble(
-        math.max(curlWidth / math.pi, pageSize.width * 0.085),
-        pageSize.width * 0.058,
+      switch (angleBand) {
+        StPageFlipCurlAngleBand.shallow => pageSize.width * 0.072,
+        StPageFlipCurlAngleBand.mid => pageSize.width * 0.078,
+        StPageFlipCurlAngleBand.steep => pageSize.width * 0.082,
+      };
+  final radiusBase = ui.lerpDouble(
+        math.max(
+          curlWidth / math.pi,
+          switch (angleBand) {
+            StPageFlipCurlAngleBand.shallow => pageSize.width * 0.078,
+            StPageFlipCurlAngleBand.mid => pageSize.width * 0.075,
+            StPageFlipCurlAngleBand.steep => pageSize.width * 0.072,
+          },
+        ),
+        switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => pageSize.width * 0.064,
+          StPageFlipCurlAngleBand.mid => pageSize.width * 0.062,
+          StPageFlipCurlAngleBand.steep => pageSize.width * 0.06,
+        },
         Curves.easeInOut.transform(progress),
       ) ??
-      (pageSize.width * 0.085);
+      switch (angleBand) {
+        StPageFlipCurlAngleBand.shallow => pageSize.width * 0.064,
+        StPageFlipCurlAngleBand.mid => pageSize.width * 0.062,
+        StPageFlipCurlAngleBand.steep => pageSize.width * 0.06,
+      };
   final sheetShift =
       -(ui.lerpDouble(
             0.0,
@@ -262,16 +317,31 @@ StPageFlipTimeline _resolveForwardTimeline({
           0.0);
   return StPageFlipTimeline(
     mirrored: false,
+    curlAngleBand: angleBand,
     basePivot: localDragX,
     diagonalExtent: diagonalExtent,
-    leadingRadius: radiusBase * 1.12,
-    trailingRadius: radiusBase * 0.72,
+    leadingRadius: radiusBase *
+        switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => 1.08,
+          StPageFlipCurlAngleBand.mid => 1.07,
+          StPageFlipCurlAngleBand.steep => 1.06,
+        },
+    trailingRadius: radiusBase *
+        switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => 0.86,
+          StPageFlipCurlAngleBand.mid => 0.88,
+          StPageFlipCurlAngleBand.steep => 0.9,
+        },
     sheetShift: sheetShift,
     perspective: pageSize.width * 4.0,
     rollProgress: progress,
     cylinderProgress: 0.0,
     unfoldProgress: 0.0,
-    heightLiftBias: 0.1,
+    heightLiftBias: switch (angleBand) {
+      StPageFlipCurlAngleBand.shallow => 0.040,
+      StPageFlipCurlAngleBand.mid => 0.044,
+      StPageFlipCurlAngleBand.steep => 0.048,
+    },
     cylinderRadiusNormalized: (radiusBase / pageSize.width)
         .clamp(0.0, 1.0)
         .toDouble(),
@@ -286,6 +356,7 @@ StPageFlipTimeline _resolveMirroredForwardTimeline({
   required double progress,
   required ui.Offset localPagePoint,
   required ui.Size pageSize,
+  required StPageFlipCurlAngleBand angleBand,
 }) {
   final mirroredLocalPoint = ui.Offset(
     pageSize.width - localPagePoint.dx.clamp(0.0, pageSize.width),
@@ -295,9 +366,11 @@ StPageFlipTimeline _resolveMirroredForwardTimeline({
     progress: progress,
     localPagePoint: mirroredLocalPoint,
     pageSize: pageSize,
+    angleBand: angleBand,
   );
   return StPageFlipTimeline(
     mirrored: true,
+    curlAngleBand: timeline.curlAngleBand,
     basePivot: timeline.basePivot,
     diagonalExtent: timeline.diagonalExtent,
     leadingRadius: timeline.leadingRadius,
@@ -317,6 +390,7 @@ StPageFlipTimeline _resolveMirroredForwardTimeline({
 StPageFlipTimeline _resolveThreeStageBackwardTimeline({
   required ReverseFlipPose reversePose,
   required ui.Size pageSize,
+  required StPageFlipCurlAngleBand angleBand,
 }) {
   final coveredWidth = reversePose.coveredWidth
       .clamp(0.0, pageSize.width)
@@ -346,6 +420,7 @@ StPageFlipTimeline _resolveThreeStageBackwardTimeline({
   final effectiveRadius = math.max(cylinderRadius, curlWidth / math.pi);
   return StPageFlipTimeline(
     mirrored: true,
+    curlAngleBand: angleBand,
     basePivot: (pageSize.width - reversePose.leadingEdgeX)
         .clamp(0.0, pageSize.width)
         .toDouble(),

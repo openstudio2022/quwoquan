@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_draft.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
@@ -15,10 +16,9 @@ class SynthesisPipeline {
 
   final LocalPhaseExecutionOwner _owner;
 
-  // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — transitional, will migrate to ExecutionPhaseSnapshot
   Future<SynthesisDraft> buildDraft(
     AssistantRunRequest request, {
-    required Map<String, dynamic> executionSnapshot,
+    required ExecutionPhaseSnapshot executionSnapshot,
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) {
     return _owner.synthesizeDraftBridge(

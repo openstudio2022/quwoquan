@@ -3,6 +3,9 @@
 > **定位**：小趣私人助理增量开发三类核心文档之一，也是助手相关需求的主入口必读文档  
 > **前置阅读**：`PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md`  
 > **配套阅读**：`PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md`
+> **目录级设计**：`PERSONAL_ASSISTANT_DIRECTORY_LEVEL_DESIGN.md`
+> **正式规格**：`PERSONAL_ASSISTANT_SKILL_MULTI_AGENT_SPEC.md`
+> **任务模板**：`PERSONAL_ASSISTANT_SKILL_MULTI_AGENT_TASK_TEMPLATE.md`
 
 ---
 
@@ -46,7 +49,18 @@
 - 无证据时输出边界与下一步，不伪造确定性答案
 - 用户轨与机器轨必须遵循统一输出契约
 
-### 2.5 元数据与 codegen 约束
+### 2.5 Skill 主导会话约束
+
+- 所有请求统一进入 skill 路由，默认分支也必须落到系统级默认 skill
+- skill 路由只允许使用模型主导选择，不允许规则召回、关键词硬过滤或代码侧语义判定
+- skill 目录采用三层结构：`领域 /（可选）子领域 / skill`
+- 每个子领域下只提供 1 到 5 个常用 skill 供模型首轮审视，模型可一次返回多个 skill
+- 若模型未选中具体 skill，则系统级默认 skill 仍需结合当前领域/子领域与用户意图继续处理
+- 一旦选中 skill，会话即进入该 skill 主导的连续叙事，直到成答、转交、用户终止或 replan
+- 最终答案的下一步建议必须由 skill 输出，且应引导用户可继续操作的路径
+- 连续叙事必须保持“问题理解 → 问题处理 → 问题答案”的自然过渡，不插入固定占位话术
+
+### 2.6 元数据与 codegen 约束
 
 - 助理协议真相源统一放在 `quwoquan_service/contracts/metadata/assistant/`
 - 目录划分必须按业务对象组织，并在业务对象之上保留业务大类聚类：`assistant/{cluster}/{business_object}/`，仅允许少量 `_shared/` 共享类型
@@ -66,6 +80,9 @@
 |---|---|
 | 总体架构与主流程 | `PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md` |
 | Skill / Tool 扩展边界 | `PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md` |
+| 目录级设计 | `PERSONAL_ASSISTANT_DIRECTORY_LEVEL_DESIGN.md` |
+| Skill 增强多 agent 正式规格 | `PERSONAL_ASSISTANT_SKILL_MULTI_AGENT_SPEC.md` |
+| Skill 增强多 agent 任务模板 | `PERSONAL_ASSISTANT_SKILL_MULTI_AGENT_TASK_TEMPLATE.md` |
 | 设计与开发约束 | 本文 |
 | Prompt 模板 | `quwoquan_app/assets/assistant/prompts/` |
 | Tool 元数据 | `quwoquan_app/assets/assistant/tools/catalog/tool_catalog.meta.json` |

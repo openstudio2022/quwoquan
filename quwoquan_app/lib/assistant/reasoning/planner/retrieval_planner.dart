@@ -47,10 +47,7 @@ class DefaultRetrievalPlanner {
         AssistantToolCall(
           name: retrievalToolName,
           arguments: <String, dynamic>{
-            'query': applyResolvedGeoToQuery(
-              frame.normalizedQuery,
-              frame.resolvedGeoScope,
-            ),
+            'query': frame.normalizedQuery,
             'mode': 'result',
             'queryNormalization': _queryNormalization(frame),
             'resolvedGeoScope': frame.resolvedGeoScope.toJson(),
@@ -117,7 +114,7 @@ class DefaultRetrievalPlanner {
   }) {
     return QueryTask(
       id: id,
-      query: applyResolvedGeoToQuery(query, frame.resolvedGeoScope),
+      query: query,
       label: label,
       dimension: dimension,
       entityAnchors: mergeGeoAnchors(frame.entityAnchors, frame.resolvedGeoScope),

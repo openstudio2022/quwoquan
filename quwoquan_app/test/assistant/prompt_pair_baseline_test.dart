@@ -61,6 +61,12 @@ void main() {
       expect(synth, isNot(contains('answerProcessing.streamText')));
       expect(planner, isNot(contains('uiProcessTimelineV2')));
       expect(synth, isNot(contains('whyThisAnswer')));
+      expect(planner, isNot(contains('deviceProfile')));
+      expect(planner, isNot(contains('deviceModel')));
+      expect(planner, isNot(contains('deviceOs')));
+      expect(planner, isNot(contains('gpsLocation')));
+      expect(planner, isNot(contains('allowBoundedAnswer')));
+      expect(planner, isNot(contains('traceId')));
     });
 
     test('phase contract 收口为最小动作与叙事字段', () {

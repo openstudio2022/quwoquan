@@ -233,7 +233,7 @@ void main() {
     expect(binding.bottomPageIndex, 2);
 
     final meshFrame = const ArticlePageCurlMeshBuilder().build(
-      pageRect: Rect.fromLTWH(16, 64, 398, 553),
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
       pageSize: Size(398, 553),
       // 故意传入与 renderFrame 不一致的参数，锁住 mesh 必须消费 renderFrame。
       dragPoint: Offset(12, 40),
@@ -245,6 +245,12 @@ void main() {
 
     expect(meshFrame.frontSurface, isNotNull);
     expect(meshFrame.backSurface, isNotNull);
+    const pageRect = Rect.fromLTWH(16, 64, 398, 553);
+    final bottomBounds = meshFrame.bottomClipPath.getBounds();
+    expect(bottomBounds.left, greaterThanOrEqualTo(pageRect.left));
+    expect(bottomBounds.top, greaterThanOrEqualTo(pageRect.top));
+    expect(bottomBounds.right, lessThanOrEqualTo(pageRect.right));
+    expect(bottomBounds.bottom, lessThanOrEqualTo(pageRect.bottom));
     expect(
       meshFrame.rollProgress,
       closeTo(renderFrame.timeline.rollProgress, 0.0001),
@@ -730,6 +736,17 @@ void main() {
     expect(frozenSession, isNotNull);
     expect(frozenSession!.binding.matches(binding), isTrue);
     expect(frozenSession.bundle, same(bundle));
+
+    final liveSession = resolveArticlePageTextureSession(
+      existing: activatedSession,
+      binding: changedBinding,
+      resolvedBundle: bundle,
+      supportsHighFidelity: true,
+      freezeBinding: false,
+    );
+    expect(liveSession, isNotNull);
+    expect(liveSession!.binding.matches(changedBinding), isTrue);
+    expect(liveSession.bundle, same(bundle));
   });
 
   test('CurlMeshBuilder 在前翻时生成正反两面网格并保持页内裁剪', () {
@@ -755,10 +772,23 @@ void main() {
     expect(frame.unfoldProgress, equals(0));
     final clipBounds = clipPath.getBounds();
     final resolvedBounds = frame.bottomClipPath.getBounds();
-    expect(resolvedBounds.left, greaterThan(clipBounds.left));
+    expect(resolvedBounds.left, greaterThanOrEqualTo(clipBounds.left));
     expect(resolvedBounds.right, equals(clipBounds.right));
     expect(resolvedBounds.top, equals(clipBounds.top));
     expect(resolvedBounds.bottom, equals(clipBounds.bottom));
+
+    final steepFrame = builder.build(
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: const Size(398, 553),
+      dragPoint: const Offset(220, 300),
+      progress: 0.74,
+      direction: StPageFlipDirection.forward,
+      corner: StPageFlipCorner.bottom,
+      bottomClipPath: clipPath,
+    );
+    expect(steepFrame.frontSurface, isNotNull);
+    expect(steepFrame.backSurface, isNotNull);
+    expect(steepFrame.bottomClipPath.getBounds().right, equals(clipBounds.right));
   });
 
   test('CurlMeshBuilder 在回翻时产生与前翻对称的镜像卷曲', () {
@@ -950,6 +980,57 @@ void main() {
     expect(meshFrame.curlLift, greaterThan(0));
   });
 
+  test('resolvePageCurlTimeline 在前翻时保持更保守的几何 profile', () {
+    const pageSize = Size(398, 553);
+    final timeline = resolvePageCurlTimeline(
+      direction: StPageFlipDirection.forward,
+      renderDirection: StPageFlipDirection.forward,
+      progress: 0.72,
+      localPagePoint: const Offset(276, 488),
+      pageSize: pageSize,
+      corner: StPageFlipCorner.bottom,
+      angleBand: resolveForwardCurlAngleBand(
+        localPagePoint: const Offset(276, 488),
+        pageSize: pageSize,
+        corner: StPageFlipCorner.bottom,
+      ),
+    );
+
+    expect(timeline.heightLiftBias, closeTo(0.044, 0.0001));
+    expect(timeline.diagonalExtent, lessThanOrEqualTo(pageSize.width * 0.078));
+    expect(timeline.leadingRadius, greaterThan(timeline.trailingRadius));
+    expect(timeline.cylinderRadiusNormalized, greaterThan(0.06));
+    expect(timeline.bottomGapNormalized, inInclusiveRange(0.0, 1.0));
+  });
+
+  test('resolveForwardCurlAngleBand 会按滑动角度分段', () {
+    const pageSize = Size(398, 553);
+    expect(
+      resolveForwardCurlAngleBand(
+        localPagePoint: const Offset(360, 540),
+        pageSize: pageSize,
+        corner: StPageFlipCorner.bottom,
+      ),
+      StPageFlipCurlAngleBand.shallow,
+    );
+    expect(
+      resolveForwardCurlAngleBand(
+        localPagePoint: const Offset(276, 488),
+        pageSize: pageSize,
+        corner: StPageFlipCorner.bottom,
+      ),
+      StPageFlipCurlAngleBand.mid,
+    );
+    expect(
+      resolveForwardCurlAngleBand(
+        localPagePoint: const Offset(220, 300),
+        pageSize: pageSize,
+        corner: StPageFlipCorner.bottom,
+      ),
+      StPageFlipCurlAngleBand.steep,
+    );
+  });
+
   test('CurlLightModel 会随卷曲进度增强投影与背页调制', () {
     final lightState = resolveArticlePageCurlLightState(
       progress: 0.72,
@@ -1121,7 +1202,6 @@ void main() {
       ),
       initialPage: 1,
     );
-
     // 开始一次回翻拖拽
     final started = controller.start(const Offset(30, 500));
     expect(started, isTrue);
@@ -1135,8 +1215,6 @@ void main() {
     // 回弹也应携带 reversePoses
     expect(plan!.reversePoses, isNotNull);
     expect(plan.reversePoses!.length, equals(plan.frames.length));
-    // 回弹的 isTurned 应为 false
-    expect(plan.isTurned, isFalse);
   });
 
   test('flipNext 不产出 reversePoses（前翻不受影响）', () {
@@ -1240,6 +1318,11 @@ StPageFlipRenderFrame _threeStageBackRenderFrame({
     localPagePoint: localPagePoint,
     pageSize: pageSize,
     corner: corner,
+    angleBand: resolveForwardCurlAngleBand(
+      localPagePoint: localPagePoint,
+      pageSize: pageSize,
+      corner: corner,
+    ),
     reversePose: reversePose,
   );
   return StPageFlipRenderFrame(

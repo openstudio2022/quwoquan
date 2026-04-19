@@ -237,9 +237,8 @@ class AssistantStreamingAnswerDecoder {
       return true;
     }
     return AssistantContentFilters.isJsonEnvelope(normalized) ||
-        _jsonEnvelopeFragmentRe.hasMatch(normalized) ||
-        _jsonKeyFragmentRe.hasMatch(normalized) ||
-        _jsonSyntaxOnlyRe.hasMatch(normalized) ||
+        _containsJsonFieldMarkers(normalized) ||
+        _containsJsonSyntaxOnly(normalized) ||
         _containsXmlToolToken(normalized);
   }
 
@@ -437,19 +436,30 @@ class AssistantStreamingAnswerDecoder {
     return _xmlToolStreamingTokens.any(lower.contains);
   }
 
-  static final _jsonEnvelopeFragmentRe = RegExp(
-    r'"?(contractId|assistant_turn|decision|toolCalls|nextAction|userMarkdown)"?\s*:',
-  );
-  static final _jsonKeyFragmentRe = RegExp(
-    r'"?(contractId|decision|nextAction|toolCalls|'
-    r'userMarkdown|messageKind|slotFillPlan|queryNormalization|'
-    r'selfCheck|diagnostics|reasoningBasis|'
-    r'queryTasks|contextSlots|subagentPlan|evidence|result|'
-    r'confidence|reasoning|answerEligibility|missingCriticalSlots|'
-    r'assistant_turn|provider|freshnessHoursMax|timeScope|queryVariants|'
-    r'plan|answer|ask_user|tool_call)"?\s*:?',
-  );
-  static final _jsonSyntaxOnlyRe = RegExp(r'^[\s"{}:\[\],\\.]+$');
+  bool _containsJsonFieldMarkers(String text) {
+    return _jsonFieldMarkers.any(text.contains);
+  }
+
+  bool _containsJsonSyntaxOnly(String text) {
+    for (final rune in text.runes) {
+      final allowed = rune == 0x20 ||
+          rune == 0x09 ||
+          rune == 0x0a ||
+          rune == 0x0d ||
+          rune == 0x22 ||
+          rune == 0x7b ||
+          rune == 0x7d ||
+          rune == 0x5b ||
+          rune == 0x5d ||
+          rune == 0x3a ||
+          rune == 0x2c ||
+          rune == 0x2e ||
+          rune == 0x5c;
+      if (!allowed) return false;
+    }
+    return text.isNotEmpty;
+  }
+
   static const List<String> _xmlToolStreamingOpenTokens = <String>[
     '<tool_call',
     '<function=',
@@ -467,6 +477,66 @@ class AssistantStreamingAnswerDecoder {
     '</tool_call',
     '</function',
     '</parameter',
+  ];
+  static const List<String> _jsonFieldMarkers = <String>[
+    '"contractId"',
+    'contractId',
+    '"assistant_turn"',
+    'assistant_turn',
+    '"decision"',
+    'decision',
+    '"toolCalls"',
+    'toolCalls',
+    '"nextAction"',
+    'nextAction',
+    '"userMarkdown"',
+    'userMarkdown',
+    '"messageKind"',
+    'messageKind',
+    '"slotFillPlan"',
+    'slotFillPlan',
+    '"queryNormalization"',
+    'queryNormalization',
+    '"selfCheck"',
+    'selfCheck',
+    '"diagnostics"',
+    'diagnostics',
+    '"reasoningBasis"',
+    'reasoningBasis',
+    '"queryTasks"',
+    'queryTasks',
+    '"contextSlots"',
+    'contextSlots',
+    '"subagentPlan"',
+    'subagentPlan',
+    '"evidence"',
+    'evidence',
+    '"result"',
+    'result',
+    '"confidence"',
+    'confidence',
+    '"reasoning"',
+    'reasoning',
+    '"answerEligibility"',
+    'answerEligibility',
+    '"missingCriticalSlots"',
+    'missingCriticalSlots',
+    '"provider"',
+    'provider',
+    '"freshnessHoursMax"',
+    'freshnessHoursMax',
+    '"timeScope"',
+    'timeScope',
+    '"queryVariants"',
+    'queryVariants',
+    '"plan"',
+    'plan',
+    '"answer"',
+    'answer',
+    '"ask_user"',
+    'ask_user',
+    '"tool_call"',
+    'tool_call',
   ];
   static const List<String> _structuredPrefixCandidates = <String>[
     '{',

@@ -686,6 +686,11 @@ class StPageFlipController {
       orientation: _layout.orientation,
       reversePose: reversePose,
     );
+    final angleBand = resolveForwardCurlAngleBand(
+      localPagePoint: localPagePoint,
+      pageSize: Size(_layout.bounds.pageWidth, _layout.bounds.height),
+      corner: corner,
+    );
     return StPageFlipRenderFrame(
       localPagePoint: localPagePoint,
       progress: progress,
@@ -709,6 +714,7 @@ class StPageFlipController {
         localPagePoint: localPagePoint,
         pageSize: Size(_layout.bounds.pageWidth, _layout.bounds.height),
         corner: corner,
+        angleBand: angleBand,
         reversePose: reversePose,
       ),
       reversePose: reversePose,

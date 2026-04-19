@@ -5,7 +5,6 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
-    "conversationSpine",
     "understandingSnapshot",
     "evidenceContext",
     "currentRuntimeState",

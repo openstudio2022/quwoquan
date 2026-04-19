@@ -2,17 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -102,6 +105,167 @@ class _TemplateResponseProvider implements AssistantLlmProvider {
   }
 }
 
+ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
+  final dialogueRoundScript = raw['dialogueRoundScript'] is Map
+      ? DialogueRoundScript(
+          domainId:
+              (raw['dialogueRoundScript'] as Map)['domainId']?.toString() ?? '',
+          enabled:
+              (raw['dialogueRoundScript'] as Map)['enabled'] == true,
+          currentStateId:
+              (raw['dialogueRoundScript'] as Map)['currentStateId']
+                  ?.toString() ??
+              '',
+          detectedEvent:
+              (raw['dialogueRoundScript'] as Map)['detectedEvent']
+                  ?.toString() ??
+              '',
+          suggestedNextStateId:
+              (raw['dialogueRoundScript'] as Map)['suggestedNextStateId']
+                  ?.toString() ??
+              '',
+          nextStateCandidates:
+              ((raw['dialogueRoundScript'] as Map)['nextStateCandidates']
+                      as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          requiredFieldsForNextState:
+              ((raw['dialogueRoundScript'] as Map)['requiredFieldsForNextState']
+                      as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          totalSubTotalRequired:
+              (raw['dialogueRoundScript'] as Map)['totalSubTotalRequired'] ==
+              true,
+          optionalEnrichment:
+              (raw['dialogueRoundScript'] as Map)['optionalEnrichment'] == true,
+          maxQuestionsPerTurn:
+              ((raw['dialogueRoundScript'] as Map)['maxQuestionsPerTurn']
+                      as num?)
+                  ?.toInt() ??
+              0,
+          hardFailCodes:
+              ((raw['dialogueRoundScript'] as Map)['hardFailCodes'] as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          passCriteriaRound:
+              ((raw['dialogueRoundScript'] as Map)['passCriteriaRound'] as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
+          statePromptExcerpt:
+              (raw['dialogueRoundScript'] as Map)['statePromptExcerpt']
+                  ?.toString() ??
+              '',
+          stateMachineExcerpt:
+              (raw['dialogueRoundScript'] as Map)['stateMachineExcerpt']
+                  ?.toString() ??
+              '',
+          routingCatalogVersion:
+              (raw['dialogueRoundScript'] as Map)['routingCatalogVersion']
+                  ?.toString() ??
+              '',
+          eventCatalogVersion:
+              (raw['dialogueRoundScript'] as Map)['eventCatalogVersion']
+                  ?.toString() ??
+              '',
+        )
+      : const DialogueRoundScript();
+
+  return ExecutionPhaseSuccess(
+    runId: (raw['runId'] as String?)?.trim() ?? '',
+    traceId: (raw['traceId'] as String?)?.trim() ?? '',
+    runStartAt: DateTime(2026, 4, 9, 10, 0, 0),
+    sessionId: (raw['sessionId'] as String?)?.trim() ?? '',
+    latestUserQuery: (raw['latestUserQuery'] as String?)?.trim() ?? '',
+    domainId: (raw['domainId'] as String?)?.trim() ?? '',
+    contextAssembly: raw['contextAssembly'] is ContextAssemblyResult
+        ? raw['contextAssembly'] as ContextAssemblyResult
+        : raw['contextAssembly'] is Map
+        ? ContextAssemblyResult.fromJson(
+            (raw['contextAssembly'] as Map).cast<String, dynamic>(),
+          )
+        : const ContextAssemblyResult(),
+    intentGraph: raw['intentGraph'] is IntentGraph
+        ? raw['intentGraph'] as IntentGraph
+        : raw['intentGraph'] is Map
+        ? IntentGraph.fromJson((raw['intentGraph'] as Map).cast<String, dynamic>())
+        : const IntentGraph(
+            userGoal: '',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: '',
+          ),
+    dialogueRoundScript: raw['dialogueRoundScript'] is DialogueRoundScript
+        ? raw['dialogueRoundScript'] as DialogueRoundScript
+        : dialogueRoundScript,
+    domainCatalog: (raw['domainCatalog'] as List?)
+            ?.map((item) => item.toString())
+            .toList(growable: false) ??
+        const <String>[],
+    domainCatalogVersion: (raw['domainCatalogVersion'] as String?)?.trim() ?? '',
+    allowedToolNames: (raw['allowedToolNames'] as List?)
+            ?.map((item) => item.toString())
+            .toList(growable: false) ??
+        const <String>[],
+    executionShell: raw['executionShell'] is SkillExecutionShell
+        ? raw['executionShell'] as SkillExecutionShell
+        : raw['executionShell'] is Map
+        ? SkillExecutionShell.fromJson(
+            (raw['executionShell'] as Map).cast<String, dynamic>(),
+          )
+        : const SkillExecutionShell(),
+    previousSlotState: raw['previousSlotState'] is SlotStateSnapshot
+        ? raw['previousSlotState'] as SlotStateSnapshot
+        : raw['previousSlotState'] is Map
+        ? SlotStateSnapshot.fromJson(
+            (raw['previousSlotState'] as Map).cast<String, dynamic>(),
+          )
+        : const SlotStateSnapshot(),
+    retrievalPolicy: (raw['retrievalPolicy'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    answerBoundaryPolicy: raw['answerBoundaryPolicy'] is AnswerBoundaryPolicy
+        ? raw['answerBoundaryPolicy'] as AnswerBoundaryPolicy
+        : raw['answerBoundaryPolicy'] is Map
+        ? AnswerBoundaryPolicy.fromJson(
+            (raw['answerBoundaryPolicy'] as Map).cast<String, dynamic>(),
+          )
+        : const AnswerBoundaryPolicy(),
+    understandingSnapshot: (raw['understandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    templateVariables: (raw['templateVariables'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    messages: (raw['messages'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[],
+    synthTemplateVersion:
+        (raw['synthTemplateVersion'] as String?)?.trim() ?? '',
+    fusionSynthTemplateVersion:
+        (raw['fusionSynthTemplateVersion'] as String?)?.trim() ?? '',
+    phaseOneResult: raw['phaseOneResult'] is ReactRuntimeResult
+        ? raw['phaseOneResult'] as ReactRuntimeResult
+        : const ReactRuntimeResult(finalText: '', traces: []),
+    synthesisReadiness: raw['synthesisReadiness'] is SynthesisReadinessResult
+        ? raw['synthesisReadiness'] as SynthesisReadinessResult
+        : const SynthesisReadinessResult(),
+    evidenceLedger: const <EvidenceLedgerEntry>[],
+    evidenceEvaluation: raw['evidenceEvaluation'] is EvidenceEvaluationResult
+        ? raw['evidenceEvaluation'] as EvidenceEvaluationResult
+        : const EvidenceEvaluationResult(),
+    toolResults: const <AssistantToolResultRow>[],
+    supplementalTraces: (raw['supplementalTraces'] as List?)
+            ?.whereType<AssistantTraceEvent>()
+            .toList(growable: false) ??
+        const <AssistantTraceEvent>[],
+  );
+}
+
 void main() {
   late Directory tempDir;
 
@@ -139,7 +303,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_renderable_blocked_synthesis',
           'traceId': 'trace_renderable_blocked_synthesis',
           'sessionId': 'renderable_blocked_synthesis',
@@ -198,19 +362,19 @@ void main() {
           },
           'blockedProcessStepId': ProcessStepId.retrievalProcessing.wireName,
           'blockedProcessMessage': '当前证据时效性不满足要求，还不能直接成答。',
-        },
+        }),
       );
       expect(
         response.finalText,
         isNot(contains('retrieval_processing_blocked')),
       );
       expect(response.answerGateDecision.renderable, isTrue);
-      expect(response.displayMarkdown, contains('先给你一版受限答案'));
+      expect(response.displayMarkdown, contains('这次生成答案失败'));
       expect(response.displayState.answer.blocks, isNotEmpty);
       expect(
         ((response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
             ?.cast<String, dynamic>())?['route'],
-        equals('retrieval_blocked_renderable'),
+        equals('formal_synthesis'),
       );
     },
   );
@@ -241,7 +405,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_blocked_but_synthesizable_weather',
           'traceId': 'trace_blocked_but_synthesizable_weather',
           'sessionId': 'blocked_but_synthesizable_weather',
@@ -298,7 +462,7 @@ void main() {
           },
           'blockedProcessStepId': ProcessStepId.retrievalProcessing.wireName,
           'blockedProcessMessage': '当前证据时效性还不够稳，但可以先整理已确认部分。',
-        },
+        }),
       );
 
       expect(
@@ -341,7 +505,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_compat_synthesis_repair',
           'traceId': 'trace_compat_synthesis_repair',
           'sessionId': 'compat_synthesis_repair',
@@ -396,7 +560,7 @@ void main() {
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '已经拿到能支撑结论的天气线索。',
           },
-        },
+        }),
       );
 
       expect(response.displayMarkdown, contains('2026年4月10日'));
@@ -433,7 +597,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_compat_tool_call_not_answer',
           'traceId': 'trace_compat_tool_call_not_answer',
           'sessionId': 'compat_tool_call_not_answer',
@@ -488,7 +652,7 @@ void main() {
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '当前证据还不够稳定，但已能进入整理答案。',
           },
-        },
+        }),
       );
 
       expect(response.displayMarkdown, contains('薄外套'));
@@ -527,7 +691,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_degraded_phase_one_requires_synthesis',
           'traceId': 'trace_degraded_phase_one_requires_synthesis',
           'sessionId': 'degraded_phase_one_requires_synthesis',
@@ -584,7 +748,7 @@ void main() {
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '当前证据还不够稳定，但已能进入整理答案。',
           },
-        },
+        }),
       );
 
       expect(response.displayMarkdown, contains('薄外套'));
@@ -628,7 +792,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_renderable_replan_answer',
           'traceId': 'trace_renderable_replan_answer',
           'sessionId': 'renderable_replan_answer',
@@ -683,7 +847,7 @@ void main() {
           'retrievalProcessing': const <String, dynamic>{
             'processingSummary': '已经拿到首轮天气证据，可以开始整理答案。',
           },
-        },
+        }),
       );
 
       final decision =
@@ -723,7 +887,7 @@ void main() {
 
       final response = await owner.synthesizeBridge(
         request,
-        executionSnapshot: <String, dynamic>{
+        executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
           'runId': 'run_structured_gate_assessment',
           'traceId': 'trace_structured_gate_assessment',
           'sessionId': 'structured_gate_assessment',
@@ -783,7 +947,7 @@ void main() {
               },
             ],
           },
-        },
+        }),
       );
 
       final conversationStateDecision =

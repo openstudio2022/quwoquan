@@ -4,7 +4,7 @@ import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.da
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_agent_loop.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/retrieval/assistant_retrieval_runtime.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 
 void main() {
@@ -9,10 +10,12 @@ void main() {
     test('canonicalizes fallback fetch data and preserves display source', () {
       final ledger = evaluator.buildLedger(
         domainId: 'weather',
-        toolResults: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'toolName': 'web_fetch',
-            'data': <String, dynamic>{
+        toolResults: <AssistantToolResultRow>[
+          AssistantToolResultRow(
+            toolName: 'web_fetch',
+            toolCallId: 'weather_now',
+            message: '',
+            data: <String, dynamic>{
               'url':
                   'https://duckduckgo.com/l/?uddg=https%3A%2F%2Fweather.cma.cn%2Fshenzhen%3Futm_source%3Dfeed',
               'title': 'Ã¤Â¸Â­å›½å¤©æ°”',
@@ -21,7 +24,7 @@ void main() {
               'queryTaskId': 'weather_now',
               'dimension': 'current_weather',
             },
-          },
+          ),
         ],
         slotState: const SlotStateSnapshot(domainId: 'weather'),
         retrievalPolicy: const <String, dynamic>{},
@@ -38,10 +41,12 @@ void main() {
     test('deduplicates tracked variants after canonicalization', () {
       final ledger = evaluator.buildLedger(
         domainId: 'weather',
-        toolResults: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'toolName': 'web_search',
-            'data': <String, dynamic>{
+        toolResults: <AssistantToolResultRow>[
+          AssistantToolResultRow(
+            toolName: 'web_search',
+            toolCallId: 'weather_now',
+            message: '',
+            data: <String, dynamic>{
               'references': <Map<String, dynamic>>[
                 <String, dynamic>{
                   'title': '深圳天气预报',
@@ -58,7 +63,7 @@ void main() {
                 },
               ],
             },
-          },
+          ),
         ],
         slotState: const SlotStateSnapshot(domainId: 'weather'),
         retrievalPolicy: const <String, dynamic>{},

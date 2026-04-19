@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_layout.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -283,13 +284,16 @@ void _consumeImageLoadExceptions(WidgetTester tester) {
 
 /// 主垂滑在 [CirclesHubPage] 子树内解析，避免误命中 [MaterialApp] 其它垂直 [Scrollable]。
 Finder _hubVerticalScrollable() {
-  return find.descendant(
-    of: find.byType(CirclesHubPage),
-    matching: find.byWidgetPredicate(
-      (widget) =>
-          widget is Scrollable && widget.axisDirection == AxisDirection.down,
-    ),
-  ).at(0);
+  return find
+      .descendant(
+        of: find.byType(CirclesHubPage),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      )
+      .at(0);
 }
 
 Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
@@ -304,10 +308,16 @@ Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
   await _hubPumpSettled(tester);
 }
 
-Future<void> _scrollHubUntilVisible(
-  WidgetTester tester,
-  Finder target,
-) async {
+Future<void> _pumpUntilHubCategoryTabsVisible(WidgetTester tester) async {
+  final probe = find.text('生活');
+  await _hubPumpSettled(tester);
+  for (var i = 0; i < 12 && probe.evaluate().isEmpty; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await _hubPumpSettled(tester);
+}
+
+Future<void> _scrollHubUntilVisible(WidgetTester tester, Finder target) async {
   await tester.scrollUntilVisible(
     target,
     200,
@@ -355,6 +365,90 @@ void main() {
 
     expect(channelIcon, findsOneWidget);
     expect(iconRightInset, closeTo(expectedInset, 2.0));
+  });
+
+  testWidgets('频道管理面板在窄屏下仅占上半屏且空白处可关闭', (tester) async {
+    tester.view.physicalSize = const Size(320, 690);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues(const <String, Object>{
+      'home_circles.selected_channels.v1': <String>['life'],
+    });
+
+    await tester.pumpWidget(_buildTestApp());
+    await _hubPumpSettled(tester);
+    _consumeImageLoadExceptions(tester);
+    await _pumpUntilHubCategoryTabsVisible(tester);
+
+    await tester.tap(find.byIcon(CupertinoIcons.line_horizontal_3_decrease));
+    await _hubPumpSettled(tester);
+
+    final panel = find.byKey(const ValueKey('home-circles-channel-panel'));
+    expect(panel, findsOneWidget);
+
+    final panelRect = tester.getRect(panel);
+    final pageSize = tester.getSize(find.byType(CirclesHubPage));
+    expect(panelRect.top, closeTo(0.0, 1.0));
+    expect(
+      panelRect.height,
+      lessThanOrEqualTo(
+        pageSize.height *
+                CircleChannelManageLayout.panelMaxHeightRatio(
+                  tester.element(panel),
+                ) +
+            1.0,
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: panel,
+        matching: find.text(UITextConstants.circleTapToAdd),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(Offset(pageSize.width * 0.5, pageSize.height * 0.82));
+    await _hubPumpSettled(tester);
+
+    expect(
+      find.byKey(const ValueKey('home-circles-channel-panel')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('iPad 频道管理面板全宽展开且完成按钮右对齐', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues(const <String, Object>{
+      'home_circles.selected_channels.v1': <String>['life'],
+    });
+
+    await tester.pumpWidget(_buildTestApp());
+    await _hubPumpSettled(tester);
+    _consumeImageLoadExceptions(tester);
+    await _pumpUntilHubCategoryTabsVisible(tester);
+
+    await tester.tap(find.byIcon(CupertinoIcons.line_horizontal_3_decrease));
+    await _hubPumpSettled(tester);
+
+    final panel = find.byKey(const ValueKey('home-circles-channel-panel'));
+    expect(panel, findsOneWidget);
+
+    final panelRect = tester.getRect(panel);
+    final pageSize = tester.getSize(find.byType(CirclesHubPage));
+    expect(panelRect.left, closeTo(0.0, 1.0));
+    expect(panelRect.width, closeTo(pageSize.width, 1.0));
+
+    final doneButton = find.byKey(const ValueKey('home-circles-channel-done'));
+    final horizontalPadding = AppSpacing.feedContentHorizontal(
+      tester.element(panel),
+    );
+    final doneRightInset = pageSize.width - tester.getTopRight(doneButton).dx;
+    expect(doneRightInset, closeTo(horizontalPadding, 4.0));
   });
 
   testWidgets('查看更多跳转到圈子展开页', (tester) async {

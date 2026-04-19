@@ -8,9 +8,30 @@ import 'package:quwoquan_app/assistant/application/assistant_journey_projector.d
 import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_answer_payload_read_view.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/observability_payload_builder.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_round_trace_codec.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_response_codec.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_subagent_plan_codec.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_precomputed_contracts.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_domain_policy_helper.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics_helper.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_failure_messages.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_recovery_bundle.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_prompt_keys.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_structured_response_assembler.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_synthesis_assessment.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_synthesis_template_bundle.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_bundle.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_usage_stats.dart' as usage_stats;
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_variables_view.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_builder.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
@@ -23,6 +44,7 @@ import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
@@ -45,7 +67,9 @@ import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/preference/preference_fact_service.dart';
+import 'package:quwoquan_app/assistant/prompt_template/runtime/prompt_snippet_renderer.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
@@ -82,6 +106,7 @@ import 'package:quwoquan_app/assistant/skill/loading/skill_loader.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
+part 'assistant_pipeline_structured_response_part.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Assistant Pipeline Engine — core execution, synthesis, and materialization.
@@ -90,12 +115,8 @@ import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.da
 // ─────────────────────────────────────────────────────────────────────────
 const RelativeTimeResolver _templateRelativeTimeResolver =
     RelativeTimeResolver();
-final RegExp _timelineRelativeTemporalTokenRe = RegExp(
-  r'(昨天|昨日|明天|后天|今天|周[一二三四五六日天]|上周[一二三四五六日天]|下周[一二三四五六日天]|最近)',
-);
-final RegExp _timelineRelativeDayTokenRe = RegExp(r'(昨天|昨日|明天|后天|今天)');
 
-class LocalPhaseExecutionOwner {
+class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   LocalPhaseExecutionOwner(
     this._runtime, {
     required AssistantSessionManager sessionManager,
@@ -143,6 +164,7 @@ class LocalPhaseExecutionOwner {
 
   AssistantSessionManager get sessionManager => _sessionManager;
   AssistantDomainRouter get domainRouter => _domainRouter;
+  ToolMetadataRegistry? get toolMetadataRegistry => _toolMetadataRegistry;
   final TemplateCatalogRuntime _templateCatalogRuntime;
   final PersonalAssistantSkillLoader _skillLoader;
   final PersonalAssistantSkillRouter _skillRouter;
@@ -152,9 +174,15 @@ class LocalPhaseExecutionOwner {
   final BaselineKernel _baselineKernel;
   final AnswerBoundaryResolver _answerBoundaryResolver;
   final ConversationStateKernel _conversationStateKernel;
+  final AssistantPipelineSubagentPlanCodec _subagentPlanCodec =
+      const AssistantPipelineSubagentPlanCodec();
   final RetrievalOutcomeResolver _retrievalOutcomeResolver =
       const RetrievalOutcomeResolver();
   final AnswerGateResolver _answerGateResolver = const AnswerGateResolver();
+  final PreferenceFactService _preferenceFactService =
+      const PreferenceFactService();
+  final PromptSnippetRenderer _promptSnippetRenderer =
+      PromptSnippetRenderer();
 
   static void Function(String delta)? _buildThinkingDeltaForwarder(
     void Function(AssistantTraceEvent event)? onTraceEvent,
@@ -165,6 +193,16 @@ class LocalPhaseExecutionOwner {
     // 仅用于开启 provider 侧流式输出。真正带 phase 的 thinking trace
     // 由 react_runtime 在收到 delta 时直接落库并转发，避免这里丢失阶段信息。
     return (_) {};
+  }
+
+  Future<String> _renderPromptSnippet(
+    String snippetId, {
+    Map<String, dynamic> variables = const <String, dynamic>{},
+  }) {
+    return _promptSnippetRenderer.renderSnippet(
+      snippetId,
+      variables: variables,
+    );
   }
 
   static void Function(AssistantTraceEvent event)?
@@ -182,19 +220,24 @@ class LocalPhaseExecutionOwner {
     return (event) {
       onTraceEvent(event);
       if (event.type == AssistantTraceEventType.thinkingProgress &&
-          event.data?['streaming'] == true &&
-          event.data?['extracted'] == true) {
-        final fieldPath = (event.data?['fieldPath'] as String?)?.trim() ?? '';
-        if (fieldPath == 'retrievalProcessing.processingSummary') {
+          event.data?[AssistantPipelineDiagnosticsKeys.streaming] == true &&
+          event.data?[AssistantPipelineDiagnosticsKeys.extracted] == true) {
+        final fieldPath =
+            (event.data?[AssistantPipelineDiagnosticsKeys.fieldPath]
+                    as String?)?.trim() ??
+            '';
+        if (fieldPath ==
+            AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary) {
           processEmitter.pushDelta(
             stepId: ProcessStepId.retrievalProcessing,
             scope: UserEventScope.aggregation,
             delta: event.message,
-            phaseId: 'answering',
-            actionCode: 'assess_evidence',
-            reasonCode: 'digest_evidence',
+            phaseId: AssistantPipelineDiagnosticsKeys.answeringPhaseId,
+            actionCode: AssistantPipelineDiagnosticsKeys.assessEvidenceAction,
+            reasonCode: AssistantPipelineDiagnosticsKeys.digestEvidenceReason,
             payload: const <String, dynamic>{
-              'fieldPath': 'retrievalProcessing.processingSummary',
+              AssistantPipelineDiagnosticsKeys.fieldPath:
+                  AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary,
             },
           );
         }
@@ -225,7 +268,7 @@ class LocalPhaseExecutionOwner {
         debugPrint('$stackTrace');
       }
       return AssistantRunResponse(
-        finalText: '助手内部出现意外错误，请重试。',
+        finalText: assistantPipelineInternalErrorMessage(),
         degraded: true,
         errorCode: 'internal_error',
         traces: <AssistantTraceEvent>[
@@ -234,8 +277,10 @@ class LocalPhaseExecutionOwner {
             message: 'agent_loop_uncaught: ${error.runtimeType}: $error',
             timestamp: DateTime.now(),
             data: <String, dynamic>{
-              'errorType': error.runtimeType.toString(),
-              'stackSnippet': stackTrace.toString().substring(
+              AssistantPipelineDiagnosticsKeys.errorType:
+                  error.runtimeType.toString(),
+              AssistantPipelineDiagnosticsKeys.stackSnippet:
+                  stackTrace.toString().substring(
                 0,
                 math.min(400, stackTrace.toString().length),
               ),
@@ -259,8 +304,10 @@ class LocalPhaseExecutionOwner {
       traceId: traceId,
       onTraceEvent: onTraceEvent,
     );
-    final shortCircuitResponse =
-        executionSnapshot['shortCircuitResponse'] as AssistantRunResponse?;
+    final shortCircuitResponse = switch (executionSnapshot) {
+      ExecutionPhaseShortCircuit(:final response) => response,
+      ExecutionPhaseSuccess() => null,
+    };
     if (shortCircuitResponse != null) {
       return shortCircuitResponse;
     }
@@ -285,308 +332,20 @@ class LocalPhaseExecutionOwner {
   }) async {
     final bridgedRequest = AssistantRunRequest.fromJson(<String, dynamic>{
       ...request.toJson(),
-      'contextScopeHint': _buildCompatibilityContextScopeHint(
+      'contextScopeHint': buildCompatibilityContextScopeHint(
         request: request,
         state: state,
       ),
     });
-    final map = await executeBridge(
+    return executeBridge(
       bridgedRequest,
       runId: runId,
       traceId: traceId,
       onTraceEvent: onTraceEvent,
     );
-    return _wrapBridgeSnapshot(map);
   }
 
-  static ExecutionPhaseSnapshot _wrapBridgeSnapshot(Map<String, dynamic> map) {
-    final shortCircuit = map['shortCircuitResponse'] as AssistantRunResponse?;
-    if (shortCircuit != null) {
-      return ExecutionPhaseShortCircuit(response: shortCircuit);
-    }
-    return ExecutionPhaseSuccess(
-      runId: (map['runId'] as String?) ?? '',
-      traceId: (map['traceId'] as String?) ?? '',
-      runStartAt: map['runStartAt'] as DateTime? ?? DateTime.now(),
-      sessionId: (map['sessionId'] as String?) ?? 'default',
-      latestUserQuery: (map['latestUserQuery'] as String?) ?? '',
-      domainId: (map['domainId'] as String?) ?? '',
-      contextAssembly:
-          map['contextAssembly'] as ContextAssemblyResult? ??
-          const ContextAssemblyResult(),
-      intentGraph: map['intentGraph'] as IntentGraph,
-      dialogueRoundScript:
-          map['dialogueRoundScript'] as DialogueRoundScript? ??
-          const DialogueRoundScript(),
-      domainCatalog:
-          (map['domainCatalog'] as List?)?.map((e) => e.toString()).toList() ??
-          const <String>[],
-      domainCatalogVersion: (map['domainCatalogVersion'] as String?) ?? '',
-      allowedToolNames:
-          (map['allowedToolNames'] as List?)
-              ?.map((item) => item.toString().trim())
-              .where((item) => item.isNotEmpty)
-              .toList() ??
-          const <String>[],
-      executionShell:
-          map['executionShell'] as SkillExecutionShell? ??
-          const SkillExecutionShell(),
-      previousSlotState:
-          map['previousSlotState'] as SlotStateSnapshot? ??
-          const SlotStateSnapshot(),
-      previousDomainPolicyBundle:
-          map['previousDomainPolicyBundle'] as DomainPolicyBundle?,
-      retrievalPolicy:
-          (map['retrievalPolicy'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      answerBoundaryPolicy:
-          map['answerBoundaryPolicy'] as AnswerBoundaryPolicy? ??
-          const AnswerBoundaryPolicy(),
-      understandingSnapshot:
-          (map['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      templateVariables:
-          (map['templateVariables'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      messages:
-          (map['messages'] as List?)
-              ?.whereType<Map>()
-              .map((m) => m.cast<String, dynamic>())
-              .toList() ??
-          const <Map<String, dynamic>>[],
-      synthTemplateVersion: (map['synthTemplateVersion'] as String?) ?? '',
-      fusionSynthTemplateVersion:
-          (map['fusionSynthTemplateVersion'] as String?) ?? '',
-      phaseOneResult: map['phaseOneResult'] as ReactRuntimeResult,
-      synthesisReadiness: map['synthesisReadiness'] as SynthesisReadinessResult,
-      evidenceLedger:
-          (map['evidenceLedger'] as List?)
-              ?.whereType<EvidenceLedgerEntry>()
-              .toList() ??
-          const <EvidenceLedgerEntry>[],
-      evidenceEvaluation:
-          map['evidenceEvaluation'] as EvidenceEvaluationResult? ??
-          const EvidenceEvaluationResult(),
-      toolResults:
-          (map['toolResults'] as List?)
-              ?.whereType<Map>()
-              .map((m) => m.cast<String, dynamic>())
-              .toList() ??
-          const <Map<String, dynamic>>[],
-      supplementalTraces:
-          (map['supplementalTraces'] as List?)
-              ?.whereType<AssistantTraceEvent>()
-              .toList() ??
-          const <AssistantTraceEvent>[],
-    );
-  }
-
-  Map<String, dynamic> _buildCompatibilityContextScopeHint({
-    required AssistantRunRequest request,
-    required AgentExecutionState state,
-  }) {
-    final continuationActive = _shouldCarryStructuredHistory(
-      state.bootstrapContext?.contextContinuityPolicy ??
-          const ContextContinuityPolicy(),
-    );
-    return <String, dynamic>{
-      ..._sanitizeModelTemplateContext(
-        request.contextScopeHint,
-        continuationActive: continuationActive,
-        previousRunArtifacts: state.previousRunArtifacts,
-      ),
-      if (state.bootstrapContext != null &&
-          _hasStructuredContent(
-            state.bootstrapContext!.previousUnderstandingSnapshot.toJson(),
-          ))
-        'previousUnderstandingSnapshot': state
-            .bootstrapContext!
-            .previousUnderstandingSnapshot
-            .toJson(),
-      if (state.bootstrapContext != null &&
-          _hasStructuredContent(
-            state.bootstrapContext!.previousAnswerProcessing.toJson(),
-          ))
-        'previousAnswerProcessing': state
-            .bootstrapContext!
-            .previousAnswerProcessing
-            .toJson(),
-      if (state.bootstrapContext != null &&
-          _hasStructuredContent(
-            state.bootstrapContext!.historicalThinkingSnapshot.toJson(),
-          ))
-        'historicalThinkingSnapshot': state
-            .bootstrapContext!
-            .historicalThinkingSnapshot
-            .toJson(),
-      if (state.bootstrapContext?.providerReasoningContinuation
-              .trim()
-              .isNotEmpty ==
-          true)
-        'providerReasoningContinuation': state
-            .bootstrapContext!
-            .providerReasoningContinuation
-            .trim(),
-      if (state.bootstrapContext != null)
-        'precomputedBootstrap': <String, dynamic>{
-          'sessionId': state.bootstrapContext!.sessionId,
-          'latestUserQuery': state.bootstrapContext!.latestUserQuery,
-          'historySummary': state.bootstrapContext!.historySummary,
-          'recentDialogueRounds': state.bootstrapContext!.recentDialogueRounds,
-          'recentDialogueRoundsLimit':
-              state.bootstrapContext!.recentDialogueRoundsLimit,
-          'recalledTexts': state.bootstrapContext!.recalledTexts,
-          if (state.bootstrapContext!.previousIntentGraph != null)
-            'previousIntentGraph': state.bootstrapContext!.previousIntentGraph!
-                .toJson(),
-          if (state.bootstrapContext!.previousAnswerSummary.isNotEmpty)
-            'previousAnswerSummary':
-                state.bootstrapContext!.previousAnswerSummary,
-          if (_hasStructuredContent(
-            state.bootstrapContext!.previousUnderstandingSnapshot.toJson(),
-          ))
-            'previousUnderstandingSnapshot': state
-                .bootstrapContext!
-                .previousUnderstandingSnapshot
-                .toJson(),
-          if (_hasStructuredContent(
-            state.bootstrapContext!.previousAnswerProcessing.toJson(),
-          ))
-            'previousAnswerProcessing': state
-                .bootstrapContext!
-                .previousAnswerProcessing
-                .toJson(),
-          if (_hasStructuredContent(
-            state.bootstrapContext!.historicalThinkingSnapshot.toJson(),
-          ))
-            'historicalThinkingSnapshot': state
-                .bootstrapContext!
-                .historicalThinkingSnapshot
-                .toJson(),
-          if (state.bootstrapContext!.providerReasoningContinuation
-              .trim()
-              .isNotEmpty)
-            'providerReasoningContinuation': state
-                .bootstrapContext!
-                .providerReasoningContinuation
-                .trim(),
-          'contextContinuityPolicy': state
-              .bootstrapContext!
-              .contextContinuityPolicy
-              .toJson(),
-          'continuityOverrideSlots':
-              state.bootstrapContext!.continuityOverrideSlots,
-          'recallResult': state.bootstrapContext!.recallResult.toJson(),
-          'forceRefreshCatalog': state.bootstrapContext!.forceRefreshCatalog,
-          'domainCatalog': state.bootstrapContext!.domainCatalog,
-          'domainCatalogVersion': state.bootstrapContext!.domainCatalogVersion,
-          'fullSkillCatalog': state.bootstrapContext!.fullSkillCatalog,
-          'skillCatalog': state.bootstrapContext!.skillCatalog,
-          if (state.contextAssembly != null)
-            'contextAssembly': state.contextAssembly!.toJson(),
-          if (state.previousRunArtifacts != null)
-            'previousRunArtifacts': state.previousRunArtifacts!.toJson(),
-        },
-      if (state.intentGraph != null)
-        'precomputedIntentGraph': state.intentGraph!.toJson(),
-      if (state.dialogueRoundScript != null ||
-          state.executionPreparation != null)
-        'precomputedUnderstand': <String, dynamic>{
-          if (state.dialogueRoundScript != null)
-            'dialogueRoundScript': state.dialogueRoundScript!.toJson(),
-          if (state.executionPreparation != null)
-            'domainId': state.executionPreparation!.domainId,
-          if (state.executionPreparation != null)
-            'modeDecision': state.executionPreparation!.modeDecision.toJson(),
-        },
-      if (state.executionPreparation != null)
-        'precomputedExecutionPreparation': state.executionPreparation!.toJson(),
-      if (state.executionPreparation != null)
-        'precomputedRetrieval': <String, dynamic>{
-          'skillName': state.executionPreparation!.skillName,
-          'skillInstructionMarkdown':
-              state.executionPreparation!.skillInstructionMarkdown,
-          'skillPersona': state.executionPreparation!.skillPersona,
-          'allowedToolNames': state.executionPreparation!.allowedToolNames,
-          'executionShell': state.executionPreparation!.executionShell.toJson(),
-          'plannerTemplateVersion':
-              state.executionPreparation!.plannerTemplateVersion,
-          'postcheckTemplateVersion':
-              state.executionPreparation!.postcheckTemplateVersion,
-          'synthTemplateVersion':
-              state.executionPreparation!.synthTemplateVersion,
-          'fusionSynthTemplateVersion':
-              state.executionPreparation!.fusionSynthTemplateVersion,
-          'previousSlotState': state.executionPreparation!.previousSlotState
-              .toJson(),
-          if (state.executionPreparation!.previousDomainPolicyBundle != null)
-            'previousDomainPolicyBundle': state
-                .executionPreparation!
-                .previousDomainPolicyBundle!
-                .toJson(),
-        },
-      if (state.queryTasks.isNotEmpty)
-        'precomputedQueryTasks': state.queryTasks
-            .map((item) => item.toJson())
-            .toList(growable: false),
-    };
-  }
-
-  bool _shouldCarryStructuredHistory(ContextContinuityPolicy policy) {
-    switch (policy.continuityMode) {
-      case ContextContinuityMode.sameTopic:
-      case ContextContinuityMode.explicitFollowUp:
-        return true;
-      case ContextContinuityMode.freshTopic:
-      case ContextContinuityMode.unknown:
-        return false;
-    }
-  }
-
-  List<AssistantRunMessage> _messagesForCurrentTurn(
-    List<AssistantRunMessage> messages, {
-    required bool continuationActive,
-    required int recentDialogueRoundsLimit,
-  }) {
-    return trimMessagesToRecentRounds(
-      messages,
-      limit: recentDialogueRoundsLimit,
-    );
-  }
-
-  Map<String, dynamic> _sanitizeModelTemplateContext(
-    Map<String, dynamic> contextScopeHint, {
-    required bool continuationActive,
-    RunArtifacts? previousRunArtifacts,
-  }) {
-    if (contextScopeHint.isEmpty) {
-      return continuationActive && previousRunArtifacts != null
-          ? <String, dynamic>{'runArtifacts': previousRunArtifacts.toJson()}
-          : const <String, dynamic>{};
-    }
-    final sanitized = Map<String, dynamic>.from(contextScopeHint);
-    for (final key in const <String>[
-      'runArtifacts',
-      'previousRunArtifacts',
-      'machineEnvelope',
-      'displayMarkdown',
-      'displayPlainText',
-      'journey',
-      'uiProcessTimeline',
-      'assistantResponse',
-    ]) {
-      sanitized.remove(key);
-    }
-    if (!continuationActive) {
-      sanitized.remove('dialogueState');
-      sanitized.remove('currentStateId');
-    } else if (previousRunArtifacts != null) {
-      sanitized['runArtifacts'] = previousRunArtifacts.toJson();
-    }
-    return sanitized;
-  }
-
-  Future<Map<String, dynamic>> executeBridge(
+  Future<ExecutionPhaseSnapshot> executeBridge(
     AssistantRunRequest request, {
     String? runId,
     String? traceId,
@@ -600,17 +359,18 @@ class LocalPhaseExecutionOwner {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
-    final precomputedBootstrap = _recoverPrecomputedBootstrap(
+    final precomputedBootstrap = recoverPrecomputedBootstrap(
+      request.contextScopeHint,
+      defaultRecentDialogueRoundsLimit: defaultRecentDialogueRoundsLimit,
+    );
+    final precomputedUnderstand = recoverPrecomputedUnderstand(
       request.contextScopeHint,
     );
-    final precomputedUnderstand = _recoverPrecomputedUnderstand(
-      request.contextScopeHint,
-    );
-    final precomputedRetrieval = _recoverPrecomputedRetrieval(
+    final precomputedRetrieval = recoverPrecomputedRetrieval(
       request.contextScopeHint,
     );
     final precomputedExecutionPreparation =
-        _recoverPrecomputedExecutionPreparation(
+        recoverPrecomputedExecutionPreparation(
           request.contextScopeHint,
           precomputedUnderstand: precomputedUnderstand,
           precomputedRetrieval: precomputedRetrieval,
@@ -639,10 +399,12 @@ class LocalPhaseExecutionOwner {
               ? _sessionManager.resolveAssistantSessionForQuery(latestUserQuery)
               : requestedSessionId);
     final contextContinuityPolicy = bootstrapContext.contextContinuityPolicy;
-    final continuationActive = _shouldCarryStructuredHistory(
-      contextContinuityPolicy,
-    );
-    final templateContext = _sanitizeModelTemplateContext(
+    final continuationActive =
+        contextContinuityPolicy.continuityMode ==
+            ContextContinuityMode.sameTopic ||
+        contextContinuityPolicy.continuityMode ==
+            ContextContinuityMode.explicitFollowUp;
+    final templateContext = sanitizeModelTemplateContext(
       request.contextScopeHint,
       continuationActive: continuationActive,
       previousRunArtifacts: ownerState.previousRunArtifacts,
@@ -653,7 +415,8 @@ class LocalPhaseExecutionOwner {
         ownerState.contextAssembly ?? const ContextAssemblyResult();
     final forceRefreshDynamicCatalog =
         bootstrapContext.forceRefreshCatalog ||
-        request.contextScopeHint['forceRefreshCatalog'] == true;
+        request.contextScopeHint[AssistantPipelineStateKeys.forceRefreshCatalog] ==
+            true;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshDynamicCatalog,
     );
@@ -733,27 +496,90 @@ class LocalPhaseExecutionOwner {
       retrievalPolicy: retrievalPolicy,
       queryTasks: intentGraph.queryTasks,
     );
-    final templateVariables = _buildTemplateVariables(
+    final conversationSpine = buildConversationSpine(
+      stageId: 'understanding',
+      userQuery: request.messages.isEmpty ? '' : request.messages.last.content,
+      userGoal: intentGraph.userGoal,
+      primarySkill: intentGraph.primarySkill,
+      problemClass: intentGraph.problemClass.wireName,
+      answerShape: intentGraph.answerShape.wireName,
+      historyAssessment: buildHistoryAssessmentFromPolicy(
+        policy: contextContinuityPolicy,
+        overrideSlots:
+            precomputedBootstrap?.continuityOverrideSlots ??
+            const <String, dynamic>{},
+      ),
+      stageState: <String, dynamic>{
+        'allowedChoices': <String>[
+          AssistantNextAction.toolCall.wireName,
+          AssistantNextAction.askUser.wireName,
+          AssistantNextAction.answer.wireName,
+        ],
+        'continuationActive':
+            contextContinuityPolicy.continuityMode ==
+                ContextContinuityMode.sameTopic ||
+            contextContinuityPolicy.continuityMode ==
+                ContextContinuityMode.explicitFollowUp,
+      },
+    );
+    final searchIterationState = _seedSearchIterationState(
       request: request,
-      contextAssembly: contextAssembly,
-      domainId: domainId,
-      domainSkillInstruction: skillContext.instructionMarkdown,
-      domainSkillName: skillContext.skillName,
-      availableToolNames: effectiveToolNames,
-      dialogueRoundScript: dialogueRoundScript,
-      skillPersona: skillPersona,
-      skillCatalog: skillCatalog,
-      skillExecutionShell: effectiveExecutionShell,
-      previousSlotState: previousSlotState,
-      previousDomainPolicyBundle: previousDomainPolicyBundle,
       intentGraph: intentGraph,
-      answerBoundaryPolicy: answerBoundaryPolicy,
-      previousIntentGraph: precomputedBootstrap?.previousIntentGraph,
-      previousAnswerSummary: precomputedBootstrap?.previousAnswerSummary ?? '',
-      continuityPolicy: contextContinuityPolicy,
-      continuityOverrideSlots:
-          precomputedBootstrap?.continuityOverrideSlots ??
-          const <String, dynamic>{},
+    );
+    final recentDialogueRounds = precomputedBootstrap?.recentDialogueRounds ??
+        coerceRecentDialogueRounds(
+          request.contextScopeHint[AssistantPipelinePromptKeys.recentDialogueRounds],
+        );
+    final temporalReference = _templateRelativeTimeResolver.resolveReferenceContext(
+      referenceNowIso: _firstNonEmptyText(<String?>[
+        request.contextScopeHint[AssistantPipelinePromptKeys.referenceNowIso]
+            as String?,
+        intentGraph.queryNormalization.referenceNowIso,
+        precomputedBootstrap?.previousIntentGraph?.queryNormalization.referenceNowIso,
+      ]),
+      timezone: _firstNonEmptyText(<String?>[
+        request.contextScopeHint[AssistantPipelinePromptKeys.timezone] as String?,
+        intentGraph.queryNormalization.timezone,
+        precomputedBootstrap?.previousIntentGraph?.queryNormalization.timezone,
+      ]),
+    );
+    final calendarContext = _templateRelativeTimeResolver.buildCalendarContext(
+      reference: temporalReference,
+    );
+    final templateVariables = buildPipelineTemplateVariables(
+      bundle: AssistantPipelineTemplateBundle(
+        request: request,
+        contextAssembly: contextAssembly,
+        domainId: domainId,
+        domainSkillInstruction: skillContext.instructionMarkdown,
+        domainSkillName: skillContext.skillName,
+        availableToolNames: effectiveToolNames,
+        toolGuidelines:
+            _toolMetadataRegistry?.invocationGuidelinesForTools(
+                  effectiveToolNames,
+                ) ??
+                const <Map<String, dynamic>>[],
+        conversationSpine: conversationSpine,
+        searchIterationState: searchIterationState,
+        temporalReference: temporalReference,
+        calendarContext: calendarContext,
+        dialogueRoundScript: dialogueRoundScript,
+        skillExecutionShell: effectiveExecutionShell,
+        skillPersona: skillPersona,
+        skillCatalog: skillCatalog,
+        previousSlotState: previousSlotState,
+        previousDomainPolicyBundle: previousDomainPolicyBundle,
+        intentGraph: intentGraph,
+        answerBoundaryPolicy: answerBoundaryPolicy,
+        previousIntentGraph: precomputedBootstrap?.previousIntentGraph,
+        previousAnswerSummary:
+            precomputedBootstrap?.previousAnswerSummary ?? '',
+        continuityPolicy: contextContinuityPolicy,
+        continuityOverrideSlots:
+            precomputedBootstrap?.continuityOverrideSlots ??
+            const <String, dynamic>{},
+      ),
+      recentDialogueRounds: recentDialogueRounds,
     );
     if (!contextAssembly.canEnterDomain) {
       final blocked = _buildBlockedResponse(
@@ -770,12 +596,11 @@ class LocalPhaseExecutionOwner {
         sessionId: sessionId,
         runId: effectiveRunId,
       );
-      return <String, dynamic>{'shortCircuitResponse': blocked};
+      return ExecutionPhaseShortCircuit(response: blocked);
     }
-    final modelMessages = _messagesForCurrentTurn(
+    final modelMessages = trimMessagesToRecentRounds(
       request.messages,
-      continuationActive: continuationActive,
-      recentDialogueRoundsLimit:
+      limit:
           precomputedBootstrap?.recentDialogueRoundsLimit ??
           resolveRecentDialogueRoundsLimit(request.contextScopeHint),
     );
@@ -785,7 +610,7 @@ class LocalPhaseExecutionOwner {
     final dataLayerBuffer = StringBuffer();
     dataLayerBuffer.writeln('<dialogue_state>');
     dataLayerBuffer.writeln(
-      jsonEncode(_dialogueScriptForModel(dialogueRoundScript)),
+      jsonEncode(dialogueScriptForModel(dialogueRoundScript)),
     );
     dataLayerBuffer.writeln('</dialogue_state>');
     dataLayerBuffer.writeln();
@@ -852,9 +677,9 @@ class LocalPhaseExecutionOwner {
       dataLayerBuffer.writeln('<rewrite_instruction>');
       dataLayerBuffer.writeln(ri.systemPromptInjection);
       dataLayerBuffer.writeln();
-      dataLayerBuffer.writeln('原始问题：${ri.originalQuery}');
+      dataLayerBuffer.writeln('original_query=${ri.originalQuery}');
       dataLayerBuffer.writeln();
-      dataLayerBuffer.writeln('上一次回答：');
+      dataLayerBuffer.writeln('previous_answer=');
       dataLayerBuffer.writeln(ri.previousAnswer);
       dataLayerBuffer.writeln('</rewrite_instruction>');
     }
@@ -911,18 +736,12 @@ class LocalPhaseExecutionOwner {
         effectiveTraceId,
       ),
     );
-    List<Map<String, dynamic>> collectToolResults(
+    List<AssistantToolResultRow> collectToolResults(
       ReactRuntimeResult runtimeResult,
     ) {
       return runtimeResult.traces
           .where((event) => event.type == AssistantTraceEventType.toolResult)
-          .map(
-            (event) => <String, dynamic>{
-              'message': event.message,
-              'data': event.data ?? const <String, dynamic>{},
-              'toolCallId': event.toolCallId ?? '',
-            },
-          )
+          .map(AssistantToolResultRow.fromTraceEvent)
           .toList(growable: false);
     }
 
@@ -948,9 +767,9 @@ class LocalPhaseExecutionOwner {
       return merged;
     }
 
-    Map<String, dynamic> computeSynthesisReadiness(
+    AssistantPipelineSynthesisAssessment computeSynthesisReadiness(
       ReactRuntimeResult runtimeResult,
-      List<Map<String, dynamic>> toolResults,
+      List<AssistantToolResultRow> toolResults,
     ) {
       final carriedEvidenceLedger =
           continuationActive &&
@@ -992,11 +811,11 @@ class LocalPhaseExecutionOwner {
         boundaryPolicy: answerBoundaryPolicy,
         evidenceEvaluation: evidenceEvaluation,
       );
-      return <String, dynamic>{
-        'synthesisReadiness': synthesisReadiness,
-        'evidenceLedger': mergedEvidenceLedger,
-        'evidenceEvaluation': evidenceEvaluation,
-      };
+      return AssistantPipelineSynthesisAssessment(
+        synthesisReadiness: synthesisReadiness,
+        evidenceLedger: mergedEvidenceLedger,
+        evidenceEvaluation: evidenceEvaluation,
+      );
     }
 
     final toolResults = collectToolResults(result);
@@ -1008,45 +827,43 @@ class LocalPhaseExecutionOwner {
     final finalSynthesisAssessment = identical(mergedResult, result)
         ? synthesisAssessment
         : computeSynthesisReadiness(mergedResult, finalToolResults);
-    final finalSynthesisReadiness =
-        finalSynthesisAssessment['synthesisReadiness']
-            as SynthesisReadinessResult;
-    return <String, dynamic>{
-      'runId': effectiveRunId,
-      'traceId': effectiveTraceId,
-      'runStartAt': runStartAt,
-      'sessionId': sessionId,
-      'latestUserQuery': latestUserQuery,
-      'domainId': domainId,
-      'contextAssembly': contextAssembly,
-      'intentGraph': intentGraph,
-      'dialogueRoundScript': dialogueRoundScript,
-      'domainCatalog': domainCatalog,
-      'domainCatalogVersion': domainCatalogVersion,
-      'allowedToolNames': effectiveToolNames,
-      'executionShell': effectiveExecutionShell,
-      'previousSlotState': previousSlotState,
-      'previousDomainPolicyBundle': previousDomainPolicyBundle,
-      'retrievalPolicy': retrievalPolicy,
-      'answerBoundaryPolicy': answerBoundaryPolicy,
-      'understandingSnapshot': ownerState.understandingSnapshot.toJson(),
-      'templateVariables': templateVariables,
-      'messages': messages,
-      'synthTemplateVersion': synthTemplateVersion,
-      'fusionSynthTemplateVersion': fusionSynthTemplateVersion,
-      'phaseOneResult': mergedResult,
-      'synthesisReadiness': finalSynthesisReadiness,
-      'evidenceLedger': finalSynthesisAssessment['evidenceLedger'],
-      'evidenceEvaluation': finalSynthesisAssessment['evidenceEvaluation'],
-      'toolResults': finalToolResults,
-      'supplementalTraces': supplementalTraces,
-    };
+    final finalSynthesisReadiness = finalSynthesisAssessment.synthesisReadiness;
+    return ExecutionPhaseSuccess(
+      runId: effectiveRunId,
+      traceId: effectiveTraceId,
+      runStartAt: runStartAt,
+      sessionId: sessionId,
+      latestUserQuery: latestUserQuery,
+      domainId: domainId,
+      contextAssembly: contextAssembly,
+      intentGraph: intentGraph,
+      dialogueRoundScript: dialogueRoundScript,
+      domainCatalog: domainCatalog,
+      domainCatalogVersion: domainCatalogVersion,
+      allowedToolNames: effectiveToolNames,
+      executionShell: effectiveExecutionShell,
+      previousSlotState: previousSlotState,
+      previousDomainPolicyBundle: previousDomainPolicyBundle,
+      retrievalPolicy: retrievalPolicy,
+      answerBoundaryPolicy: answerBoundaryPolicy,
+      understandingSnapshot: ownerState.understandingSnapshot.toJson(),
+      templateVariables: templateVariables,
+      messages: messages,
+      synthTemplateVersion: synthTemplateVersion,
+      fusionSynthTemplateVersion: fusionSynthTemplateVersion,
+      phaseOneResult: mergedResult,
+      synthesisReadiness: finalSynthesisReadiness,
+      evidenceLedger: finalSynthesisAssessment.evidenceLedger,
+      evidenceEvaluation: finalSynthesisAssessment.evidenceEvaluation,
+      toolResults: finalToolResults,
+      supplementalTraces: supplementalTraces,
+    );
   }
 
   Future<AgentExecutionState> _resolveExecutionOwnerState({
     required AssistantRunRequest request,
-    required _PrecomputedBootstrap? precomputedBootstrap,
-    required _PrecomputedUnderstand? precomputedUnderstand,
+    required PrecomputedBootstrap? precomputedBootstrap,
+    required PrecomputedUnderstand? precomputedUnderstand,
     required AssistantExecutionPreparation? precomputedExecutionPreparation,
     required String runId,
     required String traceId,
@@ -1126,11 +943,11 @@ class LocalPhaseExecutionOwner {
 
   AgentExecutionState _buildPrecomputedExecutionState({
     required AssistantRunRequest request,
-    required _PrecomputedBootstrap? precomputedBootstrap,
-    required _PrecomputedUnderstand? precomputedUnderstand,
+    required PrecomputedBootstrap? precomputedBootstrap,
+    required PrecomputedUnderstand? precomputedUnderstand,
     required AssistantExecutionPreparation? precomputedExecutionPreparation,
   }) {
-    final precomputedIntentGraph = _recoverPrecomputedIntentGraph(
+    final precomputedIntentGraph = recoverPrecomputedIntentGraph(
       request.contextScopeHint,
     );
     final precomputedQueryTasks = _recoverPrecomputedQueryTasks(
@@ -1167,6 +984,7 @@ class LocalPhaseExecutionOwner {
                   precomputedBootstrap.historicalThinkingSnapshot,
               providerReasoningContinuation:
                   precomputedBootstrap.providerReasoningContinuation,
+              sessionHistoryState: precomputedBootstrap.sessionHistoryState,
               contextContinuityPolicy: precomputedBootstrap.continuityPolicy,
               continuityOverrideSlots:
                   precomputedBootstrap.continuityOverrideSlots,
@@ -1178,9 +996,9 @@ class LocalPhaseExecutionOwner {
               skillCatalog: precomputedBootstrap.skillCatalog,
             ),
       contextAssembly: precomputedBootstrap?.contextAssembly,
-      previousRunArtifacts:
+          previousRunArtifacts:
           precomputedBootstrap?.previousRunArtifacts ??
-          _recoverPreviousRunArtifacts(request.contextScopeHint),
+          recoverPreviousRunArtifacts(request.contextScopeHint),
       intentGraph: effectiveIntentGraph,
       queryTasks: precomputedQueryTasks,
       dialogueRoundScript: precomputedUnderstand?.dialogueRoundScript,
@@ -1188,27 +1006,12 @@ class LocalPhaseExecutionOwner {
     );
   }
 
-  IntentGraph? _recoverPrecomputedIntentGraph(
-    Map<String, dynamic> contextScopeHint,
-  ) {
-    final raw =
-        (contextScopeHint['precomputedIntentGraph'] as Map?)
-            ?.cast<String, dynamic>() ??
-        (contextScopeHint['intentGraph'] as Map?)?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return IntentGraph.fromJson(raw);
-    } catch (_) {
-      return null;
-    }
-  }
-
   List<QueryTask> _recoverPrecomputedQueryTasks(
     Map<String, dynamic> contextScopeHint, {
     IntentGraph? fallbackIntentGraph,
   }) {
     final recovered = QueryTask.normalizeList(
-      contextScopeHint['precomputedQueryTasks'],
+      contextScopeHint[AssistantPipelineStateKeys.precomputedQueryTasks],
     );
     if (recovered.isNotEmpty) return recovered;
     return fallbackIntentGraph?.queryTasks ?? const <QueryTask>[];
@@ -1281,7 +1084,8 @@ class LocalPhaseExecutionOwner {
       continuityPolicy: continuityPolicy,
     );
     final forceRefreshCatalog =
-        request.contextScopeHint['forceRefreshCatalog'] == true;
+        request.contextScopeHint[AssistantPipelineStateKeys.forceRefreshCatalog] ==
+            true;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshCatalog,
     );
@@ -1317,6 +1121,7 @@ class LocalPhaseExecutionOwner {
         recentDialogueRounds: recentDialogueRounds,
         recentDialogueRoundsLimit: recentDialogueRoundsLimit,
         recalledTexts: recalledTexts,
+        sessionHistoryState: _sessionManager.historyStateOf(sessionId),
         contextContinuityPolicy: continuityPolicy,
         recallResult: recallResult,
         forceRefreshCatalog: forceRefreshCatalog,
@@ -1331,7 +1136,7 @@ class LocalPhaseExecutionOwner {
 
   Future<AssistantRunResponse> synthesizeBridge(
     AssistantRunRequest request, {
-    required Map<String, dynamic> executionSnapshot,
+    required ExecutionPhaseSnapshot executionSnapshot,
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) {
     return SynthesisRunner(
@@ -1346,168 +1151,113 @@ class LocalPhaseExecutionOwner {
 
   Future<SynthesisDraft> synthesizeDraftBridge(
     AssistantRunRequest request, {
-    required Map<String, dynamic> executionSnapshot,
+    required ExecutionPhaseSnapshot executionSnapshot,
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
-    final runId = (executionSnapshot['runId'] as String?) ?? '';
-    final traceId = (executionSnapshot['traceId'] as String?) ?? '';
-    final sessionId =
-        (executionSnapshot['sessionId'] as String?) ??
-        (request.sessionId ?? 'default');
-    final latestUserQuery =
-        (executionSnapshot['latestUserQuery'] as String?)?.trim() ?? '';
-    final domainId = (executionSnapshot['domainId'] as String?)?.trim() ?? '';
-    final contextAssembly =
-        executionSnapshot['contextAssembly'] as ContextAssemblyResult;
-    final intentGraph = executionSnapshot['intentGraph'] as IntentGraph;
-    final dialogueRoundScript =
-        executionSnapshot['dialogueRoundScript'] as DialogueRoundScript;
-    final domainCatalog =
-        ((executionSnapshot['domainCatalog'] as List?) ?? const <Object?>[])
-            .map((item) => item.toString())
-            .toList(growable: false);
-    final domainCatalogVersion =
-        (executionSnapshot['domainCatalogVersion'] as String?) ?? '';
-    final allowedToolNames =
-        ((executionSnapshot['allowedToolNames'] as List?) ?? const <Object?>[])
-            .map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-    final effectiveExecutionShell =
-        executionSnapshot['executionShell'] as SkillExecutionShell;
-    final previousSlotState =
-        executionSnapshot['previousSlotState'] as SlotStateSnapshot;
-    final previousDomainPolicyBundle =
-        executionSnapshot['previousDomainPolicyBundle'] as DomainPolicyBundle?;
-    final retrievalPolicy =
-        (executionSnapshot['retrievalPolicy'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final answerBoundaryPolicy =
-        executionSnapshot['answerBoundaryPolicy'] is Map
-        ? AnswerBoundaryPolicy.fromJson(
-            (executionSnapshot['answerBoundaryPolicy'] as Map)
-                .cast<String, dynamic>(),
-          )
-        : _answerBoundaryResolver.resolve(
-            intentGraph: intentGraph,
-            contextAssembly: contextAssembly,
-            retrievalPolicy: retrievalPolicy,
-            queryTasks: intentGraph.queryTasks,
-          );
-    final templateVariables =
-        (executionSnapshot['templateVariables'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final templateContext = _sanitizeModelTemplateContext(
+    if (executionSnapshot is! ExecutionPhaseSuccess) {
+      throw StateError('synthesizeDraftBridge requires a successful execution snapshot');
+    }
+    final runId = executionSnapshot.runId;
+    final traceId = executionSnapshot.traceId;
+    final sessionId = executionSnapshot.sessionId;
+    final latestUserQuery = executionSnapshot.latestUserQuery.trim();
+    final domainId = executionSnapshot.domainId.trim();
+    final contextAssembly = executionSnapshot.contextAssembly;
+    final intentGraph = executionSnapshot.intentGraph;
+    final dialogueRoundScript = executionSnapshot.dialogueRoundScript;
+    final domainCatalog = executionSnapshot.domainCatalog;
+    final domainCatalogVersion = executionSnapshot.domainCatalogVersion;
+    final allowedToolNames = executionSnapshot.allowedToolNames;
+    final effectiveExecutionShell = executionSnapshot.executionShell;
+    final previousSlotState = executionSnapshot.previousSlotState;
+    final previousDomainPolicyBundle = executionSnapshot.previousDomainPolicyBundle;
+    final retrievalPolicy = executionSnapshot.retrievalPolicy;
+    final answerBoundaryPolicy = executionSnapshot.answerBoundaryPolicy;
+    final templateVariables = executionSnapshot.templateVariables;
+    final templateVariablesView =
+        AssistantPipelineTemplateVariablesView.fromMap(
+          templateVariables,
+        );
+    final templateContext = sanitizeModelTemplateContext(
       request.contextScopeHint,
-      continuationActive: _hasContinuationCarryoverContext(templateVariables),
-      previousRunArtifacts: _recoverPreviousRunArtifacts(
+      continuationActive: _hasContinuationCarryoverContext(templateVariablesView),
+      previousRunArtifacts: recoverPreviousRunArtifacts(
         request.contextScopeHint,
       ),
     );
-    final messages =
-        ((executionSnapshot['messages'] as List?) ?? const <Object?>[])
-            .whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false);
-    final synthTemplateVersion =
-        (executionSnapshot['synthTemplateVersion'] as String?) ?? '';
-    final phaseOneResult =
-        executionSnapshot['phaseOneResult'] as ReactRuntimeResult;
-    final synthesisReadiness =
-        executionSnapshot['synthesisReadiness'] as SynthesisReadinessResult;
-    final supplementalTraces =
-        ((executionSnapshot['supplementalTraces'] as List?) ??
-                const <Object?>[])
-            .whereType<AssistantTraceEvent>()
-            .toList(growable: false);
+    final messages = executionSnapshot.messages;
+    final synthTemplateVersion = executionSnapshot.synthTemplateVersion;
+    final phaseOneResult = executionSnapshot.phaseOneResult;
+    final synthesisReadiness = executionSnapshot.synthesisReadiness;
+    final supplementalTraces = executionSnapshot.supplementalTraces;
 
-    final domainResultsForSynthesis = _buildDomainResultsForSynthesis(
+    final domainResultsForSynthesis = buildDomainResultsForSynthesis(
       phaseOneResult.traces,
     );
     final synthesisQueryTasks = QueryTask.toJsonList(intentGraph.queryTasks);
     final bootstrapPayload =
-        (request.contextScopeHint['precomputedBootstrap'] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys.precomputedBootstrap] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final continuityPolicyForSynthesis =
-        bootstrapPayload['contextContinuityPolicy'] is Map
+        bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy] is Map
         ? ContextContinuityPolicy.fromJson(
-            (bootstrapPayload['contextContinuityPolicy'] as Map)
+            (bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy] as Map)
                 .cast<String, dynamic>(),
           )
         : const ContextContinuityPolicy();
     final phaseOneText = phaseOneResult.finalText;
     final phaseOneParsedJson =
         LlmResponseParser.parse(phaseOneText).json ?? const <String, dynamic>{};
-    final phaseOneAnswerPayload = _parseAnswerPayload(
+    final phaseOneAnswerPayload = parseAnswerPayload(
       rawFinalText: phaseOneText,
       traces: phaseOneResult.traces,
     );
     final previousUnderstandingSnapshotForSynthesis =
-        (bootstrapPayload['previousUnderstandingSnapshot'] as Map?)
+        (bootstrapPayload[AssistantPipelineStateKeys.previousUnderstandingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint['previousUnderstandingSnapshot'] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys.previousUnderstandingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final previousAnswerProcessingForSynthesis =
-        (bootstrapPayload['previousAnswerProcessing'] as Map?)
+        (bootstrapPayload[AssistantPipelineStateKeys.previousAnswerProcessing] as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint['previousAnswerProcessing'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final carriedRetrievalProcessing =
-        (executionSnapshot['retrievalProcessing'] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys.previousAnswerProcessing] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    var blockedProcessStepId = parseProcessStepId(
-      (executionSnapshot['blockedProcessStepId'] as String?)?.trim() ?? '',
-    );
-    var blockedProcessMessage =
-        (executionSnapshot['blockedProcessMessage'] as String?)?.trim() ?? '';
+    final carriedRetrievalProcessing = const <String, dynamic>{};
+    var blockedProcessStepId = ProcessStepId.unknown;
+    var blockedProcessMessage = '';
     final historicalThinkingSnapshotForSynthesis =
-        (bootstrapPayload['historicalThinkingSnapshot'] as Map?)
+        (bootstrapPayload[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint['historicalThinkingSnapshot'] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final understandingSnapshotForSynthesis =
-        (executionSnapshot['understandingSnapshot'] as Map?)
-            ?.cast<String, dynamic>() ??
-        (phaseOneParsedJson['understandingSnapshot'] as Map?)
+        executionSnapshot.understandingSnapshot.isNotEmpty
+            ? executionSnapshot.understandingSnapshot
+            : 
+        (phaseOneParsedJson[AssistantPipelineStateKeys.understandingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
         previousUnderstandingSnapshotForSynthesis;
     final evidenceEvaluationForSynthesis =
-        executionSnapshot['evidenceEvaluation'] as EvidenceEvaluationResult? ??
+        executionSnapshot.evidenceEvaluation as EvidenceEvaluationResult? ??
         const EvidenceEvaluationResult();
-    Map<String, dynamic> templateCurrentRuntimeState =
-        const <String, dynamic>{};
-    final rawTemplateCurrentRuntimeState =
-        (templateVariables['currentRuntimeState'] as String?)?.trim() ?? '';
-    if (rawTemplateCurrentRuntimeState.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawTemplateCurrentRuntimeState);
-        if (decoded is Map) {
-          templateCurrentRuntimeState = decoded.cast<String, dynamic>();
-        }
-      } catch (_) {
-        templateCurrentRuntimeState = const <String, dynamic>{};
-      }
-    }
-    final templateDialogueState =
-        (templateCurrentRuntimeState['dialogueState'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final templateCurrentRuntimeState =
+        templateVariablesView.currentRuntimeStateMap;
+    final templateDialogueState = templateVariablesView.dialogueStateMap;
     final synthesisTemporalReference = _templateRelativeTimeResolver
         .resolveReferenceContext(
           referenceNowIso: _firstNonEmptyText(<String?>[
-            request.contextScopeHint['referenceNowIso'] as String?,
+            request.contextScopeHint[AssistantPipelinePromptKeys.referenceNowIso]
+                as String?,
             intentGraph.queryNormalization.referenceNowIso,
             templateDialogueState['referenceNowIso'] as String?,
           ]),
           timezone: _firstNonEmptyText(<String?>[
-            request.contextScopeHint['timezone'] as String?,
+            request.contextScopeHint[AssistantPipelinePromptKeys.timezone]
+                as String?,
             intentGraph.queryNormalization.timezone,
             templateDialogueState['timezone'] as String?,
           ]),
@@ -1515,73 +1265,36 @@ class LocalPhaseExecutionOwner {
     final synthesisCalendarContext = _templateRelativeTimeResolver
         .buildCalendarContext(reference: synthesisTemporalReference);
     final historicalThinkingSnapshotFromPhaseOne =
-        (phaseOneParsedJson['historicalThinkingSnapshot'] as Map?)
+        (phaseOneParsedJson[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
             ?.cast<String, dynamic>() ??
         historicalThinkingSnapshotForSynthesis;
     final sharedContextForSynthesis = <String, dynamic>{
-      'contextEnvelope': contextAssembly.contextEnvelope,
-      'recentDialogueRounds': coerceRecentDialogueRounds(
-        bootstrapPayload['recentDialogueRounds'],
-      ),
-      'temporalReference': <String, dynamic>{
-        'referenceNowIso': synthesisTemporalReference.referenceNowIso,
-        'timezone': synthesisTemporalReference.timezone,
-        'calendarContext': synthesisCalendarContext,
+      AssistantPipelinePromptKeys.contextEnvelope: contextAssembly.contextEnvelope,
+      AssistantPipelinePromptKeys.recentDialogueRounds:
+          templateVariablesView.recentDialogueRounds,
+      AssistantPipelinePromptKeys.temporalReference: <String, dynamic>{
+        AssistantPipelinePromptKeys.referenceNowIso:
+            synthesisTemporalReference.referenceNowIso,
+        AssistantPipelinePromptKeys.timezone: synthesisTemporalReference.timezone,
+        AssistantPipelinePromptKeys.calendarContext: synthesisCalendarContext,
       },
-      'userProfileSnapshot': request.userProfileSnapshot,
-      'historicalRetrievalFeedback':
-          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'domainLearningSignals':
-          (request.contextScopeHint['domainLearningSignals'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
     };
     final currentRuntimeStateForSynthesis = <String, dynamic>{
-      'dialogueState': <String, dynamic>{
-        'domainId': domainId,
-        'problemClass': intentGraph.problemClassWireName,
-        'answerShape': intentGraph.answerShape.wireName,
-        'synthesisReady': synthesisReadiness.ready,
-        'synthesisReason': synthesisReadiness.reason,
-        'referenceNowIso': synthesisTemporalReference.referenceNowIso,
-        'timezone': synthesisTemporalReference.timezone,
-        'calendarContext': synthesisCalendarContext,
+      AssistantPipelinePromptKeys.dialogueState: <String, dynamic>{
+        AssistantPipelinePromptKeys.calendarContext: synthesisCalendarContext,
+        AssistantPipelinePromptKeys.referenceNowIso:
+            synthesisTemporalReference.referenceNowIso,
+        AssistantPipelinePromptKeys.timezone: synthesisTemporalReference.timezone,
       },
-      'slotStateSnapshot': previousSlotState.toJson(),
-      'contextSlots': _buildContextSlots(contextAssembly),
-      'domainPolicyBundle':
-          previousDomainPolicyBundle?.toJson() ?? const <String, dynamic>{},
-      'skillExecutionShell': effectiveExecutionShell.toJson(),
-      'queryTasks': synthesisQueryTasks,
     };
     final dialogueContinuityForSynthesis = <String, dynamic>{
-      'recentDialogueRounds': coerceRecentDialogueRounds(
-        bootstrapPayload['recentDialogueRounds'],
-      ),
-      'historySummary':
-          (bootstrapPayload['historySummary'] as String?)?.trim() ?? '',
-      'previousIntentGraph':
-          (bootstrapPayload['previousIntentGraph'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'previousUnderstandingSnapshot':
-          previousUnderstandingSnapshotForSynthesis,
-      'previousAnswerProcessing': previousAnswerProcessingForSynthesis,
-      'previousSlotState': previousSlotState.toJson(),
-      'previousAnswerSummary':
-          (bootstrapPayload['previousAnswerSummary'] as String?)?.trim() ?? '',
-      'historicalThinkingSnapshot': historicalThinkingSnapshotForSynthesis,
-      'continuityOverrideSlots':
-          (bootstrapPayload['continuityOverrideSlots'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      AssistantPipelinePromptKeys.continuityMode:
+          continuityPolicyForSynthesis.continuityMode.wireName,
     };
     final licensedRetrievalProcessingForSynthesis =
         _licensedRetrievalProcessingForSynthesis(carriedRetrievalProcessing);
     final synthesisSearchIterationState = _buildSynthesisSearchIterationState(
-      templateVariables: templateVariables,
+      templateVariables: templateVariablesView,
       phaseOneTraces: phaseOneResult.traces,
       fallbackQueryTasks: intentGraph.queryTasks,
       maxIterations: request.totalModelStageBudget,
@@ -1605,18 +1318,19 @@ class LocalPhaseExecutionOwner {
     final evidenceContextForSynthesis = <String, dynamic>{
       'intentGraph': intentGraph.toJson(),
       'queryTasks': synthesisQueryTasks,
-      'retrievalProcessing': licensedRetrievalProcessingForSynthesis.toJson(),
+      AssistantPipelineStateKeys.retrievalProcessing:
+          licensedRetrievalProcessingForSynthesis.toJson(),
       'evidenceEvaluation': evidenceEvaluationForSynthesis.toJson(),
       if (!hasLicensedEvidenceForSynthesis)
         'domainResults': domainResultsForSynthesis,
       if (!hasLicensedEvidenceForSynthesis)
         'webEvidencePacks':
             domainResultsForSynthesis['webEvidencePacks'] ?? const <Object?>[],
-      'contextSlots': _buildContextSlots(contextAssembly),
-      'entityAnchors': intentGraph.entityAnchors,
+      'contextSlots': buildContextSlots(contextAssembly),
+      AssistantPipelinePromptKeys.entityAnchors: intentGraph.entityAnchors,
     };
     final synthesisConversationSpine = buildConversationSpine(
-      stageId: 'answering',
+      stageId: AssistantPipelineDiagnosticsKeys.answeringPhaseId,
       userQuery: latestUserQuery,
       userGoal: intentGraph.userGoal.trim().isNotEmpty
           ? intentGraph.userGoal.trim()
@@ -1637,7 +1351,11 @@ class LocalPhaseExecutionOwner {
         historicalThinkingSnapshotFromPhaseOne,
       ]),
       stageState: <String, dynamic>{
-        'allowedChoices': const <String>['answer', 'tool_call', 'ask_user'],
+        'allowedChoices': <String>[
+          AssistantNextAction.answer.wireName,
+          AssistantNextAction.toolCall.wireName,
+          AssistantNextAction.askUser.wireName,
+        ],
         'answerReadyHint': synthesisReadiness.ready,
         'answerStageBudget': request.answerStageBudget,
         'maxRequeryRounds': request.maxRequeryRounds,
@@ -1646,32 +1364,29 @@ class LocalPhaseExecutionOwner {
           'insufficientEvidenceReason': synthesisReadiness.reason.trim(),
       },
     );
-    final synthesisTemplateVars = <String, dynamic>{
-      ...templateVariables,
-      'conversationSpine': jsonEncode(synthesisConversationSpine),
-      'userGoal': intentGraph.userGoal.trim().isNotEmpty
+    final synthesisTemplateBundle = AssistantPipelineSynthesisTemplateBundle(
+      templateVariables: templateVariables,
+      conversationSpine: synthesisConversationSpine,
+      userGoal: intentGraph.userGoal.trim().isNotEmpty
           ? intentGraph.userGoal.trim()
           : latestUserQuery,
-      'understandingSnapshot': jsonEncode(understandingSnapshotForSynthesis),
-      'retrievalProcessing': jsonEncode(
-        licensedRetrievalProcessingForSynthesis.toJson(),
-      ),
-      'sharedContext': jsonEncode(sharedContextForSynthesis),
-      'currentRuntimeState': jsonEncode(currentRuntimeStateForSynthesis),
-      'dialogueContinuity': jsonEncode(dialogueContinuityForSynthesis),
-      'evidenceContext': jsonEncode(evidenceContextForSynthesis),
-      'searchIterationState': jsonEncode(
-        synthesisSearchIterationState.toJson(),
-      ),
-      'intentGraphJson': jsonEncode(intentGraph.toJson()),
-      'queryTasksJson': jsonEncode(synthesisQueryTasks),
-      'entityAnchors': intentGraph.entityAnchors,
-      'queryTasks': synthesisQueryTasks,
-      'answerShape': intentGraph.answerShape.wireName,
-      'recentDialogueRounds': jsonEncode(
-        coerceRecentDialogueRounds(bootstrapPayload['recentDialogueRounds']),
-      ),
-    };
+      understandingSnapshot: understandingSnapshotForSynthesis,
+      retrievalProcessing: licensedRetrievalProcessingForSynthesis.toJson(),
+      sharedContext: sharedContextForSynthesis,
+      currentRuntimeState: currentRuntimeStateForSynthesis,
+      dialogueContinuity: dialogueContinuityForSynthesis,
+      evidenceContext: evidenceContextForSynthesis,
+      searchIterationState: synthesisSearchIterationState.toJson(),
+      intentGraphJson: jsonEncode(intentGraph.toJson()),
+      queryTasksJson: synthesisQueryTasks,
+      entityAnchors: intentGraph.entityAnchors,
+      queryTasks: synthesisQueryTasks,
+      answerShape: intentGraph.answerShape.wireName,
+      recentDialogueRounds: templateVariablesView.recentDialogueRounds,
+    );
+    final synthesisTemplateVars = buildSynthesisTemplateVariables(
+      bundle: synthesisTemplateBundle,
+    );
     List<Map<String, dynamic>> buildSynthesisInput() {
       return <Map<String, dynamic>>[
         ...messages,
@@ -1691,21 +1406,25 @@ class LocalPhaseExecutionOwner {
       synthesisReadiness: synthesisReadiness,
       executionSignalsPresent: phaseOneExecutionSignalsPresent,
     );
-    final explicitPhaseOneSkillRunPlans = _buildExplicitSkillRunPlans(
-      answerPayload: phaseOneAnswerPayload,
-      latestUserQuery: latestUserQuery,
-      fallbackProblemClass: intentGraph.problemClassWireName,
-      primaryDomainId: domainId,
-    );
-    final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
-      synthesisTemplateVars,
-    );
+    final explicitPhaseOneSkillRunPlans =
+        _subagentPlanCodec.buildExplicitSkillRunPlans(
+          answerPayload: phaseOneAnswerPayload,
+          latestUserQuery: latestUserQuery,
+          fallbackProblemClass: intentGraph.problemClassWireName,
+          primaryDomainId: domainId,
+        );
+    final phaseOneContinuationCarryover =
+        _hasContinuationCarryoverContext(
+          AssistantPipelineTemplateVariablesView.fromMap(
+            synthesisTemplateVars,
+          ),
+        );
     final suppressDerivedPhaseOneSkillRunPlans =
         phaseOneContinuationCarryover && synthesisReadiness.ready;
     final derivedPhaseOneSkillRunPlans =
         explicitPhaseOneSkillRunPlans.isEmpty &&
             !suppressDerivedPhaseOneSkillRunPlans
-        ? _buildDerivedSkillRunPlansFromIntent(
+        ? _subagentPlanCodec.buildDerivedSkillRunPlansFromIntent(
             intentGraph: intentGraph,
             latestUserQuery: latestUserQuery,
             primaryDomainId: domainId,
@@ -1766,7 +1485,7 @@ class LocalPhaseExecutionOwner {
           );
       if (recoveredPhaseOneEnvelopeText.isNotEmpty) {
         effectivePhaseOneText = recoveredPhaseOneEnvelopeText;
-        effectivePhaseOneAnswerPayload = _parseAnswerPayload(
+        effectivePhaseOneAnswerPayload = parseAnswerPayload(
           rawFinalText: recoveredPhaseOneEnvelopeText,
           traces: effectivePhaseOneTraces,
         );
@@ -1786,15 +1505,13 @@ class LocalPhaseExecutionOwner {
     }
     final phaseOneHasRenderableContent =
         effectivePhaseOneProjection?.hasRenderableContent ??
-        (((effectivePhaseOneAnswerPayload['userMarkdown'] as String?)
-                    ?.trim()
-                    .isNotEmpty ==
-                true) ||
-            ((((effectivePhaseOneAnswerPayload['result'] as Map?)?['text']
-                        as String?)
-                    ?.trim()
-                    .isNotEmpty ==
-                true)));
+        (() {
+          final phaseOneAnswerView = AssistantAnswerPayloadReadView(
+            effectivePhaseOneAnswerPayload,
+          );
+          return phaseOneAnswerView.userMarkdownTrimmed.isNotEmpty ||
+              phaseOneAnswerView.resultTextTrimmed.isNotEmpty;
+        })();
     final phaseOneHasRenderableAnswer = _hasRenderableAnswerPayload(
       payload: effectivePhaseOneAnswerPayload,
       turn: effectivePhaseOneTurn,
@@ -1836,7 +1553,7 @@ class LocalPhaseExecutionOwner {
       if (phaseOneRepairResult.finalText.isNotEmpty) {
         phaseOneModelRepairProducedText = true;
         effectivePhaseOneText = phaseOneRepairResult.finalText;
-        effectivePhaseOneAnswerPayload = _parseAnswerPayload(
+        effectivePhaseOneAnswerPayload = parseAnswerPayload(
           rawFinalText: phaseOneRepairResult.finalText,
           traces: effectivePhaseOneTraces,
         );
@@ -1868,14 +1585,18 @@ class LocalPhaseExecutionOwner {
         return;
       }
       final data = event.data ?? const <String, dynamic>{};
-      if (data['streaming'] != true || data['extracted'] != true) {
+      if (data[AssistantPipelineDiagnosticsKeys.streaming] != true ||
+          data[AssistantPipelineDiagnosticsKeys.extracted] != true) {
         return;
       }
       if (event.message.isEmpty) {
         return;
       }
-      final fieldPath = (data['fieldPath'] as String?)?.trim() ?? '';
-      if (fieldPath == 'retrievalProcessing.processingSummary') {
+      final fieldPath =
+          (data[AssistantPipelineDiagnosticsKeys.fieldPath] as String?)?.trim() ??
+          '';
+      if (fieldPath ==
+          AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary) {
         streamedRetrievalProcessingSummary =
             '$streamedRetrievalProcessingSummary${event.message}';
       }
@@ -1963,7 +1684,9 @@ class LocalPhaseExecutionOwner {
       } else {
         final failureMessage = blockedProcessMessage.isNotEmpty
             ? blockedProcessMessage
-            : '这次拿到的结果还不够稳定，我先不继续往下生成答案。';
+            : assistantPipelineDefaultFailureMessageForStep(
+                ProcessStepId.retrievalProcessing,
+              );
         mergedResult = ReactRuntimeResult(
           finalText: _buildStageFailureAssistantTurnEnvelopeText(
             stepId: ProcessStepId.retrievalProcessing,
@@ -1977,7 +1700,7 @@ class LocalPhaseExecutionOwner {
           degraded: true,
           failureCode: 'retrieval_processing_blocked',
         );
-        answerPayloadBeforeSubagent = _parseAnswerPayload(
+        answerPayloadBeforeSubagent = parseAnswerPayload(
           rawFinalText: mergedResult.finalText,
           traces: mergedResult.traces,
         );
@@ -2039,7 +1762,7 @@ class LocalPhaseExecutionOwner {
               }
             },
             streamJsonFieldPaths: const <String>[
-              'retrievalProcessing.processingSummary',
+              AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary,
             ],
             templateContext: templateContext,
             templateVariables: synthesisTemplateVars,
@@ -2058,8 +1781,8 @@ class LocalPhaseExecutionOwner {
             final synthesisInputText = synthesisInput
                 .map((item) => (item['content'] ?? '').toString())
                 .join('\n');
-            final outputTokens = _estimateTokenCount(streamedText);
-            final inputTokens = _estimateTokenCount(synthesisInputText);
+            final outputTokens = usage_stats.estimateTokenCount(streamedText);
+            final inputTokens = usage_stats.estimateTokenCount(synthesisInputText);
             final synthesisTrace = AssistantTraceEvent(
               type: AssistantTraceEventType.lifecycleStart,
               message: 'llm request synthesis stream',
@@ -2122,7 +1845,9 @@ class LocalPhaseExecutionOwner {
               finalText: _buildStageFailureAssistantTurnEnvelopeText(
                 stepId: ProcessStepId.answerOrganization,
                 failureCode: answerStreamFailureCode,
-                failureMessage: '这次生成答案失败，我先不强行给你结论，请稍后再试。',
+                failureMessage: assistantPipelineDefaultFailureMessageForStep(
+                  ProcessStepId.answerOrganization,
+                ),
               ),
               traces: <AssistantTraceEvent>[failureTrace],
               degraded: true,
@@ -2179,93 +1904,95 @@ class LocalPhaseExecutionOwner {
         degraded: synthesisResult.degraded,
         failureCode: synthesisResult.failureCode,
       );
-      answerPayloadBeforeSubagent = _parseAnswerPayload(
+      answerPayloadBeforeSubagent = parseAnswerPayload(
         rawFinalText: mergedResult.finalText,
         traces: mergedResult.traces,
       );
-      if (((answerPayloadBeforeSubagent['subagentPlan'] as List?)?.isEmpty ??
-              true) &&
-          ((effectivePhaseOneAnswerPayload['subagentPlan'] as List?)
-                  ?.isNotEmpty ??
-              false)) {
+      final answerPayloadBeforeSubagentView =
+          AssistantAnswerPayloadReadView(answerPayloadBeforeSubagent);
+      final effectivePhaseOneAnswerPayloadView = AssistantAnswerPayloadReadView(
+        effectivePhaseOneAnswerPayload,
+      );
+      if (answerPayloadBeforeSubagentView.subagentPlanMaps.isEmpty &&
+          effectivePhaseOneAnswerPayloadView.subagentPlanMaps.isNotEmpty) {
         answerPayloadBeforeSubagent['subagentPlan'] =
-            effectivePhaseOneAnswerPayload['subagentPlan'];
+            effectivePhaseOneAnswerPayloadView.subagentPlanMaps;
       }
       skillRunPlans = directAnswerDecision.shouldSkipSynthesis
           ? const <SubagentPlan>[]
-          : _buildSkillRunPlans(
+          : _subagentPlanCodec.buildSkillRunPlans(
               intentGraph: intentGraph,
               answerPayload: answerPayloadBeforeSubagent,
               latestUserQuery: latestUserQuery,
               primaryDomainId: domainId,
             );
     }
-    final phaseOneRoutingDiagnostics = <String, dynamic>{
-      'route': phaseOneRoute,
-      'synthesisReadinessReady': synthesisReadiness.ready,
-      'synthesisReadinessReason': synthesisReadiness.reason,
-      'rawDirectAnswerReason': rawDirectAnswerDecision.reason,
-      'directAnswerReason': directAnswerDecision.reason,
-      'directAnswerShouldSkipSynthesis':
-          directAnswerDecision.shouldSkipSynthesis,
-      'phaseOneRecoveryApplied': phaseOneRecoveryApplied,
-      'phaseOneModelRepairApplied': phaseOneModelRepairApplied,
-      'phaseOneModelRepairAttempted': phaseOneModelRepairAttempted,
-      'phaseOneModelRepairProducedText': phaseOneModelRepairProducedText,
-      'phaseOneModelRepairFailureCode': phaseOneModelRepairFailureCode,
-      'phaseOneParsedContractTurn': effectivePhaseOneTurn != null,
-      'phaseOneNextAction':
-          effectivePhaseOneTurn?.nextActionType.wireName ??
-          (((effectivePhaseOneAnswerPayload['decision'] as Map?)?['nextAction']
-                      as String?)
-                  ?.trim() ??
-              ''),
-      'phaseOneMessageKind':
-          effectivePhaseOneTurn?.messageKindType.wireName ??
-          (effectivePhaseOneAnswerPayload['messageKind'] as String?)?.trim() ??
-          '',
-      'phaseOnePhaseId':
-          effectivePhaseOneTurn?.phaseIdType.wireName ??
-          (effectivePhaseOneAnswerPayload['phaseId'] as String?)?.trim() ??
-          '',
-      'phaseOneActionCode':
-          effectivePhaseOneTurn?.actionCodeType.wireName ??
-          (effectivePhaseOneAnswerPayload['actionCode'] as String?)?.trim() ??
-          '',
-      'phaseOneReasonCode':
-          effectivePhaseOneTurn?.reasonCodeType.wireName ??
-          (effectivePhaseOneAnswerPayload['reasonCode'] as String?)?.trim() ??
-          '',
-      'phaseOneHasRenderableContent': phaseOneHasRenderableContent,
-      'phaseOneExplicitSkillRunPlanCount': explicitPhaseOneSkillRunPlans.length,
-      'phaseOneDerivedSkillRunPlanCount': derivedPhaseOneSkillRunPlans.length,
-      'phaseOneSkillRunPlanCount': phaseOneSkillRunPlans.length,
-      'phaseOneSkillRunPlanSource': phaseOneSkillRunPlans.isNotEmpty
-          ? (explicitPhaseOneSkillRunPlans.isNotEmpty
-                ? 'phase_one'
-                : 'intent_secondary_skills')
-          : 'none',
-      'phaseOneExecutionSignalsPresent': phaseOneExecutionSignalsPresent,
-      'phaseOneContinuationCarryover': phaseOneContinuationCarryover,
-      'allowPhaseOneContractRepair': allowPhaseOneContractRepair,
-      'phaseOneSkillRunPlans': phaseOneSkillRunPlans
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'templateVersionUsed': templateVersionUsed,
-    };
+    final phaseOneRoutingDiagnostics =
+        AssistantPipelineDiagnosticsHelper().buildPhaseOneRoutingDiagnostics(
+          phaseOneRoute: phaseOneRoute,
+          synthesisReadinessReady: synthesisReadiness.ready,
+          synthesisReadinessReason: synthesisReadiness.reason,
+          rawDirectAnswerReason: rawDirectAnswerDecision.reason,
+          directAnswerReason: directAnswerDecision.reason,
+          directAnswerShouldSkipSynthesis:
+              directAnswerDecision.shouldSkipSynthesis,
+          phaseOneRecoveryApplied: phaseOneRecoveryApplied,
+          phaseOneModelRepairApplied: phaseOneModelRepairApplied,
+          phaseOneModelRepairAttempted: phaseOneModelRepairAttempted,
+          phaseOneModelRepairProducedText:
+              phaseOneModelRepairProducedText,
+          phaseOneModelRepairFailureCode: phaseOneModelRepairFailureCode,
+          phaseOneParsedContractTurn: effectivePhaseOneTurn != null,
+          phaseOneNextAction:
+              effectivePhaseOneTurn?.nextActionType.wireName ??
+              AssistantAnswerPayloadReadView(
+                effectivePhaseOneAnswerPayload,
+              ).nextActionWireName,
+          phaseOneMessageKind:
+              effectivePhaseOneTurn?.messageKindType.wireName ??
+              AssistantAnswerPayloadReadView(
+                effectivePhaseOneAnswerPayload,
+              ).messageKindTrimmed,
+          phaseOnePhaseId:
+              effectivePhaseOneTurn?.phaseIdType.wireName ??
+              (effectivePhaseOneAnswerPayload['phaseId'] as String?)?.trim() ??
+              '',
+          phaseOneActionCode:
+              effectivePhaseOneTurn?.actionCodeType.wireName ??
+              (effectivePhaseOneAnswerPayload['actionCode'] as String?)?.trim() ??
+              '',
+          phaseOneReasonCode:
+              effectivePhaseOneTurn?.reasonCodeType.wireName ??
+              (effectivePhaseOneAnswerPayload['reasonCode'] as String?)?.trim() ??
+              '',
+          phaseOneHasRenderableContent: phaseOneHasRenderableContent,
+          phaseOneExplicitSkillRunPlanCount:
+              explicitPhaseOneSkillRunPlans.length,
+          phaseOneDerivedSkillRunPlanCount:
+              derivedPhaseOneSkillRunPlans.length,
+          phaseOneSkillRunPlanCount: phaseOneSkillRunPlans.length,
+          milestone3Ready: phaseOneSkillRunPlans.isNotEmpty &&
+              phaseOneSkillRunPlans.every((item) => item.hasMilestone3Inputs),
+          phaseOneSkillRunPlanSource: phaseOneSkillRunPlans.isNotEmpty
+              ? (explicitPhaseOneSkillRunPlans.isNotEmpty
+                    ? 'phase_one'
+                    : 'intent_secondary_skills')
+              : 'none',
+          phaseOneExecutionSignalsPresent: phaseOneExecutionSignalsPresent,
+          phaseOneContinuationCarryover: phaseOneContinuationCarryover,
+          allowPhaseOneContractRepair: allowPhaseOneContractRepair,
+          phaseOneSkillRunPlans: phaseOneSkillRunPlans
+              .map((item) => item.toJson())
+              .toList(growable: false),
+          templateVersionUsed: templateVersionUsed,
+        );
     final primaryToolResults = mergedResult.traces
         .where((event) => event.type == AssistantTraceEventType.toolResult)
-        .map(
-          (event) => <String, dynamic>{
-            'message': event.message,
-            'data': event.data ?? const <String, dynamic>{},
-            'toolCallId': event.toolCallId ?? '',
-          },
-        )
+        .map(AssistantToolResultRow.fromTraceEvent)
         .toList(growable: false);
     final primaryUiReferences = _buildUiReferences(
       primaryToolResults,
-      isRealtimeLike: _isRealtimeLikeRequest(
+      isRealtimeLike: isRealtimeLikeRequest(
         fallbackProblemClass: intentGraph.problemClassWireName,
         answerPayload: answerPayloadBeforeSubagent,
       ),
@@ -2276,7 +2003,7 @@ class LocalPhaseExecutionOwner {
       answerPayload: answerPayloadBeforeSubagent,
       result: mergedResult,
       executionShell: effectiveExecutionShell,
-      references: primaryUiReferences,
+      references: _uiReferenceWireMaps(primaryUiReferences),
     );
     final subagentRuns = await _executeSubagentPlans(
       answerPayload: <String, dynamic>{
@@ -2302,37 +2029,62 @@ class LocalPhaseExecutionOwner {
       skillRuns: skillRuns,
       answerPayload: answerPayloadBeforeSubagent,
     );
+    final skillSynthesisInput = SkillSynthesisInput.fromExecution(
+      userQuery: latestUserQuery,
+      routeNarrative: skillRunPlans
+          .map((item) => item.routeNarrative.trim())
+          .where((item) => item.isNotEmpty)
+          .join(' | '),
+      selectedTargets: skillRunPlans,
+      subagentRuns: subagentRuns,
+      pendingClarifications: skillRunPlans
+          .expand((item) => item.pendingClarifications)
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false),
+      sessionSummary: templateVariablesView.hasContinuationCarryoverContext
+          ? templateVariablesView.recentDialogueRounds
+              .map((item) => (item['assistantSummary'] as String?)?.trim() ?? '')
+              .where((item) => item.isNotEmpty)
+              .join(' | ')
+          : '',
+    );
     if (subagentRuns.isNotEmpty) {
-      final runsForModel = _subagentRunsForModel(subagentRuns);
-      final fusionTemplateVars = <String, dynamic>{
-        ...synthesisTemplateVars,
-        'skillRuns': jsonEncode(
-          skillRuns.map((item) => item.toJson()).toList(growable: false),
-        ),
-        'aggregationState': jsonEncode(aggregationState.toJson()),
-        'subagentRuns': jsonEncode(runsForModel),
-      };
+      final runsForModel = subagentRunsForModel(subagentRuns);
+      final synthesisAnchors = synthesisTemplateBundle.entityAnchors
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      final fusionTemplateVars = buildFusionTemplateVariables(
+        bundle: synthesisTemplateBundle,
+        skillRuns: skillRuns.map((item) => item.toJson()).toList(
+              growable: false,
+            ),
+        aggregationState: aggregationState.toJson(),
+        subagentRuns: runsForModel,
+        skillSynthesis: skillSynthesisInput.toJson(),
+      );
       templateVersionUsed = synthTemplateVersion;
       final subagentSynthesisInput = <Map<String, dynamic>>[
         ...messages,
         <String, dynamic>{
           'role': 'system',
-          'content': '各子任务执行结果：${jsonEncode(runsForModel)}',
+          'content':
+              'skill_synthesis_input: ${jsonEncode(skillSynthesisInput.toJson())}',
         },
         <String, dynamic>{
           'role': 'system',
-          'content':
-              '请基于以上子任务结果整合为最终答复。'
-              '优先输出最小稳定的 assistant_turn JSON：'
-              '先写 retrievalProcessing（尤其是 processingSummary，它是唯一流式展示的过程字段）、'
-              'answerProcessing、userMarkdown、result，'
-              '再补 decision 与其余字段。'
-              '若需要保留跨轮反思，只保留极简 historicalThinkingSnapshot。'
-              'evidence、reasoningBasis、selfCheck、diagnostics 能稳定给出时再补，'
-              '如果不稳可省略，由运行时补齐默认值。'
-              '最终 userMarkdown 不要使用 #/##/### 标题或 emoji 标题，'
-              '路线/方案类只用自然段 + 单层列表。'
-              'userMarkdown 不得包含任何 JSON 字段名。',
+          'content': 'subagent_runs=${jsonEncode(runsForModel)}',
+        },
+        <String, dynamic>{
+          'role': 'system',
+          'content': await _renderPromptSnippet(
+            'synthesis_aggregation',
+            variables: <String, dynamic>{
+              'anchorReminder': '',
+              'continuationReminder': '',
+            },
+          ),
         },
         <String, dynamic>{'role': 'user', 'content': latestUserQuery},
       ];
@@ -2408,7 +2160,9 @@ class LocalPhaseExecutionOwner {
         (finalResult.failureCode.trim().isNotEmpty ||
             !finalResponseHasRenderableContent)) {
       blockedProcessStepId = ProcessStepId.answerOrganization;
-      blockedProcessMessage = '这次生成答案失败，我先不强行给你结论，请稍后再试。';
+      blockedProcessMessage = assistantPipelineDefaultFailureMessageForStep(
+        ProcessStepId.answerOrganization,
+      );
       finalResult = ReactRuntimeResult(
         finalText: _buildStageFailureAssistantTurnEnvelopeText(
           stepId: ProcessStepId.answerOrganization,
@@ -2461,9 +2215,16 @@ class LocalPhaseExecutionOwner {
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
       responseDegraded:
           (!finalResponseHasRenderableContent || finalResponseIsFallback) &&
-          (finalResult.degraded || _hasDegradedTrace(finalResult.traces)),
+          (finalResult.degraded || hasDegradedTrace(finalResult.traces)),
       blockedProcessStepId: blockedProcessStepId,
       blockedProcessMessage: blockedProcessMessage,
+      skillSynthesisInput: skillSynthesisInput,
+      skillSynthesisOutput: SkillSynthesisOutput.fromStructuredAnswer(
+        answerPayload: finalResultTurn?.toEnvelopeMap() ?? <String, dynamic>{},
+        input: skillSynthesisInput,
+        aggregationState: aggregationState,
+        synthesisReadiness: synthesisReadiness,
+      ),
     );
   }
 
@@ -2482,6 +2243,8 @@ class LocalPhaseExecutionOwner {
       aggregationState: draft.aggregationState,
       subagentPlan: draft.subagentPlan,
       subagentRuns: draft.subagentRuns,
+      skillSynthesisInput: draft.skillSynthesisInput,
+      skillSynthesisOutput: draft.skillSynthesisOutput,
       dialogueRoundScript: draft.dialogueRoundScript,
       candidateDomains: draft.candidateDomains,
       skillExecutionShell: draft.skillExecutionShell,
@@ -2509,7 +2272,7 @@ class LocalPhaseExecutionOwner {
 
   Future<AssistantRunResponse> finalizeBridge(
     AssistantRunRequest request, {
-    required Map<String, dynamic> executionSnapshot,
+    required ExecutionPhaseSnapshot executionSnapshot,
     required AssistantRunResponse response,
   }) {
     return buildFinalizeRunner().finalize(
@@ -2559,9 +2322,11 @@ class LocalPhaseExecutionOwner {
     required String traceId,
     required void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
+    final templateVariablesView =
+        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
     final repairReason = _synthesisRepairReason(
       currentResult.finalText,
-      templateVariables: templateVariables,
+      templateVariables: templateVariablesView,
     );
     if (repairReason == null) {
       return currentResult;
@@ -2584,9 +2349,9 @@ class LocalPhaseExecutionOwner {
         ...synthesisInput,
         <String, dynamic>{
           'role': 'system',
-          'content': _buildSynthesisRepairInstruction(
+          'content': await _buildSynthesisRepairInstruction(
             repairReason: repairReason,
-            templateVariables: templateVariables,
+            templateVariables: templateVariablesView,
           ),
         },
       ],
@@ -2609,7 +2374,7 @@ class LocalPhaseExecutionOwner {
     );
     if (_needsSynthesisRepair(
       repaired.finalText,
-      templateVariables: templateVariables,
+      templateVariables: templateVariablesView,
     )) {
       Map<String, dynamic> payloadMap(
         Map<String, dynamic> payload,
@@ -2629,7 +2394,7 @@ class LocalPhaseExecutionOwner {
         required String streamedNarrative,
       }) {
         final merged = Map<String, dynamic>.from(
-          _preferStructuredMap(primary, fallback),
+          preferStructuredMap(primary, fallback),
         );
         final stabilizedNarrative = _mergeStableNarrativeFinalText(
           streamed: streamedNarrative,
@@ -2648,7 +2413,7 @@ class LocalPhaseExecutionOwner {
         List<Map<String, dynamic>> candidates,
       ) {
         for (final candidate in candidates) {
-          if (_hasStructuredContent(candidate)) {
+          if (hasStructuredContent(candidate)) {
             return candidate;
           }
         }
@@ -2663,21 +2428,29 @@ class LocalPhaseExecutionOwner {
           if (trace.type != AssistantTraceEventType.assistantDelta) {
             continue;
           }
-          final payload = _parseAnswerPayload(
+          final payload = parseAnswerPayload(
             rawFinalText: trace.message,
             traces: traces,
           );
-          if (!_hasStructuredContent(payload)) {
+          if (!hasStructuredContent(payload)) {
             continue;
           }
           final hasStageSnapshots =
-              _hasStructuredContent(
-                payloadMap(payload, 'understandingSnapshot'),
+              hasStructuredContent(
+                payloadMap(
+                  payload,
+                  AssistantPipelineStateKeys.understandingSnapshot,
+                ),
               ) ||
-              _hasStructuredContent(
-                payloadMap(payload, 'retrievalProcessing'),
+              hasStructuredContent(
+                payloadMap(
+                  payload,
+                  AssistantPipelineStateKeys.retrievalProcessing,
+                ),
               ) ||
-              _hasStructuredContent(payloadMap(payload, 'answerProcessing'));
+              hasStructuredContent(
+                payloadMap(payload, AssistantPipelineStateKeys.answerProcessing),
+              );
           if (hasStageSnapshots) {
             return payload;
           }
@@ -2688,11 +2461,11 @@ class LocalPhaseExecutionOwner {
         return fallbackPayload;
       }
 
-      final repairedPayload = _parseAnswerPayload(
+      final repairedPayload = parseAnswerPayload(
         rawFinalText: repaired.finalText,
         traces: repaired.traces,
       );
-      final currentPayload = _parseAnswerPayload(
+      final currentPayload = parseAnswerPayload(
         rawFinalText: currentResult.finalText,
         traces: currentResult.traces,
       );
@@ -2704,38 +2477,80 @@ class LocalPhaseExecutionOwner {
       );
       final fallbackRetrievalProcessing =
           firstStructuredMap(<Map<String, dynamic>>[
-            payloadMap(repairedTracePayload, 'retrievalProcessing'),
-            payloadMap(currentTracePayload, 'retrievalProcessing'),
-            payloadMap(currentPayload, 'retrievalProcessing'),
+            payloadMap(
+              repairedTracePayload,
+              AssistantPipelineStateKeys.retrievalProcessing,
+            ),
+            payloadMap(
+              currentTracePayload,
+              AssistantPipelineStateKeys.retrievalProcessing,
+            ),
+            payloadMap(
+              currentPayload,
+              AssistantPipelineStateKeys.retrievalProcessing,
+            ),
             carriedRetrievalProcessing,
           ]);
       final fallbackAnswerProcessing =
           firstStructuredMap(<Map<String, dynamic>>[
-            payloadMap(repairedTracePayload, 'answerProcessing'),
-            payloadMap(currentTracePayload, 'answerProcessing'),
-            payloadMap(currentPayload, 'answerProcessing'),
+            payloadMap(
+              repairedTracePayload,
+              AssistantPipelineStateKeys.answerProcessing,
+            ),
+            payloadMap(
+              currentTracePayload,
+              AssistantPipelineStateKeys.answerProcessing,
+            ),
+            payloadMap(
+              currentPayload,
+              AssistantPipelineStateKeys.answerProcessing,
+            ),
           ]);
       final fallbackUnderstandingSnapshot =
           firstStructuredMap(<Map<String, dynamic>>[
-            payloadMap(repairedTracePayload, 'understandingSnapshot'),
-            payloadMap(currentTracePayload, 'understandingSnapshot'),
-            payloadMap(currentPayload, 'understandingSnapshot'),
+            payloadMap(
+              repairedTracePayload,
+              AssistantPipelineStateKeys.understandingSnapshot,
+            ),
+            payloadMap(
+              currentTracePayload,
+              AssistantPipelineStateKeys.understandingSnapshot,
+            ),
+            payloadMap(
+              currentPayload,
+              AssistantPipelineStateKeys.understandingSnapshot,
+            ),
           ]);
       final fallbackHistoricalThinkingSnapshot =
           firstStructuredMap(<Map<String, dynamic>>[
-            payloadMap(repairedTracePayload, 'historicalThinkingSnapshot'),
-            payloadMap(currentTracePayload, 'historicalThinkingSnapshot'),
-            payloadMap(currentPayload, 'historicalThinkingSnapshot'),
+            payloadMap(
+              repairedTracePayload,
+              AssistantPipelineStateKeys.historicalThinkingSnapshot,
+            ),
+            payloadMap(
+              currentTracePayload,
+              AssistantPipelineStateKeys.historicalThinkingSnapshot,
+            ),
+            payloadMap(
+              currentPayload,
+              AssistantPipelineStateKeys.historicalThinkingSnapshot,
+            ),
           ]);
       final fallbackSlotState = firstStructuredMap(<Map<String, dynamic>>[
-        payloadMap(repairedTracePayload, 'slotState'),
-        payloadMap(currentTracePayload, 'slotState'),
-        payloadMap(currentPayload, 'slotState'),
+        payloadMap(repairedTracePayload, AssistantPipelineStateKeys.slotState),
+        payloadMap(currentTracePayload, AssistantPipelineStateKeys.slotState),
+        payloadMap(currentPayload, AssistantPipelineStateKeys.slotState),
       ]);
       final mergedRetrievalProcessing = mergedStageMap(
         primary: firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(repairedPayload, 'retrievalProcessing'),
-          payloadMap(repairedTracePayload, 'retrievalProcessing'),
+          payloadMap(
+            repairedPayload,
+            AssistantPipelineStateKeys.retrievalProcessing,
+          ),
+          payloadMap(
+            repairedTracePayload,
+            AssistantPipelineStateKeys.retrievalProcessing,
+          ),
         ]),
         fallback: fallbackRetrievalProcessing,
         narrativeKey: 'processingSummary',
@@ -2743,8 +2558,14 @@ class LocalPhaseExecutionOwner {
       );
       final mergedAnswerProcessing = mergedStageMap(
         primary: firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(repairedPayload, 'answerProcessing'),
-          payloadMap(repairedTracePayload, 'answerProcessing'),
+          payloadMap(
+            repairedPayload,
+            AssistantPipelineStateKeys.answerProcessing,
+          ),
+          payloadMap(
+            repairedTracePayload,
+            AssistantPipelineStateKeys.answerProcessing,
+          ),
         ]),
         fallback: fallbackAnswerProcessing,
         narrativeKey: 'readinessSummary',
@@ -2752,31 +2573,54 @@ class LocalPhaseExecutionOwner {
       );
       final recoveryPayload = <String, dynamic>{
         ...repairedPayload,
-        'understandingSnapshot': firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(repairedPayload, 'understandingSnapshot'),
-          payloadMap(repairedTracePayload, 'understandingSnapshot'),
+        AssistantPipelineStateKeys.understandingSnapshot:
+            firstStructuredMap(<Map<String, dynamic>>[
+          payloadMap(
+            repairedPayload,
+            AssistantPipelineStateKeys.understandingSnapshot,
+          ),
+          payloadMap(
+            repairedTracePayload,
+            AssistantPipelineStateKeys.understandingSnapshot,
+          ),
           fallbackUnderstandingSnapshot,
         ]),
-        'retrievalProcessing': mergedRetrievalProcessing,
-        'answerProcessing': mergedAnswerProcessing,
-        'historicalThinkingSnapshot': firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(repairedPayload, 'historicalThinkingSnapshot'),
-          payloadMap(repairedTracePayload, 'historicalThinkingSnapshot'),
+        AssistantPipelineStateKeys.retrievalProcessing:
+            mergedRetrievalProcessing,
+        AssistantPipelineStateKeys.answerProcessing: mergedAnswerProcessing,
+        AssistantPipelineStateKeys.historicalThinkingSnapshot:
+            firstStructuredMap(<Map<String, dynamic>>[
+          payloadMap(
+            repairedPayload,
+            AssistantPipelineStateKeys.historicalThinkingSnapshot,
+          ),
+          payloadMap(
+            repairedTracePayload,
+            AssistantPipelineStateKeys.historicalThinkingSnapshot,
+          ),
           fallbackHistoricalThinkingSnapshot,
         ]),
-        'slotState': firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(repairedPayload, 'slotState'),
-          payloadMap(repairedTracePayload, 'slotState'),
+        AssistantPipelineStateKeys.slotState: firstStructuredMap(
+          <Map<String, dynamic>>[
+            payloadMap(repairedPayload, AssistantPipelineStateKeys.slotState),
+            payloadMap(
+              repairedTracePayload,
+              AssistantPipelineStateKeys.slotState,
+            ),
           fallbackSlotState,
-        ]),
+          ],
+        ),
       };
       final fallbackPayload = <String, dynamic>{
         ...currentPayload,
-        'understandingSnapshot': fallbackUnderstandingSnapshot,
-        'retrievalProcessing': fallbackRetrievalProcessing,
-        'answerProcessing': mergedAnswerProcessing,
-        'historicalThinkingSnapshot': fallbackHistoricalThinkingSnapshot,
-        'slotState': fallbackSlotState,
+        AssistantPipelineStateKeys.understandingSnapshot:
+            fallbackUnderstandingSnapshot,
+        AssistantPipelineStateKeys.retrievalProcessing:
+            fallbackRetrievalProcessing,
+        AssistantPipelineStateKeys.answerProcessing: mergedAnswerProcessing,
+        AssistantPipelineStateKeys.historicalThinkingSnapshot:
+            fallbackHistoricalThinkingSnapshot,
+        AssistantPipelineStateKeys.slotState: fallbackSlotState,
       };
       final recoveredMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
         primaryText: repaired.finalText,
@@ -2789,8 +2633,10 @@ class LocalPhaseExecutionOwner {
           finalText: _buildRecoveredAssistantTurnEnvelopeText(
             recoveredMarkdown: recoveredMarkdown,
             failureCode: 'invalid_synthesis_output',
-            recoveryPayload: recoveryPayload,
-            fallbackPayload: fallbackPayload,
+            payloadBundle: AssistantPipelineRecoveryPayloadBundle.fromWireMaps(
+              recoveryPayload: recoveryPayload,
+              fallbackPayload: fallbackPayload,
+            ),
           ),
           traces: <AssistantTraceEvent>[
             ...currentResult.traces,
@@ -2806,11 +2652,20 @@ class LocalPhaseExecutionOwner {
           ...synthesisInput,
           <String, dynamic>{
             'role': 'system',
-            'content':
-                '结构化 JSON 仍然无效。现在不要输出 JSON，不要输出工具调用，不要输出 XML。'
-                '请直接返回给用户看的最终 Markdown 答案正文；'
-                '若证据不足，就明确说明不足并给出当前最稳妥的建议。'
-                '${_buildSynthesisAnchorReminder(templateVariables)}',
+            'content': await _renderPromptSnippet(
+              'plain_markdown_recovery',
+              variables: <String, dynamic>{
+                'anchorReminder': templateVariablesView.requiredTopicAnchors.isEmpty
+                    ? ''
+                    : await _renderPromptSnippet(
+                        'synthesis_anchor_reminder',
+                        variables: <String, dynamic>{
+                          'anchors': templateVariablesView.requiredTopicAnchors
+                              .join('、'),
+                        },
+                      ),
+              },
+            ),
           },
         ],
         maxIterations: 1,
@@ -2847,8 +2702,10 @@ class LocalPhaseExecutionOwner {
           finalText: _buildRecoveredAssistantTurnEnvelopeText(
             recoveredMarkdown: recoveredPlainMarkdown,
             failureCode: 'invalid_synthesis_output',
-            recoveryPayload: recoveryPayload,
-            fallbackPayload: fallbackPayload,
+            payloadBundle: AssistantPipelineRecoveryPayloadBundle.fromWireMaps(
+              recoveryPayload: recoveryPayload,
+              fallbackPayload: fallbackPayload,
+            ),
           ),
           traces: <AssistantTraceEvent>[
             ...currentResult.traces,
@@ -2889,7 +2746,8 @@ class LocalPhaseExecutionOwner {
 
   bool _needsSynthesisRepair(
     String rawText, {
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    AssistantPipelineTemplateVariablesView templateVariables =
+        const AssistantPipelineTemplateVariablesView.empty(),
   }) {
     return _synthesisRepairReason(
           rawText,
@@ -2900,12 +2758,11 @@ class LocalPhaseExecutionOwner {
 
   String? _synthesisRepairReason(
     String rawText, {
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    AssistantPipelineTemplateVariablesView templateVariables =
+        const AssistantPipelineTemplateVariablesView.empty(),
   }) {
     final trimmed = rawText.trim();
-    if (trimmed.isEmpty || trimmed.contains('没有生成可展示结果')) {
-      return 'empty_or_missing_display';
-    }
+    if (trimmed.isEmpty) return 'empty_or_missing_display';
     if (_containsXmlToolCallMarkup(trimmed)) return 'xml_tool_markup';
     final parseResult = LlmResponseParser.parse(trimmed);
     if (!parseResult.ok) return 'unparseable_envelope';
@@ -2942,27 +2799,93 @@ class LocalPhaseExecutionOwner {
   }
 
   bool _containsXmlToolCallMarkup(String text) =>
-      _xmlToolCallTagRe.hasMatch(text);
+      _containsAnyMarker(text, const <String>[
+        '<tool_call>',
+        '</tool_call>',
+        '<function=',
+        '</function>',
+        '<parameter=',
+        '</parameter>',
+      ]);
 
-  String _buildSynthesisRepairInstruction({
-    required String repairReason,
-    required Map<String, dynamic> templateVariables,
-  }) {
-    final base =
-        '上一次输出未通过最终成答契约校验（$repairReason）。'
-        '请只做契约修复：'
-        '禁止新增工具调用，禁止输出 XML 标签或解释性前后缀，'
-        '仅返回单个 assistant_turn JSON，且字段必须与最终可展示结果一致。';
-    return '$base${_buildSynthesisAnchorReminder(templateVariables)}';
+  bool _containsAnyMarker(String text, List<String> markers) {
+    for (final marker in markers) {
+      if (text.contains(marker)) return true;
+    }
+    return false;
   }
 
-  String _buildSynthesisAnchorReminder(Map<String, dynamic> templateVariables) {
-    final anchors = _requiredTopicAnchors(templateVariables);
-    if (anchors.isEmpty) {
-      return '';
+  int _countSentenceTerminators(String text) {
+    var count = 0;
+    for (final rune in text.runes) {
+      if (_isSentenceTerminatorRune(rune)) count += 1;
     }
-    return ' 这轮最终回答必须显式保留至少一个主题锚点：${anchors.join('、')}。'
-        ' `userMarkdown`、`result.text` 与 `result.summary` 都不得把这些主题词丢成同域泛化表述。';
+    return count;
+  }
+
+  bool _containsSentenceTerminator(String text) {
+    for (final rune in text.runes) {
+      if (_isSentenceTerminatorRune(rune)) return true;
+    }
+    return false;
+  }
+
+  bool _containsCjkOrAsciiLetterOrDigit(String text) {
+    for (final rune in text.runes) {
+      if ((rune >= 48 && rune <= 57) ||
+          (rune >= 65 && rune <= 90) ||
+          (rune >= 97 && rune <= 122) ||
+          (rune >= 0x4e00 && rune <= 0x9fff)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isSentenceTerminatorRune(int rune) {
+    return rune == 0x3002 ||
+        rune == 0xff01 ||
+        rune == 0xff1f ||
+        rune == 0xff1b ||
+        rune == 0x3b ||
+        rune == 0x2e ||
+        rune == 0x21 ||
+        rune == 0x3f;
+  }
+
+  Future<String> _buildSynthesisRepairInstruction({
+    required String repairReason,
+    required AssistantPipelineTemplateVariablesView templateVariables,
+  }) async {
+    final anchors = _requiredTopicAnchors(templateVariables);
+    final renderedAnchorReminder = anchors.isEmpty
+        ? ''
+        : await _renderPromptSnippet(
+            'synthesis_anchor_reminder',
+            variables: <String, dynamic>{
+              'anchors': anchors.join('、'),
+            },
+          );
+    final anchorReminder = renderedAnchorReminder;
+    final continuationReminder =
+        templateVariables.hasContinuationCarryoverContext
+        ? await _renderPromptSnippet(
+            'continuation_reminder',
+            variables: <String, dynamic>{
+              'continuityMode': templateVariables.continuityMode.name,
+            },
+          )
+        : '';
+    final rendered = await _renderPromptSnippet(
+      'synthesis_repair',
+      variables: <String, dynamic>{
+        'repairReason': repairReason,
+        'anchorReminder': anchorReminder,
+        'continuationReminder': continuationReminder,
+      },
+    );
+    if (rendered.isNotEmpty) return rendered;
+    return _buildSynthesisRepairFallback(repairReason);
   }
 
   AssistantTurnOutput? _tryParseAssistantTurnFromRawText(String rawText) {
@@ -2985,6 +2908,8 @@ class LocalPhaseExecutionOwner {
     required String traceId,
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
+    final templateVariablesView =
+        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
     final recoveredMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
       primaryText: rawText,
       primaryTraces: traces,
@@ -3009,7 +2934,7 @@ class LocalPhaseExecutionOwner {
       visibility: TraceVisibility.internal,
       data: <String, dynamic>{
         'stage': 'phase_one_direct_answer_repair',
-        'continuation': _hasContinuationCarryoverContext(templateVariables),
+        'continuation': templateVariablesView.hasContinuationCarryoverContext,
       },
     );
     onTraceEvent?.call(repairTrace);
@@ -3018,7 +2943,7 @@ class LocalPhaseExecutionOwner {
         ...messages,
         <String, dynamic>{
           'role': 'system',
-          'content': _buildPhaseOneDirectAnswerRepairInstruction(
+          'content': await _buildPhaseOneDirectAnswerRepairInstruction(
             recoveredMarkdown: recoveredMarkdown,
             latestUserQuery: latestUserQuery,
             templateVariables: templateVariables,
@@ -3048,7 +2973,7 @@ class LocalPhaseExecutionOwner {
     if (repairedTurn != null &&
         _synthesisRepairReason(
               repaired.finalText,
-              templateVariables: templateVariables,
+              templateVariables: templateVariablesView,
             ) ==
             null) {
       return ReactRuntimeResult(
@@ -3070,7 +2995,7 @@ class LocalPhaseExecutionOwner {
         _containsXmlToolCallMarkup(repairedMarkdown) ||
         _missingRequiredTopicAnchor(
           repairedMarkdown,
-          templateVariables: templateVariables,
+          templateVariables: templateVariablesView,
         )) {
       return ReactRuntimeResult(
         finalText: '',
@@ -3083,6 +3008,16 @@ class LocalPhaseExecutionOwner {
       finalText: _buildRecoveredAssistantTurnEnvelopeText(
         recoveredMarkdown: repairedMarkdown,
         failureCode: 'phase_one_answer_repair',
+        payloadBundle: AssistantPipelineRecoveryPayloadBundle.fromWireMaps(
+          recoveryPayload: parseAnswerPayload(
+            rawFinalText: repaired.finalText,
+            traces: repaired.traces,
+          ),
+          fallbackPayload: parseAnswerPayload(
+            rawFinalText: rawText,
+            traces: traces,
+          ),
+        ),
       ),
       traces: <AssistantTraceEvent>[repairTrace, ...repaired.traces],
       degraded: repaired.degraded,
@@ -3090,75 +3025,63 @@ class LocalPhaseExecutionOwner {
     );
   }
 
-  String _buildPhaseOneDirectAnswerRepairInstruction({
+  Future<String> _buildPhaseOneDirectAnswerRepairInstruction({
     required String recoveredMarkdown,
     required String latestUserQuery,
     required Map<String, dynamic> templateVariables,
-  }) {
-    final carryoverReminder = _buildContinuationCarryoverReminder(
-      templateVariables,
+  }) async {
+    final templateVariablesView =
+        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
+    final anchors = _requiredTopicAnchors(templateVariablesView);
+    final renderedAnchorReminder = anchors.isEmpty
+        ? ''
+        : await _renderPromptSnippet(
+            'synthesis_anchor_reminder',
+            variables: <String, dynamic>{
+              'anchors': anchors.join('、'),
+            },
+          );
+    final anchorReminder = renderedAnchorReminder;
+    final continuationReminder =
+        templateVariablesView.hasContinuationCarryoverContext
+        ? await _renderPromptSnippet(
+            'continuation_reminder',
+            variables: <String, dynamic>{
+              'continuityMode': templateVariablesView.continuityMode.name,
+            },
+          )
+        : '';
+    final rendered = await _renderPromptSnippet(
+      'phase_one_direct_answer_repair',
+      variables: <String, dynamic>{
+        'latestUserQuery': latestUserQuery,
+        'recoveredMarkdown': recoveredMarkdown,
+        'anchorReminder': anchorReminder,
+        'continuationReminder': continuationReminder,
+      },
     );
-    return '上一轮 phase-one 输出已经包含可直接展示的答案，但没有按最终契约返回。'
-        '现在只做 direct-answer 契约修复：'
-        '禁止新增工具调用，禁止扩搜，禁止 ask_user，禁止输出 XML 标签或解释性前后缀，'
-        '必须返回单个 assistant_turn JSON，且 decision.nextAction=answer、'
-        'messageKind=answer、phaseId/actionCode/reasonCode=answering/compose_answer/evidence_ready。'
-        ' 当前用户问题是：$latestUserQuery。'
-        '${_buildSynthesisAnchorReminder(templateVariables)}'
-        ' 如果现成正文里把主题锚点或显式约束说省了，只允许补回当前问题里的主题词、对象名或限制条件，'
-        '这属于契约修复，不算改换主题。'
-        '$carryoverReminder'
-        '请基于下面这段现成答案正文做最小修复，不要改换主题：\n'
-        '<draft_answer>\n$recoveredMarkdown\n</draft_answer>';
+    if (rendered.isNotEmpty) return rendered;
+    return _buildPhaseOneDirectAnswerRepairFallback();
+  }
+
+  String _buildSynthesisRepairFallback(String repairReason) {
+    return 'assistant_turn_repair|phase=synthesis|reason=$repairReason|output=single_assistant_turn_json';
+  }
+
+  String _buildPhaseOneDirectAnswerRepairFallback() {
+    return 'assistant_turn_repair|phase=phase_one_direct_answer|output=single_assistant_turn_json';
   }
 
   bool _hasContinuationCarryoverContext(
-    Map<String, dynamic> templateVariables,
+    AssistantPipelineTemplateVariablesView templateVariables,
   ) {
-    final continuityMode = parseContextContinuityMode(
-      (templateVariables['continuityMode'] as String?)?.trim() ?? '',
-    );
-    if (continuityMode == ContextContinuityMode.unknown ||
-        continuityMode == ContextContinuityMode.freshTopic) {
-      return false;
-    }
-    final previousAnswerSummary =
-        (templateVariables['previousAnswerSummary'] as String?)?.trim() ?? '';
-    if (previousAnswerSummary.isNotEmpty) {
-      return true;
-    }
-    final previousIntentGraphJson =
-        (templateVariables['previousIntentGraphJson'] as String?)?.trim() ?? '';
-    return previousIntentGraphJson.isNotEmpty;
-  }
-
-  String _buildContinuationCarryoverReminder(
-    Map<String, dynamic> templateVariables,
-  ) {
-    if (!_hasContinuationCarryoverContext(templateVariables)) {
-      return '';
-    }
-    final previousAnswerSummary =
-        (templateVariables['previousAnswerSummary'] as String?)?.trim() ?? '';
-    final continuityMode =
-        (templateVariables['continuityMode'] as String?)?.trim() ?? '';
-    final previousIntentGraphJson =
-        (templateVariables['previousIntentGraphJson'] as String?)?.trim() ?? '';
-    final overrideSlots = jsonEncode(
-      (templateVariables['continuityOverrideSlots'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-    );
-    return ' 这是连续追问场景（continuityMode=$continuityMode）。'
-        '最终回答必须把承接对象重新说全，不能只保留脱离上下文的指代。'
-        '${previousAnswerSummary.isNotEmpty ? ' 上一轮回答摘要：$previousAnswerSummary。' : ''}'
-        '${previousIntentGraphJson.isNotEmpty ? ' 上一轮意图骨架：$previousIntentGraphJson。' : ''}'
-        '${overrideSlots != '{}' ? ' 本轮显式覆盖条件：$overrideSlots。' : ''}';
+    return templateVariables.hasContinuationCarryoverContext;
   }
 
   bool _missingRequiredTopicAnchor(
     String projectedMarkdown, {
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    AssistantPipelineTemplateVariablesView templateVariables =
+        const AssistantPipelineTemplateVariablesView.empty(),
   }) {
     final anchors = _requiredTopicAnchors(templateVariables);
     if (anchors.isEmpty) {
@@ -3174,54 +3097,39 @@ class LocalPhaseExecutionOwner {
     );
   }
 
-  List<String> _requiredTopicAnchors(Map<String, dynamic> templateVariables) {
-    final seen = <String>{};
-    final anchors = <String>[];
-
-    void collect(Iterable<Object?> values) {
-      for (final raw in values) {
-        final value = raw.toString().trim();
-        if (!_isMeaningfulTopicAnchor(value) || !seen.add(value)) {
-          continue;
-        }
-        anchors.add(value);
-      }
-    }
-
-    final directAnchors = templateVariables['entityAnchors'];
-    if (directAnchors is Iterable) {
-      collect(directAnchors);
-    } else if (directAnchors is String && directAnchors.trim().isNotEmpty) {
-      collect(directAnchors.split(','));
-    }
-
-    final queryTasks = templateVariables['queryTasks'];
-    if (queryTasks is Iterable) {
-      for (final item in queryTasks) {
-        if (item is Map) {
-          final taskAnchors = item['entityAnchors'];
-          if (taskAnchors is Iterable) {
-            collect(taskAnchors);
-          }
-        }
-      }
-    }
-
-    return anchors;
+  List<String> _requiredTopicAnchors(
+    AssistantPipelineTemplateVariablesView templateVariables,
+  ) {
+    return templateVariables.requiredTopicAnchors;
   }
 
   bool _isMeaningfulTopicAnchor(String value) {
     final normalized = value.trim();
-    if (normalized.length >= 2 &&
-        RegExp(r'[\u4e00-\u9fff]').hasMatch(normalized)) {
-      return true;
+    if (normalized.length < 2) return false;
+    var hasCjk = false;
+    var hasAsciiLetterOrDigit = false;
+    for (final rune in normalized.runes) {
+      if (rune >= 0x4e00 && rune <= 0x9fff) {
+        hasCjk = true;
+        break;
+      }
+      if ((rune >= 48 && rune <= 57) ||
+          (rune >= 65 && rune <= 90) ||
+          (rune >= 97 && rune <= 122)) {
+        hasAsciiLetterOrDigit = true;
+      }
     }
-    return normalized.length >= 3 &&
-        RegExp(r'[A-Za-z0-9]').hasMatch(normalized);
+    return hasCjk || (normalized.length >= 3 && hasAsciiLetterOrDigit);
   }
 
   String _normalizeTopicAnchorText(String raw) {
-    return raw.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    final buffer = StringBuffer();
+    for (final rune in raw.toLowerCase().runes) {
+      final ch = String.fromCharCode(rune);
+      if (ch.trim().isEmpty) continue;
+      buffer.write(ch);
+    }
+    return buffer.toString();
   }
 
   /// 确保 rawText 是符合当前契约标识（[kAssistantTurnCurrentContractId]）的 JSON 信封。
@@ -3252,7 +3160,9 @@ class LocalPhaseExecutionOwner {
   String _buildDegradedAssistantTurnEnvelopeText({
     required String failureCode,
   }) {
-    const failureMessage = '这次生成答案失败，我先不强行给你结论，请稍后再试。';
+    final failureMessage = assistantPipelineDefaultFailureMessageForStep(
+      ProcessStepId.unknown,
+    );
     return jsonEncode(
       AssistantTurnOutput(
         contractId: kAssistantTurnCurrentContractId,
@@ -3291,7 +3201,7 @@ class LocalPhaseExecutionOwner {
   }) {
     final normalizedMessage = failureMessage.trim().isNotEmpty
         ? failureMessage.trim()
-        : '这次处理失败了，我先不强行给你结论，请稍后再试。';
+        : assistantPipelineDefaultFailureMessageForStep(stepId);
     final phaseId = stepId == ProcessStepId.understanding
         ? PlannerPhaseId.understanding
         : (stepId == ProcessStepId.answerOrganization
@@ -3353,41 +3263,8 @@ class LocalPhaseExecutionOwner {
   String _buildRecoveredAssistantTurnEnvelopeText({
     required String recoveredMarkdown,
     required String failureCode,
-    Map<String, dynamic> recoveryPayload = const <String, dynamic>{},
-    Map<String, dynamic> fallbackPayload = const <String, dynamic>{},
+    required AssistantPipelineRecoveryPayloadBundle payloadBundle,
   }) {
-    Map<String, dynamic> payloadMap(Map<String, dynamic> payload, String key) {
-      final raw = payload[key];
-      if (raw is Map) {
-        return raw.cast<String, dynamic>();
-      }
-      return const <String, dynamic>{};
-    }
-
-    String payloadText(Map<String, dynamic> payload, String key) {
-      return (payload[key] as String?)?.trim() ?? '';
-    }
-
-    final understandingSnapshot = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'understandingSnapshot'),
-      payloadMap(fallbackPayload, 'understandingSnapshot'),
-    );
-    final retrievalProcessing = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'retrievalProcessing'),
-      payloadMap(fallbackPayload, 'retrievalProcessing'),
-    );
-    final answerProcessing = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'answerProcessing'),
-      payloadMap(fallbackPayload, 'answerProcessing'),
-    );
-    final historicalThinkingSnapshot = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'historicalThinkingSnapshot'),
-      payloadMap(fallbackPayload, 'historicalThinkingSnapshot'),
-    );
-    final slotStateMap = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'slotState'),
-      payloadMap(fallbackPayload, 'slotState'),
-    );
     final plainText = AssistantDisplayTextResolver.stripMarkdown(
       recoveredMarkdown,
     );
@@ -3395,14 +3272,10 @@ class LocalPhaseExecutionOwner {
         ? plainText
         : recoveredMarkdown;
     final reasonShort = _firstNonEmptyText(<String?>[
-      payloadText(recoveryPayload, 'reasonShort'),
-      payloadText(fallbackPayload, 'reasonShort'),
-      '关键信息已经齐了，我先把结果整理成你能直接使用的答案。',
+      payloadBundle.recovery.reasonShort,
+      payloadBundle.fallback.reasonShort,
+      assistantPipelineDefaultReasonShort(),
     ]);
-    final resultMap = _preferStructuredMap(
-      payloadMap(recoveryPayload, 'result'),
-      payloadMap(fallbackPayload, 'result'),
-    );
     return jsonEncode(
       AssistantTurnOutput(
         contractId: kAssistantTurnCurrentContractId,
@@ -3418,32 +3291,26 @@ class LocalPhaseExecutionOwner {
         result: AssistantTurnResult(
           text: normalizedPlain,
           summary: _firstNonEmptyText(<String?>[
-            (resultMap['summary'] as String?)?.trim(),
+            payloadBundle.recovery.resultSummary,
+            payloadBundle.fallback.resultSummary,
             normalizedPlain,
           ]),
           interpretation: _firstNonEmptyText(<String?>[
             _normalizedRecoveredAnswerInterpretation(
               existingInterpretation:
-                  (resultMap['interpretation'] as String?)?.trim() ?? '',
+                  payloadBundle.recovery.resultInterpretation,
             ),
-            'bounded_answer',
+            _normalizedRecoveredAnswerInterpretation(
+              existingInterpretation:
+                  payloadBundle.fallback.resultInterpretation,
+            ),
           ]),
         ),
-        understandingSnapshot: _hasStructuredContent(understandingSnapshot)
-            ? AssistantTurnUnderstandingSnapshot.fromJson(understandingSnapshot)
-            : const AssistantTurnUnderstandingSnapshot(),
-        retrievalProcessing: _hasStructuredContent(retrievalProcessing)
-            ? RetrievalProcessingSnapshot.fromJson(retrievalProcessing)
-            : const RetrievalProcessingSnapshot(),
-        answerProcessing: _hasStructuredContent(answerProcessing)
-            ? AssistantTurnAnswerProcessing.fromJson(answerProcessing)
-            : const AssistantTurnAnswerProcessing(),
+        understandingSnapshot: payloadBundle.recovery.understandingSnapshot,
+        retrievalProcessing: payloadBundle.recovery.retrievalProcessing,
+        answerProcessing: payloadBundle.recovery.answerProcessing,
         historicalThinkingSnapshot:
-            _hasStructuredContent(historicalThinkingSnapshot)
-            ? AssistantTurnHistoricalThinkingSnapshot.fromJson(
-                historicalThinkingSnapshot,
-              )
-            : const AssistantTurnHistoricalThinkingSnapshot(),
+            payloadBundle.recovery.historicalThinkingSnapshot,
         selfCheck: const AssistantTurnSelfCheck(
           goalSatisfied: true,
           constraintSatisfied: true,
@@ -3456,9 +3323,7 @@ class LocalPhaseExecutionOwner {
           score: 78,
           reason: 'recovered_from_streamed_answer',
         ),
-        slotState: _hasStructuredContent(slotStateMap)
-            ? SlotStateSnapshot.fromJson(slotStateMap)
-            : const SlotStateSnapshot(),
+        slotState: payloadBundle.recovery.slotState,
         askUser: const AssistantTurnAskUser(),
       ).toEnvelopeMap(),
     );
@@ -3480,6 +3345,8 @@ class LocalPhaseExecutionOwner {
     required List<AssistantTraceEvent> traces,
     Map<String, dynamic> templateVariables = const <String, dynamic>{},
   }) {
+    final templateVariablesView =
+        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
     final recoveredMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
       primaryText: rawText,
       primaryTraces: traces,
@@ -3492,18 +3359,21 @@ class LocalPhaseExecutionOwner {
         _containsXmlToolCallMarkup(recoveredMarkdown) ||
         _missingRequiredTopicAnchor(
           recoveredMarkdown,
-          templateVariables: templateVariables,
+          templateVariables: templateVariablesView,
         )) {
       return '';
     }
-    final recoveryPayload = _parseAnswerPayload(
+    final recoveryPayload = parseAnswerPayload(
       rawFinalText: rawText,
       traces: traces,
     );
     return _buildRecoveredAssistantTurnEnvelopeText(
       recoveredMarkdown: recoveredMarkdown,
       failureCode: 'phase_one_answer_recovery',
-      recoveryPayload: recoveryPayload,
+      payloadBundle: AssistantPipelineRecoveryPayloadBundle.fromWireMaps(
+        recoveryPayload: recoveryPayload,
+        fallbackPayload: const <String, dynamic>{},
+      ),
     );
   }
 
@@ -3596,30 +3466,20 @@ class LocalPhaseExecutionOwner {
 
   String _recoverCompatDisplayMarkdown(Map<String, dynamic>? payload) {
     if (payload == null || payload.isEmpty) return '';
-    final decision =
-        (payload['decision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final nextAction = parseNextAction(
-      (decision['nextAction'] as String?)?.trim() ?? '',
-    );
-    final messageKind = parseMessageKind(
-      (payload['messageKind'] as String?)?.trim() ?? '',
-    );
-    final toolCalls =
-        (payload['toolCalls'] as List?)?.whereType<Object>().toList() ??
-        const <Object>[];
-    final result =
-        (payload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final payloadView = AssistantAnswerPayloadReadView(payload);
+    final nextAction = parseNextAction(payloadView.nextActionWireName);
+    final messageKind = parseMessageKind(payloadView.messageKindTrimmed);
+    final toolCalls = normalizeToolCalls(payload['toolCalls']);
+    final result = payloadView.resultMap;
     final candidates = <String>[
       AssistantDisplayTextResolver.normalizeMarkdown(
-        (payload['userMarkdown'] as String?) ?? '',
+        payloadView.userMarkdownTrimmed,
       ),
       AssistantDisplayTextResolver.normalizeMarkdown(
-        (result['text'] as String?) ?? '',
+        payloadView.resultTextTrimmed,
       ),
       AssistantDisplayTextResolver.normalizeMarkdown(
-        (result['summary'] as String?) ?? '',
+        (result['summary'] as String?)?.trim() ?? '',
       ),
     ].where((item) => item.trim().isNotEmpty).toList(growable: false);
     if (candidates.isEmpty) return '';
@@ -3627,13 +3487,17 @@ class LocalPhaseExecutionOwner {
     final answerLike =
         nextAction == AssistantNextAction.answer ||
         messageKind == AssistantMessageKind.answer ||
-        ((payload['phaseId'] as String?)?.trim() ?? '') == 'answering';
+        (payloadView.phaseIdTrimmed) ==
+            AssistantPipelineDiagnosticsKeys.answeringPhaseId;
     final staleProgressAnswer =
         toolCalls.isEmpty &&
         messageKind == AssistantMessageKind.progress &&
         candidate.isNotEmpty &&
-        ((((payload['phaseId'] as String?)?.trim() ?? '') == 'answering') ||
-            ((result['text'] as String?)?.trim().isNotEmpty == true));
+        (
+          payloadView.phaseIdTrimmed ==
+              AssistantPipelineDiagnosticsKeys.answeringPhaseId ||
+          payloadView.resultTextTrimmed.isNotEmpty
+        );
     if (!answerLike && !staleProgressAnswer) {
       return '';
     }
@@ -3741,19 +3605,16 @@ class LocalPhaseExecutionOwner {
         normalized.contains('* ') ||
         normalized.contains('1.');
     if (hasStructuredMarkdown) return true;
-    final sentenceLikeHits = RegExp(
-      r'[。！？；;.!?]',
-    ).allMatches(normalized).length;
+    final sentenceLikeHits = _countSentenceTerminators(normalized);
     if (sentenceLikeHits >= 2) return true;
-    final hasSentenceEnding = RegExp(r'[。！？.!?]').hasMatch(normalized);
+    final hasSentenceEnding = _containsSentenceTerminator(normalized);
     if (hasSentenceEnding && normalized.length >= 8) {
       return true;
     }
-    return normalized.length >= 12 &&
-        RegExp(r'[\u4e00-\u9fffA-Za-z0-9]').hasMatch(normalized);
+    return normalized.length >= 12 && _containsCjkOrAsciiLetterOrDigit(normalized);
   }
 
-  Future<List<Map<String, dynamic>>> _executeSubagentPlans({
+  Future<List<AssistantSubagentRunRecord>> _executeSubagentPlans({
     required Map<String, dynamic> answerPayload,
     required AssistantRunRequest request,
     required String sessionId,
@@ -3767,11 +3628,11 @@ class LocalPhaseExecutionOwner {
     final rawPlans = apv.subagentPlanMaps;
     final plans = rawPlans
         .map((item) => SubagentPlan.fromJson(item))
-        .where((item) => item.goal.trim().isNotEmpty)
+        .where((item) => item.hasMilestone3Inputs)
         .toList(growable: false);
-    if (plans.isEmpty) return const <Map<String, dynamic>>[];
+    if (plans.isEmpty) return const <AssistantSubagentRunRecord>[];
     // Build a single subagent execution closure for parallel dispatch
-    Future<Map<String, dynamic>> runSingleSubagent(
+      Future<AssistantSubagentRunRecord> runSingleSubagent(
       int index,
       SubagentPlan plan,
     ) async {
@@ -3779,6 +3640,11 @@ class LocalPhaseExecutionOwner {
           ? plan.subagentId
           : 'subagent_${index + 1}';
       final goal = plan.goal;
+      final taskBrief =
+          plan.taskBrief.trim().isNotEmpty ? plan.taskBrief.trim() : goal;
+      final routeNarrative = plan.routeNarrative.trim();
+      final localContextSeed = plan.localContextSeed.trim();
+      final executionGoal = taskBrief.isNotEmpty ? taskBrief : goal;
       final subagentDomainId = plan.domainId;
       final planMode = plan.mode;
       final timeoutMs = plan.timeoutMs;
@@ -3792,7 +3658,7 @@ class LocalPhaseExecutionOwner {
         final subagentSkillContext = await _executionPreparationResolver
             .resolveSkillContext(
               domainId: subagentDomainId,
-              userQuery: goal,
+              userQuery: executionGoal,
               preferExplicitDomain: true,
             );
         effectiveSubagentShell = _executionPreparationResolver
@@ -3802,7 +3668,7 @@ class LocalPhaseExecutionOwner {
               rawProblemClass: plan.problemClass,
               mode: planMode,
               secondarySkills: const <String>[],
-              queryText: goal,
+              queryText: executionGoal,
             );
         effectiveSubagentShell = _applySubagentStrategyToShell(
           baseShell: effectiveSubagentShell,
@@ -3816,6 +3682,12 @@ class LocalPhaseExecutionOwner {
           'skillExecutionShell': effectiveSubagentShell.toJson(),
           'problemClass': effectiveSubagentShell.problemClass,
           'subagentPlan': plan.toJson(),
+          'subagentTaskBrief': taskBrief,
+          'subagentRouteNarrative': routeNarrative,
+          'subagentLocalContextSeed': localContextSeed,
+          'subagentRole': plan.role,
+          'subagentNeedClarify': plan.needClarify,
+          'subagentPendingClarifications': plan.pendingClarifications,
         };
         if (effectiveSubagentShell.maxIterations > 0 &&
             effectiveSubagentShell.maxIterations < maxIterations) {
@@ -3840,7 +3712,7 @@ class LocalPhaseExecutionOwner {
           data: <String, dynamic>{
             'subagentId': subagentId,
             'domainId': subagentDomainId,
-            'goal': goal,
+            'goal': executionGoal,
             'mode': planMode,
             'problemClass': effectiveSubagentShell.problemClass,
             'shell': effectiveSubagentShell.toJson(),
@@ -3858,14 +3730,20 @@ class LocalPhaseExecutionOwner {
         final subagentResult = await _runtime
             .run(
               messages: <Map<String, dynamic>>[
-                const <String, dynamic>{
+                <String, dynamic>{
                   'role': 'system',
-                  'content': '你是后台子代理。目标是完成分配任务并给出结构化结论，禁止输出与任务无关内容。',
+                  'content': await _renderPromptSnippet(
+                    'subagent_execution',
+                    variables: <String, dynamic>{
+                      'routeNarrative': routeNarrative,
+                      'localContextSeed': localContextSeed,
+                    },
+                  ),
                 },
-                <String, dynamic>{'role': 'user', 'content': goal},
+                <String, dynamic>{'role': 'user', 'content': executionGoal},
               ],
               maxIterations: maxIterations,
-              goal: goal,
+              goal: executionGoal,
               availableToolNamesOverride: subagentTools,
               templateId: 'planner.global_plan',
               templateVersion: '',
@@ -3877,64 +3755,76 @@ class LocalPhaseExecutionOwner {
               onTraceEvent: onTraceEvent,
             )
             .timeout(Duration(milliseconds: timeoutMs));
-        final childAnswerPayload = _parseAnswerPayload(
+        final childAnswerPayload = parseAnswerPayload(
           rawFinalText: subagentResult.finalText,
           traces: subagentResult.traces,
         );
+        final childAnswerView = AssistantAnswerPayloadReadView(
+          childAnswerPayload,
+        );
         final childToolResults = subagentResult.traces
             .where((event) => event.type == AssistantTraceEventType.toolResult)
-            .map(
-              (event) => <String, dynamic>{
-                'message': event.message,
-                'data': event.data ?? const <String, dynamic>{},
-                'toolCallId': event.toolCallId ?? '',
-              },
-            )
+            .map(AssistantToolResultRow.fromTraceEvent)
             .toList(growable: false);
         final childReferences = _buildUiReferences(
           childToolResults,
           isRealtimeLike: _isRealtimeLikeProblemClass(plan.problemClass),
         );
-        final subagentUsage = _buildUsageStatsFromTraces(
+        final childReferenceMaps =
+            childReferences.map((item) => item.toJson()).toList(growable: false);
+        final childAcceptedEvidence = childReferenceMaps;
+        final childRejectedEvidence = const <Map<String, dynamic>>[];
+        final childMissingSlots = <String>[
+          ...childAnswerView.topLevelMissingSlots,
+          ...childAnswerView.slotStateMissingSlots,
+        ]
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList(growable: false);
+        final childNextAction = childAnswerView.nextActionWireName;
+        final childFailureReason = childAnswerView.diagnosticsFailureReason;
+        final subagentUsage = usage_stats.buildUsageStatsFromTraces(
           traces: subagentResult.traces,
-          fallbackInputText: goal,
+          fallbackInputText: executionGoal,
           fallbackOutputText: subagentResult.finalText,
         );
-        final run = <String, dynamic>{
-          'version': 'subagent_result',
-          'subagentId': subagentId,
-          'domainId': subagentDomainId,
-          'status': 'success',
-          'goal': goal,
-          'mode': planMode,
-          'problemClass': effectiveSubagentShell.problemClass,
-          'shell': effectiveSubagentShell.toJson(),
-          'stopPolicy': plan.stopPolicy,
-          'searchIntensity': plan.searchIntensity,
-          'providerPolicy': plan.providerPolicy,
-          'freshnessHoursMax': plan.freshnessHoursMax,
-          'answerThreshold': plan.answerThreshold,
-          'summary': subagentResult.finalText,
-          'userMarkdown': (childAnswerPayload['userMarkdown'] as String?) ?? '',
-          'result':
-              (childAnswerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          'answerReady':
-              ((childAnswerPayload['userMarkdown'] as String?)
-                      ?.trim()
-                      .isNotEmpty ??
-                  false) ||
-              childAnswerPayload['result'] is Map,
-          'references': childReferences,
-          'toolCallCount': subagentResult.traces
+        final run = AssistantSubagentRunRecord.success(
+          subagentId: subagentId,
+          domainId: subagentDomainId,
+          goal: executionGoal,
+          mode: planMode,
+          problemClass: effectiveSubagentShell.problemClass,
+          shell: effectiveSubagentShell.toJson(),
+          stopPolicy: plan.stopPolicy,
+          searchIntensity: plan.searchIntensity,
+          providerPolicy: plan.providerPolicy,
+          freshnessHoursMax: plan.freshnessHoursMax,
+          answerThreshold: plan.answerThreshold,
+          summary: subagentResult.finalText,
+          userMarkdown: childAnswerView.userMarkdownTrimmed,
+          result: childAnswerView.resultTyped.toJson(),
+          answerReady:
+              childAnswerView.userMarkdownTrimmed.isNotEmpty ||
+              childAnswerView.hasTopLevelResultMap,
+          references: childReferenceMaps,
+          acceptedEvidence: childAcceptedEvidence,
+          rejectedEvidence: childRejectedEvidence,
+          nextAction: childNextAction,
+          missingSlots: childMissingSlots,
+          failureReason: childFailureReason,
+          toolCallCount: subagentResult.traces
               .where((event) => event.type == AssistantTraceEventType.toolStart)
               .length,
-          'modelCallCount': subagentUsage['modelCallCount'],
-          'totalTokens': subagentUsage['totalTokens'],
-          'maxTokensPerCall': subagentUsage['maxTokensPerCall'],
-          'tokenSource': subagentUsage['tokenSource'],
-          'tokenSampleCount': subagentUsage['tokenSampleCount'],
-        };
+          modelCallCount: subagentUsage.modelCallCount,
+          totalTokens: subagentUsage.totalTokens,
+          maxTokensPerCall: subagentUsage.maxTokensPerCall,
+          tokenSource: subagentUsage.tokenSource,
+          tokenSampleCount: subagentUsage.tokenSampleCount,
+          inputTokens: subagentUsage.inputTokens,
+          outputTokens: subagentUsage.outputTokens,
+          usageLedger: subagentUsage.usageLedger,
+        );
         onTraceEvent?.call(
           AssistantTraceEvent(
             type: AssistantTraceEventType.subagentResult,
@@ -3942,29 +3832,25 @@ class LocalPhaseExecutionOwner {
             timestamp: DateTime.now(),
             runId: runId,
             traceId: traceId,
-            data: run,
+            data: run.toJson(),
           ),
         );
         return run;
       } on TimeoutException {
-        final run = <String, dynamic>{
-          'version': 'subagent_result',
-          'subagentId': subagentId,
-          'domainId': subagentDomainId,
-          'status': 'timeout',
-          'goal': goal,
-          'mode': planMode,
-          'problemClass': effectiveSubagentShell.problemClass,
-          'shell': effectiveSubagentShell.toJson(),
-          'stopPolicy': plan.stopPolicy,
-          'searchIntensity': plan.searchIntensity,
-          'providerPolicy': plan.providerPolicy,
-          'freshnessHoursMax': plan.freshnessHoursMax,
-          'answerThreshold': plan.answerThreshold,
-          'summary': '',
-          'references': const <Map<String, dynamic>>[],
-          'errorClass': 'timeout',
-        };
+        final run = AssistantSubagentRunRecord.timeout(
+          subagentId: subagentId,
+          domainId: subagentDomainId,
+          goal: executionGoal,
+          mode: planMode,
+          problemClass: effectiveSubagentShell.problemClass,
+          shell: effectiveSubagentShell.toJson(),
+          stopPolicy: plan.stopPolicy,
+          searchIntensity: plan.searchIntensity,
+          providerPolicy: plan.providerPolicy,
+          freshnessHoursMax: plan.freshnessHoursMax,
+          answerThreshold: plan.answerThreshold,
+          missingSlots: plan.pendingClarifications,
+        );
         onTraceEvent?.call(
           AssistantTraceEvent(
             type: AssistantTraceEventType.subagentError,
@@ -3972,30 +3858,27 @@ class LocalPhaseExecutionOwner {
             timestamp: DateTime.now(),
             runId: runId,
             traceId: traceId,
-            data: run,
+            data: run.toJson(),
           ),
         );
         return run;
       } catch (error) {
-        final run = <String, dynamic>{
-          'version': 'subagent_result',
-          'subagentId': subagentId,
-          'domainId': subagentDomainId,
-          'status': 'failed',
-          'goal': goal,
-          'mode': planMode,
-          'problemClass': effectiveSubagentShell.problemClass,
-          'shell': effectiveSubagentShell.toJson(),
-          'stopPolicy': plan.stopPolicy,
-          'searchIntensity': plan.searchIntensity,
-          'providerPolicy': plan.providerPolicy,
-          'freshnessHoursMax': plan.freshnessHoursMax,
-          'answerThreshold': plan.answerThreshold,
-          'summary': '',
-          'references': const <Map<String, dynamic>>[],
-          'errorClass': 'execution_failed',
-          'errorMessage': error.toString(),
-        };
+        final run = AssistantSubagentRunRecord.failure(
+          subagentId: subagentId,
+          domainId: subagentDomainId,
+          goal: executionGoal,
+          mode: planMode,
+          problemClass: effectiveSubagentShell.problemClass,
+          shell: effectiveSubagentShell.toJson(),
+          stopPolicy: plan.stopPolicy,
+          searchIntensity: plan.searchIntensity,
+          providerPolicy: plan.providerPolicy,
+          freshnessHoursMax: plan.freshnessHoursMax,
+          answerThreshold: plan.answerThreshold,
+          missingSlots: plan.pendingClarifications,
+          failureReason: error.toString(),
+          errorMessage: error.toString(),
+        );
         onTraceEvent?.call(
           AssistantTraceEvent(
             type: AssistantTraceEventType.subagentError,
@@ -4003,7 +3886,7 @@ class LocalPhaseExecutionOwner {
             timestamp: DateTime.now(),
             runId: runId,
             traceId: traceId,
-            data: run,
+            data: run.toJson(),
           ),
         );
         return run;
@@ -4011,7 +3894,8 @@ class LocalPhaseExecutionOwner {
     }
 
     // Parallel dispatch (P2-1): run all subagents concurrently
-    final futures = <Future<Map<String, dynamic>>>[];
+    final futures = <Future<AssistantSubagentRunRecord>>[];
+    if (plans.isEmpty) return const <AssistantSubagentRunRecord>[];
     for (var i = 0; i < plans.length; i++) {
       futures.add(runSingleSubagent(i, plans[i]));
     }
@@ -4028,24 +3912,6 @@ class LocalPhaseExecutionOwner {
         : runtimeTools.where((tool) => toolWhitelist.contains(tool)).toList();
     if (scoped.length <= toolBudget) return scoped;
     return scoped.take(toolBudget).toList(growable: false);
-  }
-
-  int _nonNegativeInt(Object? value, {required int fallback}) {
-    if (value is int && value >= 0) return value;
-    final parsed = int.tryParse(value?.toString() ?? '');
-    if (parsed != null && parsed >= 0) return parsed;
-    return fallback;
-  }
-
-  double _normalizedThreshold(Object? value, {required double fallback}) {
-    final parsed =
-        (value as num?)?.toDouble() ??
-        double.tryParse(value?.toString() ?? '') ??
-        fallback;
-    if (parsed.isNaN) return fallback;
-    if (parsed < 0) return 0.0;
-    if (parsed > 1) return 1.0;
-    return parsed;
   }
 
   SkillExecutionShell _applySubagentStrategyToShell({
@@ -4118,105 +3984,34 @@ class LocalPhaseExecutionOwner {
 
   List<PreferenceFact> _buildSessionPreferenceFacts({
     required AssistantRunRequest request,
-    required Map<String, dynamic> answerPayload,
+    required AssistantAnswerPayloadReadView apv,
     required List<SkillRun> skillRuns,
-    required List<Map<String, dynamic>> uiReferences,
+    required int uiReferenceCount,
   }) {
-    final apvPayload = AssistantAnswerPayloadReadView(answerPayload);
-    final now = DateTime.now().toIso8601String();
-    final facts = <PreferenceFact>[
-      PreferenceFact(
-        factId: 'session_problem_class_$now',
-        scope: 'session',
-        key: 'problemClass',
-        value: skillRuns.isNotEmpty ? skillRuns.first.problemClass : '',
-        source: 'assistant_pipeline_engine',
-        createdAt: now,
-      ),
-      PreferenceFact(
-        factId: 'session_reference_count_$now',
-        scope: 'session',
-        key: 'referenceCount',
-        value: uiReferences.length.toString(),
-        source: 'assistant_pipeline_engine',
-        createdAt: now,
-      ),
-    ];
-    final feedbackHint = (request.contextScopeHint['preferenceFeedback'] ?? '')
+    final feedbackHint =
+        (request.contextScopeHint[AssistantPipelineStateKeys.preferenceFeedback] ??
+            '')
         .toString()
         .trim();
-    if (feedbackHint.isNotEmpty) {
-      facts.add(
-        PreferenceFact(
-          factId: 'session_feedback_$now',
-          scope: 'session',
-          key: 'feedbackHint',
-          value: feedbackHint,
-          source: 'context_scope_hint',
-          createdAt: now,
-        ),
-      );
-    }
-    final followupPrompt = apvPayload.followupPromptTrimmed;
-    if (followupPrompt.isNotEmpty) {
-      facts.add(
-        PreferenceFact(
-          factId: 'session_followup_$now',
-          scope: 'session',
-          key: 'followupPrompt',
-          value: followupPrompt,
-          source: 'answer_payload',
-          createdAt: now,
-        ),
-      );
-    }
-    return facts.where((item) => item.value.isNotEmpty).toList(growable: false);
+    return _preferenceFactService.buildSessionPreferenceFacts(
+      problemClass: skillRuns.isNotEmpty ? skillRuns.first.problemClass : '',
+      uiReferenceCount: uiReferenceCount,
+      feedbackHint: feedbackHint,
+      followupPrompt: apv.followupPromptTrimmed,
+    );
   }
 
   List<PreferenceFact> _buildLongTermPreferenceFacts({
     required AssistantRunRequest request,
-    required Map<String, dynamic> answerPayload,
+    required AssistantAnswerPayloadReadView apv,
     required List<PreferenceFact> sessionFacts,
   }) {
-    final seedFacts =
-        (request.contextScopeHint['longTermPreferenceFacts'] as List?)
-            ?.whereType<Map>()
-            .map(
-              (item) => PreferenceFact.fromJson(item.cast<String, dynamic>()),
-            )
-            .toList(growable: false) ??
-        const <PreferenceFact>[];
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final emergedTags = apv.diagnosticsEmergedTagMaps;
-    if (emergedTags.isEmpty) return seedFacts;
-    final now = DateTime.now().toIso8601String();
-    return <PreferenceFact>[
-          ...seedFacts,
-          ...emergedTags.map(
-            (item) => PreferenceFact(
-              factId: 'long_term_${item['tag'] ?? item['key'] ?? now}_$now',
-              scope: 'long_term',
-              key: (item['tag'] ?? item['key'] ?? '').toString(),
-              value: (item['value'] ?? item['label'] ?? '').toString(),
-              source: 'diagnostics.emergedTags',
-              createdAt: now,
-            ),
-          ),
-          ...sessionFacts
-              .where((item) => item.key == 'feedbackHint')
-              .map(
-                (item) => PreferenceFact(
-                  factId: 'long_term_feedback_${item.factId}',
-                  scope: 'long_term',
-                  key: item.key,
-                  value: item.value,
-                  source: item.source,
-                  createdAt: item.createdAt,
-                ),
-              ),
-        ]
-        .where((item) => item.key.isNotEmpty && item.value.isNotEmpty)
-        .toList(growable: false);
+    return _preferenceFactService.buildLongTermPreferenceFacts(
+      seedFactsRaw:
+          request.contextScopeHint[AssistantPipelineStateKeys.longTermPreferenceFacts],
+      emergedTagMaps: apv.diagnosticsEmergedTagMaps,
+      sessionFacts: sessionFacts,
+    );
   }
 
   AssistantRunResponse _buildBlockedResponse({
@@ -4237,11 +4032,9 @@ class LocalPhaseExecutionOwner {
       },
     );
     final nextAction = contextAssembly.fillTasks
-        .map((task) => '- ${_humanizeFillTask(task)}')
+        .map((task) => '- ${_summarizeFillTask(task)}')
         .join('\n');
-    final finalText =
-        '为保证回答准确，我还缺少少量关键信息。\n'
-        '请先补充：\n$nextAction';
+    final finalText = nextAction.isNotEmpty ? nextAction : 'missing_context';
     final traceEnd = AssistantTraceEvent(
       type: AssistantTraceEventType.lifecycleEnd,
       message: 'agent loop finished (blocked_precondition)',
@@ -4272,7 +4065,7 @@ class LocalPhaseExecutionOwner {
               .toList(growable: false),
           'replanTask': null,
         },
-        'contextSlots': _buildContextSlots(contextAssembly),
+        'contextSlots': buildContextSlots(contextAssembly),
         'fillActions': contextAssembly.fillTasks
             .map((task) => task.toJson())
             .toList(growable: false),
@@ -4292,7 +4085,7 @@ class LocalPhaseExecutionOwner {
         'nextActions': contextAssembly.fillTasks
             .map((task) => task.reason)
             .toList(growable: false),
-        'experimentBucket': _resolveExperimentBucket(
+        'experimentBucket': resolveExperimentBucket(
           const <String, dynamic>{},
           'control',
         ),
@@ -4300,27 +4093,19 @@ class LocalPhaseExecutionOwner {
     );
   }
 
-  String _humanizeFillTask(ContextFillTask task) {
-    switch (task.targetSlot) {
-      case ContextTargetSlot.gpsOrCityLocation:
-        return '你想查询的城市或当前位置（例如：深圳）';
-      case ContextTargetSlot.longtermMemory:
-        return '相关历史背景（例如：你上次提到的时间点或事件）';
-      case ContextTargetSlot.realtimeEvidence:
-        return '实时检索依据（我需要先查到最新信息）';
-      case ContextTargetSlot.answerSufficiency:
-        return '关键补充信息（当前证据不足以直接下结论）';
-      default:
-        return task.reason.trim().isEmpty
-            ? task.targetSlot.wireName
-            : task.reason;
+  String _summarizeFillTask(ContextFillTask task) {
+    final reason = task.reason.trim();
+    if (reason.isNotEmpty) {
+      return reason;
     }
+    return task.targetSlot.wireName;
   }
 
   ProfileUpdateProposal? _buildProfileUpdateProposal({
     required AssistantRunRequest request,
   }) {
-    final proposalRaw = request.contextScopeHint['profileUpdateProposal'];
+    final proposalRaw =
+        request.contextScopeHint[AssistantPipelineStateKeys.profileUpdateProposal];
     if (proposalRaw is Map) {
       final parsed = ProfileUpdateProposal.fromJson(
         proposalRaw.cast<String, dynamic>(),
@@ -4339,7 +4124,9 @@ class LocalPhaseExecutionOwner {
     required List<SkillRun> skillRuns,
     required AggregationState aggregationState,
     required List<SubagentPlan> subagentPlan,
-    required List<Map<String, dynamic>> subagentRuns,
+    required List<AssistantSubagentRunRecord> subagentRuns,
+    required SkillSynthesisInput skillSynthesisInput,
+    required SkillSynthesisOutput skillSynthesisOutput,
     required DialogueRoundScript dialogueRoundScript,
     required List<String> candidateDomains,
     required SkillExecutionShell skillExecutionShell,
@@ -4352,8 +4139,7 @@ class LocalPhaseExecutionOwner {
     Map<String, dynamic> carriedUnderstandingSnapshot =
         const <String, dynamic>{},
     Map<String, dynamic> carriedRetrievalProcessing = const <String, dynamic>{},
-    Map<String, dynamic> carriedHistoricalThinkingSnapshot =
-        const <String, dynamic>{},
+    Map<String, dynamic> carriedHistoricalThinkingSnapshot = const <String, dynamic>{},
     String streamedRetrievalProcessingSummary = '',
     String streamedAnswerReadinessSummary = '',
     Map<String, dynamic> phaseOneRoutingDiagnostics = const <String, dynamic>{},
@@ -4363,3807 +4149,41 @@ class LocalPhaseExecutionOwner {
     void Function(AssistantTraceEvent event)? onTraceEvent,
     String? runId,
     String? traceId,
-  }) async {
-    final parsedAnswerPayload = _parseAnswerPayload(
-      rawFinalText: result.finalText,
-      traces: result.traces,
-    );
-    final toolResults = result.traces
-        .where((event) => event.type == AssistantTraceEventType.toolResult)
-        .map(
-          (event) => <String, dynamic>{
-            'message': event.message,
-            'data': event.data ?? const <String, dynamic>{},
-            'toolCallId': event.toolCallId ?? '',
-          },
-        )
-        .toList(growable: false);
-    final toolErrors = result.traces
-        .where((event) => event.type == AssistantTraceEventType.toolError)
-        .map(
-          (event) => <String, dynamic>{
-            'message': event.message,
-            'data': event.data ?? const <String, dynamic>{},
-            'toolCallId': event.toolCallId ?? '',
-          },
-        )
-        .toList(growable: false);
-    final profileSnapshot = request.userProfileSnapshot;
-    final basicIdentity =
-        (profileSnapshot['basicIdentity'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final ipResidenceProfile =
-        (profileSnapshot['ipResidenceProfile'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final latestUserQuery = request.messages.isNotEmpty
-        ? request.messages.last.content
-        : '';
-    final problemClass = skillExecutionShell.problemClass.trim().isNotEmpty
-        ? skillExecutionShell.problemClass.trim()
-        : (intentGraph.problemClassWireName.isNotEmpty
-              ? intentGraph.problemClassWireName
-              : ProblemClass.general.wireName);
-    final slotSchema = _conversationStateKernel.defaultSlotSchema(
-      domainId: dialogueRoundScript.domainId,
-      problemClass: problemClass,
-      dialogueRoundScript: dialogueRoundScript,
-    );
-    final initialStateDecision = _conversationStateKernel.evaluate(
-      domainId: dialogueRoundScript.domainId,
-      problemClass: problemClass,
+  }) {
+    return buildStructuredResponsePayload(
+      request: request,
+      contextAssembly: contextAssembly,
+      synthesisReadiness: synthesisReadiness,
+      result: result,
       intentGraph: intentGraph,
-      queryTasks: intentGraph.queryTasks,
-      dialogueRoundScript: dialogueRoundScript,
-      aggregationState: aggregationState,
-      answerPayload: parsedAnswerPayload,
-      previousSlotState: previousSlotState,
-      evidenceEvaluation: const EvidenceEvaluationResult(),
-      slotSchema: slotSchema,
-    );
-    final blockingDimensions = _blockingEvidenceDimensions(
-      queryTasks: intentGraph.queryTasks,
-      toolResults: toolResults,
-    );
-    final provisionalLedger = _baselineKernel.buildEvidenceLedger(
-      domainId: dialogueRoundScript.domainId,
-      toolResults: _toolResultsForEvidenceLedger(toolResults),
-      slotState: initialStateDecision.slotState,
-      retrievalPolicy: retrievalPolicy,
-    );
-    final provisionalEvidenceEvaluation = _baselineKernel.evaluateEvidence(
-      ledger: provisionalLedger,
-      evidenceRequired: answerBoundaryPolicy.evidenceRequired,
-      authorityRequired: answerBoundaryPolicy.authorityRequired,
-      freshnessHoursMax: answerBoundaryPolicy.freshnessHoursMax,
-      blockingDimensions: blockingDimensions,
-    );
-    var stateDecision = _conversationStateKernel.evaluate(
-      domainId: dialogueRoundScript.domainId,
-      problemClass: problemClass,
-      intentGraph: intentGraph,
-      queryTasks: intentGraph.queryTasks,
-      dialogueRoundScript: dialogueRoundScript,
-      aggregationState: aggregationState,
-      answerPayload: parsedAnswerPayload,
-      previousSlotState: previousSlotState,
-      evidenceEvaluation: provisionalEvidenceEvaluation,
-      slotSchema: slotSchema,
-    );
-    final evidenceLedger = _baselineKernel.buildEvidenceLedger(
-      domainId: dialogueRoundScript.domainId,
-      toolResults: _toolResultsForEvidenceLedger(toolResults),
-      slotState: stateDecision.slotState,
-      retrievalPolicy: retrievalPolicy,
-    );
-    final evidenceEvaluation = _baselineKernel.evaluateEvidence(
-      ledger: evidenceLedger,
-      evidenceRequired: answerBoundaryPolicy.evidenceRequired,
-      authorityRequired: answerBoundaryPolicy.authorityRequired,
-      freshnessHoursMax: answerBoundaryPolicy.freshnessHoursMax,
-      blockingDimensions: blockingDimensions,
-    );
-    stateDecision = _conversationStateKernel.evaluate(
-      domainId: dialogueRoundScript.domainId,
-      problemClass: problemClass,
-      intentGraph: intentGraph,
-      queryTasks: intentGraph.queryTasks,
-      dialogueRoundScript: dialogueRoundScript,
-      aggregationState: aggregationState,
-      answerPayload: parsedAnswerPayload,
-      previousSlotState: previousSlotState,
-      evidenceEvaluation: evidenceEvaluation,
-      slotSchema: slotSchema,
-    );
-    final effectiveSynthesisReadiness = _mergeStructuredSynthesisReadiness(
-      carried: synthesisReadiness,
-      recomputed: _contextOrchestrator.checkSynthesisReadiness(
-        query: latestUserQuery,
-        finalText: result.finalText,
-        hasToolResult: toolResults.isNotEmpty,
-        problemClass: problemClass,
-        contextAssembly: contextAssembly,
-        intentGraph: intentGraph,
-        queryTasks: intentGraph.queryTasks,
-        boundaryPolicy: answerBoundaryPolicy,
-        evidenceEvaluation: evidenceEvaluation,
-      ),
-    );
-    final groundedSlotState = _contextOrchestrator.bindEvidenceToSlots(
-      slotState: stateDecision.slotState,
-      evidenceLedger: evidenceLedger,
-    );
-    final normalizedStateDecision = _normalizeRenderableAnswerStateDecision(
-      stateDecision: stateDecision,
-      answerPayload: parsedAnswerPayload,
-      synthesisReadiness: effectiveSynthesisReadiness,
-    );
-    final effectiveStateDecision = ConversationStateDecision(
-      nextAction: normalizedStateDecision.nextActionType,
-      finalAnswerMode: normalizedStateDecision.finalAnswerModeType,
-      answerEligibility: normalizedStateDecision.answerEligibilityType,
-      slotState: groundedSlotState,
-      missingCriticalSlots: normalizedStateDecision.missingCriticalSlots,
-      askUser: normalizedStateDecision.askUser,
-      qualityGates: normalizedStateDecision.qualityGates,
-      finalAnswerReady: normalizedStateDecision.finalAnswerReady,
-    );
-    final answerPayload = _applyConversationStateDecision(
-      parsedAnswerPayload,
-      effectiveStateDecision,
-      evidenceEvaluation: evidenceEvaluation,
-      synthesisReadiness: effectiveSynthesisReadiness,
-    );
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final webEvidencePacks = _extractWebEvidencePacks(toolResults);
-    final evidenceGatePassed =
-        evidenceEvaluation.passed ||
-        evidenceEvaluation.status == EvidenceStatus.bounded ||
-        !evidenceEvaluation.evidenceRequired;
-    final modelSelfScore = _asDouble(apv.modelSelfScoreMap['score']);
-    final parseStatus = apv.parseStatusOrDefault('fallback_text');
-    final decisionParseSuccess = parseStatus == 'assistant_turn_parsed';
-    final heuristicFallbackUsed = _usedHeuristicFallback(result.traces);
-    final messageKind = _resolveMessageKind(
-      answerPayload: answerPayload,
-      resultText: result.finalText,
-    );
-    final learningSatisfaction = modelSelfScore >= 85
-        ? 'high'
-        : (modelSelfScore >= 70 ? 'medium' : 'low');
-    final isRealtimeLike = _isRealtimeLikeRequest(
-      fallbackProblemClass: problemClass,
-      answerPayload: answerPayload,
-    );
-    final uiReferences = evidenceLedger.isNotEmpty
-        ? _buildUiReferencesFromLedger(
-            evidenceLedger,
-            toolResults: toolResults,
-            domainId: dialogueRoundScript.domainId,
-            isRealtimeLike: isRealtimeLike,
-          )
-        : _buildUiReferences(toolResults, isRealtimeLike: isRealtimeLike);
-    final understandingSnapshot = _buildUnderstandingSnapshot(
-      raw: _materializedUnderstandingSnapshotRaw(
-        answerPayload: answerPayload,
-        carriedUnderstandingSnapshot: carriedUnderstandingSnapshot,
-        stateDecision: effectiveStateDecision,
-        synthesisReadiness: effectiveSynthesisReadiness,
-      ),
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
-    );
-    var answerProcessingSnapshot = _buildAnswerProcessingSnapshot(
-      raw: _preferStructuredMap(
-        apv.answerProcessingMap,
-        const <String, dynamic>{},
-      ),
-      streamedReadinessSummary: streamedAnswerReadinessSummary,
-      synthesisReadiness: effectiveSynthesisReadiness,
-      stateDecision: effectiveStateDecision,
-      evidenceEvaluation: evidenceEvaluation,
-      evidenceLedger: evidenceLedger,
-      answerPayload: answerPayload,
-    );
-    final historicalThinkingSnapshot = _buildHistoricalThinkingSnapshot(
-      raw: _materializedHistoricalThinkingSnapshotRaw(
-        answerPayload: answerPayload,
-        carriedHistoricalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
-        stateDecision: effectiveStateDecision,
-        synthesisReadiness: effectiveSynthesisReadiness,
-      ),
-      understandingSnapshot: understandingSnapshot,
-    );
-    final explicitDisplayState = parseAssistantDisplayStateFromMap(
-      apv.displayStateMap,
-    );
-    final directMarkdown = _extractUiMarkdown(answerPayload);
-    final preferredMarkdown = directMarkdown.trim();
-    final hasDirectMarkdown = preferredMarkdown.isNotEmpty;
-    final normalizedMarkdown =
-        _normalizeFinalAnswerTemporalAnchors(
-          AssistantDisplayTextResolver.stabilizeFinalAnswerMarkdown(
-            AssistantDisplayTextResolver.normalizeMarkdown(preferredMarkdown),
-          ),
-          intentGraph,
-        );
-    final evidenceLinks = _buildInlineEvidenceLinks(
-      answerPayload: answerPayload,
-      uiReferences: uiReferences,
-      evidenceLedger: evidenceLedger,
-    );
-    final answerEvidenceBindings = evidenceLinks
-        .map(AnswerEvidenceBinding.fromJson)
-        .toList(growable: false);
-    var provisionalDisplayPlainText = _resolveDisplayPlainText(
-      answerPayload: answerPayload,
-      displayMarkdown: normalizedMarkdown,
-    );
-    provisionalDisplayPlainText = AssistantDisplayTextResolver.normalizePlainText(
-      _normalizeFinalAnswerTemporalAnchors(
-        provisionalDisplayPlainText,
-        intentGraph,
-      ),
-    );
-    final renderableAnswerAvailable =
-        hasDirectMarkdown ||
-        explicitDisplayState.answer.blocks.isNotEmpty ||
-        provisionalDisplayPlainText.trim().isNotEmpty;
-    final provisionalFinalAnswerReady =
-        effectiveSynthesisReadiness.ready &&
-        effectiveStateDecision.finalAnswerReady;
-    var retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
-      processing: _preferStructuredMap(
-        apv.retrievalProcessingMap,
-        carriedRetrievalProcessing,
-      ),
-      streamedProcessingSummary: streamedRetrievalProcessingSummary,
-      uiReferences: uiReferences,
-      toolResults: toolResults,
-      synthesisReadiness: effectiveSynthesisReadiness,
-      finalAnswerReady: provisionalFinalAnswerReady,
-    );
-    var retrievalOutcome = _retrievalOutcomeResolver.resolve(
-      policy: answerBoundaryPolicy,
-      retrievalProcessing: retrievalProcessingSnapshot,
-      evidenceEvaluation: evidenceEvaluation,
-      synthesisReadiness: effectiveSynthesisReadiness,
-      queryTasks: intentGraph.queryTasks,
-      toolResults: toolResults,
-      referenceNowIso: intentGraph.queryNormalization.referenceNowIso,
-      timezone: intentGraph.queryNormalization.timezone,
-    );
-    var answerGateDecision = _answerGateResolver.resolve(
-      retrievalOutcome: retrievalOutcome,
-      conversationStateDecision: effectiveStateDecision,
-      renderableAnswer: renderableAnswerAvailable,
-    );
-    if (answerGateDecision.finalAnswerReady != provisionalFinalAnswerReady) {
-      retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
-        processing: _preferStructuredMap(
-          apv.retrievalProcessingMap,
-          carriedRetrievalProcessing,
-        ),
-        streamedProcessingSummary: streamedRetrievalProcessingSummary,
-        uiReferences: uiReferences,
-        toolResults: toolResults,
-        synthesisReadiness: effectiveSynthesisReadiness,
-        finalAnswerReady: answerGateDecision.finalAnswerReady,
-      );
-      retrievalOutcome = _retrievalOutcomeResolver.resolve(
-        policy: answerBoundaryPolicy,
-        retrievalProcessing: retrievalProcessingSnapshot,
-        evidenceEvaluation: evidenceEvaluation,
-        synthesisReadiness: effectiveSynthesisReadiness,
-        queryTasks: intentGraph.queryTasks,
-        toolResults: toolResults,
-        referenceNowIso: intentGraph.queryNormalization.referenceNowIso,
-        timezone: intentGraph.queryNormalization.timezone,
-      );
-      answerGateDecision = _answerGateResolver.resolve(
-        retrievalOutcome: retrievalOutcome,
-        conversationStateDecision: effectiveStateDecision,
-        renderableAnswer: renderableAnswerAvailable,
-      );
-    }
-    final effectiveFinalAnswerReady = answerGateDecision.finalAnswerReady;
-    if (!effectiveFinalAnswerReady &&
-        answerGateDecision.reason.trim().isNotEmpty) {
-      answerProcessingSnapshot = RunArtifactsAnswerProcessing(
-        readinessSummary: answerGateDecision.reason.trim(),
-        keyFacts: answerProcessingSnapshot.keyFacts,
-        missingDimensions: answerGateDecision.missingDimensions.isNotEmpty
-            ? answerGateDecision.missingDimensions
-            : answerProcessingSnapshot.missingDimensions,
-        retrieveMoreReason: answerGateDecision.reason.trim(),
-      );
-    }
-    final renderMode = normalizedMarkdown.trim().isNotEmpty
-        ? 'md_json_single_source'
-        : 'fallback_text';
-    final renderFallbackFlag = renderMode == 'fallback_text';
-    final renderFallbackWire = renderFallbackFlag ? 'fallback_text' : '';
-    if (onTraceEvent != null &&
-        blockedProcessStepId == ProcessStepId.answerOrganization) {
-      ProcessTimelineEmitter(
-        runId: runId ?? '',
-        traceId: traceId ?? '',
-        onTraceEvent: onTraceEvent,
-      ).commit(
-        stepId: ProcessStepId.retrievalProcessing,
-        scope: UserEventScope.aggregation,
-        headline: blockedProcessMessage.trim(),
-        detail: '',
-        phaseId: 'answering',
-        actionCode: 'assess_evidence',
-        reasonCode: 'prepare_delivery',
-        payload: <String, dynamic>{
-          'summary': blockedProcessMessage.trim(),
-          'status': JourneyStageStatus.blocked.wireName,
-          'answerProcessing': RunArtifactsAnswerProcessing(
-            readinessSummary: blockedProcessMessage.trim(),
-            retrieveMoreReason: blockedProcessMessage.trim(),
-          ).toJson(),
-          'nextAction': AssistantNextAction.abort.wireName,
-          'finalAnswerReady': false,
-        },
-      );
-    }
-    final domainPolicyBundle = _buildDomainPolicyBundle(
-      domainId: dialogueRoundScript.domainId,
-      previous: previousDomainPolicyBundle,
-      skillExecutionShell: skillExecutionShell,
-      slotSchema: slotSchema,
-      dialogueRoundScript: dialogueRoundScript,
-      retrievalPolicy: retrievalPolicy,
-      evidenceEvaluation: evidenceEvaluation,
-      stateDecision: effectiveStateDecision,
-    );
-    final effectiveAggregationState = AggregationState(
-      allSkillsReady: aggregationState.allSkillsReady,
-      blockingSkills: aggregationState.blockingSkills,
-      blockedBy: aggregationState.blockedBy,
-      canGivePartialAnswer: aggregationState.canGivePartialAnswer,
-      needExpansion: aggregationState.needExpansion,
-      expansionPlan: aggregationState.expansionPlan,
-      finalAnswerReady: effectiveFinalAnswerReady,
-      finalAnswerMode: effectiveStateDecision.finalAnswerModeType,
-      clarificationNeeded:
-          effectiveStateDecision.nextActionType ==
-              AssistantNextAction.askUser ||
-          effectiveStateDecision.finalAnswerModeType == FinalAnswerMode.clarify,
-      answerOwner: aggregationState.answerOwner,
-      clarificationSource:
-          effectiveStateDecision.askUser.slotId.trim().isNotEmpty == true
-          ? effectiveStateDecision.askUser.slotId.trim()
-          : aggregationState.clarificationSource,
-      dependencies: aggregationState.dependencies,
-    );
-    final effectiveToolMetadataRegistry =
-        _toolMetadataRegistry ?? ToolMetadataRegistry();
-    if (_toolMetadataRegistry == null) {
-      await effectiveToolMetadataRegistry.ensureLoaded();
-    }
-    final effectiveJourneyTraces = result.traces;
-    final journey = _enrichJourneyWithStructuredSnapshots(
-      AssistantJourneyProjector.replay(
-        traces: effectiveJourneyTraces,
-        toolMetadataRegistry: effectiveToolMetadataRegistry,
-        aggregationState: effectiveAggregationState,
-        conversationStateDecision: effectiveStateDecision,
-      ),
-      understandingSnapshot: understandingSnapshot,
-      retrievalProcessing: retrievalProcessingSnapshot,
-      answerProcessing: answerProcessingSnapshot,
-      finalAnswerReady: effectiveFinalAnswerReady,
-    );
-    final effectiveSkillRuns = _finalizeSkillRuns(
       skillRuns: skillRuns,
-      primaryDomainId: dialogueRoundScript.domainId,
-      slotState: groundedSlotState,
-      answerReady: effectiveFinalAnswerReady,
-      stopReason: effectiveStateDecision.finalAnswerModeWireName,
-      references: uiReferences,
-      resultSummary: _extractUiSummary(
-        answerPayload,
-        provisionalDisplayPlainText,
-      ),
-    );
-    final resolvedAnswerEligibility =
-        answerGateDecision.answerEligibility.trim().isNotEmpty
-        ? answerGateDecision.answerEligibility
-        : (effectiveFinalAnswerReady
-              ? effectiveStateDecision.answerEligibilityWireName
-              : AnswerEligibility.blocked.wireName);
-    final answerOutcome = AnswerOutcomeSnapshot(
-      slotState: groundedSlotState,
-      evidenceLedger: evidenceLedger,
-      answerEvidenceBindings: answerEvidenceBindings,
-      evidenceEvaluation: evidenceEvaluation,
-      aggregationState: effectiveAggregationState,
-      synthesisReadiness: effectiveSynthesisReadiness,
-      retrievalOutcome: retrievalOutcome,
-      answerGateDecision: answerGateDecision,
-      conversationStateDecision: effectiveStateDecision,
-      domainPolicyBundle: domainPolicyBundle,
-      journey: journey,
-    );
-    final providerReasoningContinuation = _extractProviderReasoningContinuation(
-      result.traces,
-    );
-    final projectedProcessTimeline = AssistantProcessTimelineProjector.replay(
-      traces: effectiveJourneyTraces,
-    );
-    final processTimeline = _applyBlockedProcessStage(
-      normalizeProcessTimeline(projectedProcessTimeline),
+      aggregationState: aggregationState,
+      subagentPlan: subagentPlan,
+      subagentRuns: subagentRuns,
+      skillSynthesisInput: skillSynthesisInput,
+      skillSynthesisOutput: skillSynthesisOutput,
+      dialogueRoundScript: dialogueRoundScript,
+      candidateDomains: candidateDomains,
+      skillExecutionShell: skillExecutionShell,
+      templateVersionUsed: templateVersionUsed,
+      domainCatalogVersion: domainCatalogVersion,
+      sessionId: sessionId,
+      retrievalPolicy: retrievalPolicy,
+      answerBoundaryPolicy: answerBoundaryPolicy,
+      previousSlotState: previousSlotState,
+      carriedUnderstandingSnapshot: carriedUnderstandingSnapshot,
+      carriedRetrievalProcessing: carriedRetrievalProcessing,
+      carriedHistoricalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
+      streamedRetrievalProcessingSummary: streamedRetrievalProcessingSummary,
+      streamedAnswerReadinessSummary: streamedAnswerReadinessSummary,
+      phaseOneRoutingDiagnostics: phaseOneRoutingDiagnostics,
+      previousDomainPolicyBundle: previousDomainPolicyBundle,
       blockedProcessStepId: blockedProcessStepId,
       blockedProcessMessage: blockedProcessMessage,
-      understandingSnapshot: understandingSnapshot,
-      retrievalProcessingSnapshot: retrievalProcessingSnapshot,
-      answerProcessingSnapshot: answerProcessingSnapshot,
+      onTraceEvent: onTraceEvent,
+      runId: runId,
+      traceId: traceId,
     );
-    final displayState = buildAssistantDisplayState(
-      explicitState: explicitDisplayState,
-      processTimeline: processTimeline,
-      understandingSnapshot: understandingSnapshot,
-      retrievalProcessing: retrievalProcessingSnapshot,
-      answerProcessing: answerProcessingSnapshot,
-      answerMarkdown: normalizedMarkdown,
-      answerPlainText: provisionalDisplayPlainText,
-      finalAnswerReady: effectiveFinalAnswerReady,
-    );
-    final displayMarkdown = renderAnswerBlocksToMarkdown(
-      displayState.answer.blocks,
-    );
-    final displayPlainText = renderAnswerBlocksToPlainText(
-      displayState.answer.blocks,
-    );
-    final runArtifacts = RunArtifacts(
-      machineEnvelope: result.finalText,
-      displayMarkdown: displayMarkdown.trim(),
-      displayPlainText: displayPlainText,
-      displayState: displayState,
-      journey: journey,
-      processTimeline: processTimeline,
-      understandingSnapshot: understandingSnapshot,
-      answerProcessing: answerProcessingSnapshot,
-      historicalThinkingSnapshot: historicalThinkingSnapshot,
-      retrievalProcessing: retrievalProcessingSnapshot,
-      evidenceLedger: evidenceLedger,
-      answerEvidenceBindings: answerEvidenceBindings,
-      slotState: groundedSlotState,
-      answerDecision:
-          RunArtifactsAnswerDecisionPartitioned.fromWireMap(<String, dynamic>{
-            ...apv.decisionMap,
-            ...effectiveStateDecision.toDecisionMap(),
-            ...answerGateDecision.toJson(),
-            'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
-                ? answerGateDecision.nextAction
-                : effectiveStateDecision.nextActionWireName,
-            'answerEligibility': resolvedAnswerEligibility,
-            'finalAnswerReady': effectiveFinalAnswerReady,
-            'evidenceSummary': evidenceEvaluation.summary,
-          }),
-      diagnostics:
-          RunArtifactsDiagnosticsPartitioned.fromWireMap(<String, dynamic>{
-            'domainId': dialogueRoundScript.domainId,
-            'renderMode': displayState.answer.blocks.isNotEmpty
-                ? 'typed_display_state'
-                : renderMode,
-            'renderFallback': renderFallbackWire,
-            'answerEligibility': resolvedAnswerEligibility,
-            'qualityGates': effectiveStateDecision.qualityGatesData,
-            'evidenceEvaluation': evidenceEvaluation.toJson(),
-            'answerBoundaryPolicy': answerBoundaryPolicy.toJson(),
-            ...apv.diagnosticsMap,
-          }),
-      domainPolicyBundle: domainPolicyBundle,
-    );
-    final sessionPreferenceFacts = _buildSessionPreferenceFacts(
-      request: request,
-      answerPayload: answerPayload,
-      skillRuns: effectiveSkillRuns,
-      uiReferences: uiReferences,
-    );
-    final longTermPreferenceFacts = _buildLongTermPreferenceFacts(
-      request: request,
-      answerPayload: answerPayload,
-      sessionFacts: sessionPreferenceFacts,
-    );
-    final enrichedAnswerPayload = <String, dynamic>{
-      ...answerPayload,
-      'contractId': apv.hasNonEmptyContractId
-          ? apv.contractIdTrimmed
-          : kAssistantTurnCurrentContractId,
-      'intentGraph': intentGraph.toJson(),
-      'messageKind': messageKind,
-      'subagentPlan': subagentPlan
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'skillRuns': effectiveSkillRuns
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'aggregationState': effectiveAggregationState.toJson(),
-      'evidenceEvaluation': evidenceEvaluation.toJson(),
-      'slotState': groundedSlotState.toJson(),
-      'missingContextSlots': effectiveStateDecision.missingCriticalSlots,
-      'understandingSnapshot': understandingSnapshot.toJson(),
-      'processTimeline': processTimeline
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'answerProcessing': answerProcessingSnapshot.toJson(),
-      'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
-      'retrievalProcessing': retrievalProcessingSnapshot.toJson(),
-      'displayState': displayState.toJson(),
-      'userMarkdown': displayMarkdown,
-      'result': <String, dynamic>{...apv.resultMap, 'text': displayPlainText},
-      'askUser': apv.askUserMap,
-      'decision': <String, dynamic>{
-        ...effectiveStateDecision.toDecisionMap(),
-        ...answerGateDecision.toJson(),
-        ...apv.decisionMap,
-        'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
-            ? answerGateDecision.nextAction
-            : effectiveStateDecision.nextActionWireName,
-        'answerEligibility': resolvedAnswerEligibility,
-        'finalAnswerReady': effectiveFinalAnswerReady,
-      },
-      'phaseId': apv.hasNonEmptyPhaseId
-          ? apv.phaseIdTrimmed
-          : PlannerPhaseId.answering.wireName,
-      'actionCode': apv.hasNonEmptyActionCode
-          ? apv.actionCodeTrimmed
-          : PlannerActionCode.composeAnswer.wireName,
-      'reasonCode': apv.hasNonEmptyReasonCode
-          ? apv.reasonCodeTrimmed
-          : (answerGateDecision.reasonCode.trim().isNotEmpty
-                ? answerGateDecision.reasonCode.trim()
-                : (effectiveFinalAnswerReady
-                      ? PlannerReasonCode.evidenceReady.wireName
-                      : PlannerReasonCode.needMoreEvidence.wireName)),
-      'journey': journey.toJson(),
-      'sessionPreferenceFacts': sessionPreferenceFacts
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'longTermPreferenceFacts': longTermPreferenceFacts
-          .map((item) => item.toJson())
-          .toList(growable: false),
-    };
-    return <String, dynamic>{
-      ...enrichedAnswerPayload,
-      'domainId': dialogueRoundScript.domainId,
-      'problemShape': intentGraph.problemShape,
-      'primarySkill': intentGraph.primarySkill,
-      'secondarySkills': intentGraph.secondarySkills,
-      'intentGraph': intentGraph.toJson(),
-      'candidateDomains': candidateDomains,
-      'templateVersionUsed': templateVersionUsed,
-      'phaseOneRoutingDiagnostics': phaseOneRoutingDiagnostics,
-      'domainCatalogVersion': domainCatalogVersion,
-      'effectiveSessionId': sessionId,
-      'activeTopicTitle': _sessionManager.topicTitleOf(sessionId),
-      'contextAssembly': contextAssembly.contextEnvelope,
-      'answerOutcome': answerOutcome.toJson(),
-      'domainPrecheck': <String, dynamic>{
-        'canEnterDomain': contextAssembly.canEnterDomain,
-        'fillTaskCount': contextAssembly.fillTasks.length,
-      },
-      'domainResults': <String, dynamic>{
-        'toolResults': toolResults,
-        'toolErrors': toolErrors,
-      },
-      'synthesisReadiness': <String, dynamic>{
-        'ready': effectiveSynthesisReadiness.ready,
-        'reason': effectiveSynthesisReadiness.reason,
-      },
-      'webEvidencePacks': webEvidencePacks,
-      'webEvidenceGate': <String, dynamic>{
-        'passed': evidenceGatePassed,
-        'evaluation': evidenceEvaluation.toJson(),
-        'thresholds': <String, dynamic>{
-          'coverageMin': 0.7,
-          'confidenceMin': 0.65,
-          'freshnessHoursMax': answerBoundaryPolicy.freshnessHoursMax,
-          'authorityRequired': answerBoundaryPolicy.authorityRequired,
-        },
-      },
-      'fillTasks': <String, dynamic>{
-        'contextFillTasks': contextAssembly.fillTasks
-            .map((task) => task.toJson())
-            .toList(growable: false),
-        'replanTask': effectiveSynthesisReadiness.replanTask?.toJson(),
-      },
-      'contextSlots': _buildContextSlots(contextAssembly),
-      'dialogueRuntime': dialogueRoundScript.toJson(),
-      'roundTrace': _buildRoundTrace(
-        request: request,
-        result: result,
-        dialogueRoundScript: dialogueRoundScript,
-      ),
-      'fillActions': <Map<String, dynamic>>[
-        ...contextAssembly.fillTasks.map((task) => task.toJson()),
-        if (effectiveSynthesisReadiness.replanTask != null)
-          effectiveSynthesisReadiness.replanTask!.toJson(),
-      ],
-      'missingCriticalSlots': effectiveStateDecision.missingCriticalSlots,
-      'answerEligibility': resolvedAnswerEligibility,
-      'conversationStateDecision': <String, dynamic>{
-        ...effectiveStateDecision.toDecisionMap(),
-        'nextAction': answerGateDecision.nextAction.trim().isNotEmpty
-            ? answerGateDecision.nextAction
-            : effectiveStateDecision.nextActionWireName,
-        'answerEligibility': resolvedAnswerEligibility,
-        'finalAnswerReady': effectiveFinalAnswerReady,
-      },
-      'finalAnswerMode': effectiveStateDecision.finalAnswerModeWireName,
-      'nextActions': _buildNextActions(
-        contextAssembly,
-        effectiveSynthesisReadiness,
-      ),
-      'experimentBucket': _resolveExperimentBucket(
-        request.contextScopeHint,
-        'control',
-      ),
-      'userProfileSnapshot': profileSnapshot,
-      'profileVersion': (profileSnapshot['profileVersion'] ?? '').toString(),
-      'snapshotAt': DateTime.now().toIso8601String(),
-      'confidenceByFacet':
-          (profileSnapshot['confidenceByFacet'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'sourceRuns':
-          (profileSnapshot['sourceRuns'] as List?)?.whereType<String>().toList(
-            growable: false,
-          ) ??
-          const <String>[],
-      'basicIdentity': basicIdentity,
-      'ipResidenceProfile': ipResidenceProfile,
-      'retrievalFeedback': <String, dynamic>{
-        'hasToolResult': toolResults.isNotEmpty,
-        'toolResultCount': toolResults.length,
-        'toolErrorCount': toolErrors.length,
-        // Layer 4: 传递搜索质量分和轮次历史，供反思重写和 gap 补查使用
-        'qualityScore': () {
-          for (final r in toolResults.reversed) {
-            final data = r['data'];
-            if (data is Map) {
-              final qs = (data['qualityScore'] as num?)?.toDouble();
-              if (qs != null) return qs;
-            }
-          }
-          return 0.0;
-        }(),
-        'roundTraces': toolResults
-            .where(
-              (r) =>
-                  r['tool'] == 'search' ||
-                  r['tool'] == 'web_search' ||
-                  r['stepId'] != null,
-            )
-            .map(
-              (r) => <String, dynamic>{
-                'stepId': r['stepId'] ?? '',
-                'tool': r['tool'] ?? '',
-                'success': r['success'] ?? false,
-                'qualityScore':
-                    (r['data'] is Map
-                        ? (r['data']['qualityScore'] as num?)?.toDouble()
-                        : null) ??
-                    0.0,
-                'authorityScore':
-                    (r['data'] is Map
-                        ? (r['data']['authorityScore'] as num?)?.toDouble()
-                        : null) ??
-                    0.0,
-                'totalReferences':
-                    (r['data'] is Map
-                        ? (r['data']['totalReferences'] as int?)
-                        : null) ??
-                    0,
-              },
-            )
-            .toList(growable: false),
-        'eligible':
-            toolResults.isNotEmpty &&
-            toolResults.any((r) {
-              if (r['success'] != true) return false;
-              final qs =
-                  (r['data'] is Map
-                      ? (r['data']['qualityScore'] as num?)?.toDouble()
-                      : null) ??
-                  0.0;
-              return qs >= 0.35;
-            }),
-        'gaps': toolResults.isEmpty
-            ? <String>['no_search_result']
-            : toolResults
-                  .where((r) {
-                    final qs =
-                        (r['data'] is Map
-                            ? (r['data']['qualityScore'] as num?)?.toDouble()
-                            : null) ??
-                        0.0;
-                    return r['success'] != true || qs < 0.35;
-                  })
-                  .map((r) => 'low_quality_result:${r['stepId'] ?? ''}')
-                  .toList(growable: false),
-      },
-      'learningSignals': <String, dynamic>{
-        'profileTagDelta': apv.diagnosticsEmergedTagMaps,
-        'retrievalStrategyOutcome': 'not_generated',
-        'answerFormatOutcome': 'not_generated',
-        'satisfactionProxy': learningSatisfaction,
-        'modelSelfScore': modelSelfScore,
-      },
-      'reasoningBasis': apv.reasoningBasisMaps,
-      'selfCheck': _mergeSelfCheck(
-        answerPayload: answerPayload,
-        answerEligible: effectiveFinalAnswerReady,
-        synthesisReason: effectiveSynthesisReadiness.reason,
-        evidenceGatePassed: evidenceGatePassed,
-      ),
-      'diagnostics': <String, dynamic>{
-        ...apv.diagnosticsMap,
-        'synthesisReason': effectiveSynthesisReadiness.reason,
-        'toolResultCount': toolResults.length,
-        'toolErrorCount': toolErrors.length,
-        'webEvidenceGatePassed': evidenceGatePassed,
-        'qualityGates': effectiveStateDecision.qualityGatesData,
-      },
-      'understandingSnapshot': understandingSnapshot.toJson(),
-      'answerProcessing': answerProcessingSnapshot.toJson(),
-      'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
-      'retrievalProcessing': retrievalProcessingSnapshot.toJson(),
-      assistantRetrievalOutcomeField: retrievalOutcome.toJson(),
-      assistantAnswerGateDecisionField: answerGateDecision.toJson(),
-      if (providerReasoningContinuation.isNotEmpty)
-        'providerReasoningContinuation': providerReasoningContinuation,
-      'answerPayload': enrichedAnswerPayload,
-      'decision':
-          enrichedAnswerPayload['decision'] ?? const <String, dynamic>{},
-      'messageKind': messageKind,
-      'toolObservations': <Map<String, dynamic>>[
-        ...toolResults.map(
-          (item) => <String, dynamic>{
-            'ok': true,
-            'message': item['message'] ?? '',
-            'data': item['data'] ?? const <String, dynamic>{},
-            'toolCallId': item['toolCallId'] ?? '',
-          },
-        ),
-        ...toolErrors.map(
-          (item) => <String, dynamic>{
-            'ok': false,
-            'message': item['message'] ?? '',
-            'data': item['data'] ?? const <String, dynamic>{},
-            'toolCallId': item['toolCallId'] ?? '',
-          },
-        ),
-      ],
-      'subagentPlan': subagentPlan
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'subagentRuns': subagentRuns,
-      'skillRuns': effectiveSkillRuns
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'aggregationState': effectiveAggregationState.toJson(),
-      'sessionPreferenceFacts': sessionPreferenceFacts
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'longTermPreferenceFacts': longTermPreferenceFacts
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'renderMode': renderMode,
-      'qualityMetrics': <String, dynamic>{
-        'decisionParseSuccess': decisionParseSuccess,
-        'renderFallback': renderFallbackFlag,
-        'heuristicFallbackUsed': heuristicFallbackUsed,
-        'evidenceSufficient': retrievalOutcome.retrievalReady,
-        'freshnessSatisfied':
-            retrievalOutcome.freshnessSatisfied ||
-            !retrievalOutcome.freshnessRequired,
-        'criticalSlotsResolved':
-            effectiveStateDecision.missingCriticalSlots.isEmpty,
-        'answerGateReady': effectiveFinalAnswerReady,
-        'answerGateReasonCode': answerGateDecision.reasonCode,
-      },
-      'contractId': kAssistantTurnCurrentContractId,
-      '_meta': EngineResponseMeta(
-        contractId: kAssistantTurnCurrentContractId,
-        domainId: dialogueRoundScript.domainId,
-        stateId: dialogueRoundScript.currentStateId,
-        detectedEvent: dialogueRoundScript.detectedEvent,
-        latencyMs: DateTime.now()
-            .difference(
-              result.traces.isEmpty
-                  ? DateTime.now()
-                  : result.traces.first.timestamp,
-            )
-            .inMilliseconds,
-      ).toJson(),
-      'journey': journey.toJson(),
-      'runArtifacts': runArtifacts.toJson(),
-      'uiTimeline': <Map<String, dynamic>>[
-        for (final run in subagentRuns)
-          <String, dynamic>{
-            'event': 'subagent_progress',
-            'subagentId': (run['subagentId'] as String?) ?? '',
-            'status': (run['status'] as String?) ?? 'unknown',
-          },
-      ],
-      'uiReferences': uiReferences,
-      'evidenceLedger': evidenceLedger
-          .map((entry) => entry.toJson())
-          .toList(growable: false),
-      'domainPolicyBundle': domainPolicyBundle.toJson(),
-      'uiActions': <Map<String, dynamic>>[
-        <String, dynamic>{'id': 'regenerate'},
-        <String, dynamic>{'id': 'brief'},
-        <String, dynamic>{'id': 'detailed'},
-        <String, dynamic>{'id': 'switch_model'},
-      ],
-      'uiUsageStats': _buildUiUsageStats(
-        traces: result.traces,
-        request: request,
-        subagentRuns: subagentRuns,
-        outputText: result.finalText,
-      ),
-      'profileUpdateProposal': _buildProfileUpdateProposal(
-        request: request,
-      )?.toJson(),
-    };
-  }
-
-  static final RegExp _xmlToolCallTagRe = RegExp(
-    r'<tool_call>[\s\S]*?</tool_call>|'
-    r'<function=[^>]+>[\s\S]*?</function>|'
-    r'<tool_call>|</tool_call>|'
-    r'<function=[^>]*>|</function>|'
-    r'<parameter=[^>]*>[\s\S]*?</parameter>|'
-    r'</?parameter[^>]*>',
-  );
-
-  Map<String, dynamic> _buildUiUsageStats({
-    required List<AssistantTraceEvent> traces,
-    required AssistantRunRequest request,
-    required List<Map<String, dynamic>> subagentRuns,
-    required String outputText,
-  }) {
-    final inputText = request.messages.map((item) => item.content).join('\n');
-    final mainUsage = _buildUsageStatsFromTraces(
-      traces: traces,
-      fallbackInputText: inputText,
-      fallbackOutputText: outputText,
-    );
-    final mainLedger =
-        (mainUsage['usageLedger'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    final mainCalls = (mainUsage['modelCallCount'] as num?)?.toInt() ?? 0;
-    final mainTokens = (mainUsage['totalTokens'] as num?)?.toInt() ?? 0;
-    final mainMaxTokens = (mainUsage['maxTokensPerCall'] as num?)?.toInt() ?? 0;
-    final mainTokenSamples =
-        (mainUsage['tokenSampleCount'] as num?)?.toInt() ?? 0;
-    final mainInputTokens = (mainUsage['inputTokens'] as num?)?.toInt() ?? 0;
-    final mainOutputTokens = (mainUsage['outputTokens'] as num?)?.toInt() ?? 0;
-
-    var subagentCalls = 0;
-    var subagentTokens = 0;
-    var subagentMaxTokens = 0;
-    var subagentTokenSamples = 0;
-    var subagentInputTokens = 0;
-    var subagentOutputTokens = 0;
-    final usageLedger = <Map<String, dynamic>>[...mainLedger];
-    for (final run in subagentRuns) {
-      subagentCalls += _safeNonNegativeInt(run['modelCallCount']);
-      subagentTokens += _safeNonNegativeInt(run['totalTokens']);
-      final maxTokens = _safeNonNegativeInt(run['maxTokensPerCall']);
-      if (maxTokens > subagentMaxTokens) subagentMaxTokens = maxTokens;
-      subagentTokenSamples += _safeNonNegativeInt(run['tokenSampleCount']);
-      subagentInputTokens += _safeNonNegativeInt(run['inputTokens']);
-      subagentOutputTokens += _safeNonNegativeInt(run['outputTokens']);
-      final subagentLedger =
-          (run['usageLedger'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      usageLedger.addAll(subagentLedger);
-    }
-
-    final tokenSampleCount = mainTokenSamples + subagentTokenSamples;
-    final modelCalls = math.max(1, mainCalls + subagentCalls);
-    final totalTokens = mainTokens + subagentTokens;
-    final maxTokens = math.max(mainMaxTokens, subagentMaxTokens);
-
-    return <String, dynamic>{
-      'modelCallCount': modelCalls,
-      'totalTokens': totalTokens,
-      'maxTokensPerCall': maxTokens,
-      'inputTokens': mainInputTokens + subagentInputTokens,
-      'outputTokens': mainOutputTokens + subagentOutputTokens,
-      'tokenSource': tokenSampleCount > 0 ? 'trace_or_subagent' : 'estimated',
-      'tokenSampleCount': tokenSampleCount,
-      if (usageLedger.isNotEmpty) 'usageLedger': usageLedger,
-    };
-  }
-
-  Map<String, dynamic> _buildUsageStatsFromTraces({
-    required List<AssistantTraceEvent> traces,
-    required String fallbackInputText,
-    required String fallbackOutputText,
-  }) {
-    final usageLedger = <Map<String, dynamic>>[];
-    for (final trace in traces) {
-      final entries =
-          (trace.data?['usageEntries'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      if (entries.isEmpty) continue;
-      usageLedger.addAll(entries);
-    }
-    if (usageLedger.isNotEmpty) {
-      var totalTokens = 0;
-      var maxTokens = 0;
-      var inputTokens = 0;
-      var outputTokens = 0;
-      final sources = <String>{};
-      for (final entry in usageLedger) {
-        final total = _safeNonNegativeInt(
-          entry['totalTokens'] ?? entry['tokenUsage'],
-        );
-        final input = _safeNonNegativeInt(entry['inputTokens']);
-        final output = _safeNonNegativeInt(entry['outputTokens']);
-        totalTokens += total;
-        inputTokens += input;
-        outputTokens += output;
-        if (total > maxTokens) maxTokens = total;
-        final source = (entry['source'] as String?)?.trim() ?? '';
-        if (source.isNotEmpty) {
-          sources.add(source);
-        }
-      }
-      return <String, dynamic>{
-        'modelCallCount': usageLedger.length,
-        'totalTokens': totalTokens,
-        'maxTokensPerCall': maxTokens,
-        'inputTokens': inputTokens,
-        'outputTokens': outputTokens,
-        'tokenSource': sources.isEmpty
-            ? 'usage_ledger'
-            : (sources.length == 1 ? sources.first : 'mixed_ledger'),
-        'tokenSampleCount': usageLedger.length,
-        'usageLedger': usageLedger,
-      };
-    }
-
-    int totalTokensFromTrace = 0;
-    int maxTokensFromTrace = 0;
-    var tokenSampleCount = 0;
-
-    void collectTokenValues(Object? node) {
-      if (node is Map) {
-        for (final entry in node.entries) {
-          final key = entry.key.toString().toLowerCase();
-          final value = entry.value;
-          if (value is num &&
-              (key.contains('token') ||
-                  key.contains('input_tokens') ||
-                  key.contains('output_tokens'))) {
-            final token = value.toInt();
-            if (token > 0) {
-              tokenSampleCount += 1;
-              totalTokensFromTrace += token;
-              if (token > maxTokensFromTrace) maxTokensFromTrace = token;
-            }
-          } else {
-            collectTokenValues(value);
-          }
-        }
-      } else if (node is List) {
-        for (final item in node) {
-          collectTokenValues(item);
-        }
-      }
-    }
-
-    for (final trace in traces) {
-      collectTokenValues(trace.data);
-    }
-
-    final estimatedInputTokens = _estimateTokenCount(fallbackInputText);
-    final estimatedOutputTokens = _estimateTokenCount(fallbackOutputText);
-    final estimatedTotalTokens = estimatedInputTokens + estimatedOutputTokens;
-    final estimatedMaxTokens = math.max(
-      estimatedInputTokens,
-      estimatedOutputTokens,
-    );
-
-    final totalTokens = tokenSampleCount > 0
-        ? totalTokensFromTrace
-        : estimatedTotalTokens;
-    final maxTokens = tokenSampleCount > 0
-        ? maxTokensFromTrace
-        : estimatedMaxTokens;
-    final modelCalls = _countModelCallsFromTraces(traces);
-
-    return <String, dynamic>{
-      'modelCallCount': modelCalls,
-      'totalTokens': totalTokens,
-      'maxTokensPerCall': maxTokens,
-      'tokenSource': tokenSampleCount > 0 ? 'trace' : 'estimated',
-      'tokenSampleCount': tokenSampleCount,
-    };
-  }
-
-  int _countModelCallsFromTraces(List<AssistantTraceEvent> traces) {
-    final calls = traces
-        .where(
-          (trace) =>
-              trace.type == AssistantTraceEventType.lifecycleStart &&
-              (trace.message.startsWith('llm request iteration ') ||
-                  trace.message.startsWith('llm request synthesis ')),
-        )
-        .length;
-    return math.max(1, calls);
-  }
-
-  int _estimateTokenCount(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return 0;
-    return (trimmed.length / 4).ceil();
-  }
-
-  int _safeNonNegativeInt(Object? value) {
-    if (value is num) return value.toInt() < 0 ? 0 : value.toInt();
-    final parsed = int.tryParse(value?.toString() ?? '');
-    if (parsed == null || parsed < 0) return 0;
-    return parsed;
-  }
-
-  List<Map<String, dynamic>> _buildUiReferences(
-    List<Map<String, dynamic>> toolResults, {
-    required bool isRealtimeLike,
-  }) {
-    final refs = <Map<String, dynamic>>[];
-    final seen = <String>{};
-    var totalSearched = 0;
-    for (final item in toolResults) {
-      final toolName = (item['toolName'] as String?)?.trim() ?? '';
-      if (!_toolContributesUiReferences(
-        toolName,
-        allowLocationContext: isRealtimeLike,
-      )) {
-        continue;
-      }
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      // Layer 5: 统计总搜索量
-      final searchTotal = (data['totalReferences'] as int?) ?? 0;
-      if (searchTotal > 0) totalSearched += searchTotal;
-      final rawRefs =
-          (data['references'] as List?)
-              ?.whereType<Map>()
-              .map((ref) => ref.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final authorityDomains =
-          (data['authorityDomains'] as List?)?.cast<String>() ?? <String>[];
-      for (final ref in rawRefs) {
-        final url = (ref['url'] as String?)?.trim() ?? '';
-        if (url.isEmpty || seen.contains(url)) continue;
-        final parsed = Uri.tryParse(url);
-        final sourceLabel =
-            (ref['source'] as String?)?.trim().isNotEmpty == true
-            ? (ref['source'] as String).trim()
-            : ((ref['sourceHost'] as String?)?.trim().isNotEmpty == true
-                  ? (ref['sourceHost'] as String).trim()
-                  : parsed?.host ?? '');
-        final sourceHost =
-            (ref['sourceHost'] as String?)?.trim().isNotEmpty == true
-            ? (ref['sourceHost'] as String).trim()
-            : parsed?.host ?? '';
-        final title = (ref['title'] as String?)?.trim() ?? '';
-        final snippet = (ref['snippet'] as String?)?.trim() ?? '';
-        final sourceTier = (ref['sourceTier'] as String?)?.trim() ?? '';
-        final authorityScore =
-            (ref['authorityScore'] as num?)?.toDouble() ?? 0.0;
-        final freshnessHours =
-            (ref['freshnessHours'] as num?)?.toDouble() ?? 0.0;
-        final isCited =
-            authorityDomains.isNotEmpty &&
-            authorityDomains.any(
-              (d) => sourceHost == d || sourceHost.endsWith('.$d'),
-            );
-        if (isRealtimeLike &&
-            !_isStrictRealtimeReference(
-              title: title,
-              source: sourceLabel,
-              snippet: snippet,
-              sourceTier: sourceTier,
-              authorityScore: authorityScore,
-              freshnessHours: freshnessHours,
-              isAuthoritative: isCited,
-            )) {
-          continue;
-        }
-        final dedupeKey = '${sourceLabel.toLowerCase()}|${title.toLowerCase()}';
-        if (seen.contains(dedupeKey)) continue;
-        refs.add(<String, dynamic>{
-          'title': title.isNotEmpty ? title : sourceLabel,
-          'url': url,
-          'source': sourceLabel,
-          'provider': (ref['provider'] as String?)?.trim() ?? '',
-          'snippet': snippet,
-          'cited': isCited,
-          'authorityScore': isCited ? 1.0 : 0.0,
-        });
-        seen.add(url);
-        seen.add(dedupeKey);
-      }
-    }
-    refs.sort((a, b) {
-      final citedDelta =
-          ((b['cited'] == true) ? 1 : 0) - ((a['cited'] == true) ? 1 : 0);
-      if (citedDelta != 0) return citedDelta;
-      final authorityDelta =
-          (((b['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round() -
-          (((a['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round();
-      if (authorityDelta != 0) return authorityDelta;
-      return 0;
-    });
-    final curatedRefs = isRealtimeLike
-        ? refs
-              .where((item) => item['cited'] == true)
-              .take(4)
-              .toList(growable: false)
-        : refs.take(8).toList(growable: false);
-    // Layer 5: 总搜索资料数注入到第一个参考资料的元数据中，供 UI 展示"共检索 N 篇资料，以下为参考来源"
-    if (curatedRefs.isNotEmpty && totalSearched > 0) {
-      curatedRefs.first['_totalSearched'] = totalSearched;
-    }
-    return curatedRefs;
-  }
-
-  List<Map<String, dynamic>> _buildInlineEvidenceLinks({
-    required Map<String, dynamic> answerPayload,
-    required List<Map<String, dynamic>> uiReferences,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-  }) {
-    return _buildAnswerEvidenceBindings(
-      answerPayload: answerPayload,
-      uiReferences: uiReferences,
-      evidenceLedger: evidenceLedger,
-    ).map((item) => item.toJson()).toList(growable: false);
-  }
-
-  List<AnswerEvidenceBinding> _buildAnswerEvidenceBindings({
-    required Map<String, dynamic> answerPayload,
-    required List<Map<String, dynamic>> uiReferences,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-  }) {
-    final bindings = <AnswerEvidenceBinding>[];
-    final seenKeys = <String>{};
-    final rawEvidence = AssistantAnswerPayloadReadView(
-      answerPayload,
-    ).evidenceMaps;
-    for (final item in rawEvidence) {
-      final candidate = _normalizeInlineEvidenceBinding(
-        item: item,
-        uiReferences: uiReferences,
-        evidenceLedger: evidenceLedger,
-        index: bindings.length + 1,
-      );
-      if (candidate == null) continue;
-      final dedupeKey = candidate.evidenceId.isNotEmpty
-          ? candidate.evidenceId
-          : candidate.url;
-      if (dedupeKey.isEmpty || !seenKeys.add(dedupeKey)) continue;
-      bindings.add(candidate);
-      if (bindings.length >= 4) break;
-    }
-    if (bindings.isEmpty) {
-      for (final entry in evidenceLedger.take(2)) {
-        final dedupeKey = entry.evidenceId.isNotEmpty
-            ? entry.evidenceId
-            : entry.url;
-        if (dedupeKey.isEmpty || !seenKeys.add(dedupeKey)) continue;
-        bindings.add(
-          _fallbackBindingFromEvidenceEntry(
-            entry: entry,
-            index: bindings.length + 1,
-          ),
-        );
-      }
-    }
-    if (bindings.isEmpty) {
-      for (final ref in uiReferences.take(2)) {
-        final url = (ref['url'] as String?)?.trim() ?? '';
-        if (url.isEmpty || !seenKeys.add(url)) continue;
-        bindings.add(
-          _fallbackBindingFromReference(ref: ref, index: bindings.length + 1),
-        );
-      }
-    }
-    return bindings;
-  }
-
-  AnswerEvidenceBinding? _normalizeInlineEvidenceBinding({
-    required Map<String, dynamic> item,
-    required List<Map<String, dynamic>> uiReferences,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-    required int index,
-  }) {
-    final claim =
-        ((item['text'] as String?)?.trim().isNotEmpty == true
-            ? (item['text'] as String).trim()
-            : (item['claim'] as String?)?.trim()) ??
-        '';
-    final directEvidenceId = (item['evidenceId'] as String?)?.trim() ?? '';
-    final directUrl = SafeReferenceNormalizer.canonicalizeUrl(
-      (item['url'] as String?)?.trim() ?? '',
-    );
-    final directTitle = (item['title'] as String?)?.trim() ?? '';
-    final directSource = (item['source'] as String?)?.trim() ?? '';
-    final directSnippet = (item['snippet'] as String?)?.trim() ?? '';
-    final matchedEvidence = _matchEvidenceEntryForBinding(
-      claim: claim,
-      title: directTitle,
-      snippet: directSnippet,
-      directUrl: directUrl,
-      directEvidenceId: directEvidenceId,
-      evidenceLedger: evidenceLedger,
-    );
-    Map<String, dynamic> matchedReference = const <String, dynamic>{};
-    if (directUrl.isEmpty && matchedEvidence == null) {
-      matchedReference = _matchReferenceForEvidence(
-        claim: claim,
-        title: directTitle,
-        snippet: directSnippet,
-        uiReferences: uiReferences,
-      );
-    }
-    final url = directUrl.isNotEmpty
-        ? directUrl
-        : (matchedEvidence?.url.isNotEmpty == true
-              ? matchedEvidence!.url
-              : SafeReferenceNormalizer.canonicalizeUrl(
-                  (matchedReference['url'] as String?)?.trim() ?? '',
-                ));
-    if (url.isEmpty) return null;
-    final normalizedReference = SafeReferenceNormalizer.normalize(<
-      String,
-      dynamic
-    >{
-      'url': url,
-      'title': directTitle.isNotEmpty
-          ? directTitle
-          : (matchedEvidence?.title.isNotEmpty == true
-                ? matchedEvidence!.title
-                : ((matchedReference['title'] as String?)?.trim().isNotEmpty ==
-                          true
-                      ? (matchedReference['title'] as String).trim()
-                      : url)),
-      'source': matchedEvidence?.source.isNotEmpty == true
-          ? matchedEvidence!.source
-          : (directSource.isNotEmpty
-                ? directSource
-                : (matchedEvidence?.sourceHost.isNotEmpty == true
-                      ? matchedEvidence!.sourceHost
-                      : (matchedReference['source'] as String?)?.trim() ?? '')),
-      'snippet': directSnippet.isNotEmpty
-          ? directSnippet
-          : (matchedEvidence?.snippet.isNotEmpty == true
-                ? matchedEvidence!.snippet
-                : (matchedReference['snippet'] as String?)?.trim() ?? ''),
-    });
-    if (normalizedReference == null) return null;
-    final source = matchedEvidence?.source.isNotEmpty == true
-        ? matchedEvidence!.source
-        : (directSource.isNotEmpty
-              ? directSource
-              : (matchedEvidence?.sourceHost.isNotEmpty == true
-                    ? matchedEvidence!.sourceHost
-                    : (normalizedReference['source'] as String?)?.trim() ??
-                          ''));
-    final snippet = (normalizedReference['snippet'] as String?)?.trim() ?? '';
-    return AnswerEvidenceBinding(
-      bindingId:
-          'answer_evidence_${index}_${matchedEvidence?.evidenceId.isNotEmpty == true ? matchedEvidence!.evidenceId : url.hashCode}',
-      label: '来源$index',
-      claim: claim,
-      evidenceId: matchedEvidence?.evidenceId ?? '',
-      url: url,
-      title: (normalizedReference['title'] as String?)?.trim() ?? url,
-      source: source,
-      snippet: snippet,
-    );
-  }
-
-  AnswerEvidenceBinding _fallbackBindingFromEvidenceEntry({
-    required EvidenceLedgerEntry entry,
-    required int index,
-  }) {
-    return AnswerEvidenceBinding(
-      bindingId:
-          'answer_evidence_${index}_${entry.evidenceId.isNotEmpty ? entry.evidenceId : entry.url.hashCode}',
-      label: '来源$index',
-      claim: entry.title,
-      evidenceId: entry.evidenceId,
-      url: entry.url,
-      title: entry.title.isNotEmpty ? entry.title : entry.url,
-      source: entry.source.isNotEmpty ? entry.source : entry.sourceHost,
-      snippet: entry.snippet,
-    );
-  }
-
-  AnswerEvidenceBinding _fallbackBindingFromReference({
-    required Map<String, dynamic> ref,
-    required int index,
-  }) {
-    final normalized = SafeReferenceNormalizer.normalize(ref) ?? ref;
-    final url = SafeReferenceNormalizer.canonicalizeUrl(
-      (normalized['url'] as String?)?.trim() ?? '',
-    );
-    final title = (normalized['title'] as String?)?.trim().isNotEmpty == true
-        ? (normalized['title'] as String).trim()
-        : url;
-    return AnswerEvidenceBinding(
-      bindingId: 'answer_evidence_${index}_${url.hashCode}',
-      label: '来源$index',
-      claim: title,
-      evidenceId: (ref['evidenceId'] as String?)?.trim() ?? '',
-      url: url,
-      title: title,
-      source: (ref['source'] as String?)?.trim() ?? '',
-      snippet: (ref['snippet'] as String?)?.trim() ?? '',
-    );
-  }
-
-  EvidenceLedgerEntry? _matchEvidenceEntryForBinding({
-    required String claim,
-    required String title,
-    required String snippet,
-    required String directUrl,
-    required String directEvidenceId,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-  }) {
-    for (final entry in evidenceLedger) {
-      if (directEvidenceId.isNotEmpty && entry.evidenceId == directEvidenceId) {
-        return entry;
-      }
-      if (directUrl.isNotEmpty &&
-          SafeReferenceNormalizer.canonicalizeUrl(entry.url) == directUrl) {
-        return entry;
-      }
-    }
-    final scoreTarget = '$claim $title $snippet'.toLowerCase();
-    EvidenceLedgerEntry? best;
-    var bestScore = 0;
-    for (final entry in evidenceLedger) {
-      final haystack =
-          '${entry.title} ${entry.snippet} ${entry.source} ${entry.sourceHost} ${entry.url}'
-              .toLowerCase();
-      var score = 0;
-      if (claim.isNotEmpty && haystack.contains(claim.toLowerCase())) {
-        score += claim.length + 6;
-      }
-      if (title.isNotEmpty && haystack.contains(title.toLowerCase())) {
-        score += title.length + 4;
-      }
-      for (final token in _evidenceScoreTokens(scoreTarget)) {
-        if (haystack.contains(token)) score += token.length;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = entry;
-      }
-    }
-    return bestScore > 0 ? best : null;
-  }
-
-  Map<String, dynamic> _matchReferenceForEvidence({
-    required String claim,
-    required String title,
-    required String snippet,
-    required List<Map<String, dynamic>> uiReferences,
-  }) {
-    final scoreTarget = '$claim $title $snippet'.toLowerCase();
-    Map<String, dynamic> best = const <String, dynamic>{};
-    var bestScore = 0;
-    for (final ref in uiReferences) {
-      final refText =
-          '${(ref['title'] ?? '').toString()} ${(ref['snippet'] ?? '').toString()} ${(ref['source'] ?? '').toString()}'
-              .toLowerCase();
-      var score = 0;
-      for (final token in _evidenceScoreTokens(scoreTarget)) {
-        if (refText.contains(token)) score += token.length;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = ref;
-      }
-    }
-    return best;
-  }
-
-  Iterable<String> _evidenceScoreTokens(String raw) {
-    return RegExp(r'[\u4e00-\u9fa5A-Za-z0-9]{2,}')
-        .allMatches(raw)
-        .map((m) => m.group(0)!.toLowerCase())
-        .where((token) => token.length >= 2)
-        .take(8);
-  }
-
-  bool _isStrictRealtimeReference({
-    required String title,
-    required String source,
-    required String snippet,
-    required String sourceTier,
-    required double authorityScore,
-    required double freshnessHours,
-    required bool isAuthoritative,
-  }) {
-    if (isAuthoritative) return true;
-    if (authorityScore >= 0.8) return true;
-    if (freshnessHours > 0 && freshnessHours <= 24) return true;
-    final sourceTierType = parseEvidenceSourceTier(sourceTier);
-    if (sourceTierType == EvidenceSourceTier.authority ||
-        sourceTierType == EvidenceSourceTier.page) {
-      return freshnessHours <= 0 || freshnessHours <= 72;
-    }
-    return false;
-  }
-
-  /// 将 LLM 最终文本解析为结构化的 answerPayload Map。
-  ///
-  /// LLM JSON → [tryParseAssistantTurnOutput()] 类型化对象 → answerPayload Map。
-  /// 字段名字符串只在 [tryParseAssistantTurnOutput()] 内出现（见 02-dart-coding §5.1）。
-  Map<String, dynamic> _parseAnswerPayload({
-    required String rawFinalText,
-    required List<AssistantTraceEvent> traces,
-  }) {
-    final parseResult = LlmResponseParser.parse(rawFinalText);
-    final parsed = parseResult.json ?? <String, dynamic>{};
-    // 解析为类型化对象，字段名字符串集中在 tryParseAssistantTurnOutput() 内
-    final turn = tryParseAssistantTurnOutput(parsed);
-    final toolCallsFromTrace = traces
-        .where((event) => event.type == AssistantTraceEventType.toolStart)
-        .map(
-          (event) => <String, dynamic>{
-            'toolName': _traceToolName(event),
-            'arguments': event.data ?? const <String, dynamic>{},
-            'toolCallId': event.toolCallId ?? '',
-          },
-        )
-        .toList(growable: false);
-    final existingToolCalls = _normalizeToolCalls(
-      turn != null ? turn.toolCalls : (parsed['toolCalls']),
-    );
-    final normalizedToolCalls = existingToolCalls.isNotEmpty
-        ? existingToolCalls
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false)
-        : toolCallsFromTrace;
-    final resultPayload = turn != null
-        ? (turn.resultData.isNotEmpty
-              ? Map<String, dynamic>.from(turn.resultData)
-              : <String, dynamic>{'text': rawFinalText})
-        : ((parsed['result'] as Map?)?.cast<String, dynamic>() ??
-              <String, dynamic>{'text': rawFinalText});
-    // 将 nextAction 注入到 result，供下游 _extractUiMarkdown 使用
-    if (turn != null && turn.nextAction.isNotEmpty) {
-      resultPayload['nextAction'] = turn.nextAction;
-    }
-    final parseStatus = parsed.isEmpty
-        ? 'fallback_text'
-        : (turn != null ? 'assistant_turn_parsed' : 'json_parsed');
-    return <String, dynamic>{
-      'contractId':
-          turn?.contractId ?? (parsed['contractId'] as String?)?.trim() ?? '',
-      'result': resultPayload,
-      'evidence': turn != null
-          ? turn.evidence.map((item) => item.toJson()).toList(growable: false)
-          : _normalizeMapList(parsed['evidence'], textKey: 'text'),
-      'reasoningBasis': turn != null
-          ? turn.reasoningBasis
-                .map((item) => item.toJson())
-                .toList(growable: false)
-          : _normalizeMapList(parsed['reasoningBasis'], textKey: 'text'),
-      'selfCheck': turn != null
-          ? turn.selfCheck.toJson()
-          : _normalizeMap(parsed['selfCheck']),
-      'diagnostics': turn != null
-          ? turn.diagnostics.toJson()
-          : _normalizeMap(parsed['diagnostics']),
-      'modelSelfScore': turn != null
-          ? _normalizeModelSelfScore(turn.modelSelfScore.toJson())
-          : _normalizeModelSelfScore(parsed['modelSelfScore']),
-      'toolCalls': normalizedToolCalls,
-      'userMarkdown':
-          turn?.userMarkdown ??
-          (parsed['userMarkdown'] as String?)?.trim() ??
-          '',
-      'decision': turn?.decision.toJson() ?? _normalizeMap(parsed['decision']),
-      'messageKind':
-          turn?.messageKind.wireName ??
-          (parsed['messageKind'] as String?)?.trim() ??
-          '',
-      'phaseId':
-          turn?.phaseIdType.wireName ??
-          (parsed['phaseId'] as String?)?.trim() ??
-          '',
-      'actionCode':
-          turn?.actionCodeType.wireName ??
-          (parsed['actionCode'] as String?)?.trim() ??
-          '',
-      'reasonCode':
-          turn?.reasonCodeType.wireName ??
-          (parsed['reasonCode'] as String?)?.trim() ??
-          '',
-      'reasonShort':
-          turn?.reasonShort ?? (parsed['reasonShort'] as String?)?.trim() ?? '',
-      'slotState':
-          turn?.slotState.toJson() ?? _normalizeMap(parsed['slotState']),
-      'askUser': turn?.askUser.toJson() ?? _normalizeMap(parsed['askUser']),
-      'understandingSnapshot': _preferStructuredMap(
-        turn?.understandingSnapshot.toJson(),
-        _normalizeMap(parsed['understandingSnapshot']),
-      ),
-      'retrievalProcessing': _preferStructuredMap(
-        turn?.retrievalProcessing.toJson(),
-        _normalizeMap(parsed['retrievalProcessing']),
-      ),
-      'answerProcessing': _preferStructuredMap(
-        turn?.answerProcessing.toJson(),
-        _normalizeMap(parsed['answerProcessing']),
-      ),
-      'historicalThinkingSnapshot': _preferStructuredMap(
-        turn?.historicalThinkingSnapshot.toJson(),
-        _normalizeMap(parsed['historicalThinkingSnapshot']),
-      ),
-      'subagentPlan': turn != null
-          ? turn.subagentPlan
-                .map((item) => item.toJson())
-                .toList(growable: false)
-          : _normalizeMapList(parsed['subagentPlan'], textKey: 'goal'),
-      'intentGraph':
-          turn?.intentGraph?.toJson() ?? _normalizeMap(parsed['intentGraph']),
-      'skillRuns': turn != null
-          ? turn.skillRuns.map((item) => item.toJson()).toList(growable: false)
-          : _normalizeMapList(parsed['skillRuns'], textKey: 'goal'),
-      'aggregationState':
-          turn?.aggregationState?.toJson() ??
-          _normalizeMap(parsed['aggregationState']),
-      'journey': turn?.journey.toJson() ?? _normalizeMap(parsed['journey']),
-      'missingContextSlots':
-          turn?.missingContextSlots ??
-          _normalizeStringList(parsed['missingContextSlots']),
-      'fillGuidance': turn != null
-          ? turn.fillGuidance
-                .map((item) => item.toJson())
-                .toList(growable: false)
-          : _normalizeMapList(parsed['fillGuidance'], textKey: 'guidance'),
-      'followupPrompt': turn?.followupPrompt ?? '',
-      'actionHints':
-          turn?.result.actionHints ??
-          _normalizeStringList(
-            (((parsed['result'] as Map?)?.cast<String, dynamic>()) ??
-                const <String, dynamic>{})['actionHints'],
-          ),
-      'sessionPreferenceFacts': turn != null
-          ? turn.sessionPreferenceFacts
-                .map((item) => item.toJson())
-                .toList(growable: false)
-          : _normalizeMapList(parsed['sessionPreferenceFacts'], textKey: 'key'),
-      'longTermPreferenceFacts': turn != null
-          ? turn.longTermPreferenceFacts
-                .map((item) => item.toJson())
-                .toList(growable: false)
-          : _normalizeMapList(
-              parsed['longTermPreferenceFacts'],
-              textKey: 'key',
-            ),
-      'parseStatus': parseStatus,
-    };
-  }
-
-  RunArtifactsUnderstandingSnapshot _buildUnderstandingSnapshot({
-    required Map<String, dynamic> raw,
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-  }) {
-    final parsed = _hasStructuredContent(raw)
-        ? parseRunArtifactsUnderstandingSnapshotFromMap(raw)
-        : const RunArtifactsUnderstandingSnapshot();
-    final concernPoints = parsed.concernPoints.isNotEmpty
-        ? parsed.concernPoints
-        : <String>[
-                ...intentGraph.hardConstraints,
-                ...intentGraph.softConstraints,
-              ]
-              .where((item) => item.trim().isNotEmpty)
-              .take(4)
-              .toList(growable: false);
-    final normalizedIntentSummary = _normalizeUnderstandingSnapshotTemporalText(
-      base: parsed.intentSummary.isNotEmpty
-          ? parsed.intentSummary
-          : _firstNonEmptyText(<String?>[
-              intentGraph.userGoal,
-              intentGraph.userJobToBeDone,
-              intentGraph.targetObject,
-              latestUserQuery,
-            ]),
-      intentGraph: intentGraph,
-    );
-    final normalizedUserFacingSummary =
-        _normalizeUnderstandingSnapshotTemporalText(
-          base: parsed.userFacingSummary.isNotEmpty
-              ? parsed.userFacingSummary
-              : _firstNonEmptyText(<String?>[
-                  parsed.intentSummary,
-                  normalizedIntentSummary,
-                  intentGraph.userGoal,
-                  intentGraph.userJobToBeDone,
-                  intentGraph.targetObject,
-                  latestUserQuery,
-                ]),
-          intentGraph: intentGraph,
-        );
-    return RunArtifactsUnderstandingSnapshot(
-      intentSummary: normalizedIntentSummary,
-      userFacingSummary: normalizedUserFacingSummary,
-      concernPoints: concernPoints,
-      emotionSignal: parsed.emotionSignal,
-      resolutionItems: parsed.resolutionItems.isNotEmpty
-          ? parsed.resolutionItems
-          : _deriveResolutionItemsFromIntentGraph(intentGraph),
-      assumptions: parsed.assumptions,
-      mismatchSignal: parsed.mismatchSignal,
-      carryForwardFacts: parsed.carryForwardFacts,
-      discardedAssumptions: parsed.discardedAssumptions,
-    );
-  }
-
-  String _normalizeUnderstandingSnapshotTemporalText({
-    required String base,
-    required IntentGraph intentGraph,
-  }) {
-    final trimmed = base.trim();
-    if (trimmed.isEmpty) {
-      return '';
-    }
-    if (!_timelineRelativeTemporalTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(trimmed);
-    }
-    final queryNormalization = intentGraph.queryNormalization;
-    final fallbackDate = _firstUnderstandingSnapshotExplicitDate(intentGraph);
-    final rewritten = _templateRelativeTimeResolver
-        .resolve(
-          query: trimmed,
-          referenceNowIso: queryNormalization.referenceNowIso,
-          timezone: queryNormalization.timezone,
-          timeScope: queryNormalization.timeScope,
-          timeRangeStart: queryNormalization.timeRangeStart,
-          timeRangeEnd: queryNormalization.timeRangeEnd,
-          timePoint: queryNormalization.timePoint.isNotEmpty
-              ? queryNormalization.timePoint
-              : fallbackDate,
-        )
-        .rewrittenQuery
-        .trim();
-    if (rewritten.isNotEmpty &&
-        rewritten != trimmed &&
-        !_timelineRelativeDayTokenRe.hasMatch(rewritten)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(rewritten);
-    }
-    if (fallbackDate.isNotEmpty && _timelineRelativeDayTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(
-        trimmed.replaceAllMapped(
-          _timelineRelativeDayTokenRe,
-          (_) => fallbackDate,
-        ),
-      );
-    }
-    return _canonicalizeUnderstandingSnapshotDateAnchors(
-      rewritten.isNotEmpty ? rewritten : trimmed,
-    );
-  }
-
-  String _normalizeFinalAnswerTemporalAnchors(
-    String base,
-    IntentGraph intentGraph,
-  ) {
-    final trimmed = base.trim();
-    if (trimmed.isEmpty) {
-      return '';
-    }
-    if (!_timelineRelativeTemporalTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(trimmed);
-    }
-    final queryNormalization = intentGraph.queryNormalization;
-    final fallbackDate = _firstUnderstandingSnapshotExplicitDate(intentGraph);
-    final rewritten = _templateRelativeTimeResolver
-        .resolve(
-          query: trimmed,
-          referenceNowIso: queryNormalization.referenceNowIso,
-          timezone: queryNormalization.timezone,
-          timeScope: queryNormalization.timeScope,
-          timeRangeStart: queryNormalization.timeRangeStart,
-          timeRangeEnd: queryNormalization.timeRangeEnd,
-          timePoint: queryNormalization.timePoint.isNotEmpty
-              ? queryNormalization.timePoint
-              : fallbackDate,
-        )
-        .rewrittenQuery
-        .trim();
-    if (rewritten.isNotEmpty &&
-        rewritten != trimmed &&
-        !_timelineRelativeDayTokenRe.hasMatch(rewritten)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(rewritten);
-    }
-    if (fallbackDate.isNotEmpty && _timelineRelativeDayTokenRe.hasMatch(trimmed)) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(
-        trimmed.replaceAllMapped(
-          _timelineRelativeDayTokenRe,
-          (_) => fallbackDate,
-        ),
-      );
-    }
-    return _canonicalizeUnderstandingSnapshotDateAnchors(
-      rewritten.isNotEmpty ? rewritten : trimmed,
-    );
-  }
-
-  String _firstUnderstandingSnapshotExplicitDate(IntentGraph intentGraph) {
-    final queryNormalization = intentGraph.queryNormalization;
-    final normalizedCandidates = <String>[
-      queryNormalization.timePoint.trim(),
-      queryNormalization.timeRangeStart.trim(),
-      queryNormalization.timeRangeEnd.trim(),
-    ].where((item) => item.isNotEmpty);
-    if (normalizedCandidates.isNotEmpty) {
-      return _canonicalUnderstandingSnapshotDateToken(normalizedCandidates.first);
-    }
-    for (final task in intentGraph.queryTasks) {
-      if (task.timePoint.trim().isNotEmpty) {
-        return _canonicalUnderstandingSnapshotDateToken(task.timePoint.trim());
-      }
-      final match = _dateInQueryPattern.firstMatch(task.query);
-      if (match != null) {
-        return _canonicalUnderstandingSnapshotDateToken(
-          match.group(0)?.trim() ?? '',
-        );
-      }
-    }
-    return '';
-  }
-
-  static final RegExp _understandingSnapshotDateTokenRe = RegExp(
-    r'(\d{4})[-年/](\d{1,2})(?:[-月/])(\d{1,2})(?:日)?',
-  );
-  static final RegExp _dateInQueryPattern = RegExp(
-    r'(\d{4})[-年/](\d{1,2})[-月/](\d{1,2})',
-  );
-
-  String _canonicalizeUnderstandingSnapshotDateAnchors(String text) {
-    return text.replaceAllMapped(_understandingSnapshotDateTokenRe, (match) {
-      final year = match.group(1) ?? '';
-      final month = int.tryParse(match.group(2) ?? '')?.toString() ?? '';
-      final day = int.tryParse(match.group(3) ?? '')?.toString() ?? '';
-      if (year.isEmpty || month.isEmpty || day.isEmpty) {
-        return match.group(0) ?? '';
-      }
-      return '$year年${month}月${day}日';
-    });
-  }
-
-  String _canonicalUnderstandingSnapshotDateToken(String value) =>
-      _canonicalizeUnderstandingSnapshotDateAnchors(value.trim());
-
-  List<RunArtifactsUnderstandingResolutionItem>
-  _deriveResolutionItemsFromIntentGraph(IntentGraph intentGraph) {
-    final items = <RunArtifactsUnderstandingResolutionItem>[];
-    final dateMatches = <String>{};
-    for (final task in intentGraph.queryTasks) {
-      for (final m in _dateInQueryPattern.allMatches(task.query)) {
-        dateMatches.add(m.group(0)!);
-      }
-    }
-    if (dateMatches.isNotEmpty) {
-      items.add(
-        RunArtifactsUnderstandingResolutionItem(
-          kind: 'temporal_anchor',
-          title: '时间确认',
-          detail: '查询时间对齐到${dateMatches.first}',
-          resolvedValue: dateMatches.first,
-          visibleInUnderstanding: true,
-        ),
-      );
-    }
-    final geo = intentGraph.resolvedGeoScope;
-    final geoLabel = geo.cityLabel.isNotEmpty
-        ? geo.cityLabel
-        : geo.regionLabel.isNotEmpty
-        ? geo.regionLabel
-        : geo.countryLabel;
-    if (geoLabel.isNotEmpty) {
-      items.add(
-        RunArtifactsUnderstandingResolutionItem(
-          kind: 'geo_anchor',
-          title: '区域确认',
-          detail: geo.defaultApplied ? '默认采用$geoLabel' : '查询范围为$geoLabel',
-          resolvedValue: geoLabel,
-          defaultApplied: geo.defaultApplied,
-          visibleInUnderstanding: true,
-        ),
-      );
-    }
-    return items;
-  }
-
-  RetrievalProcessingSnapshot _licensedRetrievalProcessingForSynthesis(
-    Map<String, dynamic> raw,
-  ) {
-    final parsed = _hasStructuredContent(raw)
-        ? RetrievalProcessingSnapshot.fromJson(raw)
-        : const RetrievalProcessingSnapshot();
-    final selectedKeyPoints = parsed.selectedKeyPoints
-        .map(SafeReferenceNormalizer.normalizeFact)
-        .where((item) => item.isNotEmpty)
-        .take(5)
-        .toList(growable: false);
-    final acceptedReferences = parsed.acceptedReferences
-        .map(
-          (item) => RetrievalProcessingReference(
-            title: SafeReferenceNormalizer.normalizeText(item.title),
-            url: item.url.trim(),
-            source: SafeReferenceNormalizer.normalizeText(item.source),
-            snippet: SafeReferenceNormalizer.normalizeSnippet(item.snippet),
-          ),
-        )
-        .where(_hasRenderableRetrievalReference)
-        .take(5)
-        .toList(growable: false);
-    return RetrievalProcessingSnapshot(
-      processedDocumentCount: parsed.processedDocumentCount,
-      acceptedDocumentCount: parsed.acceptedDocumentCount > 0
-          ? parsed.acceptedDocumentCount
-          : acceptedReferences.length,
-      processingSummary: parsed.processingSummary.trim(),
-      selectedKeyPoints: selectedKeyPoints,
-      expansionReason: parsed.expansionReason.trim(),
-      acceptedReferences: acceptedReferences,
-    );
-  }
-
-  bool _hasRenderableRetrievalReference(
-    RetrievalProcessingReference reference,
-  ) {
-    return reference.title.isNotEmpty ||
-        reference.url.isNotEmpty ||
-        reference.source.isNotEmpty ||
-        reference.snippet.isNotEmpty;
-  }
-
-  RunArtifactsAnswerProcessing _buildAnswerProcessingSnapshot({
-    required Map<String, dynamic> raw,
-    String streamedReadinessSummary = '',
-    required SynthesisReadinessResult synthesisReadiness,
-    required ConversationStateDecision stateDecision,
-    required EvidenceEvaluationResult evidenceEvaluation,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-    required Map<String, dynamic> answerPayload,
-  }) {
-    final parsed = _hasStructuredContent(raw)
-        ? RunArtifactsAnswerProcessing.fromJson(raw)
-        : const RunArtifactsAnswerProcessing();
-    final keyFacts =
-        (parsed.keyFacts.isNotEmpty
-                ? parsed.keyFacts
-                : _buildAnswerKeyFacts(
-                    answerPayload: answerPayload,
-                    evidenceLedger: evidenceLedger,
-                  ))
-            .map(_sanitizeAnswerKeyFact)
-            .where((item) => item.isNotEmpty)
-            .take(4)
-            .toList(growable: false);
-    final missingDimensions = parsed.missingDimensions.isNotEmpty
-        ? parsed.missingDimensions
-        : stateDecision.missingCriticalSlots
-              .where((item) => item.trim().isNotEmpty)
-              .take(4)
-              .toList(growable: false);
-    final retrieveMoreReason = parsed.retrieveMoreReason.isNotEmpty
-        ? parsed.retrieveMoreReason
-        : (stateDecision.finalAnswerReady
-              ? ''
-              : _firstNonEmptyText(<String?>[
-                  synthesisReadiness.reason,
-                  evidenceEvaluation.summary,
-                ]));
-    final stabilizedReadinessSummary = _mergeStableNarrativeFinalText(
-      streamed: streamedReadinessSummary,
-      finalized: parsed.readinessSummary,
-    );
-    return RunArtifactsAnswerProcessing(
-      readinessSummary: stabilizedReadinessSummary.isNotEmpty
-          ? stabilizedReadinessSummary
-          : (stateDecision.finalAnswerReady
-                ? ''
-                : _firstNonEmptyText(<String?>[
-                    synthesisReadiness.reason,
-                    evidenceEvaluation.summary,
-                    '仍有维度待补充',
-                  ])),
-      keyFacts: keyFacts,
-      missingDimensions: missingDimensions,
-      retrieveMoreReason: retrieveMoreReason,
-    );
-  }
-
-  List<String> _buildAnswerKeyFacts({
-    required Map<String, dynamic> answerPayload,
-    required List<EvidenceLedgerEntry> evidenceLedger,
-  }) {
-    final fromPayload = AssistantAnswerPayloadReadView(answerPayload)
-        .evidenceMaps
-        .map(
-          (item) => (item['claim'] as String?)?.trim().isNotEmpty == true
-              ? _sanitizeAnswerKeyFact((item['claim'] as String).trim())
-              : _sanitizeAnswerKeyFact((item['text'] as String?)?.trim() ?? ''),
-        )
-        .where((item) => item.isNotEmpty)
-        .take(4)
-        .toList(growable: false);
-    if (fromPayload.isNotEmpty) return fromPayload;
-    return evidenceLedger
-        .map(
-          (entry) => _sanitizeAnswerKeyFact(
-            entry.snippet.trim().isNotEmpty
-                ? entry.snippet.trim()
-                : entry.title.trim(),
-          ),
-        )
-        .where((item) => item.isNotEmpty)
-        .take(4)
-        .toList(growable: false);
-  }
-
-  String _sanitizeAnswerKeyFact(String raw) {
-    return SafeReferenceNormalizer.normalizeFact(raw);
-  }
-
-  String _mergeStableNarrativeFinalText({
-    required String streamed,
-    required String finalized,
-  }) {
-    final streamedText = streamed.trim();
-    final finalizedText = finalized.trim();
-    if (streamedText.isEmpty) return finalizedText;
-    if (finalizedText.isEmpty) return streamedText;
-    if (finalizedText == streamedText) {
-      return streamedText;
-    }
-    if (streamedText.startsWith(finalizedText)) {
-      return streamedText;
-    }
-    final overlap = _suffixPrefixOverlap(streamedText, finalizedText);
-    if (overlap > 0 && overlap < finalizedText.length) {
-      return '$streamedText${finalizedText.substring(overlap)}'.trim();
-    }
-    return streamedText;
-  }
-
-  int _suffixPrefixOverlap(String left, String right) {
-    final maxOverlap = left.length < right.length ? left.length : right.length;
-    for (var overlap = maxOverlap; overlap > 0; overlap--) {
-      if (left.substring(left.length - overlap) ==
-          right.substring(0, overlap)) {
-        return overlap;
-      }
-    }
-    return 0;
-  }
-
-  RunArtifactsHistoricalThinkingSnapshot _buildHistoricalThinkingSnapshot({
-    required Map<String, dynamic> raw,
-    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
-  }) {
-    final parsed = _hasStructuredContent(raw)
-        ? RunArtifactsHistoricalThinkingSnapshot.fromJson(raw)
-        : const RunArtifactsHistoricalThinkingSnapshot();
-    return RunArtifactsHistoricalThinkingSnapshot(
-      continuityMode: parsed.continuityMode,
-      mismatchSignal: parsed.mismatchSignal.isNotEmpty
-          ? parsed.mismatchSignal
-          : understandingSnapshot.mismatchSignal,
-      carryForwardFacts: parsed.carryForwardFacts.isNotEmpty
-          ? parsed.carryForwardFacts
-          : understandingSnapshot.carryForwardFacts,
-      needsRecheckFacts: parsed.needsRecheckFacts,
-      discardedAssumptions: parsed.discardedAssumptions.isNotEmpty
-          ? parsed.discardedAssumptions
-          : understandingSnapshot.discardedAssumptions,
-    );
-  }
-
-  RetrievalProcessingSnapshot _buildRetrievalProcessingSnapshot({
-    Map<String, dynamic> processing = const <String, dynamic>{},
-    String streamedProcessingSummary = '',
-    required List<Map<String, dynamic>> uiReferences,
-    required List<Map<String, dynamic>> toolResults,
-    required SynthesisReadinessResult synthesisReadiness,
-    required bool finalAnswerReady,
-  }) {
-    final parsed = _hasStructuredContent(processing)
-        ? RetrievalProcessingSnapshot.fromJson(processing)
-        : const RetrievalProcessingSnapshot();
-    final acceptedReferences = uiReferences
-        .map(
-          (item) => RetrievalProcessingReference(
-            title: SafeReferenceNormalizer.normalizeText(
-              (item['title'] as String?)?.trim() ?? '',
-            ),
-            url: (item['url'] as String?)?.trim() ?? '',
-            source: SafeReferenceNormalizer.normalizeText(
-              (item['source'] as String?)?.trim() ?? '',
-            ),
-            snippet: SafeReferenceNormalizer.normalizeSnippet(
-              (item['snippet'] as String?)?.trim() ?? '',
-            ),
-          ),
-        )
-        .where(
-          (item) =>
-              item.title.isNotEmpty ||
-              item.url.isNotEmpty ||
-              item.source.isNotEmpty,
-        )
-        .toList(growable: false);
-    final processedDocumentCount = _resolveProcessedDocumentCount(
-      uiReferences: uiReferences,
-      toolResults: toolResults,
-      acceptedDocumentCount: acceptedReferences.length,
-    );
-    final parsedSelectedKeyPoints = parsed.selectedKeyPoints
-        .map(SafeReferenceNormalizer.normalizeFact)
-        .where((item) => item.isNotEmpty)
-        .take(5)
-        .toList(growable: false);
-    final selectedKeyPoints = parsedSelectedKeyPoints.isNotEmpty
-        ? parsedSelectedKeyPoints
-        : acceptedReferences
-              .map(
-                (item) => item.snippet.trim().isNotEmpty
-                    ? item.snippet.trim()
-                    : item.title.trim(),
-              )
-              .where((item) => item.isNotEmpty)
-              .take(5)
-              .toList(growable: false);
-    final stabilizedProcessingSummary = _mergeStableNarrativeFinalText(
-      streamed: streamedProcessingSummary,
-      finalized: parsed.processingSummary,
-    );
-    return RetrievalProcessingSnapshot(
-      processedDocumentCount: parsed.processedDocumentCount > 0
-          ? parsed.processedDocumentCount
-          : processedDocumentCount,
-      acceptedDocumentCount: parsed.acceptedDocumentCount > 0
-          ? parsed.acceptedDocumentCount
-          : acceptedReferences.length,
-      processingSummary: stabilizedProcessingSummary.isNotEmpty
-          ? stabilizedProcessingSummary
-          : (finalAnswerReady
-                ? ''
-                : _firstNonEmptyText(<String?>[synthesisReadiness.reason])),
-      selectedKeyPoints: selectedKeyPoints,
-      expansionReason: parsed.expansionReason.trim().isNotEmpty
-          ? parsed.expansionReason.trim()
-          : (finalAnswerReady
-                ? ''
-                : _firstNonEmptyText(<String?>[synthesisReadiness.reason])),
-      acceptedReferences: parsed.acceptedReferences.isNotEmpty
-          ? parsed.acceptedReferences
-                .map(
-                  (item) => RetrievalProcessingReference(
-                    title: SafeReferenceNormalizer.normalizeText(item.title),
-                    url: item.url.trim(),
-                    source: SafeReferenceNormalizer.normalizeText(item.source),
-                    snippet: SafeReferenceNormalizer.normalizeSnippet(
-                      item.snippet,
-                    ),
-                  ),
-                )
-                .toList(growable: false)
-          : acceptedReferences,
-    );
-  }
-
-  List<ProcessTimelineFrame> _applyBlockedProcessStage(
-    List<ProcessTimelineFrame> processTimeline, {
-    required ProcessStepId blockedProcessStepId,
-    required String blockedProcessMessage,
-    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
-    required RetrievalProcessingSnapshot retrievalProcessingSnapshot,
-    required RunArtifactsAnswerProcessing answerProcessingSnapshot,
-  }) {
-    if (blockedProcessStepId == ProcessStepId.unknown ||
-        blockedProcessMessage.trim().isEmpty) {
-      return processTimeline;
-    }
-    final byStep = <ProcessStepId, ProcessTimelineFrame>{
-      for (final frame in normalizeProcessTimeline(processTimeline))
-        frame.stepId: frame,
-    };
-    final blockedFrame = switch (blockedProcessStepId) {
-      ProcessStepId.understanding => buildProcessTimelineFrame(
-        stepId: ProcessStepId.understanding,
-        status: JourneyStageStatus.blocked,
-        headline: blockedProcessMessage.trim(),
-        detail: '',
-        understandingSnapshot: RunArtifactsUnderstandingSnapshot(
-          intentSummary: understandingSnapshot.intentSummary,
-          userFacingSummary: blockedProcessMessage.trim(),
-          concernPoints: understandingSnapshot.concernPoints,
-          emotionSignal: understandingSnapshot.emotionSignal,
-          assumptions: understandingSnapshot.assumptions,
-          mismatchSignal: understandingSnapshot.mismatchSignal,
-          carryForwardFacts: understandingSnapshot.carryForwardFacts,
-          discardedAssumptions: understandingSnapshot.discardedAssumptions,
-        ),
-      ),
-      ProcessStepId.retrievalDesign => buildProcessTimelineFrame(
-        stepId: ProcessStepId.retrievalDesign,
-        status: JourneyStageStatus.blocked,
-        headline: blockedProcessMessage.trim(),
-        detail: '',
-        understandingSnapshot: understandingSnapshot,
-      ),
-      ProcessStepId.retrievalProcessing => buildProcessTimelineFrame(
-        stepId: ProcessStepId.retrievalProcessing,
-        status: JourneyStageStatus.blocked,
-        headline: blockedProcessMessage.trim(),
-        detail: '',
-        references: retrievalProcessingSnapshot.acceptedReferences,
-        retrievalProcessing: RetrievalProcessingSnapshot(
-          processedDocumentCount:
-              retrievalProcessingSnapshot.processedDocumentCount,
-          acceptedDocumentCount:
-              retrievalProcessingSnapshot.acceptedDocumentCount,
-          processingSummary: blockedProcessMessage.trim(),
-          expansionReason: blockedProcessMessage.trim(),
-          acceptedReferences: retrievalProcessingSnapshot.acceptedReferences,
-        ),
-      ),
-      ProcessStepId.answerOrganization => buildProcessTimelineFrame(
-        stepId: ProcessStepId.retrievalProcessing,
-        status: JourneyStageStatus.blocked,
-        headline: blockedProcessMessage.trim(),
-        detail: '',
-        retrievalProcessing: RetrievalProcessingSnapshot(
-          processedDocumentCount:
-              retrievalProcessingSnapshot.processedDocumentCount,
-          acceptedDocumentCount:
-              retrievalProcessingSnapshot.acceptedDocumentCount,
-          processingSummary: blockedProcessMessage.trim(),
-          acceptedReferences: retrievalProcessingSnapshot.acceptedReferences,
-        ),
-      ),
-      ProcessStepId.unknown => buildProcessTimelineFrame(
-        stepId: ProcessStepId.unknown,
-      ),
-    };
-    byStep[blockedProcessStepId] = blockedFrame;
-    if (blockedProcessStepId == ProcessStepId.retrievalProcessing) {
-      byStep.remove(ProcessStepId.answerOrganization);
-    }
-    return normalizeProcessTimeline(byStep.values.toList(growable: false));
-  }
-
-  int _resolveProcessedDocumentCount({
-    required List<Map<String, dynamic>> uiReferences,
-    required List<Map<String, dynamic>> toolResults,
-    required int acceptedDocumentCount,
-  }) {
-    var maxProcessed = acceptedDocumentCount;
-    for (final item in uiReferences) {
-      final total = (item['_totalSearched'] as num?)?.toInt() ?? 0;
-      if (total > maxProcessed) {
-        maxProcessed = total;
-      }
-    }
-    var summedToolTotal = 0;
-    for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      summedToolTotal += (data['totalReferences'] as num?)?.toInt() ?? 0;
-    }
-    if (summedToolTotal > maxProcessed) {
-      maxProcessed = summedToolTotal;
-    }
-    return maxProcessed;
-  }
-
-  AssistantJourney _enrichJourneyWithStructuredSnapshots(
-    AssistantJourney journey, {
-    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
-    required RetrievalProcessingSnapshot retrievalProcessing,
-    required RunArtifactsAnswerProcessing answerProcessing,
-    required bool finalAnswerReady,
-  }) {
-    final entries = List<AssistantJourneyEntry>.of(journey.entries);
-    var changed = false;
-
-    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.analyze)) {
-      final headline = _buildUnderstandingJourneyHeadline(
-        understandingSnapshot,
-      );
-      final detail = _buildUnderstandingJourneyDetail(understandingSnapshot);
-      if (headline.isNotEmpty || detail.isNotEmpty) {
-        entries.add(
-          AssistantJourneyEntry(
-            entryId: 'journey.analyze.snapshot',
-            stageId: JourneyStageId.analyze,
-            kind: JourneyEntryKind.narrative,
-            status: JourneyStageStatus.completed,
-            order: -10,
-            headline: headline,
-            detail: detail,
-            provenance: const AssistantJourneyProvenance(source: 'snapshot'),
-          ),
-        );
-        changed = true;
-      }
-    }
-
-    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.answer) &&
-        finalAnswerReady) {
-      final headline = answerProcessing.readinessSummary.trim().isNotEmpty
-          ? answerProcessing.readinessSummary.trim()
-          : retrievalProcessing.processingSummary.trim();
-      final detail = answerProcessing.keyFacts.take(2).join('；').trim();
-      if (headline.isNotEmpty || detail.isNotEmpty) {
-        entries.add(
-          AssistantJourneyEntry(
-            entryId: 'journey.answer.snapshot',
-            stageId: JourneyStageId.answer,
-            kind: JourneyEntryKind.narrative,
-            status: JourneyStageStatus.completed,
-            order: 9990,
-            headline: headline,
-            detail: detail,
-            provenance: const AssistantJourneyProvenance(source: 'snapshot'),
-          ),
-        );
-        changed = true;
-      }
-    }
-
-    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.search) &&
-        (retrievalProcessing.processingSummary.trim().isNotEmpty ||
-            retrievalProcessing.acceptedReferences.isNotEmpty)) {
-      final detail = _firstNonEmptyText(<String?>[
-        retrievalProcessing.processingSummary,
-        understandingSnapshot.userFacingSummary,
-      ]);
-      entries.add(
-        AssistantJourneyEntry(
-          entryId: 'journey.search.snapshot',
-          stageId: JourneyStageId.search,
-          kind: retrievalProcessing.acceptedReferences.isNotEmpty
-              ? JourneyEntryKind.referenceBundle
-              : JourneyEntryKind.narrative,
-          status: finalAnswerReady
-              ? JourneyStageStatus.completed
-              : JourneyStageStatus.active,
-          order: 100,
-          headline: '',
-          detail: detail,
-          references: retrievalProcessing.acceptedReferences
-              .map(
-                (item) => AssistantJourneyReference(
-                  title: item.title.trim(),
-                  url: item.url.trim(),
-                  source: item.source.trim(),
-                ),
-              )
-              .where(
-                (item) =>
-                    item.title.isNotEmpty &&
-                    (item.url.isNotEmpty || item.source.isNotEmpty),
-              )
-              .toList(growable: false),
-          provenance: const AssistantJourneyProvenance(source: 'snapshot'),
-        ),
-      );
-      changed = true;
-    }
-
-    if (!changed) {
-      return journey;
-    }
-    entries.sort((a, b) => a.order.compareTo(b.order));
-    return AssistantJourney(
-      stages: journey.stages,
-      entries: entries,
-      summary: journey.summary,
-      referenceSummary: journey.referenceSummary,
-      readiness: journey.readiness,
-    );
-  }
-
-  bool _hasVisibleJourneyEntry(
-    List<AssistantJourneyEntry> entries,
-    JourneyStageId stageId,
-  ) {
-    for (final entry in entries) {
-      final displayStageId = entry.stageId == JourneyStageId.verify
-          ? JourneyStageId.search
-          : entry.stageId;
-      if (displayStageId != stageId) continue;
-      if (_hasUserVisibleJourneyNarrative(entry)) {
-        return true;
-      }
-      if (entry.references.isNotEmpty && stageId != JourneyStageId.search) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  String _buildUnderstandingJourneyHeadline(
-    RunArtifactsUnderstandingSnapshot snapshot,
-  ) {
-    final intent = snapshot.intentSummary.trim();
-    final summary = snapshot.userFacingSummary.trim();
-    if (summary.isNotEmpty) {
-      return summary;
-    }
-    return intent;
-  }
-
-  String _buildUnderstandingJourneyDetail(
-    RunArtifactsUnderstandingSnapshot snapshot,
-  ) {
-    final lines = <String>[];
-    lines.addAll(
-      snapshot.concernPoints
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty)
-          .take(3),
-    );
-    return lines.join('\n').trim();
-  }
-
-  bool _hasUserVisibleJourneyNarrative(AssistantJourneyEntry entry) {
-    final provenance = entry.provenance;
-    if (provenance.source == 'trace' &&
-        provenance.actionCode == PlannerActionCode.unknown &&
-        provenance.reasonCode == PlannerReasonCode.unknownReason &&
-        entry.references.isEmpty) {
-      return false;
-    }
-    final candidates = <String>[entry.headline, entry.detail];
-    for (final candidate in candidates) {
-      final sanitized = _sanitizeJourneyCandidate(candidate);
-      if (sanitized.isEmpty) {
-        continue;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  String _sanitizeJourneyCandidate(String raw) {
-    final normalized =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          AssistantDisplayTextResolver.stripRomanizedQueryLeakSentences(raw),
-        ).trim();
-    if (normalized.isEmpty) {
-      return '';
-    }
-    if (AssistantContentFilters.isNotDisplayable(normalized) ||
-        AssistantDisplayTextResolver.containsInternalProcessFragment(
-          normalized,
-        ) ||
-        AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
-          normalized,
-        )) {
-      return '';
-    }
-    return normalized;
-  }
-
-  String _firstNonEmptyText(Iterable<String?> candidates) {
-    for (final candidate in candidates) {
-      final normalized = candidate?.trim() ?? '';
-      if (normalized.isNotEmpty) {
-        return normalized;
-      }
-    }
-    return '';
-  }
-
-  String _extractProviderReasoningContinuation(
-    List<AssistantTraceEvent> traces,
-  ) {
-    for (final trace in traces.reversed) {
-      final data = trace.data;
-      if (data == null) continue;
-      final continuation =
-          (data['providerReasoningContinuation'] as String?)?.trim() ?? '';
-      if (continuation.isNotEmpty) {
-        return continuation;
-      }
-    }
-    return '';
-  }
-
-  List<SubagentPlan> _buildSkillRunPlans({
-    required IntentGraph intentGraph,
-    required Map<String, dynamic> answerPayload,
-    required String latestUserQuery,
-    required String primaryDomainId,
-  }) {
-    final explicitPlans = _buildExplicitSkillRunPlans(
-      answerPayload: answerPayload,
-      latestUserQuery: latestUserQuery,
-      fallbackProblemClass: intentGraph.problemClassWireName,
-      primaryDomainId: primaryDomainId,
-    );
-    if (explicitPlans.isNotEmpty) {
-      return explicitPlans;
-    }
-    return _buildDerivedSkillRunPlansFromIntent(
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
-      primaryDomainId: primaryDomainId,
-    );
-  }
-
-  List<SubagentPlan> _buildExplicitSkillRunPlans({
-    required Map<String, dynamic> answerPayload,
-    required String latestUserQuery,
-    required String fallbackProblemClass,
-    required String primaryDomainId,
-  }) {
-    final existingPlans = AssistantAnswerPayloadReadView(
-      answerPayload,
-    ).subagentPlanMaps;
-    if (existingPlans.isEmpty) return const <SubagentPlan>[];
-    return existingPlans
-        .where(
-          (item) =>
-              ((item['domainId'] as String?)?.trim() ?? '').isNotEmpty &&
-              ((item['domainId'] as String?)?.trim() ?? '') != primaryDomainId,
-        )
-        .map(
-          (item) => _normalizeSubagentPlan(
-            plan: item,
-            latestUserQuery: latestUserQuery,
-            fallbackProblemClass: fallbackProblemClass,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  List<SubagentPlan> _buildDerivedSkillRunPlansFromIntent({
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-    required String primaryDomainId,
-  }) {
-    return intentGraph.secondarySkills
-        .where(
-          (item) => item.trim().isNotEmpty && item.trim() != primaryDomainId,
-        )
-        .map(
-          (skillId) => _normalizeSubagentPlan(
-            plan: <String, dynamic>{
-              'subagentId': 'skill_${skillId}_1',
-              'domainId': skillId,
-              'problemClass': intentGraph.problemClassWireName.isNotEmpty
-                  ? intentGraph.problemClassWireName
-                  : ProblemClass.general.wireName,
-              'mode': 'qa',
-              'goal': '围绕用户问题补充 $skillId 视角的关键信息：$latestUserQuery',
-              'maxIterations': 2,
-              'toolBudget': 2,
-              'stopPolicy': StopPolicy.balanced.wireName,
-              'searchIntensity':
-                  intentGraph.problemClass == ProblemClass.realtimeInfo
-                  ? SearchIntensity.low.wireName
-                  : SearchIntensity.medium.wireName,
-            },
-            latestUserQuery: latestUserQuery,
-            fallbackProblemClass: intentGraph.problemClassWireName,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  SubagentPlan _normalizeSubagentPlan({
-    required Map<String, dynamic> plan,
-    required String latestUserQuery,
-    required String fallbackProblemClass,
-  }) {
-    final domainId = (plan['domainId'] as String?)?.trim() ?? '';
-    final goal = (plan['goal'] as String?)?.trim() ?? '';
-    final mode = (plan['mode'] as String?)?.trim() ?? 'qa';
-    final rawProblemClass =
-        (plan['problemClass'] as String?)?.trim() ?? fallbackProblemClass;
-    return SubagentPlan.fromJson(<String, dynamic>{
-      ...plan,
-      'domainId': domainId,
-      'goal': goal,
-      'mode': mode,
-      'problemClass': _normalizeProblemClassForQuery(
-        raw: rawProblemClass,
-        primarySkill: domainId,
-        mode: mode,
-        secondarySkills: const <String>[],
-        queryText: goal.isNotEmpty ? goal : latestUserQuery,
-      ),
-      'stopPolicy': (plan['stopPolicy'] as String?)?.trim() ?? 'balanced',
-      'searchIntensity':
-          (plan['searchIntensity'] as String?)?.trim() ?? 'medium',
-      'providerPolicy': (plan['providerPolicy'] as String?)?.trim() ?? '',
-      'freshnessHoursMax': _nonNegativeInt(
-        plan['freshnessHoursMax'],
-        fallback: 0,
-      ),
-      'answerThreshold': _normalizedThreshold(
-        plan['answerThreshold'],
-        fallback: 0.0,
-      ),
-      'dependencies': _normalizeStringList(plan['dependencies']),
-    });
-  }
-
-  SkillRun _buildPrimarySkillRun({
-    required IntentGraph intentGraph,
-    required String domainId,
-    required Map<String, dynamic> answerPayload,
-    required ReactRuntimeResult result,
-    required SkillExecutionShell executionShell,
-    required List<Map<String, dynamic>> references,
-  }) {
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    return SkillRun(
-      runId: 'skill_primary_$domainId',
-      domainId: domainId,
-      goal: intentGraph.userGoal,
-      problemClass: executionShell.problemClass,
-      shell: executionShell.toJson(),
-      slotState: apv.slotStateMap,
-      answerReady:
-          apv.userMarkdownTrimmed.isNotEmpty || apv.hasTopLevelResultMap,
-      stopReason: apv.messageKindTrimmed,
-      references: references,
-      resultSummary: _extractUiSummary(
-        answerPayload,
-        _resolveDisplayPlainText(
-          answerPayload: answerPayload,
-          displayMarkdown: _extractUiMarkdown(answerPayload),
-        ),
-      ),
-    );
-  }
-
-  SkillRun _skillRunFromLegacySubagentRun(Map<String, dynamic> run) {
-    final domainId = (run['domainId'] as String?)?.trim() ?? '';
-    final status = (run['status'] as String?)?.trim() ?? 'unknown';
-    final goal = (run['goal'] as String?)?.trim() ?? '';
-    return SkillRun(
-      runId: (run['subagentId'] as String?)?.trim() ?? 'skill_$domainId',
-      domainId: domainId,
-      goal: goal,
-      problemClass: _normalizeProblemClassForQuery(
-        raw: (run['problemClass'] as String?)?.trim() ?? '',
-        primarySkill: domainId,
-        mode: (run['mode'] as String?)?.trim() ?? 'qa',
-        secondarySkills: const <String>[],
-        queryText: goal,
-      ),
-      shell:
-          (run['shell'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      answerReady: run['answerReady'] == true || status == 'success',
-      stopReason: status,
-      references:
-          (run['references'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[],
-      resultSummary: (run['summary'] as String?)?.trim() ?? '',
-    );
-  }
-
-  AggregationState _buildAggregationState({
-    required IntentGraph intentGraph,
-    required List<SkillRun> skillRuns,
-    required Map<String, dynamic> answerPayload,
-  }) {
-    return _aggregationGate.evaluate(
-      intentGraph: intentGraph,
-      skillRuns: skillRuns,
-      answerPayload: answerPayload,
-    );
-  }
-
-  String _resolveMessageKind({
-    required Map<String, dynamic> answerPayload,
-    required String resultText,
-  }) {
-    final decision = AssistantTurnDecision.fromMaps(
-      structured: <String, dynamic>{
-        'messageKind': answerPayload['messageKind'],
-      },
-      answerPayload: answerPayload,
-    );
-    if (decision.messageKind != AssistantMessageKind.unknown) {
-      return decision.messageKind.name;
-    }
-    switch (decision.nextAction) {
-      case AssistantNextAction.toolCall:
-        return 'progress';
-      case AssistantNextAction.askUser:
-        return 'ask_user';
-      case AssistantNextAction.replan:
-        return 'progress';
-      case AssistantNextAction.retry:
-      case AssistantNextAction.abort:
-        return 'fallback';
-      case AssistantNextAction.answer:
-        return 'answer';
-      case AssistantNextAction.unknown:
-        break;
-    }
-    if (AssistantContentFilters.isJsonEnvelope(resultText)) return 'fallback';
-    if (AssistantContentFilters.isProgressPlaceholder(resultText)) {
-      return 'progress';
-    }
-    return 'answer';
-  }
-
-  List<Map> _normalizeToolCalls(dynamic value) {
-    if (value is List) {
-      return value.whereType<Map>().toList(growable: false);
-    }
-    if (value is Map) return <Map>[value];
-    return const <Map>[];
-  }
-
-  Map<String, dynamic> _normalizeMap(dynamic value) {
-    if (value is Map) {
-      return value.cast<String, dynamic>();
-    }
-    if (value is String && value.trim().isNotEmpty) {
-      return <String, dynamic>{'text': value.trim()};
-    }
-    return const <String, dynamic>{};
-  }
-
-  Map<String, dynamic> _preferStructuredMap(
-    Map<String, dynamic>? primary,
-    Map<String, dynamic> fallback,
-  ) {
-    if (primary != null && _hasStructuredContent(primary)) {
-      return primary;
-    }
-    if (_hasStructuredContent(fallback)) {
-      return fallback;
-    }
-    return const <String, dynamic>{};
-  }
-
-  Map<String, dynamic> _materializedUnderstandingSnapshotRaw({
-    required Map<String, dynamic> answerPayload,
-    required Map<String, dynamic> carriedUnderstandingSnapshot,
-    required ConversationStateDecision stateDecision,
-    required SynthesisReadinessResult synthesisReadiness,
-  }) {
-    final current = AssistantAnswerPayloadReadView(
-      answerPayload,
-    ).understandingSnapshotMap;
-    if (!_hasStructuredContent(carriedUnderstandingSnapshot)) {
-      return _preferStructuredMap(current, const <String, dynamic>{});
-    }
-    if (_shouldAllowSecondTurnUnderstandingRewrite(
-      stateDecision: stateDecision,
-      synthesisReadiness: synthesisReadiness,
-    )) {
-      return _preferStructuredMap(current, carriedUnderstandingSnapshot);
-    }
-    return carriedUnderstandingSnapshot;
-  }
-
-  Map<String, dynamic> _materializedHistoricalThinkingSnapshotRaw({
-    required Map<String, dynamic> answerPayload,
-    required Map<String, dynamic> carriedHistoricalThinkingSnapshot,
-    required ConversationStateDecision stateDecision,
-    required SynthesisReadinessResult synthesisReadiness,
-  }) {
-    final current = AssistantAnswerPayloadReadView(
-      answerPayload,
-    ).historicalThinkingSnapshotMap;
-    if (!_hasStructuredContent(carriedHistoricalThinkingSnapshot)) {
-      return _preferStructuredMap(current, const <String, dynamic>{});
-    }
-    if (_shouldAllowSecondTurnUnderstandingRewrite(
-      stateDecision: stateDecision,
-      synthesisReadiness: synthesisReadiness,
-    )) {
-      return _preferStructuredMap(current, carriedHistoricalThinkingSnapshot);
-    }
-    return carriedHistoricalThinkingSnapshot;
-  }
-
-  bool _shouldAllowSecondTurnUnderstandingRewrite({
-    required ConversationStateDecision stateDecision,
-    required SynthesisReadinessResult synthesisReadiness,
-  }) {
-    return stateDecision.nextActionType == AssistantNextAction.toolCall ||
-        stateDecision.nextActionType == AssistantNextAction.replan ||
-        stateDecision.finalAnswerModeType == FinalAnswerMode.replan ||
-        synthesisReadiness.replanTask != null;
-  }
-
-  /// 供模型消费的对话脚本，移除版本追踪字段，避免干扰指令理解。
-  Map<String, dynamic> _dialogueScriptForModel(DialogueRoundScript script) {
-    final json = Map<String, dynamic>.from(script.toJson());
-    json.remove('routingCatalogVersion');
-    json.remove('eventCatalogVersion');
-    return json;
-  }
-
-  /// 供模型消费的子任务结果，移除版本追踪字段。
-  List<Map<String, dynamic>> _subagentRunsForModel(
-    List<Map<String, dynamic>> runs,
-  ) {
-    return runs
-        .map((r) {
-          return <String, dynamic>{
-            'subagentId': (r['subagentId'] ?? '').toString(),
-            'domainId': (r['domainId'] ?? '').toString(),
-            'status': (r['status'] ?? '').toString(),
-            'goal': (r['goal'] ?? '').toString(),
-            'problemClass': (r['problemClass'] ?? '').toString(),
-            'userMarkdown': (r['userMarkdown'] ?? '').toString(),
-            'result':
-                (r['result'] as Map?)?.cast<String, dynamic>() ??
-                const <String, dynamic>{},
-            'summary': (r['summary'] ?? '').toString(),
-            'references':
-                (r['references'] as List?)
-                    ?.whereType<Map>()
-                    .map((item) => item.cast<String, dynamic>())
-                    .toList(growable: false) ??
-                const <Map<String, dynamic>>[],
-          };
-        })
-        .toList(growable: false);
-  }
-
-  Map<String, dynamic> _normalizeModelSelfScore(dynamic value) {
-    final mapped = _normalizeMap(value);
-    if (mapped.isNotEmpty) return mapped;
-    return const <String, dynamic>{'score': 0, 'reason': 'not_provided'};
-  }
-
-  List<String> _normalizeStringList(dynamic value) {
-    if (value is List) {
-      return value
-          .where((item) => item != null)
-          .map((item) => item.toString())
-          .where((item) => item.trim().isNotEmpty)
-          .toList(growable: false);
-    }
-    if (value is String && value.trim().isNotEmpty) {
-      return <String>[value.trim()];
-    }
-    return const <String>[];
-  }
-
-  List<Map<String, dynamic>> _normalizeMapList(
-    dynamic value, {
-    required String textKey,
-  }) {
-    if (value is List) {
-      return value
-          .map((item) {
-            if (item is Map) return item.cast<String, dynamic>();
-            if (item is String && item.trim().isNotEmpty) {
-              return <String, dynamic>{textKey: item.trim()};
-            }
-            return null;
-          })
-          .whereType<Map<String, dynamic>>()
-          .toList(growable: false);
-    }
-    if (value is Map) {
-      return <Map<String, dynamic>>[value.cast<String, dynamic>()];
-    }
-    if (value is String && value.trim().isNotEmpty) {
-      return <Map<String, dynamic>>[
-        <String, dynamic>{textKey: value.trim()},
-      ];
-    }
-    return const <Map<String, dynamic>>[];
-  }
-
-  // JSON 解析已统一委托给 LlmResponseParser，不再在此文件内重复实现。
-
-  Map<String, dynamic> _mergeSelfCheck({
-    required Map<String, dynamic> answerPayload,
-    required bool answerEligible,
-    required String synthesisReason,
-    required bool evidenceGatePassed,
-  }) {
-    final base = Map<String, dynamic>.from(
-      AssistantAnswerPayloadReadView(answerPayload).selfCheckMap,
-    );
-    final failed = <String>[
-      ...((base['failedItems'] as List?)?.whereType<String>() ??
-          const <String>[]),
-      if (!answerEligible && synthesisReason.isNotEmpty) synthesisReason,
-      if (!evidenceGatePassed) 'web_evidence_threshold_not_met',
-    ];
-    return <String, dynamic>{
-      ...base,
-      'passed': answerEligible && failed.isEmpty,
-      'failedChecks': failed,
-    };
-  }
-
-  String _extractUiSummary(
-    Map<String, dynamic> answerPayload,
-    String fallback,
-  ) {
-    final turn = tryParseAssistantTurnOutput(answerPayload);
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final interpretation =
-        turn?.interpretation ?? apv.resultInterpretationTrimmed;
-    if (interpretation.isNotEmpty) return interpretation;
-    final text = turn?.resultText ?? apv.resultTextTrimmed;
-    if (text.isNotEmpty) return text;
-    return fallback;
-  }
-
-  bool _isRealtimeLikeRequest({
-    required String fallbackProblemClass,
-    required Map<String, dynamic> answerPayload,
-  }) {
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final payloadProblemClass = apv.problemClassRootTrimmedLower.isNotEmpty
-        ? apv.problemClassRootTrimmedLower
-        : (apv.decisionMap['problemClass'] as String?)?.trim().toLowerCase() ??
-              '';
-    if (payloadProblemClass.isNotEmpty) {
-      return parseProblemClass(payloadProblemClass) ==
-          ProblemClass.realtimeInfo;
-    }
-    return parseProblemClass(fallbackProblemClass) == ProblemClass.realtimeInfo;
-  }
-
-  bool _toolContributesUiReferences(
-    String toolName, {
-    required bool allowLocationContext,
-  }) {
-    final normalized = toolName.trim();
-    if (normalized.isEmpty) return false;
-    final registry = _toolMetadataRegistry;
-    return registry?.contributesUiReferences(
-          normalized,
-          allowLocationContext: allowLocationContext,
-        ) ??
-        false;
-  }
-
-  String _traceToolName(AssistantTraceEvent event) {
-    final data = event.data ?? const <String, dynamic>{};
-    return (data['toolName'] as String?)?.trim() ?? '';
-  }
-
-  String _resolveDisplayPlainText({
-    required Map<String, dynamic> answerPayload,
-    required String displayMarkdown,
-  }) {
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final normalizedMarkdown =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          displayMarkdown,
-          allowJsonExtraction: false,
-        );
-    final plainFromMarkdown = _sanitizeDisplayPlainCandidate(
-      AssistantDisplayTextResolver.stripMarkdown(normalizedMarkdown),
-    );
-    final result = apv.resultMap;
-    final directText = _sanitizeDisplayPlainCandidate(
-      (result['text'] as String?)?.trim() ?? '',
-    );
-    if (plainFromMarkdown.isNotEmpty) return plainFromMarkdown;
-    if (directText.isNotEmpty) {
-      return directText;
-    }
-    final summaryText = _sanitizeDisplayPlainCandidate(
-      (result['summary'] as String?)?.trim() ?? '',
-    ).trim();
-    if (summaryText.isNotEmpty) {
-      return summaryText;
-    }
-    return '';
-  }
-
-  String _sanitizeDisplayPlainCandidate(String raw) {
-    final text =
-        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(raw);
-    if (text.isEmpty) return '';
-    if (AssistantContentFilters.isProgressPlaceholder(text) ||
-        AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(text)) {
-      return '';
-    }
-    return text;
-  }
-
-  String _extractUiMarkdown(Map<String, dynamic> answerPayload) {
-    // nextAction 为中间动作时不应作为最终展示内容输出；但 fail-closed 的 abort
-    // 需要把明确失败提示继续暴露给用户。
-    // nextAction 来自 _parseAnswerPayload 注入到 result 中的值，属于受控 Map。
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final resultMap = apv.resultMap;
-    final nextAction = (resultMap['nextAction'] as String?)?.trim() ?? '';
-    if (nextAction.isNotEmpty &&
-        nextAction != AssistantNextAction.answer.wireName &&
-        nextAction != AssistantNextAction.abort.wireName) {
-      return '';
-    }
-    // 优先级 1：userMarkdown（契约标准字段，已通过 AssistantTurnOutput 类型化解析）
-    final userMd =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          apv.userMarkdownTrimmed,
-          allowJsonExtraction: false,
-        );
-    if (_isRenderableAssistantAnswerText(userMd)) {
-      return userMd;
-    }
-    final resultText =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          (resultMap['text'] as String?)?.trim() ?? '',
-          allowJsonExtraction: false,
-        );
-    if (!_isRenderableAssistantAnswerText(resultText)) {
-      return '';
-    }
-    return resultText;
-  }
-
-  bool _isRenderableAssistantAnswerText(String text) {
-    return AssistantDisplayTextResolver.isRenderableDisplayText(text);
-  }
-
-  List<String> _buildNextActions(
-    ContextAssemblyResult contextAssembly,
-    SynthesisReadinessResult synthesisReadiness,
-  ) {
-    final out = <String>[];
-    for (final task in contextAssembly.fillTasks) {
-      out.add(task.reason);
-    }
-    if (!synthesisReadiness.ready && synthesisReadiness.replanTask != null) {
-      out.add(synthesisReadiness.reason);
-    }
-    return out;
-  }
-
-  String _resolveExperimentBucket(Map<String, dynamic> hint, String fallback) {
-    final raw = (hint['experimentBucket'] as String?)?.trim() ?? '';
-    if (raw.isNotEmpty) return raw;
-    return fallback;
-  }
-
-  bool _usedHeuristicFallback(List<AssistantTraceEvent> traces) {
-    for (final event in traces) {
-      if (event.type != AssistantTraceEventType.assistantDelta) continue;
-      final data = event.data ?? const <String, dynamic>{};
-      final path = (data['modelPath'] as String?)?.trim() ?? '';
-      if (path != 'fallback_local') continue;
-      final parsed = LlmResponseParser.parse(event.message);
-      if (!parsed.ok) {
-        final raw = event.message.trim();
-        if (raw.isNotEmpty) return true;
-        continue;
-      }
-      final payload = parsed.json ?? const <String, dynamic>{};
-      final diagnostics =
-          (payload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      if (diagnostics['heuristicFallbackUsed'] == true) {
-        return true;
-      }
-      final messageKind = parseMessageKind(
-        (payload['messageKind'] as String?)?.trim() ?? '',
-      );
-      final phaseId = (payload['phaseId'] as String?)?.trim() ?? '';
-      final turnPhase = (payload['turnPhase'] as String?)?.trim() ?? '';
-      final isAnswerLike =
-          messageKind == AssistantMessageKind.answer ||
-          phaseId == 'answering' ||
-          turnPhase == 'answer';
-      if (isAnswerLike && parsed.userMarkdown.isNotEmpty) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _hasDegradedTrace(List<AssistantTraceEvent> traces) {
-    for (final event in traces) {
-      if (event.type != AssistantTraceEventType.assistantDelta) continue;
-      final data = event.data ?? const <String, dynamic>{};
-      if (data['degraded'] == true) return true;
-    }
-    return false;
-  }
-
-  List<Map<String, dynamic>> _extractWebEvidencePacks(
-    List<Map<String, dynamic>> toolResults,
-  ) {
-    final packs = <Map<String, dynamic>>[];
-    for (final item in toolResults) {
-      final data = (item['data'] as Map?)?.cast<String, dynamic>();
-      if (data == null) continue;
-      if (!data.containsKey('coverage') ||
-          !data.containsKey('confidence') ||
-          !data.containsKey('freshnessHours')) {
-        continue;
-      }
-      packs.add(<String, dynamic>{
-        'coverage': _asDouble(data['coverage']),
-        'confidence': _asDouble(data['confidence']),
-        'freshnessHours': _asDouble(data['freshnessHours']),
-        'authorityScore': _asDouble(data['authorityScore']),
-        'authoritativeCount': _asDouble(data['authoritativeCount']),
-        'totalReferences': _asDouble(data['totalReferences']),
-        // Layer 5: 新增 qualityScore 和 freshScore，供 synthesizer 参考资料展示使用
-        'qualityScore': _asDouble(data['qualityScore']),
-        'freshScore': _asDouble(data['freshScore']),
-        'facts': data['facts'] ?? const <Map<String, dynamic>>[],
-      });
-    }
-    return packs;
-  }
-
-  /// 从 assets 加载对应领域的 retrieval_policy.json。
-  /// 若文件不存在或解析失败，返回空 Map，调用方使用默认值。
-  Future<Map<String, dynamic>> _loadRetrievalPolicy(String domainId) async {
-    if (domainId.isEmpty) return const <String, dynamic>{};
-    const basePath = 'assets/assistant/skills';
-    final path = '$basePath/$domainId/config/retrieval_policy.json';
-    try {
-      final raw = await rootBundle.loadString(path);
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) return decoded.cast<String, dynamic>();
-    } catch (_) {
-      // Asset missing or malformed — caller falls back to defaults.
-    }
-    return const <String, dynamic>{};
-  }
-
-  _PrecomputedBootstrap? _recoverPrecomputedBootstrap(
-    Map<String, dynamic> contextScopeHint,
-  ) {
-    final raw = (contextScopeHint['precomputedBootstrap'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return _PrecomputedBootstrap(
-        sessionId: (raw['sessionId'] as String?)?.trim() ?? 'default',
-        latestUserQuery: (raw['latestUserQuery'] as String?)?.trim() ?? '',
-        historySummary: (raw['historySummary'] as String?) ?? '',
-        recalledTexts:
-            (raw['recalledTexts'] as List?)
-                ?.map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[],
-        previousIntentGraph: raw['previousIntentGraph'] is Map
-            ? IntentGraph.fromJson(
-                (raw['previousIntentGraph'] as Map).cast<String, dynamic>(),
-              )
-            : null,
-        previousAnswerSummary:
-            (raw['previousAnswerSummary'] as String?)?.trim() ?? '',
-        recentDialogueRounds: coerceRecentDialogueRounds(
-          raw['recentDialogueRounds'],
-        ),
-        recentDialogueRoundsLimit:
-            (raw['recentDialogueRoundsLimit'] as num?)?.toInt() ??
-            defaultRecentDialogueRoundsLimit,
-        previousUnderstandingSnapshot:
-            raw['previousUnderstandingSnapshot'] is Map
-            ? parseRunArtifactsUnderstandingSnapshotFromMap(
-                (raw['previousUnderstandingSnapshot'] as Map)
-                    .cast<String, dynamic>(),
-              )
-            : const RunArtifactsUnderstandingSnapshot(),
-        previousAnswerProcessing: raw['previousAnswerProcessing'] is Map
-            ? RunArtifactsAnswerProcessing.fromJson(
-                (raw['previousAnswerProcessing'] as Map)
-                    .cast<String, dynamic>(),
-              )
-            : const RunArtifactsAnswerProcessing(),
-        historicalThinkingSnapshot: raw['historicalThinkingSnapshot'] is Map
-            ? RunArtifactsHistoricalThinkingSnapshot.fromJson(
-                (raw['historicalThinkingSnapshot'] as Map)
-                    .cast<String, dynamic>(),
-              )
-            : const RunArtifactsHistoricalThinkingSnapshot(),
-        providerReasoningContinuation:
-            (raw['providerReasoningContinuation'] as String?)?.trim() ?? '',
-        continuityPolicy: raw['contextContinuityPolicy'] is Map
-            ? ContextContinuityPolicy.fromJson(
-                (raw['contextContinuityPolicy'] as Map).cast<String, dynamic>(),
-              )
-            : const ContextContinuityPolicy(),
-        continuityOverrideSlots:
-            (raw['continuityOverrideSlots'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{},
-        recallResult: raw['recallResult'] is Map
-            ? RecallResult.fromJson(
-                (raw['recallResult'] as Map).cast<String, dynamic>(),
-              )
-            : const RecallResult(topK: <RecallCandidate>[]),
-        forceRefreshCatalog: raw['forceRefreshCatalog'] == true,
-        domainCatalog:
-            (raw['domainCatalog'] as List?)
-                ?.map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[],
-        domainCatalogVersion:
-            (raw['domainCatalogVersion'] as String?)?.trim() ?? '',
-        fullSkillCatalog: (raw['fullSkillCatalog'] as String?) ?? '',
-        skillCatalog: (raw['skillCatalog'] as String?) ?? '',
-        contextAssembly: raw['contextAssembly'] is Map
-            ? ContextAssemblyResult.fromJson(
-                (raw['contextAssembly'] as Map).cast<String, dynamic>(),
-              )
-            : null,
-        previousRunArtifacts: raw['previousRunArtifacts'] is Map
-            ? parseRunArtifacts(
-                (raw['previousRunArtifacts'] as Map).cast<String, dynamic>(),
-              )
-            : null,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool _hasStructuredContent(Map<String, dynamic> value) {
-    for (final item in value.values) {
-      if (item is String && item.trim().isNotEmpty) return true;
-      if (item is num && item != 0) return true;
-      if (item is bool && item) return true;
-      if (item is List && item.isNotEmpty) return true;
-      if (item is Map && item.isNotEmpty) return true;
-    }
-    return false;
-  }
-
-  _PrecomputedUnderstand? _recoverPrecomputedUnderstand(
-    Map<String, dynamic> contextScopeHint,
-  ) {
-    final raw = (contextScopeHint['precomputedUnderstand'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      final modeRaw =
-          (raw['modeDecision'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      return _PrecomputedUnderstand(
-        domainId: (raw['domainId'] as String?)?.trim() ?? '',
-        dialogueRoundScript: raw['dialogueRoundScript'] is Map
-            ? _dialogueRoundScriptFromJson(
-                (raw['dialogueRoundScript'] as Map).cast<String, dynamic>(),
-              )
-            : null,
-        modeDecision: ModeDecision.fromJson(modeRaw),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  _PrecomputedRetrieval? _recoverPrecomputedRetrieval(
-    Map<String, dynamic> contextScopeHint,
-  ) {
-    final raw = (contextScopeHint['precomputedRetrieval'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return _PrecomputedRetrieval(
-        skillName: (raw['skillName'] as String?)?.trim() ?? '',
-        skillInstructionMarkdown:
-            (raw['skillInstructionMarkdown'] as String?) ?? '',
-        skillPersona: (raw['skillPersona'] as String?) ?? '',
-        allowedToolNames:
-            (raw['allowedToolNames'] as List?)
-                ?.map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[],
-        executionShell: raw['executionShell'] is Map
-            ? SkillExecutionShell.fromJson(
-                (raw['executionShell'] as Map).cast<String, dynamic>(),
-              )
-            : const SkillExecutionShell(),
-        plannerTemplateVersion:
-            (raw['plannerTemplateVersion'] as String?)?.trim() ?? '',
-        postcheckTemplateVersion:
-            (raw['postcheckTemplateVersion'] as String?)?.trim() ?? '',
-        synthTemplateVersion:
-            (raw['synthTemplateVersion'] as String?)?.trim() ?? '',
-        fusionSynthTemplateVersion:
-            (raw['fusionSynthTemplateVersion'] as String?)?.trim() ?? '',
-        previousSlotState: raw['previousSlotState'] is Map
-            ? SlotStateSnapshot.fromJson(
-                (raw['previousSlotState'] as Map).cast<String, dynamic>(),
-              )
-            : const SlotStateSnapshot(),
-        previousDomainPolicyBundle: raw['previousDomainPolicyBundle'] is Map
-            ? DomainPolicyBundle.fromJson(
-                (raw['previousDomainPolicyBundle'] as Map)
-                    .cast<String, dynamic>(),
-              )
-            : null,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  AssistantExecutionPreparation? _recoverPrecomputedExecutionPreparation(
-    Map<String, dynamic> contextScopeHint, {
-    _PrecomputedUnderstand? precomputedUnderstand,
-    _PrecomputedRetrieval? precomputedRetrieval,
-  }) {
-    final raw = (contextScopeHint['precomputedExecutionPreparation'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        return AssistantExecutionPreparation.fromJson(raw);
-      } catch (_) {
-        // Fall through to compatibility recovery.
-      }
-    }
-    if (precomputedUnderstand == null && precomputedRetrieval == null) {
-      return null;
-    }
-    return AssistantExecutionPreparation(
-      domainId: precomputedUnderstand?.domainId ?? '',
-      modeDecision:
-          precomputedUnderstand?.modeDecision ??
-          const ModeDecision(
-            mode: AgentMode.singleAgent,
-            reason: 'default_single',
-          ),
-      skillName: precomputedRetrieval?.skillName ?? '',
-      skillInstructionMarkdown:
-          precomputedRetrieval?.skillInstructionMarkdown ?? '',
-      skillPersona: precomputedRetrieval?.skillPersona ?? '',
-      allowedToolNames:
-          precomputedRetrieval?.allowedToolNames ?? const <String>[],
-      executionShell:
-          precomputedRetrieval?.executionShell ?? const SkillExecutionShell(),
-      plannerTemplateVersion:
-          precomputedRetrieval?.plannerTemplateVersion ?? '',
-      postcheckTemplateVersion:
-          precomputedRetrieval?.postcheckTemplateVersion ?? '',
-      synthTemplateVersion: precomputedRetrieval?.synthTemplateVersion ?? '',
-      fusionSynthTemplateVersion:
-          precomputedRetrieval?.fusionSynthTemplateVersion ?? '',
-      previousSlotState:
-          precomputedRetrieval?.previousSlotState ?? const SlotStateSnapshot(),
-      previousDomainPolicyBundle:
-          precomputedRetrieval?.previousDomainPolicyBundle,
-    );
-  }
-
-  DialogueRoundScript _dialogueRoundScriptFromJson(Map<String, dynamic> json) {
-    final dto = DialogueRoundScriptDto.fromJson(json);
-    return DialogueRoundScript(
-      domainId: dto.domainId,
-      enabled: dto.enabled,
-      currentStateId: dto.currentStateId,
-      detectedEvent: dto.detectedEvent,
-      suggestedNextStateId: dto.suggestedNextStateId,
-      nextStateCandidates: dto.nextStateCandidates,
-      requiredFieldsForNextState: dto.requiredFieldsForNextState,
-      totalSubTotalRequired: dto.totalSubTotalRequired,
-      optionalEnrichment: dto.optionalEnrichment,
-      maxQuestionsPerTurn: dto.maxQuestionsPerTurn,
-      hardFailCodes: dto.hardFailCodes,
-      passCriteriaRound: dto.passCriteriaRound,
-      statePromptExcerpt: dto.statePromptExcerpt,
-      stateMachineExcerpt: dto.stateMachineExcerpt,
-      routingCatalogVersion: dto.routingCatalogVersion,
-      eventCatalogVersion: dto.eventCatalogVersion,
-    );
-  }
-
-  RunArtifacts? _recoverPreviousRunArtifacts(
-    Map<String, dynamic> contextScopeHint,
-  ) {
-    final raw = (contextScopeHint['runArtifacts'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return parseRunArtifacts(raw);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  List<Map<String, dynamic>> _toolResultsForEvidenceLedger(
-    List<Map<String, dynamic>> toolResults,
-  ) {
-    return toolResults
-        .map((item) {
-          final data =
-              (item['data'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
-          return <String, dynamic>{
-            'toolName': (data['toolName'] as String?)?.trim().isNotEmpty == true
-                ? (data['toolName'] as String).trim()
-                : (item['toolName'] as String?)?.trim() ?? '',
-            'data': data,
-          };
-        })
-        .toList(growable: false);
-  }
-
-  List<String> _blockingEvidenceDimensions({
-    required List<QueryTask> queryTasks,
-    required List<Map<String, dynamic>> toolResults,
-  }) {
-    final dimensions = <String>{};
-    for (final item in toolResults) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      final explicitBlocking =
-          (data['blockingDimensions'] as List?)
-              ?.whereType<String>()
-              .map(
-                (value) =>
-                    parseQueryTaskDimension(value.trim()) !=
-                        QueryTaskDimension.unknown
-                    ? parseQueryTaskDimension(value.trim()).wireName
-                    : value.trim(),
-              )
-              .where((value) => value.isNotEmpty) ??
-          const Iterable<String>.empty();
-      dimensions.addAll(explicitBlocking);
-    }
-    if (dimensions.isNotEmpty) {
-      return dimensions.toList(growable: false);
-    }
-    return AnswerBoundaryResolver.normalizedTaskDimensions(queryTasks);
-  }
-
-  ConversationStateDecision _normalizeRenderableAnswerStateDecision({
-    required ConversationStateDecision stateDecision,
-    required Map<String, dynamic> answerPayload,
-    required SynthesisReadinessResult synthesisReadiness,
-  }) {
-    final turn = tryParseAssistantTurnOutput(answerPayload);
-    final explicitDecision = AssistantTurnDecision.fromAnswerPayload(
-      answerPayload,
-    );
-    if (explicitDecision.nextAction == AssistantNextAction.toolCall) {
-      return ConversationStateDecision(
-        nextAction: AssistantNextAction.toolCall,
-        finalAnswerMode: FinalAnswerMode.replan,
-        answerEligibility: AnswerEligibility.blocked,
-        slotState: stateDecision.slotState,
-        missingCriticalSlots: stateDecision.missingCriticalSlots,
-        askUser: const AssistantTurnAskUser(),
-        qualityGates: stateDecision.qualityGates,
-        finalAnswerReady: false,
-      );
-    }
-    if (explicitDecision.nextAction == AssistantNextAction.askUser) {
-      return ConversationStateDecision(
-        nextAction: AssistantNextAction.askUser,
-        finalAnswerMode: FinalAnswerMode.clarify,
-        answerEligibility: AnswerEligibility.blocked,
-        slotState: stateDecision.slotState,
-        missingCriticalSlots: stateDecision.missingCriticalSlots,
-        askUser: turn?.askUser ?? stateDecision.askUser,
-        qualityGates: stateDecision.qualityGates,
-        finalAnswerReady: false,
-      );
-    }
-    if (explicitDecision.nextAction == AssistantNextAction.replan &&
-        (!synthesisReadiness.ready || synthesisReadiness.replanTask != null)) {
-      return ConversationStateDecision(
-        nextAction: AssistantNextAction.toolCall,
-        finalAnswerMode: FinalAnswerMode.replan,
-        answerEligibility: AnswerEligibility.blocked,
-        slotState: stateDecision.slotState,
-        missingCriticalSlots: stateDecision.missingCriticalSlots,
-        askUser: const AssistantTurnAskUser(),
-        qualityGates: stateDecision.qualityGates,
-        finalAnswerReady: false,
-      );
-    }
-    final explicitAnswerMode = _explicitAnswerModeFromPayload(answerPayload);
-    if (explicitAnswerMode.isNotEmpty) {
-      return _stateDecisionFromAnswerMode(
-        existing: stateDecision,
-        answerMode: explicitAnswerMode,
-      );
-    }
-    final projection = turn == null
-        ? null
-        : AssistantDisplayTextResolver.projectTurn(turn);
-    final canPromoteRecoveredAnswer =
-        synthesisReadiness.ready &&
-        stateDecision.askUser.prompt.trim().isEmpty &&
-        stateDecision.missingCriticalSlots.isEmpty &&
-        _hasRenderableAnswerPayload(
-          payload: answerPayload,
-          turn: turn,
-          projectionRenderableContent: projection?.hasRenderableContent ?? false,
-        );
-    if (canPromoteRecoveredAnswer) {
-      return ConversationStateDecision(
-        nextAction: AssistantNextAction.answer,
-        finalAnswerMode:
-            stateDecision.finalAnswerModeType == FinalAnswerMode.full ||
-                stateDecision.finalAnswerReady
-            ? FinalAnswerMode.full
-            : FinalAnswerMode.boundedAnswer,
-        answerEligibility: AnswerEligibility.eligible,
-        slotState: stateDecision.slotState,
-        missingCriticalSlots: stateDecision.missingCriticalSlots,
-        askUser: const AssistantTurnAskUser(),
-        qualityGates: stateDecision.qualityGates,
-        finalAnswerReady: true,
-      );
-    }
-    final replanLike =
-        stateDecision.nextActionType == AssistantNextAction.toolCall ||
-        stateDecision.nextActionType == AssistantNextAction.replan ||
-        stateDecision.finalAnswerModeType == FinalAnswerMode.replan;
-    if (!replanLike ||
-        !synthesisReadiness.ready ||
-        stateDecision.askUser.prompt.trim().isNotEmpty ||
-        stateDecision.missingCriticalSlots.isNotEmpty) {
-      return stateDecision;
-    }
-    return stateDecision;
-  }
-
-  SynthesisReadinessResult _mergeStructuredSynthesisReadiness({
-    required SynthesisReadinessResult carried,
-    required SynthesisReadinessResult recomputed,
-  }) {
-    if (carried.replanTask != null) {
-      return SynthesisReadinessResult(
-        ready: false,
-        reason: carried.reason.trim().isNotEmpty
-            ? carried.reason.trim()
-            : recomputed.reason,
-        replanTask: carried.replanTask,
-      );
-    }
-    return recomputed;
-  }
-
-  String _explicitAnswerModeFromPayload(Map<String, dynamic> answerPayload) {
-    final resultPayload = AssistantAnswerPayloadReadView(
-      answerPayload,
-    ).resultMap;
-    final interpretation =
-        (resultPayload['interpretation'] as String?)?.trim().toLowerCase() ??
-        '';
-    return interpretation == 'answer' ||
-            interpretation == 'bounded_answer' ||
-            interpretation == 'replan' ||
-            interpretation == 'fallback'
-        ? interpretation
-        : '';
-  }
-
-  ConversationStateDecision _stateDecisionFromAnswerMode({
-    required ConversationStateDecision existing,
-    required String answerMode,
-  }) {
-    switch (answerMode) {
-      case 'answer':
-        return ConversationStateDecision(
-          nextAction: AssistantNextAction.answer,
-          finalAnswerMode: FinalAnswerMode.full,
-          answerEligibility: AnswerEligibility.eligible,
-          slotState: existing.slotState,
-          missingCriticalSlots: existing.missingCriticalSlots,
-          askUser: const AssistantTurnAskUser(),
-          qualityGates: existing.qualityGates,
-          finalAnswerReady: true,
-        );
-      case 'bounded_answer':
-        return ConversationStateDecision(
-          nextAction: AssistantNextAction.answer,
-          finalAnswerMode: FinalAnswerMode.boundedAnswer,
-          answerEligibility: AnswerEligibility.eligible,
-          slotState: existing.slotState,
-          missingCriticalSlots: existing.missingCriticalSlots,
-          askUser: const AssistantTurnAskUser(),
-          qualityGates: existing.qualityGates,
-          finalAnswerReady: true,
-        );
-      case 'replan':
-        return ConversationStateDecision(
-          nextAction: AssistantNextAction.toolCall,
-          finalAnswerMode: FinalAnswerMode.replan,
-          answerEligibility: AnswerEligibility.blocked,
-          slotState: existing.slotState,
-          missingCriticalSlots: existing.missingCriticalSlots,
-          askUser: const AssistantTurnAskUser(),
-          qualityGates: existing.qualityGates,
-          finalAnswerReady: false,
-        );
-      case 'fallback':
-        return ConversationStateDecision(
-          nextAction: AssistantNextAction.answer,
-          finalAnswerMode: FinalAnswerMode.blocked,
-          answerEligibility: AnswerEligibility.blocked,
-          slotState: existing.slotState,
-          missingCriticalSlots: existing.missingCriticalSlots,
-          askUser: const AssistantTurnAskUser(),
-          qualityGates: existing.qualityGates,
-          finalAnswerReady: false,
-        );
-      default:
-        return existing;
-    }
-  }
-
-  Map<String, dynamic> _applyConversationStateDecision(
-    Map<String, dynamic> answerPayload,
-    ConversationStateDecision decision, {
-    required EvidenceEvaluationResult evidenceEvaluation,
-    required SynthesisReadinessResult synthesisReadiness,
-  }) {
-    final turn = tryParseAssistantTurnOutput(answerPayload);
-    final apv = AssistantAnswerPayloadReadView(answerPayload);
-    final diagnostics = apv.diagnosticsMap;
-    final existingDecision = turn?.decision.toJson() ?? apv.decisionMap;
-    final existingAskUser = turn?.askUser.toJson() ?? apv.askUserMap;
-    final sanitizedAskUser = _sanitizeAskUserPayload(
-      existingAskUser: existingAskUser,
-      decision: decision,
-    );
-    final userMarkdown = turn?.userMarkdown.trim() ?? apv.userMarkdownTrimmed;
-    final resultText =
-        turn?.resultText ?? (apv.resultMap['text'] as String?)?.trim() ?? '';
-    final hasRenderableAnswer =
-        _isRenderableAssistantAnswerText(userMarkdown) ||
-        _isRenderableAssistantAnswerText(resultText);
-    final explicitAnswerMode = _explicitAnswerModeFromPayload(answerPayload);
-    final explicitFallback =
-        explicitAnswerMode == 'fallback' ||
-        turn?.messageKind == AssistantMessageKind.fallback;
-    final messageKind = decision.nextActionType == AssistantNextAction.askUser
-        ? AssistantMessageKind.askUser.wireName
-        : (decision.nextActionType == AssistantNextAction.toolCall
-              ? AssistantMessageKind.progress.wireName
-              : (decision.nextActionType == AssistantNextAction.answer &&
-                        hasRenderableAnswer
-                    ? (explicitFallback
-                          ? AssistantMessageKind.fallback.wireName
-                          : AssistantMessageKind.answer.wireName)
-                    : AssistantMessageKind.fallback.wireName));
-    return <String, dynamic>{
-      ...answerPayload,
-      'messageKind': messageKind,
-      'slotState': _slotStatePayloadFromSnapshot(decision.slotState),
-      'missingContextSlots': decision.missingCriticalSlots,
-      'askUser': sanitizedAskUser,
-      'followupPrompt': '',
-      'actionHints': const <String>[],
-      'decision': <String, dynamic>{
-        ...existingDecision,
-        ...decision.toDecisionMap(),
-        'synthesisReady': synthesisReadiness.ready,
-        'synthesisReason': synthesisReadiness.reason,
-        'evidenceSummary': evidenceEvaluation.summary,
-      },
-      'diagnostics': <String, dynamic>{
-        ...diagnostics,
-        'qualityGates': decision.qualityGatesData,
-        'evidenceSummary': evidenceEvaluation.summary,
-        'evidencePassed': evidenceEvaluation.passed,
-        'finalAnswerMode': decision.finalAnswerModeWireName,
-        'answerEligibility': decision.answerEligibilityWireName,
-        'synthesisReady': synthesisReadiness.ready,
-        'synthesisReason': synthesisReadiness.reason,
-      },
-    };
-  }
-
-  bool _hasRenderableAnswerPayload({
-    required Map<String, dynamic> payload,
-    AssistantTurnOutput? turn,
-    bool projectionRenderableContent = false,
-  }) {
-    final explicitDisplayState = parseAssistantDisplayStateFromMap(
-      (payload['displayState'] as Map?)?.cast<String, dynamic>(),
-    );
-    if (_isRenderableAssistantAnswerText(
-      renderAnswerBlocksToMarkdown(explicitDisplayState.answer.blocks),
-    )) {
-      return true;
-    }
-    if (turn != null) {
-      if (turn.nextActionType != AssistantNextAction.answer ||
-          turn.messageKindType == AssistantMessageKind.progress) {
-        return false;
-      }
-      if (projectionRenderableContent) {
-        return true;
-      }
-      return _isRenderableAssistantAnswerText(
-            AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-              turn.userMarkdown.trim(),
-              allowJsonExtraction: false,
-            ),
-          ) ||
-          _isRenderableAssistantAnswerText(
-            AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-              turn.resultText.trim(),
-              allowJsonExtraction: false,
-            ),
-          );
-    }
-    final userMarkdown = (payload['userMarkdown'] as String?)?.trim() ?? '';
-    final resultText =
-        ((payload['result'] as Map?)?['text'] as String?)?.trim() ?? '';
-    final rawDecision =
-        (payload['decision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final rawNextAction = parseNextAction(
-      (rawDecision['nextAction'] as String?)?.trim() ?? '',
-    );
-    final rawMessageKind = parseMessageKind(
-      (payload['messageKind'] as String?)?.trim() ?? '',
-    );
-    final rawPhaseId = (payload['phaseId'] as String?)?.trim() ?? '';
-    final answerLike =
-        rawNextAction == AssistantNextAction.answer ||
-        rawMessageKind == AssistantMessageKind.answer ||
-        rawPhaseId == PlannerPhaseId.answering.wireName;
-    if (!answerLike) {
-      return false;
-    }
-    return _isRenderableAssistantAnswerText(
-          AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-            userMarkdown,
-            allowJsonExtraction: false,
-          ),
-        ) ||
-        _isRenderableAssistantAnswerText(
-          AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-            resultText,
-            allowJsonExtraction: false,
-          ),
-        );
-  }
-
-  Map<String, dynamic> _sanitizeAskUserPayload({
-    required Map<String, dynamic> existingAskUser,
-    required ConversationStateDecision decision,
-  }) {
-    final prompt =
-        (existingAskUser['prompt'] as String?)?.trim().isNotEmpty == true
-        ? (existingAskUser['prompt'] as String).trim()
-        : decision.askUser.prompt.trim();
-    final slotId =
-        (existingAskUser['slotId'] as String?)?.trim().isNotEmpty == true
-        ? (existingAskUser['slotId'] as String).trim()
-        : decision.askUser.slotId.trim();
-    final suggestions =
-        (existingAskUser['suggestions'] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        decision.askUser.suggestions;
-    final required =
-        existingAskUser['required'] == true || decision.askUser.required;
-    return <String, dynamic>{
-      'slotId': slotId,
-      'prompt': prompt,
-      'required': required,
-      'suggestions': suggestions,
-    };
-  }
-
-  Map<String, dynamic> _slotStatePayloadFromSnapshot(
-    SlotStateSnapshot slotState,
-  ) => slotState.toJson();
-
-  List<Map<String, dynamic>> _buildUiReferencesFromLedger(
-    List<EvidenceLedgerEntry> ledger, {
-    required List<Map<String, dynamic>> toolResults,
-    required String domainId,
-    required bool isRealtimeLike,
-  }) {
-    if (ledger.isEmpty) {
-      return _buildUiReferences(toolResults, isRealtimeLike: isRealtimeLike);
-    }
-    final refs = <Map<String, dynamic>>[];
-    final seen = <String>{};
-    final totalSearched = toolResults.fold<int>(0, (sum, item) {
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      return sum + ((data['totalReferences'] as num?)?.toInt() ?? 0);
-    });
-    for (final entry in ledger) {
-      final source = entry.source.isNotEmpty
-          ? entry.source
-          : (entry.sourceHost.isNotEmpty ? entry.sourceHost : entry.url);
-      final dedupeKey = '${source.toLowerCase()}|${entry.title.toLowerCase()}';
-      if (!seen.add(entry.url) || !seen.add(dedupeKey)) continue;
-      refs.add(<String, dynamic>{
-        'evidenceId': entry.evidenceId,
-        'title': entry.title.isNotEmpty ? entry.title : source,
-        'url': entry.url,
-        'source': source,
-        'provider': entry.queryTaskId,
-        'snippet': entry.snippet,
-        'cited':
-            entry.sourceTierType == EvidenceSourceTier.authority ||
-            entry.authorityScore >= 0.8,
-        'authorityScore': entry.authorityScore,
-        'dimension': entry.effectiveDimensionLabel,
-        'queryTaskId': entry.queryTaskId,
-      });
-    }
-    refs.sort((a, b) {
-      final citedDelta =
-          ((b['cited'] == true) ? 1 : 0) - ((a['cited'] == true) ? 1 : 0);
-      if (citedDelta != 0) return citedDelta;
-      final authorityDelta =
-          (((b['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round() -
-          (((a['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round();
-      if (authorityDelta != 0) return authorityDelta;
-      return 0;
-    });
-    final curated = isRealtimeLike
-        ? refs
-              .where((item) => item['cited'] == true)
-              .take(4)
-              .toList(growable: false)
-        : refs.take(8).toList(growable: false);
-    if (curated.isNotEmpty && totalSearched > 0) {
-      curated.first['_totalSearched'] = totalSearched;
-    }
-    return curated;
   }
 
   DomainPolicyBundle _buildDomainPolicyBundle({
@@ -8176,60 +4196,15 @@ class LocalPhaseExecutionOwner {
     required ConversationStateDecision stateDecision,
     DomainPolicyBundle? previous,
   }) {
-    return DomainPolicyBundle(
+    return buildDomainPolicyBundle(
       domainId: domainId,
-      executionPolicy: <String, dynamic>{
-        ...?previous?.executionPolicy,
-        'problemClass': skillExecutionShell.problemClass,
-        'maxIterations': skillExecutionShell.maxIterations,
-        'toolBudget': skillExecutionShell.toolBudget,
-        'variantBudget': skillExecutionShell.variantBudget,
-        'reflectionBudget': skillExecutionShell.reflectionBudget,
-        'providerPolicy': skillExecutionShell.providerPolicy,
-        'preferredProviders': skillExecutionShell.preferredProviders,
-        'freshnessHoursMax': skillExecutionShell.freshnessHoursMax,
-        'finalAnswerMode': stateDecision.finalAnswerModeWireName,
-        'nextAction': stateDecision.nextActionWireName,
-      },
-      slotSchema: <String, dynamic>{
-        ...?previous?.slotSchema,
-        ...slotSchema.toSchemaMap(),
-      },
-      dialoguePolicy: <String, dynamic>{
-        ...?previous?.dialoguePolicy,
-        'currentStateId': dialogueRoundScript.currentStateId,
-        'suggestedNextStateId': dialogueRoundScript.suggestedNextStateId,
-        'detectedEvent': dialogueRoundScript.detectedEvent,
-        'requiredFieldsForNextState':
-            dialogueRoundScript.requiredFieldsForNextState,
-        'missingCriticalSlots': stateDecision.missingCriticalSlots,
-        'askUser': stateDecision.askUserData,
-      },
-      authorityPolicy: <String, dynamic>{
-        ...?previous?.authorityPolicy,
-        'authorityRequired': retrievalPolicy['authorityRequired'] == true,
-        'authoritySatisfied': evidenceEvaluation.authoritySatisfied,
-        'freshnessSatisfied': evidenceEvaluation.freshnessSatisfied,
-      },
-      retrievalPolicy: <String, dynamic>{
-        ...?previous?.retrievalPolicy,
-        ...retrievalPolicy,
-        'coveredDimensions': evidenceEvaluation.coveredDimensions,
-        'missingDimensions': evidenceEvaluation.missingDimensions,
-        'coveredQueryTaskIds': evidenceEvaluation.coveredQueryTaskIds,
-      },
-      answerPolicy: <String, dynamic>{
-        ...?previous?.answerPolicy,
-        'answerEligibility': stateDecision.answerEligibilityWireName,
-        'finalAnswerMode': stateDecision.finalAnswerModeWireName,
-        'qualityGates': stateDecision.qualityGatesData,
-      },
-      narrativePolicy: <String, dynamic>{
-        ...?previous?.narrativePolicy,
-        'style': 'user_facing',
-        'referencesMode': 'inline_links',
-        'fallbackReasoning': evidenceEvaluation.summary,
-      },
+      skillExecutionShell: skillExecutionShell,
+      slotSchema: slotSchema,
+      dialogueRoundScript: dialogueRoundScript,
+      retrievalPolicy: retrievalPolicy,
+      evidenceEvaluation: evidenceEvaluation,
+      stateDecision: stateDecision,
+      previous: previous,
     );
   }
 
@@ -8242,264 +4217,20 @@ class LocalPhaseExecutionOwner {
     required List<Map<String, dynamic>> references,
     required String resultSummary,
   }) {
-    return skillRuns
-        .map((item) {
-          if (item.domainId != primaryDomainId) return item;
-          return SkillRun(
-            runId: item.runId,
-            domainId: item.domainId,
-            goal: item.goal,
-            problemClass: item.problemClass,
-            shell: item.shell,
-            slotState: _slotStatePayloadFromSnapshot(slotState),
-            answerReady: answerReady,
-            stopReason: stopReason,
-            references: references,
-            resultSummary: resultSummary,
-          );
-        })
-        .toList(growable: false);
+    return finalizeSkillRuns(
+      skillRuns: skillRuns,
+      primaryDomainId: primaryDomainId,
+      slotState: slotState,
+      answerReady: answerReady,
+      stopReason: stopReason,
+      references: references,
+      resultSummary: resultSummary,
+    );
   }
 
   double _asDouble(Object? raw) {
     if (raw is num) return raw.toDouble();
     return double.tryParse(raw?.toString() ?? '') ?? 0;
-  }
-
-  List<Map<String, dynamic>> _buildContextSlots(
-    ContextAssemblyResult contextAssembly,
-  ) {
-    final sourceStatus =
-        (contextAssembly.contextEnvelope['sourceStatus'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final missing =
-        (contextAssembly.contextEnvelope['missingSlots'] as List?)
-            ?.whereType<String>()
-            .toSet() ??
-        <String>{};
-    return sourceStatus.entries
-        .map((entry) {
-          final statusText = entry.value.toString().toLowerCase();
-          final status = missing.contains(entry.key) || statusText == 'missing'
-              ? 'need_query'
-              : (statusText == 'empty' ? 'unavailable' : 'ready');
-          return <String, dynamic>{
-            'slotId': entry.key,
-            'status': status,
-            'source': 'context_assembly',
-            'value': entry.value,
-            'queryPlan': status == 'need_query'
-                ? <String, dynamic>{
-                    'reason': 'slot_missing',
-                    'singleTopicQuery': entry.key,
-                  }
-                : null,
-          };
-        })
-        .toList(growable: false);
-  }
-
-  /// Uses the LLM to semantically compress a session transcript.
-  /// Returns the compressed summary, or rethrows on failure (caller handles fallback).
-  /// Builds domain results payload from traces for synthesizer injection.
-  Map<String, dynamic> _buildDomainResultsForSynthesis(
-    List<AssistantTraceEvent> traces,
-  ) {
-    final toolResults = traces
-        .where((e) => e.type == AssistantTraceEventType.toolResult)
-        .map(
-          (e) => <String, dynamic>{
-            'message': e.message,
-            'data': e.data ?? const <String, dynamic>{},
-            'toolCallId': e.toolCallId ?? '',
-          },
-        )
-        .toList(growable: false);
-    final toolErrors = traces
-        .where((e) => e.type == AssistantTraceEventType.toolError)
-        .map(
-          (e) => <String, dynamic>{
-            'message': e.message,
-            'data': e.data ?? const <String, dynamic>{},
-          },
-        )
-        .toList(growable: false);
-    final webEvidencePacks = _extractWebEvidencePacks(toolResults);
-    return <String, dynamic>{
-      'toolResults': toolResults,
-      'toolErrors': toolErrors,
-      'toolResultCount': toolResults.length,
-      'toolErrorCount': toolErrors.length,
-      'webEvidencePacks': webEvidencePacks,
-    };
-  }
-
-  Map<String, dynamic> _buildTemplateVariables({
-    required AssistantRunRequest request,
-    required ContextAssemblyResult contextAssembly,
-    required String domainId,
-    required String domainSkillInstruction,
-    required String domainSkillName,
-    required List<String> availableToolNames,
-    required DialogueRoundScript dialogueRoundScript,
-    String skillPersona = '',
-    String skillCatalog = '',
-    required SkillExecutionShell skillExecutionShell,
-    SlotStateSnapshot previousSlotState = const SlotStateSnapshot(),
-    DomainPolicyBundle? previousDomainPolicyBundle,
-    IntentGraph? intentGraph,
-    AnswerBoundaryPolicy answerBoundaryPolicy = const AnswerBoundaryPolicy(),
-    IntentGraph? previousIntentGraph,
-    String previousAnswerSummary = '',
-    ContextContinuityPolicy continuityPolicy = const ContextContinuityPolicy(),
-    Map<String, dynamic> continuityOverrideSlots = const <String, dynamic>{},
-  }) {
-    final query = request.messages.isEmpty ? '' : request.messages.last.content;
-    final toolGuidelines =
-        _toolMetadataRegistry?.invocationGuidelinesForTools(
-          availableToolNames,
-        ) ??
-        const <Map<String, dynamic>>[];
-    final conversationSpine = buildConversationSpine(
-      stageId: 'understanding',
-      userQuery: query,
-      userGoal: intentGraph?.userGoal ?? '',
-      primarySkill: intentGraph?.primarySkill ?? domainId,
-      problemClass:
-          intentGraph?.problemClass.wireName ??
-          skillExecutionShell.problemClass,
-      answerShape: intentGraph?.answerShape.wireName ?? '',
-      historyAssessment: buildHistoryAssessmentFromPolicy(
-        policy: continuityPolicy,
-        overrideSlots: continuityOverrideSlots,
-      ),
-      stageState: <String, dynamic>{
-        'allowedChoices': const <String>['tool_call', 'ask_user', 'answer'],
-        'continuationActive':
-            continuityPolicy.continuityMode ==
-                ContextContinuityMode.sameTopic ||
-            continuityPolicy.continuityMode ==
-                ContextContinuityMode.explicitFollowUp,
-      },
-    );
-    final searchIterationState = _seedSearchIterationState(
-      request: request,
-      intentGraph: intentGraph,
-    );
-    final temporalReference = _templateRelativeTimeResolver
-        .resolveReferenceContext(
-          referenceNowIso: _firstNonEmptyText(<String?>[
-            request.contextScopeHint['referenceNowIso'] as String?,
-            intentGraph?.queryNormalization.referenceNowIso,
-            previousIntentGraph?.queryNormalization.referenceNowIso,
-          ]),
-          timezone: _firstNonEmptyText(<String?>[
-            request.contextScopeHint['timezone'] as String?,
-            intentGraph?.queryNormalization.timezone,
-            previousIntentGraph?.queryNormalization.timezone,
-          ]),
-        );
-    final calendarContext = _templateRelativeTimeResolver.buildCalendarContext(
-      reference: temporalReference,
-    );
-    final sharedContext = <String, dynamic>{
-      'contextEnvelope': contextAssembly.contextEnvelope,
-      'temporalReference': <String, dynamic>{
-        'referenceNowIso': temporalReference.referenceNowIso,
-        'timezone': temporalReference.timezone,
-        'calendarContext': calendarContext,
-      },
-      'userProfileSnapshot': request.userProfileSnapshot,
-      'historicalRetrievalFeedback':
-          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'domainLearningSignals':
-          (request.contextScopeHint['domainLearningSignals'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-    };
-    final currentRuntimeState = <String, dynamic>{
-      'dialogueState': <String, dynamic>{
-        'continuityMode': continuityPolicy.continuityMode.wireName,
-        'problemClassHint':
-            intentGraph?.problemClass.wireName ??
-            skillExecutionShell.problemClass,
-        'sessionId': request.sessionId ?? 'default',
-        'referenceNowIso': temporalReference.referenceNowIso,
-        'timezone': temporalReference.timezone,
-        'calendarContext': calendarContext,
-        'searchIterationState': searchIterationState.toJson(),
-      },
-      'slotStateSnapshot': previousSlotState.toJson(),
-      'contextSlots': contextAssembly.contextEnvelope,
-      'domainPolicyBundle':
-          previousDomainPolicyBundle?.toJson() ?? const <String, dynamic>{},
-      'skillExecutionShell': skillExecutionShell.toJson(),
-      'queryTasks': QueryTask.toJsonList(
-        intentGraph?.queryTasks ?? const <QueryTask>[],
-      ),
-    };
-    final dialogueContinuity = <String, dynamic>{
-      'continuityMode': continuityPolicy.continuityMode.wireName,
-      'previousIntentGraph':
-          previousIntentGraph?.toJson() ?? const <String, dynamic>{},
-      'previousAnswerSummary': previousAnswerSummary,
-      'previousSlotState': previousSlotState.toJson(),
-      'continuityOverrideSlots': continuityOverrideSlots,
-    };
-    return <String, dynamic>{
-      'userQuery': query,
-      'conversationSpine': jsonEncode(conversationSpine),
-      'sharedContext': jsonEncode(sharedContext),
-      'currentRuntimeState': jsonEncode(currentRuntimeState),
-      'dialogueContinuity': jsonEncode(dialogueContinuity),
-      'searchIterationState': jsonEncode(searchIterationState.toJson()),
-      'deviceProfile': request.deviceProfile,
-      'deviceModel': request.deviceModel,
-      'deviceOs': request.deviceOs,
-      'gpsLocation': request.gpsLocation,
-      'userProfileSnapshot': request.userProfileSnapshot,
-      'historicalRetrievalFeedback':
-          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'domainLearningSignals':
-          (request.contextScopeHint['domainLearningSignals'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
-      'domainId': domainId,
-      'domainSkillName': domainSkillName,
-      'domainSkillInstruction': domainSkillInstruction,
-      'contextEnvelope': contextAssembly.contextEnvelope,
-      'availableTools': availableToolNames,
-      'toolInvocationGuidelines': toolGuidelines,
-      'dialogueRoundScript': _dialogueScriptForModel(dialogueRoundScript),
-      'slotStateSnapshot': previousSlotState.toJson(),
-      'domainPolicyBundle':
-          previousDomainPolicyBundle?.toJson() ?? const <String, dynamic>{},
-      'answerBoundaryPolicy': answerBoundaryPolicy.toJson(),
-      'allowBoundedAnswer': answerBoundaryPolicy.allowBoundedAnswer,
-      if (previousIntentGraph != null)
-        'previousIntentGraphJson': jsonEncode(previousIntentGraph.toJson()),
-      'previousAnswerSummary': previousAnswerSummary,
-      'continuityMode': continuityPolicy.continuityMode.wireName,
-      'continuityPolicy': continuityPolicy.toJson(),
-      'continuityOverrideSlots': continuityOverrideSlots,
-      'skillPersona': skillPersona,
-      'skillCatalog': skillCatalog,
-      'skillExecutionShell': <String, dynamic>{
-        ...skillExecutionShell.toJson(),
-        if (intentGraph?.queryTasks != null &&
-            intentGraph!.queryTasks.isNotEmpty)
-          'preComputedQueryTasks': intentGraph.queryTasks
-              .map((t) => t.toJson())
-              .toList(growable: false),
-      },
-      'problemClass': skillExecutionShell.problemClass,
-      'traceId': '',
-    };
   }
 
   SearchIterationState _seedSearchIterationState({
@@ -8560,24 +4291,20 @@ class LocalPhaseExecutionOwner {
         .take(3)
         .toList(growable: false);
     if (labels.isEmpty) {
-      return '已生成本轮检索词。';
+      return '';
     }
-    return '已生成${labels.join('、')}这几路检索词。';
+    return labels.join('、');
   }
 
   SearchIterationState _searchIterationStateFromTemplateVariables(
-    Map<String, dynamic> templateVariables, {
+    AssistantPipelineTemplateVariablesView templateVariables, {
     int fallbackMaxIterations = 0,
   }) {
-    final raw = templateVariables['searchIterationState'];
-    if (raw is String && raw.trim().isNotEmpty) {
-      final parsed = LlmResponseParser.parse(raw).json;
-      if (parsed != null) {
-        return SearchIterationState.fromJson(parsed);
-      }
-    }
-    if (raw is Map) {
-      return SearchIterationState.fromJson(raw.cast<String, dynamic>());
+    final base = templateVariables.searchIterationState;
+    if (base.maxIterations > 0 ||
+        base.currentIteration > 0 ||
+        base.rounds.isNotEmpty) {
+      return base;
     }
     return SearchIterationState(
       maxIterations: fallbackMaxIterations,
@@ -8587,7 +4314,7 @@ class LocalPhaseExecutionOwner {
   }
 
   SearchIterationState _buildSynthesisSearchIterationState({
-    required Map<String, dynamic> templateVariables,
+    required AssistantPipelineTemplateVariablesView templateVariables,
     required List<AssistantTraceEvent> phaseOneTraces,
     required List<QueryTask> fallbackQueryTasks,
     required int maxIterations,
@@ -8705,56 +4432,6 @@ class LocalPhaseExecutionOwner {
     );
   }
 
-  String _normalizeProblemClassForQuery({
-    required String raw,
-    required String primarySkill,
-    required String mode,
-    required List<String> secondarySkills,
-    required String queryText,
-  }) {
-    final normalized = parseProblemClass(raw.trim()).wireName;
-    return normalized.isNotEmpty ? normalized : ProblemClass.general.wireName;
-  }
-
-  Map<String, dynamic> _buildRoundTrace({
-    required AssistantRunRequest request,
-    required ReactRuntimeResult result,
-    required DialogueRoundScript dialogueRoundScript,
-  }) {
-    final toolStarts = result.traces
-        .where((event) => event.type == AssistantTraceEventType.toolStart)
-        .map(
-          (event) => <String, dynamic>{
-            'toolName': _traceToolName(event),
-            'toolCallId': event.toolCallId ?? '',
-            'arguments': event.data ?? const <String, dynamic>{},
-          },
-        )
-        .toList(growable: false);
-    final toolResults = result.traces
-        .where((event) => event.type == AssistantTraceEventType.toolResult)
-        .length;
-    final toolErrors = result.traces
-        .where((event) => event.type == AssistantTraceEventType.toolError)
-        .length;
-    return <String, dynamic>{
-      'domainId': dialogueRoundScript.domainId,
-      'stateId': dialogueRoundScript.currentStateId,
-      'event': dialogueRoundScript.detectedEvent,
-      'suggestedNextStateId': dialogueRoundScript.suggestedNextStateId,
-      'nextStateCandidates': dialogueRoundScript.nextStateCandidates,
-      'requiredFieldsForNextState':
-          dialogueRoundScript.requiredFieldsForNextState,
-      'totalSubTotalRequired': dialogueRoundScript.totalSubTotalRequired,
-      'query': request.messages.isNotEmpty ? request.messages.last.content : '',
-      'assistantResponse': result.finalText,
-      'toolCalls': toolStarts,
-      'toolResultCount': toolResults,
-      'toolErrorCount': toolErrors,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-  }
-
   ExecutionPreparationResolver get _executionPreparationResolver =>
       ExecutionPreparationResolver(
         domainRouter: _domainRouter,
@@ -8823,98 +4500,6 @@ class LocalPhaseExecutionOwner {
     memoryRepository: _memoryRepository,
     buildObservabilityPayload: const ObservabilityPayloadBuilder().call,
   );
-}
-
-class _PrecomputedBootstrap {
-  const _PrecomputedBootstrap({
-    required this.sessionId,
-    required this.latestUserQuery,
-    required this.historySummary,
-    this.recentDialogueRounds = const <Map<String, dynamic>>[],
-    this.recentDialogueRoundsLimit = 5,
-    required this.recalledTexts,
-    this.previousIntentGraph,
-    this.previousAnswerSummary = '',
-    this.previousUnderstandingSnapshot =
-        const RunArtifactsUnderstandingSnapshot(),
-    this.previousAnswerProcessing = const RunArtifactsAnswerProcessing(),
-    this.historicalThinkingSnapshot =
-        const RunArtifactsHistoricalThinkingSnapshot(),
-    this.providerReasoningContinuation = '',
-    required this.continuityPolicy,
-    this.continuityOverrideSlots = const <String, dynamic>{},
-    required this.recallResult,
-    required this.forceRefreshCatalog,
-    required this.domainCatalog,
-    required this.domainCatalogVersion,
-    required this.fullSkillCatalog,
-    required this.skillCatalog,
-    this.contextAssembly,
-    this.previousRunArtifacts,
-  });
-
-  final String sessionId;
-  final String latestUserQuery;
-  final String historySummary;
-  final List<Map<String, dynamic>> recentDialogueRounds;
-  final int recentDialogueRoundsLimit;
-  final List<String> recalledTexts;
-  final IntentGraph? previousIntentGraph;
-  final String previousAnswerSummary;
-  final RunArtifactsUnderstandingSnapshot previousUnderstandingSnapshot;
-  final RunArtifactsAnswerProcessing previousAnswerProcessing;
-  final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
-  final String providerReasoningContinuation;
-  final ContextContinuityPolicy continuityPolicy;
-  final Map<String, dynamic> continuityOverrideSlots;
-  final RecallResult recallResult;
-  final bool forceRefreshCatalog;
-  final List<String> domainCatalog;
-  final String domainCatalogVersion;
-  final String fullSkillCatalog;
-  final String skillCatalog;
-  final ContextAssemblyResult? contextAssembly;
-  final RunArtifacts? previousRunArtifacts;
-}
-
-class _PrecomputedUnderstand {
-  const _PrecomputedUnderstand({
-    required this.domainId,
-    required this.modeDecision,
-    this.dialogueRoundScript,
-  });
-
-  final String domainId;
-  final ModeDecision modeDecision;
-  final DialogueRoundScript? dialogueRoundScript;
-}
-
-class _PrecomputedRetrieval {
-  const _PrecomputedRetrieval({
-    required this.skillName,
-    required this.skillInstructionMarkdown,
-    required this.skillPersona,
-    required this.allowedToolNames,
-    required this.executionShell,
-    required this.plannerTemplateVersion,
-    required this.postcheckTemplateVersion,
-    required this.synthTemplateVersion,
-    required this.fusionSynthTemplateVersion,
-    required this.previousSlotState,
-    this.previousDomainPolicyBundle,
-  });
-
-  final String skillName;
-  final String skillInstructionMarkdown;
-  final String skillPersona;
-  final List<String> allowedToolNames;
-  final SkillExecutionShell executionShell;
-  final String plannerTemplateVersion;
-  final String postcheckTemplateVersion;
-  final String synthTemplateVersion;
-  final String fusionSynthTemplateVersion;
-  final SlotStateSnapshot previousSlotState;
-  final DomainPolicyBundle? previousDomainPolicyBundle;
 }
 
 class _CompatibilityBootstrapState {

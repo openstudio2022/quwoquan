@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
@@ -62,7 +63,7 @@ class DefaultEvidenceEvaluator {
 
   List<EvidenceLedgerEntry> buildLedger({
     required String domainId,
-    required List<Map<String, dynamic>> toolResults,
+    required List<AssistantToolResultRow> toolResults,
     required SlotStateSnapshot slotState,
     required Map<String, dynamic> retrievalPolicy,
     DateTime? now,
@@ -77,10 +78,8 @@ class DefaultEvidenceEvaluator {
             .toList(growable: false) ??
         const <String>[];
     for (final item in toolResults) {
-      final toolName = (item['toolName'] as String?)?.trim() ?? '';
-      final data =
-          (item['data'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final toolName = item.toolName.trim();
+      final data = item.data;
       final authorityDomains = <String>{
         ...globalAuthorityDomains,
         ...((data['authorityDomains'] as List?)

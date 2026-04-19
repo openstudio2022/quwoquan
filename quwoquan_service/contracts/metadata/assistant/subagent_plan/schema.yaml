@@ -24,6 +24,30 @@ fields:
   - name: goal
     dart_type: String
     json_key: goal
+  - name: role
+    dart_type: String
+    json_key: role
+    default: supporting
+  - name: taskBrief
+    dart_type: String
+    json_key: taskBrief
+    default: ''
+  - name: routeNarrative
+    dart_type: String
+    json_key: routeNarrative
+    default: ''
+  - name: localContextSeed
+    dart_type: String
+    json_key: localContextSeed
+    default: ''
+  - name: needClarify
+    dart_type: bool
+    json_key: needClarify
+    default: false
+  - name: pendingClarifications
+    dart_type: List<String>
+    json_key: pendingClarifications
+    default: const <String>[]
   - name: mode
     dart_type: String
     json_key: mode

@@ -1,0 +1,9 @@
+{
+  "templateId": "prompt.snippets",
+  "version": "2026.04.19",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["_static"],
+  "outputContract": "none",
+  "selfCheckRules": ["snippet_loading"]
+}

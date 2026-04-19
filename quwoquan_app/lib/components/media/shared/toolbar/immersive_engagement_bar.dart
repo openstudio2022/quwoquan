@@ -54,13 +54,61 @@ class ImmersiveEngagementBar extends StatelessWidget {
   /// 工具栏预留高度（含内边距），供宿主布局使用。
   static const double preferredReservedHeight = 108;
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
+  static double _actionCellWidth(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.iconButtonMinSizeSm,
+        regular: AppSpacing.buttonHeightLg,
+        expanded: AppSpacing.buttonHeightLg + AppSpacing.intraGroupXs,
+      );
 
-  static double _crossGroupGap(BuildContext ctx) => AppSpacing.responsiveValue(
+  static double _toolbarHorizontalPadding(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.containerSm,
+        regular: AppSpacing.containerMd,
+        expanded: AppSpacing.containerMd,
+      );
+
+  static double _avatarRadius(BuildContext ctx) => AppSpacing.responsiveValue(
     ctx,
-    compact: AppSpacing.intraGroupXs,
-    regular: AppSpacing.intraGroupSm,
-    expanded: AppSpacing.intraGroupMd,
+    compact: AppSpacing.avatarUserSm / 2,
+    regular: AppSpacing.avatarUserMd / 2,
+    expanded: AppSpacing.avatarUserMd / 2,
   );
+
+  static double _toolbarRailMaxWidth(double availableWidth) {
+    if (availableWidth <= 0) return 0;
+    return availableWidth;
+  }
+
+  static double _outerClusterGapForWidth(double availableWidth) {
+    final rawGap = availableWidth * 0.03;
+    return rawGap.clamp(AppSpacing.intraGroupMd, AppSpacing.interGroupMd)
+        .toDouble();
+  }
+
+  static double _authorClusterWidth({
+    required double avatarRadius,
+    required double currentNameSlotWidth,
+    required bool showFollowLane,
+  }) {
+    final avatarWidth = avatarRadius * 2;
+    final followWidth = showFollowLane
+        ? AppSpacing.intraGroupXs + _kFollowBtnWidth
+        : 0;
+    return avatarWidth +
+        AppSpacing.intraGroupSm +
+        currentNameSlotWidth +
+        followWidth;
+  }
+
+  static double _actionClusterWidth({
+    required double actionCellWidth,
+    required double actionGroupGap,
+  }) {
+    return (actionCellWidth * 3) + (actionGroupGap * 2);
+  }
 
   static int _restNameMaxChars(BuildContext ctx) => AppSpacing.responsiveValue(
     ctx,
@@ -76,6 +124,12 @@ class ImmersiveEngagementBar extends StatelessWidget {
         regular: 5,
         expanded: 6,
       ).round();
+
+  static double _actionGroupGapForWidth(double railWidth) {
+    final rawGap = railWidth * 0.014;
+    return rawGap.clamp(AppSpacing.intraGroupSm, AppSpacing.intraGroupXl)
+        .toDouble();
+  }
 
   static double _nameVisibleWidth(
     int charCount,
@@ -96,22 +150,237 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return painter.width;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+  Widget _buildAuthorCluster({
+    required String displayName,
+    required bool isRevealState,
+    required bool showFollowLane,
+    required bool isFollowing,
+    required ImageProvider? avatarImage,
+    required double avatarRadius,
+    required double currentNameSlotWidth,
+    required double restNameWidth,
+    required double restSecondaryWidth,
+    required double revealNameWidth,
+    required double revealSecondaryWidth,
+    required TextStyle restDisplayStyle,
+    required TextStyle compressedDisplayStyle,
+    required TextStyle secondaryStyle,
+    required VoidCallback onUserTap,
+    required VoidCallback onFollowTap,
+  }) {
     final textDisplayName = displayName.isEmpty
         ? UITextConstants.unknownUser
         : displayName;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: onUserTap,
+          behavior: HitTestBehavior.opaque,
+          child: CircleAvatar(
+            radius: avatarRadius,
+            backgroundImage: avatarImage,
+            onBackgroundImageError: avatarImage == null
+                ? null
+                : (_, stackTrace) {},
+            backgroundColor: AppColors.worksCaption,
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: _kTransitionDuration,
+              curve: Curves.easeOutCubic,
+              width: currentNameSlotWidth,
+              child: isRevealState
+                  ? ShaderMask(
+                      shaderCallback: (bounds) {
+                        const fadeWidth = 14.0;
+                        final start = bounds.width <= fadeWidth
+                            ? 0.0
+                            : ((bounds.width - fadeWidth) / bounds.width)
+                                .clamp(0.0, 1.0);
+                        return LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          stops: [start, 1.0],
+                          colors: const [
+                            AppColors.white,
+                            AppColors.transparent,
+                          ],
+                        ).createShader(bounds);
+                      },
+                      blendMode: BlendMode.dstIn,
+                      child: _nameColumn(
+                        displayName: textDisplayName,
+                        displayStyle: compressedDisplayStyle,
+                        secondaryStyle: secondaryStyle,
+                        primaryMaxWidth: revealNameWidth,
+                        secondaryMaxWidth: revealSecondaryWidth,
+                        clip: true,
+                      ),
+                    )
+                  : _nameColumn(
+                      displayName: textDisplayName,
+                      displayStyle: restDisplayStyle,
+                      secondaryStyle: secondaryStyle,
+                      primaryMaxWidth: restNameWidth,
+                      secondaryMaxWidth: restSecondaryWidth,
+                      clip: false,
+                    ),
+            ),
+            ClipRect(
+              child: AnimatedContainer(
+                duration: _kTransitionDuration,
+                curve: Curves.easeOutCubic,
+                width: showFollowLane
+                    ? AppSpacing.intraGroupXs + _kFollowBtnWidth
+                    : 0,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppSpacing.intraGroupXs,
+                    ),
+                    child: SizedBox(
+                      width: _kFollowBtnWidth,
+                      height: AppSpacing.buttonHeightXs,
+                      child: IgnorePointer(
+                        ignoring: !showFollowLane,
+                        child: AnimatedSlide(
+                          duration: _kTransitionDuration,
+                          curve: Curves.easeOutCubic,
+                          offset: showFollowLane
+                              ? Offset.zero
+                              : const Offset(0.24, 0),
+                          child: AnimatedOpacity(
+                            duration: _kTransitionDuration,
+                            curve: Curves.easeOutCubic,
+                            opacity: showFollowLane ? 1 : 0,
+                            child: GestureDetector(
+                              onTap: onFollowTap,
+                              behavior: HitTestBehavior.opaque,
+                              child: Container(
+                                width: _kFollowBtnWidth,
+                                height: AppSpacing.buttonHeightXs,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isFollowing
+                                      ? AppColors.followingButtonOnDark
+                                      : AppColors.worksAccent,
+                                  borderRadius: BorderRadius.circular(
+                                    AppSpacing.circularBorderRadius,
+                                  ),
+                                ),
+                                child: Text(
+                                  isFollowing
+                                      ? UITextConstants.following
+                                      : UITextConstants.follow,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.fade,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: isFollowing
+                                        ? AppColors.worksBodyText.withValues(
+                                            alpha: 0.72,
+                                          )
+                                        : AppColors.white,
+                                    fontSize: AppTypography.xs,
+                                    fontWeight: AppTypography.semiBold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCluster({
+    required bool isLiked,
+    required int likeCount,
+    required int shareCount,
+    required int commentCount,
+    required double actionCellWidth,
+    required double actionGroupGap,
+    required VoidCallback onLikeTap,
+    required VoidCallback? onShareTap,
+    required VoidCallback? onCommentTap,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: actionCellWidth,
+          child: _action(
+            icon: Icon(
+              isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+              color: isLiked ? AppColors.worksLike : AppColors.worksTitle,
+              size: AppSpacing.iconMedium,
+            ),
+            label: formatCompactActionCount(likeCount),
+            onTap: onLikeTap,
+            alignment: Alignment.centerLeft,
+          ),
+        ),
+        SizedBox(width: actionGroupGap),
+        SizedBox(
+          width: actionCellWidth,
+          child: _action(
+            icon: Icon(
+              CupertinoIcons.arrowshape_turn_up_right,
+              color: AppColors.worksTitle,
+              size: AppSpacing.iconMedium,
+            ),
+            label: formatCompactActionCount(shareCount),
+            onTap: onShareTap,
+            alignment: Alignment.center,
+          ),
+        ),
+        SizedBox(width: actionGroupGap),
+        SizedBox(
+          width: actionCellWidth,
+          child: _action(
+            icon: Icon(
+              CupertinoIcons.chat_bubble,
+              color: AppColors.worksTitle,
+              size: AppSpacing.iconMedium,
+            ),
+            label: formatCompactActionCount(commentCount),
+            onTap: onCommentTap,
+            alignment: Alignment.centerRight,
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final isRevealState = showFollowButton;
     final restDisplayStyle = TextStyle(
       color: AppColors.worksTitle,
       fontSize: AppTypography.sm,
-      fontWeight: AppTypography.bold,
+      fontWeight: AppTypography.medium,
     );
     final compressedDisplayStyle = TextStyle(
       color: AppColors.worksTitle,
       fontSize: AppTypography.xxs,
-      fontWeight: AppTypography.bold,
+      fontWeight: AppTypography.medium,
     );
     final secondaryStyle = TextStyle(
       color: AppColors.worksBodyText.withValues(alpha: 0.72),
@@ -142,7 +411,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
     final revealNameSlotWidth = revealNameWidth > revealSecondaryWidth
         ? revealNameWidth
         : revealSecondaryWidth;
-    final crossGroupGap = _crossGroupGap(context);
+    final actionCellWidth = _actionCellWidth(context);
+    final horizontalPadding = _toolbarHorizontalPadding(context);
+    final avatarRadius = _avatarRadius(context);
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
     final showFollowLane = showFollowButton;
     final currentNameSlotWidth = showFollowLane
@@ -162,205 +433,96 @@ class ImmersiveEngagementBar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
+              horizontalPadding,
               topPadding,
-              AppSpacing.containerMd,
+              horizontalPadding,
               bottomPadding,
             ),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 500.0,
-                ),
-                child: isSelfPost
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final outerGap = _outerClusterGapForWidth(
+                  constraints.maxWidth,
+                );
+                final actionGroupGap = _actionGroupGapForWidth(
+                  constraints.maxWidth,
+                );
+                final authorClusterWidth = _authorClusterWidth(
+                  avatarRadius: avatarRadius,
+                  currentNameSlotWidth: currentNameSlotWidth,
+                  showFollowLane: showFollowLane,
+                );
+                final actionClusterWidth = _actionClusterWidth(
+                  actionCellWidth: actionCellWidth,
+                  actionGroupGap: actionGroupGap,
+                );
+                final railWidth = _toolbarRailMaxWidth(
+                  constraints.maxWidth,
+                )
+                    .clamp(
+                      0.0,
+                      authorClusterWidth +
+                          outerGap +
+                          actionClusterWidth,
+                    )
+                    .toDouble();
+
+                final content = isSelfPost
                     ? SizedBox(
                         height: AppSpacing.iconButtonMinSizeSm,
                         child: _buildSelfActionRow(),
                       )
-                    : Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      GestureDetector(
-                        onTap: onUserTap,
-                        behavior: HitTestBehavior.opaque,
-                        child: CircleAvatar(
-                          radius: AppSpacing.avatarUserMd * 0.5,
-                          backgroundImage: avatarImage,
-                          onBackgroundImageError: avatarImage == null
-                              ? null
-                              : (_, stackTrace) {},
-                          backgroundColor: AppColors.worksCaption,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.intraGroupSm),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedContainer(
-                            duration: _kTransitionDuration,
-                            curve: Curves.easeOutCubic,
-                            width: currentNameSlotWidth,
-                            child: isRevealState
-                                ? ShaderMask(
-                                    shaderCallback: (bounds) {
-                                      const fadeWidth = 14.0;
-                                      final start = bounds.width <= fadeWidth
-                                          ? 0.0
-                                          : ((bounds.width - fadeWidth) /
-                                                    bounds.width)
-                                                .clamp(0.0, 1.0);
-                                      return LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        stops: [start, 1.0],
-                                        colors: const [
-                                          AppColors.white,
-                                          AppColors.transparent,
-                                        ],
-                                      ).createShader(bounds);
-                                    },
-                                    blendMode: BlendMode.dstIn,
-                                    child: _nameColumn(
-                                      displayName: textDisplayName,
-                                      displayStyle: compressedDisplayStyle,
-                                      secondaryStyle: secondaryStyle,
-                                      primaryMaxWidth: revealNameWidth,
-                                      secondaryMaxWidth: revealSecondaryWidth,
-                                      clip: true,
-                                    ),
-                                  )
-                                : _nameColumn(
-                                    displayName: textDisplayName,
-                                    displayStyle: restDisplayStyle,
-                                    secondaryStyle: secondaryStyle,
-                                    primaryMaxWidth: restNameWidth,
-                                    secondaryMaxWidth: restSecondaryWidth,
-                                    clip: false,
-                                  ),
-                          ),
-                          ClipRect(
-                            child: AnimatedContainer(
-                              duration: _kTransitionDuration,
-                              curve: Curves.easeOutCubic,
-                              width: showFollowLane
-                                  ? AppSpacing.intraGroupSm + _kFollowBtnWidth
-                                  : 0,
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: AppSpacing.intraGroupSm,
-                                  ),
-                                  child: SizedBox(
-                                    width: _kFollowBtnWidth,
-                                    height: AppSpacing.buttonHeightXs,
-                                    child: IgnorePointer(
-                                      ignoring: !showFollowButton,
-                                      child: AnimatedSlide(
-                                        duration: _kTransitionDuration,
-                                        curve: Curves.easeOutCubic,
-                                        offset: showFollowButton
-                                            ? Offset.zero
-                                            : const Offset(0.24, 0),
-                                        child: AnimatedOpacity(
-                                          duration: _kTransitionDuration,
-                                          curve: Curves.easeOutCubic,
-                                          opacity: showFollowButton ? 1 : 0,
-                                          child: GestureDetector(
-                                            onTap: onFollowTap,
-                                            behavior: HitTestBehavior.opaque,
-                                            child: Container(
-                                              width: _kFollowBtnWidth,
-                                              height: AppSpacing.buttonHeightXs,
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: isFollowing
-                                                    ? AppColors
-                                                          .followingButtonOnDark
-                                                    : AppColors.worksAccent,
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                      AppSpacing
-                                                          .circularBorderRadius,
-                                                    ),
-                                              ),
-                                              child: Text(
-                                                isFollowing
-                                                    ? UITextConstants.following
-                                                    : UITextConstants.follow,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.fade,
-                                                softWrap: false,
-                                                style: TextStyle(
-                                                  color: isFollowing
-                                                      ? AppColors.worksBodyText
-                                                            .withValues(
-                                                              alpha: 0.72,
-                                                            )
-                                                      : AppColors.white,
-                                                  fontSize: AppTypography.xs,
-                                                  fontWeight:
-                                                      AppTypography.semiBold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(width: crossGroupGap),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
+                    : SizedBox(
+                        width: railWidth,
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            _action(
-                              icon: Icon(
-                                isLiked
-                                    ? CupertinoIcons.heart_fill
-                                    : CupertinoIcons.heart,
-                                color: isLiked
-                                    ? AppColors.worksLike
-                                    : AppColors.worksTitle,
-                                size: AppSpacing.iconMedium,
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: _buildAuthorCluster(
+                                displayName: displayName,
+                                isRevealState: isRevealState,
+                                showFollowLane: showFollowLane,
+                                isFollowing: isFollowing,
+                                avatarImage: avatarImage,
+                                avatarRadius: avatarRadius,
+                                currentNameSlotWidth: currentNameSlotWidth,
+                                restNameWidth: restNameWidth,
+                                restSecondaryWidth: restSecondaryWidth,
+                                revealNameWidth: revealNameWidth,
+                                revealSecondaryWidth: revealSecondaryWidth,
+                                restDisplayStyle: restDisplayStyle,
+                                compressedDisplayStyle:
+                                    compressedDisplayStyle,
+                                secondaryStyle: secondaryStyle,
+                                onUserTap: onUserTap,
+                                onFollowTap: onFollowTap,
                               ),
-                              label: formatCompactActionCount(likeCount),
-                              onTap: onLikeTap,
                             ),
-                            SizedBox(width: AppSpacing.interGroupMd),
-                            _action(
-                              icon: Icon(
-                                CupertinoIcons.arrowshape_turn_up_right,
-                                color: AppColors.worksTitle,
-                                size: AppSpacing.iconMedium,
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildActionCluster(
+                                isLiked: isLiked,
+                                likeCount: likeCount,
+                                shareCount: shareCount,
+                                commentCount: commentCount,
+                                actionCellWidth: actionCellWidth,
+                                actionGroupGap: actionGroupGap,
+                                onLikeTap: onLikeTap,
+                                onShareTap: onShareTap,
+                                onCommentTap: onCommentTap,
                               ),
-                              label: formatCompactActionCount(shareCount),
-                              onTap: onShareTap,
-                            ),
-                            SizedBox(width: AppSpacing.interGroupMd),
-                            _action(
-                              icon: Icon(
-                                CupertinoIcons.chat_bubble,
-                                color: AppColors.worksTitle,
-                                size: AppSpacing.iconMedium,
-                              ),
-                              label: formatCompactActionCount(commentCount),
-                              onTap: onCommentTap,
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: railWidth),
+                    child: content,
                   ),
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -488,25 +650,32 @@ class ImmersiveEngagementBar extends StatelessWidget {
   Widget _action({
     required Widget icon,
     required String label,
+    required Alignment alignment,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          SizedBox(height: AppSpacing.intraGroupXs / 2),
-          Text(
-            label,
-            style: TextStyle(
-              color: AppColors.worksBodyText,
-              fontSize: AppTypography.xs,
-              fontWeight: AppTypography.medium,
-            ),
+      child: SizedBox(
+        width: double.infinity,
+        child: Align(
+          alignment: alignment,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              SizedBox(height: AppSpacing.intraGroupXs / 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.worksBodyText,
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

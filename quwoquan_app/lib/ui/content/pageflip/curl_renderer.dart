@@ -47,6 +47,17 @@ class ArticlePageCurlRenderScene {
   final ArticlePageCurlRenderConfig renderConfig;
 }
 
+Rect resolveArticlePageBottomProjectionBand(
+  Rect pageRect,
+  double foldXNormalized,
+) {
+  final foldX = pageRect.left + pageRect.width * foldXNormalized;
+  final halfWidth = math.max(pageRect.width * 0.16, 24.0).toDouble();
+  final left = math.max(pageRect.left, foldX - halfWidth).toDouble();
+  final right = math.min(pageRect.right, foldX).toDouble();
+  return Rect.fromLTRB(left, pageRect.top, right, pageRect.bottom);
+}
+
 class ArticlePageCurlRenderer extends StatelessWidget {
   const ArticlePageCurlRenderer({
     super.key,
@@ -91,8 +102,8 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     if (scene.renderConfig.enableBottomProjection) {
       _drawBottomProjection(canvas);
     }
-    _drawBackSurface(canvas);
     _drawFrontSurface(canvas);
+    _drawBackSurface(canvas);
     if (scene.renderConfig.enableSpineAmbient) {
       _drawSpineAmbient(canvas);
     }
@@ -151,12 +162,10 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
   }
 
   Rect _bottomProjectionBand() {
-    final foldX =
-        scene.pageRect.left + scene.pageRect.width * scene.meshFrame.foldXNormalized;
-    final halfWidth = math.max(scene.pageRect.width * 0.16, 24.0).toDouble();
-    final left = math.max(scene.pageRect.left, foldX - halfWidth).toDouble();
-    final right = math.min(scene.pageRect.right, foldX + halfWidth).toDouble();
-    return Rect.fromLTRB(left, scene.pageRect.top, right, scene.pageRect.bottom);
+    return resolveArticlePageBottomProjectionBand(
+      scene.pageRect,
+      scene.meshFrame.foldXNormalized,
+    );
   }
 
   void _drawBackSurface(Canvas canvas) {
@@ -178,7 +187,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       canvas,
       backSurface,
       scene.textures.verso,
-      blendMode: BlendMode.srcOver,
+      blendMode: BlendMode.src,
     );
   }
 
@@ -235,7 +244,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       canvas,
       frontSurface,
       scene.textures.recto,
-      blendMode: BlendMode.srcOver,
+      blendMode: BlendMode.src,
     );
     if (lightingProgram != null) {
       final shader = lightingProgram!.fragmentShader();
@@ -266,7 +275,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     Canvas canvas,
     ArticlePageCurlMeshSurface surface,
     ArticlePageTextureSnapshot snapshot, {
-    BlendMode blendMode = BlendMode.srcOver,
+    BlendMode blendMode = BlendMode.src,
   }) {
     final imageShader = ui.ImageShader(
       snapshot.image,
@@ -282,8 +291,8 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       surface.vertices,
       blendMode,
       Paint()
-        ..isAntiAlias = true
-        ..filterQuality = FilterQuality.high
+        ..isAntiAlias = false
+        ..filterQuality = FilterQuality.none
         ..shader = imageShader,
     );
   }

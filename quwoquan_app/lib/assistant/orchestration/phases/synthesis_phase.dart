@@ -56,15 +56,12 @@ class SynthesisPhase implements Phase {
     var synthesisDraft = input.state.synthesisDraft;
     var pendingResponse = input.state.pendingResponse;
     final snapshot = input.state.executionPhaseSnapshot;
-    // ignore: deprecated_member_use_from_same_package
-    final hasExecution = snapshot is ExecutionPhaseSuccess ||
-        input.state.executionBridgeSnapshot.isNotEmpty;
+    final hasExecution = snapshot is ExecutionPhaseSuccess;
     if (pendingResponse == null && hasExecution) {
       final request = input.request as AssistantRunRequest;
-      // ignore: deprecated_member_use_from_same_package
       synthesisDraft = await _runner.buildDraft(
         request,
-        executionSnapshot: input.state.executionBridgeSnapshot,
+        executionSnapshot: snapshot,
         onTraceEvent: input.onTraceEvent == null
             ? null
             : (event) => input.onTraceEvent!(event),

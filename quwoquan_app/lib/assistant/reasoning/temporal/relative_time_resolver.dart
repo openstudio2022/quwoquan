@@ -1,6 +1,11 @@
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 
+final RegExp relativeTemporalTokenPattern = RegExp(
+  r'(昨天|昨日|明天|后天|今天|周[一二三四五六日天]|上周[一二三四五六日天]|下周[一二三四五六日天]|最近)',
+);
+final RegExp relativeDayTokenPattern = RegExp(r'(昨天|昨日|明天|后天|今天)');
+
 class TemporalReferenceContext {
   const TemporalReferenceContext({
     required this.referenceNow,
@@ -139,7 +144,7 @@ class RelativeTimeResolver {
       referenceNow: reference.referenceNow,
       referenceNowIso: reference.referenceNowIso,
       timezone: reference.timezone,
-      rewrittenQuery: _compressWhitespace(query),
+      rewrittenQuery: query,
     );
   }
 
@@ -175,7 +180,7 @@ class RelativeTimeResolver {
       normalizedQuery: baseQuery,
       rewrittenQuery: normalization.rewrittenQuery.trim().isNotEmpty
           ? normalization.rewrittenQuery.trim()
-          : resolution.rewrittenQuery,
+          : baseQuery,
       issues: normalization.issues,
       language: normalization.language,
       hints: normalization.hints,
@@ -233,9 +238,9 @@ class RelativeTimeResolver {
           : fallbackResolution.timePointIso,
     );
     return task.copyWith(
-      query: taskResolution.rewrittenQuery.trim().isNotEmpty
-          ? taskResolution.rewrittenQuery.trim()
-          : task.query,
+      query: task.query.trim().isNotEmpty
+          ? task.query.trim()
+          : taskResolution.rewrittenQuery,
       timeScope: task.timeScope.trim().isNotEmpty
           ? task.timeScope.trim()
           : taskResolution.timeScope,
@@ -269,9 +274,9 @@ class RelativeTimeResolver {
       timezone: timezone,
     );
     final fallbackResolution = resolve(
-      query: queryNormalization.rewrittenQuery.trim().isNotEmpty
-          ? queryNormalization.rewrittenQuery.trim()
-          : queryNormalization.normalizedQuery.trim(),
+      query: queryNormalization.normalizedQuery.trim().isNotEmpty
+          ? queryNormalization.normalizedQuery.trim()
+          : latestUserQuery.trim(),
       referenceNowIso: queryNormalization.referenceNowIso,
       timezone: queryNormalization.timezone,
       timeScope: queryNormalization.timeScope,
@@ -543,7 +548,7 @@ class RelativeTimeResolver {
     if (RegExp(r'(为什么|为何|原因|复盘|回顾|发生了什么|发生什么|怎么了|怎么样了)').hasMatch(query)) {
       return _WeekdayDirection.past;
     }
-    if (RegExp(r'(会不会|会怎样|将会|预报|预测|预计|适合|要不要|穿什么|需要带)').hasMatch(query)) {
+    if (RegExp(r'(会不会|会怎样|将会|预报|预测|预计|适合|要不要)').hasMatch(query)) {
       return _WeekdayDirection.future;
     }
     return _WeekdayDirection.neutral;

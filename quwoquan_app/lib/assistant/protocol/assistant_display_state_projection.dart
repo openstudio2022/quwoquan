@@ -147,31 +147,15 @@ AssistantAnswerDisplayState _resolveAnswerDisplayState({
       .where(_hasVisibleAnswerBlock)
       .toList(growable: false);
   final markdown = _normalizeMarkdownLeaf(answerMarkdown);
-  if (explicitBlocks.isNotEmpty || explicit.summary.trim().isNotEmpty) {
-    final explicitVisibleText = _normalizePlainText(
-      <String>[
-        explicit.summary.trim(),
-        renderAnswerBlocksToPlainText(explicitBlocks),
-      ].where((item) => item.trim().isNotEmpty).join('\n\n'),
-    );
-    final shouldAppendMarkdownFallback =
-        markdown.isNotEmpty &&
-        _containsExplicitDateAnchor(markdown) &&
-        !_containsExplicitDateAnchor(explicitVisibleText);
+  if (explicitBlocks.isNotEmpty ||
+      (explicit.summary.trim().isNotEmpty &&
+          markdown.isEmpty &&
+          _normalizePlainText(answerPlainText).isEmpty)) {
     return AssistantAnswerDisplayState(
       summary: explicit.summary.trim().isNotEmpty
           ? explicit.summary.trim()
           : answerSummary.trim(),
-      blocks: shouldAppendMarkdownFallback
-          ? <AssistantAnswerDisplayBlock>[
-              ...explicitBlocks,
-              AssistantAnswerDisplayBlock(
-                blockId: 'answer_markdown_fallback',
-                kind: DisplayBlockKind.markdown,
-                body: markdown,
-              ),
-            ]
-          : explicitBlocks,
+      blocks: explicitBlocks,
     );
   }
   if (markdown.isNotEmpty) {
@@ -278,27 +262,12 @@ String _enrichSummaryWithResolutions(
 }
 
 bool _summaryCoversDetail(String summary, String detail) {
-  final s = summary.replaceAll(RegExp(r'\s+'), '');
-  final d = detail.replaceAll(RegExp(r'\s+'), '');
+  final s = _stripSpacesAndPunctuation(summary);
+  final d = _stripSpacesAndPunctuation(detail);
   if (d.length <= 6) return s.contains(d);
-  final datePattern = RegExp(r'\d{4}[-年/]\d{1,2}[-月/日]?\d{0,2}');
-  final detailDates =
-      datePattern.allMatches(d).map((m) => m.group(0)!).toList();
-  for (final date in detailDates) {
-    if (!s.contains(date)) return false;
-  }
-  if (detailDates.isNotEmpty) return true;
-  final segments = d.split(RegExp(r'[，,。；;、\s]+'));
+  final segments = _splitDetailSegments(d);
   for (final seg in segments) {
     if (seg.length >= 2 && seg.length <= 6 && s.contains(seg)) return true;
-  }
-  const knownGeoNames = <String>[
-    '深圳', '北京', '上海', '广州', '杭州', '成都', '武汉', '南京',
-    '重庆', '天津', '苏州', '西安', '长沙', '东莞', '青岛', '郑州',
-    '中国', '美国', '日本', '香港', '台湾', '新加坡',
-  ];
-  for (final geo in knownGeoNames) {
-    if (d.contains(geo) && s.contains(geo)) return true;
   }
   return false;
 }
@@ -480,11 +449,23 @@ bool _isDuplicateNarrativeText(
 }
 
 String _normalizeProcessTextKey(String raw) {
-  return raw
-      .replaceAll(RegExp(r'^(我会先|我先|先)'), '')
-      .replaceAll(RegExp(r'[\s，,。；;：:、/]+'), '')
-      .trim()
-      .toLowerCase();
+  final trimmed = raw.trimLeft();
+  final prefixes = <String>['我会先', '我先', '先'];
+  var start = 0;
+  for (final prefix in prefixes) {
+    if (trimmed.startsWith(prefix)) {
+      start = prefix.length;
+      break;
+    }
+  }
+  final buffer = StringBuffer();
+  for (final rune in trimmed.substring(start).runes) {
+    if (_isIgnorableNormalizationRune(rune)) {
+      continue;
+    }
+    buffer.writeCharCode(rune);
+  }
+  return buffer.toString().trim().toLowerCase();
 }
 
 String _resolveRetrievalSummary({
@@ -762,14 +743,86 @@ bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
       );
 }
 
-bool _containsExplicitDateAnchor(String raw) {
-  final text = raw.replaceAll(RegExp(r'\s+'), '');
-  if (text.isEmpty) {
-    return false;
+String _stripSpacesAndPunctuation(String raw) {
+  final buffer = StringBuffer();
+  for (final rune in raw.runes) {
+    if (_isIgnorableNormalizationRune(rune)) {
+      continue;
+    }
+    buffer.writeCharCode(rune);
   }
-  return RegExp(r'20\d{2}-\d{2}-\d{2}').hasMatch(text) ||
-      RegExp(r'20\d{2}年\d{1,2}月\d{1,2}日').hasMatch(text) ||
-      RegExp(r'\d{1,2}月\d{1,2}日').hasMatch(text);
+  return buffer.toString();
+}
+
+String _removeWhitespace(String raw) {
+  final buffer = StringBuffer();
+  for (final rune in raw.runes) {
+    if (rune == 0x20 || rune == 0x09 || rune == 0x0a || rune == 0x0d) {
+      continue;
+    }
+    buffer.writeCharCode(rune);
+  }
+  return buffer.toString();
+}
+
+List<String> _splitDetailSegments(String text) {
+  final segments = <String>[];
+  final buffer = StringBuffer();
+  for (final rune in text.runes) {
+    if (_isDetailSegmentSeparatorRune(rune)) {
+      final segment = buffer.toString().trim();
+      if (segment.isNotEmpty) {
+        segments.add(segment);
+      }
+      buffer.clear();
+      continue;
+    }
+    buffer.writeCharCode(rune);
+  }
+  final tail = buffer.toString().trim();
+  if (tail.isNotEmpty) {
+    segments.add(tail);
+  }
+  return segments;
+}
+
+bool _isIgnorableNormalizationRune(int rune) {
+  return rune == 0x20 ||
+      rune == 0x09 ||
+      rune == 0x0a ||
+      rune == 0x0d ||
+      rune == 0x3000 ||
+      rune == 0x3001 ||
+      rune == 0x3002 ||
+      rune == 0xFF0C ||
+      rune == 0xFF1B ||
+      rune == 0x003B ||
+      rune == 0x003A ||
+      rune == 0xFF1A ||
+      rune == 0x300A ||
+      rune == 0x300B ||
+      rune == 0x300C ||
+      rune == 0x300D ||
+      rune == 0x300E ||
+      rune == 0x300F ||
+      rune == 0x002F ||
+      rune == 0x005C ||
+      rune == 0x0028 ||
+      rune == 0x0029 ||
+      rune == 0x002D ||
+      rune == 0x005F;
+}
+
+bool _isDetailSegmentSeparatorRune(int rune) {
+  return rune == 0x20 ||
+      rune == 0x09 ||
+      rune == 0x0a ||
+      rune == 0x0d ||
+      rune == 0xFF0C ||
+      rune == 0x3001 ||
+      rune == 0x3002 ||
+      rune == 0xFF1B ||
+      rune == 0x003B;
 }
 
 String _renderAnswerBlockToMarkdown(AssistantAnswerDisplayBlock block) {

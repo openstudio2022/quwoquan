@@ -82,6 +82,7 @@ class BootstrapPhase implements Phase {
     );
     final previousProviderReasoningContinuation =
         _resolveProviderReasoningContinuation(latestAssistant);
+    final sessionHistoryState = sessionManager.historyStateOf(sessionId);
     final previousUnderstandingSnapshot = _parsePreviousUnderstandingSnapshot(
       latestAssistant,
       previousRunArtifacts,
@@ -235,6 +236,7 @@ class BootstrapPhase implements Phase {
           previousAnswerProcessing: carriedPreviousAnswerProcessing,
           historicalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
           providerReasoningContinuation: carriedProviderReasoningContinuation,
+          sessionHistoryState: sessionHistoryState,
           contextContinuityPolicy: continuityPolicy,
           continuityOverrideSlots: continuityOverrideSlots,
           recallResult: recallResult,
@@ -527,10 +529,7 @@ class BootstrapPhase implements Phase {
     final refinementCue = RegExp(
       r'(明天|后天|只有\d+天|优先|哪条|哪个更|怎么选|这样|这么|这种|这一版)',
     ).hasMatch(compact);
-    final explicitAnchor = RegExp(
-      r'([A-Za-z]{3,}|[\u4e00-\u9fff]{2,}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
-    ).hasMatch(compact);
-    return (referentialCue || refinementCue) && !explicitAnchor;
+    return referentialCue || refinementCue;
   }
 
   bool _looksLikeImplicitSameTopicFollowUp(
@@ -564,8 +563,6 @@ class BootstrapPhase implements Phase {
     var normalized = raw.trim().toLowerCase();
     if (normalized.isEmpty) return '';
     normalized = normalized
-        .replaceAll(RegExp(r'[Aa]股'), '股票')
-        .replaceAll('中国股市', '股票')
         .replaceAll(RegExp(r'\s+'), '')
         .replaceAll(
           RegExp(
@@ -590,11 +587,6 @@ class BootstrapPhase implements Phase {
       'place',
     ]) {
       if (contextSlots[key] != null) return true;
-    }
-    if (previousIntentGraph?.entityAnchors.isNotEmpty == true) {
-      return RegExp(
-        r'(市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原)',
-      ).hasMatch(previousAnswerSummary);
     }
     return false;
   }

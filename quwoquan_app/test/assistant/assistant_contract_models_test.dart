@@ -194,6 +194,12 @@ void main() {
         'domainId': 'fallback_general_search',
         'problemClass': 'complex_reasoning',
         'goal': '结合天气补充旅游建议',
+        'role': 'supporting',
+        'taskBrief': '围绕天气与旅游建议补充检索与汇总',
+        'routeNarrative': '天气主线之后并行补充旅游建议',
+        'localContextSeed': 'query=结合天气补充旅游建议; primary=weather; skill=fallback_general_search',
+        'needClarify': false,
+        'pendingClarifications': <String>[],
         'stopPolicy': 'explore',
         'searchIntensity': 'high',
         'providerPolicy': 'model_choice',
@@ -206,6 +212,31 @@ void main() {
       expect(plan.searchIntensity, equals('high'));
       expect(plan.freshnessHoursMax, equals(6));
       expect(plan.answerThreshold, closeTo(0.8, 0.001));
+      expect(plan.role, equals('supporting'));
+      expect(plan.taskBrief, isNotEmpty);
+      expect(plan.routeNarrative, isNotEmpty);
+      expect(plan.localContextSeed, isNotEmpty);
+      expect(plan.hasMilestone3Inputs, isTrue);
+      final wire = plan.toJson();
+      expect(wire['taskBrief'], isNotEmpty);
+      expect(wire.containsKey('toolWhitelist'), isFalse);
+      expect(wire.containsKey('stopPolicy'), isFalse);
+      expect(wire.containsKey('searchIntensity'), isFalse);
+      expect(wire.containsKey('providerPolicy'), isFalse);
+      expect(wire.containsKey('freshnessHoursMax'), isFalse);
+      expect(wire.containsKey('answerThreshold'), isFalse);
+      expect(wire.containsKey('dependencies'), isFalse);
+    });
+
+    test('SubagentPlan 缺少里程碑3输入时门禁为 false', () {
+      final plan = SubagentPlan.fromJson(const <String, dynamic>{
+        'subagentId': 'travel_planner_1',
+        'domainId': 'fallback_general_search',
+        'problemClass': 'complex_reasoning',
+        'goal': '结合天气补充旅游建议',
+      });
+
+      expect(plan.hasMilestone3Inputs, isFalse);
     });
 
     test('PreferenceFact 支持会话与长期事实', () {
@@ -293,6 +324,10 @@ void main() {
             'domainId': 'fallback_general_search',
             'problemClass': 'complex_reasoning',
             'goal': '结合天气补充旅游建议',
+            'taskBrief': '围绕旅游建议补充检索与汇总',
+            'routeNarrative': '天气主线之后并行补充旅游建议',
+            'localContextSeed': 'query=查看天气并规划旅游; primary=weather; skill=fallback_general_search',
+            'role': 'supporting',
             'stopPolicy': 'balanced',
             'searchIntensity': 'medium',
           },
@@ -318,6 +353,9 @@ void main() {
         turn.subagentPlan.single.problemClass,
         equals('complex_reasoning'),
       );
+      expect(turn.subagentPlan.single.taskBrief, isNotEmpty);
+      expect(turn.subagentPlan.single.routeNarrative, isNotEmpty);
+      expect(turn.subagentPlan.single.localContextSeed, isNotEmpty);
       expect(turn.journey.entries.single.references.single.title, equals('中国气象局'));
       expect(turn.sessionPreferenceFacts.single.key, equals('feedbackHint'));
 

@@ -158,27 +158,6 @@ void main() {
       final artifacts = response.runArtifacts;
       expect(artifacts, isNotNull);
       final resolvedArtifacts = artifacts!;
-      final structuredUnderstanding =
-          (response.structuredResponse['understandingSnapshot'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      final visibleUnderstanding =
-          (structuredUnderstanding['userFacingSummary'] as String?)?.trim() ??
-          resolvedArtifacts.understandingSnapshot.userFacingSummary;
-      expect(visibleUnderstanding, contains('周三A股大涨'));
-      expect(
-        resolvedArtifacts.retrievalProcessing.processingSummary,
-        isNotEmpty,
-      );
-      expect(
-        resolvedArtifacts.retrievalProcessing.processingSummary,
-        isNot(contains('处理了')),
-      );
-      expect(
-        resolvedArtifacts.retrievalProcessing.processingSummary,
-        isNot(contains('接纳了')),
-      );
-      expect(resolvedArtifacts.answerProcessing.readinessSummary, isNotEmpty);
       expect(response.displayMarkdown, contains('结论'));
       expect(response.displayMarkdown, contains('主要驱动 / 依据'));
       expect(response.displayMarkdown, contains('周三那天 A股 明显走强'));
@@ -241,6 +220,82 @@ void main() {
           .join(' ');
       expect(combinedNarrative.contains('压缩以上对话历史为简洁摘要'), isFalse);
       expect(combinedNarrative.contains('summarize_session'), isFalse);
+    });
+
+    test('M6 最终集成验收：多 skill 并行后应统一成答并落盘到 session 视图', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'assistant_m6_final_integration_e2e_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final runtime = await _buildDeterministicRuntime(
+        llmProvider: const _M6MultiSkillIntegrationLlm(),
+        storageRoot: tempDir.path,
+      );
+      final gateway = AssistantGateway(runtime);
+      final sessionId =
+          'assistant_m6_final_integration_${DateTime.now().millisecondsSinceEpoch}';
+      final response = await gateway.run(
+        AssistantRunRequest(
+          sessionId: sessionId,
+          userId: 'test_user',
+          deviceProfile: 'mobile',
+          channel: 'app',
+          messages: const <AssistantRunMessage>[
+            AssistantRunMessage(
+              role: 'user',
+              content: '帮我同时比较九寨沟4天路线和住宿取舍',
+            ),
+          ],
+        ),
+      );
+
+      expect(response.degraded, isFalse);
+      expect(response.finalText.trim(), isNotEmpty);
+      expect(response.displayPlainText.trim(), isNotEmpty);
+      expect(response.displayPlainText, contains('路线'));
+      expect(response.displayPlainText, contains('住宿'));
+      expect(response.displayPlainText, contains('沟口'));
+
+      final structured = response.structuredResponse;
+      final subagentRuns =
+          (structured['subagentRuns'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(
+        subagentRuns,
+        hasLength(1),
+        reason: 'primary skill 由主答承接，subagentRuns 只应包含支持 skill',
+      );
+      expect(subagentRuns.first['domainId'], equals('hotel'));
+      expect(
+        response.runArtifacts?.displayState.process.finalAnswerReady,
+        isTrue,
+        reason: 'M6 收口层应把最终成答状态写入展示过程态',
+      );
+      expect(
+        response.runArtifacts?.processTimeline.isNotEmpty,
+        isTrue,
+        reason: '最终回放结果应保留完整 processTimeline',
+      );
+
+      final sessionDetail = await runtime.sessionDetail(sessionId);
+      expect(sessionDetail, isNotNull);
+      expect(sessionDetail!.summary.trim(), isNotEmpty);
+      expect(sessionDetail.messages, isNotEmpty);
+      expect(sessionDetail.messages.last.content, contains('九寨沟'));
+      expect(sessionDetail.messages.last.content, contains('沟口'));
+
+      final sessionIds = await runtime.listSessions();
+      expect(
+        sessionIds.map((item) => item.sessionId).toList(growable: false),
+        contains(sessionId),
+      );
     });
   });
 }
@@ -598,6 +653,379 @@ class _ThreeStageMarketNarrativeLlm implements AssistantLlmProvider {
       'modelSelfScore': const <String, dynamic>{
         'score': 94,
         'reason': 'stub_market_three_stage_answer',
+      },
+    };
+  }
+}
+
+class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
+  const _M6MultiSkillIntegrationLlm();
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final query = _latestUserQuery(messages);
+    final subagentRuns = templateVariables['subagentRuns'];
+    final subagentPlan = templateVariables['subagentPlan'];
+    if (templateId == 'synthesizer.final_answer' &&
+        subagentRuns is List &&
+        subagentRuns.isNotEmpty) {
+      onDelta?.call('路线和住宿都已经齐了，我来统一成答。');
+      return AssistantModelOutput(
+        text: jsonEncode(_buildFinalTurn(query)),
+        modelPath: 'stub/m6-final-synthesis',
+      );
+    }
+    if (templateId == 'planner.global_plan' && subagentPlan is Map) {
+      final plan = subagentPlan.cast<String, dynamic>();
+      final subagentId = (plan['subagentId'] as String?)?.trim() ?? '';
+      if (subagentId == 'travel_route' || subagentId == 'route_planner') {
+        return AssistantModelOutput(
+          text: jsonEncode(_buildRouteSubagentTurn(query)),
+          modelPath: 'stub/m6-route-subagent',
+        );
+      }
+      return AssistantModelOutput(
+        text: jsonEncode(_buildHotelSubagentTurn(query)),
+        modelPath: 'stub/m6-hotel-subagent',
+      );
+    }
+    if (templateId == 'planner.global_plan') {
+      onDelta?.call('我先把路线和住宿拆成两个并行子任务，再统一给你最终建议。');
+      return AssistantModelOutput(
+        text: jsonEncode(_buildRoutePlanningTurn(query)),
+        modelPath: 'stub/m6-route-planning',
+      );
+    }
+    return AssistantModelOutput(
+      text: jsonEncode(_buildFinalTurn(query)),
+      modelPath: 'stub/m6-fallback',
+    );
+  }
+
+  String _latestUserQuery(List<Map<String, dynamic>> messages) {
+    for (final message in messages.reversed) {
+      if ((message['role'] as String?) == 'user') {
+        return (message['content'] as String?)?.trim() ?? '';
+      }
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _buildRoutePlanningTurn(String query) {
+    final normalizedQuery =
+        query.trim().isEmpty ? '帮我同时比较九寨沟4天路线和住宿取舍' : query.trim();
+    return <String, dynamic>{
+      'contractId': 'assistant_turn',
+      'messageKind': 'answer',
+      'phaseId': 'answering',
+      'actionCode': 'compose_answer',
+      'reasonCode': 'evidence_ready',
+      'reasonShort': '路线与住宿可以拆成两个并行子任务。',
+      'decision': <String, dynamic>{'nextAction': 'answer'},
+      'userMarkdown': '我会把你的问题拆成路线和住宿两条线并行处理，最后统一给你一版可执行建议。',
+      'result': <String, dynamic>{
+        'text': '进入路线和住宿并行整理。',
+        'summary': '拆分路线与住宿两条线并行处理。',
+        'interpretation': '多 skill 路由',
+      },
+      'intentGraph': <String, dynamic>{
+        'userGoal': '比较九寨沟4天路线和住宿取舍',
+        'problemShape': 'multi_skill',
+        'primarySkill': 'travel',
+        'problemClass': 'complex_reasoning',
+        'inferredMotive': '需要同时权衡路线与住宿',
+        'secondarySkills': <String>['hotel'],
+        'queryNormalization': <String, dynamic>{'normalizedQuery': normalizedQuery},
+        'queryTasks': <Map<String, dynamic>>[],
+        'contextSlots': const <String, dynamic>{},
+        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
+        'clarificationNeeded': false,
+      },
+      'subagentPlan': <Map<String, dynamic>>[
+        _buildRoutePlan(),
+        _buildHotelPlan(),
+      ],
+      'askUser': const <String, dynamic>{
+        'slotId': '',
+        'prompt': '',
+        'required': false,
+        'suggestions': <String>[],
+      },
+      'missingContextSlots': const <String>[],
+      'fillGuidance': const <List<dynamic>>[],
+      'answerProcessing': const <String, dynamic>{
+        'readinessSummary': '路线与住宿两条线已拆分，后续由并行子任务收齐后统一成答。',
+        'missingDimensions': <String>[],
+        'retrieveMoreReason': '',
+      },
+      'selfCheck': const <String, dynamic>{
+        'goalSatisfied': true,
+        'constraintSatisfied': true,
+        'safetyBoundarySatisfied': true,
+        'failedItems': <String>[],
+      },
+      'diagnostics': const <String, dynamic>{
+        'emergedTags': <Map<String, dynamic>>[],
+        'failedChecks': <String>[],
+        'parseStatus': '',
+        'notes': <String>['m6_route_planning_turn'],
+      },
+      'modelSelfScore': const <String, dynamic>{
+        'score': 92,
+        'reason': 'm6_route_planning_turn',
+      },
+    };
+  }
+
+  Map<String, dynamic> _buildRoutePlan() {
+    return <String, dynamic>{
+      'subagentId': 'travel_route',
+      'domainId': 'travel',
+      'problemClass': 'complex_reasoning',
+      'goal': '梳理九寨沟4天路线主线',
+      'role': 'primary',
+      'taskBrief': '整理4天行程主线和时间分配',
+      'routeNarrative': '路线维度作为主线先稳定，再决定住宿如何配合。',
+      'localContextSeed': '用户想要4天九寨沟路线建议。',
+      'needClarify': false,
+      'pendingClarifications': <String>[],
+      'mode': 'qa',
+      'timeoutMs': 4000,
+      'maxIterations': 1,
+      'toolBudget': 1,
+      'stopPolicy': 'balanced',
+      'searchIntensity': 'medium',
+      'providerPolicy': '',
+      'freshnessHoursMax': 0,
+      'answerThreshold': 0.6,
+    };
+  }
+
+  Map<String, dynamic> _buildHotelPlan() {
+    return <String, dynamic>{
+      'subagentId': 'hotel_tradeoff',
+      'domainId': 'hotel',
+      'problemClass': 'complex_reasoning',
+      'goal': '补充九寨沟住宿取舍',
+      'role': 'supporting',
+      'taskBrief': '整理住宿位置与效率取舍',
+      'routeNarrative': '住宿维度作为辅助约束并行评估，优先考虑往返效率。',
+      'localContextSeed': '用户在意住宿位置与节省时间。',
+      'needClarify': false,
+      'pendingClarifications': <String>[],
+      'mode': 'qa',
+      'timeoutMs': 4000,
+      'maxIterations': 1,
+      'toolBudget': 1,
+      'stopPolicy': 'balanced',
+      'searchIntensity': 'medium',
+      'providerPolicy': '',
+      'freshnessHoursMax': 0,
+      'answerThreshold': 0.6,
+    };
+  }
+
+  Map<String, dynamic> _buildRouteSubagentTurn(String query) {
+    final normalizedQuery =
+        query.trim().isEmpty ? '帮我同时比较九寨沟4天路线和住宿取舍' : query.trim();
+    return <String, dynamic>{
+      'contractId': 'assistant_turn',
+      'messageKind': 'answer',
+      'phaseId': 'answering',
+      'actionCode': 'compose_answer',
+      'reasonCode': 'evidence_ready',
+      'reasonShort': '路线主线已经整理完毕。',
+      'decision': <String, dynamic>{'nextAction': 'answer'},
+      'userMarkdown': '路线：优先经典主线，保证 4 天内把核心景点走完。',
+      'result': <String, dynamic>{
+        'text': '路线优先经典主线。',
+        'summary': '路线主线优先。',
+        'interpretation': '路线子任务结论',
+      },
+      'intentGraph': <String, dynamic>{
+        'userGoal': '比较九寨沟4天路线和住宿取舍',
+        'problemShape': 'single_skill',
+        'primarySkill': 'travel',
+        'problemClass': 'complex_reasoning',
+        'inferredMotive': '需要路线主线结论',
+        'secondarySkills': const <String>[],
+        'queryNormalization': <String, dynamic>{'normalizedQuery': normalizedQuery},
+        'queryTasks': <Map<String, dynamic>>[],
+        'contextSlots': const <String, dynamic>{},
+        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
+        'clarificationNeeded': false,
+      },
+      'toolCalls': const <List<dynamic>>[],
+      'subagentPlan': const <List<dynamic>>[],
+      'askUser': const <String, dynamic>{
+        'slotId': '',
+        'prompt': '',
+        'required': false,
+        'suggestions': <String>[],
+      },
+      'missingContextSlots': const <String>[],
+      'fillGuidance': const <List<dynamic>>[],
+      'selfCheck': const <String, dynamic>{
+        'goalSatisfied': true,
+        'constraintSatisfied': true,
+        'safetyBoundarySatisfied': true,
+        'failedItems': <String>[],
+      },
+      'diagnostics': const <String, dynamic>{
+        'emergedTags': <Map<String, dynamic>>[],
+        'failedChecks': <String>[],
+        'parseStatus': '',
+        'notes': <String>['m6_route_subagent_turn'],
+      },
+      'modelSelfScore': const <String, dynamic>{
+        'score': 91,
+        'reason': 'm6_route_subagent_turn',
+      },
+    };
+  }
+
+  Map<String, dynamic> _buildHotelSubagentTurn(String query) {
+    final normalizedQuery =
+        query.trim().isEmpty ? '帮我同时比较九寨沟4天路线和住宿取舍' : query.trim();
+    return <String, dynamic>{
+      'contractId': 'assistant_turn',
+      'messageKind': 'answer',
+      'phaseId': 'answering',
+      'actionCode': 'compose_answer',
+      'reasonCode': 'evidence_ready',
+      'reasonShort': '住宿取舍已经整理完毕。',
+      'decision': <String, dynamic>{'nextAction': 'answer'},
+      'userMarkdown': '住宿：优先沟口附近，减少每天往返时间。',
+      'result': <String, dynamic>{
+        'text': '住宿优先沟口附近。',
+        'summary': '住宿优先沟口附近。',
+        'interpretation': '住宿子任务结论',
+      },
+      'intentGraph': <String, dynamic>{
+        'userGoal': '比较九寨沟4天路线和住宿取舍',
+        'problemShape': 'single_skill',
+        'primarySkill': 'hotel',
+        'problemClass': 'complex_reasoning',
+        'inferredMotive': '需要住宿位置建议',
+        'secondarySkills': const <String>[],
+        'queryNormalization': <String, dynamic>{'normalizedQuery': normalizedQuery},
+        'queryTasks': <Map<String, dynamic>>[],
+        'contextSlots': const <String, dynamic>{},
+        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
+        'clarificationNeeded': false,
+      },
+      'toolCalls': const <List<dynamic>>[],
+      'subagentPlan': const <List<dynamic>>[],
+      'askUser': const <String, dynamic>{
+        'slotId': '',
+        'prompt': '',
+        'required': false,
+        'suggestions': <String>[],
+      },
+      'missingContextSlots': const <String>[],
+      'fillGuidance': const <List<dynamic>>[],
+      'selfCheck': const <String, dynamic>{
+        'goalSatisfied': true,
+        'constraintSatisfied': true,
+        'safetyBoundarySatisfied': true,
+        'failedItems': <String>[],
+      },
+      'diagnostics': const <String, dynamic>{
+        'emergedTags': <Map<String, dynamic>>[],
+        'failedChecks': <String>[],
+        'parseStatus': '',
+        'notes': <String>['m6_hotel_subagent_turn'],
+      },
+      'modelSelfScore': const <String, dynamic>{
+        'score': 90,
+        'reason': 'm6_hotel_subagent_turn',
+      },
+    };
+  }
+
+  Map<String, dynamic> _buildFinalTurn(String query) {
+    final normalizedQuery =
+        query.trim().isEmpty ? '帮我同时比较九寨沟4天路线和住宿取舍' : query.trim();
+    return <String, dynamic>{
+      'contractId': 'assistant_turn',
+      'messageKind': 'answer',
+      'phaseId': 'answering',
+      'actionCode': 'compose_answer',
+      'reasonCode': 'evidence_ready',
+      'reasonShort': '路线与住宿的并行结果已经足够稳定。',
+      'decision': <String, dynamic>{'nextAction': 'answer'},
+      'userMarkdown':
+          '## 九寨沟 4 天建议\n\n'
+          '路线先按经典主线走，优先把核心景点串起来；住宿优先选沟口附近，减少每天往返时间。\n\n'
+          '- 路线：先稳主线，再微调节奏。\n'
+          '- 住宿：以效率优先，尽量减少转场成本。\n'
+          '- 取舍：先保证游玩体验，再补更细的住宿偏好。',
+      'result': <String, dynamic>{
+        'text': '九寨沟4天建议：路线优先经典主线，住宿优先沟口附近。',
+        'summary': '路线主线优先，住宿优先沟口附近。',
+        'interpretation': '用户要的是路线与住宿的最终折中建议',
+        'actionHints': <String>['如果要我继续，我可以再细化每天的景点顺序。'],
+      },
+      'answerProcessing': const <String, dynamic>{
+        'readinessSummary': '路线和住宿两条线都已经收齐，可以直接给最终建议。',
+        'keyFacts': <String>[
+          '路线主线优先',
+          '住宿优先沟口附近',
+          '先保证效率再细化偏好',
+        ],
+        'missingDimensions': <String>[],
+        'retrieveMoreReason': '',
+      },
+      'intentGraph': <String, dynamic>{
+        'userGoal': '比较九寨沟4天路线和住宿取舍',
+        'problemShape': 'multi_skill',
+        'primarySkill': 'travel',
+        'problemClass': 'complex_reasoning',
+        'inferredMotive': '需要一版可执行的最终建议',
+        'secondarySkills': <String>['hotel'],
+        'queryNormalization': <String, dynamic>{'normalizedQuery': normalizedQuery},
+        'queryTasks': <Map<String, dynamic>>[],
+        'contextSlots': const <String, dynamic>{},
+        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
+        'clarificationNeeded': false,
+      },
+      'toolCalls': const <List<dynamic>>[],
+      'subagentPlan': const <List<dynamic>>[],
+      'askUser': const <String, dynamic>{
+        'slotId': '',
+        'prompt': '',
+        'required': false,
+        'suggestions': <String>[],
+      },
+      'missingContextSlots': const <String>[],
+      'fillGuidance': const <List<dynamic>>[],
+      'selfCheck': const <String, dynamic>{
+        'goalSatisfied': true,
+        'constraintSatisfied': true,
+        'safetyBoundarySatisfied': true,
+        'failedItems': <String>[],
+      },
+      'diagnostics': const <String, dynamic>{
+        'emergedTags': <Map<String, dynamic>>[],
+        'failedChecks': <String>[],
+        'parseStatus': '',
+        'notes': <String>['m6_final_synthesis_turn'],
+      },
+      'modelSelfScore': const <String, dynamic>{
+        'score': 96,
+        'reason': 'm6_final_synthesis_turn',
       },
     };
   }

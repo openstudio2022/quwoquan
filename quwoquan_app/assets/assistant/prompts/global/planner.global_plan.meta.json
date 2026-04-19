@@ -5,11 +5,11 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
-    "conversationSpine",
     "skillCatalog",
     "sharedContext",
     "currentRuntimeState",
     "dialogueContinuity",
+    "recentDialogueRounds",
     "searchIterationState"
   ],
   "outputContract": "assistant_turn",

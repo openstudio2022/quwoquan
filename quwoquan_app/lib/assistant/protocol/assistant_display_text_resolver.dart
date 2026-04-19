@@ -7,15 +7,11 @@ import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 
 class AssistantDisplayProjection {
-  const AssistantDisplayProjection({
-    required this.markdown,
-    required this.plainText,
-    required this.summary,
-  });
+  const AssistantDisplayProjection({required this.markdown});
 
   final String markdown;
-  final String plainText;
-  final String summary;
+
+  String get plainText => AssistantDisplayTextResolver.normalizePlainText(markdown);
 
   bool get hasRenderableContent =>
       markdown.trim().isNotEmpty || plainText.trim().isNotEmpty;
@@ -28,43 +24,6 @@ abstract final class AssistantDisplayTextResolver {
   );
   static final RegExp _leadingJsonFenceRe = RegExp(
     r'^```([a-zA-Z0-9_-]*)\s*\r?\n([\s\S]*?)\r?\n```',
-  );
-  static final RegExp _leadingAnswerBodyRe = RegExp(
-    r'^(#{1,6}|[-*+]\s|\d+\.\s|>\s?|[A-Za-z\u4E00-\u9FFF])',
-  );
-  static final RegExp _internalFieldRe = RegExp(
-    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|toolResult)',
-  );
-  static final RegExp _assistantProtocolFragmentRe = RegExp(
-    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|toolResult|<tool_call>|</tool_call>)',
-    caseSensitive: false,
-  );
-  static final RegExp _processOnlyFragmentRe = RegExp(
-    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用|中间结果|\{\{[^}]+\}\}|已完成\s+\d+/\d+\s+步)',
-    caseSensitive: false,
-  );
-  static final RegExp _technicalFailureFragmentRe = RegExp(
-    r'(MissingPluginException|No implementation found|Local context failed|PlatformException|Exception:|Error:|channel\s+[a-z0-9_./-]+|method\s+[a-zA-Z0-9_]+|personalassistant/nativeapi|getLocalContext|[\w./-]+\.dart:\d+)',
-    caseSensitive: false,
-  );
-  static final RegExp _internalPlannerNarrationFragmentRe = RegExp(
-    r'(\{\{[^}]+\}\}|<tool_call>|</tool_call>|assistant_turn|contractId|runArtifacts)',
-    caseSensitive: false,
-  );
-  static final RegExp _hardInternalProcessFragmentRe = RegExp(
-    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用)',
-    caseSensitive: false,
-  );
-  static final RegExp _reportStyleProcessFragmentRe = RegExp(
-    r'(处理了\s*\d+\s*篇|检索了\s*\d+\s*条|交叉核对|信息已就位|收拢到\s*\d+\s*条)',
-    caseSensitive: false,
-  );
-  static final RegExp _residualXmlToolFragmentRe = RegExp(
-    r'</?<?(?:tool_call|function|parameter)[^>\n\r]*>?',
-    caseSensitive: false,
-  );
-  static final RegExp _romanizedQueryLeakFragmentRe = RegExp(
-    r'\b(?:[A-Z][a-z]+|[a-z]+)(?:\s+[a-z]+){1,7}\b',
   );
   static AssistantDisplayProjection projectTurn(AssistantTurnOutput turn) {
     final answerLike =
@@ -93,19 +52,17 @@ abstract final class AssistantDisplayTextResolver {
         : sanitizedPlain.isNotEmpty
         ? sanitizedPlain
         : (markdown.isNotEmpty ? stripMarkdown(markdown) : '');
-    final sanitizedSummary =
-        normalizePlainText(turn.displayState.answer.summary).isNotEmpty
-        ? normalizePlainText(turn.displayState.answer.summary)
-        : normalizePlainText(turn.result.summary);
     return AssistantDisplayProjection(
       markdown: markdown,
-      plainText: plainText,
-      summary: sanitizedSummary.isNotEmpty ? sanitizedSummary : plainText,
     );
   }
 
   static AssistantTurnOutput normalizeTurn(AssistantTurnOutput turn) {
     final projection = projectTurn(turn);
+    final sanitizedSummary =
+        normalizePlainText(turn.displayState.answer.summary).isNotEmpty
+        ? normalizePlainText(turn.displayState.answer.summary)
+        : normalizePlainText(turn.result.summary);
     return AssistantTurnOutput(
       contractId: turn.contractId,
       decision: turn.decision,
@@ -113,7 +70,7 @@ abstract final class AssistantDisplayTextResolver {
       userMarkdown: projection.markdown,
       result: AssistantTurnResult(
         text: projection.plainText,
-        summary: projection.summary,
+        summary: sanitizedSummary.isNotEmpty ? sanitizedSummary : projection.plainText,
         interpretation: turn.result.interpretation,
         actionHints: turn.result.actionHints,
       ),
@@ -204,10 +161,10 @@ abstract final class AssistantDisplayTextResolver {
   static String normalizeMarkdown(String raw) {
     var text = OpenAiCompatibleLlmProvider.stripXmlToolCalls(raw).trim();
     if (text.isEmpty) return '';
-    text = text.replaceAll(_residualXmlToolFragmentRe, '').trim();
+    text = _stripResidualXmlToolFragments(text);
     text = _stripWrappedMarkdownEnvelope(text);
     text = _stripLeadingStructuredFragments(text);
-    text = text.replaceAll(_residualXmlToolFragmentRe, '').trim();
+    text = _stripResidualXmlToolFragments(text);
     text = _stripWrappedMarkdownEnvelope(text).trim();
     if (text.isEmpty) return '';
     if (AssistantContentFilters.isJsonEnvelope(text) ||
@@ -215,7 +172,7 @@ abstract final class AssistantDisplayTextResolver {
         AssistantContentFilters.isDegradedText(text)) {
       return '';
     }
-    if (_internalFieldRe.hasMatch(text) && !_looksLikeAnswerBody(text)) {
+    if (_containsInternalProtocolFields(text) && !_looksLikeAnswerBody(text)) {
       return '';
     }
     text = _normalizeMarkdownStructuralSpacing(text, aggressive: false);
@@ -308,34 +265,57 @@ abstract final class AssistantDisplayTextResolver {
   static bool containsInternalAssistantProtocolFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
-    if (_assistantProtocolFragmentRe.hasMatch(text)) return true;
+    if (_containsInternalProtocolFields(text)) return true;
     final stripped = OpenAiCompatibleLlmProvider.stripXmlToolCalls(text).trim();
     if (stripped.isEmpty) {
-      return text.contains('<tool_call') ||
-          text.contains('<function') ||
-          text.contains('<parameter');
+      return _containsAnyMarker(text, const <String>[
+        '<tool_call',
+        '<function',
+        '<parameter',
+      ]);
     }
-    return _assistantProtocolFragmentRe.hasMatch(stripped);
+    return _containsInternalProtocolFields(stripped) ||
+        _containsAnyMarker(stripped, const <String>['<tool_call>', '</tool_call>']);
   }
 
   static bool containsInternalProcessFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return containsInternalAssistantProtocolFragment(text) ||
-        _processOnlyFragmentRe.hasMatch(text) ||
+        _containsProcessOnlyMarkers(text) ||
         containsTechnicalFailureFragment(text);
   }
 
   static bool containsTechnicalFailureFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
-    return _technicalFailureFragmentRe.hasMatch(text);
+    return _containsAnyMarker(text, const <String>[
+      'MissingPluginException',
+      'No implementation found',
+      'Local context failed',
+      'PlatformException',
+      'Exception:',
+      'Error:',
+      'channel ',
+      'method ',
+      'personalassistant/nativeapi',
+      'getLocalContext',
+      '.dart:',
+    ]);
   }
 
   static bool containsInternalPlannerNarrationFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
-    return _internalPlannerNarrationFragmentRe.hasMatch(text);
+    return _containsAnyMarker(text, const <String>[
+      '{{',
+      '}}',
+      '<tool_call>',
+      '</tool_call>',
+      'assistant_turn',
+      'contractId',
+      'runArtifacts',
+    ]);
   }
 
   static String normalizeUserFacingProcessNarration(String raw) {
@@ -346,11 +326,11 @@ abstract final class AssistantDisplayTextResolver {
       text = normalizePlainText(stripped);
     }
     if (text.isEmpty) return '';
-    if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(text)) {
+    if (text.contains('{{') && text.contains('}}')) {
       return '';
     }
-    if (_hardInternalProcessFragmentRe.hasMatch(text) ||
-        _reportStyleProcessFragmentRe.hasMatch(text) ||
+    if (_containsProcessOnlyMarkers(text) ||
+        _containsReportStyleMarkers(text) ||
         containsInternalAssistantProtocolFragment(text) ||
         containsTechnicalFailureFragment(text) ||
         AssistantContentFilters.isJsonEnvelope(text) ||
@@ -381,7 +361,7 @@ abstract final class AssistantDisplayTextResolver {
   static bool _containsRomanizedQueryLeakFragment(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
-    return _romanizedQueryLeakFragmentRe.hasMatch(text);
+    return _hasRomanizedTokenRun(text);
   }
 
   static String stripRomanizedQueryLeakSentences(String raw) {
@@ -393,31 +373,13 @@ abstract final class AssistantDisplayTextResolver {
       if (line.isEmpty) {
         continue;
       }
-      final sentenceMatches = RegExp(
-        r'[^。！？!?]+[。！？!?]?',
-      ).allMatches(line).toList();
-      if (sentenceMatches.isEmpty) {
-        if (!_containsRomanizedQueryLeakFragment(line)) {
-          preservedLines.add(line);
-        }
+      if (_containsRomanizedQueryLeakFragment(line) ||
+          AssistantContentFilters.isDegradedText(line) ||
+          containsInternalAssistantProtocolFragment(line) ||
+          containsTechnicalFailureFragment(line)) {
         continue;
       }
-      final keptSentences = <String>[];
-      for (final match in sentenceMatches) {
-        final sentence = (match.group(0) ?? '').trim();
-        if (sentence.isEmpty ||
-            _containsRomanizedQueryLeakFragment(sentence) ||
-            AssistantContentFilters.isDegradedText(sentence) ||
-            containsInternalAssistantProtocolFragment(sentence) ||
-            containsTechnicalFailureFragment(sentence)) {
-          continue;
-        }
-        keptSentences.add(sentence);
-      }
-      final rebuilt = keptSentences.join('').trim();
-      if (rebuilt.isNotEmpty) {
-        preservedLines.add(rebuilt);
-      }
+      preservedLines.add(line);
     }
     return preservedLines.join('\n').trim();
   }
@@ -605,6 +567,116 @@ abstract final class AssistantDisplayTextResolver {
     if (trimmed.startsWith('```') || trimmed.startsWith('`')) {
       return true;
     }
-    return _leadingAnswerBodyRe.hasMatch(trimmed);
+    return _isAnswerBodyLead(trimmed);
+  }
+
+  static bool _containsAnyMarker(String text, List<String> markers) {
+    for (final marker in markers) {
+      if (text.contains(marker)) return true;
+    }
+    return false;
+  }
+
+  static bool _containsInternalProtocolFields(String text) {
+    return _containsAnyMarker(text, const <String>[
+      'assistant_turn',
+      'contractId',
+      'machineEnvelope',
+      'runArtifacts',
+      'queryTasks',
+      'queryVariants',
+      'tool_call',
+      'toolResult',
+    ]);
+  }
+
+  static bool _containsProcessOnlyMarkers(String text) {
+    return _containsAnyMarker(text, const <String>[
+      'provider',
+      'freshnessHoursMax',
+      'timeScope',
+      'nextAction',
+      'finalAnswerReady',
+      'clarificationNeeded',
+      'needExpansion',
+      'phaseOneRoutingDiagnostics',
+      'modelCallCount',
+      'runModelCallCount',
+      'assistantElapsedMs',
+      'tokens',
+      '模型调用',
+      '中间结果',
+      '{{',
+      '已完成',
+      '步',
+    ]);
+  }
+
+  static bool _containsReportStyleMarkers(String text) {
+    return _containsAnyMarker(text, const <String>[
+      '处理了',
+      '检索了',
+      '交叉核对',
+      '信息已就位',
+      '收拢到',
+    ]);
+  }
+
+  static bool _hasRomanizedTokenRun(String text) {
+    final tokens = text
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\n', ' ')
+        .split(' ')
+        .where((item) => item.trim().isNotEmpty)
+        .toList(growable: false);
+    var romanizedCount = 0;
+    for (final token in tokens) {
+      if (_isRomanizedToken(token)) {
+        romanizedCount += 1;
+        if (romanizedCount >= 2) return true;
+      } else {
+        romanizedCount = 0;
+      }
+    }
+    return false;
+  }
+
+  static bool _isRomanizedToken(String token) {
+    if (token.length < 2) return false;
+    for (final rune in token.runes) {
+      if ((rune >= 65 && rune <= 90) || (rune >= 97 && rune <= 122)) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  static bool _isAnswerBodyLead(String text) {
+    final firstRune = text.runes.first;
+    if (_isAlphaNumericOrCjkRune(firstRune)) return true;
+    return firstRune == 0x23 ||
+        firstRune == 0x2d ||
+        firstRune == 0x2a ||
+        firstRune == 0x3e ||
+        firstRune == 0x2022;
+  }
+
+  static bool _isAlphaNumericOrCjkRune(int rune) {
+    return (rune >= 0x30 && rune <= 0x39) ||
+        (rune >= 0x41 && rune <= 0x5a) ||
+        (rune >= 0x61 && rune <= 0x7a) ||
+        (rune >= 0x4e00 && rune <= 0x9fff);
+  }
+
+  static String _stripResidualXmlToolFragments(String text) {
+    return text
+        .replaceAll('<tool_call>', '')
+        .replaceAll('</tool_call>', '')
+        .replaceAll('<function>', '')
+        .replaceAll('</function>', '')
+        .replaceAll('<parameter>', '')
+        .replaceAll('</parameter>', '')
+        .trim();
   }
 }

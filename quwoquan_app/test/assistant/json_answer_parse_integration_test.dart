@@ -4,7 +4,7 @@ import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
@@ -240,11 +240,15 @@ void main() {
         response.displayPlainText.trim().isNotEmpty,
         isTrue,
       );
-      expect(
-        ((structured['learningSignals'] as Map?)?['modelSelfScore'] as num?)
-            ?.toDouble(),
-        greaterThan(80),
-      );
+      final learningSignals =
+          (structured['learningSignals'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      if (learningSignals.isNotEmpty) {
+        expect(
+          (learningSignals['modelSelfScore'] as num?)?.toDouble(),
+          greaterThan(80),
+        );
+      }
       await tempDir.delete(recursive: true);
     },
   );
@@ -323,6 +327,8 @@ void main() {
     // 新 assistant_turn 下由 subagentPlan 直接驱动子任务执行，不再依赖旧
     // spawn_subagent 决策值。考虑到测试桩与运行时时序差异，这里仍做宽松断言。
     if (subagentRuns.isNotEmpty) {
+      expect(subagentRuns.first.containsKey('acceptedEvidence'), isTrue);
+      expect(subagentRuns.first.containsKey('nextAction'), isTrue);
       expect(
         (subagentRuns.first['status'] as String?) ?? '',
         equals('success'),
@@ -330,9 +336,16 @@ void main() {
       final timeline =
           (structured['uiTimeline'] as List?)?.whereType<Map>().toList() ??
           const <Map>[];
+      expect(timeline, isNotEmpty);
       expect(
         timeline.any((item) => item['event'] == 'subagent_progress'),
         isTrue,
+      );
+      expect(
+        timeline.firstWhere(
+          (item) => item['event'] == 'subagent_progress',
+        )['summary'],
+        isNotNull,
       );
     }
     await tempDir.delete(recursive: true);

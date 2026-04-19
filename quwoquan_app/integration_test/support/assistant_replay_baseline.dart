@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/application/transcript/assistant_replay_record_factory.dart';
-import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
+import 'package:quwoquan_app/assistant/persistence/assistant_storage_path.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_paths.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/transcript/replay/assistant_replay_record.dart';

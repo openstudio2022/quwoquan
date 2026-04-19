@@ -2,6 +2,7 @@
 
 > **定位**：小趣私人助理增量开发三类核心文档之一  
 > **前置阅读**：`PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md`
+> **正式规格**：`PERSONAL_ASSISTANT_SKILL_MULTI_AGENT_SPEC.md`
 
 ---
 
@@ -15,28 +16,26 @@
 
 ### 2.1 Skill 是什么
 
-Skill 是某一 `domainId` 的领域资产集合，负责表达：
+Skill 是某一业务路径下的模型主导会话资产，负责表达：
 
-- 领域目标与边界
-- 工具调用策略
-- 领域参考资料和 few-shot 示例
-- 对话状态机与轮次推进
-- 检索策略与域特有约束
+- 领域、（可选）子领域与具体 skill 的层级结构
+- 该 skill 的目标、边界与完成标准
+- 该 skill 的对话状态机与轮次推进
+- 该 skill 的工具调用约束与参数指引
+- 该 skill 的 few-shot 与最终输出要求
 
 ### 2.2 Skill 目录结构
 
 ```text
 assets/assistant/skills/{domain}/
-├── SKILL.md
-├── references/
-├── dialogue/
-├── scripts/
-└── config/
+├── {skill}/
+└── {subdomain}/
+    └── {skill}/
 ```
 
 ### 2.3 各目录职责
 
-- `SKILL.md`：技能主控文档，包含领域说明、frontmatter 与主体规则
+- `SKILL.md`：技能主控文档，包含 skill 说明、边界与完成条件
 - `references/`：模型可读的领域知识、工具指引、输出示例
 - `dialogue/`：状态机、状态提示、事件判定与测试样例
 - `scripts/`：始终加载的策略叠加层，例如 persona 和全局段落
@@ -45,9 +44,9 @@ assets/assistant/skills/{domain}/
 ### 2.4 运行时如何消费 Skill
 
 1. `PersonalAssistantSkillLoader` 读取 asset
-2. `AssistantSkillMarketService` / `AssistantCapabilityCatalog` 暴露当前 skill 与 capability 目录
-3. Planner 输出 `primaryDomainId`
-4. `AssistantEdgeService` 装配当前运行时，并按 domain 加载 skill 指令与 dialogue 片段
+2. `AssistantSkillMarketService` / `AssistantCapabilityCatalog` 暴露目录树与常用技能
+3. 第 1 次模型调用基于目录树选择领域、子领域、skill 或多 skill
+4. `AssistantEdgeService` 装配当前运行时，并按选中 skill 加载指令与 dialogue 片段
 5. ReAct 在阶段推进时按需注入 phase-aware 材料
 
 ### 2.5 Phase-aware 加载
@@ -59,20 +58,31 @@ assets/assistant/skills/{domain}/
 | `ask_user` | `references/domain-knowledge.md` | 槽位追问、补齐信息 |
 | `answer` | `references/output-examples.md` | few-shot 与回答结构 |
 
-### 2.6 新增 Skill 的正确路径
+### 2.6 路由与会话约束
 
-1. 新建 `assets/assistant/skills/{domain}/`
+- 路由阶段只做模型选择，不做规则召回、不做关键词过滤
+- 模型输入使用目录树摘要，每个子领域只展示 1 到 5 个常用 skill
+- 模型可一次返回多个 skill，分别标记 primary / supporting
+- 若未选中具体 skill，系统级默认 skill 必须根据当前领域/子领域继续承接
+- 一旦选中 skill，后续会话由 skill 主导，直到成答、转交、用户终止或 replan
+- 技能内多轮只能由状态机推进，不得回到全局路由重置全部上下文
+- 全程必须保持连续叙事，不得在问题理解、问题处理、问题答案之间插入固定占位话术
+
+### 2.7 新增 Skill 的正确路径
+
+1. 新建 `assets/assistant/skills/{domain}/{subdomain}/{skill}/`
 2. 编写 `SKILL.md` 与必需目录
-3. 在 `domain_routing_catalog` 或等价 skill catalog 中注册描述
+3. 通过目录树摘要把该 skill 暴露给首轮模型
 4. 补充 dialogue 契约和测试样例
-5. 若需要检索策略，放入 `config/retrieval_policy.json`
+5. 若需要工具或输出细节，放入 `references/` 与 `dialogue/`
 6. 在测试中验证 skill 结构、合同与可加载性
 
-### 2.7 Skill 扩展禁止事项
+### 2.8 Skill 扩展禁止事项
 
 - 禁止把垂类知识写进 `assistant_agent_loop`、`local_phase_execution_owner`、`react_runtime`、`context_orchestrator`
-- 禁止以 `contains()` / `RegExp` 形式在 runtime 判定某个 domain
+- 禁止把 skill 路由写成规则召回、关键词命中或硬阈值过滤
 - 禁止让 skill 与域模板维护两套冲突策略
+- 禁止把输出要求散落在 runtime 中
 
 ---
 

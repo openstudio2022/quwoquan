@@ -6,7 +6,7 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
@@ -199,8 +199,8 @@ void main() {
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
       final isStream = body['stream'] == true;
-      if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
-          joined.contains('上一次输出未通过最终成答契约校验') ||
+      if (joined.contains('assistant_turn_repair|phase=synthesis|') ||
+          joined.contains('assistant_turn_repair|phase=phase_one_direct_answer|') ||
           joined.contains('结构化 JSON 仍然无效') ||
           joined.contains('上一次输出无效')) {
         return isStream
@@ -266,8 +266,8 @@ void main() {
           '<tool_call><name>web_search</name></tool_call>',
         ]);
       }
-      if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
-          joined.contains('上一次输出未通过最终成答契约校验') ||
+      if (joined.contains('assistant_turn_repair|phase=synthesis|') ||
+          joined.contains('assistant_turn_repair|phase=phase_one_direct_answer|') ||
           joined.contains('结构化 JSON 仍然无效') ||
           joined.contains('上一次输出无效')) {
         return const _MockChatResponse.json(

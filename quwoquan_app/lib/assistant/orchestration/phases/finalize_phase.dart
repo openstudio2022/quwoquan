@@ -30,16 +30,13 @@ class FinalizePhase implements Phase {
       return PhaseOutput(state: input.state);
     }
     final snapshot = input.state.executionPhaseSnapshot;
-    // ignore: deprecated_member_use_from_same_package
-    final hasExecution = snapshot is ExecutionPhaseSuccess ||
-        input.state.executionBridgeSnapshot.isNotEmpty;
+    final hasExecution = snapshot is ExecutionPhaseSuccess;
     if (!hasExecution) {
       return PhaseOutput(state: input.state, response: pendingResponse);
     }
-    // ignore: deprecated_member_use_from_same_package
     final finalizedResponse = await _runner.finalize(
       coerceAssistantRunRequest(input.request),
-      executionSnapshot: input.state.executionBridgeSnapshot,
+      executionSnapshot: snapshot,
       response: pendingResponse,
     );
     return PhaseOutput(

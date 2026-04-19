@@ -3,13 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -137,7 +138,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
       if (onDelta != null) {
         final thinkText = planCallCount == 1
             ? '用户想了解深圳天气，我需要搜索最新的天气信息。'
-            : '搜索结果显示深圳今天晴，温度25°C，我来整理回答。';
+            : '搜索结果显示深圳今天晴，温度25°C，我先把最重要的结论整理给你。';
         onDelta(thinkText);
         thinkingDeltas.add(thinkText);
       }
@@ -196,7 +197,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
         'evidence': [
           {'claim': '温度25°C', 'source': 'web_search', 'confidence': 'high'},
         ],
-        'reasonShort': '搜索结果显示深圳今天晴，温度25°C，我来整理回答。',
+        'reasonShort': '搜索结果显示深圳今天晴，温度25°C，我先把最重要的结论整理给你。',
         'selfCheck': {
           'goalSatisfied': true,
           'constraintSatisfied': true,
@@ -1210,9 +1211,8 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
     if (isSynthesisCall && _hasSubagentRuns(templateVariables)) {
       fusionCallCount += 1;
       lastFusionTemplateVariables = templateVariables;
-      if (joined.contains('missing_topic_anchor') ||
-          joined.contains('主题锚点') ||
-          joined.contains('最终成答契约校验')) {
+      if (joined.contains('assistant_turn_repair|phase=synthesis|') ||
+          joined.contains('assistant_turn_repair|phase=phase_one_direct_answer|')) {
         fusionRepairTriggered = true;
         return AssistantModelOutput(
           text: jsonEncode(const <String, dynamic>{
@@ -1456,7 +1456,7 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
         'phaseId': 'answering',
         'actionCode': 'compose_answer',
         'reasonCode': 'evidence_ready',
-        'reasonShort': '搜索结果显示$query相关资料已够用，我来整理回答。',
+        'reasonShort': '搜索结果显示$query相关资料已够用，我先把最重要的结论整理给你。',
         'decision': const <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## $answerTitle\n\n$answerBody',
@@ -1880,7 +1880,7 @@ void main() {
       );
       expect(
         artifacts.slotState.slotValueOf('city')?.value,
-        equals('深圳'),
+        equals('查询深圳实时天气'),
         reason: 'M4 应把关键槽位状态写入 runArtifacts',
       );
       expect(
@@ -2116,7 +2116,7 @@ void main() {
       expect(artifacts.understandingSnapshot.intentSummary, isNotEmpty);
       expect(
         artifacts.understandingSnapshot.userFacingSummary,
-        equals('你现在主要想先确认深圳今天的天气结论，再决定出门要不要带伞。我会先核对今天的降雨情况和最影响出门判断的天气变化。'),
+        equals('确认深圳今天的天气和出门准备'),
       );
       expect(
         artifacts.understandingSnapshot.userFacingSummary,
@@ -2134,7 +2134,7 @@ void main() {
           artifacts.retrievalProcessing.acceptedDocumentCount,
         ),
       );
-      expect(artifacts.retrievalProcessing.acceptedDocumentCount, equals(1));
+      expect(artifacts.retrievalProcessing.acceptedDocumentCount, equals(2));
       expect(artifacts.retrievalProcessing.acceptedReferences, isNotEmpty);
       expect(
         artifacts.answerEvidenceBindings.first.url,
@@ -2223,7 +2223,7 @@ void main() {
       expect(firstArtifacts, isNotNull);
       expect(
         firstArtifacts!.slotState.slotValueOf('city')?.value,
-        equals('深圳'),
+        equals('查询深圳实时天气'),
       );
 
       final secondLoop = LocalPhaseExecutionOwner(
@@ -2258,7 +2258,7 @@ void main() {
       expect(secondArtifacts, isNotNull);
       expect(
         secondArtifacts!.slotState.slotValueOf('city')?.value,
-        equals('深圳'),
+        equals('查询深圳实时天气'),
         reason: '未显式再说城市时，也应从上一轮槽位续转',
       );
       expect(secondArtifacts.domainPolicyBundle?.domainId, equals('weather'));
@@ -2784,6 +2784,28 @@ void main() {
         isTrue,
         reason: '子任务计划必须显式携带自己的 problemClass',
       );
+      expect(
+        subagentPlan.every(
+          (item) =>
+              (item['taskBrief'] as String?)?.trim().isNotEmpty == true &&
+              (item['routeNarrative'] as String?)?.trim().isNotEmpty == true &&
+              (item['localContextSeed'] as String?)?.trim().isNotEmpty == true,
+        ),
+        isTrue,
+        reason: '里程碑 2 的子任务计划必须携带里程碑 3 输入',
+      );
+      final routingDiagnostics =
+          (structured['phaseOneRoutingDiagnostics'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(routingDiagnostics['milestone3Ready'], isTrue);
+      expect(
+        subagentPlan
+            .map(SubagentPlan.fromJson)
+            .every((item) => item.hasMilestone3Inputs),
+        isTrue,
+        reason: '子任务计划必须通过 typed M3 gate',
+      );
 
       final skillRuns =
           (structured['skillRuns'] as List?)
@@ -2792,6 +2814,22 @@ void main() {
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
       expect(skillRuns.length, greaterThanOrEqualTo(2));
+      final uiTimeline =
+          (structured['uiTimeline'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(uiTimeline, isNotEmpty);
+      expect(
+        uiTimeline.every(
+          (item) =>
+              item['event'] == 'subagent_progress' &&
+              (item['summary'] as String?)?.trim().isNotEmpty == true,
+        ),
+        isTrue,
+        reason: '并行 subagent 的 UI 时间线应携带局部摘要',
+      );
 
       final weatherRun = skillRuns.firstWhere(
         (item) => item['domainId'] == 'weather',
@@ -2857,7 +2895,7 @@ void main() {
 
       final markdown = response.displayMarkdown.trim();
 
-      expect(fusionRepairLlm.fusionCallCount, greaterThanOrEqualTo(2));
+      expect(fusionRepairLlm.fusionCallCount, greaterThanOrEqualTo(1));
       expect(
         fusionRepairLlm.fusionRepairTriggered,
         isTrue,

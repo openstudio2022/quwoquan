@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/learning/domain/assistant_learning_models.dart';
-import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
+import 'package:quwoquan_app/assistant/persistence/assistant_storage_path.dart';
 
 class AssistantLearningStore {
   AssistantLearningStore({String? storagePath})

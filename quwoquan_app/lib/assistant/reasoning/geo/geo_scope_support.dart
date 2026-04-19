@@ -8,7 +8,6 @@ class DefaultGeoPolicy {
     this.fallbackSources = const <String>[],
     this.marketTemplate = '',
     this.marketOverrides = const <String, String>{},
-    this.scopeCatalog = const <GeoScopeCatalogEntry>[],
   });
 
   final String defaultGeoScope;
@@ -16,33 +15,6 @@ class DefaultGeoPolicy {
   final List<String> fallbackSources;
   final String marketTemplate;
   final Map<String, String> marketOverrides;
-  final List<GeoScopeCatalogEntry> scopeCatalog;
-}
-
-class GeoScopeCatalogEntry {
-  const GeoScopeCatalogEntry({
-    this.geoKind = '',
-    this.countryCode = '',
-    this.countryLabel = '',
-    this.regionLabel = '',
-    this.cityLabel = '',
-    this.marketCode = '',
-    this.marketLabel = '',
-    this.resolvedText = '',
-    this.aliases = const <String>[],
-    this.reason = 'user_explicit_scope',
-  });
-
-  final String geoKind;
-  final String countryCode;
-  final String countryLabel;
-  final String regionLabel;
-  final String cityLabel;
-  final String marketCode;
-  final String marketLabel;
-  final String resolvedText;
-  final List<String> aliases;
-  final String reason;
 }
 
 DefaultGeoPolicy parseDefaultGeoPolicy(Map<String, dynamic> retrievalPolicy) {
@@ -53,29 +25,6 @@ DefaultGeoPolicy parseDefaultGeoPolicy(Map<String, dynamic> retrievalPolicy) {
   final rawOverrides =
       (raw['marketOverrides'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-  final scopeCatalog =
-      (raw['scopeCatalog'] as List?)
-          ?.whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .map(
-            (item) => GeoScopeCatalogEntry(
-              geoKind: _stringValue(item['geoKind']).toLowerCase(),
-              countryCode: _stringValue(item['countryCode']).toUpperCase(),
-              countryLabel: _stringValue(item['countryLabel']),
-              regionLabel: _stringValue(item['regionLabel']),
-              cityLabel: _stringValue(item['cityLabel']),
-              marketCode: _stringValue(item['marketCode']),
-              marketLabel: _stringValue(item['marketLabel']),
-              resolvedText: _stringValue(item['resolvedText']),
-              aliases: _stringList(item['aliases']),
-              reason: _stringValue(item['reason']).isNotEmpty
-                  ? _stringValue(item['reason'])
-                  : 'user_explicit_scope',
-            ),
-          )
-          .where((item) => item.aliases.isNotEmpty)
-          .toList(growable: false) ??
-      const <GeoScopeCatalogEntry>[];
   for (final entry in rawOverrides.entries) {
     final key = entry.key.trim().toUpperCase();
     final value = entry.value.toString().trim();
@@ -90,7 +39,6 @@ DefaultGeoPolicy parseDefaultGeoPolicy(Map<String, dynamic> retrievalPolicy) {
     fallbackSources: _stringList(raw['fallbackSources']),
     marketTemplate: _stringValue(raw['marketTemplate']),
     marketOverrides: overrides,
-    scopeCatalog: scopeCatalog,
   );
 }
 
@@ -246,20 +194,11 @@ AvailableGeoContext buildAvailableGeoContext({
 }
 
 ResolvedGeoScope resolveGeoScope({
-  required String userQuery,
-  required String domainId,
   required AvailableGeoContext availableGeoContext,
   ResolvedGeoScope current = const ResolvedGeoScope(),
   ResolvedGeoScope previous = const ResolvedGeoScope(),
   DefaultGeoPolicy geoPolicy = const DefaultGeoPolicy(),
 }) {
-  final explicit = _extractExplicitGeoScope(
-    userQuery,
-    geoPolicy: geoPolicy,
-  );
-  if (hasResolvedGeoScope(explicit)) {
-    return explicit;
-  }
   final normalizedCurrent = _normalizeResolvedGeoScope(current);
   if (hasResolvedGeoScope(normalizedCurrent)) {
     return normalizedCurrent;
@@ -308,41 +247,6 @@ ResolvedGeoScope resolveGeoScope({
   }
 }
 
-String applyResolvedGeoToQuery(String query, ResolvedGeoScope scope) {
-  final base = _compressWhitespace(query);
-  if (base.isEmpty) {
-    return base;
-  }
-  final normalizedScope = _normalizeResolvedGeoScope(scope);
-  if (!hasResolvedGeoScope(normalizedScope)) {
-    return base;
-  }
-  final resolvedText = normalizedScope.resolvedText.trim();
-  if (resolvedText.isEmpty) {
-    return base;
-  }
-  final existing = _normalizedToken(base);
-  for (final token in _geoAliasTokens(normalizedScope)) {
-    if (token.isEmpty) {
-      continue;
-    }
-    if (existing.contains(_normalizedToken(token))) {
-      return base;
-    }
-  }
-  final leadingRange = RegExp(
-    r'^(\d{4}-\d{2}-\d{2}(?:\s+至\s+\d{4}-\d{2}-\d{2})?)\s+(.+)$',
-  ).firstMatch(base);
-  if (leadingRange != null) {
-    final rangeText = (leadingRange.group(1) ?? '').trim();
-    final remainder = (leadingRange.group(2) ?? '').trim();
-    if (rangeText.isNotEmpty && remainder.isNotEmpty) {
-      return _compressWhitespace('$rangeText $resolvedText $remainder');
-    }
-  }
-  return _compressWhitespace('$resolvedText $base');
-}
-
 List<String> mergeGeoAnchors(
   List<String> baseAnchors,
   ResolvedGeoScope scope,
@@ -352,90 +256,6 @@ List<String> mergeGeoAnchors(
     ..._geoAliasTokens(scope),
   };
   return merged.toList(growable: false);
-}
-
-ResolvedGeoScope _extractExplicitGeoScope(
-  String query, {
-  required DefaultGeoPolicy geoPolicy,
-}) {
-  final configuredScope = _extractConfiguredScope(query, geoPolicy.scopeCatalog);
-  if (hasResolvedGeoScope(configuredScope)) {
-    return configuredScope;
-  }
-  final explicitCity = _extractExplicitCity(query);
-  if (hasResolvedGeoScope(explicitCity)) {
-    return explicitCity;
-  }
-  return const ResolvedGeoScope();
-}
-
-ResolvedGeoScope _extractConfiguredScope(
-  String query,
-  List<GeoScopeCatalogEntry> catalog,
-) {
-  final normalized = query.trim();
-  if (normalized.isEmpty || catalog.isEmpty) {
-    return const ResolvedGeoScope();
-  }
-  final haystack = _normalizedToken(normalized);
-  for (final entry in catalog) {
-    for (final alias in entry.aliases) {
-      final token = _normalizedToken(alias);
-      if (token.isEmpty || !haystack.contains(token)) {
-        continue;
-      }
-      final resolvedText = _resolvedTextFromCatalogEntry(entry);
-      if (resolvedText.isEmpty) {
-        continue;
-      }
-      return ResolvedGeoScope(
-        geoKind: entry.geoKind.trim().isNotEmpty ? entry.geoKind.trim() : 'none',
-        countryCode: entry.countryCode.trim().toUpperCase(),
-        countryLabel: entry.countryLabel.trim(),
-        regionLabel: entry.regionLabel.trim(),
-        cityLabel: entry.cityLabel.trim(),
-        marketCode: entry.marketCode.trim(),
-        marketLabel: entry.marketLabel.trim(),
-        resolvedText: resolvedText,
-        source: 'user_explicit',
-        reason: entry.reason.trim().isNotEmpty
-            ? entry.reason.trim()
-            : 'user_explicit_scope',
-      );
-    }
-  }
-  return const ResolvedGeoScope();
-}
-
-String _resolvedTextFromCatalogEntry(GeoScopeCatalogEntry entry) {
-  final candidates = <String>[
-    entry.resolvedText.trim(),
-    entry.marketLabel.trim(),
-    entry.cityLabel.trim(),
-    entry.regionLabel.trim(),
-    entry.countryLabel.trim(),
-    entry.countryCode.trim().toUpperCase(),
-  ];
-  for (final candidate in candidates) {
-    if (candidate.isNotEmpty) {
-      return candidate;
-    }
-  }
-  return '';
-}
-
-ResolvedGeoScope _extractExplicitCity(String query) {
-  final city = _extractCityCandidate(query);
-  if (city.isEmpty) {
-    return const ResolvedGeoScope();
-  }
-  return ResolvedGeoScope(
-    geoKind: 'city',
-    cityLabel: city,
-    resolvedText: city,
-    source: 'user_explicit',
-    reason: 'user_explicit_city',
-  );
 }
 
 ResolvedGeoScope _defaultCityScope({
@@ -531,34 +351,15 @@ ResolvedGeoScope _defaultMarketScope({
 }
 
 ResolvedGeoScope _normalizeResolvedGeoScope(ResolvedGeoScope scope) {
-  final marketLabel = scope.marketLabel.trim();
-  final cityLabel = scope.cityLabel.trim();
-  final countryLabel = scope.countryLabel.trim();
-  final resolvedText = scope.resolvedText.trim().isNotEmpty
-      ? scope.resolvedText.trim()
-      : marketLabel.isNotEmpty
-      ? marketLabel
-      : cityLabel.isNotEmpty
-      ? cityLabel
-      : countryLabel;
-  final geoKind = scope.geoKind.trim().isNotEmpty
-      ? scope.geoKind.trim()
-      : marketLabel.isNotEmpty
-      ? 'market'
-      : cityLabel.isNotEmpty
-      ? 'city'
-      : countryLabel.isNotEmpty
-      ? 'country'
-      : 'none';
   return ResolvedGeoScope(
-    geoKind: geoKind,
+    geoKind: scope.geoKind.trim(),
     countryCode: scope.countryCode.trim().toUpperCase(),
-    countryLabel: countryLabel,
+    countryLabel: scope.countryLabel.trim(),
     regionLabel: scope.regionLabel.trim(),
-    cityLabel: cityLabel,
+    cityLabel: scope.cityLabel.trim(),
     marketCode: scope.marketCode.trim(),
-    marketLabel: marketLabel,
-    resolvedText: resolvedText,
+    marketLabel: scope.marketLabel.trim(),
+    resolvedText: scope.resolvedText.trim(),
     source: scope.source.trim(),
     defaultApplied: scope.defaultApplied,
     reason: scope.reason.trim(),
@@ -596,79 +397,6 @@ List<String> _geoAliasTokens(ResolvedGeoScope scope) {
       .where((item) => item.isNotEmpty);
   tokens.addAll(slashSplit);
   return tokens.where((item) => item.isNotEmpty).toList(growable: false);
-}
-
-String _extractCityCandidate(String text) {
-  if (text.trim().isEmpty) {
-    return '';
-  }
-  final placeLikeMatches = RegExp(
-    r'([\u4e00-\u9fffA-Za-z]{2,20}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
-  ).allMatches(text);
-  for (final match in placeLikeMatches) {
-    final normalized = _normalizeLocationCandidate(match.group(1));
-    if (normalized.isNotEmpty) {
-      return normalized;
-    }
-  }
-  final weatherPrefix = RegExp(
-    r'([\u4e00-\u9fffA-Za-z]{2,12})(?:天气|气温|温度|下雨|降雨|穿什么|带外套)',
-  ).firstMatch(text);
-  if (weatherPrefix != null) {
-    final normalized = _normalizeLocationCandidate(weatherPrefix.group(1));
-    if (normalized.isNotEmpty) {
-      return normalized;
-    }
-  }
-  final connectorMatch = RegExp(
-    r'(?:在|去|到|从|围绕|关于|针对)\s*([\u4e00-\u9fffA-Za-z]{2,16})',
-  ).firstMatch(text);
-  if (connectorMatch != null) {
-    return _normalizeLocationCandidate(connectorMatch.group(1));
-  }
-  return '';
-}
-
-String _normalizeLocationCandidate(String? raw) {
-  final candidate = (raw ?? '')
-      .trim()
-      .replaceFirst(
-        RegExp(r'^(如果把|如果将|把|将|往|向|到|在|去|从|围绕|关于|针对)'),
-        '',
-      )
-      .replaceFirst(
-        RegExp(r'(今天|明天|后天|前天|昨日|昨天|今日|今晚|今早|本周|这周|下周|上周|周[一二三四五六日天末])+$'),
-        '',
-      )
-      .replaceFirst(RegExp(r'(呢|呀|啊|吗|吧|吗？|\?)$'), '')
-      .trim();
-  if (candidate.length < 2 || candidate.length > 20) {
-    return '';
-  }
-  const blocked = <String>{
-    '今天',
-    '明天',
-    '后天',
-    '现在',
-    '当前',
-    '最近',
-    '这里',
-    '那里',
-    '这个',
-    '那个',
-    '问题',
-    '方案',
-    '情况',
-    '东西',
-    '资料',
-  };
-  if (blocked.contains(candidate)) {
-    return '';
-  }
-  if (RegExp(r'^(今天|明天|后天|这周|下周|周末|最近|当前|现在)').hasMatch(candidate)) {
-    return '';
-  }
-  return candidate;
 }
 
 String _countryCodeFromLocale(String raw) {
@@ -719,14 +447,4 @@ String _firstNonEmpty(List<String> values) {
     }
   }
   return '';
-}
-
-String _compressWhitespace(String raw) {
-  return raw.replaceAll(RegExp(r'\s+'), ' ').trim();
-}
-
-String _normalizedToken(String raw) {
-  return raw
-      .replaceAll(RegExp(r'[\s:：|｜/、,，。！？!?._-]+'), '')
-      .toLowerCase();
 }

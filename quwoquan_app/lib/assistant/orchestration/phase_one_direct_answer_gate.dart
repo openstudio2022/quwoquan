@@ -69,7 +69,7 @@ class PhaseOneDirectAnswerGate {
         userMarkdown: projection.markdown,
         result: AssistantTurnResult(
           text: projection.plainText,
-          summary: projection.summary,
+          summary: projection.plainText,
           interpretation: 'recovered_from_progress_compat',
         ),
         selfCheck: const AssistantTurnSelfCheck(

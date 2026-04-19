@@ -1,9 +1,11 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
@@ -25,6 +27,8 @@ class SynthesisDraft {
     required this.aggregationState,
     required this.subagentPlan,
     required this.subagentRuns,
+    required this.skillSynthesisInput,
+    required this.skillSynthesisOutput,
     required this.dialogueRoundScript,
     required this.candidateDomains,
     required this.skillExecutionShell,
@@ -56,7 +60,9 @@ class SynthesisDraft {
   final List<SkillRun> skillRuns;
   final AggregationState aggregationState;
   final List<SubagentPlan> subagentPlan;
-  final List<Map<String, dynamic>> subagentRuns;
+  final List<AssistantSubagentRunRecord> subagentRuns;
+  final SkillSynthesisInput skillSynthesisInput;
+  final SkillSynthesisOutput skillSynthesisOutput;
   final DialogueRoundScript dialogueRoundScript;
   final List<String> candidateDomains;
   final SkillExecutionShell skillExecutionShell;

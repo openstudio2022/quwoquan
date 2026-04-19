@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
@@ -13,10 +14,12 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -67,6 +70,167 @@ class _StaticEnvelopeProvider implements AssistantLlmProvider {
     }
     return const AssistantModelOutput(text: '');
   }
+}
+
+ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
+  final dialogueRoundScript = raw['dialogueRoundScript'] is Map
+      ? DialogueRoundScript(
+          domainId:
+              (raw['dialogueRoundScript'] as Map)['domainId']?.toString() ?? '',
+          enabled:
+              (raw['dialogueRoundScript'] as Map)['enabled'] == true,
+          currentStateId:
+              (raw['dialogueRoundScript'] as Map)['currentStateId']
+                  ?.toString() ??
+              '',
+          detectedEvent:
+              (raw['dialogueRoundScript'] as Map)['detectedEvent']
+                  ?.toString() ??
+              '',
+          suggestedNextStateId:
+              (raw['dialogueRoundScript'] as Map)['suggestedNextStateId']
+                  ?.toString() ??
+              '',
+          nextStateCandidates:
+              ((raw['dialogueRoundScript'] as Map)['nextStateCandidates']
+                      as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          requiredFieldsForNextState:
+              ((raw['dialogueRoundScript'] as Map)['requiredFieldsForNextState']
+                      as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          totalSubTotalRequired:
+              (raw['dialogueRoundScript'] as Map)['totalSubTotalRequired'] ==
+              true,
+          optionalEnrichment:
+              (raw['dialogueRoundScript'] as Map)['optionalEnrichment'] == true,
+          maxQuestionsPerTurn:
+              ((raw['dialogueRoundScript'] as Map)['maxQuestionsPerTurn']
+                      as num?)
+                  ?.toInt() ??
+              0,
+          hardFailCodes:
+              ((raw['dialogueRoundScript'] as Map)['hardFailCodes'] as List?)
+                  ?.map((item) => item.toString())
+                  .toList(growable: false) ??
+              const <String>[],
+          passCriteriaRound:
+              ((raw['dialogueRoundScript'] as Map)['passCriteriaRound'] as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
+          statePromptExcerpt:
+              (raw['dialogueRoundScript'] as Map)['statePromptExcerpt']
+                  ?.toString() ??
+              '',
+          stateMachineExcerpt:
+              (raw['dialogueRoundScript'] as Map)['stateMachineExcerpt']
+                  ?.toString() ??
+              '',
+          routingCatalogVersion:
+              (raw['dialogueRoundScript'] as Map)['routingCatalogVersion']
+                  ?.toString() ??
+              '',
+          eventCatalogVersion:
+              (raw['dialogueRoundScript'] as Map)['eventCatalogVersion']
+                  ?.toString() ??
+              '',
+        )
+      : const DialogueRoundScript();
+
+  return ExecutionPhaseSuccess(
+    runId: (raw['runId'] as String?)?.trim() ?? '',
+    traceId: (raw['traceId'] as String?)?.trim() ?? '',
+    runStartAt: DateTime(2026, 4, 9, 10, 0, 0),
+    sessionId: (raw['sessionId'] as String?)?.trim() ?? '',
+    latestUserQuery: (raw['latestUserQuery'] as String?)?.trim() ?? '',
+    domainId: (raw['domainId'] as String?)?.trim() ?? '',
+    contextAssembly: raw['contextAssembly'] is ContextAssemblyResult
+        ? raw['contextAssembly'] as ContextAssemblyResult
+        : raw['contextAssembly'] is Map
+        ? ContextAssemblyResult.fromJson(
+            (raw['contextAssembly'] as Map).cast<String, dynamic>(),
+          )
+        : const ContextAssemblyResult(),
+    intentGraph: raw['intentGraph'] is IntentGraph
+        ? raw['intentGraph'] as IntentGraph
+        : raw['intentGraph'] is Map
+        ? IntentGraph.fromJson((raw['intentGraph'] as Map).cast<String, dynamic>())
+        : const IntentGraph(
+            userGoal: '',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: '',
+          ),
+    dialogueRoundScript: raw['dialogueRoundScript'] is DialogueRoundScript
+        ? raw['dialogueRoundScript'] as DialogueRoundScript
+        : dialogueRoundScript,
+    domainCatalog: (raw['domainCatalog'] as List?)
+            ?.map((item) => item.toString())
+            .toList(growable: false) ??
+        const <String>[],
+    domainCatalogVersion: (raw['domainCatalogVersion'] as String?)?.trim() ?? '',
+    allowedToolNames: (raw['allowedToolNames'] as List?)
+            ?.map((item) => item.toString())
+            .toList(growable: false) ??
+        const <String>[],
+    executionShell: raw['executionShell'] is SkillExecutionShell
+        ? raw['executionShell'] as SkillExecutionShell
+        : raw['executionShell'] is Map
+        ? SkillExecutionShell.fromJson(
+            (raw['executionShell'] as Map).cast<String, dynamic>(),
+          )
+        : const SkillExecutionShell(),
+    previousSlotState: raw['previousSlotState'] is SlotStateSnapshot
+        ? raw['previousSlotState'] as SlotStateSnapshot
+        : raw['previousSlotState'] is Map
+        ? SlotStateSnapshot.fromJson(
+            (raw['previousSlotState'] as Map).cast<String, dynamic>(),
+          )
+        : const SlotStateSnapshot(),
+    retrievalPolicy: (raw['retrievalPolicy'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    answerBoundaryPolicy: raw['answerBoundaryPolicy'] is AnswerBoundaryPolicy
+        ? raw['answerBoundaryPolicy'] as AnswerBoundaryPolicy
+        : raw['answerBoundaryPolicy'] is Map
+        ? AnswerBoundaryPolicy.fromJson(
+            (raw['answerBoundaryPolicy'] as Map).cast<String, dynamic>(),
+          )
+        : const AnswerBoundaryPolicy(),
+    understandingSnapshot: (raw['understandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    templateVariables: (raw['templateVariables'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{},
+    messages: (raw['messages'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[],
+    synthTemplateVersion:
+        (raw['synthTemplateVersion'] as String?)?.trim() ?? '',
+    fusionSynthTemplateVersion:
+        (raw['fusionSynthTemplateVersion'] as String?)?.trim() ?? '',
+    phaseOneResult: raw['phaseOneResult'] is ReactRuntimeResult
+        ? raw['phaseOneResult'] as ReactRuntimeResult
+        : const ReactRuntimeResult(finalText: '', traces: []),
+    synthesisReadiness: raw['synthesisReadiness'] is SynthesisReadinessResult
+        ? raw['synthesisReadiness'] as SynthesisReadinessResult
+        : const SynthesisReadinessResult(),
+    evidenceLedger: const <EvidenceLedgerEntry>[],
+    evidenceEvaluation: raw['evidenceEvaluation'] is EvidenceEvaluationResult
+        ? raw['evidenceEvaluation'] as EvidenceEvaluationResult
+        : const EvidenceEvaluationResult(),
+    toolResults: const <AssistantToolResultRow>[],
+    supplementalTraces: (raw['supplementalTraces'] as List?)
+            ?.whereType<AssistantTraceEvent>()
+            .toList(growable: false) ??
+        const <AssistantTraceEvent>[],
+  );
 }
 
 const String _phaseOneRenderableBlockedEnvelope =
@@ -159,7 +323,7 @@ void main() {
               AssistantRunMessage(role: 'user', content: '明天深圳会下雨吗？'),
             ],
           ),
-          executionSnapshot: <String, dynamic>{
+          executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
             'runId': 'run_renderable_blocked_with_replan',
             'traceId': 'trace_renderable_blocked_with_replan',
             'sessionId': 'renderable_blocked_with_replan',
@@ -221,7 +385,7 @@ void main() {
             },
             'blockedProcessStepId': ProcessStepId.retrievalProcessing.wireName,
             'blockedProcessMessage': '当前证据仍需补齐。',
-          },
+          }),
         );
 
         final routing =
