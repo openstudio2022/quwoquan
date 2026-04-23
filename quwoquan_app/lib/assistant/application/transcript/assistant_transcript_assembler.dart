@@ -54,7 +54,6 @@ class AssistantTranscriptAssembler {
       streamFinalAnswer: '',
       persisted: PersistedAssistantTimelinePayload.empty().copyWithMerged(
         <String, dynamic>{
-          assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
           assistantDisplayMarkdownField: '',
           assistantDisplayPlainTextField: '',
           assistantJourneyField: const <String, dynamic>{},
@@ -120,6 +119,7 @@ class AssistantTranscriptAssembler {
     required Map<String, dynamic> mergedRunArtifacts,
     required Map<String, dynamic> uiUsageStats,
     required Map<String, dynamic> persistedTurnFields,
+    Map<String, dynamic> extraFields = const <String, dynamic>{},
   }) {
     final domainId =
         AssistantDialogueRuntimeReadView(dialogueState).domainIdOrEmpty;
@@ -137,6 +137,10 @@ class AssistantTranscriptAssembler {
     final persistedBase =
         mergeFrom?.persisted ?? PersistedAssistantTimelinePayload.empty();
     final nextPersisted = persistedBase.copyWithMerged(persistedTurnFields);
+    final mergedExtra = <String, dynamic>{
+      ...?mergeFrom?.extra,
+      ...extraFields,
+    };
 
     if (mergeFrom != null) {
       return mergeFrom.copyWith(
@@ -149,6 +153,7 @@ class AssistantTranscriptAssembler {
         runArtifacts: mergedRunArtifacts,
         uiUsageStats: uiUsageStats,
         persisted: nextPersisted,
+        extra: mergedExtra,
         streaming: false,
         streamFinalAnswer: '',
       );
@@ -173,6 +178,7 @@ class AssistantTranscriptAssembler {
       uiActions: uiActions,
       runArtifacts: mergedRunArtifacts,
       uiUsageStats: uiUsageStats,
+      extra: mergedExtra,
     );
   }
 

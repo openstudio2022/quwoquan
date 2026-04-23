@@ -1,5 +1,7 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 工具结果 JSON 链；外层 typed row，内层 dataPayload 仍为结构化 JSON。
 
+import 'dart:math' as math;
+
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
@@ -213,11 +215,11 @@ class RetrievalOutcomeResolver {
     required EvidenceEvaluationResult evidenceEvaluation,
     required List<AssistantToolResultRow> toolResults,
   }) {
+    final fromToolResults = _toolResultRelevanceScore(toolResults);
     if (evidenceEvaluation.entries.isNotEmpty ||
         evidenceEvaluation.relevanceScore > 0) {
-      return evidenceEvaluation.relevanceScore;
+      return math.max(evidenceEvaluation.relevanceScore, fromToolResults);
     }
-    final fromToolResults = _toolResultRelevanceScore(toolResults);
     if (fromToolResults > 0) {
       return fromToolResults;
     }
@@ -452,14 +454,6 @@ class RetrievalOutcomeResolver {
     if (queryTasks.any(_queryTaskNeedsStrictFreshness)) {
       return true;
     }
-    if (queryTasks.any(
-      (task) =>
-          task.timeScope == 'latest' ||
-          task.timeScope == 'today' ||
-          task.timeScope == 'last_7d',
-    )) {
-      return true;
-    }
     for (final item in toolResults) {
       final data =
           item.dataPayload;
@@ -475,10 +469,6 @@ class RetrievalOutcomeResolver {
       if (temporalMode == 'realtime') {
         return true;
       }
-      final scope = (timeConstraint['scope'] as String?)?.trim() ?? '';
-      if (scope == 'latest' || scope == 'today' || scope == 'last_7d') {
-        return true;
-      }
     }
     return queryTasks.isEmpty &&
         policy.freshnessHoursMax > 0 &&
@@ -486,19 +476,7 @@ class RetrievalOutcomeResolver {
   }
 
   bool _queryTaskNeedsStrictFreshness(QueryTask task) {
-    if (task.freshnessHoursMax <= 0) {
-      return false;
-    }
-    final timeScope = task.timeScope.trim();
-    if (timeScope == 'latest' ||
-        timeScope == 'today' ||
-        timeScope == 'last_7d') {
-      return true;
-    }
-    if (_hasExplicitTimeWindow(task)) {
-      return false;
-    }
-    return true;
+    return task.freshnessHoursMax > 0;
   }
 
   bool _hasExplicitTimeWindow(QueryTask task) {
@@ -603,12 +581,6 @@ class RetrievalOutcomeResolver {
         task.timeRangeEnd.trim().isEmpty) {
       return false;
     }
-    final timeScope = task.timeScope.trim();
-    if (timeScope == 'latest' ||
-        timeScope == 'today' ||
-        timeScope == 'last_7d') {
-      return false;
-    }
     final referenceNow = _resolveReferenceNow(
       referenceNowIso: referenceNowIso,
       timezone: _firstNonEmpty(<String>[task.timezone, timezone]),
@@ -631,10 +603,6 @@ class RetrievalOutcomeResolver {
     String timezone = '',
   }) {
     if (raw.isEmpty) {
-      return false;
-    }
-    final scope = (raw['scope'] as String?)?.trim() ?? '';
-    if (scope == 'latest' || scope == 'today' || scope == 'last_7d') {
       return false;
     }
     final end = _parseDateTime((raw['timeRangeEnd'] as String?)?.trim() ?? '');

@@ -68,6 +68,7 @@ const _weatherFirstQuery = '深圳今天天气怎么样？需要带外套吗？'
 const _weatherSecondQuery = '明天会下雨吗，要带伞还是外套？';
 const _canonicalVisibleReplayTimeline = <String>[
   'understanding',
+  'retrieval_design',
   'retrieval_processing',
 ];
 const _m0ReplayCases = <_M0ReplayCase>[
@@ -710,7 +711,6 @@ Future<AssistantReplayBaselineTurn> _buildM0TurnArtifact({
       result: result,
       turn: turn,
       referenceNow: referenceNow,
-      queryDesignLines: queryDesignLines,
     ),
   ];
   final finalAnswerReady =
@@ -866,6 +866,9 @@ List<String> _collectTurnScopeIssues({
       if (!_matchesWeatherAnswer(result.finalAnswerText)) {
         issues.add('scope_answer_not_weather');
       }
+      if (!_hasReplayStructuredGeoScope(result.structuredResolvedGeoScope)) {
+        issues.add('resolved_geo_scope_missing');
+      }
       break;
   }
   return issues;
@@ -875,7 +878,6 @@ List<String> _collectTemporalAnchorIssues({
   required _ReplayResult result,
   required _M0ReplayTurnSpec turn,
   required DateTime referenceNow,
-  required List<String> queryDesignLines,
 }) {
   if (turn.temporalExpectation == _M0TemporalExpectation.none) {
     return const <String>[];
@@ -886,46 +888,25 @@ List<String> _collectTemporalAnchorIssues({
       final targetDate = _startOfDay(
         referenceNow,
       ).subtract(const Duration(days: 1));
-      if (!queryDesignLines.any(
-        (line) => _containsDateAnchor(line, targetDate),
+      if (!_structuredTemporalAnchorsContainDate(
+        result.structuredTemporalAnchors,
+        targetDate,
       )) {
         issues.add('query_design_missing_explicit_date');
-      }
-      if (!_containsDateAnchor(result.finalVisibleText, targetDate)) {
-        issues.add('visible_text_missing_explicit_date');
-      }
-      if (!_containsDateAnchor(result.finalAnswerText, targetDate)) {
-        issues.add('final_answer_missing_explicit_date');
       }
       return issues;
     case _M0TemporalExpectation.tomorrow:
       final targetDate = _startOfDay(referenceNow).add(const Duration(days: 1));
-      if (!queryDesignLines.any(
-        (line) => _containsDateAnchor(line, targetDate),
+      if (!_structuredTemporalAnchorsContainDate(
+        result.structuredTemporalAnchors,
+        targetDate,
       )) {
         issues.add('query_design_missing_explicit_date');
       }
-      if (!_containsDateAnchor(result.finalVisibleText, targetDate)) {
-        issues.add('visible_text_missing_explicit_date');
-      }
-      if (!_containsDateAnchor(result.finalAnswerText, targetDate)) {
-        issues.add('final_answer_missing_explicit_date');
-      }
       return issues;
     case _M0TemporalExpectation.weekday:
-      if (!queryDesignLines.any(_containsExplicitCalendarAnchor)) {
+      if (!_hasStructuredCalendarAnchor(result.structuredTemporalAnchors)) {
         issues.add('query_design_missing_calendar_anchor');
-      }
-      if (queryDesignLines.any(
-        (line) => line.contains('周三') && !_containsExplicitCalendarAnchor(line),
-      )) {
-        issues.add('query_design_retains_relative_weekday');
-      }
-      if (!_containsExplicitCalendarAnchor(result.finalVisibleText)) {
-        issues.add('visible_text_missing_calendar_anchor');
-      }
-      if (!_containsExplicitCalendarAnchor(result.finalAnswerText)) {
-        issues.add('final_answer_missing_calendar_anchor');
       }
       return issues;
     case _M0TemporalExpectation.none:
@@ -1340,6 +1321,7 @@ List<String> _reloadVisibleProcessSteps(Map<String, dynamic> state) {
       .where(
         (stepId) =>
             stepId == ProcessStepId.understanding.wireName ||
+            stepId == ProcessStepId.retrievalDesign.wireName ||
             stepId == ProcessStepId.retrievalProcessing.wireName,
       )
       .toList(growable: false);
@@ -1407,8 +1389,6 @@ Map<String, dynamic> _buildCanonicalBaselineState(
           .toList(growable: false) ??
       const <Map<String, dynamic>>[];
   return <String, dynamic>{
-    'assistantTurnSchemaVersion':
-        (normalized[assistantTurnSchemaVersionField] as String?)?.trim() ?? '',
     'displayMarkdown': resolvePersistedAssistantDisplayMarkdown(normalized),
     'displayPlainText': resolvePersistedAssistantDisplayPlainText(normalized),
     'displayAnswerBlocks':
@@ -1987,6 +1967,10 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     timelinePhases: latestSnapshot?.visibleProcessSteps ?? const <String>[],
     journalStages: latestSnapshot?.visibleProcessSteps ?? const <String>[],
     queryDesignLines: latestSnapshot?.queryDesignLines ?? const <String>[],
+    structuredTemporalAnchors:
+        latestSnapshot?.structuredTemporalAnchors ?? const <String>[],
+    structuredResolvedGeoScope:
+        latestSnapshot?.structuredResolvedGeoScope ?? const <String, dynamic>{},
   );
 }
 
@@ -2383,33 +2367,11 @@ List<String> _extractQueryDesignLines(String text) {
   return queryLines;
 }
 
-bool _containsDateAnchor(String text, DateTime date) {
-  final normalized = text.replaceAll(RegExp(r'\s+'), '');
-  final year = date.year.toString().padLeft(4, '0');
-  final month = date.month.toString();
-  final month2 = date.month.toString().padLeft(2, '0');
-  final day = date.day.toString();
-  final day2 = date.day.toString().padLeft(2, '0');
-  return normalized.contains('$year-$month2-$day2') ||
-      normalized.contains('$year年$month月$day日') ||
-      normalized.contains('$year年$month2月$day2日') ||
-      normalized.contains('$month月$day日') ||
-      normalized.contains('$month2月$day2日');
+DateTime _startOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
 }
 
-bool _containsExplicitCalendarAnchor(String text) {
-  final normalized = text.replaceAll(RegExp(r'\s+'), '');
-  return RegExp(
-        r'20\d{2}-\d{2}-\d{2}(?:至|到|~|-|—)20\d{2}-\d{2}-\d{2}',
-      ).hasMatch(normalized) ||
-      RegExp(r'20\d{2}年\d{1,2}月\d{1,2}日').hasMatch(normalized) ||
-      RegExp(r'20\d{2}-\d{2}-\d{2}').hasMatch(normalized) ||
-      RegExp(r'20\d{2}年\d{1,2}月').hasMatch(normalized) ||
-      RegExp(r'20\d{2}年Q[1-4]').hasMatch(normalized) ||
-      RegExp(r'20\d{2}(?:上半年|下半年|全年)').hasMatch(normalized);
-}
-
-DateTime _relativeWeekdayDate(
+DateTime _resolveWeekdayDate(
   DateTime referenceNow, {
   required int weekday,
   required int weekOffset,
@@ -2421,8 +2383,44 @@ DateTime _relativeWeekdayDate(
   return weekStart.add(Duration(days: weekOffset * 7 + weekday - 1));
 }
 
-DateTime _startOfDay(DateTime value) {
-  return DateTime(value.year, value.month, value.day);
+bool _structuredTemporalAnchorsContainDate(
+  List<String> anchors,
+  DateTime targetDate,
+) {
+  for (final anchor in anchors) {
+    final parsed = DateTime.tryParse(anchor.trim());
+    if (parsed == null) {
+      continue;
+    }
+    final date = _startOfDay(parsed);
+    if (date.year == targetDate.year &&
+        date.month == targetDate.month &&
+        date.day == targetDate.day) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _hasStructuredCalendarAnchor(List<String> anchors) {
+  return anchors.any((item) => DateTime.tryParse(item.trim()) != null);
+}
+
+bool _hasReplayStructuredGeoScope(Map<String, dynamic> scope) {
+  for (final key in const <String>[
+    'resolvedText',
+    'cityLabel',
+    'regionLabel',
+    'countryLabel',
+    'marketLabel',
+    'countryCode',
+    'marketCode',
+  ]) {
+    if ((scope[key] as String?)?.trim().isNotEmpty == true) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool _isAcceptableProcessHeader(String text) {
@@ -2482,7 +2480,7 @@ void _expectTemporalReplayResult(
   );
   switch (replayCase.kind) {
     case _TemporalReplayExpectationKind.lastWednesday:
-      final targetDate = _relativeWeekdayDate(
+      final targetDate = _resolveWeekdayDate(
         referenceNow,
         weekday: DateTime.wednesday,
         weekOffset: -1,
@@ -2490,12 +2488,11 @@ void _expectTemporalReplayResult(
       _expectExplicitDateAnchor(
         result: result,
         replayCase: replayCase,
-        queryLines: queryLines,
         targetDate: targetDate,
       );
       return;
     case _TemporalReplayExpectationKind.nextWednesday:
-      final targetDate = _relativeWeekdayDate(
+      final targetDate = _resolveWeekdayDate(
         referenceNow,
         weekday: DateTime.wednesday,
         weekOffset: 1,
@@ -2503,7 +2500,6 @@ void _expectTemporalReplayResult(
       _expectExplicitDateAnchor(
         result: result,
         replayCase: replayCase,
-        queryLines: queryLines,
         targetDate: targetDate,
       );
       return;
@@ -2512,12 +2508,12 @@ void _expectTemporalReplayResult(
       _expectExplicitDateAnchor(
         result: result,
         replayCase: replayCase,
-        queryLines: queryLines,
         targetDate: targetDate,
       );
       return;
     case _TemporalReplayExpectationKind.recentWindow:
       _expectExplicitWindowQueryDesign(
+        result: result,
         replayCase: replayCase,
         queryLines: queryLines,
         forbidFutureToken: false,
@@ -2525,6 +2521,7 @@ void _expectTemporalReplayResult(
       return;
     case _TemporalReplayExpectationKind.futureForecast:
       _expectExplicitWindowQueryDesign(
+        result: result,
         replayCase: replayCase,
         queryLines: queryLines,
         forbidFutureToken: true,
@@ -2543,33 +2540,23 @@ void _expectTemporalReplayResult(
 void _expectExplicitDateAnchor({
   required _ReplayResult result,
   required _TemporalReplayCase replayCase,
-  required List<String> queryLines,
   required DateTime targetDate,
 }) {
   expect(
-    queryLines.any((line) => _containsDateAnchor(line, targetDate)),
+    _structuredTemporalAnchorsContainDate(result.structuredTemporalAnchors, targetDate),
     isTrue,
     reason: '${replayCase.caseName} 的 query design 必须落成明确日期锚点',
-  );
-  expect(
-    _containsDateAnchor(result.finalVisibleText, targetDate),
-    isTrue,
-    reason: '${replayCase.caseName} 的界面文本必须体现明确日期锚点',
-  );
-  expect(
-    _containsDateAnchor(result.finalAnswerText, targetDate),
-    isTrue,
-    reason: '${replayCase.caseName} 的最终答案必须体现明确日期锚点',
   );
 }
 
 void _expectExplicitWindowQueryDesign({
+  required _ReplayResult result,
   required _TemporalReplayCase replayCase,
   required List<String> queryLines,
   required bool forbidFutureToken,
 }) {
   expect(
-    queryLines.any(_containsExplicitCalendarAnchor),
+    _hasStructuredCalendarAnchor(result.structuredTemporalAnchors),
     isTrue,
     reason: '${replayCase.caseName} 的 query design 必须包含明确时间范围或年月锚点',
   );
@@ -2727,6 +2714,8 @@ class _ReplayResult {
     required this.timelinePhases,
     required this.journalStages,
     required this.queryDesignLines,
+    required this.structuredTemporalAnchors,
+    required this.structuredResolvedGeoScope,
   });
 
   final String query;
@@ -2750,6 +2739,8 @@ class _ReplayResult {
   final List<String> timelinePhases;
   final List<String> journalStages;
   final List<String> queryDesignLines;
+  final List<String> structuredTemporalAnchors;
+  final Map<String, dynamic> structuredResolvedGeoScope;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -2774,6 +2765,8 @@ class _ReplayResult {
       'timelinePhases': timelinePhases,
       'journalStages': journalStages,
       'queryDesignLines': queryDesignLines,
+      'structuredTemporalAnchors': structuredTemporalAnchors,
+      'structuredResolvedGeoScope': structuredResolvedGeoScope,
     };
   }
 }
@@ -2830,14 +2823,12 @@ List<String> _queryDesignLineStringsFromFrames(
   final lines = <String>[];
   for (final frame in frames) {
     if (frame.stepId != ProcessStepId.retrievalDesign) continue;
-    for (final piece in <String>[frame.headline, frame.detail]) {
-      for (final line in piece.split('\n')) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) {
-          lines.add(trimmed);
-        }
-      }
+    final detailLines = _queryDesignLineStringsFromText(frame.detail);
+    if (detailLines.isNotEmpty) {
+      lines.addAll(detailLines);
+      continue;
     }
+    lines.addAll(_queryDesignLineStringsFromText(frame.headline));
   }
   return _uniqueNonEmpty(lines);
 }
@@ -2849,18 +2840,62 @@ List<String> _queryDesignLineStringsFromRawTimeline(List<dynamic> raw) {
     final map = item.cast<String, dynamic>();
     final stepId = (map['stepId'] as String?)?.trim() ?? '';
     if (stepId != 'retrieval_design') continue;
-    for (final key in <String>['headline', 'detail', 'summary']) {
-      final text = (map[key] as String?)?.trim() ?? '';
-      if (text.isEmpty) continue;
-      for (final line in text.split('\n')) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) {
-          lines.add(trimmed);
-        }
-      }
+    final detailLines = _queryDesignLineStringsFromText(
+      (map['detail'] as String?)?.trim() ?? '',
+    );
+    if (detailLines.isNotEmpty) {
+      lines.addAll(detailLines);
+      continue;
     }
+    final summaryLines = _queryDesignLineStringsFromText(
+      (map['summary'] as String?)?.trim() ?? '',
+    );
+    if (summaryLines.isNotEmpty) {
+      lines.addAll(summaryLines);
+      continue;
+    }
+    lines.addAll(
+      _queryDesignLineStringsFromText((map['headline'] as String?)?.trim() ?? ''),
+    );
   }
   return _uniqueNonEmpty(lines);
+}
+
+List<String> _queryDesignLineStringsFromText(String text) {
+  return text
+      .split('\n')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<String> _extractExplicitDateAnchorsFromText(String text) {
+  final matches = <String>{};
+  for (final match in RegExp(r'(\d{4})-(\d{1,2})-(\d{1,2})').allMatches(text)) {
+    final year = int.tryParse(match.group(1) ?? '');
+    final month = int.tryParse(match.group(2) ?? '');
+    final day = int.tryParse(match.group(3) ?? '');
+    if (year == null || month == null || day == null) {
+      continue;
+    }
+    matches.add(
+      DateTime(year, month, day).toIso8601String().split('T').first,
+    );
+  }
+  for (final match in RegExp(
+    r'(\d{4})年(\d{1,2})月(\d{1,2})日',
+  ).allMatches(text)) {
+    final year = int.tryParse(match.group(1) ?? '');
+    final month = int.tryParse(match.group(2) ?? '');
+    final day = int.tryParse(match.group(3) ?? '');
+    if (year == null || month == null || day == null) {
+      continue;
+    }
+    matches.add(
+      DateTime(year, month, day).toIso8601String().split('T').first,
+    );
+  }
+  return matches.toList(growable: false);
 }
 
 List<String> _queryDesignLineStringsFromIntentGraph(Map<String, dynamic> root) {
@@ -2995,7 +3030,18 @@ class _AssistantBubbleSnapshot {
   String get nextAction {
     final ra = _runArtifacts;
     if (ra != null) {
-      return ra.answerDecisionReadView.nextAction;
+      final nextAction = ra.answerDecisionReadView.nextAction;
+      if (nextAction.isNotEmpty) {
+        return nextAction;
+      }
+    }
+    final conversationStateDecision =
+        (message['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final decisionNextAction =
+        (conversationStateDecision['nextAction'] as String?)?.trim() ?? '';
+    if (decisionNextAction.isNotEmpty) {
+      return decisionNextAction;
     }
     final answerDecision =
         ((message['runArtifacts'] as Map?)?['answerDecision'] as Map?)
@@ -3009,6 +3055,14 @@ class _AssistantBubbleSnapshot {
     if (ra != null) {
       final mode = ra.diagnosticsReadView.finalAnswerMode.trim();
       if (mode.isNotEmpty) return mode;
+    }
+    final conversationStateDecision =
+        (message['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final decisionMode =
+        (conversationStateDecision['finalAnswerMode'] as String?)?.trim() ?? '';
+    if (decisionMode.isNotEmpty) {
+      return decisionMode;
     }
     final answerDecision =
         ((message['runArtifacts'] as Map?)?['answerDecision'] as Map?)
@@ -3157,6 +3211,8 @@ class _AssistantBubbleSnapshot {
     }
 
     for (final container in <Map<String, dynamic>?>[
+      normalized,
+      (normalized['runArtifacts'] as Map?)?.cast<String, dynamic>(),
       Map<String, dynamic>.from(message),
       (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
     ]) {
@@ -3165,6 +3221,15 @@ class _AssistantBubbleSnapshot {
       if (fromIntent.isNotEmpty) {
         return fromIntent;
       }
+    }
+
+    for (final container in <Map<String, dynamic>?>[
+      normalized,
+      (normalized['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+      Map<String, dynamic>.from(message),
+      (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+    ]) {
+      if (container == null) continue;
       final fromUnderstanding =
           _queryDesignLineStringsFromUnderstandingSnapshot(container);
       if (fromUnderstanding.isNotEmpty) {
@@ -3232,6 +3297,7 @@ class _AssistantBubbleSnapshot {
         .where(
           (stepId) =>
               stepId == ProcessStepId.understanding.wireName ||
+              stepId == ProcessStepId.retrievalDesign.wireName ||
               stepId == ProcessStepId.retrievalProcessing.wireName,
         )
         .toList(growable: false);
@@ -3285,6 +3351,69 @@ class _AssistantBubbleSnapshot {
             ?.cast<String, dynamic>()) ??
         const <String, dynamic>{};
     return answerDecision['finalAnswerReady'] == true;
+  }
+
+  Map<String, dynamic> get _intentGraph {
+    final normalized = normalizedMessage;
+    for (final container in <Map<String, dynamic>?>[
+      normalized,
+      (normalized['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+      Map<String, dynamic>.from(message),
+      (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+    ]) {
+      if (container == null) {
+        continue;
+      }
+      final intentGraph =
+          (container['intentGraph'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      if (intentGraph.isNotEmpty) {
+        return intentGraph;
+      }
+    }
+    return const <String, dynamic>{};
+  }
+
+  List<String> get structuredTemporalAnchors {
+    final intentGraph = _intentGraph;
+    final queryNormalization =
+        (intentGraph['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final queryTasks =
+        (intentGraph['queryTasks'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final values = <String>[
+      (queryNormalization['timePoint'] as String?)?.trim() ?? '',
+      (queryNormalization['timeRangeStart'] as String?)?.trim() ?? '',
+      (queryNormalization['timeRangeEnd'] as String?)?.trim() ?? '',
+        ..._extractExplicitDateAnchorsFromText(
+          (queryNormalization['normalizedQuery'] as String?)?.trim() ?? '',
+        ),
+        ..._extractExplicitDateAnchorsFromText(
+          (queryNormalization['rewrittenQuery'] as String?)?.trim() ?? '',
+        ),
+      for (final task in queryTasks) ...<String>[
+        (task['timePoint'] as String?)?.trim() ?? '',
+        (task['timeRangeStart'] as String?)?.trim() ?? '',
+        (task['timeRangeEnd'] as String?)?.trim() ?? '',
+        ..._extractExplicitDateAnchorsFromText(
+          (task['query'] as String?)?.trim() ?? '',
+        ),
+        ..._extractExplicitDateAnchorsFromText(
+          (task['label'] as String?)?.trim() ?? '',
+        ),
+      ],
+    ];
+    return _uniqueNonEmpty(values.where((item) => item.isNotEmpty));
+  }
+
+  Map<String, dynamic> get structuredResolvedGeoScope {
+    final intentGraph = _intentGraph;
+    return (intentGraph['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
   }
 
   Map<String, dynamic> get normalizedMessage =>

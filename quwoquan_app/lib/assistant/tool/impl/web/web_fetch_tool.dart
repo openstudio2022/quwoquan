@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
 import 'package:quwoquan_app/assistant/tool/impl/web/web_fetch_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
@@ -70,6 +71,20 @@ class WebFetchTool implements AssistantTool {
           debugPrint('[WebFetchTool] HTTP ${response.statusCode}: $url');
         }
         final errorCode = _statusCodeToErrorCode(response.statusCode);
+        _emitConsoleReadableFetchLog(
+          request: <String, dynamic>{
+            'url': url,
+            'method': 'GET',
+            'headers': _buildHeaders(),
+            'maxChars': maxChars,
+          },
+          response: <String, dynamic>{
+            'statusCode': response.statusCode,
+            'headers': response.headers,
+            'body': _decodeResponseBody(response),
+          },
+          hasError: true,
+        );
         return AssistantToolResult(
           success: false,
           message: _statusCodeToMessage(response.statusCode, url),
@@ -90,6 +105,21 @@ class WebFetchTool implements AssistantTool {
           contentType.contains('application/xml');
 
       if (!isHtml && !isText) {
+        _emitConsoleReadableFetchLog(
+          request: <String, dynamic>{
+            'url': url,
+            'method': 'GET',
+            'headers': _buildHeaders(),
+            'maxChars': maxChars,
+          },
+          response: <String, dynamic>{
+            'statusCode': response.statusCode,
+            'headers': response.headers,
+            'contentType': contentType,
+          },
+          hasError: true,
+          error: 'Unsupported content type: $contentType',
+        );
         return AssistantToolResult(
           success: false,
           message: 'Unsupported content type: $contentType',
@@ -158,12 +188,34 @@ class WebFetchTool implements AssistantTool {
         dimension: dimension,
         references: references,
       );
+      _emitConsoleReadableFetchLog(
+        request: <String, dynamic>{
+          'url': url,
+          'method': 'GET',
+          'headers': _buildHeaders(),
+          'maxChars': maxChars,
+          if (queryTaskId.isNotEmpty) 'queryTaskId': queryTaskId,
+          if (dimension.isNotEmpty) 'dimension': dimension,
+        },
+        response: <String, dynamic>{
+          'statusCode': response.statusCode,
+          'headers': response.headers,
+          'payload': payload.toResultData(),
+        },
+        hasError: false,
+      );
       return AssistantToolResult(
         success: true,
         message: '已阅读 $charCount 字内容${truncated ? "（已截断）" : ""}',
         data: payload.toResultData(),
       );
     } on FormatException {
+      _emitConsoleReadableFetchLog(
+        request: <String, dynamic>{'url': url, 'maxChars': maxChars},
+        response: const <String, dynamic>{},
+        hasError: true,
+        error: 'Invalid URL format',
+      );
       return AssistantToolResult(
         success: false,
         message: 'Invalid URL format: $url',
@@ -173,6 +225,12 @@ class WebFetchTool implements AssistantTool {
       if (kDebugMode) {
         debugPrint('[WebFetchTool] timeout: $url');
       }
+      _emitConsoleReadableFetchLog(
+        request: <String, dynamic>{'url': url, 'maxChars': maxChars},
+        response: const <String, dynamic>{},
+        hasError: true,
+        error: 'timeout',
+      );
       return const AssistantToolResult(
         success: false,
         message: '网页加载超时，请稍后重试',
@@ -183,6 +241,12 @@ class WebFetchTool implements AssistantTool {
       if (kDebugMode) {
         debugPrint('[WebFetchTool] client error: $url — $e');
       }
+      _emitConsoleReadableFetchLog(
+        request: <String, dynamic>{'url': url, 'maxChars': maxChars},
+        response: const <String, dynamic>{},
+        hasError: true,
+        error: e.toString(),
+      );
       return AssistantToolResult(
         success: false,
         message: '网页读取失败，网络连接异常',
@@ -194,6 +258,12 @@ class WebFetchTool implements AssistantTool {
       if (kDebugMode) {
         debugPrint('[WebFetchTool] error: $url — $e');
       }
+      _emitConsoleReadableFetchLog(
+        request: <String, dynamic>{'url': url, 'maxChars': maxChars},
+        response: const <String, dynamic>{},
+        hasError: true,
+        error: e.toString(),
+      );
       return AssistantToolResult(
         success: false,
         message: '网页读取失败: $e',
@@ -201,6 +271,49 @@ class WebFetchTool implements AssistantTool {
         degraded: true,
       );
     }
+  }
+
+  void _emitConsoleReadableFetchLog({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> response,
+    required bool hasError,
+    String error = '',
+  }) {
+    assert(() {
+      final queryTaskId = (request['queryTaskId'] as String?)?.trim() ?? '';
+      final header = StringBuffer('[AssistantSearch][fetch] ');
+      header.write(hasError ? 'ERROR' : 'OK');
+      header.write(' stage=retrieval_processing');
+      header.write(' tool=web_fetch');
+      if (queryTaskId.isNotEmpty) {
+        header.write(' queryTaskId=$queryTaskId');
+      }
+      print(header.toString());
+      for (final line in ConsolePrettyLogFormatter.renderSection(
+        prefix: '[AssistantSearch] ',
+        title: 'request',
+        value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(request),
+      )) {
+        print(line);
+      }
+      for (final line in ConsolePrettyLogFormatter.renderSection(
+        prefix: '[AssistantSearch] ',
+        title: 'response',
+        value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(response),
+      )) {
+        print(line);
+      }
+      if (error.trim().isNotEmpty) {
+        for (final line in ConsolePrettyLogFormatter.renderSection(
+          prefix: '[AssistantSearch] ',
+          title: 'error',
+          value: error,
+        )) {
+          print(line);
+        }
+      }
+      return true;
+    }());
   }
 
   AssistantToolResult _sanitizeBrokerFetchResult({

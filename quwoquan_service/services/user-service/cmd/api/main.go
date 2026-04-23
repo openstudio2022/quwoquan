@@ -16,7 +16,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	rtredis "quwoquan_service/runtime/redis"
+	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
+	"quwoquan_service/services/user-service/internal/adapters/mq"
 	"quwoquan_service/services/user-service/internal/application"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
@@ -142,9 +144,19 @@ func main() {
 	profileCache := cache.NewProfileCache(redisClient)
 	settingCache := cache.NewSettingCache(redisClient)
 	blockCache := cache.NewBlockCache(redisClient)
+	userEventPublisher := mq.NewEventPublisher(redisClient)
+	userSyncService := runtimesync.NewService(redisClient, redisRouter.Scene("realtime"))
 
 	// 7. Services
-	profileService := application.NewProfileService(profileStore, personaStore, settingStore, profileCache, settingCache)
+	profileService := application.NewProfileService(
+		profileStore,
+		personaStore,
+		settingStore,
+		profileCache,
+		settingCache,
+		userEventPublisher,
+		userSyncService,
+	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
 	followService := application.NewFollowService(followStore, profileStore, profileCache)
 	blockService := application.NewBlockService(blockStore, blockCache)

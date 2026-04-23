@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"testing"
@@ -13,7 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	rtredis "quwoquan_service/runtime/redis"
+	runtimesync "quwoquan_service/runtime/sync"
 	chathttp "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
 	"quwoquan_service/services/chat-service/internal/application"
@@ -22,11 +25,11 @@ import (
 )
 
 var (
-	testHandler  http.Handler
-	mongoDB      *mongo.Database
-	mongoClient  *mongo.Client
-	mr           *miniredis.Miniredis
-	redisRouter  *rtredis.Router
+	testHandler http.Handler
+	mongoDB     *mongo.Database
+	mongoClient *mongo.Client
+	mr          *miniredis.Miniredis
+	redisRouter *rtredis.Router
 )
 
 var collections = []string{
@@ -44,8 +47,10 @@ func (testProfileResolver) ResolveMany(ctx context.Context, userIDs []string) (m
 	out := make(map[string]application.ProfileSnapshot, len(userIDs))
 	for _, id := range userIDs {
 		out[id] = application.ProfileSnapshot{
-			DisplayName: "Display_" + id,
-			AvatarURL:   "https://test.avatar/" + id,
+			DisplayName:   "Display_" + id,
+			AvatarURL:     "https://test.avatar/" + id,
+			AvatarAssetID: "ua_" + id,
+			AvatarVersion: 1,
 		}
 	}
 	return out, nil
@@ -103,12 +108,53 @@ func TestMain(m *testing.M) {
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
+	groupAvatarMedia := runtimemedia.NewGroupAvatarService(redisRouter.Scene("general"), "")
+	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
+	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
+		redisRouter.Scene("general"),
+		chatStore,
+		eventPublisher,
+		groupAvatarMedia,
+		userSyncService,
+		slog.Default(),
+	)
+	if err := groupAvatarScheduler.Start(ctx); err != nil {
+		panic("failed to start group avatar scheduler: " + err.Error())
+	}
 
 	profiles := testProfileResolver{}
-	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher, profiles)
+	conversationSvc := application.NewConversationService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		profiles,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+	)
 	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
-	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher, profiles)
+	memberSvc := application.NewMemberService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		profiles,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+	)
 	inboxSvc := application.NewInboxService(chatStore)
+	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
+		redisRouter.Scene("general"),
+		chatStore,
+		eventPublisher,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+		slog.Default(),
+	)
+	if err := userAvatarConsumer.Start(ctx); err != nil {
+		panic("failed to start user avatar consumer: " + err.Error())
+	}
 
 	testHandler = chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
 

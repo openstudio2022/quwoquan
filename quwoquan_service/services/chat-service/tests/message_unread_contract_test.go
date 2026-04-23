@@ -38,16 +38,12 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 		if !ok {
 			continue
 		}
-		us, ok := m["userState"].(map[string]any)
-		if !ok {
-			continue
-		}
-		usConvId, _ := us["conversationId"].(string)
-		if usConvId != convId {
+		itemConvId, _ := m["conversationId"].(string)
+		if itemConvId != convId {
 			continue
 		}
 		found = true
-		unread, _ := us["unreadCount"].(float64)
+		unread, _ := m["unreadCount"].(float64)
 		// maxSeq=5 (owner msg at seq 0 doesn't exist, 5 messages sent = seq 1..5)
 		// marked msg3 read (seq=3) → unread = maxSeq(5) - 3 = 2
 		if int(unread) != 2 {
@@ -72,15 +68,11 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 		if !ok {
 			continue
 		}
-		us, ok := m["userState"].(map[string]any)
-		if !ok {
+		itemConvId, _ := m["conversationId"].(string)
+		if itemConvId != convId {
 			continue
 		}
-		usConvId, _ := us["conversationId"].(string)
-		if usConvId != convId {
-			continue
-		}
-		unread, _ := us["unreadCount"].(float64)
+		unread, _ := m["unreadCount"].(float64)
 		if int(unread) != 0 {
 			t.Errorf("expected unreadCount=0 after marking last msg read, got %.0f", unread)
 		}

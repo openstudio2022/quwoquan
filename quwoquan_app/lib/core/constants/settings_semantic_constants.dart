@@ -57,7 +57,8 @@ class SettingsSemanticConstants {
       : AppColors.iosGroupedSurfaceLight;
 
   /// Inset grouped 分组圆角（与 `settings_page` `_SettingsGroup`、系统设置卡片一致）。
-  static double get insetFormSectionCornerRadius => AppSpacing.largeBorderRadius;
+  static double get insetFormSectionCornerRadius =>
+      AppSpacing.largeBorderRadius;
 
   /// 表单列表相对屏幕的左右内边距（与系统设置列表边距一致）。
   static double get insetFormListHorizontalPadding =>
@@ -100,7 +101,8 @@ class SettingsSemanticConstants {
   }
 
   /// 分组内边距：紧凑（多行列表项）。
-  static double get insetFormSectionPaddingVerticalCompact => AppSpacing.containerSm;
+  static double get insetFormSectionPaddingVerticalCompact =>
+      AppSpacing.containerSm;
 
   /// 分组内边距：标准（含成员网格等较高内容）。
   static double get insetFormSectionPaddingVerticalStandard =>
@@ -148,6 +150,14 @@ class SettingsSemanticConstants {
   static Color conversationSheetSelectionAccentColor(bool isDark) =>
       AppColors.primaryColor;
 
+  /// 贴底对话态 sheet 内的轻量主操作按钮填充色（如「添加」）。
+  static Color conversationSheetPrimaryActionBackgroundColor(bool isDark) =>
+      AppColors.primaryColor;
+
+  /// 贴底对话态 sheet 内的轻量主操作按钮前景色。
+  static Color conversationSheetPrimaryActionForegroundColor(bool isDark) =>
+      AppColors.white;
+
   /// 面板内容区相对屏幕左右缩进（与帖子更多功能一致）。
   static double get conversationSheetOuterHorizontalPadding =>
       AppSpacing.containerXs;
@@ -158,6 +168,22 @@ class SettingsSemanticConstants {
   /// 标题与下方脚注的间距。
   static double get conversationSheetTitleToFootnoteSpacing =>
       AppSpacing.intraGroupSm;
+
+  /// 行尾轻量主操作按钮高度。
+  static double get conversationSheetInlineActionButtonHeight =>
+      AppSpacing.buttonHeightSm;
+
+  /// 行尾轻量主操作按钮横向内边距。
+  static double get conversationSheetInlineActionHorizontalPadding =>
+      AppSpacing.containerSm;
+
+  /// 行尾轻量主操作按钮描边色。
+  static Color conversationSheetInlineActionBorderColor(bool isDark) =>
+      AppColors.white.withValues(alpha: isDark ? 0.14 : 0.18);
+
+  /// 行尾轻量主操作按钮阴影色。
+  static Color conversationSheetInlineActionShadowColor(bool isDark) =>
+      AppColors.black.withValues(alpha: isDark ? 0.16 : 0.08);
 
   // ==================== 内容与分割线 ====================
   /// 设置项主文字颜色

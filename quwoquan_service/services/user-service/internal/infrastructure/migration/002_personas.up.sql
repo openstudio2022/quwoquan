@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS personas (
     id                       VARCHAR(36) PRIMARY KEY,
     user_id                  VARCHAR(36) NOT NULL,
     display_name             VARCHAR(64) NOT NULL,
+    user_handle              VARCHAR(64),
+    phone                    VARCHAR(20),
+    email                    VARCHAR(128),
     avatar_url               TEXT,
     caller_ringtone_id       VARCHAR(64),
     theme_mode_override      VARCHAR(16),
@@ -15,6 +18,11 @@ CREATE TABLE IF NOT EXISTS personas (
     sub_account_id           VARCHAR(36) NOT NULL UNIQUE,
     isolation_level          VARCHAR(16) NOT NULL DEFAULT 'open',
     purpose_hint             VARCHAR(128),
+    inherits_profile_from_owner BOOLEAN NOT NULL DEFAULT true,
+    overridden_profile_fields TEXT[],
+    last_profile_sync_at     TIMESTAMPTZ,
+    last_profile_sync_source VARCHAR(16),
+    last_activated_at        TIMESTAMPTZ,
     invite_count             INTEGER NOT NULL DEFAULT 0,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -25,8 +33,12 @@ CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_personas_sub_account_id ON personas (sub_account_id);
 
+CREATE INDEX IF NOT EXISTS idx_personas_user_handle ON personas (user_handle);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_primary ON personas (user_id, is_primary) WHERE is_primary = true;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_active ON personas (user_id, is_active) WHERE is_active = true;
 
 ALTER TABLE personas ADD CONSTRAINT uq_personas_sub_account_id UNIQUE (sub_account_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_user_handle ON personas (user_handle) WHERE user_handle IS NOT NULL AND user_handle <> '';

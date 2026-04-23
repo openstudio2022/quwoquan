@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 
@@ -14,11 +12,13 @@ class AssistantSessionSummaryBuilder {
     List<Map<String, dynamic>> history, {
     int limit = defaultRecentDialogueRoundsLimit,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     return _summarizeRecentMessages(
       history,
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
     );
   }
 
@@ -26,12 +26,14 @@ class AssistantSessionSummaryBuilder {
     List<Map<String, dynamic>> history, {
     int limit = defaultRecentDialogueRoundsLimit,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
     Future<String> Function(String transcript)? summarizer,
   }) async {
     final raw = _summarizeRecentMessages(
       history,
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
     );
     if (raw.isEmpty) return '';
     if (summarizer == null) return raw;
@@ -69,13 +71,18 @@ class AssistantSessionSummaryBuilder {
     List<Map<String, dynamic>> history, {
     int limit = defaultRecentDialogueRoundsLimit,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     if (history.isEmpty) {
       return '';
     }
     if ((roundsLimit ?? 0) > 0) {
       final transcript = buildRecentDialogueRoundsTranscript(
-        buildRecentDialogueRounds(history, limit: roundsLimit!),
+        buildRecentDialogueRounds(
+          history,
+          limit: roundsLimit!,
+          olderLimit: roundsOlderLimit,
+        ),
       );
       if (transcript.isNotEmpty) {
         return transcript;

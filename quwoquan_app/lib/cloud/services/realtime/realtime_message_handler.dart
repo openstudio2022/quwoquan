@@ -17,6 +17,11 @@ class RealtimeMessageHandler {
   RealtimeMessageHandler(ChatProviderRead read) : _read = read;
 
   final ChatProviderRead _read;
+  final Set<String> _pendingConversationRefreshes = <String>{};
+  Timer? _conversationRefreshTimer;
+  Timer? _avatarPatchTimer;
+  Timer? _reconnectRecoveryTimer;
+  int? _latestHintedSyncSeq;
 
   void handle(Map<String, dynamic> event) {
     final eventType = event['type'] as String? ?? '';
@@ -34,35 +39,37 @@ class RealtimeMessageHandler {
 
         _updateConversationCacheForNewMessage(conversationId, payload);
         unawaited(
-          _read(localChatSearchSyncProvider)
-              .ingestRealtimeMessage(
-                conversationId: conversationId,
-                payload: payload,
-              ),
+          _read(localChatSearchSyncProvider).ingestRealtimeMessage(
+            conversationId: conversationId,
+            payload: payload,
+          ),
         );
+        return;
 
       case 'MessageRecalled':
         if (conversationId.isEmpty) return;
         final messageId = payload['messageId'] as String? ?? '';
         if (messageId.isNotEmpty) {
-          _read(chatMessageProvider(conversationId).notifier)
-              .markRecalled(messageId);
+          _read(
+            chatMessageProvider(conversationId).notifier,
+          ).markRecalled(messageId);
           unawaited(
-            _read(localChatSearchSyncProvider)
-                .markMessageRecalled(
-                  conversationId: conversationId,
-                  messageId: messageId,
-                ),
+            _read(localChatSearchSyncProvider).markMessageRecalled(
+              conversationId: conversationId,
+              messageId: messageId,
+            ),
           );
         }
+        return;
 
       case 'ReadReceiptSent':
-        break;
+        return;
 
       case 'MemberJoined':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '加入了群聊');
         _refreshConversationCache(conversationId);
+        return;
 
       case 'ConversationRosterUpdated':
         if (conversationId.isEmpty) return;
@@ -70,21 +77,40 @@ class RealtimeMessageHandler {
           _read(conversationMembersProvider(conversationId).notifier).load(),
         );
         _refreshConversationCache(conversationId);
+        return;
+
+      case 'ConversationAvatarUpdated':
+      case 'UserAvatarUpdated':
+        final latestSeq =
+            (event['latestSyncSeq'] as num?)?.toInt() ??
+            (payload['latestSyncSeq'] as num?)?.toInt();
+        _scheduleAvatarPatchSync(latestSeq);
+        return;
 
       case 'MemberLeft':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '离开了群聊');
         _refreshConversationCache(conversationId);
+        return;
 
       case 'ConversationSettingsUpdated':
         if (conversationId.isEmpty) return;
         _refreshConversationCache(conversationId);
+        return;
+
+      case 'sync_hint':
+        final latestSeq =
+            (event['latestSyncSeq'] as num?)?.toInt() ??
+            (payload['latestSyncSeq'] as num?)?.toInt();
+        _scheduleAvatarPatchSync(latestSeq);
+        return;
 
       case 'Reconnected':
         _onReconnected();
+        return;
 
       default:
-        break;
+        return;
     }
   }
 
@@ -135,22 +161,56 @@ class RealtimeMessageHandler {
 
   /// 设置/成员变更 → 强制刷新该会话的缓存（下次读取时从云端拉取最新）
   void _refreshConversationCache(String conversationId) {
-    try {
-      final syncService = _read(conversationSyncProvider);
-      syncService.sync(force: true);
-      unawaited(
-        _read(localChatSearchSyncProvider)
-            .syncConversation(conversationId: conversationId, forceFull: true),
-      );
-    } catch (_) {}
+    _pendingConversationRefreshes.add(conversationId);
+    _conversationRefreshTimer?.cancel();
+    _conversationRefreshTimer = Timer(const Duration(milliseconds: 160), () {
+      try {
+        final syncService = _read(conversationSyncProvider);
+        unawaited(syncService.sync(force: true));
+        final pending = _pendingConversationRefreshes.toList(growable: false);
+        _pendingConversationRefreshes.clear();
+        for (final id in pending) {
+          unawaited(
+            _read(
+              localChatSearchSyncProvider,
+            ).syncConversation(conversationId: id, forceFull: true),
+          );
+        }
+      } catch (_) {}
+    });
   }
 
   /// WS 重连成功 → 触发消息 seq gap 补全 + 会话列表同步
   void _onReconnected() {
-    try {
-      final syncService = _read(conversationSyncProvider);
-      syncService.sync(force: true);
-      unawaited(_read(localChatSearchSyncProvider).sync(force: true));
-    } catch (_) {}
+    _reconnectRecoveryTimer?.cancel();
+    _reconnectRecoveryTimer = Timer(const Duration(milliseconds: 200), () {
+      try {
+        final syncService = _read(conversationSyncProvider);
+        unawaited(syncService.sync(force: true));
+        _scheduleAvatarPatchSync(_latestHintedSyncSeq);
+        unawaited(_read(localChatSearchSyncProvider).sync(force: true));
+      } catch (_) {}
+    });
+  }
+
+  void _scheduleAvatarPatchSync(int? latestSeq) {
+    if (latestSeq != null &&
+        latestSeq > 0 &&
+        (_latestHintedSyncSeq == null || latestSeq > _latestHintedSyncSeq!)) {
+      _latestHintedSyncSeq = latestSeq;
+    }
+    _avatarPatchTimer?.cancel();
+    _avatarPatchTimer = Timer(const Duration(milliseconds: 120), () {
+      try {
+        final hintedLatestSyncSeq = _latestHintedSyncSeq;
+        _latestHintedSyncSeq = null;
+        unawaited(
+          _read(conversationSyncProvider).syncAvatarPatches(
+            hintedLatestSyncSeq: hintedLatestSyncSeq,
+            force: true,
+          ),
+        );
+      } catch (_) {}
+    });
   }
 }

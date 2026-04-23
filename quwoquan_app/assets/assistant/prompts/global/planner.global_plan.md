@@ -20,13 +20,16 @@
 - `userFacingSummary` 首句必须说清“用户现在真正要什么结果”；中间句子自然交代关键决策（时间落定、市场选择、地理锚点等）；末句说明接下来要确认什么方向
 - `userFacingSummary` 禁止使用 bullet point、编号列表或“时间锚点：”“地理/市场锚点：”“默认：”等结构化标签；所有锚点决策必须自然嵌入叙事句子中
 - `userFacingSummary` 的末尾要自然引出接下来的检索方向，为阶段 2 做铺垫
+- `understandingSnapshot.retrievalDesignNarrative` 是阶段 2 唯一主展示字段，必须紧接 `userFacingSummary` 的末尾方向继续说清“接下来沿哪几条线检索、为什么这么拆”
+- `retrievalDesignNarrative` 只承担检索设计叙事，不要把 queryTasks 原样拼成另一段口号；检索词清单单独放在 `queryTasks`
+- `retrievalDesignNarrative` 不能为空；如果你已经拆出了 2-3 条 `queryTasks`，主叙事里至少要把前两条检索线自然说出来
 - 这轮只允许输出两种动作：`tool_call`、`ask_user`
 - `search_iteration_state` 是你判断是否值得继续补查、如何避免重复旧查询的唯一轮次上下文；要参考最近轮次的 `queryTasks`、缺口和收敛状态
 - `shared_context.recentDialogueRounds` 与 `dialogue_continuity.recentDialogueRounds` 提供最近多轮结构化上下文；默认只看最近 5 轮，且越近优先
 - 历史信息只能辅助判断，不能覆盖当前轮事实
 - 如果 `historyAssessment.needsRecheckFacts` 非空，必须把这轮还要重新核实什么自然写进 `userFacingSummary` 或 `historicalThinkingSnapshot`
 - 不要假设运行时还会额外补一段中文承接文案；多轮连续性必须直接体现在你输出的 `understandingSnapshot`、`resolutionItems` 与 `historicalThinkingSnapshot`
-- 不要再额外输出一段与主叙事重复的“检索设计说明”；如果 `queryTasks` 已经足够清晰，就直接让检索设计隐含在叙事和 `queryTasks` 中
+- `userFacingSummary` 和 `retrievalDesignNarrative` 必须像同一个人在连续说话；不要让运行时再额外补一句承接文案
 
 ### userFacingSummary 正反例
 
@@ -40,6 +43,19 @@
 正确写法（连贯叙事）：
 ```
 你这轮想确认的是周三那天 A 股为什么明显走强。我先把“周三”对齐到 2026-04-08 这个交易日，再沿着政策预期、权重板块发力和风险偏好修复三条线去核对真正带动盘面的催化因素。
+```
+
+### retrievalDesignNarrative 正反例
+
+禁止写法（把 queryTasks 直接改写成生硬检索播报）：
+```
+获取深圳实时天气情况
+深圳 / 中国｜深圳今天气查询｜2026年4月22日 深圳 天气 实时 温度 降水 空气质量
+```
+
+正确写法（主叙事只说检索设计，检索词另放 queryTasks）：
+```
+我会先沿着深圳今天的实时天气、降雨变化和空气质量三条线继续核对，优先确认会不会影响今天出门，再把能直接支撑结论的最新数据收拢出来。
 ```
 
 ## 执行要求
@@ -103,6 +119,7 @@
 - 我有没有真正说清用户要的结果，而不是复述原话？
 - `userFacingSummary` 读起来是不是像一个人在自然说话，还是像在填表？有没有出现 bullet point 或结构化标签？
 - `userFacingSummary` 的末尾有没有自然引出接下来要确认的方向？
+- `retrievalDesignNarrative` 是否自然承接了 `userFacingSummary`，而不是把 queryTasks 拼成另一段生硬播报？
 - `queryTasks` 是否已经是最终可执行检索词，而不是留给运行时再改写？
 - 时间表达是否已经写成明确锚点或范围？
 - 结合 `search_iteration_state` 看，这轮应该继续检索，还是该先向用户补一个关键槽位？

@@ -33,6 +33,8 @@ fields:
   - { name: type, type: enum }
   - { name: title, type: string }
   - { name: avatarUrl, type: string }
+  - { name: groupAvatarUrl, type: string, description: "群聊服务端预合成头像 URL；为空时客户端回退默认群图标" }
+  - { name: groupAvatarVersion, type: int64, description: "群头像版本号，用于端侧缓存失效与 patch 幂等" }
   - { name: avatarCompositeUrls, type: "[]string", description: "群聊九宫格头像 URL，最多 9 个" }
   - { name: lastMessagePreview, type: string }
   - { name: lastMessageType, type: string, description: "最近一条消息类型，用于列表副标题 icon" }
@@ -93,6 +95,20 @@ client_projection:
       source: avatarUrl
       aliases: [avatarUrl, avatar]
       default: "''"
+
+    - name: groupAvatarUrl
+      dart_type: String
+      nullable: false
+      source: groupAvatarUrl
+      aliases: [groupAvatarUrl]
+      default: "''"
+
+    - name: groupAvatarVersion
+      dart_type: int
+      nullable: false
+      source: groupAvatarVersion
+      aliases: [groupAvatarVersion]
+      default: "0"
 
     - name: avatarCompositeUrls
       dart_type: List<String>

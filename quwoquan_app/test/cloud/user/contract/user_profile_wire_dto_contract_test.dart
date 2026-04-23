@@ -159,15 +159,25 @@ void main() {
   });
 
   group('PersonaManagementItemWireDto', () {
-    test('personaId / id 别名', () {
+    test('personaId / id 别名与扩展字段', () {
       final dto = PersonaManagementItemWireDto.fromMap(<String, dynamic>{
         'personaId': 'per_1',
         'profileSubjectId': 'subj_1',
         'nickname': '分身名',
+        'userHandle': 'persona_handle',
+        'phone': '13800000000',
+        'email': 'persona@example.com',
+        'inheritsFromOwner': false,
+        'overriddenProfileFields': <String>['email'],
       });
       expect(dto.subAccountId, 'per_1');
       expect(dto.profileSubjectId, 'subj_1');
       expect(dto.displayName, '分身名');
+      expect(dto.userHandle, 'persona_handle');
+      expect(dto.phone, '13800000000');
+      expect(dto.email, 'persona@example.com');
+      expect(dto.inheritsProfileFromOwner, isFalse);
+      expect(dto.overriddenProfileFields, <String>['email']);
     });
   });
 

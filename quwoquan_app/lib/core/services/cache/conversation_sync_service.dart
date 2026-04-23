@@ -1,5 +1,8 @@
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
 /// 会话列表同步引擎
 ///
@@ -11,25 +14,40 @@ class ConversationSyncService {
   ConversationSyncService({
     required this.repo,
     required this.cache,
+    required this.userSyncRepository,
+    required this.store,
+    required this.personaContextLoader,
   });
 
   final ChatRepository repo;
   final ConversationCacheService cache;
+  final UserSyncRepository userSyncRepository;
+  final LocalChatSearchStore store;
+  final PersonaContextLoader personaContextLoader;
 
   bool _syncing = false;
-  DateTime? _lastSyncTime;
+  bool _syncingUserPatches = false;
+  final Map<String, DateTime> _lastSyncTimeByNamespace = <String, DateTime>{};
   static const _minSyncInterval = Duration(seconds: 30);
+  String? _activeNamespaceKey;
 
   /// 执行增量同步，返回是否有数据变更
   Future<bool> sync({bool force = false}) async {
     if (_syncing) return false;
-    if (!force && _lastSyncTime != null &&
-        DateTime.now().difference(_lastSyncTime!) < _minSyncInterval) {
+    final namespace = await _resolveNamespace();
+    if (namespace == null) {
+      return false;
+    }
+    _activateNamespace(namespace);
+    final lastSyncTime = _lastSyncTimeByNamespace[namespace.key];
+    if (!force &&
+        lastSyncTime != null &&
+        DateTime.now().difference(lastSyncTime) < _minSyncInterval) {
       return false;
     }
 
     _syncing = true;
-    _lastSyncTime = DateTime.now();
+    _lastSyncTimeByNamespace[namespace.key] = DateTime.now();
     try {
       final timestamps = await repo.getConversationTimestamps();
       final cloudIds = <String>{};
@@ -43,13 +61,15 @@ class ConversationSyncService {
         cloudIds.add(id);
 
         final cloudSettingsUpdatedAt =
-            m['settingsUpdatedAt'] as String? ?? m['updatedAt'] as String? ?? '';
-        final cloudLastMessageAt =
-            m['lastMessageAt'] as String? ?? '';
+            m['settingsUpdatedAt'] as String? ??
+            m['updatedAt'] as String? ??
+            '';
+        final cloudLastMessageAt = m['lastMessageAt'] as String? ?? '';
         final localSettingsTs = cache.getSettingsTimestamp(id);
         final localMessageTs = cache.getMessageTimestamp(id);
 
-        if (localSettingsTs == null || localSettingsTs != cloudSettingsUpdatedAt) {
+        if (localSettingsTs == null ||
+            localSettingsTs != cloudSettingsUpdatedAt) {
           needFetchIds.add(id);
           hasChanges = true;
         } else if (localMessageTs != cloudLastMessageAt) {
@@ -94,5 +114,137 @@ class ConversationSyncService {
     } finally {
       _syncing = false;
     }
+  }
+
+  Future<bool> syncAvatarPatches({
+    int? hintedLatestSyncSeq,
+    bool force = false,
+  }) async {
+    if (_syncingUserPatches) return false;
+    final namespace = await _resolveNamespace();
+    if (namespace == null) {
+      return false;
+    }
+    _activateNamespace(namespace);
+    _syncingUserPatches = true;
+    try {
+      await store.ensureReady();
+      var lastSeq = await store.lastUserSyncSeq(namespace: namespace);
+      if (!force &&
+          hintedLatestSyncSeq != null &&
+          hintedLatestSyncSeq > 0 &&
+          hintedLatestSyncSeq <= lastSeq) {
+        return false;
+      }
+      var changed = false;
+      var hasMore = true;
+      var guard = 0;
+      while (hasMore && guard < 20) {
+        guard += 1;
+        final result = await userSyncRepository.pull(
+          afterSeq: lastSeq,
+          limit: 200,
+        );
+        if (result.requiresResync) {
+          final changedByFullSync = await sync(force: true);
+          if (result.latestSyncSeq > lastSeq) {
+            lastSeq = result.latestSyncSeq;
+            await store.saveUserSyncSeq(namespace: namespace, syncSeq: lastSeq);
+          }
+          return changed || changedByFullSync;
+        }
+        if (result.patches.isEmpty) {
+          if (result.latestSyncSeq > lastSeq) {
+            lastSeq = result.latestSyncSeq;
+            await store.saveUserSyncSeq(namespace: namespace, syncSeq: lastSeq);
+          }
+          break;
+        }
+        for (final patch in result.patches) {
+          if (patch.syncSeq <= lastSeq) {
+            continue;
+          }
+          await _applyPatch(namespace, patch);
+          lastSeq = patch.syncSeq;
+          changed = true;
+        }
+        await store.saveUserSyncSeq(namespace: namespace, syncSeq: lastSeq);
+        hasMore = result.hasMore;
+      }
+      return changed;
+    } catch (_) {
+      return false;
+    } finally {
+      _syncingUserPatches = false;
+    }
+  }
+
+  Future<void> _applyPatch(
+    LocalSearchNamespace namespace,
+    UserSyncPatch patch,
+  ) async {
+    switch (patch.type) {
+      case 'conversation.avatar.updated':
+        final conversationId =
+            patch.payload['conversationId']?.toString() ?? '';
+        final avatarUrl = patch.payload['groupAvatarUrl']?.toString() ?? '';
+        final groupAvatarVersion = (patch.payload['groupAvatarVersion'] as num?)
+            ?.toInt();
+        final groupAvatarSourceHash = patch.payload['groupAvatarSourceHash']
+            ?.toString();
+        if (conversationId.isEmpty) {
+          return;
+        }
+        cache.updateConversationAvatar(
+          conversationId,
+          avatarUrl: avatarUrl,
+          groupAvatarVersion: groupAvatarVersion,
+          groupAvatarSourceHash: groupAvatarSourceHash,
+        );
+        await store.updateConversationAvatar(
+          namespace: namespace,
+          conversationId: conversationId,
+          avatarUrl: avatarUrl,
+          groupAvatarVersion: groupAvatarVersion,
+          groupAvatarSourceHash: groupAvatarSourceHash,
+        );
+        return;
+      case 'user.avatar.updated':
+        final userId = patch.payload['userId']?.toString() ?? '';
+        final avatarUrl = patch.payload['avatarUrl']?.toString() ?? '';
+        if (userId.isEmpty || avatarUrl.isEmpty) {
+          return;
+        }
+        await store.updateContactAvatar(
+          namespace: namespace,
+          userId: userId,
+          avatarUrl: avatarUrl,
+        );
+        return;
+      default:
+        return;
+    }
+  }
+
+  Future<LocalSearchNamespace?> _resolveNamespace() async {
+    try {
+      final context = await personaContextLoader();
+      return LocalSearchNamespace.fromActivePersonaContext(context);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _activateNamespace(LocalSearchNamespace namespace) {
+    if (_activeNamespaceKey == namespace.key) {
+      return;
+    }
+    if (_activeNamespaceKey == null) {
+      _activeNamespaceKey = namespace.key;
+      cache.activateNamespace(namespace.key);
+      return;
+    }
+    _activeNamespaceKey = namespace.key;
+    cache.activateNamespace(namespace.key);
   }
 }

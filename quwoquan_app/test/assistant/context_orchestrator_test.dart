@@ -28,11 +28,13 @@ void main() {
       List<Map<String, dynamic>> sessionHistory =
           const <Map<String, dynamic>>[],
       int recentRoundsLimit = 5,
+      int recentOlderRoundsLimit = 5,
     }) {
       return orchestrator.buildContinuityPolicy(
         query: query,
         sessionHistory: sessionHistory,
         recentRoundsLimit: recentRoundsLimit,
+        recentOlderRoundsLimit: recentOlderRoundsLimit,
       );
     }
 
@@ -104,6 +106,54 @@ void main() {
       expect(
         policy.referenceQueries,
         equals(const <String>['第二问', '第一问']),
+      );
+    });
+
+    test('buildContinuityPolicy 会按 recent + older limits 组合 reference queries', () {
+      final now = DateTime.now().toUtc();
+      final policy = continuity(
+        '刚刚问怎么继续',
+        recentRoundsLimit: 1,
+        recentOlderRoundsLimit: 1,
+        sessionHistory: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': '两天前问',
+            'timestamp': now
+                .subtract(const Duration(days: 2, hours: 1))
+                .toIso8601String(),
+          },
+          <String, dynamic>{
+            'role': 'assistant',
+            'content': '两天前答',
+            'id': 'turn_old',
+            'timestamp': now
+                .subtract(const Duration(days: 2))
+                .toIso8601String(),
+            'runArtifacts': _sessionTurnRunArtifacts('两天前理解'),
+          },
+          <String, dynamic>{
+            'role': 'user',
+            'content': '刚刚问',
+            'timestamp': now
+                .subtract(const Duration(hours: 3))
+                .toIso8601String(),
+          },
+          <String, dynamic>{
+            'role': 'assistant',
+            'content': '刚刚答',
+            'id': 'turn_recent',
+            'timestamp': now
+                .subtract(const Duration(hours: 2))
+                .toIso8601String(),
+            'runArtifacts': _sessionTurnRunArtifacts('刚刚理解'),
+          },
+        ],
+      );
+
+      expect(
+        policy.referenceQueries,
+        equals(const <String>['刚刚问', '两天前问']),
       );
     });
 

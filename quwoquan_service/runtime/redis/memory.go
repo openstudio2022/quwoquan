@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 )
@@ -9,12 +10,13 @@ import (
 // memoryClient implements Client using in-memory maps.
 // Thread-safe, suitable for dev/test environments.
 type memoryClient struct {
-	mu       sync.RWMutex
-	strings  map[string]memEntry
-	hashes   map[string]map[string]string
-	sets     map[string]map[string]struct{}
-	subs     map[string][]chan Message
-	subsMu   sync.RWMutex
+	mu      sync.RWMutex
+	strings map[string]memEntry
+	hashes  map[string]map[string]string
+	sets    map[string]map[string]struct{}
+	zsets   map[string]map[string]float64
+	subs    map[string][]chan Message
+	subsMu  sync.RWMutex
 }
 
 type memEntry struct {
@@ -33,6 +35,7 @@ func NewMemoryClient() Client {
 		strings: make(map[string]memEntry),
 		hashes:  make(map[string]map[string]string),
 		sets:    make(map[string]map[string]struct{}),
+		zsets:   make(map[string]map[string]float64),
 		subs:    make(map[string][]chan Message),
 	}
 }
@@ -100,6 +103,7 @@ func (m *memoryClient) Del(_ context.Context, keys ...string) error {
 		delete(m.strings, k)
 		delete(m.hashes, k)
 		delete(m.sets, k)
+		delete(m.zsets, k)
 	}
 	return nil
 }
@@ -328,6 +332,71 @@ func (m *memoryClient) SIsMember(_ context.Context, key, member string) (bool, e
 	return exists, nil
 }
 
+func (m *memoryClient) ZAdd(_ context.Context, key string, score float64, member string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	z, ok := m.zsets[key]
+	if !ok {
+		z = make(map[string]float64)
+		m.zsets[key] = z
+	}
+	z[member] = score
+	return nil
+}
+
+func (m *memoryClient) ZRangeByScore(_ context.Context, key string, min, max float64, limit int) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	z, ok := m.zsets[key]
+	if !ok {
+		return []string{}, nil
+	}
+	type entry struct {
+		member string
+		score  float64
+	}
+	items := make([]entry, 0, len(z))
+	for member, score := range z {
+		if score < min || score > max {
+			continue
+		}
+		items = append(items, entry{member: member, score: score})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].score == items[j].score {
+			return items[i].member < items[j].member
+		}
+		return items[i].score < items[j].score
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		result = append(result, item.member)
+	}
+	return result, nil
+}
+
+func (m *memoryClient) ZRem(_ context.Context, key string, members ...string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	z, ok := m.zsets[key]
+	if !ok {
+		return nil
+	}
+	for _, member := range members {
+		delete(z, member)
+	}
+	return nil
+}
+
+func (m *memoryClient) ZCard(_ context.Context, key string) (int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return int64(len(m.zsets[key])), nil
+}
+
 // ── Pub/Sub ─────────────────────────────────────────────
 
 func (m *memoryClient) Publish(_ context.Context, channel, message string) error {
@@ -425,5 +494,5 @@ func (p *memPipeline) Exec(_ context.Context) error {
 
 // ── Lifecycle ───────────────────────────────────────────
 
-func (m *memoryClient) Close() error { return nil }
+func (m *memoryClient) Close() error                 { return nil }
 func (m *memoryClient) Ping(_ context.Context) error { return nil }

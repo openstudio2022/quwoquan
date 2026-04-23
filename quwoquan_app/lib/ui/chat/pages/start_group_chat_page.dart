@@ -1072,17 +1072,15 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
   }
 
   Widget _buildLeading(ChatInboxDto group, bool isDark) {
-    final memberAvatars = group.avatarCompositeUrls
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (memberAvatars.isNotEmpty) {
-      return GroupAvatarGrid(
+    final groupAvatarUrl = group.groupAvatarUrl.trim();
+    if (groupAvatarUrl.isNotEmpty) {
+      return RoundedSquareAvatar(
         size: AppSpacing.avatarSize,
-        avatarUrls: memberAvatars,
+        imageUrl: groupAvatarUrl,
+        name: group.title,
+        backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
       );
     }
-
     final avatarUrl = group.avatarUrl;
     if (avatarUrl.isNotEmpty) {
       return RoundedSquareAvatar(

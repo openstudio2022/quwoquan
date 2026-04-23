@@ -129,6 +129,7 @@ class UITextConstants {
   static const String loading = '加载中...';
   static const String retry = '重试';
   static const String cancel = '取消';
+
   /// 表单/弹层主提交（与「确认」区分，偏对话框「确定」）
   static const String ok = '确定';
   static const String confirm = '确认';
@@ -194,8 +195,10 @@ class UITextConstants {
   static const String circlePosts = '创作';
   static const String circleWeeklyActive = '活跃';
   static const String searchMembersHint = '搜索成员...';
+
   /// 群成员搜索页搜索框占位（端侧过滤）。
   static const String searchGroupMembers = '搜索群成员';
+
   /// 成员列表本地过滤无结果。
   static const String noMatchingMembers = '暂无匹配成员';
   static const String searchGroupsHint = '搜索群聊...';
@@ -443,8 +446,9 @@ class UITextConstants {
 
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';
-  static const String addContact = '加联系';
+  static const String addContact = '添加';
   static const String addSameInterest = '添加同好';
+  static const String noAddableSameInterest = '暂无可添加同好';
   static const String globalActionSheetTitle = '发起';
   static const String globalSearchTitle = '搜索';
   static const String createActionCamera = '从摄像';
@@ -497,10 +501,10 @@ class UITextConstants {
   static const String assistantPhaseUnderstanding = '理解问题';
 
   /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '处理问题';
+  static const String assistantPhaseSearching = '检索设计';
 
   /// v3 用户视角阶段：替用户整理判断
-  static const String assistantPhaseAnalyzing = '处理问题';
+  static const String assistantPhaseAnalyzing = '检索处理';
 
   /// v3 用户视角阶段：替用户组织最终回答
   static const String assistantPhaseAnswering = '生成答案';
@@ -569,11 +573,11 @@ class UITextConstants {
   static const String assistantProcessCompletedSummaryFullTemplate =
       '已完成深度思考，处理 %s 篇文档，耗时 %s 秒';
   static const String assistantProcessStageUnderstand = '理解问题';
-  static const String assistantProcessStageSearch = '理解问题';
-  static const String assistantProcessStageRetrievalDesign = '理解问题';
-  static const String assistantProcessStageRetrievalProcessing = '处理并生成答案';
-  static const String assistantProcessStageAnalyze = '处理并生成答案';
-  static const String assistantProcessStageVerify = '处理并生成答案';
+  static const String assistantProcessStageSearch = '检索设计';
+  static const String assistantProcessStageRetrievalDesign = '检索设计';
+  static const String assistantProcessStageRetrievalProcessing = '检索处理';
+  static const String assistantProcessStageAnalyze = '检索处理';
+  static const String assistantProcessStageVerify = '检索处理';
   static const String assistantProcessStageAnswer = '生成答案';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
@@ -612,7 +616,34 @@ class UITextConstants {
 
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
-  static const String personaPrimary = '主账号';
+  static const String personaPrimary = '主分身';
+  static const String personaCreate = '新增分身';
+  static const String personaCreateTitle = '创建分身';
+  static const String personaCreateSuccess = '分身已创建';
+  static const String personaSwitchNow = '立即切换';
+  static const String personaSwitchLater = '稍后切换';
+  static const String personaCurrentUsing = '当前使用';
+  static const String personaInactive = '未激活';
+  static const String personaDelete = '删除';
+  static const String personaRetire = '退役';
+  static const String personaSyncApply = '同步资料';
+  static const String personaSyncIgnore = '暂不处理';
+  static const String personaSyncApplyAll = '同步到全部分身';
+  static const String personaSyncApplySelected = '同步到指定分身';
+  static const String personaUserHandleLabel = '用户号';
+  static const String personaPhoneLabel = '手机号';
+  static const String personaEmailLabel = '邮箱';
+  static const String personaInheritanceDefault = '默认继承';
+  static const String personaInheritanceSynced = '继承中';
+  static const String personaInheritanceCustom = '已独立';
+  static const String personaSyncStatusReady = '已同步';
+  static const String personaSyncStatusMissing = '待补充';
+  static const String personaSettingsEntry = '用户与分身';
+  static const String personaSyncSuggestionTitle = '同步资料建议';
+  static const String personaSyncSuggestionBody =
+      '你刚刚更新了分身资料，可同步到其它分身以保持资料一致。';
+  static const String personaDeleteBlocked = '当前分身暂不可删除';
+  static const String personaRetireBlocked = '当前分身暂不可退役';
 
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
   static const String myResonance = '我的交集';
@@ -688,10 +719,13 @@ class UITextConstants {
   static const String publish = '发表';
   static const String publishAction = '发布';
   static const String createPageTitle = '创作';
+
   /// 沉浸文章顶栏分段：纵向长文编辑态
   static const String createArticleSurfaceLongEdit = '长文编辑';
+
   /// 沉浸文章第二步：独立长文排版页
   static const String createArticleSurfaceTypography = '排版';
+
   /// 创作顶栏短标签（与「草稿箱」全局面板入口区分）
   static const String createToolbarDraftShort = '草稿';
   static const String publishSettingsTitle = '发布设置';
@@ -701,6 +735,7 @@ class UITextConstants {
   static const String whoCanSeeLabel = '谁可以看';
   static const String visibilityPublic = '公开';
   static const String visibilityPrivate = '私密';
+
   /// 发布可见性：仅作者本人（与 [visibilityPrivate]「私密」展示口径区分）
   static const String visibilitySelfOnly = '仅自己可见';
   static const String isPublicLabel = '是否公开';
@@ -781,8 +816,7 @@ class UITextConstants {
   static const String createPublishPreviewOverviewTitle = '内容概览';
   static const String createPublishPreviewExpandFull = '展开全文';
   static const String createPublishNeedContentToast = '先写点内容';
-  static const String createPublishPersonaContextNotReady =
-      '当前分身上下文未就绪，请稍后重试';
+  static const String createPublishPersonaContextNotReady = '当前分身上下文未就绪，请稍后重试';
 
   /// 媒体区提示与操作
   static const String createMediaHintVideoCover = '轻点视频编辑，可设置封面';
@@ -801,8 +835,7 @@ class UITextConstants {
   static const String createMediaSingleVideoCaption = '仅 1 个视频';
   static const String createMediaBodySectionLabel = '正文';
   static const String createMediaBodyPlaceholder = '补一段配文，让内容更完整';
-  static const String createVideoEditFeaturesHint =
-      '轻点视频编辑，支持裁切、静音和精细选帧';
+  static const String createVideoEditFeaturesHint = '轻点视频编辑，支持裁切、静音和精细选帧';
   static const String createVideoBadgeEditLabel = '编辑视频';
   static const String createVideoKindBadgeLabel = '视频';
   static const String createAddTitleWithOptional = '添加标题（可选）';

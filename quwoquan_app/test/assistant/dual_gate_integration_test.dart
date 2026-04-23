@@ -49,9 +49,14 @@ void main() {
       );
       expect(response.errorCode, isNot(equals('missing_context')));
       expect(
-        (response.structuredResponse['domainPrecheck']
-            as Map?)?['canEnterDomain'],
-        isTrue,
+        response.traces.any(
+          (e) =>
+              e.type == AssistantTraceEventType.lifecycleEnd &&
+              (e.data?['lifecycleOutcome'] as String?) == 'blocked',
+        ),
+        isFalse,
+        reason: '预检不应因「历史/聊天」等关键词而 blocked_precondition；'
+            '成功路径未必含 structuredResponse.domainPrecheck',
       );
     });
 

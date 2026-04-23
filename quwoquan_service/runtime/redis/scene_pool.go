@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -158,6 +159,36 @@ func (c *goRedisClient) SIsMember(ctx context.Context, key, member string) (bool
 	return c.rdb.SIsMember(ctx, key, member).Result()
 }
 
+// ── Sorted Set ───────────────────────────────────────────
+
+func (c *goRedisClient) ZAdd(ctx context.Context, key string, score float64, member string) error {
+	return c.rdb.ZAdd(ctx, key, goredis.Z{Score: score, Member: member}).Err()
+}
+
+func (c *goRedisClient) ZRangeByScore(ctx context.Context, key string, min, max float64, limit int) ([]string, error) {
+	opt := &goredis.ZRangeBy{
+		Min: strconv.FormatFloat(min, 'f', -1, 64),
+		Max: strconv.FormatFloat(max, 'f', -1, 64),
+	}
+	if limit > 0 {
+		opt.Offset = 0
+		opt.Count = int64(limit)
+	}
+	return c.rdb.ZRangeByScore(ctx, key, opt).Result()
+}
+
+func (c *goRedisClient) ZRem(ctx context.Context, key string, members ...string) error {
+	args := make([]interface{}, len(members))
+	for i, member := range members {
+		args[i] = member
+	}
+	return c.rdb.ZRem(ctx, key, args...).Err()
+}
+
+func (c *goRedisClient) ZCard(ctx context.Context, key string) (int64, error) {
+	return c.rdb.ZCard(ctx, key).Result()
+}
+
 // ── Pub/Sub ─────────────────────────────────────────────
 
 func (c *goRedisClient) Publish(ctx context.Context, channel, message string) error {
@@ -234,6 +265,9 @@ func (p *goRedisPipeline) SMembers(ctx context.Context, key string) *SliceResult
 
 func (p *goRedisPipeline) Exec(ctx context.Context) error {
 	_, err := p.pipe.Exec(ctx)
+	if errors.Is(err, goredis.Nil) {
+		err = nil
+	}
 	for i, cmd := range p.gets {
 		v, e := cmd.Result()
 		if errors.Is(e, goredis.Nil) {

@@ -37,6 +37,12 @@ type Client interface {
 	SMembers(ctx context.Context, key string) ([]string, error)
 	SIsMember(ctx context.Context, key string, member string) (bool, error)
 
+	// ── Sorted Set ──────────────────────────────────────────
+	ZAdd(ctx context.Context, key string, score float64, member string) error
+	ZRangeByScore(ctx context.Context, key string, min, max float64, limit int) ([]string, error)
+	ZRem(ctx context.Context, key string, members ...string) error
+	ZCard(ctx context.Context, key string) (int64, error)
+
 	// ── Pub/Sub ─────────────────────────────────────────────
 	Publish(ctx context.Context, channel string, message string) error
 	Subscribe(ctx context.Context, channels ...string) (Subscription, error)

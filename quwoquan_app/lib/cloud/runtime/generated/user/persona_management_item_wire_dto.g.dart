@@ -5,6 +5,9 @@ class PersonaManagementItemWireDto {
   final String subAccountId;
   final String profileSubjectId;
   final String displayName;
+  final String userHandle;
+  final String phone;
+  final String email;
   final String avatarUrl;
   final String isolationLevel;
   final String profileVisibility;
@@ -12,12 +15,20 @@ class PersonaManagementItemWireDto {
   final bool isActive;
   final bool hasAttributedHistory;
   final bool hasPublishedContent;
+  final bool inheritsProfileFromOwner;
+  final List<String> overriddenProfileFields;
+  final DateTime? lastProfileSyncAt;
+  final String lastProfileSyncSource;
+  final DateTime? lastActivatedAt;
   final String subjectType;
 
   PersonaManagementItemWireDto({
     this.subAccountId = '',
     this.profileSubjectId = '',
     this.displayName = '',
+    this.userHandle = '',
+    this.phone = '',
+    this.email = '',
     this.avatarUrl = '',
     this.isolationLevel = 'open',
     this.profileVisibility = 'public',
@@ -25,6 +36,11 @@ class PersonaManagementItemWireDto {
     this.isActive = false,
     this.hasAttributedHistory = false,
     this.hasPublishedContent = false,
+    this.inheritsProfileFromOwner = true,
+    this.overriddenProfileFields = const <String>[],
+    this.lastProfileSyncAt,
+    this.lastProfileSyncSource = '',
+    this.lastActivatedAt,
     this.subjectType = 'sub_account',
   });
 
@@ -33,6 +49,9 @@ class PersonaManagementItemWireDto {
       subAccountId: m['subAccountId']?.toString() ?? m['personaId']?.toString() ?? m['id']?.toString() ?? '',
       profileSubjectId: m['profileSubjectId']?.toString() ?? m['subAccountId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
+      phone: m['phone']?.toString() ?? '',
+      email: m['email']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
       isolationLevel: m['isolationLevel']?.toString() ?? 'open',
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
@@ -40,6 +59,11 @@ class PersonaManagementItemWireDto {
       isActive: m['isActive'] as bool? ?? false,
       hasAttributedHistory: m['hasAttributedHistory'] as bool? ?? false,
       hasPublishedContent: m['hasPublishedContent'] as bool? ?? false,
+      inheritsProfileFromOwner: m['inheritsProfileFromOwner'] as bool? ?? m['inheritsFromOwner'] as bool? ?? true,
+      overriddenProfileFields: _parseStringList(m['overriddenProfileFields']) ?? const <String>[],
+      lastProfileSyncAt: _parseDateTime(m['lastProfileSyncAt']) ?? null,
+      lastProfileSyncSource: m['lastProfileSyncSource']?.toString() ?? '',
+      lastActivatedAt: _parseDateTime(m['lastActivatedAt']) ?? null,
       subjectType: m['subjectType']?.toString() ?? 'sub_account',
     );
   }
@@ -49,6 +73,9 @@ class PersonaManagementItemWireDto {
       'subAccountId': subAccountId,
       'profileSubjectId': profileSubjectId,
       'displayName': displayName,
+      'userHandle': userHandle,
+      'phone': phone,
+      'email': email,
       'avatarUrl': avatarUrl,
       'isolationLevel': isolationLevel,
       'profileVisibility': profileVisibility,
@@ -56,6 +83,11 @@ class PersonaManagementItemWireDto {
       'isActive': isActive,
       'hasAttributedHistory': hasAttributedHistory,
       'hasPublishedContent': hasPublishedContent,
+      'inheritsProfileFromOwner': inheritsProfileFromOwner,
+      'overriddenProfileFields': overriddenProfileFields,
+      'lastProfileSyncAt': lastProfileSyncAt,
+      'lastProfileSyncSource': lastProfileSyncSource,
+      'lastActivatedAt': lastActivatedAt,
       'subjectType': subjectType,
     };
   }
@@ -64,6 +96,9 @@ class PersonaManagementItemWireDto {
     String? subAccountId,
     String? profileSubjectId,
     String? displayName,
+    String? userHandle,
+    String? phone,
+    String? email,
     String? avatarUrl,
     String? isolationLevel,
     String? profileVisibility,
@@ -71,12 +106,20 @@ class PersonaManagementItemWireDto {
     bool? isActive,
     bool? hasAttributedHistory,
     bool? hasPublishedContent,
+    bool? inheritsProfileFromOwner,
+    List<String>? overriddenProfileFields,
+    DateTime? lastProfileSyncAt,
+    String? lastProfileSyncSource,
+    DateTime? lastActivatedAt,
     String? subjectType,
   }) {
     return PersonaManagementItemWireDto(
       subAccountId: subAccountId ?? this.subAccountId,
       profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       displayName: displayName ?? this.displayName,
+      userHandle: userHandle ?? this.userHandle,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       profileVisibility: profileVisibility ?? this.profileVisibility,
@@ -84,8 +127,25 @@ class PersonaManagementItemWireDto {
       isActive: isActive ?? this.isActive,
       hasAttributedHistory: hasAttributedHistory ?? this.hasAttributedHistory,
       hasPublishedContent: hasPublishedContent ?? this.hasPublishedContent,
+      inheritsProfileFromOwner: inheritsProfileFromOwner ?? this.inheritsProfileFromOwner,
+      overriddenProfileFields: overriddenProfileFields ?? this.overriddenProfileFields,
+      lastProfileSyncAt: lastProfileSyncAt ?? this.lastProfileSyncAt,
+      lastProfileSyncSource: lastProfileSyncSource ?? this.lastProfileSyncSource,
+      lastActivatedAt: lastActivatedAt ?? this.lastActivatedAt,
       subjectType: subjectType ?? this.subjectType,
     );
   }
 }
 
+DateTime? _parseDateTime(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  if (v is String) return DateTime.tryParse(v);
+  return null;
+}
+
+List<String>? _parseStringList(dynamic v) {
+  if (v == null) return null;
+  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}

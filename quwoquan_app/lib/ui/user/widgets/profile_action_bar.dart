@@ -88,7 +88,7 @@ class ProfileActionBar extends StatelessWidget {
     }
 
     if (mode == ProfileMode.mine) {
-      return _buildButtonRow(<Widget>[
+      final children = <Widget>[
         Expanded(
           child: neutralAction(
             label: UITextConstants.profileEditLabel,
@@ -96,14 +96,19 @@ class ProfileActionBar extends StatelessWidget {
             onPressed: onEditProfile,
           ),
         ),
-        Expanded(
-          child: neutralAction(
-            label: UITextConstants.profilePersonasLabel,
-            icon: CupertinoIcons.person_2,
-            onPressed: onManagePersonas,
+      ];
+      if (onManagePersonas != null) {
+        children.add(
+          Expanded(
+            child: neutralAction(
+              label: UITextConstants.profilePersonasLabel,
+              icon: CupertinoIcons.person_2,
+              onPressed: onManagePersonas,
+            ),
           ),
-        ),
-      ]);
+        );
+      }
+      return _buildButtonRow(children);
     }
 
     final cap = capability;

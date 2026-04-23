@@ -539,6 +539,17 @@ class RemoteAssistantEntry {
       profileUpdateProposal: response.profileUpdateProposal,
     );
     if (response.degraded) {
+      if (_shouldPreserveRenderableDegradedAnswer(structured)) {
+        return AssistantRunResponse(
+          finalText: response.finalText,
+          traces: response.traces,
+          runId: response.runId,
+          traceId: response.traceId,
+          degraded: false,
+          structuredResponse: structured,
+          profileUpdateProposal: response.profileUpdateProposal,
+        );
+      }
       return _ensureCanonicalGate(
         normalizedResponse,
         reasonCode: response.errorCode == 'remote_stream_terminal_payload_missing'
@@ -552,6 +563,32 @@ class RemoteAssistantEntry {
       );
     }
     return normalizedResponse;
+  }
+
+  bool _shouldPreserveRenderableDegradedAnswer(Map<String, dynamic> structured) {
+    final ra = _runArtifactsFromStructured(structured);
+    final hasRenderableAnswer =
+        ra.displayMarkdown.trim().isNotEmpty ||
+        ra.displayPlainText.trim().isNotEmpty ||
+        ((structured['userMarkdown'] as String?)?.trim().isNotEmpty ?? false) ||
+        ((structured['result'] as Map?)?['text'] as String?)?.trim().isNotEmpty ==
+            true;
+    if (!hasRenderableAnswer) {
+      return false;
+    }
+    final decision =
+        (structured['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final nextAction = (decision['nextAction'] as String?)?.trim() ?? '';
+    final finalAnswerReady = decision['finalAnswerReady'] == true;
+    if (nextAction == AssistantNextAction.answer.wireName || finalAnswerReady) {
+      return true;
+    }
+    final rawDecision =
+        (structured['decision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return (rawDecision['nextAction'] as String?)?.trim() ==
+        AssistantNextAction.answer.wireName;
   }
 
   AssistantRunResponse _ensureCanonicalGate(

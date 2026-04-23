@@ -174,55 +174,41 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: EdgeInsets.only(right: AppSpacing.sm),
-              child: SizedBox(
-                width: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
-                height: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
-                child: Center(
-                  child: _viewModel.isRunning
-                      ? _BreathingCapsule(color: monochrome)
-                      : Icon(
-                          CupertinoIcons.checkmark_circle_fill,
-                          size: AppTypography.base + 1,
-                          color: monochrome,
-                        ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _headerLabel(),
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                        height: AppTypography.bodyLineHeight,
+                      ),
+                    ),
+                    for (final metric in metricTexts) ...[
+                      SizedBox(width: AppSpacing.xs),
+                      _buildHeaderMetricChip(
+                        label: metric,
+                        secondaryTextColor: secondaryTextColor,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _headerLabel(),
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                      height: AppTypography.bodyLineHeight,
-                    ),
-                  ),
-                  if (metricTexts.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.xs),
-                      child: Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: metricTexts
-                            .map(
-                              (metric) => _buildHeaderMetricChip(
-                                label: metric,
-                                secondaryTextColor: secondaryTextColor,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ),
-                ],
+            if (_viewModel.isRunning) ...[
+              SizedBox(width: AppSpacing.xs),
+              SizedBox(
+                width: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
+                height: AppSpacing.iconButtonMinSizeSm - AppSpacing.xs,
+                child: Center(child: _BreathingCapsule(color: monochrome)),
               ),
-            ),
+            ],
+            SizedBox(width: AppSpacing.xs),
             Icon(
               _expanded
                   ? CupertinoIcons.chevron_up
@@ -365,32 +351,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             if (isExpanded) ...[
               SizedBox(height: AppSpacing.one),
               ...List<Widget>.generate(block.references.length, (refIndex) {
-                final reference = block.references[refIndex];
-                final sourceSuffix = reference.source.trim().isNotEmpty
-                    ? ' · ${reference.source.trim()}'
-                    : '';
-                return GestureDetector(
-                  onTap: reference.url.isNotEmpty
-                      ? () => widget.onReferenceTap?.call(
-                            AssistantCitation(
-                              url: reference.url,
-                              title: reference.title,
-                              source: reference.source,
-                            ),
-                          )
-                      : null,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: AppSpacing.one),
-                    child: Text(
-                      '${refIndex + 1}. ${reference.title}$sourceSuffix',
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w400,
-                        color: textColor.withValues(alpha: 0.88),
-                        height: AppTypography.lineHeightRelaxed,
-                      ),
-                    ),
+                return Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.one),
+                  child: _buildReferenceEntry(
+                    reference: block.references[refIndex],
+                    index: refIndex,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
                 );
               }),
@@ -457,32 +424,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
           if (isExpanded && block.hasReferences) ...[
             SizedBox(height: AppSpacing.one),
             ...List<Widget>.generate(block.references.length, (refIndex) {
-              final reference = block.references[refIndex];
-              final sourceSuffix = reference.source.trim().isNotEmpty
-                  ? ' · ${reference.source.trim()}'
-                  : '';
-              return GestureDetector(
-                onTap: reference.url.isNotEmpty
-                    ? () => widget.onReferenceTap?.call(
-                          AssistantCitation(
-                            url: reference.url,
-                            title: reference.title,
-                            source: reference.source,
-                          ),
-                        )
-                    : null,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: AppSpacing.one),
-                  child: Text(
-                    '${refIndex + 1}. ${reference.title}$sourceSuffix',
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      fontWeight: FontWeight.w400,
-                      color: textColor.withValues(alpha: 0.88),
-                      height: AppTypography.lineHeightRelaxed,
-                    ),
-                  ),
+              return Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.one),
+                child: _buildReferenceEntry(
+                  reference: block.references[refIndex],
+                  index: refIndex,
+                  textColor: textColor,
+                  secondaryTextColor: secondaryTextColor,
                 ),
               );
             }),
@@ -552,6 +500,61 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       return block.referenceLabel.trim();
     }
     return _referenceCountLabel(block.references.length);
+  }
+
+  Widget _buildReferenceEntry({
+    required AssistantJourneyReferenceViewModel reference,
+    required int index,
+    required Color textColor,
+    required Color secondaryTextColor,
+  }) {
+    final title = reference.title.trim().isNotEmpty
+        ? reference.title.trim()
+        : reference.url.trim();
+    final sourceSuffix = reference.source.trim().isNotEmpty
+        ? ' · ${reference.source.trim()}'
+        : '';
+    final url = reference.url.trim();
+    return GestureDetector(
+      onTap: url.isNotEmpty
+          ? () => widget.onReferenceTap?.call(
+                AssistantCitation(
+                  url: url,
+                  title: reference.title,
+                  source: reference.source,
+                ),
+              )
+          : null,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${index + 1}. $title$sourceSuffix',
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: FontWeight.w400,
+              color: textColor.withValues(alpha: 0.88),
+              height: AppTypography.lineHeightRelaxed,
+            ),
+          ),
+          if (url.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: AppSpacing.one),
+              child: Text(
+                url,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: FontWeight.w400,
+                  color: secondaryTextColor.withValues(alpha: 0.8),
+                  height: AppTypography.bodyLineHeight,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildNarrativeItemRow(

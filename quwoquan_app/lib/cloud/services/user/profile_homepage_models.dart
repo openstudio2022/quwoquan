@@ -196,7 +196,9 @@ class RelationshipViewData {
     );
   }
 
-  @Deprecated('Use fromRelationshipNormalizedWire(RelationshipNormalizedWireDto)')
+  @Deprecated(
+    'Use fromRelationshipNormalizedWire(RelationshipNormalizedWireDto)',
+  )
   factory RelationshipViewData.fromNormalizedMap(Map<String, dynamic> m) {
     return RelationshipViewData.fromRelationshipNormalizedWire(
       RelationshipNormalizedWireDto.fromMap(m),
@@ -272,7 +274,9 @@ class ProfileSocialRelationRowViewData {
     );
   }
 
-  @Deprecated('Use fromProfileSocialRelationRowWire(ProfileSocialRelationRowWireDto)')
+  @Deprecated(
+    'Use fromProfileSocialRelationRowWire(ProfileSocialRelationRowWireDto)',
+  )
   factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
     return ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
       ProfileSocialRelationRowWireDto.fromMap(map),
@@ -385,7 +389,9 @@ class ActivePersonaContextViewData {
       ownerUserId = profileSubjectId;
     }
     final subAccountId = w.subAccountId;
-    final displayName = w.displayName.isNotEmpty ? w.displayName : profileSubjectId;
+    final displayName = w.displayName.isNotEmpty
+        ? w.displayName
+        : profileSubjectId;
     final subjectType = w.subjectType.isNotEmpty
         ? w.subjectType
         : (subAccountId.isNotEmpty ? 'sub_account' : 'owner');
@@ -436,6 +442,9 @@ class PersonaManagementItemViewData {
     required this.subAccountId,
     required this.profileSubjectId,
     required this.displayName,
+    required this.userHandle,
+    required this.phone,
+    required this.email,
     required this.avatarUrl,
     required this.isolationLevel,
     required this.profileVisibility,
@@ -443,12 +452,20 @@ class PersonaManagementItemViewData {
     required this.isActive,
     required this.hasAttributedHistory,
     required this.hasPublishedContent,
+    required this.inheritsProfileFromOwner,
+    required this.overriddenProfileFields,
+    required this.lastProfileSyncAt,
+    required this.lastProfileSyncSource,
+    required this.lastActivatedAt,
     required this.subjectType,
   });
 
   final String subAccountId;
   final String profileSubjectId;
   final String displayName;
+  final String userHandle;
+  final String phone;
+  final String email;
   final String avatarUrl;
   final String isolationLevel;
   final String profileVisibility;
@@ -456,16 +473,25 @@ class PersonaManagementItemViewData {
   final bool isActive;
   final bool hasAttributedHistory;
   final bool hasPublishedContent;
+  final bool inheritsProfileFromOwner;
+  final List<String> overriddenProfileFields;
+  final DateTime? lastProfileSyncAt;
+  final String lastProfileSyncSource;
+  final DateTime? lastActivatedAt;
   final String subjectType;
+
+  bool get hasContactInfo => phone.isNotEmpty || email.isNotEmpty;
 
   /// 纠正 wire 默认 `subjectType: sub_account`：无 `subAccountId` 时视为 owner 主行。
   factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
     PersonaManagementItemWireDto w,
   ) {
-    final profileSubjectId =
-        w.profileSubjectId.isNotEmpty ? w.profileSubjectId : w.subAccountId;
-    final displayName =
-        w.displayName.isNotEmpty ? w.displayName : profileSubjectId;
+    final profileSubjectId = w.profileSubjectId.isNotEmpty
+        ? w.profileSubjectId
+        : w.subAccountId;
+    final displayName = w.displayName.isNotEmpty
+        ? w.displayName
+        : profileSubjectId;
     final subjectType = w.subAccountId.isEmpty
         ? (w.subjectType.isEmpty || w.subjectType == 'sub_account'
               ? 'owner'
@@ -475,6 +501,9 @@ class PersonaManagementItemViewData {
       subAccountId: w.subAccountId,
       profileSubjectId: profileSubjectId,
       displayName: displayName,
+      userHandle: w.userHandle,
+      phone: w.phone,
+      email: w.email,
       avatarUrl: w.avatarUrl,
       isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
@@ -482,18 +511,40 @@ class PersonaManagementItemViewData {
       isActive: w.isActive,
       hasAttributedHistory: w.hasAttributedHistory,
       hasPublishedContent: w.hasPublishedContent,
+      inheritsProfileFromOwner: w.inheritsProfileFromOwner,
+      overriddenProfileFields: w.overriddenProfileFields,
+      lastProfileSyncAt: w.lastProfileSyncAt,
+      lastProfileSyncSource: w.lastProfileSyncSource,
+      lastActivatedAt: w.lastActivatedAt,
       subjectType: subjectType,
     );
   }
 
-  @Deprecated(
-    'Use fromPersonaManagementItemWire(PersonaManagementItemWireDto)',
-  )
+  @Deprecated('Use fromPersonaManagementItemWire(PersonaManagementItemWireDto)')
   factory PersonaManagementItemViewData.fromMap(Map<String, dynamic> map) {
     return PersonaManagementItemViewData.fromPersonaManagementItemWire(
       PersonaManagementItemWireDto.fromMap(map),
     );
   }
+}
+
+@immutable
+class PersonaSyncSuggestionViewData {
+  const PersonaSyncSuggestionViewData({
+    required this.sourcePersonaId,
+    required this.sourceDisplayName,
+    required this.targetPersonaIds,
+    required this.targetDisplayNames,
+    required this.fieldKeys,
+  });
+
+  final String sourcePersonaId;
+  final String sourceDisplayName;
+  final List<String> targetPersonaIds;
+  final List<String> targetDisplayNames;
+  final List<String> fieldKeys;
+
+  bool get canApply => targetPersonaIds.isNotEmpty && fieldKeys.isNotEmpty;
 }
 
 @immutable
@@ -565,9 +616,7 @@ class PersonaLifecycleGuardViewData {
     );
   }
 
-  @Deprecated(
-    'Use fromPersonaLifecycleGuardWire(PersonaLifecycleGuardWireDto)',
-  )
+  @Deprecated('Use fromPersonaLifecycleGuardWire(PersonaLifecycleGuardWireDto)')
   factory PersonaLifecycleGuardViewData.fromMap(Map<String, dynamic> map) {
     return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
       PersonaLifecycleGuardWireDto.fromMap(map),
@@ -597,11 +646,9 @@ class PersonaManagementSummaryViewData {
           ),
         )
         .toList(growable: false);
-    final quotaMap = w.quota ??
-        <String, dynamic>{
-          'usedSubAccounts': items.length,
-          'maxSubAccounts': 5,
-        };
+    final quotaMap =
+        w.quota ??
+        <String, dynamic>{'usedSubAccounts': items.length, 'maxSubAccounts': 5};
     final activeMap = w.activeContext;
     return PersonaManagementSummaryViewData(
       items: items,

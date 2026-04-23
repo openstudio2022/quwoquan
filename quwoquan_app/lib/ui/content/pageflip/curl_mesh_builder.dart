@@ -12,10 +12,12 @@ class ArticlePageCurlMeshSurface {
   const ArticlePageCurlMeshSurface({
     required this.vertices,
     required this.maxDepth,
+    required this.diagnostics,
   });
 
   final ui.Vertices vertices;
   final double maxDepth;
+  final ArticlePageCurlSurfaceDiagnostics diagnostics;
 }
 
 @immutable
@@ -24,23 +26,83 @@ class ArticlePageCurlFrame {
     required this.frontSurface,
     required this.backSurface,
     required this.bottomClipPath,
+    required this.frontBounds,
+    required this.backBounds,
+    required this.frontDiagnostics,
+    required this.backDiagnostics,
     required this.foldXNormalized,
     required this.curlLift,
     required this.progress,
     required this.rollProgress,
     required this.cylinderProgress,
     required this.unfoldProgress,
+    this.alignmentDiagnostics,
   });
 
   final ArticlePageCurlMeshSurface? frontSurface;
   final ArticlePageCurlMeshSurface? backSurface;
   final Path bottomClipPath;
+  final Rect frontBounds;
+  final Rect backBounds;
+  final ArticlePageCurlSurfaceDiagnostics? frontDiagnostics;
+  final ArticlePageCurlSurfaceDiagnostics? backDiagnostics;
   final double foldXNormalized;
   final double curlLift;
   final double progress;
   final double rollProgress;
   final double cylinderProgress;
   final double unfoldProgress;
+  final ArticlePageCurlAlignmentDiagnostics? alignmentDiagnostics;
+}
+
+@immutable
+class ArticlePageCurlAlignmentDiagnostics {
+  const ArticlePageCurlAlignmentDiagnostics({
+    required this.spineTopX,
+    required this.spineBottomX,
+    required this.seamTopX,
+    required this.seamBottomX,
+  });
+
+  final double spineTopX;
+  final double spineBottomX;
+  final double seamTopX;
+  final double seamBottomX;
+
+  double get spineDelta => (spineTopX - spineBottomX).abs();
+
+  double get seamDelta => (seamTopX - seamBottomX).abs();
+}
+
+@immutable
+class ArticlePageCurlSurfaceDiagnostics {
+  const ArticlePageCurlSurfaceDiagnostics({
+    required this.bounds,
+    required this.overflowLeft,
+    required this.overflowRight,
+    required this.overflowTop,
+    required this.overflowBottom,
+    required this.maxEdgeScale,
+    required this.meanEdgeScale,
+    required this.maxTriangleAreaScale,
+    required this.meanTriangleAreaScale,
+  });
+
+  final Rect bounds;
+  final double overflowLeft;
+  final double overflowRight;
+  final double overflowTop;
+  final double overflowBottom;
+  final double maxEdgeScale;
+  final double meanEdgeScale;
+  final double maxTriangleAreaScale;
+  final double meanTriangleAreaScale;
+
+  bool get hasOverflow =>
+      overflowLeft > 0 ||
+      overflowRight > 0 ||
+      overflowTop > 0 ||
+      overflowBottom > 0;
 }
 
 class ArticlePageCurlMeshBuilder {
@@ -68,7 +130,8 @@ class ArticlePageCurlMeshBuilder {
     final effectiveDirection = effectiveFrame?.renderDirection ?? direction;
     final effectiveCorner = effectiveFrame?.corner ?? corner;
     final effectiveDragPoint = effectiveFrame?.localPagePoint ?? dragPoint;
-    final angleBand = effectiveFrame?.timeline.curlAngleBand ??
+    final angleBand =
+        effectiveFrame?.timeline.curlAngleBand ??
         resolveForwardCurlAngleBand(
           localPagePoint: effectiveDragPoint,
           pageSize: pageSize,
@@ -81,7 +144,8 @@ class ArticlePageCurlMeshBuilder {
         ? _CurlTimeline.fromPageTimeline(
             resolvePageCurlTimeline(
               direction: effectiveDirection,
-              renderDirection: reversePose != null &&
+              renderDirection:
+                  reversePose != null &&
                       effectiveDirection == StPageFlipDirection.back
                   ? StPageFlipDirection.forward
                   : effectiveDirection,
@@ -95,6 +159,13 @@ class ArticlePageCurlMeshBuilder {
             reversePose: reversePose,
           )
         : _CurlTimeline.fromRenderFrame(effectiveFrame);
+    final backwardLeafFrame = effectiveDirection == StPageFlipDirection.back
+        ? (effectiveFrame?.backwardLeafFrame ??
+              resolveArticlePageBackwardLeafFrame(
+                direction: StPageFlipDirection.back,
+                progress: settledProgress,
+              ))
+        : null;
     final foldTheta = _resolveFoldTheta(timeline);
     final pointCount = (horizontalSegments + 1) * (verticalSegments + 1);
     final points = List<_CurlMeshPoint>.filled(
@@ -138,6 +209,7 @@ class ArticlePageCurlMeshBuilder {
           foldTheta: foldTheta,
           corner: effectiveCorner,
           timeline: timeline,
+          backwardLeafFrame: backwardLeafFrame,
         );
         points[_indexFor(row, col)] = point;
         maxDepth = math.max(maxDepth, point.depth);
@@ -178,6 +250,7 @@ class ArticlePageCurlMeshBuilder {
     }
 
     final foldXNormalized =
+        backwardLeafFrame?.seamXNormalized ??
         (pivotAccumulator / (verticalSegments + 1) / pageSize.width)
             .clamp(0.0, 1.0)
             .toDouble();
@@ -189,17 +262,48 @@ class ArticlePageCurlMeshBuilder {
         ? meshDerivedBottomClipPath
         : bottomClipPath == null
         ? (Path()..addRect(pageRect))
-        : timeline.reversePose == null && !timeline.mirrored
-        ? Path.combine(
+        : Path.combine(
             PathOperation.intersect,
+            Path()..addRect(pageRect),
             bottomClipPath,
-            meshDerivedBottomClipPath,
-          )
-        : bottomClipPath;
+          );
+    final frontDiagnostics = _resolveSurfaceDiagnostics(
+      positions: frontPositions,
+      textureCoordinates: frontTexCoords,
+      pageRect: pageRect,
+    );
+    final backDiagnostics = _resolveSurfaceDiagnostics(
+      positions: backPositions,
+      textureCoordinates: backTexCoords,
+      pageRect: pageRect,
+    );
+    final alignmentDiagnostics = backwardLeafFrame == null
+        ? null
+        : _resolveBackwardAlignmentDiagnostics(
+            pageRect: pageRect,
+            pageSize: pageSize,
+            corner: effectiveCorner,
+            timeline: timeline,
+            backwardLeafFrame: backwardLeafFrame,
+          );
     return ArticlePageCurlFrame(
-      frontSurface: _buildSurface(frontPositions, frontTexCoords, maxDepth),
-      backSurface: _buildSurface(backPositions, backTexCoords, maxDepth),
+      frontSurface: _buildSurface(
+        frontPositions,
+        frontTexCoords,
+        maxDepth,
+        diagnostics: frontDiagnostics,
+      ),
+      backSurface: _buildSurface(
+        backPositions,
+        backTexCoords,
+        maxDepth,
+        diagnostics: backDiagnostics,
+      ),
       bottomClipPath: effectiveBottomClipPath,
+      frontBounds: _resolveBounds(frontPositions),
+      backBounds: _resolveBounds(backPositions),
+      frontDiagnostics: frontDiagnostics,
+      backDiagnostics: backDiagnostics,
       foldXNormalized: foldXNormalized,
       curlLift: (maxDepth / math.max(pageSize.width * 0.32, 1.0))
           .clamp(0.0, 1.0)
@@ -208,6 +312,7 @@ class ArticlePageCurlMeshBuilder {
       rollProgress: timeline.rollProgress,
       cylinderProgress: timeline.cylinderProgress,
       unfoldProgress: timeline.unfoldProgress,
+      alignmentDiagnostics: alignmentDiagnostics,
     );
   }
 
@@ -218,9 +323,12 @@ class ArticlePageCurlMeshBuilder {
   ArticlePageCurlMeshSurface? _buildSurface(
     List<double> positions,
     List<double> textureCoordinates,
-    double maxDepth,
-  ) {
-    if (positions.isEmpty || textureCoordinates.isEmpty) {
+    double maxDepth, {
+    required ArticlePageCurlSurfaceDiagnostics? diagnostics,
+  }) {
+    if (positions.isEmpty ||
+        textureCoordinates.isEmpty ||
+        diagnostics == null) {
       return null;
     }
     return ArticlePageCurlMeshSurface(
@@ -230,6 +338,127 @@ class ArticlePageCurlMeshBuilder {
         textureCoordinates: Float32List.fromList(textureCoordinates),
       ),
       maxDepth: maxDepth,
+      diagnostics: diagnostics,
+    );
+  }
+
+  Rect _resolveBounds(List<double> positions) {
+    if (positions.isEmpty) {
+      return Rect.zero;
+    }
+    var minX = double.infinity;
+    var maxX = -double.infinity;
+    var minY = double.infinity;
+    var maxY = -double.infinity;
+    for (var index = 0; index < positions.length; index += 2) {
+      final x = positions[index];
+      final y = positions[index + 1];
+      if (x < minX) {
+        minX = x;
+      }
+      if (x > maxX) {
+        maxX = x;
+      }
+      if (y < minY) {
+        minY = y;
+      }
+      if (y > maxY) {
+        maxY = y;
+      }
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  ArticlePageCurlSurfaceDiagnostics? _resolveSurfaceDiagnostics({
+    required List<double> positions,
+    required List<double> textureCoordinates,
+    required Rect pageRect,
+  }) {
+    if (positions.isEmpty || textureCoordinates.isEmpty) {
+      return null;
+    }
+    final bounds = _resolveBounds(positions);
+    var maxEdgeScale = 0.0;
+    var edgeScaleSum = 0.0;
+    var edgeScaleCount = 0;
+    var maxTriangleAreaScale = 0.0;
+    var triangleAreaScaleSum = 0.0;
+    var triangleAreaScaleCount = 0;
+
+    Offset readPosition(int vertexIndex) {
+      final offset = vertexIndex * 2;
+      return Offset(positions[offset], positions[offset + 1]);
+    }
+
+    Offset readTexture(int vertexIndex) {
+      final offset = vertexIndex * 2;
+      return Offset(textureCoordinates[offset], textureCoordinates[offset + 1]);
+    }
+
+    void recordEdge(
+      Offset projectedA,
+      Offset projectedB,
+      Offset textureA,
+      Offset textureB,
+    ) {
+      final textureLength = (textureB - textureA).distance;
+      if (textureLength <= 0.0001) {
+        return;
+      }
+      final projectedLength = (projectedB - projectedA).distance;
+      final scale = projectedLength / textureLength;
+      maxEdgeScale = math.max(maxEdgeScale, scale);
+      edgeScaleSum += scale;
+      edgeScaleCount += 1;
+    }
+
+    double triangleArea(Offset a, Offset b, Offset c) {
+      return ((b.dx - a.dx) * (c.dy - a.dy) - (b.dy - a.dy) * (c.dx - a.dx))
+              .abs() /
+          2;
+    }
+
+    final triangleCount = positions.length ~/ 6;
+    for (
+      var triangleIndex = 0;
+      triangleIndex < triangleCount;
+      triangleIndex += 1
+    ) {
+      final baseVertex = triangleIndex * 3;
+      final projectedA = readPosition(baseVertex);
+      final projectedB = readPosition(baseVertex + 1);
+      final projectedC = readPosition(baseVertex + 2);
+      final textureA = readTexture(baseVertex);
+      final textureB = readTexture(baseVertex + 1);
+      final textureC = readTexture(baseVertex + 2);
+
+      recordEdge(projectedA, projectedB, textureA, textureB);
+      recordEdge(projectedB, projectedC, textureB, textureC);
+      recordEdge(projectedC, projectedA, textureC, textureA);
+
+      final textureArea = triangleArea(textureA, textureB, textureC);
+      if (textureArea <= 0.0001) {
+        continue;
+      }
+      final projectedArea = triangleArea(projectedA, projectedB, projectedC);
+      final areaScale = projectedArea / textureArea;
+      maxTriangleAreaScale = math.max(maxTriangleAreaScale, areaScale);
+      triangleAreaScaleSum += areaScale;
+      triangleAreaScaleCount += 1;
+    }
+
+    return ArticlePageCurlSurfaceDiagnostics(
+      bounds: bounds,
+      overflowLeft: math.max(0.0, pageRect.left - bounds.left),
+      overflowRight: math.max(0.0, bounds.right - pageRect.right),
+      overflowTop: math.max(0.0, pageRect.top - bounds.top),
+      overflowBottom: math.max(0.0, bounds.bottom - pageRect.bottom),
+      maxEdgeScale: maxEdgeScale,
+      meanEdgeScale: edgeScaleCount == 0 ? 0.0 : edgeScaleSum / edgeScaleCount,
+      maxTriangleAreaScale: maxTriangleAreaScale,
+      meanTriangleAreaScale: triangleAreaScaleCount == 0
+          ? 0.0
+          : triangleAreaScaleSum / triangleAreaScaleCount,
     );
   }
 
@@ -329,8 +558,8 @@ class ArticlePageCurlMeshBuilder {
     final t = seamDelta.abs() < 0.0001
         ? 0.0
         : ((targetSeamMetric - from.seamMetric) / seamDelta)
-            .clamp(0.0, 1.0)
-            .toDouble();
+              .clamp(0.0, 1.0)
+              .toDouble();
     Offset interpolateOffset(Offset a, Offset b) {
       return Offset(
         ui.lerpDouble(a.dx, b.dx, t) ?? a.dx,
@@ -426,7 +655,19 @@ class ArticlePageCurlMeshBuilder {
     required double foldTheta,
     required StPageFlipCorner corner,
     required _CurlTimeline timeline,
+    required ArticlePageBackwardLeafFrame? backwardLeafFrame,
   }) {
+    if (backwardLeafFrame != null) {
+      return _projectBackwardReplayPoint(
+        pageRect: pageRect,
+        pageSize: pageSize,
+        localX: localX,
+        localY: localY,
+        corner: corner,
+        timeline: timeline,
+        backwardLeafFrame: backwardLeafFrame,
+      );
+    }
     if (timeline.reversePose != null) {
       return _projectReversePoint(
         pageRect: pageRect,
@@ -440,20 +681,23 @@ class ArticlePageCurlMeshBuilder {
     }
     final rowCurlDistance = math.max(0.0, localX - rowPivot);
     final theta = math.min(math.pi, rowCurlDistance / math.max(rowRadius, 1.0));
-    final foldDepth =
-        theta <= 0 ? 0.0 : (1 - math.cos(foldTheta)) * rowRadius;
+    final foldDepth = theta <= 0 ? 0.0 : (1 - math.cos(foldTheta)) * rowRadius;
     final frontDepth = theta <= foldTheta
         ? theta <= 0
-            ? 0.0
-            : (1 - math.cos(theta)) * rowRadius
+              ? 0.0
+              : (1 - math.cos(theta)) * rowRadius
         : foldDepth;
+    final rigidAngleT = timeline.forwardAngle == null
+        ? 0.0
+        : (timeline.forwardAngle!.abs() / math.pi).clamp(0.0, 1.0).toDouble();
+    final backTravelMultiplier = ui.lerpDouble(1.18, 1.42, rigidAngleT) ?? 1.25;
     final backTravel = theta <= foldTheta
         ? 0.0
         : ((theta - foldTheta) / math.max(math.pi - foldTheta, 0.0001))
-            .clamp(0.0, 1.0)
-            .toDouble() *
-            rowRadius *
-            1.25;
+                  .clamp(0.0, 1.0)
+                  .toDouble() *
+              rowRadius *
+              backTravelMultiplier;
     final curledX = theta <= foldTheta
         ? rowPivot - frontDepth
         : (rowPivot - foldDepth) - backTravel;
@@ -558,6 +802,131 @@ class ArticlePageCurlMeshBuilder {
       depth: depth,
     );
   }
+
+  _CurlMeshPoint _projectBackwardReplayPoint({
+    required Rect pageRect,
+    required Size pageSize,
+    required double localX,
+    required double localY,
+    required StPageFlipCorner corner,
+    required _CurlTimeline timeline,
+    required ArticlePageBackwardLeafFrame backwardLeafFrame,
+  }) {
+    final coveredWidth =
+        (backwardLeafFrame.coveredWidthNormalized * pageSize.width)
+            .clamp(0.0, pageSize.width)
+            .toDouble();
+    final flatWidth =
+        (backwardLeafFrame.laidDownWidthNormalized * pageSize.width)
+            .clamp(0.0, coveredWidth)
+            .toDouble();
+    final visibleCurlWidth = math.max(1.0, coveredWidth - flatWidth).toDouble();
+    final rectoRevealWidth =
+        (backwardLeafFrame.rectoRevealWidthNormalized * pageSize.width)
+            .clamp(0.0, visibleCurlWidth)
+            .toDouble();
+    final edgeBandWidth =
+        (backwardLeafFrame.edgeBandWidthNormalized * pageSize.width)
+            .clamp(0.0, math.max(0.0, visibleCurlWidth - rectoRevealWidth))
+            .toDouble();
+    final seamSplitWidth = (rectoRevealWidth + edgeBandWidth * 0.5)
+        .clamp(visibleCurlWidth * 0.08, visibleCurlWidth * 0.92)
+        .toDouble();
+    final seamTheta = (seamSplitWidth / visibleCurlWidth * math.pi)
+        .clamp(math.pi * 0.08, math.pi * 0.92)
+        .toDouble();
+    final cylinderRadius = math.max(
+      visibleCurlWidth / math.pi,
+      pageSize.width * 0.028,
+    );
+
+    double theta;
+    double visualX;
+    double depth;
+    if (localX <= flatWidth) {
+      theta = 0.0;
+      visualX = localX;
+      depth = 0.0;
+    } else if (localX <= coveredWidth) {
+      final bandT = ((localX - flatWidth) / visibleCurlWidth)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      theta = bandT * math.pi;
+      visualX = flatWidth + (1 - math.cos(theta)) * visibleCurlWidth * 0.5;
+      depth = math.sin(theta) * cylinderRadius;
+    } else {
+      theta = math.pi;
+      visualX = coveredWidth;
+      depth = 0.0;
+    }
+
+    final worldX = pageRect.left + visualX;
+    final worldY = pageRect.top + localY;
+    final projected = Offset(worldX, worldY);
+    return _CurlMeshPoint(
+      projected: projected,
+      rectoTexture: Offset(localX, localY),
+      versoTexture: Offset(pageSize.width - localX, localY),
+      theta: theta,
+      seamMetric: theta - seamTheta,
+      depth: depth,
+    );
+  }
+
+  ArticlePageCurlAlignmentDiagnostics _resolveBackwardAlignmentDiagnostics({
+    required Rect pageRect,
+    required Size pageSize,
+    required StPageFlipCorner corner,
+    required _CurlTimeline timeline,
+    required ArticlePageBackwardLeafFrame backwardLeafFrame,
+  }) {
+    final seamX = resolveArticlePageBackwardSeamX(
+      frame: backwardLeafFrame,
+      pageSize: pageSize,
+    );
+    final topSpine = _projectBackwardReplayPoint(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      localX: 0,
+      localY: 0,
+      corner: corner,
+      timeline: timeline,
+      backwardLeafFrame: backwardLeafFrame,
+    );
+    final bottomSpine = _projectBackwardReplayPoint(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      localX: 0,
+      localY: pageSize.height,
+      corner: corner,
+      timeline: timeline,
+      backwardLeafFrame: backwardLeafFrame,
+    );
+    final topSeam = _projectBackwardReplayPoint(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      localX: seamX,
+      localY: 0,
+      corner: corner,
+      timeline: timeline,
+      backwardLeafFrame: backwardLeafFrame,
+    );
+    final bottomSeam = _projectBackwardReplayPoint(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      localX: seamX,
+      localY: pageSize.height,
+      corner: corner,
+      timeline: timeline,
+      backwardLeafFrame: backwardLeafFrame,
+    );
+    return ArticlePageCurlAlignmentDiagnostics(
+      spineTopX: topSpine.projected.dx,
+      spineBottomX: bottomSpine.projected.dx,
+      seamTopX: topSeam.projected.dx,
+      seamBottomX: bottomSeam.projected.dx,
+    );
+  }
 }
 
 double _resolveFoldTheta(_CurlTimeline timeline) {
@@ -613,6 +982,7 @@ class _CurlTimeline {
     required this.cylinderProgress,
     required this.unfoldProgress,
     required this.heightLiftBias,
+    required this.forwardAngle,
     required this.reversePose,
   });
 
@@ -633,13 +1003,28 @@ class _CurlTimeline {
       cylinderProgress: timeline.cylinderProgress,
       unfoldProgress: timeline.unfoldProgress,
       heightLiftBias: timeline.heightLiftBias,
+      forwardAngle: null,
       reversePose: reversePose,
     );
   }
 
   factory _CurlTimeline.fromRenderFrame(StPageFlipRenderFrame renderFrame) {
-    return _CurlTimeline.fromPageTimeline(
-      renderFrame.timeline,
+    return _CurlTimeline(
+      mirrored: renderFrame.timeline.mirrored,
+      curlAngleBand: renderFrame.timeline.curlAngleBand,
+      basePivot: renderFrame.timeline.basePivot,
+      diagonalExtent: renderFrame.timeline.diagonalExtent,
+      leadingRadius: renderFrame.timeline.leadingRadius,
+      trailingRadius: renderFrame.timeline.trailingRadius,
+      sheetShift: renderFrame.timeline.sheetShift,
+      perspective: renderFrame.timeline.perspective,
+      rollProgress: renderFrame.timeline.rollProgress,
+      cylinderProgress: renderFrame.timeline.cylinderProgress,
+      unfoldProgress: renderFrame.timeline.unfoldProgress,
+      heightLiftBias: renderFrame.timeline.heightLiftBias,
+      forwardAngle: renderFrame.direction == StPageFlipDirection.forward
+          ? renderFrame.angle
+          : null,
       reversePose: renderFrame.reversePose,
     );
   }
@@ -656,5 +1041,6 @@ class _CurlTimeline {
   final double cylinderProgress;
   final double unfoldProgress;
   final double heightLiftBias;
+  final double? forwardAngle;
   final ReverseFlipPose? reversePose;
 }

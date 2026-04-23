@@ -690,13 +690,19 @@ RetrievalProcessingSnapshot _resolveRetrievalProcessing(
   if (summaryFrame != null) {
     return _mergeRetrievalSnapshotWithFrameReferences(
       summaryFrame,
-      summaryFrame.retrievalProcessing,
+      _mergeRetrievalSnapshots(
+        primary: summaryFrame.retrievalProcessing,
+        fallback: fallback,
+      ),
     );
   }
   if (refsFallbackFrame != null) {
     return _mergeRetrievalSnapshotWithFrameReferences(
       refsFallbackFrame,
-      refsFallbackFrame.retrievalProcessing,
+      _mergeRetrievalSnapshots(
+        primary: fallback,
+        fallback: refsFallbackFrame.retrievalProcessing,
+      ),
     );
   }
   return fallback;
@@ -735,6 +741,45 @@ RetrievalProcessingSnapshot _mergeRetrievalSnapshotWithFrameReferences(
     selectedKeyPoints: snapshot.selectedKeyPoints,
     expansionReason: snapshot.expansionReason,
     acceptedReferences: refs,
+  );
+}
+
+RetrievalProcessingSnapshot _mergeRetrievalSnapshots({
+  required RetrievalProcessingSnapshot primary,
+  required RetrievalProcessingSnapshot fallback,
+}) {
+  final mergedRefs = <String, RetrievalProcessingReference>{};
+  void absorb(Iterable<RetrievalProcessingReference> refs) {
+    for (final reference in refs) {
+      final key = reference.url.trim().isNotEmpty
+          ? reference.url.trim()
+          : '${reference.source.trim()}:${reference.title.trim()}';
+      if (key.trim().isEmpty || mergedRefs.containsKey(key)) {
+        continue;
+      }
+      mergedRefs[key] = reference;
+    }
+  }
+
+  absorb(primary.acceptedReferences);
+  absorb(fallback.acceptedReferences);
+  return RetrievalProcessingSnapshot(
+    processedDocumentCount: primary.processedDocumentCount > 0
+        ? primary.processedDocumentCount
+        : fallback.processedDocumentCount,
+    acceptedDocumentCount: primary.acceptedDocumentCount > 0
+        ? primary.acceptedDocumentCount
+        : fallback.acceptedDocumentCount,
+    processingSummary: primary.processingSummary.trim().isNotEmpty
+        ? primary.processingSummary
+        : fallback.processingSummary,
+    selectedKeyPoints: primary.selectedKeyPoints.isNotEmpty
+        ? primary.selectedKeyPoints
+        : fallback.selectedKeyPoints,
+    expansionReason: primary.expansionReason.trim().isNotEmpty
+        ? primary.expansionReason
+        : fallback.expansionReason,
+    acceptedReferences: mergedRefs.values.toList(growable: false),
   );
 }
 
@@ -805,7 +850,7 @@ String _processStepLabel(ProcessStepId stepId) {
     case ProcessStepId.understanding:
       return UITextConstants.assistantProcessStageUnderstand;
     case ProcessStepId.retrievalDesign:
-      return UITextConstants.assistantProcessStageUnderstand;
+      return UITextConstants.assistantProcessStageRetrievalDesign;
     case ProcessStepId.retrievalProcessing:
       return UITextConstants.assistantProcessStageRetrievalProcessing;
     case ProcessStepId.answerOrganization:

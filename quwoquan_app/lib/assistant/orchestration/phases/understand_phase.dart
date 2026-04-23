@@ -488,13 +488,11 @@ class UnderstandPhase implements Phase {
     required String referenceNowIso,
     required String timezone,
   }) {
-    final temporalizedIntent = _applyResolvedGeoNormalization(
-      intentGraph: _applyRelativeTimeNormalization(
-        intentGraph: intentGraph,
-        latestUserQuery: latestUserQuery,
-        referenceNowIso: referenceNowIso,
-        timezone: timezone,
-      ),
+    final temporalizedIntent = _applyRelativeTimeNormalization(
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+      referenceNowIso: referenceNowIso,
+      timezone: timezone,
     );
     if (temporalizedIntent.queryTasks.isNotEmpty) {
       return temporalizedIntent;
@@ -536,40 +534,38 @@ class UnderstandPhase implements Phase {
     if (queryTasks.isEmpty) {
       return temporalizedIntent;
     }
-    return _applyResolvedGeoNormalization(
-      intentGraph: _applyRelativeTimeNormalization(
-        latestUserQuery: latestUserQuery,
-        referenceNowIso: referenceNowIso,
-        timezone: timezone,
-        intentGraph: IntentGraph(
-          userGoal: temporalizedIntent.userGoal,
-          problemShape: temporalizedIntent.problemShape,
-          primarySkill: temporalizedIntent.primarySkill,
-          problemClass: temporalizedIntent.problemClass,
-          inferredMotive: temporalizedIntent.inferredMotive,
-          secondarySkills: temporalizedIntent.secondarySkills,
-          targetObject: temporalizedIntent.targetObject,
-          userJobToBeDone: temporalizedIntent.userJobToBeDone,
-          hardConstraints: temporalizedIntent.hardConstraints,
-          softConstraints: temporalizedIntent.softConstraints,
-          excludedScopes: temporalizedIntent.excludedScopes,
-          freshnessNeed: temporalizedIntent.freshnessNeed,
-          answerShape: temporalizedIntent.answerShape,
-          mustVerifyClaims: temporalizedIntent.mustVerifyClaims,
-          requiresExternalEvidence: temporalizedIntent.requiresExternalEvidence,
-          entityAnchors: temporalizedIntent.entityAnchors,
-          negativeKeywords: temporalizedIntent.negativeKeywords,
-          queryNormalization: temporalizedIntent.queryNormalization,
-          queryTasks: queryTasks,
-          searchIterationState: temporalizedIntent.searchIterationState,
-          contextSlots: temporalizedIntent.contextSlots,
-          globalConstraints: temporalizedIntent.globalConstraints,
-          clarificationNeeded: temporalizedIntent.clarificationNeeded,
-          recallResult: temporalizedIntent.recallResult,
-          authorityDomains: temporalizedIntent.authorityDomains,
-          freshnessHoursMax: temporalizedIntent.freshnessHoursMax,
-          resolvedGeoScope: temporalizedIntent.resolvedGeoScope,
-        ),
+    return _applyRelativeTimeNormalization(
+      latestUserQuery: latestUserQuery,
+      referenceNowIso: referenceNowIso,
+      timezone: timezone,
+      intentGraph: IntentGraph(
+        userGoal: temporalizedIntent.userGoal,
+        problemShape: temporalizedIntent.problemShape,
+        primarySkill: temporalizedIntent.primarySkill,
+        problemClass: temporalizedIntent.problemClass,
+        inferredMotive: temporalizedIntent.inferredMotive,
+        secondarySkills: temporalizedIntent.secondarySkills,
+        targetObject: temporalizedIntent.targetObject,
+        userJobToBeDone: temporalizedIntent.userJobToBeDone,
+        hardConstraints: temporalizedIntent.hardConstraints,
+        softConstraints: temporalizedIntent.softConstraints,
+        excludedScopes: temporalizedIntent.excludedScopes,
+        freshnessNeed: temporalizedIntent.freshnessNeed,
+        answerShape: temporalizedIntent.answerShape,
+        mustVerifyClaims: temporalizedIntent.mustVerifyClaims,
+        requiresExternalEvidence: temporalizedIntent.requiresExternalEvidence,
+        entityAnchors: temporalizedIntent.entityAnchors,
+        negativeKeywords: temporalizedIntent.negativeKeywords,
+        queryNormalization: temporalizedIntent.queryNormalization,
+        queryTasks: queryTasks,
+        searchIterationState: temporalizedIntent.searchIterationState,
+        contextSlots: temporalizedIntent.contextSlots,
+        globalConstraints: temporalizedIntent.globalConstraints,
+        clarificationNeeded: temporalizedIntent.clarificationNeeded,
+        recallResult: temporalizedIntent.recallResult,
+        authorityDomains: temporalizedIntent.authorityDomains,
+        freshnessHoursMax: temporalizedIntent.freshnessHoursMax,
+        resolvedGeoScope: temporalizedIntent.resolvedGeoScope,
       ),
     );
   }
@@ -817,6 +813,7 @@ class UnderstandPhase implements Phase {
         streamed: streamedUserFacingSummary,
         finalized: parsedSnapshot.userFacingSummary,
       ),
+      retrievalDesignNarrative: parsedSnapshot.retrievalDesignNarrative,
       concernPoints: parsedSnapshot.concernPoints,
       emotionSignal: parsedSnapshot.emotionSignal,
       resolutionItems: parsedSnapshot.resolutionItems,
@@ -852,6 +849,7 @@ class UnderstandPhase implements Phase {
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: fallbackIntentSummary,
       userFacingSummary: fallbackIntentSummary,
+      retrievalDesignNarrative: '',
       concernPoints: concernPoints,
       emotionSignal: 'neutral',
     );
@@ -905,9 +903,21 @@ class UnderstandPhase implements Phase {
               : normalizedIntent,
           intentGraph: intentGraph,
         );
+    final normalizedRetrievalDesignNarrative =
+        _normalizeUnderstandingSummaryWithTemporalAnchor(
+          base: snapshot.retrievalDesignNarrative.trim().isNotEmpty
+              ? snapshot.retrievalDesignNarrative.trim()
+              : (snapshot.intentSummary.trim().isNotEmpty &&
+                        snapshot.intentSummary.trim() !=
+                            snapshot.userFacingSummary.trim()
+                    ? snapshot.intentSummary.trim()
+                    : ''),
+          intentGraph: intentGraph,
+        );
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: normalizedIntent,
       userFacingSummary: normalizedUserFacingSummary,
+      retrievalDesignNarrative: normalizedRetrievalDesignNarrative,
       concernPoints: normalizedConcernPoints,
       emotionSignal: snapshot.emotionSignal,
       resolutionItems: normalizedResolutionItems,
@@ -960,43 +970,6 @@ class UnderstandPhase implements Phase {
     if (explicitItems.isNotEmpty) {
       return explicitItems.toList(growable: false);
     }
-    final derivedItems = <RunArtifactsUnderstandingResolutionItem>[
-      ...() sync* {
-        final geoItem = _buildGeoResolutionItem(
-          resolvedGeoScope: intentGraph.resolvedGeoScope,
-          availableGeoContext: availableGeoContext,
-          previousIntentGraph: previousIntentGraph,
-        );
-        if (geoItem != null) {
-          yield geoItem;
-        } else {
-          final clarificationItem = _buildGeoClarificationItem(
-            intentGraph: intentGraph,
-          );
-          if (clarificationItem != null) {
-            yield clarificationItem;
-          }
-        }
-      }(),
-      ...() sync* {
-        final temporalItem = _buildTemporalResolutionItem(
-          queryNormalization: intentGraph.queryNormalization,
-        );
-        if (temporalItem != null) {
-          yield temporalItem;
-        }
-      }(),
-    ];
-    for (final derived in derivedItems) {
-      final alreadyPresent = explicitItems.any(
-        (item) =>
-            item.kind.trim() == derived.kind.trim() &&
-            item.resolvedValue.trim() == derived.resolvedValue.trim(),
-      );
-      if (!alreadyPresent) {
-        explicitItems.add(derived);
-      }
-    }
     return explicitItems.toList(growable: false);
   }
 
@@ -1021,7 +994,7 @@ class UnderstandPhase implements Phase {
       return RunArtifactsUnderstandingResolutionItem(
         kind: 'followup_carry',
         title: '沿用上一轮地理范围',
-        detail: '这轮没有改地点或市场，我继续按$resolvedText理解并检索。',
+        detail: '',
         source: 'followup_carried',
         originalValue: previousIntentGraph?.resolvedGeoScope.resolvedText ?? '',
         resolvedValue: resolvedText,
@@ -1036,7 +1009,7 @@ class UnderstandPhase implements Phase {
       return RunArtifactsUnderstandingResolutionItem(
         kind: 'geo_explicit',
         title: title,
-        detail: '你明确提到了$resolvedText，我会按这个范围检索。',
+        detail: '',
         source: 'user_explicit',
         originalValue: resolvedText,
         resolvedValue: resolvedText,
@@ -1052,9 +1025,7 @@ class UnderstandPhase implements Phase {
         return RunArtifactsUnderstandingResolutionItem(
           kind: 'market_default',
           title: '已采用默认市场',
-          detail: countryLabel.isNotEmpty
-              ? '你没有指定市场，我先按${_currentCountryDefault(countryLabel, resolvedText)}理解并检索。'
-              : '你没有指定市场，我先按$resolvedText理解并检索。',
+          detail: '',
           source: source.isNotEmpty ? source : 'available_geo_default',
           originalValue: '',
           resolvedValue: resolvedText,
@@ -1071,7 +1042,7 @@ class UnderstandPhase implements Phase {
       return RunArtifactsUnderstandingResolutionItem(
         kind: 'geo_default',
         title: title,
-        detail: detail,
+        detail: '',
         source: source.isNotEmpty ? source : 'available_geo_default',
         originalValue: '',
         resolvedValue: resolvedText,
@@ -1097,13 +1068,10 @@ class UnderstandPhase implements Phase {
           resolvedValue.startsWith('scope:')) {
         continue;
       }
-      final detail = resolvedValue.contains('..')
-          ? '你说$originalValue，我会按${resolvedValue.replaceAll('..', ' 至 ')}这个时间范围检索。'
-          : '你说$originalValue，我会按$resolvedValue这个日期检索。';
       return RunArtifactsUnderstandingResolutionItem(
         kind: 'temporal_resolution',
         title: '已固定查询时间',
-        detail: detail,
+        detail: '',
         source: 'query_normalization',
         originalValue: originalValue,
         resolvedValue: resolvedValue,
@@ -1128,7 +1096,7 @@ class UnderstandPhase implements Phase {
     return RunArtifactsUnderstandingResolutionItem(
       kind: 'clarification_needed',
       title: '需要补充地理范围',
-      detail: '这个问题需要先确认$target，我再继续检索，避免搜到错城市或错市场。',
+      detail: '',
       source: 'query_normalization',
       originalValue: '',
       resolvedValue: '',
@@ -1441,80 +1409,36 @@ class UnderstandPhase implements Phase {
             gpsLocation: request.gpsLocation,
             scopeHint: request.contextScopeHint,
           );
-    final previousGeoScope = _isContinuationContext(bootstrapContext)
-        ? bootstrapContext?.previousIntentGraph?.resolvedGeoScope ??
-              const ResolvedGeoScope()
-        : const ResolvedGeoScope();
     final resolvedGeoScope = resolveGeoScope(
       availableGeoContext: availableGeoContext,
       current: intentGraph.resolvedGeoScope,
-      previous: previousGeoScope,
       geoPolicy: defaultGeoPolicy,
     );
     final needsGeoClarification =
-        !hasResolvedGeoScope(resolvedGeoScope) &&
-        defaultGeoPolicy.fallbackAllowed &&
+        !hasResolvedGeoScope(intentGraph.resolvedGeoScope) &&
         defaultGeoPolicy.defaultGeoScope.trim().isNotEmpty &&
         defaultGeoPolicy.defaultGeoScope.trim().toLowerCase() != 'none';
-    return _applyResolvedGeoNormalization(
-      intentGraph: IntentGraph.fromJson(<String, dynamic>{
-        ...intentGraph.toJson(),
-        'resolvedGeoScope': resolvedGeoScope.toJson(),
-        'clarificationNeeded':
-            intentGraph.clarificationNeeded || needsGeoClarification,
-        'contextSlots': <String, dynamic>{
-          ...intentGraph.contextSlots,
-          if (hasAvailableGeoContext(availableGeoContext))
-            'availableGeoContext': availableGeoContext.toJson(),
-          if (hasResolvedGeoScope(resolvedGeoScope))
-            'resolvedGeoScope': resolvedGeoScope.toJson(),
-          if (needsGeoClarification)
-            'geoClarificationReason':
-                'missing_geo_context_for_${defaultGeoPolicy.defaultGeoScope}',
-        },
-      }),
-    );
+    return IntentGraph.fromJson(<String, dynamic>{
+      ...intentGraph.toJson(),
+      'resolvedGeoScope': resolvedGeoScope.toJson(),
+      'clarificationNeeded': intentGraph.clarificationNeeded || needsGeoClarification,
+      'contextSlots': <String, dynamic>{
+        ...intentGraph.contextSlots,
+        if (hasAvailableGeoContext(availableGeoContext))
+          'availableGeoContext': availableGeoContext.toJson(),
+        if (hasResolvedGeoScope(resolvedGeoScope))
+          'resolvedGeoScope': resolvedGeoScope.toJson(),
+        if (needsGeoClarification)
+          'geoClarificationReason':
+              'missing_model_resolved_geo_for_${defaultGeoPolicy.defaultGeoScope}',
+      },
+    });
   }
 
   IntentGraph _applyResolvedGeoNormalization({
     required IntentGraph intentGraph,
   }) {
-    if (!hasResolvedGeoScope(intentGraph.resolvedGeoScope)) {
-      return intentGraph;
-    }
-    final mergedEntityAnchors = mergeGeoAnchors(
-      intentGraph.entityAnchors,
-      intentGraph.resolvedGeoScope,
-    );
-    return IntentGraph(
-      userGoal: intentGraph.userGoal,
-      problemShape: intentGraph.problemShape,
-      primarySkill: intentGraph.primarySkill,
-      problemClass: intentGraph.problemClass,
-      inferredMotive: intentGraph.inferredMotive,
-      secondarySkills: intentGraph.secondarySkills,
-      targetObject: intentGraph.targetObject,
-      userJobToBeDone: intentGraph.userJobToBeDone,
-      hardConstraints: intentGraph.hardConstraints,
-      softConstraints: intentGraph.softConstraints,
-      excludedScopes: intentGraph.excludedScopes,
-      freshnessNeed: intentGraph.freshnessNeed,
-      answerShape: intentGraph.answerShape,
-      mustVerifyClaims: intentGraph.mustVerifyClaims,
-      requiresExternalEvidence: intentGraph.requiresExternalEvidence,
-      entityAnchors: mergedEntityAnchors,
-      negativeKeywords: intentGraph.negativeKeywords,
-      queryNormalization: intentGraph.queryNormalization,
-      queryTasks: intentGraph.queryTasks,
-      searchIterationState: intentGraph.searchIterationState,
-      contextSlots: intentGraph.contextSlots,
-      globalConstraints: intentGraph.globalConstraints,
-      clarificationNeeded: intentGraph.clarificationNeeded,
-      recallResult: intentGraph.recallResult,
-      authorityDomains: intentGraph.authorityDomains,
-      freshnessHoursMax: intentGraph.freshnessHoursMax,
-      resolvedGeoScope: intentGraph.resolvedGeoScope,
-    );
+    return intentGraph;
   }
 
   Map<String, dynamic> _mergedScopeHint({

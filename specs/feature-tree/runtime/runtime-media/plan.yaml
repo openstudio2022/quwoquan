@@ -1,0 +1,82 @@
+version: 1
+node: runtime/runtime-media
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260423-018-group-avatar-runtime-prd-baseline.yaml
+
+slices:
+  - id: M0
+    title: metadata 与 codegen 设计基线
+    goal: 冻结群头像字段、avatar patch 类型、对象引用合同与 codegen 影响面，确保 metadata-first 路径明确
+    depends_on: []
+    acceptance_refs: [J1, J2, J3, R1]
+    planned_evidence: [T1]
+    done_when:
+      - metadata 影响面清单冻结
+      - verify-metadata / codegen / codegen-app baseline 已确认可用
+    status: implemented
+
+  - id: M1
+    title: runtime media 统一对象模型与 URL 规范
+    goal: runtime 层具备统一 AssetRef / MediaAsset / objectKey / CDN URL 构建能力
+    depends_on: [M0]
+    acceptance_refs: [J1]
+    planned_evidence: [T1, T3]
+    done_when:
+      - 业务服务不再需要自行拼接对象存储 URL
+      - 统一版本参数与 objectKey 规则落地
+    status: implemented
+
+  - id: M2
+    title: 群头像字段与服务端预合成任务
+    goal: chat-service 增加群头像字段并具备 top9/sourceHash 驱动的异步重算链路
+    depends_on: [M1]
+    acceptance_refs: [J2]
+    planned_evidence: [T1, T3]
+    done_when:
+      - groupAvatarAssetId/groupAvatarVersion/groupAvatarSourceHash 已可写入
+      - 重算任务支持去重与失败降级
+    status: implemented
+
+  - id: M3
+    title: avatar patch 与 realtime hint 接入统一 sync
+    goal: 用户头像与群头像变化都进入统一 patch envelope 与 cursor 拉取模型
+    depends_on: [M1, M2]
+    acceptance_refs: [J3]
+    planned_evidence: [T1, T2, T3]
+    done_when:
+      - `user.avatar.updated` 与 `conversation.avatar.updated` patch 契约落地
+      - realtime hint 只做通知，客户端通过 cursor 拉取增量
+    status: implemented
+
+  - id: M4
+    title: App 切换到 groupAvatarUrl 主链路
+    goal: 客户端消费新群头像字段，并以默认群图标作为唯一失败兜底
+    depends_on: [M2, M3]
+    acceptance_refs: [J2, J3]
+    planned_evidence: [T2, T3, T4]
+    done_when:
+      - 群头像主渲染路径不再依赖成员头像列表实时拼装
+      - 失败时统一显示默认群图标
+    status: implemented
+
+  - id: M5
+    title: 灰度、观测与回滚收口
+    goal: 新链路具备 feature flag、关键指标、回滚路径和清理策略
+    depends_on: [M2, M3, M4]
+    acceptance_refs: [R1]
+    planned_evidence: [T1, T3, T4]
+    done_when:
+      - 群头像新链路支持灰度开关
+      - 指标、告警、回滚路径与旧字段清理条件明确
+    status: implemented
+    notes:
+      - 已收口 `groupAvatarCDNDomain` 到 runtime/config 单一来源，并通过 `/metrics/runtime-media` 暴露运行时快照
+      - 群头像任务已切到到期队列模型，sync pull 改为批量读取，客户端缓存改为 namespaced 真相源
+      - T4 仍以可重复执行的预发演练为主，尚未升级为全自动真机链路
+      - 发布级补充证据已独立冻结到 `t4-release-rehearsal.md`、`observability-and-rollback.md`、`capacity-validation.md` 与 `automation-gates.md`
+      - 已增加 `make gate-runtime-media` / `make gate-runtime-media-full` 作为 runtime-media 的自动化与半自动化门禁入口

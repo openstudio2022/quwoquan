@@ -593,50 +593,102 @@ void main() {
       );
     });
 
-    test('listSubAccounts → GET /v1/owner/sub-accounts', () async {
-      await repo.listSubAccounts();
+    test('listPersonas → GET /v1/user/personas', () async {
+      await repo.listPersonas();
       expect(log.last.method, 'GET');
-      expect(log.last.path, UserApiMetadata.listSubAccountsPath);
+      expect(log.last.path, UserApiMetadata.listPersonasPath);
     });
 
     test(
-      'getActivePersonaContext → GET /v1/owner/sub-accounts/active',
+      'getPersonaManagementSummary → GET /v1/user/personas/summary',
       () async {
-        await repo.getActivePersonaContext();
+        await repo.getPersonaManagementSummary();
         expect(log.last.method, 'GET');
-        expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
+        expect(log.last.path, UserApiMetadata.getPersonaManagementSummaryPath);
       },
     );
 
-    test('createSubAccount → POST /v1/owner/sub-accounts', () async {
-      await repo.createSubAccount(displayName: '摄影分身');
+    test('getActivePersonaContext → GET /v1/user/personas/active', () async {
+      await repo.getActivePersonaContext();
+      expect(log.last.method, 'GET');
+      expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
+    });
+
+    test('createPersona → POST /v1/user/personas', () async {
+      await repo.createPersona(displayName: '摄影分身', userHandle: 'photo_handle');
       expect(log.last.method, 'POST');
-      expect(log.last.path, UserApiMetadata.createSubAccountPath);
+      expect(log.last.path, UserApiMetadata.createPersonaPath);
+    });
+
+    test('updatePersona → PATCH /v1/user/personas/{id}', () async {
+      await repo.updatePersona(
+        'persona_1',
+        displayName: '新分身名',
+        userHandle: 'new_handle',
+      );
+      expect(log.last.method, 'PATCH');
+      expect(
+        log.last.path,
+        UserApiMetadata.updatePersonaPath(personaId: 'persona_1'),
+      );
+    });
+
+    test('activatePersona → POST /v1/user/personas/{id}/activate', () async {
+      await repo.activatePersona('persona_1');
+      expect(log.last.method, 'POST');
+      expect(
+        log.last.path,
+        UserApiMetadata.activatePersonaPath(personaId: 'persona_1'),
+      );
     });
 
     test(
-      'activateSubAccount → POST /v1/owner/sub-accounts/{id}/activate',
+      'deleteEmptyPersona → DELETE /v1/user/personas/{id}:delete-empty',
       () async {
-        await repo.activateSubAccount('persona_1');
-        expect(log.last.method, 'POST');
-        expect(
-          log.last.path,
-          UserApiMetadata.activateSubAccountPath(subAccountId: 'persona_1'),
-        );
-      },
-    );
-
-    test(
-      'deleteEmptySubAccount → DELETE /v1/owner/sub-accounts/{id}:delete-empty',
-      () async {
-        await repo.deleteEmptySubAccount('persona_1');
+        await repo.deleteEmptyPersona('persona_1');
         expect(log.last.method, 'DELETE');
         expect(
           log.last.path,
-          UserApiMetadata.deleteEmptySubAccountPath(subAccountId: 'persona_1'),
+          UserApiMetadata.deleteEmptyPersonaPath(personaId: 'persona_1'),
         );
       },
     );
+
+    test(
+      'applyPersonaProfileSync → POST /v1/user/personas/{id}/profile-sync',
+      () async {
+        await repo.applyPersonaProfileSync(
+          'persona_1',
+          fieldsMask: const <String>['phone', 'email'],
+        );
+        expect(log.last.method, 'POST');
+        expect(
+          log.last.path,
+          UserApiMetadata.applyPersonaProfileSyncPath(personaId: 'persona_1'),
+        );
+      },
+    );
+
+    test(
+      'getPersonaLifecycleGuard → GET /v1/user/personas/{id}/lifecycle-guard',
+      () async {
+        await repo.getPersonaLifecycleGuard('persona_1');
+        expect(log.last.method, 'GET');
+        expect(
+          log.last.path,
+          UserApiMetadata.getPersonaLifecycleGuardPath(personaId: 'persona_1'),
+        );
+      },
+    );
+
+    test('retirePersona → POST /v1/user/personas/{id}/retire', () async {
+      await repo.retirePersona('persona_1');
+      expect(log.last.method, 'POST');
+      expect(
+        log.last.path,
+        UserApiMetadata.retirePersonaPath(personaId: 'persona_1'),
+      );
+    });
 
     test(
       'getNotificationSettings → GET /v1/user/settings/notifications',

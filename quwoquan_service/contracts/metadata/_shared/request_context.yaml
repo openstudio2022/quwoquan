@@ -137,45 +137,40 @@ domain_operation_page_ids:
     ToggleMute: rtc.mute
 
   user:
-    ActivateSubAccount: user.owner.sub_accounts.activate
     ActivatePersona: user.personas.activate
+    ApplyPersonaProfileSync: user.personas.profile_sync
     BlockUser: user.block.create
     ClearRecentSearches: user.search.history.clear
-    CreateSubAccount: user.owner.sub_accounts.create
     CreatePersona: user.personas.create
     DeleteRecentSearch: user.search.history.delete
-    DeleteEmptySubAccount: user.owner.sub_accounts.delete_empty
-    DeletePersona: user.personas.delete
-    DeleteSubAccount: user.owner.sub_accounts.delete
-    GetActivePersonaContext: user.owner.sub_accounts.active_context
+    DeleteEmptyPersona: user.personas.delete_empty
+    GetActivePersonaContext: user.personas.active_context
     FollowUser: user.follow
     GetAppearanceSettings: user.settings.appearance.get
     GetMeProfile: user.get.me.profile
     GetNotificationSettings: user.notification_settings.get
-    GetPersonaManagementSummary: user.owner.sub_accounts.summary
+    GetPersonaManagementSummary: user.personas.summary
     GetPrivacySettings: user.settings.privacy.get
     GetRelationship: user.relationship
     GetRelationshipCapability: user.get.relationship.capability
-    GetSubAccountLifecycleGuard: user.owner.sub_accounts.lifecycle_guard
+    GetPersonaLifecycleGuard: user.personas.lifecycle_guard
     GetSubAccountProfile: user.get.sub.account.profile
     GetUserProfile: user.profile
     ListBlockedUsers: user.block.list
     ListFollowers: user.followers
     ListFollowing: user.following
     ListRecentSearches: user.search.history.list
-    ListSubAccounts: user.owner.sub_accounts.list
     ListPersonas: user.personas
     ListUserLifeItems: user.lifeItems
     ListUserLikes: user.likes
     ListUserWorks: user.works
-    RetireSubAccount: user.owner.sub_accounts.retire
+    RetirePersona: user.personas.retire
     SearchSocialRelations: user.social.search
     UnblockUser: user.block.delete
     UnfollowUser: user.unfollow
     UpsertRecentSearch: user.search.history.upsert
     UpdateAppearanceSettings: user.settings.appearance.patch
     UpdatePersona: user.personas.update
-    UpdateSubAccount: user.owner.sub_accounts.update
     UpdatePrivacySettings: user.settings.privacy.patch
     UpdateUserProfile: user.profile.edit
 

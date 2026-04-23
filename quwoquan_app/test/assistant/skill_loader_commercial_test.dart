@@ -55,6 +55,7 @@ void main() {
       expect(skill.executionShell.variantBudget, equals(0));
       expect(skill.executionShell.reflectionBudget, equals(0));
       expect(skill.executionShell.providerPolicy, equals('authority_first'));
+      expect(skill.executionShell.authorityDomains, contains('weather.cma.cn'));
       expect(skill.executionShell.authorityDomains, contains('weather.com.cn'));
       expect(skill.executionShell.freshnessHoursMax, equals(1));
       expect(

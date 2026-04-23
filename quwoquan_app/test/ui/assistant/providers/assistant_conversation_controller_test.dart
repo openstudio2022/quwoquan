@@ -209,6 +209,7 @@ void main() {
 
         const expectedVisibleSteps = <ProcessStepId>[
           ProcessStepId.understanding,
+          ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
         ];
         const expectedCanonicalSteps = <ProcessStepId>[
@@ -699,8 +700,8 @@ void main() {
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'understanding_narrative' &&
-              block.body.contains('天气现状和出门建议两路来核对'),
+              block.blockId == 'retrieval_query_design' &&
+              block.title.contains('天气现状和出门建议两路来核对'),
         ),
         isTrue,
       );
@@ -937,8 +938,8 @@ void main() {
         expect(
           reloadedDisplayState.process.blocks.any(
             (block) =>
-                block.blockId == 'understanding_narrative' &&
-                block.body.contains('天气现状和出门建议两路来核对'),
+                block.blockId == 'retrieval_query_design' &&
+                block.title.contains('天气现状和出门建议两路来核对'),
           ),
           isTrue,
         );
@@ -1000,8 +1001,8 @@ void main() {
           finalAssistantMessage,
         );
         expect(
-          finalAssistantMessage[assistantTurnSchemaVersionField],
-          isNotNull,
+          finalAssistantMessage.containsKey('assistantTurnSchemaVersion'),
+          isFalse,
         );
         expect(finalAssistantMessage[assistantDisplayStateField], isA<Map>());
         expect(
@@ -1011,8 +1012,8 @@ void main() {
         expect(
           displayState.process.blocks.any(
             (block) =>
-                block.blockId == 'understanding_narrative' &&
-                block.body.contains('天气现状和出门建议两路来核对'),
+                block.blockId == 'retrieval_query_design' &&
+                block.title.contains('天气现状和出门建议两路来核对'),
           ),
           isTrue,
         );
@@ -1096,8 +1097,8 @@ void main() {
       expect(
         displayState.process.blocks.any(
           (block) =>
-              block.blockId == 'understanding_narrative' &&
-              block.body.contains('天气现状和出门建议两路来核对'),
+              block.blockId == 'retrieval_query_design' &&
+              block.title.contains('天气现状和出门建议两路来核对'),
         ),
         isTrue,
       );

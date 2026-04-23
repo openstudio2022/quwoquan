@@ -32,6 +32,7 @@ Widget _scopedApp({
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1.0,
+  List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
@@ -41,6 +42,7 @@ Widget _scopedApp({
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
+      ...overrides,
     ],
     child: MaterialApp(
       builder: (context, child) {
@@ -85,6 +87,28 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
       expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+    });
+
+    testWidgets('分身管理开关关闭时我的主页不展示分身管理按钮', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          overrides: [
+            personaManagementFeatureFlagProvider.overrideWith((ref) => false),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
+      expect(
+        find.text(UITextConstants.profileEditLabel),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('other 模式渲染返回和更多按钮', (tester) async {

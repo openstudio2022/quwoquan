@@ -29,6 +29,7 @@ import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
@@ -188,15 +189,13 @@ class UserDataNotifier extends Notifier<User?> {
     try {
       final repo = ref.read(userProfileRepositoryProvider);
       final profile = await repo.getUserProfile(userId);
-      final avatarUrl =
-          profile.avatarUrl.isNotEmpty ? profile.avatarUrl : null;
+      final avatarUrl = profile.avatarUrl.isNotEmpty ? profile.avatarUrl : null;
       final profileSubjectId = profile.profileSubjectId.isNotEmpty
           ? profile.profileSubjectId
           : userId;
       state = User(
         id: profileSubjectId,
-        username:
-            profile.username.isNotEmpty ? profile.username : userId,
+        username: profile.username.isNotEmpty ? profile.username : userId,
         displayName: profile.displayName.isNotEmpty
             ? profile.displayName
             : null,
@@ -517,8 +516,9 @@ class ContentRuntimeConfigState {
     final currentCanaryStage = gray.currentStage.trim();
     return ContentRuntimeConfigState(
       featureFlags: mergedFlags,
-      experimentBucket:
-          experimentBucket.isEmpty ? fallback.experimentBucket : experimentBucket,
+      experimentBucket: experimentBucket.isEmpty
+          ? fallback.experimentBucket
+          : experimentBucket,
       currentCanaryStage: currentCanaryStage.isEmpty
           ? fallback.currentCanaryStage
           : currentCanaryStage,
@@ -570,6 +570,27 @@ final contentRuntimeConfigProvider =
 
 final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
+});
+
+const String _personaManagementFeatureFlag = 'ops.user.persona_management_v1';
+const String _personaProfileSyncFeatureFlag =
+    'ops.user.persona_profile_sync_v1';
+
+bool _runtimeFlagOrEnabledDefault(Ref ref, String flag) {
+  final config = ref.watch(contentRuntimeConfigProvider);
+  if (config.featureFlags.containsKey(flag)) {
+    return config.isEnabled(flag);
+  }
+  return true;
+}
+
+final personaManagementFeatureFlagProvider = Provider<bool>((ref) {
+  return _runtimeFlagOrEnabledDefault(ref, _personaManagementFeatureFlag);
+});
+
+final personaProfileSyncFeatureFlagProvider = Provider<bool>((ref) {
+  return ref.watch(personaManagementFeatureFlagProvider) &&
+      _runtimeFlagOrEnabledDefault(ref, _personaProfileSyncFeatureFlag);
 });
 
 class UserRelationshipState {
@@ -936,7 +957,7 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   );
 });
 
-/// 会话缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
+/// 会话缓存（按 namespace 隔离，支持列表增量监听）
 final conversationCacheProvider = Provider<ConversationCacheService>((ref) {
   return ConversationCacheService();
 });
@@ -951,6 +972,9 @@ final conversationSyncProvider = Provider<ConversationSyncService>((ref) {
   return ConversationSyncService(
     repo: ref.watch(chatRepositoryProvider),
     cache: ref.watch(conversationCacheProvider),
+    userSyncRepository: ref.watch(userSyncRepositoryProvider),
+    store: ref.watch(localChatSearchStoreProvider),
+    personaContextLoader: ref.read(activePersonaContextLoaderProvider),
   );
 });
 
@@ -970,6 +994,15 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
     mode,
     remote: RemoteUserRepository.new,
     mock: MockUserRepository.new,
+  );
+});
+
+final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteUserSyncRepository.new,
+    mock: MockUserSyncRepository.new,
   );
 });
 

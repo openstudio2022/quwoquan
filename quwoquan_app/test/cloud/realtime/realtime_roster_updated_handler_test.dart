@@ -51,5 +51,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(repo.listMembersCallCount, greaterThanOrEqualTo(1));
+    await tester.pump(const Duration(milliseconds: 200));
   });
 }

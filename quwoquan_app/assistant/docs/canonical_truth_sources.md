@@ -57,7 +57,7 @@
 
 | 资产 | 状态 | 说明 |
 |------|------|------|
-| `assistant_turn_v2/v3` | 已淘汰 | 当前运行时不再读取兼容；仅允许在历史文档/回放说明中出现，待后续专门兼容方案再评估 |
+| `assistant_turn_v2/v3` | 已淘汰 | 仅允许在启动加载阶段做一次历史转换；运行时统一只处理 `assistant_turn` canonical message |
 | `trigger_keywords` | 兼容层 | runtime 已停止消费，该字段仅留给历史资产读取 |
 | 旧 prompt stack（非 v4 规划链） | 兼容层 | 不用于新功能 |
 | 基于 RegExp/contains 的语义分类 | 待移除 | 只保留单点兼容兜底，其余移除 |

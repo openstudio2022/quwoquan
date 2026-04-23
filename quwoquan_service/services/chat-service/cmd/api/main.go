@@ -17,8 +17,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	rthttp "quwoquan_service/runtime/http"
+	runtimemedia "quwoquan_service/runtime/media"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
+	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
 	"quwoquan_service/services/chat-service/internal/application"
@@ -57,6 +59,23 @@ type config struct {
 		Realtime redisSceneCfg `yaml:"realtime"`
 		General  redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
+
+	Runtime struct {
+		Media struct {
+			GroupAvatarCDNDomain string `yaml:"group_avatar_cdn_domain"`
+		} `yaml:"media"`
+		Sync struct {
+			PatchTTLHours int `yaml:"patch_ttl_hours"`
+		} `yaml:"sync"`
+		Observability struct {
+			RuntimeMedia struct {
+				GroupAvatarRecomputeDurationMsP95 float64 `yaml:"group_avatar_recompute_duration_ms_p95"`
+				GroupAvatarFallbackRatio          float64 `yaml:"group_avatar_fallback_ratio"`
+				HintToPullDelayMsP95              float64 `yaml:"hint_to_pull_delay_ms_p95"`
+				PatchFanoutFailureRatio           float64 `yaml:"patch_fanout_failure_ratio"`
+			} `yaml:"runtime_media"`
+		} `yaml:"observability"`
+	} `yaml:"runtime"`
 }
 
 func main() {
@@ -81,6 +100,7 @@ func main() {
 
 	logger := slog.Default()
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
+	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
 
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
@@ -106,14 +126,86 @@ func main() {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
+	application.ConfigureGroupAvatarCDNDomain(cfg.Runtime.Media.GroupAvatarCDNDomain)
+	groupAvatarMedia := runtimemedia.NewGroupAvatarService(
+		router.Scene("general"),
+		cfg.Runtime.Media.GroupAvatarCDNDomain,
+	)
+	syncOptions := []runtimesync.Option{}
+	if cfg.Runtime.Sync.PatchTTLHours > 0 {
+		syncOptions = append(
+			syncOptions,
+			runtimesync.WithPatchTTL(time.Duration(cfg.Runtime.Sync.PatchTTLHours)*time.Hour),
+		)
+	}
+	userSyncService := runtimesync.NewService(
+		router.Scene("general"),
+		router.Scene("realtime"),
+		syncOptions...,
+	)
+	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
+		router.Scene("general"),
+		chatStore,
+		eventPublisher,
+		groupAvatarMedia,
+		userSyncService,
+		logger,
+	)
+	if err := groupAvatarScheduler.Start(ctx); err != nil {
+		log.Fatalf("chat-service group avatar scheduler start failed: %v", err)
+	}
+	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, nil)
 
-	conversationSvc := application.NewConversationService(chatStore, convCache, eventPublisher, nil)
+	conversationSvc := application.NewConversationService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		profileResolver,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+	)
 	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
-	memberSvc := application.NewMemberService(chatStore, convCache, eventPublisher, nil)
+	memberSvc := application.NewMemberService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		profileResolver,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+	)
 	inboxSvc := application.NewInboxService(chatStore)
+	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
+		router.Scene("general"),
+		chatStore,
+		eventPublisher,
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+		logger,
+	)
+	if err := userAvatarConsumer.Start(ctx); err != nil {
+		log.Fatalf("chat-service user avatar consumer start failed: %v", err)
+	}
+	if userServiceBaseURL == "" {
+		logger.Warn("chat-service user profile resolver base URL is empty; create/add member snapshot hydration will be skipped")
+	}
 
-	handler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
-	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
+	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/metrics/runtime-media", application.NewRuntimeMediaMetricsHandler(
+		groupAvatarScheduler,
+		userSyncService,
+		application.RuntimeMediaAlertThresholds{
+			GroupAvatarRecomputeDurationMsP95: cfg.Runtime.Observability.RuntimeMedia.GroupAvatarRecomputeDurationMsP95,
+			GroupAvatarFallbackRatio:          cfg.Runtime.Observability.RuntimeMedia.GroupAvatarFallbackRatio,
+			HintToPullDelayMsP95:              cfg.Runtime.Observability.RuntimeMedia.HintToPullDelayMsP95,
+			PatchFanoutFailureRatio:           cfg.Runtime.Observability.RuntimeMedia.PatchFanoutFailureRatio,
+		},
+	))
+	rootMux.Handle("/", baseHandler)
+	observedHandler := rthttp.NewHTTPServerMiddleware(rootMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "chat-service",
 		ServiceName:       "chat-service",
 		ServiceInstanceID: instanceID,
@@ -286,6 +378,14 @@ func applyEnvOverrides(cfg *config) {
 		}
 		if cfg.Redis.Realtime.Addr == "" {
 			cfg.Redis.Realtime.Addr = v
+		}
+	}
+	if v := os.Getenv("CHAT_GROUP_AVATAR_CDN_DOMAIN"); v != "" {
+		cfg.Runtime.Media.GroupAvatarCDNDomain = v
+	}
+	if v := os.Getenv("RUNTIME_SYNC_PATCH_TTL_HOURS"); v != "" {
+		if hours, err := strconv.Atoi(v); err == nil {
+			cfg.Runtime.Sync.PatchTTLHours = hours
 		}
 	}
 }

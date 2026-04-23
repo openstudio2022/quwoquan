@@ -458,6 +458,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   Widget build(BuildContext context) {
     _scheduleSectionMeasurement();
     final isDark = ref.watch(isDarkProvider);
+    final personaManagementEnabled = ref.watch(
+      personaManagementFeatureFlagProvider,
+    );
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     final userData = ref.watch(userDataProvider);
@@ -548,6 +551,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                         _buildSummarySection(
                           context,
                           isDark: isDark,
+                          personaManagementEnabled: personaManagementEnabled,
                           avatarUrl: avatarUrl,
                           displayName: displayName,
                           bio: bio,
@@ -642,6 +646,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   Widget _buildSummarySection(
     BuildContext context, {
     required bool isDark,
+    required bool personaManagementEnabled,
     required String? avatarUrl,
     required String displayName,
     required String? bio,
@@ -711,8 +716,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                   isDark: isDark,
                   capability: state.capability,
                   onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                  onManagePersonas: () =>
-                      context.push(AppRoutePaths.profilePersonas),
+                  onManagePersonas: personaManagementEnabled
+                      ? () => context.push(AppRoutePaths.profilePersonas)
+                      : null,
                   onFollow: notifier.toggleFollow,
                   onMessage: () =>
                       context.push(AppRoutePaths.chatDetail(id: widget.userId)),

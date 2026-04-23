@@ -210,6 +210,34 @@ func (c *instrumentedClient) SIsMember(ctx context.Context, key, member string) 
 	return v, err
 }
 
+func (c *instrumentedClient) ZAdd(ctx context.Context, key string, score float64, member string) error {
+	t := time.Now()
+	err := c.inner.ZAdd(ctx, key, score, member)
+	c.record(t, err)
+	return err
+}
+
+func (c *instrumentedClient) ZRangeByScore(ctx context.Context, key string, min, max float64, limit int) ([]string, error) {
+	t := time.Now()
+	v, err := c.inner.ZRangeByScore(ctx, key, min, max, limit)
+	c.record(t, err)
+	return v, err
+}
+
+func (c *instrumentedClient) ZRem(ctx context.Context, key string, members ...string) error {
+	t := time.Now()
+	err := c.inner.ZRem(ctx, key, members...)
+	c.record(t, err)
+	return err
+}
+
+func (c *instrumentedClient) ZCard(ctx context.Context, key string) (int64, error) {
+	t := time.Now()
+	v, err := c.inner.ZCard(ctx, key)
+	c.record(t, err)
+	return v, err
+}
+
 func (c *instrumentedClient) Publish(ctx context.Context, channel, message string) error {
 	t := time.Now()
 	err := c.inner.Publish(ctx, channel, message)
@@ -225,7 +253,7 @@ func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {
 	return c.inner.Pipeline(ctx)
 }
 
-func (c *instrumentedClient) Close() error  { return c.inner.Close() }
+func (c *instrumentedClient) Close() error { return c.inner.Close() }
 func (c *instrumentedClient) Ping(ctx context.Context) error {
 	t := time.Now()
 	err := c.inner.Ping(ctx)

@@ -10,8 +10,8 @@ execution:
 
 scope:
   summary: >
-    冻结 owner 进入分身管理、分身公开身份建立、跨域身份透传与关系隔离的完整旅程，
-    把“作者分身”明确收口为 user 域 Persona/SubAccount 的产品化闭环。
+    冻结“一个用户 + 多个分身”的完整旅程：主分身管理、公开分身资料建立、
+    跨域动作主体透传与分身级关系隔离，统一替换历史账号/主账号/子账号语义。
   composed_scenarios:
     - persona-management
     - persona-profile-subject-and-visibility
@@ -25,18 +25,18 @@ scope:
 
 journey_acceptance:
   J1:
-    title: owner 可完成分身创建、切换、停用与恢复管理
+    title: 用户可完成主分身与多分身管理
     journey: profile/settings -> persona management -> create/edit/activate/retire
     scenario_refs:
       - persona-management
       - persona-profile-subject-and-visibility
     done_when:
-      - owner 可以从个人主页与设置进入统一的分身管理台
+      - 用户可以从个人主页与设置进入统一的分身管理台
       - 分身支持创建、切换、停用/删除保护、配额与主分身约束
-      - 新分身默认继承 owner 资料基线，并可进入公开身份编辑
+      - 新分身默认继承主分身资料基线，并可进入分身资料编辑
     blockers:
-      - 管理入口仍分裂为 mock 页与真实页两套
-      - create/activate/delete 任一步会导致 active persona 丢失或切换到错误主体
+      - 分身管理入口的 feature flag 行为仍不一致，设置页与个人主页未完全同口径
+      - "`summary / update / lifecycle-guard / retire / profile-sync` 仍缺正式 HTTP/旅程级证据"
     evidence:
       primary:
         - T2_module_interaction
@@ -49,8 +49,14 @@ journey_acceptance:
         - persona management widget journey test
         - user-service persona lifecycle contract test
         - owner to persona management patrol test
-      recorded: []
-    status: pending
+      recorded:
+        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/persona_management_page_test.dart`"
+        - "T1/T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart`"
+        - "T1/T3: `go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|SubAccount_)'`"
+    notes:
+      - "J1 中 `persona-management` 的 A1/A2 已收口到 implemented，入口、列表、create/activate/sync contract 与路径证据已补齐。"
+      - "但 delete/retire 的“历史归因分身真实退役”语义仍未实体化，因此 Journey 级 J1 继续保持 partial。"
+    status: partial
   J2:
     title: 分身成为内容、聊天、圈子、助手与邀请的统一动作主体
     journey: activate persona -> publish/comment/chat/circle/assistant/invite -> observe downstream consistency
@@ -61,9 +67,9 @@ journey_acceptance:
     done_when:
       - 激活分身后，发帖、评论、聊天、圈子、邀请与助手上下文统一切换
       - 默认动作主体来自 active persona，只有显式选择时才允许覆盖
-      - 任何链路缺少 persona 上下文时，系统阻断或提示恢复，不允许静默回退到 owner
+      - 任何链路缺少 persona 上下文时，系统阻断或提示恢复，不允许静默回退到 userId
     blockers:
-      - 下游域继续以 userId 或 ownerId 作为默认动作主体
+      - 下游域继续以 userId 或旧 owner 语义作为默认动作主体
       - 评论、聊天、邀请、通知任一链路发生串号
     evidence:
       primary:
@@ -80,19 +86,19 @@ journey_acceptance:
       recorded: []
     status: pending
   J3:
-    title: 外部只看到分身主体，内部保留 owner 审计链
+    title: 外部只看到分身主体，内部保留用户归属链
     journey: public read -> social graph -> historical activity -> internal audit
     scenario_refs:
       - persona-profile-subject-and-visibility
       - follow-relationship
       - social-graph-read
     done_when:
-      - 普通读接口与常规界面无法推断同 owner 下的多个分身关联
+      - 普通读接口与常规界面无法推断同一用户下的多个分身关联
       - strict isolation 与停用分身的公开读取策略稳定可预期
-      - 审计与风控链路可追踪 owner 与分身映射，但不泄露到业务读接口
+      - 审计与风控链路可追踪 userId 与分身映射，但不泄露到业务读接口
     blockers:
       - 主页、评论、共同联系人、圈子参与或邀请记录可反推出跨分身关联
-      - 停用后历史归因丢失或被重绑到 owner
+      - 停用后历史归因丢失或被重绑到 userId
     evidence:
       primary:
         - T1_schema
@@ -110,11 +116,11 @@ journey_acceptance:
 
 release_guardrails:
   R1:
-    title: 分身管理、公开身份与跨域透传可灰度可回滚
+    title: 用户及分身统一升级可灰度可回滚
     done_when:
-      - persona management、profile subject、context propagation 三类能力可独立开关
+      - 分身管理、公开分身资料、上下文透传三类能力可独立开关
       - 串号、公开映射泄露或历史归因丢失时可单独回退对应能力
-      - 关键指标具备观测：switch latency、attribution mismatch、public leakage、retired-subject reads
+      - 关键指标具备观测：switch latency、attribution mismatch、public leakage、persona migration failure
     evidence:
       primary:
         - T1_schema
@@ -125,5 +131,9 @@ release_guardrails:
       planned:
         - feature flag rollback rehearsal
         - observability dashboard verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
+    notes:
+      - "persona-management 相关入口开关、flag-off 降级与成功/失败 telemetry 已补齐。"
+      - "Journey 级其它 scenario（公开身份、上下文透传）尚未一起进入本轮回归，因此 R1 仍保持 partial。"
+    status: partial

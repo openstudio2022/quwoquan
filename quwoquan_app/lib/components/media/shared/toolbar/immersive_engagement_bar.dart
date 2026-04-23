@@ -1,13 +1,33 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
+/// 侵入式浏览器底部工具栏。
+///
+/// 布局规格（五段式，同档位内完全固定）：
+///   [Avatar] [intraSm] [NameSlot(档位固定字符数)] [intraXs] [Follow(始终占位)]
+///   [clusterGap(档位常量)] [RightSpacer] [ActionGroup(固定宽)]
+///
+/// **首要硬约束**：作者组左缘锚定 rail 左缘，动作组右缘锚定 rail 右缘，
+/// 与顶部工具栏、内容区、文字区共享同一 content rail。iPad 等宽屏下，
+/// 多余空间落到组间距右侧的 RightSpacer（= Expanded SizedBox）上，
+/// 绝不会被 clusterGap 或动作组吞掉。
+///
+/// 防"组间距过大"的隔离：
+///   1. clusterGap 是档位常量，不参与任何弹性分配；
+///   2. 动作组不是 Expanded，固定宽度 + 右锚定；
+///   3. RightSpacer 是唯一吸纳剩余空间的位置，它是"布局余量"不是"组间距"。
+///
+/// 同设备内的可变项只有作者名槽位宽度（按屏幕档位决定字符数），
+/// 其它所有元素（头像/关注/赞/转/评）位置固定。
 class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
     super.key,
@@ -28,6 +48,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
     this.onRevealSystemNav,
     this.isSelfPost = false,
     this.showFollowButton = true,
+    this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
   });
 
   final String avatarUrl;
@@ -40,6 +61,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final bool isFollowing;
   final bool isSelfPost;
   final bool showFollowButton;
+  final ImmersiveViewerStageLayoutSpec layoutSpec;
 
   final VoidCallback onUserTap;
   final VoidCallback onCircleTap;
@@ -54,20 +76,13 @@ class ImmersiveEngagementBar extends StatelessWidget {
   /// 工具栏预留高度（含内边距），供宿主布局使用。
   static const double preferredReservedHeight = 108;
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
+
   static double _actionCellWidth(BuildContext ctx) =>
       AppSpacing.responsiveValue(
         ctx,
         compact: AppSpacing.iconButtonMinSizeSm,
         regular: AppSpacing.buttonHeightLg,
         expanded: AppSpacing.buttonHeightLg + AppSpacing.intraGroupXs,
-      );
-
-  static double _toolbarHorizontalPadding(BuildContext ctx) =>
-      AppSpacing.responsiveValue(
-        ctx,
-        compact: AppSpacing.containerSm,
-        regular: AppSpacing.containerMd,
-        expanded: AppSpacing.containerMd,
       );
 
   static double _avatarRadius(BuildContext ctx) => AppSpacing.responsiveValue(
@@ -77,31 +92,32 @@ class ImmersiveEngagementBar extends StatelessWidget {
     expanded: AppSpacing.avatarUserMd / 2,
   );
 
-  static double _toolbarRailMaxWidth(double availableWidth) {
-    if (availableWidth <= 0) return 0;
-    return availableWidth;
-  }
+  /// 组间距：档位常量。不参与任何 LayoutBuilder 的弹性计算。
+  static double _clusterGapForTier(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.interGroupSm,
+        regular: AppSpacing.interGroupMd,
+        expanded: AppSpacing.interGroupLg,
+      );
 
-  static double _outerClusterGapForWidth(double availableWidth) {
-    final rawGap = availableWidth * 0.03;
-    return rawGap.clamp(AppSpacing.intraGroupMd, AppSpacing.interGroupMd)
-        .toDouble();
-  }
+  /// 动作组内间距：档位常量。
+  static double _actionInnerGapForTier(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.intraGroupSm,
+        regular: AppSpacing.intraGroupMd,
+        expanded: AppSpacing.intraGroupLg,
+      );
 
-  static double _authorClusterWidth({
-    required double avatarRadius,
-    required double currentNameSlotWidth,
-    required bool showFollowLane,
-  }) {
-    final avatarWidth = avatarRadius * 2;
-    final followWidth = showFollowLane
-        ? AppSpacing.intraGroupXs + _kFollowBtnWidth
-        : 0;
-    return avatarWidth +
-        AppSpacing.intraGroupSm +
-        currentNameSlotWidth +
-        followWidth;
-  }
+  /// 组间距降级下限：当自然宽度超过 track 宽度时，允许把组间距压到这个值。
+  static double _clusterGapFloorForTier(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.interGroupSm,
+        regular: AppSpacing.interGroupSm,
+        expanded: AppSpacing.interGroupMd,
+      );
 
   static double _actionClusterWidth({
     required double actionCellWidth,
@@ -110,25 +126,11 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return (actionCellWidth * 3) + (actionGroupGap * 2);
   }
 
-  static int _restNameMaxChars(BuildContext ctx) => AppSpacing.responsiveValue(
-    ctx,
-    compact: 5,
-    regular: 6,
-    expanded: 7,
-  ).round();
-
-  static int _revealNameMaxChars(BuildContext ctx) =>
-      AppSpacing.responsiveValue(
-        ctx,
-        compact: 4,
-        regular: 5,
-        expanded: 6,
-      ).round();
-
-  static double _actionGroupGapForWidth(double railWidth) {
-    final rawGap = railWidth * 0.014;
-    return rawGap.clamp(AppSpacing.intraGroupSm, AppSpacing.intraGroupXl)
-        .toDouble();
+  /// 作者名在当前屏幕档位下的可见字符数（同设备固定）。
+  static int _authorNameVisibleCharsForViewport(double viewportWidth) {
+    if (viewportWidth < 360) return 4;
+    if (viewportWidth < 430) return 5;
+    return 6;
   }
 
   static double _nameVisibleWidth(
@@ -150,6 +152,16 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return painter.width;
   }
 
+  static double _nameSlotForChars(
+    int charCount,
+    TextStyle primary,
+    TextStyle secondary,
+  ) {
+    final p = _nameVisibleWidth(charCount, primary, includeEllipsis: true);
+    final s = _nameVisibleWidth(charCount, secondary, includeEllipsis: true);
+    return math.max(p, s);
+  }
+
   Widget _buildAuthorCluster({
     required String displayName,
     required bool isRevealState,
@@ -158,10 +170,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required ImageProvider? avatarImage,
     required double avatarRadius,
     required double currentNameSlotWidth,
-    required double restNameWidth,
-    required double restSecondaryWidth,
-    required double revealNameWidth,
-    required double revealSecondaryWidth,
+    required double followLaneWidth,
     required TextStyle restDisplayStyle,
     required TextStyle compressedDisplayStyle,
     required TextStyle secondaryStyle,
@@ -173,6 +182,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         : displayName;
 
     return Row(
+      key: const ValueKey('immersive-author-group'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -193,6 +203,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
+              key: const ValueKey('immersive-author-name-slot'),
               duration: _kTransitionDuration,
               curve: Curves.easeOutCubic,
               width: currentNameSlotWidth,
@@ -219,8 +230,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                         displayName: textDisplayName,
                         displayStyle: compressedDisplayStyle,
                         secondaryStyle: secondaryStyle,
-                        primaryMaxWidth: revealNameWidth,
-                        secondaryMaxWidth: revealSecondaryWidth,
+                        primaryMaxWidth: currentNameSlotWidth,
+                        secondaryMaxWidth: currentNameSlotWidth,
                         clip: true,
                       ),
                     )
@@ -228,71 +239,60 @@ class ImmersiveEngagementBar extends StatelessWidget {
                       displayName: textDisplayName,
                       displayStyle: restDisplayStyle,
                       secondaryStyle: secondaryStyle,
-                      primaryMaxWidth: restNameWidth,
-                      secondaryMaxWidth: restSecondaryWidth,
+                      primaryMaxWidth: currentNameSlotWidth,
+                      secondaryMaxWidth: currentNameSlotWidth,
                       clip: false,
                     ),
             ),
-            ClipRect(
-              child: AnimatedContainer(
-                duration: _kTransitionDuration,
-                curve: Curves.easeOutCubic,
-                width: showFollowLane
-                    ? AppSpacing.intraGroupXs + _kFollowBtnWidth
-                    : 0,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppSpacing.intraGroupXs,
-                    ),
-                    child: SizedBox(
-                      width: _kFollowBtnWidth,
-                      height: AppSpacing.buttonHeightXs,
-                      child: IgnorePointer(
-                        ignoring: !showFollowLane,
-                        child: AnimatedSlide(
-                          duration: _kTransitionDuration,
-                          curve: Curves.easeOutCubic,
-                          offset: showFollowLane
-                              ? Offset.zero
-                              : const Offset(0.24, 0),
-                          child: AnimatedOpacity(
-                            duration: _kTransitionDuration,
-                            curve: Curves.easeOutCubic,
-                            opacity: showFollowLane ? 1 : 0,
-                            child: GestureDetector(
-                              onTap: onFollowTap,
-                              behavior: HitTestBehavior.opaque,
-                              child: Container(
-                                width: _kFollowBtnWidth,
-                                height: AppSpacing.buttonHeightXs,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: isFollowing
-                                      ? AppColors.followingButtonOnDark
-                                      : AppColors.worksAccent,
-                                  borderRadius: BorderRadius.circular(
-                                    AppSpacing.circularBorderRadius,
-                                  ),
-                                ),
-                                child: Text(
-                                  isFollowing
-                                      ? UITextConstants.following
-                                      : UITextConstants.follow,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.fade,
-                                  softWrap: false,
-                                  style: TextStyle(
-                                    color: isFollowing
-                                        ? AppColors.worksBodyText.withValues(
-                                            alpha: 0.72,
-                                          )
-                                        : AppColors.white,
-                                    fontSize: AppTypography.xs,
-                                    fontWeight: AppTypography.semiBold,
-                                  ),
-                                ),
+            SizedBox(
+              key: const ValueKey('immersive-follow-lane'),
+              width: followLaneWidth,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.intraGroupXs,
+                  ),
+                  child: SizedBox(
+                    width: _kFollowBtnWidth,
+                    height: AppSpacing.buttonHeightXs,
+                    child: IgnorePointer(
+                      ignoring: !showFollowLane,
+                      child: AnimatedOpacity(
+                        duration: _kTransitionDuration,
+                        curve: Curves.easeOutCubic,
+                        opacity: showFollowLane ? 1 : 0,
+                        child: GestureDetector(
+                          onTap: onFollowTap,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            key: const ValueKey('immersive-follow-button'),
+                            width: _kFollowBtnWidth,
+                            height: AppSpacing.buttonHeightXs,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isFollowing
+                                  ? AppColors.followingButtonOnDark
+                                  : AppColors.worksAccent,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.circularBorderRadius,
+                              ),
+                            ),
+                            child: Text(
+                              isFollowing
+                                  ? UITextConstants.following
+                                  : UITextConstants.follow,
+                              maxLines: 1,
+                              overflow: TextOverflow.fade,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: isFollowing
+                                    ? AppColors.worksBodyText.withValues(
+                                        alpha: 0.72,
+                                      )
+                                    : AppColors.white,
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.semiBold,
                               ),
                             ),
                           ),
@@ -321,6 +321,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required VoidCallback? onCommentTap,
   }) {
     return Row(
+      key: const ValueKey('immersive-actions-group'),
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
@@ -377,48 +378,16 @@ class ImmersiveEngagementBar extends StatelessWidget {
       fontSize: AppTypography.sm,
       fontWeight: AppTypography.medium,
     );
-    final compressedDisplayStyle = TextStyle(
-      color: AppColors.worksTitle,
-      fontSize: AppTypography.xxs,
-      fontWeight: AppTypography.medium,
-    );
+    final compressedDisplayStyle = restDisplayStyle;
     final secondaryStyle = TextStyle(
       color: AppColors.worksBodyText.withValues(alpha: 0.72),
       fontSize: AppTypography.xxs,
       fontWeight: AppTypography.medium,
     );
-    final restNameWidth = _nameVisibleWidth(
-      _restNameMaxChars(context),
-      restDisplayStyle,
-      includeEllipsis: true,
-    );
-    final restSecondaryWidth = _nameVisibleWidth(
-      _restNameMaxChars(context),
-      secondaryStyle,
-      includeEllipsis: true,
-    );
-    final revealNameWidth = _nameVisibleWidth(
-      _revealNameMaxChars(context),
-      compressedDisplayStyle,
-    );
-    final revealSecondaryWidth = _nameVisibleWidth(
-      _revealNameMaxChars(context),
-      secondaryStyle,
-    );
-    final restNameSlotWidth = restNameWidth > restSecondaryWidth
-        ? restNameWidth
-        : restSecondaryWidth;
-    final revealNameSlotWidth = revealNameWidth > revealSecondaryWidth
-        ? revealNameWidth
-        : revealSecondaryWidth;
     final actionCellWidth = _actionCellWidth(context);
-    final horizontalPadding = _toolbarHorizontalPadding(context);
     final avatarRadius = _avatarRadius(context);
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
     final showFollowLane = showFollowButton;
-    final currentNameSlotWidth = showFollowLane
-        ? revealNameSlotWidth
-        : restNameSlotWidth;
     final topPadding = isSelfPost ? AppSpacing.xs : AppSpacing.intraGroupSm;
     final bottomPadding = isSelfPost
         ? bottomInset + AppSpacing.xs
@@ -432,94 +401,135 @@ class ImmersiveEngagementBar extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding,
-              topPadding,
-              horizontalPadding,
-              bottomPadding,
+            padding: EdgeInsets.only(
+              top: topPadding,
+              bottom: bottomPadding,
             ),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final outerGap = _outerClusterGapForWidth(
+                final viewportWidth = MediaQuery.sizeOf(context).width;
+
+                // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘，
+                // 与顶部工具栏/内容/文字区共享同一 content rail。
+                final rail = ImmersiveViewerLayout.railWidthForViewport(
+                  context,
                   constraints.maxWidth,
+                  layoutSpec: layoutSpec,
                 );
-                final actionGroupGap = _actionGroupGapForWidth(
-                  constraints.maxWidth,
+                final trackWidth = rail;
+
+                final visibleChars = _authorNameVisibleCharsForViewport(
+                  viewportWidth,
                 );
-                final authorClusterWidth = _authorClusterWidth(
-                  avatarRadius: avatarRadius,
-                  currentNameSlotWidth: currentNameSlotWidth,
-                  showFollowLane: showFollowLane,
+                final naturalNameSlot = _nameSlotForChars(
+                  visibleChars,
+                  restDisplayStyle,
+                  secondaryStyle,
                 );
+
+                // 关注槽位：始终保留，隐藏只改 opacity / pointer events。
+                final followLaneWidth =
+                    AppSpacing.intraGroupXs + _kFollowBtnWidth;
+                final avatarWidth = avatarRadius * 2;
+                final fixedLeftFrameWidth =
+                    avatarWidth +
+                    AppSpacing.intraGroupSm +
+                    followLaneWidth;
+                double authorWidthFor(double nameSlot) =>
+                    fixedLeftFrameWidth + nameSlot;
+
+                final clusterGapNatural = _clusterGapForTier(context);
+                final actionInnerGap = _actionInnerGapForTier(context);
                 final actionClusterWidth = _actionClusterWidth(
                   actionCellWidth: actionCellWidth,
-                  actionGroupGap: actionGroupGap,
+                  actionGroupGap: actionInnerGap,
                 );
-                final railWidth = _toolbarRailMaxWidth(
-                  constraints.maxWidth,
-                )
-                    .clamp(
-                      0.0,
-                      authorClusterWidth +
-                          outerGap +
-                          actionClusterWidth,
-                    )
-                    .toDouble();
+
+                final naturalTotalWidth =
+                    authorWidthFor(naturalNameSlot) +
+                    clusterGapNatural +
+                    actionClusterWidth;
+
+                // 空间不足时的降级链（仅在窄屏上生效）：
+                //   1. 先把 clusterGap 压到档位下限（interGroupSm）；
+                //   2. 再把作者名槽位收窄（极窄屏可降到 0，名字通过 clip 自然截断），
+                //      避免 Row 溢出。
+                double effectiveGap = clusterGapNatural;
+                double effectiveName = naturalNameSlot;
+                if (naturalTotalWidth > trackWidth) {
+                  var overflow = naturalTotalWidth - trackWidth;
+                  final gapFloor = _clusterGapFloorForTier(context);
+                  final gapShrinkable = math.max(
+                    0.0,
+                    clusterGapNatural - gapFloor,
+                  );
+                  final useGap = math.min(overflow, gapShrinkable);
+                  effectiveGap = clusterGapNatural - useGap;
+                  overflow -= useGap;
+                  if (overflow > 0) {
+                    effectiveName = math.max(0.0, naturalNameSlot - overflow);
+                  }
+                }
 
                 final content = isSelfPost
                     ? SizedBox(
+                        width: double.infinity,
                         height: AppSpacing.iconButtonMinSizeSm,
                         child: _buildSelfActionRow(),
                       )
-                    : SizedBox(
-                        width: railWidth,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _buildAuthorCluster(
-                                displayName: displayName,
-                                isRevealState: isRevealState,
-                                showFollowLane: showFollowLane,
-                                isFollowing: isFollowing,
-                                avatarImage: avatarImage,
-                                avatarRadius: avatarRadius,
-                                currentNameSlotWidth: currentNameSlotWidth,
-                                restNameWidth: restNameWidth,
-                                restSecondaryWidth: restSecondaryWidth,
-                                revealNameWidth: revealNameWidth,
-                                revealSecondaryWidth: revealSecondaryWidth,
-                                restDisplayStyle: restDisplayStyle,
-                                compressedDisplayStyle:
-                                    compressedDisplayStyle,
-                                secondaryStyle: secondaryStyle,
-                                onUserTap: onUserTap,
-                                onFollowTap: onFollowTap,
-                              ),
+                    : Row(
+                        children: [
+                          SizedBox(
+                            width: authorWidthFor(effectiveName),
+                            child: _buildAuthorCluster(
+                              displayName: displayName,
+                              isRevealState: isRevealState,
+                              showFollowLane: showFollowLane,
+                              isFollowing: isFollowing,
+                              avatarImage: avatarImage,
+                              avatarRadius: avatarRadius,
+                              currentNameSlotWidth: effectiveName,
+                              followLaneWidth: followLaneWidth,
+                              restDisplayStyle: restDisplayStyle,
+                              compressedDisplayStyle: compressedDisplayStyle,
+                              secondaryStyle: secondaryStyle,
+                              onUserTap: onUserTap,
+                              onFollowTap: onFollowTap,
                             ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: _buildActionCluster(
-                                isLiked: isLiked,
-                                likeCount: likeCount,
-                                shareCount: shareCount,
-                                commentCount: commentCount,
-                                actionCellWidth: actionCellWidth,
-                                actionGroupGap: actionGroupGap,
-                                onLikeTap: onLikeTap,
-                                onShareTap: onShareTap,
-                                onCommentTap: onCommentTap,
-                              ),
+                          ),
+                          SizedBox(width: effectiveGap),
+                          const Expanded(child: SizedBox.shrink()),
+                          SizedBox(
+                            width: actionClusterWidth,
+                            child: _buildActionCluster(
+                              isLiked: isLiked,
+                              likeCount: likeCount,
+                              shareCount: shareCount,
+                              commentCount: commentCount,
+                              actionCellWidth: actionCellWidth,
+                              actionGroupGap: actionInnerGap,
+                              onLikeTap: onLikeTap,
+                              onShareTap: onShareTap,
+                              onCommentTap: onCommentTap,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       );
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: railWidth),
-                    child: content,
+
+                final horizontalInset = ImmersiveViewerLayout.horizontalPadding(
+                  context,
+                  layoutSpec: layoutSpec,
+                );
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontalInset),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      key: const ValueKey('immersive-engagement-rail'),
+                      width: trackWidth,
+                      child: content,
+                    ),
                   ),
                 );
               },

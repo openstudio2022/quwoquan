@@ -3,32 +3,39 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
+import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
+import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 void main() {
   group('Pageflip', () {
-    test('single-page role resolver maps underlay by direction', () {
-      const resolver = PageflipSinglePageRoleResolver();
+    test(
+      'single-page role resolver maps turning and covered pages by direction',
+      () {
+        const resolver = PageflipSinglePageRoleResolver();
 
-      final forward = resolver.resolve(
-        mode: PageflipMode.single,
-        direction: PageflipDirection.forward,
-        currentPageIndex: 2,
-        pageCount: 5,
-      );
-      final backward = resolver.resolve(
-        mode: PageflipMode.single,
-        direction: PageflipDirection.back,
-        currentPageIndex: 2,
-        pageCount: 5,
-      );
+        final forward = resolver.resolve(
+          mode: PageflipMode.single,
+          direction: PageflipDirection.forward,
+          currentPageIndex: 2,
+          pageCount: 5,
+        );
+        final backward = resolver.resolve(
+          mode: PageflipMode.single,
+          direction: PageflipDirection.back,
+          currentPageIndex: 2,
+          pageCount: 5,
+        );
 
-      expect(forward.underlayPageIndex, 3);
-      expect(backward.underlayPageIndex, 1);
-      expect(forward.turningPageIndex, 2);
-      expect(backward.turningPageIndex, 2);
-    });
+        expect(forward.underlayPageIndex, 3);
+        expect(backward.underlayPageIndex, 2);
+        expect(forward.turningPageIndex, 2);
+        expect(backward.turningPageIndex, 1);
+        expect(forward.coveredPageIndex, 2);
+        expect(backward.coveredPageIndex, 2);
+      },
+    );
 
     test('forward render frame matches long-form canonical angle', () {
       final engine = PageflipEngine(pageCount: 5, initialPage: 2);
@@ -39,7 +46,10 @@ void main() {
 
       final layout = engine.buildScene(const Size(900, 1200))!.layout;
       final pageRect = layout.resolvePageRect(isRightPage: true);
-      expect(engine.start(Offset(pageRect.right - 18, pageRect.bottom - 18)), isTrue);
+      expect(
+        engine.start(Offset(pageRect.right - 18, pageRect.bottom - 18)),
+        isTrue,
+      );
       engine.fold(Offset(pageRect.center.dx + 48, pageRect.center.dy));
 
       final scene = engine.buildScene(const Size(900, 1200));
@@ -55,10 +65,7 @@ void main() {
         pageHeight: 584,
       );
       expect(canonical.calc(renderFrame.canonicalFrame.localPagePoint), isTrue);
-      expect(
-        renderFrame.angle,
-        closeTo(canonical.getAngle(), 1e-9),
-      );
+      expect(renderFrame.angle, closeTo(canonical.getAngle(), 1e-9));
       expect(
         renderFrame.canonicalFrame.timeline.diagonalExtent,
         lessThanOrEqualTo(420 * 0.078),
@@ -75,9 +82,17 @@ void main() {
         renderFrame.canonicalFrame.timeline.heightLiftBias,
         lessThan(0.08),
       );
+      expect(renderFrame.canonicalFrame.flippingClipArea, isNotEmpty);
+      expect(renderFrame.canonicalFrame.bottomClipArea, isNotEmpty);
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea.any(
+          (point) => point.dx >= 420 - 0.001,
+        ),
+        isTrue,
+      );
     });
 
-    test('reverse render frame exposes reverse pose', () {
+    test('reverse render frame uses shared backward replay contract', () {
       final engine = PageflipEngine(pageCount: 5, initialPage: 2);
       engine.updateViewport(
         stageSize: const Size(900, 1200),
@@ -94,7 +109,157 @@ void main() {
       final renderFrame = scene!.renderFrame;
       expect(renderFrame, isNotNull);
       expect(renderFrame!.direction, PageflipDirection.back);
-      expect(renderFrame.canonicalFrame.reversePose, isNotNull);
+      expect(renderFrame.canonicalFrame.reversePose, isNull);
+      expect(renderFrame.canonicalFrame.backwardLeafFrame, isNotNull);
+      expect(scene.turningPageIndex, 1);
+      expect(scene.coveredPageIndex, 2);
+      expect(renderFrame.canonicalFrame.flippingClipArea, hasLength(4));
+      expect(renderFrame.canonicalFrame.bottomClipArea, hasLength(4));
+      final seamX =
+          renderFrame.canonicalFrame.backwardLeafFrame!.seamXNormalized * 420;
+      expect(renderFrame.canonicalFrame.flippingAnchor.dx, 0);
+      expect(renderFrame.canonicalFrame.bottomAnchor, Offset.zero);
+      expect(renderFrame.canonicalFrame.angle, 0);
+      expect(
+        renderFrame.canonicalFrame.flippingClipArea[1].dx,
+        closeTo(seamX, 0.001),
+      );
+      expect(
+        renderFrame.canonicalFrame.flippingClipArea[2].dx,
+        closeTo(seamX, 0.001),
+      );
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea[0].dx,
+        closeTo(seamX, 0.001),
+      );
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea[1].dx,
+        closeTo(420, 0.001),
+      );
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea[2].dx,
+        closeTo(420, 0.001),
+      );
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea[3].dx,
+        closeTo(seamX, 0.001),
+      );
+      final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+        localPagePoint: renderFrame.canonicalFrame.localPagePoint,
+        pageSize: const Size(420, 584),
+      );
+      expect(
+        renderFrame.canonicalFrame.timeline.curlAngleBand,
+        resolveForwardCurlAngleBand(
+          localPagePoint: replayLocalPoint,
+          pageSize: const Size(420, 584),
+          corner: renderFrame.canonicalFrame.corner,
+        ),
+      );
+    });
+
+    test('backward mesh keeps spine and seam vertically aligned', () {
+      final engine = PageflipEngine(pageCount: 5, initialPage: 2);
+      engine.updateViewport(
+        stageSize: const Size(900, 1200),
+        pageSize: const Size(420, 584),
+      );
+
+      final layout = engine.buildScene(const Size(900, 1200))!.layout;
+      final pageRect = layout.resolvePageRect(isRightPage: true);
+      final startPoint = Offset(pageRect.left + pageRect.width * 0.18, 600);
+      expect(engine.start(startPoint), isTrue);
+      engine.fold(Offset(startPoint.dx + 120, startPoint.dy - 36));
+
+      final scene = engine.buildScene(const Size(900, 1200));
+      expect(scene, isNotNull);
+      final renderFrame = scene!.renderFrame;
+      expect(renderFrame, isNotNull);
+      expect(renderFrame!.direction, PageflipDirection.back);
+
+      const builder = ArticlePageCurlMeshBuilder();
+      final meshFrame = builder.build(
+        pageRect: scene.pageRect,
+        pageSize: scene.pageSize,
+        dragPoint: renderFrame.canonicalFrame.localPagePoint,
+        progress: renderFrame.progress,
+        direction: StPageFlipDirection.back,
+        corner: renderFrame.canonicalFrame.corner,
+        renderFrame: renderFrame.canonicalFrame,
+        deriveBottomClipPathFromMesh: true,
+      );
+
+      expect(meshFrame.alignmentDiagnostics, isNotNull);
+      expect(
+        meshFrame.alignmentDiagnostics!.spineTopX,
+        closeTo(scene.pageRect.left, 0.5),
+      );
+      expect(
+        meshFrame.alignmentDiagnostics!.spineBottomX,
+        closeTo(scene.pageRect.left, 0.5),
+      );
+      expect(
+        meshFrame.alignmentDiagnostics!.spineDelta,
+        lessThanOrEqualTo(0.01),
+      );
+      expect(
+        meshFrame.alignmentDiagnostics!.seamDelta,
+        lessThanOrEqualTo(0.01),
+      );
+      expect(meshFrame.frontDiagnostics, isNotNull);
+      expect(meshFrame.backDiagnostics, isNotNull);
+      expect(meshFrame.frontDiagnostics!.hasOverflow, isFalse);
+      expect(meshFrame.backDiagnostics!.hasOverflow, isFalse);
+    });
+
+    test('backward seam moves monotonically from spine toward page edge', () {
+      final engine = PageflipEngine(pageCount: 5, initialPage: 2);
+      engine.updateViewport(
+        stageSize: const Size(900, 1200),
+        pageSize: const Size(420, 584),
+      );
+
+      final layout = engine.buildScene(const Size(900, 1200))!.layout;
+      final pageRect = layout.resolvePageRect(isRightPage: true);
+      final startPoint = Offset(pageRect.left + pageRect.width * 0.18, 600);
+      expect(engine.start(startPoint), isTrue);
+
+      const sampleMoves = <Offset>[
+        Offset(42, -12),
+        Offset(140, -24),
+        Offset(248, -36),
+      ];
+      final seamTopXs = <double>[];
+      final seamBottomXs = <double>[];
+      const builder = ArticlePageCurlMeshBuilder();
+
+      for (final move in sampleMoves) {
+        engine.fold(Offset(startPoint.dx + move.dx, startPoint.dy + move.dy));
+        final scene = engine.buildScene(const Size(900, 1200));
+        expect(scene, isNotNull);
+        final renderFrame = scene!.renderFrame;
+        expect(renderFrame, isNotNull);
+        final meshFrame = builder.build(
+          pageRect: scene.pageRect,
+          pageSize: scene.pageSize,
+          dragPoint: renderFrame!.canonicalFrame.localPagePoint,
+          progress: renderFrame.progress,
+          direction: StPageFlipDirection.back,
+          corner: renderFrame.canonicalFrame.corner,
+          renderFrame: renderFrame.canonicalFrame,
+          deriveBottomClipPathFromMesh: true,
+        );
+        expect(meshFrame.alignmentDiagnostics, isNotNull);
+        seamTopXs.add(meshFrame.alignmentDiagnostics!.seamTopX);
+        seamBottomXs.add(meshFrame.alignmentDiagnostics!.seamBottomX);
+      }
+
+      expect(seamTopXs, orderedEquals([...seamTopXs]..sort()));
+      expect(seamBottomXs, orderedEquals([...seamBottomXs]..sort()));
+      expect(seamTopXs.first, greaterThanOrEqualTo(pageRect.left));
+      expect(seamTopXs.last, lessThanOrEqualTo(pageRect.right + 0.5));
+      expect(seamBottomXs.first, greaterThanOrEqualTo(pageRect.left));
+      expect(seamBottomXs.last, lessThanOrEqualTo(pageRect.right + 0.5));
     });
 
     test('backward stopMove commits to previous page', () {
@@ -116,6 +281,37 @@ void main() {
       expect(plan.commitsTurn, isTrue);
       expect(plan.direction, PageflipDirection.back);
       expect(engine.currentPageIndex, 1);
+    });
+
+    test('single-page backward can start from the visible page left half', () {
+      final engine = PageflipEngine(pageCount: 5, initialPage: 3);
+      engine.updateViewport(
+        stageSize: const Size(900, 1200),
+        pageSize: const Size(420, 584),
+      );
+
+      final layout = engine.buildScene(const Size(900, 1200))!.layout;
+      final pageRect = layout.resolvePageRect(isRightPage: true);
+      final startPoint = Offset(
+        pageRect.left + pageRect.width * 0.18,
+        pageRect.bottom - 24,
+      );
+      expect(engine.start(startPoint), isTrue);
+      engine.fold(Offset(startPoint.dx + 120, startPoint.dy - 36));
+
+      final scene = engine.buildScene(const Size(900, 1200));
+      expect(scene, isNotNull);
+      expect(scene!.direction, PageflipDirection.back);
+      expect(scene.turningPageIndex, 2);
+      expect(scene.underlayPageIndex, 3);
+      expect(scene.coveredPageIndex, 3);
+
+      final plan = engine.stopMove(
+        const Velocity(pixelsPerSecond: Offset(420, 0)),
+      );
+      expect(plan.commitsTurn, isTrue);
+      expect(plan.direction, PageflipDirection.back);
+      expect(engine.currentPageIndex, 2);
     });
 
     test('scene buildBottomClipPath returns full page rect', () {

@@ -27,6 +27,14 @@ type ChatRepository interface {
 	CreateMember(ctx context.Context, member *model.ConversationMember) error
 	DeleteMember(ctx context.Context, conversationId, userId string) error
 	FindMember(ctx context.Context, conversationId, userId string) (*model.ConversationMember, error)
+	UpdateMemberAvatarSnapshot(
+		ctx context.Context,
+		conversationId string,
+		userId string,
+		avatarURL string,
+		avatarAssetID string,
+		avatarVersion int64,
+	) error
 	UpdateMemberRole(ctx context.Context, conversationId, userId, role string) error
 	ListMembers(ctx context.Context, conversationId string, limit int, cursor, role, sort string) ([]model.ConversationMember, error)
 	BumpMembersRosterRevision(ctx context.Context, conversationId string, memberCount *int) error

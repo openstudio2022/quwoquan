@@ -9,9 +9,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 
-/// AuthRepository: 登录、凭证管理、SubAccount 管理。
+/// AuthRepository: 登录、凭证管理、分身管理。
 abstract class AuthRepository {
-  /// 手机号/微信/Apple 登录，首次自动创建 OwnerAccount + 默认 SubAccount。
+  /// 手机号/微信/Apple 登录，首次自动创建用户与默认分身。
   Future<AuthLoginResultDto> login({
     required String credentialType,
     required String credentialKey,
@@ -31,20 +31,20 @@ abstract class AuthRepository {
   /// 列出当前账号绑定的所有凭证。
   Future<List<OwnerCredentialRowDto>> listCredentials();
 
-  /// 列出当前账号的所有子账号。
-  Future<List<PersonaManagementItemViewData>> listSubAccounts();
+  /// 列出当前账号的所有分身。
+  Future<List<PersonaManagementItemViewData>> listPersonas();
 
-  /// 创建新子账号。
-  Future<PersonaManagementItemViewData> createSubAccount({
+  /// 创建新分身。
+  Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
     String isolationLevel = 'open',
   });
 
-  /// 激活指定子账号（自动停用其他）。
-  Future<void> activateSubAccount(String subAccountId);
+  /// 激活指定分身（自动停用其他）。
+  Future<void> activatePersona(String personaId);
 
-  /// 删除子账号（最后一个禁止删除）。
-  Future<void> deleteSubAccount(String subAccountId);
+  /// 删除分身（最后一个禁止删除）。
+  Future<void> deletePersona(String personaId);
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -91,12 +91,13 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<List<PersonaManagementItemViewData>> listSubAccounts() async {
+  Future<List<PersonaManagementItemViewData>> listPersonas() async {
     return [
       PersonaManagementItemViewData.fromMap(<String, dynamic>{
         'id': 'mock_persona_1',
-        'subAccountId': 'mock_sub_id',
-        'displayName': '默认账号',
+        'personaId': 'mock_persona_1',
+        'subAccountId': 'mock_persona_1',
+        'displayName': '默认分身',
         'isolationLevel': 'open',
         'isPrimary': true,
         'isActive': true,
@@ -105,13 +106,14 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<PersonaManagementItemViewData> createSubAccount({
+  Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
     String isolationLevel = 'open',
   }) async {
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
       'id': 'mock_persona_new',
-      'subAccountId': 'mock_sub_new',
+      'personaId': 'mock_persona_new',
+      'subAccountId': 'mock_persona_new',
       'displayName': displayName,
       'isolationLevel': isolationLevel,
       'isPrimary': false,
@@ -120,10 +122,10 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> activateSubAccount(String subAccountId) async {}
+  Future<void> activatePersona(String personaId) async {}
 
   @override
-  Future<void> deleteSubAccount(String subAccountId) async {}
+  Future<void> deletePersona(String personaId) async {}
 }
 
 class RemoteAuthRepository implements AuthRepository {
@@ -242,52 +244,52 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<List<PersonaManagementItemViewData>> listSubAccounts() async {
+  Future<List<PersonaManagementItemViewData>> listPersonas() async {
     final resp = await _client.getJson(
-      _uri(UserApiMetadata.listSubAccountsPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listSubAccounts),
+      _uri(UserApiMetadata.listPersonasPath),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
     );
     final data = CloudResponseDecoder.asObject(
       resp,
-      context: UserRequestPageIds.listSubAccounts,
+      context: UserRequestPageIds.listPersonas,
     );
-    return CloudResponseDecoder.mapList(data, 'subAccounts')
+    return CloudResponseDecoder.mapList(data, 'items')
         .map(PersonaManagementItemViewData.fromMap)
         .toList(growable: false);
   }
 
   @override
-  Future<PersonaManagementItemViewData> createSubAccount({
+  Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
     String isolationLevel = 'open',
   }) async {
     final resp = await _client.postJson(
-      _uri(UserApiMetadata.createSubAccountPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.createSubAccount),
+      _uri(UserApiMetadata.createPersonaPath),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
       body: {'displayName': displayName, 'isolationLevel': isolationLevel},
     );
     return PersonaManagementItemViewData.fromMap(
       CloudResponseDecoder.asObject(
         resp,
-        context: UserRequestPageIds.createSubAccount,
+        context: UserRequestPageIds.createPersona,
       ),
     );
   }
 
   @override
-  Future<void> activateSubAccount(String subAccountId) async {
+  Future<void> activatePersona(String personaId) async {
     await _client.postJson(
-      _uri(UserApiMetadata.activateSubAccountPath(subAccountId: subAccountId)),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activateSubAccount),
+      _uri(UserApiMetadata.activatePersonaPath(personaId: personaId)),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
       body: {},
     );
   }
 
   @override
-  Future<void> deleteSubAccount(String subAccountId) async {
+  Future<void> deletePersona(String personaId) async {
     await _client.deleteJson(
-      _uri(UserApiMetadata.deleteSubAccountPath(subAccountId: subAccountId)),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteSubAccount),
+      _uri(UserApiMetadata.deleteEmptyPersonaPath(personaId: personaId)),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteEmptyPersona),
     );
   }
 }

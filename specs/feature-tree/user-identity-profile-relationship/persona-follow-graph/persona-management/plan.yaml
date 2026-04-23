@@ -10,8 +10,8 @@ derived_from:
 
 slices:
   - id: P1
-    title: freeze owner plane management metadata
-    goal: 收口统一管理台 route、列表/配额/guard 实体与 create/activate/retire/delete command contract
+    title: freeze persona management metadata
+    goal: 收口统一管理台 route、列表/配额/guard/sync 实体与 create/activate/retire/delete/sync command contract
     depends_on: []
     acceptance_refs:
       - A1
@@ -19,14 +19,16 @@ slices:
     planned_evidence:
       - T1_schema
     done_when:
-      - "`ListOwnerPersonas / CreateSubAccount / ActivateSubAccount / RetireSubAccount / DeleteEmptySubAccount` 契约冻结"
-      - "`PersonaManagementItemView / QuotaView / LifecycleGuardView` 可由 metadata 表达"
+      - "`ListPersonas / CreatePersona / ActivatePersona / RetirePersona / DeleteEmptyPersona / ApplyPersonaProfileSync` 契约冻结"
+      - "`PersonaManagementItemView / QuotaView / LifecycleGuardView / PersonaSyncSuggestionView` 可由 metadata 表达"
       - 主页与设置共用同一私有 surface 定义
-    status: planned
+    status: completed
+    notes:
+      - "`fields.yaml / service.yaml / projections` 已补齐 `userHandle / phone / email / lifecycle guard / profile sync` 契约，并完成 codegen。"
 
   - id: P2
     title: establish codegen and management facade baseline
-    goal: 让 App 只通过生成物和统一 facade 消费管理台数据
+    goal: 让 App 只通过生成物和统一 facade 消费管理台与同步建议数据
     depends_on:
       - P1
     acceptance_refs:
@@ -37,13 +39,16 @@ slices:
       - T2_module_interaction
     done_when:
       - "`verify-metadata / codegen / codegen-app` 通过"
-      - 旧 mock 页降级为兼容跳转壳，不再承载业务逻辑
+      - 旧 mock 页与旧 sub-account 页退出主链路，不再承载业务逻辑
       - 主页入口与设置入口读取同一 management facade 状态
-    status: planned
+    status: completed
+    notes:
+      - "统一 management facade/provider 已建立，旧 `sub-account` 页面已退出主链路。"
+      - "主页入口与设置入口现已读取同一 runtime config feature flag 行为。"
 
   - id: P3
-    title: implement create, activate, delete, and retire flows
-    goal: 落地 owner plane 的创建、立即切换、删除保护和退役主链路
+    title: implement create, activate, delete, retire, and sync flows
+    goal: 落地用户私有管理面的创建、立即切换、删除保护、退役和资料同步建议主链路
     depends_on:
       - P2
     acceptance_refs:
@@ -55,12 +60,17 @@ slices:
     done_when:
       - 创建成功后可显式选择是否立即切换
       - active persona exclusivity 由 user 域保证
+      - `displayName / userHandle / phone / email` 的继承与同步建议行为稳定
       - 主分身、最后一个分身与有历史分身的 guard 行为稳定
-    status: planned
+    status: partial
+    notes:
+      - "创建、立即切换、delete-empty、retire 与同步建议主链路已进入统一管理台。"
+      - "`summary / update / lifecycle-guard / retire / profile-sync` 的黑盒证据已补齐。"
+      - "`retire` 的历史归因持久化语义仍未实体化，因此本切片继续维持 partial。"
 
   - id: P4
     title: validate management telemetry and rollback
-    goal: 建立管理台灰度、错误观测与 owner journey 回归，确保可安全放量
+    goal: 建立管理台灰度、错误观测与用户 journey 回归，确保可安全放量
     depends_on:
       - P3
     acceptance_refs:
@@ -70,7 +80,11 @@ slices:
       - T3_cross_service_integration
       - T4_user_journey
     done_when:
-      - create/activate/delete failure、quota reached、retired count 指标可观测
+      - create/activate/delete failure、quota reached、retired count、profile sync suggested/applied 指标可观测
       - 管理台开关关闭后可退回单 active persona 安全基线
-      - owner journey 回归覆盖单分身、配额上限、删除阻断与退役分流
-    status: planned
+      - 用户 journey 回归覆盖单分身、配额上限、删除阻断、退役分流与资料同步建议
+    status: partial
+    notes:
+      - "成功/失败 telemetry、quota reached 与 profile sync 事件已补齐，feature flag 已接入 runtime config。"
+      - "flag-off 场景已验证设置页与个人主页一致降级。"
+      - "受 P3 历史归因退役语义未完成影响，本切片保持 partial。"

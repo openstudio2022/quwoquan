@@ -7,24 +7,27 @@ var _ = time.Now
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
-	ID                 string    `json:"_id" bson:"_id"`
-	Type               string    `json:"type" bson:"type"`
-	Title              string    `json:"title" bson:"title"`
-	AvatarUrl          string    `json:"avatarUrl" bson:"avatarUrl"`
-	CreatorId          string    `json:"creatorId" bson:"creatorId"`
-	CircleId           string    `json:"circleId" bson:"circleId"`
-	MaxSeq                 int64 `json:"maxSeq" bson:"maxSeq"`
-	MemberCount            int   `json:"memberCount" bson:"memberCount"`
-	MembersRosterRevision  int64 `json:"membersRosterRevision" bson:"membersRosterRevision"`
-	MaxGroupSize       int       `json:"maxGroupSize" bson:"maxGroupSize"`
-	ReceiptEnabled     bool      `json:"receiptEnabled" bson:"receiptEnabled"`
-	LastMessageId      string    `json:"lastMessageId" bson:"lastMessageId"`
-	LastMessagePreview string    `json:"lastMessagePreview" bson:"lastMessagePreview"`
-	LastMessageTime    time.Time `json:"lastMessageTime" bson:"lastMessageTime"`
-	MessageCount       int       `json:"messageCount" bson:"messageCount"`
-	Status             string    `json:"status" bson:"status"`
-	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
+	ID                    string    `json:"_id" bson:"_id"`
+	Type                  string    `json:"type" bson:"type"`
+	Title                 string    `json:"title" bson:"title"`
+	AvatarUrl             string    `json:"avatarUrl" bson:"avatarUrl"`
+	GroupAvatarAssetId    string    `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
+	GroupAvatarVersion    int64     `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
+	GroupAvatarSourceHash string    `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
+	CreatorId             string    `json:"creatorId" bson:"creatorId"`
+	CircleId              string    `json:"circleId" bson:"circleId"`
+	MaxSeq                int64     `json:"maxSeq" bson:"maxSeq"`
+	MemberCount           int       `json:"memberCount" bson:"memberCount"`
+	MembersRosterRevision int64     `json:"membersRosterRevision" bson:"membersRosterRevision"`
+	MaxGroupSize          int       `json:"maxGroupSize" bson:"maxGroupSize"`
+	ReceiptEnabled        bool      `json:"receiptEnabled" bson:"receiptEnabled"`
+	LastMessageId         string    `json:"lastMessageId" bson:"lastMessageId"`
+	LastMessagePreview    string    `json:"lastMessagePreview" bson:"lastMessagePreview"`
+	LastMessageTime       time.Time `json:"lastMessageTime" bson:"lastMessageTime"`
+	MessageCount          int       `json:"messageCount" bson:"messageCount"`
+	Status                string    `json:"status" bson:"status"`
+	CreatedAt             time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
 // Message belongs to a Conversation, ordered by per-conversation seq.
@@ -55,6 +58,8 @@ type ConversationMember struct {
 	UserId           string    `json:"userId" bson:"userId"`
 	DisplayName      string    `json:"displayName" bson:"displayName"`
 	AvatarUrl        string    `json:"avatarUrl" bson:"avatarUrl"`
+	AvatarAssetId    string    `json:"avatarAssetId" bson:"avatarAssetId"`
+	AvatarVersion    int64     `json:"avatarVersion" bson:"avatarVersion"`
 	MemberType       string    `json:"memberType" bson:"memberType"`
 	Role             string    `json:"role" bson:"role"`
 	AssistantSkillId string    `json:"assistantSkillId" bson:"assistantSkillId"`

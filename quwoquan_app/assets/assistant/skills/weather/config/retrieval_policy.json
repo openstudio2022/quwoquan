@@ -17,6 +17,7 @@
   },
   "allowedTimeScopes": ["latest", "today", "last_7d", "custom", "unspecified"],
   "authorityDomains": [
+    "weather.cma.cn",
     "weather.com.cn",
     "nmc.cn",
     "cma.gov.cn",

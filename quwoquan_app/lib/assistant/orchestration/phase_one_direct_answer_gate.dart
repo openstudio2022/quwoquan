@@ -60,35 +60,9 @@ class PhaseOneDirectAnswerGate {
         normalizedTurn.messageKindType == AssistantMessageKind.progress &&
         (phaseId == 'answering' || rawResultText.isNotEmpty);
     if (staleProgressCompat && !executionSignalsPresent) {
-      final recoveredTurn = AssistantTurnOutput(
-        contractId: kAssistantTurnCurrentContractId,
-        decision: const AssistantTurnDecisionPayload(
-          nextAction: AssistantNextAction.answer,
-        ),
-        messageKind: AssistantMessageKind.answer,
-        userMarkdown: projection.markdown,
-        result: AssistantTurnResult(
-          text: projection.plainText,
-          summary: projection.plainText,
-          interpretation: 'recovered_from_progress_compat',
-        ),
-        selfCheck: const AssistantTurnSelfCheck(
-          goalSatisfied: true,
-          constraintSatisfied: true,
-          safetyBoundarySatisfied: true,
-        ),
-        diagnostics: const AssistantTurnDiagnostics(
-          notes: <String>['phase_one_progress_answer_compat'],
-        ),
-        modelSelfScore: const AssistantTurnModelSelfScore(
-          score: 78,
-          reason: 'phase_one_progress_answer_compat',
-        ),
-      );
-      return PhaseOneDirectAnswerDecision(
-        shouldSkipSynthesis: true,
-        reason: 'phase_one_compat_direct_answer',
-        normalizedEnvelopeText: jsonEncode(recoveredTurn.toEnvelopeMap()),
+      return const PhaseOneDirectAnswerDecision(
+        shouldSkipSynthesis: false,
+        reason: 'phase_one_progress_answer_compat',
       );
     }
     if (normalizedTurn.nextActionType != AssistantNextAction.answer) {

@@ -249,7 +249,7 @@ Map<String, dynamic> buildPipelineTemplateVariables({
   final query = bundle.request.messages.isEmpty
       ? ''
       : bundle.request.messages.last.content;
-  return buildPlannerTemplateVariables(
+  final plannerTemplateVariables = buildPlannerTemplateVariables(
     userQuery: query,
     skillCatalog: bundle.skillCatalog,
     conversationSpineJson: jsonEncode(bundle.conversationSpine),
@@ -258,7 +258,48 @@ Map<String, dynamic> buildPipelineTemplateVariables({
     dialogueContinuityJson: jsonEncode(_buildDialogueContinuity(bundle)),
     recentDialogueRoundsJson: jsonEncode(recentDialogueRounds),
     searchIterationStateJson: jsonEncode(bundle.searchIterationState.toJson()),
+    continuityMode: bundle.continuityPolicy.continuityMode.wireName,
+    problemClass: bundle.intentGraph?.problemClass.wireName ??
+        bundle.skillExecutionShell.problemClass,
   );
+  return <String, dynamic>{
+    ...plannerTemplateVariables,
+    AssistantPipelineStateKeys.domainId: bundle.domainId,
+    AssistantPipelineStateKeys.skillName: bundle.domainSkillName,
+    AssistantPipelineStateKeys.skillInstructionMarkdown:
+        bundle.domainSkillInstruction,
+    AssistantPipelineStateKeys.skillPersona: bundle.skillPersona,
+    AssistantPipelineStateKeys.allowedToolNames: bundle.availableToolNames,
+    AssistantPipelineStateKeys.executionShell:
+        _buildSkillExecutionShellTemplate(bundle),
+    AssistantPipelineStateKeys.previousSlotState:
+        bundle.previousSlotState.toJson(),
+    AssistantPipelineStateKeys.dialogueRoundScript:
+        bundle.dialogueRoundScript.toJson(),
+    AssistantPipelineStateKeys.previousAnswerSummary:
+        bundle.previousAnswerSummary,
+    AssistantPipelineStateKeys.continuityOverrideSlots:
+        bundle.continuityOverrideSlots,
+    AssistantPipelinePromptKeys.contextEnvelope:
+        bundle.contextAssembly.contextEnvelope,
+    AssistantPipelinePromptKeys.queryTasks:
+        bundle.intentGraph?.queryTasks.map((item) => item.toJson()).toList(
+              growable: false,
+            ) ??
+        const <Map<String, dynamic>>[],
+    AssistantPipelinePromptKeys.entityAnchors:
+        bundle.intentGraph?.entityAnchors ?? const <String>[],
+    'domainSkillName': bundle.domainSkillName,
+    'domainSkillInstruction': bundle.domainSkillInstruction,
+    'availableTools': bundle.availableToolNames,
+    'availableToolNames': bundle.availableToolNames,
+    'toolGuidelines': bundle.toolGuidelines,
+    'skillPersona': bundle.skillPersona,
+    'answerBoundaryPolicy': bundle.answerBoundaryPolicy.toJson(),
+    if (bundle.previousDomainPolicyBundle != null)
+      AssistantPipelineStateKeys.previousDomainPolicyBundle:
+          bundle.previousDomainPolicyBundle!.toJson(),
+  };
 }
 
 Map<String, dynamic> buildSynthesisTemplateVariables({

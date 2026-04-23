@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	runtimemedia "quwoquan_service/runtime/media"
+	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
@@ -21,11 +23,22 @@ func newInboxTestEnv(t *testing.T) (
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
+	groupAvatarMedia := runtimemedia.NewGroupAvatarService(redisRouter.Scene("general"), "")
+	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
+	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
+		redisRouter.Scene("general"),
+		chatStore,
+		nil,
+		groupAvatarMedia,
+		userSyncService,
+		nil,
+	)
+	_ = groupAvatarScheduler.Start(context.Background())
 
 	inboxSvc := application.NewInboxService(chatStore)
-	convSvc := application.NewConversationService(chatStore, convCache, nil, nil)
+	convSvc := application.NewConversationService(chatStore, convCache, nil, nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
 	msgSvc := application.NewMessageService(chatStore, convCache, nil)
-	memberSvc := application.NewMemberService(chatStore, convCache, nil, nil)
+	memberSvc := application.NewMemberService(chatStore, convCache, nil, nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
 
 	return inboxSvc, convSvc, msgSvc, memberSvc
 }

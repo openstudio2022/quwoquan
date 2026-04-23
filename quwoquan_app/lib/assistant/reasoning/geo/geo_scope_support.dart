@@ -200,62 +200,20 @@ ResolvedGeoScope resolveGeoScope({
   DefaultGeoPolicy geoPolicy = const DefaultGeoPolicy(),
 }) {
   final normalizedCurrent = _normalizeResolvedGeoScope(current);
-  if (hasResolvedGeoScope(normalizedCurrent)) {
-    return normalizedCurrent;
-  }
-  if (hasResolvedGeoScope(previous)) {
-    final normalizedPrevious = _normalizeResolvedGeoScope(previous);
-    return ResolvedGeoScope(
-      geoKind: normalizedPrevious.geoKind,
-      countryCode: normalizedPrevious.countryCode,
-      countryLabel: normalizedPrevious.countryLabel,
-      regionLabel: normalizedPrevious.regionLabel,
-      cityLabel: normalizedPrevious.cityLabel,
-      marketCode: normalizedPrevious.marketCode,
-      marketLabel: normalizedPrevious.marketLabel,
-      resolvedText: normalizedPrevious.resolvedText,
-      source: normalizedPrevious.source.trim().isNotEmpty
-          ? 'followup_carried'
-          : normalizedPrevious.source,
-      defaultApplied: normalizedPrevious.defaultApplied,
-      reason: normalizedPrevious.reason.trim().isNotEmpty
-          ? normalizedPrevious.reason
-          : 'followup_inherit_geo',
-    );
-  }
-  final effectiveScope = _effectiveDefaultGeoScope(
-    requested: geoPolicy.defaultGeoScope,
-  );
-  if (!geoPolicy.fallbackAllowed || effectiveScope == 'none') {
-    return const ResolvedGeoScope();
-  }
-  switch (effectiveScope) {
-    case 'city':
-      return _defaultCityScope(
-        availableGeoContext: availableGeoContext,
-        fallbackSources: geoPolicy.fallbackSources,
-      );
-    case 'market':
-      return _defaultMarketScope(
-        availableGeoContext: availableGeoContext,
-        geoPolicy: geoPolicy,
-      );
-    case 'country':
-      return _defaultCountryScope(availableGeoContext);
-    default:
-      return const ResolvedGeoScope();
-  }
+  return hasResolvedGeoScope(normalizedCurrent)
+      ? normalizedCurrent
+      : const ResolvedGeoScope();
 }
 
 List<String> mergeGeoAnchors(
   List<String> baseAnchors,
   ResolvedGeoScope scope,
 ) {
-  final merged = <String>{
-    ...baseAnchors.map((item) => item.trim()).where((item) => item.isNotEmpty),
-    ..._geoAliasTokens(scope),
-  };
-  return merged.toList(growable: false);
+  return baseAnchors
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
 }
 
 ResolvedGeoScope _defaultCityScope({

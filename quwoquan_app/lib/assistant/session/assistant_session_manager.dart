@@ -59,20 +59,29 @@ class AssistantSessionManager {
     Map<String, dynamic> metadata = const <String, dynamic>{},
   }) {
     final messages = getOrCreateSession(sessionId);
+    final resolvedTimestamp = (metadata['timestamp'] ?? '').toString().trim();
+    final resolvedMetadata = <String, dynamic>{
+      ...metadata,
+      'timestamp': resolvedTimestamp.isNotEmpty
+          ? resolvedTimestamp
+          : DateTime.now().toIso8601String(),
+    };
     messages.add(<String, dynamic>{
       'role': role,
       'content': content,
-      ...metadata,
+      ...resolvedMetadata,
     });
   }
 
   List<Map<String, dynamic>> recentDialogueRounds(
     String sessionId, {
     int limit = defaultRecentDialogueRoundsLimit,
+    int olderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     return _projectionService.recentDialogueRounds(
       getOrCreateSession(sessionId),
       limit: limit,
+      olderLimit: olderLimit,
     );
   }
 
@@ -80,11 +89,13 @@ class AssistantSessionManager {
     String sessionId, {
     int limit = 8,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     return _projectionService.summarizeRecent(
       getOrCreateSession(sessionId),
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
     );
   }
 
@@ -92,12 +103,14 @@ class AssistantSessionManager {
     String sessionId, {
     int limit = 8,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
     Future<String> Function(String transcript)? summarizer,
   }) {
     return _projectionService.summarizeRecentAsync(
       getOrCreateSession(sessionId),
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
       summarizer: summarizer,
     );
   }

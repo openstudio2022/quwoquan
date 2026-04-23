@@ -30,6 +30,8 @@ class ChatInboxListState {
 
 class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
   bool _loaded = false;
+  Future<void>? _pendingLoad;
+  bool _cacheListenerRegistered = false;
 
   ChatRepository get _repo => ref.read(chatRepositoryProvider);
   ConversationCacheService get _cache => ref.read(conversationCacheProvider);
@@ -37,44 +39,100 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
   @override
   ChatInboxListState build() {
     ref.watch(chatRepositoryProvider);
-    ref.watch(conversationCacheProvider);
+    ref.listen(activePersonaContextProvider, (_, __) {
+      _loaded = false;
+      Future<void>.microtask(() {
+        if (ref.mounted) {
+          load(force: true);
+        }
+      });
+    });
+    _ensureCacheListener();
     _loaded = false;
-    Future<void>.microtask(() => load());
+    Future<void>.microtask(() {
+      if (ref.mounted) {
+        load();
+      }
+    });
     return const ChatInboxListState();
   }
 
   Future<void> load({bool force = false}) async {
+    _ensureCacheListener();
+    if (_pendingLoad != null) {
+      return _pendingLoad!;
+    }
     if (_loaded && !force) {
       return;
     }
-    _loaded = true;
+    final future = () async {
+      _loaded = true;
 
-    final cached = _readCache();
-    state = state.copyWith(items: cached, isLoading: true);
+      final cached = _readCache();
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(items: cached, isLoading: true);
 
-    try {
-      final remote = _sortItems(await _repo.listInbox(limit: 100));
-      if (remote.isNotEmpty) {
-        _cache.putAll(
-          remote.map((item) => item.toMap()).toList(growable: false),
+      try {
+        final remote = _sortItems(await _repo.listInbox(limit: 100));
+        if (!ref.mounted) {
+          return;
+        }
+        if (remote.isNotEmpty) {
+          _cache.putAll(
+            remote.map((item) => item.toMap()).toList(growable: false),
+          );
+        }
+        state = state.copyWith(
+          items: remote.isNotEmpty ? remote : cached,
+          isLoading: false,
+        );
+      } catch (error) {
+        if (!ref.mounted) {
+          return;
+        }
+        final fallback = cached.isNotEmpty ? cached : _fallbackItems();
+        state = state.copyWith(
+          items: fallback,
+          isLoading: false,
+          error: error.toString(),
         );
       }
-      state = state.copyWith(
-        items: remote.isNotEmpty ? remote : cached,
-        isLoading: false,
-      );
-    } catch (error) {
-      final fallback = cached.isNotEmpty ? cached : _fallbackItems();
-      state = state.copyWith(
-        items: fallback,
-        isLoading: false,
-        error: error.toString(),
-      );
+    }();
+    _pendingLoad = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_pendingLoad, future)) {
+        _pendingLoad = null;
+      }
     }
   }
 
   Future<void> refresh() async {
     await load(force: true);
+  }
+
+  void _refreshFromCache() {
+    final cached = _readCache();
+    state = state.copyWith(items: cached);
+  }
+
+  void _ensureCacheListener() {
+    if (_cacheListenerRegistered) {
+      return;
+    }
+    final cache = ref.read(conversationCacheProvider);
+    void handleCacheChange() {
+      if (_loaded) {
+        _refreshFromCache();
+      }
+    }
+
+    cache.addListener(handleCacheChange);
+    ref.onDispose(() => cache.removeListener(handleCacheChange));
+    _cacheListenerRegistered = true;
   }
 
   void markConversationRead(String conversationId) {
@@ -141,5 +199,5 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
 
 final chatInboxListProvider =
     NotifierProvider<ChatInboxListNotifier, ChatInboxListState>(
-  ChatInboxListNotifier.new,
-);
+      ChatInboxListNotifier.new,
+    );

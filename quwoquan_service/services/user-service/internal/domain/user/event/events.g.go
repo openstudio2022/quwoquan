@@ -4,6 +4,7 @@ package event
 const (
 	UserRegistered                = "UserRegistered"
 	UserProfileUpdated            = "UserProfileUpdated"
+	UserAvatarUpdated             = "UserAvatarUpdated"
 	PersonaActivated              = "PersonaActivated"
 	PersonaCreated                = "PersonaCreated"
 	SubAccountIsolationUpdated    = "SubAccountIsolationUpdated"

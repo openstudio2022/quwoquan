@@ -5,6 +5,7 @@ import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
@@ -93,20 +94,17 @@ class _AssistantRepo implements AssistantRepository {
   Future<List<AssistantUserTaskView>> listAssistantTasks({
     int limit = 32,
     String? status,
-  }) async =>
-      const <AssistantUserTaskView>[];
+  }) async => const <AssistantUserTaskView>[];
 
   @override
   Future<List<AssistantUserMemoryView>> listAssistantMemories({
     int limit = 32,
-  }) async =>
-      const <AssistantUserMemoryView>[];
+  }) async => const <AssistantUserMemoryView>[];
 
   @override
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = 64,
-  }) async =>
-      const <AssistantSkillCatalogItemView>[];
+  }) async => const <AssistantSkillCatalogItemView>[];
 }
 
 void main() {
@@ -219,6 +217,39 @@ void main() {
       );
       expect(container.read(personalContentAccessProvider).granted, isFalse);
       expect(find.text('未允许'), findsOneWidget);
+    });
+
+    testWidgets('设置页展示用户与分身入口', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appearanceSettingsRepositoryProvider.overrideWithValue(
+              MockAppearanceSettingsRepository(),
+            ),
+          ],
+          child: const MaterialApp(home: SettingsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.personaSettingsEntry), findsOneWidget);
+    });
+
+    testWidgets('分身管理开关关闭时隐藏设置入口', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appearanceSettingsRepositoryProvider.overrideWithValue(
+              MockAppearanceSettingsRepository(),
+            ),
+            personaManagementFeatureFlagProvider.overrideWith((ref) => false),
+          ],
+          child: const MaterialApp(home: SettingsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.personaSettingsEntry), findsNothing);
     });
   });
 }

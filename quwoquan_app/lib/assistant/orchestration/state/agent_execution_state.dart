@@ -26,7 +26,7 @@ class AssistantBootstrapContext {
     this.historySummary = '',
     // ASSISTANT_WEAK_TYPE: LLM serde boundary — session messages
     this.recentDialogueRounds = const <Map<String, dynamic>>[],
-    this.recentDialogueRoundsLimit = 5,
+    this.recentDialogueRoundsLimit = 10,
     this.recalledTexts = const <String>[],
     this.previousIntentGraph,
     this.previousAnswerSummary = '',

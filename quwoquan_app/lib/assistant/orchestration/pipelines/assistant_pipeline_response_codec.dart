@@ -394,11 +394,37 @@ mixin AssistantPipelineResponseCodecMixin {
       final json = turn.toJson();
       final result = (json['result'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{'text': rawFinalText};
+      final understandingSnapshot = normalizeMap(parsed['understandingSnapshot']);
+      final retrievalProcessing = normalizeMap(parsed['retrievalProcessing']);
+      final answerProcessing = normalizeMap(parsed['answerProcessing']);
+      final historicalThinkingSnapshot = normalizeMap(
+        parsed['historicalThinkingSnapshot'],
+      );
+      final journey = normalizeMap(parsed['journey']);
+      final aggregationState = normalizeMap(parsed['aggregationState']);
       final nextAction = turn.decision.nextAction.wireName;
       if (nextAction.isNotEmpty && nextAction != AssistantNextAction.unknown.wireName) {
         result['nextAction'] = nextAction;
       }
       json['result'] = result;
+      if (understandingSnapshot.isNotEmpty) {
+        json['understandingSnapshot'] = understandingSnapshot;
+      }
+      if (retrievalProcessing.isNotEmpty) {
+        json['retrievalProcessing'] = retrievalProcessing;
+      }
+      if (answerProcessing.isNotEmpty) {
+        json['answerProcessing'] = answerProcessing;
+      }
+      if (historicalThinkingSnapshot.isNotEmpty) {
+        json['historicalThinkingSnapshot'] = historicalThinkingSnapshot;
+      }
+      if (journey.isNotEmpty) {
+        json['journey'] = journey;
+      }
+      if (aggregationState.isNotEmpty) {
+        json['aggregationState'] = aggregationState;
+      }
       json['parseStatus'] = parsed.isEmpty ? 'fallback_text' : 'assistant_turn_parsed';
       return json;
     }

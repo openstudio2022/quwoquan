@@ -9,6 +9,9 @@ type Persona struct {
 	ID                          string     `json:"id" db:"id"`
 	UserID                      string     `json:"userId" db:"user_id"`
 	DisplayName                 string     `json:"displayName" db:"display_name"`
+	UserHandle                  string     `json:"userHandle" db:"user_handle"`
+	Phone                       string     `json:"phone" db:"phone"`
+	Email                       string     `json:"email" db:"email"`
 	AvatarURL                   string     `json:"avatarUrl" db:"avatar_url"`
 	CallerRingtoneID            string     `json:"callerRingtoneId" db:"caller_ringtone_id"`
 	ThemeModeOverride           string     `json:"themeModeOverride" db:"theme_mode_override"`
@@ -20,6 +23,11 @@ type Persona struct {
 	SubAccountID                string     `json:"subAccountId" db:"sub_account_id"`
 	IsolationLevel              string     `json:"isolationLevel" db:"isolation_level"`
 	PurposeHint                 string     `json:"-" db:"purpose_hint"`
+	InheritsProfileFromOwner    bool       `json:"inheritsProfileFromOwner" db:"inherits_profile_from_owner"`
+	OverriddenProfileFields     string     `json:"overriddenProfileFields" db:"overridden_profile_fields"`
+	LastProfileSyncAt           *time.Time `json:"lastProfileSyncAt" db:"last_profile_sync_at"`
+	LastProfileSyncSource       string     `json:"lastProfileSyncSource" db:"last_profile_sync_source"`
+	LastActivatedAt             *time.Time `json:"lastActivatedAt" db:"last_activated_at"`
 	InviteCount                 int64      `json:"inviteCount" db:"invite_count"`
 	CreatedAt                   time.Time  `json:"createdAt" db:"created_at"`
 	UpdatedAt                   time.Time  `json:"updatedAt" db:"updated_at"`

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
@@ -760,6 +761,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         _circlesForPost(post).isNotEmpty;
   }
 
+  ImmersiveViewerStageLayoutSpec _layoutSpecForPost(PostBaseDto post) {
+    if (_isArticleLikePost(post)) {
+      return ImmersiveViewerStageLayoutSpec.articleStage;
+    }
+    if (_isTextOnlyMomentPost(post)) {
+      return ImmersiveViewerStageLayoutSpec.textStage;
+    }
+    return ImmersiveViewerStageLayoutSpec.mediaStage;
+  }
+
   bool _isCaptionExpanded(String postId) {
     return _expandedCaptionPostIds.contains(postId);
   }
@@ -1070,6 +1081,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final currentPost = posts.isEmpty
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
+    final currentLayoutSpec = currentPost == null
+        ? ImmersiveViewerStageLayoutSpec.feedRail
+        : _layoutSpecForPost(currentPost);
     final progress = _innerProgress(posts);
     final overlayTitle = currentPost == null
         ? ''
@@ -1151,6 +1165,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _WorksPrimaryTopBar(
+                    layoutSpec: currentLayoutSpec,
                     isFilterExpanded: _isFilterExpanded,
                     progressLabel: topProgressLabel,
                     onTapClose: _dismissViewer,
@@ -1193,6 +1208,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               right: 0,
               bottom: _toolbarReservedHeight + AppSpacing.containerSm,
               child: MediaCaptionBlock(
+                layoutSpec: currentLayoutSpec,
+                railKey: const ValueKey<String>('works-caption-rail'),
                 header: counterIndicator,
                 title: overlayTitle,
                 caption: overlayBody,
@@ -1208,6 +1225,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               right: 0,
               bottom: 0,
               child: ImmersiveEngagementBar(
+                layoutSpec: currentLayoutSpec,
                 avatarUrl: currentPost.avatarUrl,
                 displayName: currentPost.displayName,
                 circleName: '',
@@ -1315,6 +1333,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         enabled: _canSwipePrimaryTabs,
         onSwipe: _handlePrimaryTabSwipe,
         child: _WorksTextCanvas(
+          layoutSpec: _layoutSpecForPost(post),
           title: _titleForPost(post),
           body: _bodyForPost(post),
           imageUrl: _rawPostById(post.id)?[ArticleDetailWireKeys.coverUrl]
@@ -1417,6 +1436,7 @@ class _PostCircleTarget {
 
 class _WorksPrimaryTopBar extends StatelessWidget {
   const _WorksPrimaryTopBar({
+    required this.layoutSpec,
     required this.isFilterExpanded,
     required this.progressLabel,
     required this.onTapWorksArrow,
@@ -1428,6 +1448,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
     this.onTapCircles,
   });
 
+  final ImmersiveViewerStageLayoutSpec layoutSpec;
   final bool isFilterExpanded;
   final String? progressLabel;
   final VoidCallback onTapWorksArrow;
@@ -1440,10 +1461,13 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppSpacing.tabNavigationHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+    return ImmersiveViewerLayout.alignToRail(
+      context: context,
+      layoutSpec: layoutSpec,
+      child: SizedBox(
+        key: const ValueKey<String>('works-top-rail'),
+        width: double.infinity,
+        height: AppSpacing.tabNavigationHeight,
         child: Stack(
           children: [
             Positioned.fill(
@@ -1508,7 +1532,6 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                 ),
               ),
 
-            // More Button (Right)
             Positioned(
               right: 0,
               top: 0,
@@ -2147,11 +2170,13 @@ class _WorksArticleCanvas extends StatelessWidget {
 
 class _WorksTextCanvas extends StatelessWidget {
   const _WorksTextCanvas({
+    required this.layoutSpec,
     required this.title,
     required this.body,
     this.imageUrl,
   });
 
+  final ImmersiveViewerStageLayoutSpec layoutSpec;
   final String title;
   final String body;
   final String? imageUrl;
@@ -2192,50 +2217,55 @@ class _WorksTextCanvas extends StatelessWidget {
         ),
         SafeArea(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.containerLg,
-              AppSpacing.containerMd,
-              _WorksImmersiveViewerState._toolbarReservedHeight +
+            padding: EdgeInsets.only(
+              top: AppSpacing.containerLg,
+              bottom:
+                  _WorksImmersiveViewerState._toolbarReservedHeight +
                   AppSpacing.containerMd,
             ),
-            child: Container(
-              padding: EdgeInsets.all(AppSpacing.containerLg),
-              decoration: BoxDecoration(
-                color: AppColors.worksDrawerBg.withValues(alpha: 0.74),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.borderRadius + 4,
+            child: ImmersiveViewerLayout.alignToRail(
+              context: context,
+              layoutSpec: layoutSpec,
+              child: Container(
+                key: const ValueKey<String>('works-text-stage-rail'),
+                width: double.infinity,
+                padding: EdgeInsets.all(AppSpacing.containerLg),
+                decoration: BoxDecoration(
+                  color: AppColors.worksDrawerBg.withValues(alpha: 0.74),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.borderRadius + 4,
+                  ),
+                  border: Border.all(
+                    color: AppColors.worksBodyText.withValues(alpha: 0.16),
+                  ),
                 ),
-                border: Border.all(
-                  color: AppColors.worksBodyText.withValues(alpha: 0.16),
-                ),
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title.isNotEmpty) ...[
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (title.isNotEmpty) ...[
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: AppTypography.xl + 2,
+                            fontWeight: AppTypography.bold,
+                            color: AppColors.worksTitle,
+                            height: AppTypography.bodyLineHeight,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupSm),
+                      ],
                       Text(
-                        title,
+                        body,
                         style: TextStyle(
-                          fontSize: AppTypography.xl + 2,
-                          fontWeight: AppTypography.bold,
-                          color: AppColors.worksTitle,
-                          height: AppTypography.bodyLineHeight,
+                          fontSize: AppTypography.base,
+                          color: AppColors.worksBodyText,
+                          height: AppTypography.lineHeightRelaxed,
+                          letterSpacing: 0.4,
                         ),
                       ),
-                      SizedBox(height: AppSpacing.intraGroupSm),
                     ],
-                    Text(
-                      body,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: AppColors.worksBodyText,
-                        height: AppTypography.lineHeightRelaxed,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

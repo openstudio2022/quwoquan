@@ -10,7 +10,8 @@ import 'package:quwoquan_app/components/pageflip/src/geometry/pageflip_reverse_c
 import 'package:quwoquan_app/components/pageflip/src/layout/pageflip_layout_resolver.dart';
 import 'package:quwoquan_app/components/pageflip/src/render/pageflip_render_frame.dart';
 import 'package:quwoquan_app/components/pageflip/src/scene/pageflip_scene.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart' as canonical;
+import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart'
+    as canonical;
 import 'package:quwoquan_app/ui/content/pageflip/release_policy.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -36,14 +37,11 @@ class PageflipEngine {
     this.mode = PageflipMode.single,
     PageflipLayoutResolver? layoutResolver,
     PageflipRoleResolver? roleResolver,
-  })  : _pageCount = pageCount,
-        _currentPageIndex = initialPage,
-        _layoutResolver = layoutResolver ?? const PageflipLayoutResolver(),
-        _roleResolver = roleResolver ?? const PageflipSinglePageRoleResolver() {
-    _state = PageflipState(
-      mode: mode,
-      currentPageIndex: _currentPageIndex,
-    );
+  }) : _pageCount = pageCount,
+       _currentPageIndex = initialPage,
+       _layoutResolver = layoutResolver ?? const PageflipLayoutResolver(),
+       _roleResolver = roleResolver ?? const PageflipSinglePageRoleResolver() {
+    _state = PageflipState(mode: mode, currentPageIndex: _currentPageIndex);
   }
 
   final int _pageCount;
@@ -63,11 +61,9 @@ class PageflipEngine {
 
   PageflipState get state => _state;
   int get currentPageIndex => _currentPageIndex;
+  int get pageCount => _pageCount;
 
-  void updateViewport({
-    required Size stageSize,
-    required Size pageSize,
-  }) {
+  void updateViewport({required Size stageSize, required Size pageSize}) {
     _stageSize = stageSize;
     _pageSize = pageSize;
     _syncState();
@@ -78,19 +74,20 @@ class PageflipEngine {
     if (_pageSize == null) {
       return false;
     }
-    final direction = stagePoint.dx >= (layout.bounds.left + layout.bounds.width / 2)
-        ? PageflipDirection.forward
-        : PageflipDirection.back;
-    final corner = stagePoint.dy >= (layout.bounds.top + layout.bounds.height / 2)
+    final direction = _resolveInteractionDirection(
+      layout: layout,
+      stagePoint: stagePoint,
+    );
+    final corner =
+        stagePoint.dy >= (layout.bounds.top + layout.bounds.height / 2)
         ? PageflipCorner.bottom
         : PageflipCorner.top;
     _direction = direction;
     _corner = corner;
-    _localPagePoint = layout.convertViewportPointToPage(
-      stagePoint,
-      direction: direction == PageflipDirection.forward
-          ? StPageFlipDirection.forward
-          : StPageFlipDirection.back,
+    _localPagePoint = _convertStagePointToPage(
+      layout: layout,
+      stagePoint: stagePoint,
+      direction: direction,
     );
     _syncState(isInteractive: true);
     _dragStartPoint = stagePoint;
@@ -101,11 +98,10 @@ class PageflipEngine {
   void fold(Offset stagePoint) {
     final layout = _resolveLayout();
     final direction = _direction ?? PageflipDirection.forward;
-    _localPagePoint = layout.convertViewportPointToPage(
-      stagePoint,
-      direction: direction == PageflipDirection.forward
-          ? StPageFlipDirection.forward
-          : StPageFlipDirection.back,
+    _localPagePoint = _convertStagePointToPage(
+      layout: layout,
+      stagePoint: stagePoint,
+      direction: direction,
     );
     _dragStartedAt ??= DateTime.now();
     _syncState(isInteractive: true);
@@ -174,7 +170,8 @@ class PageflipEngine {
             currentPageIndex: _currentPageIndex,
             pageCount: _pageCount,
           );
-    final renderFrame = roleState == null || _corner == null || _localPagePoint == null
+    final renderFrame =
+        roleState == null || _corner == null || _localPagePoint == null
         ? null
         : _buildRenderFrame(
             layout: layout,
@@ -218,6 +215,42 @@ class PageflipEngine {
     );
   }
 
+  PageflipDirection _resolveInteractionDirection({
+    required PageflipLayout layout,
+    required Offset stagePoint,
+  }) {
+    if (mode == PageflipMode.single) {
+      final pageRect = layout.resolvePageRect(isRightPage: true);
+      return stagePoint.dx >= pageRect.center.dx
+          ? PageflipDirection.forward
+          : PageflipDirection.back;
+    }
+    return stagePoint.dx >= (layout.bounds.left + layout.bounds.width / 2)
+        ? PageflipDirection.forward
+        : PageflipDirection.back;
+  }
+
+  Offset _convertStagePointToPage({
+    required PageflipLayout layout,
+    required Offset stagePoint,
+    required PageflipDirection direction,
+  }) {
+    if (mode == PageflipMode.single) {
+      final pageRect = layout.resolvePageRect(isRightPage: true);
+      final localX = direction == PageflipDirection.forward
+          ? stagePoint.dx - pageRect.left
+          : pageRect.right - stagePoint.dx;
+      final localY = stagePoint.dy - pageRect.top;
+      return Offset(localX, localY);
+    }
+    return layout.convertViewportPointToPage(
+      stagePoint,
+      direction: direction == PageflipDirection.forward
+          ? StPageFlipDirection.forward
+          : StPageFlipDirection.back,
+    );
+  }
+
   PageflipRenderFrame _buildRenderFrame({
     required PageflipLayout layout,
     required PageflipRoleState roleState,
@@ -250,8 +283,8 @@ class PageflipEngine {
         corner: corner == PageflipCorner.top
             ? StPageFlipCorner.top
             : StPageFlipCorner.bottom,
-        flippingClipArea: const <Offset>[],
-        bottomClipArea: const <Offset>[],
+        flippingClipArea: List<Offset>.unmodifiable(calc.getFlippingClipArea()),
+        bottomClipArea: List<Offset>.unmodifiable(calc.getBottomClipArea()),
         flippingAnchor: calc.getActiveCorner(),
         bottomAnchor: calc.getBottomPagePosition(),
         angle: calc.getAngle(),
@@ -284,12 +317,24 @@ class PageflipEngine {
       pageHeight: pageSize.height,
     );
     calc.calc(localPagePoint);
-    final angleBand = canonical.resolveForwardCurlAngleBand(
+    final replayLocalPoint = canonical.resolveBackwardReplayLocalPagePoint(
       localPagePoint: localPagePoint,
+      pageSize: pageSize,
+    );
+    final angleBand = canonical.resolveForwardCurlAngleBand(
+      localPagePoint: replayLocalPoint,
       pageSize: pageSize,
       corner: corner == PageflipCorner.top
           ? StPageFlipCorner.top
           : StPageFlipCorner.bottom,
+    );
+    final canonicalCorner = corner == PageflipCorner.top
+        ? StPageFlipCorner.top
+        : StPageFlipCorner.bottom;
+    final backwardLeafFrame = canonical.resolveArticlePageBackwardLeafFrame(
+      direction: StPageFlipDirection.back,
+      progress: calc.getProgress(),
+      reversePose: null,
     );
     final canonicalFrame = canonical.StPageFlipRenderFrame(
       localPagePoint: localPagePoint,
@@ -298,39 +343,68 @@ class PageflipEngine {
       renderDirection: canonical.resolvePageFlipRenderDirection(
         direction: StPageFlipDirection.back,
         orientation: layout.orientation,
-        reversePose: calc.pose,
+        reversePose: null,
       ),
-      corner: corner == PageflipCorner.top
-          ? StPageFlipCorner.top
-          : StPageFlipCorner.bottom,
-      flippingClipArea: const <Offset>[],
-      bottomClipArea: const <Offset>[],
-      flippingAnchor: calc.getActiveCorner(),
-      bottomAnchor: calc.getBottomPagePosition(),
-      angle: calc.getAngle(),
-      shadow: null,
+      corner: canonicalCorner,
+      flippingClipArea: List<Offset>.unmodifiable(
+        backwardLeafFrame == null
+            ? calc.getFlippingClipArea()
+            : canonical.resolveArticlePageBackwardFlippingClipArea(
+                frame: backwardLeafFrame,
+                pageSize: pageSize,
+              ),
+      ),
+      bottomClipArea: List<Offset>.unmodifiable(
+        backwardLeafFrame == null
+            ? calc.getBottomClipArea()
+            : canonical.resolveArticlePageBackwardBottomClipArea(
+                frame: backwardLeafFrame,
+                pageSize: pageSize,
+              ),
+      ),
+      flippingAnchor: backwardLeafFrame == null
+          ? calc.getActiveCorner()
+          : canonical.resolveArticlePageBackwardFlippingAnchor(
+              frame: backwardLeafFrame,
+              pageSize: pageSize,
+              corner: canonicalCorner,
+            ),
+      bottomAnchor: backwardLeafFrame == null
+          ? calc.getBottomPagePosition()
+          : canonical.resolveArticlePageBackwardBottomAnchor(
+              frame: backwardLeafFrame,
+              pageSize: pageSize,
+              corner: canonicalCorner,
+            ),
+      angle: backwardLeafFrame == null
+          ? calc.getAngle()
+          : canonical.resolveArticlePageBackwardAngle(
+              frame: backwardLeafFrame,
+              corner: canonicalCorner,
+            ),
+      shadow: backwardLeafFrame == null
+          ? null
+          : canonical.resolveArticlePageBackwardShadowData(
+              frame: backwardLeafFrame,
+              pageSize: pageSize,
+              corner: canonicalCorner,
+            ),
       timeline: canonical.resolvePageCurlTimeline(
         direction: StPageFlipDirection.back,
         renderDirection: canonical.resolvePageFlipRenderDirection(
           direction: StPageFlipDirection.back,
           orientation: layout.orientation,
-          reversePose: calc.pose,
+          reversePose: null,
         ),
         progress: calc.getProgress(),
         localPagePoint: localPagePoint,
         pageSize: pageSize,
-        corner: corner == PageflipCorner.top
-            ? StPageFlipCorner.top
-            : StPageFlipCorner.bottom,
+        corner: canonicalCorner,
         angleBand: angleBand,
-        reversePose: calc.pose,
+        reversePose: null,
       ),
-      reversePose: calc.pose,
-      backwardLeafFrame: canonical.resolveArticlePageBackwardLeafFrame(
-        direction: StPageFlipDirection.back,
-        progress: calc.getProgress(),
-        reversePose: calc.pose,
-      ),
+      reversePose: null,
+      backwardLeafFrame: backwardLeafFrame,
     );
     return PageflipRenderFrame(
       mode: mode,

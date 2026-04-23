@@ -62,6 +62,7 @@ func (h *UserHandler) Routes() http.Handler {
 
 	mux.HandleFunc("GET /v1/user/profile/{userId}", h.handleGetProfile)
 	mux.HandleFunc("PATCH /v1/user/profile", h.handleUpdateProfile)
+	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
 	mux.HandleFunc("GET /v1/me", h.handleGetMeProfile)
 	mux.HandleFunc("GET /v1/user/{subAccountId}", h.handleGetSubAccountProfile)
 	mux.HandleFunc("GET /v1/user/search/social-relations", h.handleSearchSocialRelations)
@@ -83,9 +84,15 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/user/block/check/{targetUserId}", h.handleCheckBlocked)
 
 	mux.HandleFunc("GET /v1/user/personas", h.handleListPersonas)
+	mux.HandleFunc("GET /v1/user/personas/summary", h.handleGetPersonaManagementSummary)
+	mux.HandleFunc("GET /v1/user/personas/active", h.handleGetActivePersonaContext)
 	mux.HandleFunc("POST /v1/user/personas", h.handleCreatePersona)
 	mux.HandleFunc("PATCH /v1/user/personas/{personaId}", h.handleUpdatePersona)
+	mux.HandleFunc("POST /v1/user/personas/{personaId}/profile-sync", h.handleApplyPersonaProfileSync)
+	mux.HandleFunc("GET /v1/user/personas/{personaId}/lifecycle-guard", h.handleGetPersonaLifecycleGuard)
 	mux.HandleFunc("DELETE /v1/user/personas/{personaId}", h.handleDeletePersona)
+	mux.HandleFunc("POST /v1/user/personas/{personaId}/retire", h.handleRetirePersona)
+	mux.HandleFunc("DELETE /v1/user/personas/{personaId}/delete-empty", h.handleDeleteEmptyPersona)
 	mux.HandleFunc("POST /v1/user/personas/{personaId}/activate", h.handleActivatePersona)
 
 	mux.HandleFunc("GET /v1/users/{userId}/works", h.handleListUserWorks)
@@ -102,13 +109,6 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/user/credentials", h.handleListCredentials)
 	mux.HandleFunc("POST /v1/user/credentials", h.handleBindCredential)
 	mux.HandleFunc("DELETE /v1/user/credentials/{credType}", h.handleUnbindCredential)
-
-	// SubAccounts
-	mux.HandleFunc("GET /v1/user/sub-accounts", h.handleListSubAccounts)
-	mux.HandleFunc("POST /v1/user/sub-accounts", h.handleCreateSubAccount)
-	mux.HandleFunc("POST /v1/user/sub-accounts/{subAccountId}/activate", h.handleActivateSubAccount)
-	mux.HandleFunc("DELETE /v1/user/sub-accounts/{subAccountId}", h.handleDeleteSubAccount)
-	mux.HandleFunc("GET /v1/sub-accounts/{subAccountId}", h.handleGetSubAccountProfile)
 
 	// Contact Discovery
 	mux.HandleFunc("POST /v1/user/contact-discovery", h.handleInitiateContactDiscovery)
@@ -189,6 +189,38 @@ func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid request body")
+		return
+	}
+	afterSeq := int64(0)
+	switch raw := body["afterSeq"].(type) {
+	case float64:
+		afterSeq = int64(raw)
+	case int64:
+		afterSeq = raw
+	case int:
+		afterSeq = int64(raw)
+	}
+	limit := 200
+	if raw, ok := body["limit"].(float64); ok && int(raw) > 0 {
+		limit = int(raw)
+	}
+	resp, err := h.profile.PullSync(r.Context(), userID, afterSeq, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http.Request) {
@@ -500,12 +532,44 @@ func (h *UserHandler) handleListPersonas(w http.ResponseWriter, r *http.Request)
 		writeInvalidArg(w, "X-Client-User-Id header required")
 		return
 	}
-	personas, err := h.persona.List(r.Context(), userID)
+	personas, err := h.subAccount.ListSubAccounts(r.Context(), userID)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": personas})
+	items := make([]map[string]any, 0, len(personas))
+	for i := range personas {
+		items = append(items, application.BuildPersonaManagementItem(personas[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *UserHandler) handleGetPersonaManagementSummary(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	summary, err := h.subAccount.GetPersonaManagementSummary(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func (h *UserHandler) handleGetActivePersonaContext(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	view, err := h.subAccount.GetActivePersonaContextView(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request) {
@@ -519,23 +583,36 @@ func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request
 		writeInvalidArg(w, "invalid body")
 		return
 	}
-	p, err := h.persona.Create(r.Context(), userID, data)
+	p, err := h.subAccount.CreateSubAccount(r.Context(), userID, data)
 	if err != nil {
+		if strings.Contains(err.Error(), "persona_handle_taken") {
+			writeInvalidArg(w, "用户号已被占用")
+			return
+		}
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, p)
+	writeJSON(w, http.StatusCreated, application.BuildPersonaManagementItem(*p))
 }
 
 func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request) {
 	personaID := r.PathValue("personaId")
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
 	data, err := readBody(r)
 	if err != nil {
 		writeInvalidArg(w, "invalid body")
 		return
 	}
-	p, err := h.persona.Update(r.Context(), personaID, data)
+	p, err := h.subAccount.UpdatePersona(r.Context(), userID, personaID, data)
 	if err != nil {
+		if strings.Contains(err.Error(), "persona_handle_taken") {
+			writeInvalidArg(w, "用户号已被占用")
+			return
+		}
 		if strings.Contains(err.Error(), "not found") {
 			writeNotFound(w, err.Error())
 			return
@@ -543,14 +620,63 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	writeJSON(w, http.StatusOK, application.BuildPersonaManagementItem(*p))
+}
+
+func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	personaID := r.PathValue("personaId")
+	data, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	result, err := h.subAccount.ApplyPersonaProfileSync(r.Context(), userID, personaID, data)
+	if err != nil {
+		if strings.Contains(err.Error(), "persona_handle_taken") {
+			writeInvalidArg(w, "用户号已被占用")
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			writeNotFound(w, err.Error())
+			return
+		}
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleGetPersonaLifecycleGuard(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	personaID := r.PathValue("personaId")
+	guard, err := h.subAccount.GetPersonaLifecycleGuard(r.Context(), userID, personaID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, guard)
 }
 
 func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
 	personaID := r.PathValue("personaId")
-	err := h.persona.Delete(r.Context(), personaID)
+	err := h.subAccount.DeleteSubAccount(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "primary") {
+		if strings.Contains(err.Error(), "primary") ||
+			strings.Contains(err.Error(), "last") {
 			writeForbidden(w, err.Error())
 			return
 		}
@@ -564,9 +690,48 @@ func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	personaID := r.PathValue("personaId")
+	view, err := h.subAccount.RetirePersona(r.Context(), userID, personaID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *UserHandler) handleDeleteEmptyPersona(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	personaID := r.PathValue("personaId")
+	if err := h.subAccount.DeleteEmptyPersona(r.Context(), userID, personaID); err != nil {
+		if strings.Contains(err.Error(), "primary") ||
+			strings.Contains(err.Error(), "last") {
+			writeForbidden(w, err.Error())
+			return
+		}
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
 func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Request) {
 	personaID := r.PathValue("personaId")
-	err := h.persona.Activate(r.Context(), personaID)
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	err := h.subAccount.ActivateSubAccount(r.Context(), userID, personaID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeNotFound(w, err.Error())

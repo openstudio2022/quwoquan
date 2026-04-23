@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
@@ -245,6 +246,51 @@ void main() {
         isEmpty,
       );
     });
+
+    test('sync removes orphan conversations beyond first 200 rows', () async {
+      final service = LocalChatSearchSyncService(
+        chatRepository: _EmptyTimelineChatRepository(),
+        conversationCache: cache,
+        store: store,
+        personaContextLoader: () async => currentContext,
+      );
+      final namespace = LocalSearchNamespace.fromActivePersonaContext(
+        currentContext,
+      );
+
+      final orphanConversations = List<Map<String, dynamic>>.generate(205, (
+        index,
+      ) {
+        final id = 'orphan_$index';
+        return <String, dynamic>{
+          'conversationId': id,
+          'id': id,
+          '_id': id,
+          'title': '孤儿会话 $index',
+          'type': 'group',
+          'updatedAt': DateTime.utc(
+            2026,
+            4,
+            23,
+            10,
+            0,
+            index,
+          ).toIso8601String(),
+        };
+      });
+      await store.upsertConversations(
+        namespace: namespace,
+        conversations: orphanConversations,
+      );
+
+      expect(
+        await store.listConversationIds(namespace: namespace),
+        hasLength(205),
+      );
+
+      expect(await service.sync(force: true), isTrue);
+      expect(await store.listConversationIds(namespace: namespace), isEmpty);
+    });
   });
 }
 
@@ -311,5 +357,20 @@ class _StableChatRepository extends MockChatRepository {
     int limit = 200,
   }) async {
     return const SyncResponse(messages: [], hasMore: false);
+  }
+}
+
+class _EmptyTimelineChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return const <ChatContactRowDto>[];
+  }
+
+  @override
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
+    return const <ChatConversationTimestampDto>[];
   }
 }

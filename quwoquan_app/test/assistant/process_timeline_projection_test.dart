@@ -7,7 +7,7 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 void main() {
   group('process timeline projection', () {
-    test('canonical 4-step timeline 会投影成可见 2-step timeline', () {
+    test('canonical 4-step timeline 会投影成可见 3-step timeline', () {
       final canonical = _canonicalFourStepTimeline();
 
       final visible = buildVisibleProcessTimeline(canonical);
@@ -16,17 +16,17 @@ void main() {
         visible.map((frame) => frame.stepId).toList(growable: false),
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
+          ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(visible.first.detail, contains('关注点：天气现状、出门体感'));
       expect(
-        visible.first.understandingSnapshot.intentSummary,
+        visible[1].headline,
         contains('我会先按天气现状和出门建议两路来核对'),
       );
     });
 
-    test('持久化消息读取时 UI timeline 只恢复 2-step，但 canonical 仍保留 4-step', () {
+    test('持久化消息读取时 UI timeline 恢复 3-step，但 canonical 仍保留 4-step', () {
       final canonical = _canonicalFourStepTimeline();
       final message = <String, dynamic>{
         'role': 'assistant',
@@ -62,17 +62,20 @@ void main() {
         persistedVisible.map((frame) => frame.stepId).toList(growable: false),
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
+          ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(persistedVisible.first.detail, contains('关注点：天气现状、出门体感'));
+      expect(
+        persistedVisible[1].headline,
+        contains('我会先按天气现状和出门建议两路来核对'),
+      );
     });
 
     test('当前 v1 消息缺少 processTimeline 时不再回退到 journey', () {
       final message = <String, dynamic>{
         'role': 'assistant',
         'content': '深圳今天晴，轻装出门更合适。',
-        assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
         assistantJourneyField: const AssistantJourney(
           entries: <AssistantJourneyEntry>[
             AssistantJourneyEntry(
@@ -94,7 +97,7 @@ void main() {
       final message = <String, dynamic>{
         'role': 'assistant',
         'content': '深圳今天晴，轻装出门更合适。',
-        assistantTurnSchemaVersionField: 'assistant_turn_legacy',
+        'assistantTurnSchemaVersion': 'assistant_turn_legacy',
         assistantJourneyField: const AssistantJourney(
           entries: <AssistantJourneyEntry>[
             AssistantJourneyEntry(
@@ -124,6 +127,7 @@ List<ProcessTimelineFrame> _canonicalFourStepTimeline() {
       understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
         intentSummary: '',
         userFacingSummary: '我先确认你现在最需要的是实时天气结果。',
+        retrievalDesignNarrative: '我会先按天气现状和出门建议两路来核对。',
         concernPoints: <String>['天气现状', '出门体感'],
       ),
     ),
@@ -134,6 +138,7 @@ List<ProcessTimelineFrame> _canonicalFourStepTimeline() {
       detail: '天气现状：深圳 实时天气\n出门建议：体感温度 / 降雨概率',
       understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
         intentSummary: '我会先按天气现状和出门建议两路来核对。',
+        retrievalDesignNarrative: '我会先按天气现状和出门建议两路来核对。',
       ),
     ),
     buildProcessTimelineFrame(

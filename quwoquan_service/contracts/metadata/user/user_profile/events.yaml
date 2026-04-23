@@ -20,6 +20,14 @@ events:
     payload_fields: [userId, nickname, bio, avatarUrl, gender, region, profileVersion]
     recommend_impact: profile_feature_refresh
 
+  - name: UserAvatarUpdated
+    description: 用户头像更新；供聊天 runtime/avatar patch 统一消费
+    producer: user-service
+    consumers: [chat-service, notification-service]
+    channel: event_store
+    payload_entity: UserProfile
+    payload_fields: [userId, avatarAssetId, avatarVersion, avatarUrl, profileVersion, updatedAt]
+
   - name: PersonaActivated
     description: 子账号切换（激活）
     producer: user-service

@@ -84,19 +84,18 @@ class PersonalAssistantSkillLoader {
   Future<List<String>> _discoverBundledSkillAssets() async {
     final assets = <String>{};
     try {
-      final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final decoded = jsonDecode(manifestContent);
-      if (decoded is Map<String, dynamic>) {
-        for (final key in decoded.keys) {
-          final path = key.toString();
-          if (!path.startsWith('assets/assistant/skills/')) continue;
-          if (path.endsWith('/SKILL.md') || path.endsWith('.skill.yaml')) {
-            assets.add(path);
-          }
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      for (final key in manifest.listAssets()) {
+        final path = key.trim();
+        if (!path.startsWith('assets/assistant/skills/')) {
+          continue;
+        }
+        if (path.endsWith('/SKILL.md') || path.endsWith('.skill.yaml')) {
+          assets.add(path);
         }
       }
     } catch (_) {
-      // Fallback for local tests where AssetManifest may be unavailable.
+      // Fallback for tests or packaging paths where the bundle manifest is unavailable.
     }
     // Always merge filesystem scan in tests/dev to avoid missing markdown
     // assets when AssetManifest omits uppercase `SKILL.md`.

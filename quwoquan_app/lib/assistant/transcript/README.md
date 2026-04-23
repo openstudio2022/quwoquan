@@ -5,7 +5,7 @@
 ## 与 `AssistantTurn` codegen 的边界
 
 - `lib/assistant/generated/contracts/assistant_turn.g.dart`：**Planner / contract** 语义（`AssistantTurnOutput` 等）。
-- **本目录** `PersistedAssistantTimelinePayload`：**历史时间轴行**上的 `assistant_turn_v1` 持久化块与 UI 信封字段的组合模型。
+- **本目录** `PersistedAssistantTimelinePayload`：**历史时间轴行**上的 `assistant_turn` canonical 持久化块与 UI 信封字段的组合模型。
 - **禁止**混用命名：不在 transcript 类型上使用 `AssistantTurn` 前缀指代时间轴行。
 
 ## 上下文一览

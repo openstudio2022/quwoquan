@@ -53,12 +53,34 @@ void main() {
   group('ProfileActionBar — 渲染契约', () {
     testWidgets('mine 模式渲染编辑资料和分身管理按钮', (tester) async {
       await tester.pumpWidget(
-        _wrap(ProfileActionBar(mode: ProfileMode.mine, isDark: false)),
+        _wrap(
+          ProfileActionBar(
+            mode: ProfileMode.mine,
+            isDark: false,
+            onManagePersonas: () {},
+          ),
+        ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
       expect(find.text(UITextConstants.profilePersonasLabel), findsOneWidget);
+    });
+
+    testWidgets('mine 模式未提供分身回调时隐藏分身管理按钮', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const ProfileActionBar(
+            mode: ProfileMode.mine,
+            isDark: false,
+            onManagePersonas: null,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
+      expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
     });
 
     testWidgets('mutual 渲染私信、视频通话、语音通话三等分按钮', (tester) async {

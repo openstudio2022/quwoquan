@@ -30,6 +30,12 @@ func (s *PgProfileStore) Create(ctx context.Context, p *model.UserProfile) error
 	if p.ProfileVersion == 0 {
 		p.ProfileVersion = 1
 	}
+	if p.AvatarURL != "" && p.AvatarAssetID == "" {
+		p.AvatarAssetID = "ua_" + p.UserID
+	}
+	if p.AvatarURL != "" && p.AvatarVersion == 0 {
+		p.AvatarVersion = 1
+	}
 	return s.pgProfileStoreBase.Create(ctx, p)
 }
 
@@ -39,10 +45,10 @@ func (s *PgProfileStore) Update(ctx context.Context, p *model.UserProfile) error
 	p.ProfileVersion++
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE user_profiles
-		SET nickname=$2, avatar_url=$3, bio=$4, gender=$5, birth_date=$6,
-		    region=$7, profile_version=$8, updated_at=$9
+		SET nickname=$2, avatar_url=$3, avatar_asset_id=$4, avatar_version=$5,
+		    bio=$6, gender=$7, birth_date=$8, region=$9, profile_version=$10, updated_at=$11
 		WHERE user_id=$1`,
-		p.UserID, p.Nickname, p.AvatarURL, p.Bio, p.Gender,
+		p.UserID, p.Nickname, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion, p.Bio, p.Gender,
 		p.BirthDate, p.Region, p.ProfileVersion, p.UpdatedAt)
 	if err != nil {
 		return err
@@ -111,6 +117,8 @@ func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
 		&e.Phone,
 		&e.Nickname,
 		&e.AvatarURL,
+		&e.AvatarAssetID,
+		&e.AvatarVersion,
 		&e.Bio,
 		&e.Gender,
 		&e.BirthDate,

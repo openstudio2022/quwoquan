@@ -531,12 +531,17 @@ void main() {
     );
     expect(
       provider.capturedMessages.last.any(
-        (item) =>
-            item['role'] == 'system' &&
-            (item['content'] as String? ?? '').contains('不要继续调用任何工具'),
+        (item) {
+          if (item['role'] != 'system') return false;
+          final c = (item['content'] as String? ?? '');
+          // 与 assets/assistant/prompts/global/prompt_snippets.md 中
+          // force_answer_conclusion / force_answer_conclusion_minimal 对齐
+          return c.contains('mode=answer_conclusion') &&
+              c.contains('decision=answer');
+        },
       ),
       isTrue,
-      reason: 'runtime 应显式注入 answer-only 收敛提示',
+      reason: 'runtime 应显式注入 answer-only 收敛提示（answer_conclusion）',
     );
   });
 

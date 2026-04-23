@@ -22,7 +22,7 @@ class PrecomputedBootstrap {
     required this.latestUserQuery,
     required this.historySummary,
     this.recentDialogueRounds = const <Map<String, dynamic>>[],
-    this.recentDialogueRoundsLimit = 5,
+    this.recentDialogueRoundsLimit = 10,
     required this.recalledTexts,
     this.previousIntentGraph,
     this.previousAnswerSummary = '',

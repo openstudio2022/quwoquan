@@ -148,10 +148,17 @@ class RetrievalDesignPhase implements Phase {
             ? updatedPreparation.allowedToolNames
             : (runtime?.listAvailableToolNames() ?? const <String>[]),
       );
+      final retrievalDesignNarrative =
+          updatedUnderstandingSnapshot.retrievalDesignNarrative.trim().isNotEmpty
+          ? updatedUnderstandingSnapshot.retrievalDesignNarrative.trim()
+          : (updatedUnderstandingSnapshot.intentSummary.trim() !=
+                        updatedUnderstandingSnapshot.userFacingSummary.trim()
+                    ? updatedUnderstandingSnapshot.intentSummary.trim()
+                    : '');
       input.onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.searchQueryGenerated,
-          message: updatedUnderstandingSnapshot.userFacingSummary.trim(),
+          message: retrievalDesignNarrative,
           timestamp: DateTime.now(),
           runId: input.runId,
           traceId: input.traceId,
@@ -184,6 +191,7 @@ class RetrievalDesignPhase implements Phase {
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: current.intentSummary,
       userFacingSummary: current.userFacingSummary,
+      retrievalDesignNarrative: current.retrievalDesignNarrative,
       concernPoints: current.concernPoints,
       emotionSignal: current.emotionSignal,
       resolutionItems: current.resolutionItems,

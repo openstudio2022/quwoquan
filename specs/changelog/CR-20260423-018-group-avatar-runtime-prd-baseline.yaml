@@ -1,0 +1,112 @@
+id: CR-20260423-018
+title: group avatar runtime prd baseline
+slug: group-avatar-runtime-prd-baseline
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-media
+  - specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract
+  - specs/feature-tree/chat-conversation/chat-experience-optimization/chat-detail-avatar-display
+  - specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync
+
+entries:
+  - timestamp: "2026-04-23T12:00:00+08:00"
+    summary: >
+      冻结 runtime 媒体 Journey 与群头像服务端预合成场景的 PRD 基线，明确统一资产引用、
+      objectKey/CDN URL 规范、用户头像与群头像归属边界、前 9 成员重算规则、默认群图标降级策略，
+      以及头像变化进入统一 sync patch + realtime hint 的合同。
+    reason: >
+      群聊头像当前存在端侧多图渲染慢、默认头像降级不美观、媒体对象引用不统一、URL 规范与同步链路分散的问题。
+      在进入 /design 与 metadata 变更前，需要先冻结运行时边界、产品范围、非功能目标、灰度回滚和覆盖矩阵。
+    change_type:
+      - refine
+      - scope
+      - acceptance
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-media/spec.md
+        sections:
+          - 节点定位
+          - 功能范围
+          - 对标输入与吸收结论
+          - 既有 Story 覆盖矩阵
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/runtime/runtime-media/acceptance.yaml
+        sections:
+          - scope
+          - journey_acceptance
+          - release_acceptance
+      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md
+        sections:
+          - all
+      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/acceptance.yaml
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/00-runtime-overview.md
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/01-runtime-boundaries.md
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/02-object-identity-and-url-spec.md
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/media/06-avatar-strategy-user-and-group.md
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/sync/02-user-sync-stream.md
+        sections:
+          - all
+      - path: quwoquan_service/specs/runtime/sync/06-message-avatar-roster-sync-flows.md
+        sections:
+          - all
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次只完成 PRD 基线，不在特性树节点下生成 design.md / plan.yaml，下一步进入 /design。
+      - 聊天头像显示、roster revision sync、消息推拉模型作为覆盖矩阵输入复用，不在本次重复发明第二套真相源。
+  - timestamp: "2026-04-23T12:45:00+08:00"
+    summary: >
+      完成 runtime-media Journey 与群头像服务端预合成场景的 design baseline，冻结统一对象模型、
+      群头像异步重算职责边界、avatar patch 接入统一 sync 的方案，并补齐 Journey/Scenario 的 plan 切片。
+    reason: >
+      PRD 基线已经完成，进入 /dev 前需要明确方案对比、选型决策、metadata/codegen 影响面、
+      字段演进与迁移、feature flag、观测与回滚、以及 metadata -> codegen -> 业务逻辑 -> 测试 的稳定实施顺序。
+    change_type:
+      - design
+      - replan
+      - observability
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-media/design.md
+        sections:
+          - all
+      - path: specs/feature-tree/runtime/runtime-media/plan.yaml
+        sections:
+          - all
+      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/design.md
+        sections:
+          - all
+      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/plan.yaml
+        sections:
+          - all
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次 /design 已执行 G1 基线命令：`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app`，均通过。
+      - 现阶段仍未实际修改 metadata 合同；具体契约落地与实现切片进入 `/dev`。

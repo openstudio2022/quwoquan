@@ -5,13 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
-import 'package:quwoquan_app/components/pageflip/src/scene/pageflip_scene.dart';
 
 class _ArticleGetPostRepo extends MockContentRepository {
   _ArticleGetPostRepo(this._item);
@@ -108,7 +107,6 @@ void main() {
       ],
     };
 
-    PageflipScene? capturedScene;
     double? capturedStageWidth;
 
     await tester.pumpWidget(
@@ -170,9 +168,6 @@ void main() {
                                   pagePadding: pagePadding,
                                   coverUrl: '',
                                   showFooterPageLabel: false,
-                                  onSceneChanged: (scene) {
-                                    capturedScene = scene;
-                                  },
                                 ),
                               ),
                             );
@@ -190,15 +185,99 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(capturedScene, isNotNull);
     expect(capturedStageWidth, isNotNull);
-    final scene = capturedScene!;
     final outerWidth = surfaceSize.width - AppSpacing.containerMd * 2;
+    final stageSize = tester.getSize(find.byKey(TestKeys.articlePageCurlLayer));
+    final visiblePage = tester.widgetList<ArticlePageShell>(
+      find.byType(ArticlePageShell),
+    ).first;
+    final visiblePageFinder = find.byWidget(visiblePage);
+    final pageSize = tester.getSize(visiblePageFinder);
 
-    expect(scene.pageRect.width, lessThan(outerWidth));
-    expect(scene.pageSize.width, closeTo(capturedStageWidth!, 0.01));
-    expect(scene.pageRect.width, closeTo(capturedStageWidth!, 0.01));
-    expect(scene.pageRect.width, lessThan(surfaceSize.width));
+    expect(stageSize.width, closeTo(capturedStageWidth!, 0.01));
+    expect(stageSize.width, lessThan(outerWidth));
+    expect(pageSize.width, lessThan(outerWidth));
+    expect(pageSize.width, lessThan(stageSize.width));
+    expect(pageSize.width, lessThan(surfaceSize.width));
+  });
+
+  testWidgets('ArticleReadOnlyBookDeck 支持前翻后翻回到原页', (tester) async {
+    const surfaceSize = Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = surfaceSize;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final pageChanges = <int>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.detail,
+              );
+              final pagePadding = articleReaderStagePagePadding();
+              final stageWidth = resolveArticlePaperStageWidth(
+                context,
+                constraints,
+                stagePadding: pagePadding,
+                allowLandscapeSpread: true,
+              );
+              final stageHeight =
+                  metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                  pagePadding.vertical;
+              return Center(
+                child: SizedBox(
+                  width: stageWidth,
+                  height: stageHeight,
+                  child: ArticleReadOnlyBookDeck(
+                    pages: _bookPages(),
+                    template: ArticleTemplatePreset.tech,
+                    fontPreset: ArticleFontPreset.mono,
+                    metrics: metrics,
+                    pagePadding: pagePadding,
+                    coverUrl: '',
+                    showFooterPageLabel: false,
+                    onPageChanged: pageChanges.add,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      const Offset(260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(pageChanges.length, greaterThanOrEqualTo(2));
+    expect(
+      pageChanges.sublist(pageChanges.length - 2),
+      equals(<int>[1, 0]),
+    );
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
   });
 }
 
@@ -209,5 +288,12 @@ List<ArticlePageData> _pagesFrom(Map<String, dynamic> article) {
       title: article['title'] as String,
       body: article['body'] as String,
     ),
+  ];
+}
+
+List<ArticlePageData> _bookPages() {
+  return const <ArticlePageData>[
+    ArticlePageData(id: 'page_0', title: '第一页', body: '第一页正文'),
+    ArticlePageData(id: 'page_1', title: '第二页', body: '第二页正文'),
   ];
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -25,7 +26,8 @@ import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipelin
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_synthesis_assessment.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_synthesis_template_bundle.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_bundle.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_usage_stats.dart' as usage_stats;
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_usage_stats.dart'
+    as usage_stats;
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_variables_view.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_builder.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
@@ -44,6 +46,7 @@ import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_route_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
@@ -181,8 +184,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   final AnswerGateResolver _answerGateResolver = const AnswerGateResolver();
   final PreferenceFactService _preferenceFactService =
       const PreferenceFactService();
-  final PromptSnippetRenderer _promptSnippetRenderer =
-      PromptSnippetRenderer();
+  final PromptSnippetRenderer _promptSnippetRenderer = PromptSnippetRenderer();
 
   static void Function(String delta)? _buildThinkingDeltaForwarder(
     void Function(AssistantTraceEvent event)? onTraceEvent,
@@ -223,11 +225,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           event.data?[AssistantPipelineDiagnosticsKeys.streaming] == true &&
           event.data?[AssistantPipelineDiagnosticsKeys.extracted] == true) {
         final fieldPath =
-            (event.data?[AssistantPipelineDiagnosticsKeys.fieldPath]
-                    as String?)?.trim() ??
+            (event.data?[AssistantPipelineDiagnosticsKeys.fieldPath] as String?)
+                ?.trim() ??
             '';
         if (fieldPath ==
-            AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary) {
+                AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary ||
+            fieldPath ==
+                AssistantPipelineDiagnosticsKeys
+                    .answerProcessingReadinessSummary) {
           processEmitter.pushDelta(
             stepId: ProcessStepId.retrievalProcessing,
             scope: UserEventScope.aggregation,
@@ -235,14 +240,37 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             phaseId: AssistantPipelineDiagnosticsKeys.answeringPhaseId,
             actionCode: AssistantPipelineDiagnosticsKeys.assessEvidenceAction,
             reasonCode: AssistantPipelineDiagnosticsKeys.digestEvidenceReason,
-            payload: const <String, dynamic>{
-              AssistantPipelineDiagnosticsKeys.fieldPath:
-                  AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary,
+            payload: <String, dynamic>{
+              AssistantPipelineDiagnosticsKeys.fieldPath: fieldPath,
             },
           );
         }
       }
     };
+  }
+
+  String _mergeStableNarrativeDeltaText({
+    required String previous,
+    required String incoming,
+  }) {
+    if (incoming.isEmpty) return previous;
+    if (previous.isEmpty) return incoming;
+    if (previous.endsWith(incoming) || previous.contains(incoming)) {
+      return previous;
+    }
+    if (incoming.endsWith(previous)) {
+      return incoming;
+    }
+    final maxOverlap = previous.length < incoming.length
+        ? previous.length
+        : incoming.length;
+    for (var overlap = maxOverlap; overlap > 0; overlap -= 1) {
+      if (previous.substring(previous.length - overlap) ==
+          incoming.substring(0, overlap)) {
+        return '$previous${incoming.substring(overlap)}';
+      }
+    }
+    return '$previous$incoming';
   }
 
   static void Function(AssistantTraceEvent event)? _withTraceVisibility(
@@ -277,13 +305,11 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             message: 'agent_loop_uncaught: ${error.runtimeType}: $error',
             timestamp: DateTime.now(),
             data: <String, dynamic>{
-              AssistantPipelineDiagnosticsKeys.errorType:
-                  error.runtimeType.toString(),
-              AssistantPipelineDiagnosticsKeys.stackSnippet:
-                  stackTrace.toString().substring(
-                0,
-                math.min(400, stackTrace.toString().length),
-              ),
+              AssistantPipelineDiagnosticsKeys.errorType: error.runtimeType
+                  .toString(),
+              AssistantPipelineDiagnosticsKeys.stackSnippet: stackTrace
+                  .toString()
+                  .substring(0, math.min(400, stackTrace.toString().length)),
             },
           ),
         ],
@@ -415,7 +441,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ownerState.contextAssembly ?? const ContextAssemblyResult();
     final forceRefreshDynamicCatalog =
         bootstrapContext.forceRefreshCatalog ||
-        request.contextScopeHint[AssistantPipelineStateKeys.forceRefreshCatalog] ==
+        request.contextScopeHint[AssistantPipelineStateKeys
+                .forceRefreshCatalog] ==
             true;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshDynamicCatalog,
@@ -526,23 +553,34 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       request: request,
       intentGraph: intentGraph,
     );
-    final recentDialogueRounds = precomputedBootstrap?.recentDialogueRounds ??
+    final recentDialogueRounds =
+        precomputedBootstrap?.recentDialogueRounds ??
         coerceRecentDialogueRounds(
-          request.contextScopeHint[AssistantPipelinePromptKeys.recentDialogueRounds],
+          request.contextScopeHint[AssistantPipelinePromptKeys
+              .recentDialogueRounds],
         );
-    final temporalReference = _templateRelativeTimeResolver.resolveReferenceContext(
-      referenceNowIso: _firstNonEmptyText(<String?>[
-        request.contextScopeHint[AssistantPipelinePromptKeys.referenceNowIso]
-            as String?,
-        intentGraph.queryNormalization.referenceNowIso,
-        precomputedBootstrap?.previousIntentGraph?.queryNormalization.referenceNowIso,
-      ]),
-      timezone: _firstNonEmptyText(<String?>[
-        request.contextScopeHint[AssistantPipelinePromptKeys.timezone] as String?,
-        intentGraph.queryNormalization.timezone,
-        precomputedBootstrap?.previousIntentGraph?.queryNormalization.timezone,
-      ]),
-    );
+    final temporalReference = _templateRelativeTimeResolver
+        .resolveReferenceContext(
+          referenceNowIso: _firstNonEmptyText(<String?>[
+            request.contextScopeHint[AssistantPipelinePromptKeys
+                    .referenceNowIso]
+                as String?,
+            intentGraph.queryNormalization.referenceNowIso,
+            precomputedBootstrap
+                ?.previousIntentGraph
+                ?.queryNormalization
+                .referenceNowIso,
+          ]),
+          timezone: _firstNonEmptyText(<String?>[
+            request.contextScopeHint[AssistantPipelinePromptKeys.timezone]
+                as String?,
+            intentGraph.queryNormalization.timezone,
+            precomputedBootstrap
+                ?.previousIntentGraph
+                ?.queryNormalization
+                .timezone,
+          ]),
+        );
     final calendarContext = _templateRelativeTimeResolver.buildCalendarContext(
       reference: temporalReference,
     );
@@ -556,9 +594,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         availableToolNames: effectiveToolNames,
         toolGuidelines:
             _toolMetadataRegistry?.invocationGuidelinesForTools(
-                  effectiveToolNames,
-                ) ??
-                const <Map<String, dynamic>>[],
+              effectiveToolNames,
+            ) ??
+            const <Map<String, dynamic>>[],
         conversationSpine: conversationSpine,
         searchIterationState: searchIterationState,
         temporalReference: temporalReference,
@@ -996,7 +1034,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               skillCatalog: precomputedBootstrap.skillCatalog,
             ),
       contextAssembly: precomputedBootstrap?.contextAssembly,
-          previousRunArtifacts:
+      previousRunArtifacts:
           precomputedBootstrap?.previousRunArtifacts ??
           recoverPreviousRunArtifacts(request.contextScopeHint),
       intentGraph: effectiveIntentGraph,
@@ -1034,10 +1072,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final recentDialogueRoundsLimit = resolveRecentDialogueRoundsLimit(
       request.contextScopeHint,
     );
+    final olderRecentDialogueRoundsLimit = resolveOlderRecentDialogueRoundsLimit(
+      request.contextScopeHint,
+    );
     final continuityPolicy = _contextOrchestrator.buildContinuityPolicy(
       query: latestUserQuery,
       sessionHistory: priorSessionHistory,
       recentRoundsLimit: recentDialogueRoundsLimit,
+      recentOlderRoundsLimit: olderRecentDialogueRoundsLimit,
     );
     if (latestUserQuery.isNotEmpty) {
       _sessionManager.appendMessage(
@@ -1059,11 +1101,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ? _sessionManager.summarizeRecent(
             sessionId,
             roundsLimit: recentDialogueRoundsLimit,
+            roundsOlderLimit: olderRecentDialogueRoundsLimit,
           )
         : '';
     final recentDialogueRounds = _sessionManager.recentDialogueRounds(
       sessionId,
       limit: recentDialogueRoundsLimit,
+      olderLimit: olderRecentDialogueRoundsLimit,
     );
     final recalledTexts =
         enableChatLongterm && continuityPolicy.allowLongtermMemory
@@ -1084,8 +1128,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       continuityPolicy: continuityPolicy,
     );
     final forceRefreshCatalog =
-        request.contextScopeHint[AssistantPipelineStateKeys.forceRefreshCatalog] ==
-            true;
+        request.contextScopeHint[AssistantPipelineStateKeys
+            .forceRefreshCatalog] ==
+        true;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshCatalog,
     );
@@ -1155,7 +1200,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
     if (executionSnapshot is! ExecutionPhaseSuccess) {
-      throw StateError('synthesizeDraftBridge requires a successful execution snapshot');
+      throw StateError(
+        'synthesizeDraftBridge requires a successful execution snapshot',
+      );
     }
     final runId = executionSnapshot.runId;
     final traceId = executionSnapshot.traceId;
@@ -1170,17 +1217,18 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final allowedToolNames = executionSnapshot.allowedToolNames;
     final effectiveExecutionShell = executionSnapshot.executionShell;
     final previousSlotState = executionSnapshot.previousSlotState;
-    final previousDomainPolicyBundle = executionSnapshot.previousDomainPolicyBundle;
+    final previousDomainPolicyBundle =
+        executionSnapshot.previousDomainPolicyBundle;
     final retrievalPolicy = executionSnapshot.retrievalPolicy;
     final answerBoundaryPolicy = executionSnapshot.answerBoundaryPolicy;
     final templateVariables = executionSnapshot.templateVariables;
     final templateVariablesView =
-        AssistantPipelineTemplateVariablesView.fromMap(
-          templateVariables,
-        );
+        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
     final templateContext = sanitizeModelTemplateContext(
       request.contextScopeHint,
-      continuationActive: _hasContinuationCarryoverContext(templateVariablesView),
+      continuationActive: _hasContinuationCarryoverContext(
+        templateVariablesView,
+      ),
       previousRunArtifacts: recoverPreviousRunArtifacts(
         request.contextScopeHint,
       ),
@@ -1196,51 +1244,110 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
     final synthesisQueryTasks = QueryTask.toJsonList(intentGraph.queryTasks);
     final bootstrapPayload =
-        (request.contextScopeHint[AssistantPipelineStateKeys.precomputedBootstrap] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys
+                    .precomputedBootstrap]
+                as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final continuityPolicyForSynthesis =
-        bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy] is Map
+        bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy]
+            is Map
         ? ContextContinuityPolicy.fromJson(
-            (bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy] as Map)
+            (bootstrapPayload[AssistantPipelineStateKeys
+                        .contextContinuityPolicy]
+                    as Map)
                 .cast<String, dynamic>(),
           )
         : const ContextContinuityPolicy();
     final phaseOneText = phaseOneResult.finalText;
-    final phaseOneParsedJson =
-        LlmResponseParser.parse(phaseOneText).json ?? const <String, dynamic>{};
     final phaseOneAnswerPayload = parseAnswerPayload(
       rawFinalText: phaseOneText,
       traces: phaseOneResult.traces,
     );
+    final previousRunArtifactsForSynthesis = recoverPreviousRunArtifacts(
+      request.contextScopeHint,
+    );
     final previousUnderstandingSnapshotForSynthesis =
-        (bootstrapPayload[AssistantPipelineStateKeys.previousUnderstandingSnapshot] as Map?)
+        (bootstrapPayload[AssistantPipelineStateKeys
+                    .previousUnderstandingSnapshot]
+                as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint[AssistantPipelineStateKeys.previousUnderstandingSnapshot] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final previousAnswerProcessingForSynthesis =
-        (bootstrapPayload[AssistantPipelineStateKeys.previousAnswerProcessing] as Map?)
-            ?.cast<String, dynamic>() ??
-        (request.contextScopeHint[AssistantPipelineStateKeys.previousAnswerProcessing] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys
+                    .previousUnderstandingSnapshot]
+                as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final carriedRetrievalProcessing = const <String, dynamic>{};
+    Map<String, dynamic> stagePayloadMap(
+      Map<String, dynamic> payload,
+      String key,
+    ) {
+      final raw = payload[key];
+      if (raw is Map) {
+        return raw.cast<String, dynamic>();
+      }
+      return const <String, dynamic>{};
+    }
+
+    var carriedUnderstandingSnapshot = _normalizedUnderstandingSnapshotMap(
+      raw: preferStructuredMap(
+        executionSnapshot.understandingSnapshot,
+        preferStructuredMap(
+          previousUnderstandingSnapshotForSynthesis,
+          previousRunArtifactsForSynthesis?.understandingSnapshot.toJson() ??
+              const <String, dynamic>{},
+        ),
+      ),
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+    );
+    var carriedRetrievalProcessing = preferStructuredMap(
+      previousRunArtifactsForSynthesis?.retrievalProcessing.toJson(),
+      const <String, dynamic>{},
+    );
     var blockedProcessStepId = ProcessStepId.unknown;
     var blockedProcessMessage = '';
     final historicalThinkingSnapshotForSynthesis =
-        (bootstrapPayload[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
+        (bootstrapPayload[AssistantPipelineStateKeys.historicalThinkingSnapshot]
+                as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
+        (request.contextScopeHint[AssistantPipelineStateKeys
+                    .historicalThinkingSnapshot]
+                as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final understandingSnapshotForSynthesis =
-        executionSnapshot.understandingSnapshot.isNotEmpty
-            ? executionSnapshot.understandingSnapshot
-            : 
-        (phaseOneParsedJson[AssistantPipelineStateKeys.understandingSnapshot] as Map?)
-            ?.cast<String, dynamic>() ??
-        previousUnderstandingSnapshotForSynthesis;
+    var carriedHistoricalThinkingSnapshot = preferStructuredMap(
+      historicalThinkingSnapshotForSynthesis,
+      previousRunArtifactsForSynthesis?.historicalThinkingSnapshot.toJson() ??
+          const <String, dynamic>{},
+    );
+    void refreshPhaseOneStructuredCarryover(Map<String, dynamic> payload) {
+      carriedUnderstandingSnapshot = preferStructuredMap(
+        _normalizedUnderstandingSnapshotMap(
+          raw: stagePayloadMap(
+            payload,
+            AssistantPipelineStateKeys.understandingSnapshot,
+          ),
+          intentGraph: intentGraph,
+          latestUserQuery: latestUserQuery,
+        ),
+        carriedUnderstandingSnapshot,
+      );
+      carriedRetrievalProcessing = preferStructuredMap(
+        stagePayloadMap(
+          payload,
+          AssistantPipelineStateKeys.retrievalProcessing,
+        ),
+        carriedRetrievalProcessing,
+      );
+      carriedHistoricalThinkingSnapshot = preferStructuredMap(
+        stagePayloadMap(
+          payload,
+          AssistantPipelineStateKeys.historicalThinkingSnapshot,
+        ),
+        carriedHistoricalThinkingSnapshot,
+      );
+    }
+
     final evidenceEvaluationForSynthesis =
         executionSnapshot.evidenceEvaluation as EvidenceEvaluationResult? ??
         const EvidenceEvaluationResult();
@@ -1250,7 +1357,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final synthesisTemporalReference = _templateRelativeTimeResolver
         .resolveReferenceContext(
           referenceNowIso: _firstNonEmptyText(<String?>[
-            request.contextScopeHint[AssistantPipelinePromptKeys.referenceNowIso]
+            request.contextScopeHint[AssistantPipelinePromptKeys
+                    .referenceNowIso]
                 as String?,
             intentGraph.queryNormalization.referenceNowIso,
             templateDialogueState['referenceNowIso'] as String?,
@@ -1264,18 +1372,16 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         );
     final synthesisCalendarContext = _templateRelativeTimeResolver
         .buildCalendarContext(reference: synthesisTemporalReference);
-    final historicalThinkingSnapshotFromPhaseOne =
-        (phaseOneParsedJson[AssistantPipelineStateKeys.historicalThinkingSnapshot] as Map?)
-            ?.cast<String, dynamic>() ??
-        historicalThinkingSnapshotForSynthesis;
     final sharedContextForSynthesis = <String, dynamic>{
-      AssistantPipelinePromptKeys.contextEnvelope: contextAssembly.contextEnvelope,
+      AssistantPipelinePromptKeys.contextEnvelope:
+          contextAssembly.contextEnvelope,
       AssistantPipelinePromptKeys.recentDialogueRounds:
           templateVariablesView.recentDialogueRounds,
       AssistantPipelinePromptKeys.temporalReference: <String, dynamic>{
         AssistantPipelinePromptKeys.referenceNowIso:
             synthesisTemporalReference.referenceNowIso,
-        AssistantPipelinePromptKeys.timezone: synthesisTemporalReference.timezone,
+        AssistantPipelinePromptKeys.timezone:
+            synthesisTemporalReference.timezone,
         AssistantPipelinePromptKeys.calendarContext: synthesisCalendarContext,
       },
     };
@@ -1284,7 +1390,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         AssistantPipelinePromptKeys.calendarContext: synthesisCalendarContext,
         AssistantPipelinePromptKeys.referenceNowIso:
             synthesisTemporalReference.referenceNowIso,
-        AssistantPipelinePromptKeys.timezone: synthesisTemporalReference.timezone,
+        AssistantPipelinePromptKeys.timezone:
+            synthesisTemporalReference.timezone,
       },
     };
     final dialogueContinuityForSynthesis = <String, dynamic>{
@@ -1348,7 +1455,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
         ),
-        historicalThinkingSnapshotFromPhaseOne,
+        carriedHistoricalThinkingSnapshot,
       ]),
       stageState: <String, dynamic>{
         'allowedChoices': <String>[
@@ -1370,7 +1477,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       userGoal: intentGraph.userGoal.trim().isNotEmpty
           ? intentGraph.userGoal.trim()
           : latestUserQuery,
-      understandingSnapshot: understandingSnapshotForSynthesis,
+      understandingSnapshot: carriedUnderstandingSnapshot,
       retrievalProcessing: licensedRetrievalProcessingForSynthesis.toJson(),
       sharedContext: sharedContextForSynthesis,
       currentRuntimeState: currentRuntimeStateForSynthesis,
@@ -1406,19 +1513,16 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       synthesisReadiness: synthesisReadiness,
       executionSignalsPresent: phaseOneExecutionSignalsPresent,
     );
-    final explicitPhaseOneSkillRunPlans =
-        _subagentPlanCodec.buildExplicitSkillRunPlans(
+    final explicitPhaseOneSkillRunPlans = _subagentPlanCodec
+        .buildExplicitSkillRunPlans(
           answerPayload: phaseOneAnswerPayload,
           latestUserQuery: latestUserQuery,
           fallbackProblemClass: intentGraph.problemClassWireName,
           primaryDomainId: domainId,
         );
-    final phaseOneContinuationCarryover =
-        _hasContinuationCarryoverContext(
-          AssistantPipelineTemplateVariablesView.fromMap(
-            synthesisTemplateVars,
-          ),
-        );
+    final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
+      AssistantPipelineTemplateVariablesView.fromMap(synthesisTemplateVars),
+    );
     final suppressDerivedPhaseOneSkillRunPlans =
         phaseOneContinuationCarryover && synthesisReadiness.ready;
     final derivedPhaseOneSkillRunPlans =
@@ -1430,6 +1534,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             primaryDomainId: domainId,
           )
         : const <SubagentPlan>[];
+    final preferFormalSynthesis =
+        phaseOneExecutionSignalsPresent ||
+        explicitPhaseOneSkillRunPlans.isNotEmpty ||
+        derivedPhaseOneSkillRunPlans.isNotEmpty;
     var effectivePhaseOneText = phaseOneText;
     var effectivePhaseOneAnswerPayload = phaseOneAnswerPayload;
     var effectivePhaseOneTurn = rawPhaseOneTurn;
@@ -1468,7 +1576,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       );
     }
     final allowPhaseOneContractRepair =
-        !phaseOneExecutionSignalsPresent || phaseOneContinuationCarryover;
+        (!phaseOneExecutionSignalsPresent || phaseOneContinuationCarryover) &&
+        !preferFormalSynthesis;
     if (explicitPhaseOneSkillRunPlans.isEmpty &&
         synthesisReadiness.ready &&
         !shouldIgnorePhaseOneArtifact &&
@@ -1573,6 +1682,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         phaseOneModelRepairApplied = directAnswerDecision.shouldSkipSynthesis;
       }
     }
+    refreshPhaseOneStructuredCarryover(effectivePhaseOneAnswerPayload);
     var streamedRetrievalProcessingSummary = '';
     var streamedAnswerReadinessSummary = '';
     final baseSynthesisTraceForwarder = _buildAnswerProcessTraceForwarder(
@@ -1593,12 +1703,23 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         return;
       }
       final fieldPath =
-          (data[AssistantPipelineDiagnosticsKeys.fieldPath] as String?)?.trim() ??
+          (data[AssistantPipelineDiagnosticsKeys.fieldPath] as String?)
+              ?.trim() ??
           '';
       if (fieldPath ==
           AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary) {
-        streamedRetrievalProcessingSummary =
-            '$streamedRetrievalProcessingSummary${event.message}';
+        streamedRetrievalProcessingSummary = _mergeStableNarrativeDeltaText(
+          previous: streamedRetrievalProcessingSummary,
+          incoming: event.message,
+        );
+        return;
+      }
+      if (fieldPath ==
+          AssistantPipelineDiagnosticsKeys.answerProcessingReadinessSummary) {
+        streamedAnswerReadinessSummary = _mergeStableNarrativeDeltaText(
+          previous: streamedAnswerReadinessSummary,
+          incoming: event.message,
+        );
       }
     }
 
@@ -1742,7 +1863,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       final canStreamSynthesis =
           synthesisReadiness.ready && _runtime.supportsStructuredStreaming;
       if (canStreamSynthesis) {
-        const maxAnswerStreamAttempts = 2;
+        final maxAnswerStreamAttempts = directAnswerDecision.shouldSkipSynthesis
+            ? 1
+            : 2;
         ReactRuntimeResult? streamedSynthesisResult;
         for (
           var attempt = 1;
@@ -1763,6 +1886,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             },
             streamJsonFieldPaths: const <String>[
               AssistantPipelineDiagnosticsKeys.retrievalProcessingSummary,
+              AssistantPipelineDiagnosticsKeys.answerProcessingReadinessSummary,
             ],
             templateContext: templateContext,
             templateVariables: synthesisTemplateVars,
@@ -1782,7 +1906,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                 .map((item) => (item['content'] ?? '').toString())
                 .join('\n');
             final outputTokens = usage_stats.estimateTokenCount(streamedText);
-            final inputTokens = usage_stats.estimateTokenCount(synthesisInputText);
+            final inputTokens = usage_stats.estimateTokenCount(
+              synthesisInputText,
+            );
             final synthesisTrace = AssistantTraceEvent(
               type: AssistantTraceEventType.lifecycleStart,
               message: 'llm request synthesis stream',
@@ -1882,7 +2008,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           synthesisInput: synthesisInput,
           latestUserQuery: latestUserQuery,
           templateContext: templateContext,
+          carriedUnderstandingSnapshot: carriedUnderstandingSnapshot,
           carriedRetrievalProcessing: carriedRetrievalProcessing,
+          carriedHistoricalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
           templateVariables: synthesisTemplateVars,
           streamedRetrievalProcessingSummary:
               streamedRetrievalProcessingSummary,
@@ -1893,6 +2021,50 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           runId: runId,
           traceId: traceId,
           onTraceEvent: synthesisTraceForwarder,
+        );
+      }
+      final synthesisResultTurn = _tryParseAssistantTurnFromRawText(
+        synthesisResult.finalText,
+      );
+      final synthesisResultProjection = synthesisResultTurn != null
+          ? AssistantDisplayTextResolver.projectTurn(synthesisResultTurn)
+          : null;
+      final synthesisResultPayload = parseAnswerPayload(
+        rawFinalText: synthesisResult.finalText,
+        traces: synthesisResult.traces,
+      );
+      final synthesisHasRenderableAnswer = _hasRenderableAnswerPayload(
+        payload: synthesisResultPayload,
+        turn: synthesisResultTurn,
+        projectionRenderableContent:
+            synthesisResultProjection?.hasRenderableContent ?? false,
+      );
+      if (directAnswerDecision.shouldSkipSynthesis &&
+          phaseOneHasRenderableAnswer &&
+          (synthesisResult.degraded ||
+              synthesisResult.failureCode.trim().isNotEmpty) &&
+          !synthesisHasRenderableAnswer) {
+        final preserveTrace = AssistantTraceEvent(
+          type: AssistantTraceEventType.lifecycleEnd,
+          message: 'synthesis failed, preserve phase one direct answer',
+          timestamp: DateTime.now(),
+          runId: runId,
+          traceId: traceId,
+          visibility: TraceVisibility.system,
+          data: <String, dynamic>{
+            'stage': 'phase_one_direct_answer_preserved',
+            'failureCode': synthesisResult.failureCode,
+          },
+        );
+        onTraceEvent?.call(preserveTrace);
+        synthesisResult = ReactRuntimeResult(
+          finalText: effectivePhaseOneText,
+          traces: <AssistantTraceEvent>[
+            ...synthesisResult.traces,
+            preserveTrace,
+          ],
+          degraded: false,
+          failureCode: '',
         );
       }
       mergedResult = ReactRuntimeResult(
@@ -1908,8 +2080,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         rawFinalText: mergedResult.finalText,
         traces: mergedResult.traces,
       );
-      final answerPayloadBeforeSubagentView =
-          AssistantAnswerPayloadReadView(answerPayloadBeforeSubagent);
+      final answerPayloadBeforeSubagentView = AssistantAnswerPayloadReadView(
+        answerPayloadBeforeSubagent,
+      );
       final effectivePhaseOneAnswerPayloadView = AssistantAnswerPayloadReadView(
         effectivePhaseOneAnswerPayload,
       );
@@ -1927,8 +2100,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               primaryDomainId: domainId,
             );
     }
-    final phaseOneRoutingDiagnostics =
-        AssistantPipelineDiagnosticsHelper().buildPhaseOneRoutingDiagnostics(
+    final phaseOneRoutingDiagnostics = AssistantPipelineDiagnosticsHelper()
+        .buildPhaseOneRoutingDiagnostics(
           phaseOneRoute: phaseOneRoute,
           synthesisReadinessReady: synthesisReadiness.ready,
           synthesisReadinessReason: synthesisReadiness.reason,
@@ -1939,8 +2112,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           phaseOneRecoveryApplied: phaseOneRecoveryApplied,
           phaseOneModelRepairApplied: phaseOneModelRepairApplied,
           phaseOneModelRepairAttempted: phaseOneModelRepairAttempted,
-          phaseOneModelRepairProducedText:
-              phaseOneModelRepairProducedText,
+          phaseOneModelRepairProducedText: phaseOneModelRepairProducedText,
           phaseOneModelRepairFailureCode: phaseOneModelRepairFailureCode,
           phaseOneParsedContractTurn: effectivePhaseOneTurn != null,
           phaseOneNextAction:
@@ -1959,19 +2131,21 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               '',
           phaseOneActionCode:
               effectivePhaseOneTurn?.actionCodeType.wireName ??
-              (effectivePhaseOneAnswerPayload['actionCode'] as String?)?.trim() ??
+              (effectivePhaseOneAnswerPayload['actionCode'] as String?)
+                  ?.trim() ??
               '',
           phaseOneReasonCode:
               effectivePhaseOneTurn?.reasonCodeType.wireName ??
-              (effectivePhaseOneAnswerPayload['reasonCode'] as String?)?.trim() ??
+              (effectivePhaseOneAnswerPayload['reasonCode'] as String?)
+                  ?.trim() ??
               '',
           phaseOneHasRenderableContent: phaseOneHasRenderableContent,
           phaseOneExplicitSkillRunPlanCount:
               explicitPhaseOneSkillRunPlans.length,
-          phaseOneDerivedSkillRunPlanCount:
-              derivedPhaseOneSkillRunPlans.length,
+          phaseOneDerivedSkillRunPlanCount: derivedPhaseOneSkillRunPlans.length,
           phaseOneSkillRunPlanCount: phaseOneSkillRunPlans.length,
-          milestone3Ready: phaseOneSkillRunPlans.isNotEmpty &&
+          milestone3Ready:
+              phaseOneSkillRunPlans.isNotEmpty &&
               phaseOneSkillRunPlans.every((item) => item.hasMilestone3Inputs),
           phaseOneSkillRunPlanSource: phaseOneSkillRunPlans.isNotEmpty
               ? (explicitPhaseOneSkillRunPlans.isNotEmpty
@@ -1997,13 +2171,21 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         answerPayload: answerPayloadBeforeSubagent,
       ),
     );
+    final primaryAcceptedEvidence = _uiReferenceWireMaps(primaryUiReferences);
     final primarySkillRun = _buildPrimarySkillRun(
       intentGraph: intentGraph,
       domainId: domainId,
       answerPayload: answerPayloadBeforeSubagent,
       result: mergedResult,
       executionShell: effectiveExecutionShell,
-      references: _uiReferenceWireMaps(primaryUiReferences),
+      references: primaryAcceptedEvidence,
+    );
+    final skillRouteOutput = _buildSkillRouteOutput(
+      userQuery: latestUserQuery,
+      intentGraph: intentGraph,
+      primaryDomainId: domainId,
+      executionShell: effectiveExecutionShell,
+      subagentPlans: skillRunPlans,
     );
     final subagentRuns = await _executeSubagentPlans(
       answerPayload: <String, dynamic>{
@@ -2029,24 +2211,25 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       skillRuns: skillRuns,
       answerPayload: answerPayloadBeforeSubagent,
     );
+    final primarySkillSynthesisResult = _buildPrimarySkillSynthesisResult(
+      primaryDomainId: domainId,
+      answerPayload: answerPayloadBeforeSubagent,
+      fallbackSummary: primarySkillRun.resultSummary,
+      acceptedEvidence: primaryAcceptedEvidence,
+      answerReady: primarySkillRun.answerReady,
+    );
     final skillSynthesisInput = SkillSynthesisInput.fromExecution(
       userQuery: latestUserQuery,
-      routeNarrative: skillRunPlans
-          .map((item) => item.routeNarrative.trim())
-          .where((item) => item.isNotEmpty)
-          .join(' | '),
-      selectedTargets: skillRunPlans,
+      skillRoute: skillRouteOutput,
       subagentRuns: subagentRuns,
-      pendingClarifications: skillRunPlans
-          .expand((item) => item.pendingClarifications)
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false),
+      primarySkillResult: primarySkillSynthesisResult,
       sessionSummary: templateVariablesView.hasContinuationCarryoverContext
           ? templateVariablesView.recentDialogueRounds
-              .map((item) => (item['assistantSummary'] as String?)?.trim() ?? '')
-              .where((item) => item.isNotEmpty)
-              .join(' | ')
+                .map(
+                  (item) => (item['assistantSummary'] as String?)?.trim() ?? '',
+                )
+                .where((item) => item.isNotEmpty)
+                .join(' | ')
           : '',
     );
     if (subagentRuns.isNotEmpty) {
@@ -2057,9 +2240,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           .toList(growable: false);
       final fusionTemplateVars = buildFusionTemplateVariables(
         bundle: synthesisTemplateBundle,
-        skillRuns: skillRuns.map((item) => item.toJson()).toList(
-              growable: false,
-            ),
+        skillRuns: skillRuns
+            .map((item) => item.toJson())
+            .toList(growable: false),
         aggregationState: aggregationState.toJson(),
         subagentRuns: runsForModel,
         skillSynthesis: skillSynthesisInput.toJson(),
@@ -2109,7 +2292,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         synthesisInput: subagentSynthesisInput,
         latestUserQuery: latestUserQuery,
         templateContext: templateContext,
+        carriedUnderstandingSnapshot: carriedUnderstandingSnapshot,
         carriedRetrievalProcessing: carriedRetrievalProcessing,
+        carriedHistoricalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
         templateVariables: fusionTemplateVars,
         streamedRetrievalProcessingSummary: streamedRetrievalProcessingSummary,
         streamedAnswerReadinessSummary: streamedAnswerReadinessSummary,
@@ -2206,9 +2391,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       answerBoundaryPolicy: answerBoundaryPolicy,
       previousSlotState: previousSlotState,
       phaseOneRoutingDiagnostics: phaseOneRoutingDiagnostics,
-      understandingSnapshot: understandingSnapshotForSynthesis,
+      understandingSnapshot: carriedUnderstandingSnapshot,
       retrievalProcessing: carriedRetrievalProcessing,
-      historicalThinkingSnapshot: historicalThinkingSnapshotFromPhaseOne,
+      historicalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
       streamedRetrievalProcessingSummary: streamedRetrievalProcessingSummary,
       streamedAnswerReadinessSummary: streamedAnswerReadinessSummary,
       previousDomainPolicyBundle: previousDomainPolicyBundle,
@@ -2311,7 +2496,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required List<Map<String, dynamic>> synthesisInput,
     required String latestUserQuery,
     required Map<String, dynamic> templateContext,
+    required Map<String, dynamic> carriedUnderstandingSnapshot,
     required Map<String, dynamic> carriedRetrievalProcessing,
+    required Map<String, dynamic> carriedHistoricalThinkingSnapshot,
     required Map<String, dynamic> templateVariables,
     required String streamedRetrievalProcessingSummary,
     required String streamedAnswerReadinessSummary,
@@ -2449,7 +2636,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                 ),
               ) ||
               hasStructuredContent(
-                payloadMap(payload, AssistantPipelineStateKeys.answerProcessing),
+                payloadMap(
+                  payload,
+                  AssistantPipelineStateKeys.answerProcessing,
+                ),
               );
           if (hasStageSnapshots) {
             return payload;
@@ -2520,6 +2710,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               currentPayload,
               AssistantPipelineStateKeys.understandingSnapshot,
             ),
+            carriedUnderstandingSnapshot,
           ]);
       final fallbackHistoricalThinkingSnapshot =
           firstStructuredMap(<Map<String, dynamic>>[
@@ -2535,6 +2726,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               currentPayload,
               AssistantPipelineStateKeys.historicalThinkingSnapshot,
             ),
+            carriedHistoricalThinkingSnapshot,
           ]);
       final fallbackSlotState = firstStructuredMap(<Map<String, dynamic>>[
         payloadMap(repairedTracePayload, AssistantPipelineStateKeys.slotState),
@@ -2575,41 +2767,40 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ...repairedPayload,
         AssistantPipelineStateKeys.understandingSnapshot:
             firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(
-            repairedPayload,
-            AssistantPipelineStateKeys.understandingSnapshot,
-          ),
-          payloadMap(
-            repairedTracePayload,
-            AssistantPipelineStateKeys.understandingSnapshot,
-          ),
-          fallbackUnderstandingSnapshot,
-        ]),
+              payloadMap(
+                repairedPayload,
+                AssistantPipelineStateKeys.understandingSnapshot,
+              ),
+              payloadMap(
+                repairedTracePayload,
+                AssistantPipelineStateKeys.understandingSnapshot,
+              ),
+              fallbackUnderstandingSnapshot,
+            ]),
         AssistantPipelineStateKeys.retrievalProcessing:
             mergedRetrievalProcessing,
         AssistantPipelineStateKeys.answerProcessing: mergedAnswerProcessing,
         AssistantPipelineStateKeys.historicalThinkingSnapshot:
             firstStructuredMap(<Map<String, dynamic>>[
-          payloadMap(
-            repairedPayload,
-            AssistantPipelineStateKeys.historicalThinkingSnapshot,
-          ),
-          payloadMap(
-            repairedTracePayload,
-            AssistantPipelineStateKeys.historicalThinkingSnapshot,
-          ),
-          fallbackHistoricalThinkingSnapshot,
-        ]),
-        AssistantPipelineStateKeys.slotState: firstStructuredMap(
-          <Map<String, dynamic>>[
-            payloadMap(repairedPayload, AssistantPipelineStateKeys.slotState),
-            payloadMap(
-              repairedTracePayload,
-              AssistantPipelineStateKeys.slotState,
-            ),
-          fallbackSlotState,
-          ],
-        ),
+              payloadMap(
+                repairedPayload,
+                AssistantPipelineStateKeys.historicalThinkingSnapshot,
+              ),
+              payloadMap(
+                repairedTracePayload,
+                AssistantPipelineStateKeys.historicalThinkingSnapshot,
+              ),
+              fallbackHistoricalThinkingSnapshot,
+            ]),
+        AssistantPipelineStateKeys.slotState:
+            firstStructuredMap(<Map<String, dynamic>>[
+              payloadMap(repairedPayload, AssistantPipelineStateKeys.slotState),
+              payloadMap(
+                repairedTracePayload,
+                AssistantPipelineStateKeys.slotState,
+              ),
+              fallbackSlotState,
+            ]),
       };
       final fallbackPayload = <String, dynamic>{
         ...currentPayload,
@@ -2655,7 +2846,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             'content': await _renderPromptSnippet(
               'plain_markdown_recovery',
               variables: <String, dynamic>{
-                'anchorReminder': templateVariablesView.requiredTopicAnchors.isEmpty
+                'anchorReminder':
+                    templateVariablesView.requiredTopicAnchors.isEmpty
                     ? ''
                     : await _renderPromptSnippet(
                         'synthesis_anchor_reminder',
@@ -2781,8 +2973,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     if (nextAction == AssistantNextAction.unknown) {
       return 'unknown_next_action';
     }
-    final projectedMarkdown =
-        AssistantDisplayTextResolver.projectTurn(turn).markdown;
+    final projectedMarkdown = AssistantDisplayTextResolver.projectTurn(
+      turn,
+    ).markdown;
     if (projectedMarkdown.isEmpty) return 'empty_projected_markdown';
     if (AssistantContentFilters.isJsonEnvelope(projectedMarkdown) ||
         AssistantContentFilters.isProgressPlaceholder(projectedMarkdown) ||
@@ -2862,9 +3055,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ? ''
         : await _renderPromptSnippet(
             'synthesis_anchor_reminder',
-            variables: <String, dynamic>{
-              'anchors': anchors.join('、'),
-            },
+            variables: <String, dynamic>{'anchors': anchors.join('、')},
           );
     final anchorReminder = renderedAnchorReminder;
     final continuationReminder =
@@ -3037,9 +3228,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ? ''
         : await _renderPromptSnippet(
             'synthesis_anchor_reminder',
-            variables: <String, dynamic>{
-              'anchors': anchors.join('、'),
-            },
+            variables: <String, dynamic>{'anchors': anchors.join('、')},
           );
     final anchorReminder = renderedAnchorReminder;
     final continuationReminder =
@@ -3061,15 +3250,39 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       },
     );
     if (rendered.isNotEmpty) return rendered;
-    return _buildPhaseOneDirectAnswerRepairFallback();
+    return _buildPhaseOneDirectAnswerRepairFallback(
+      latestUserQuery: latestUserQuery,
+      recoveredMarkdown: recoveredMarkdown,
+      anchorReminder: anchorReminder,
+      continuationReminder: continuationReminder,
+    );
   }
 
   String _buildSynthesisRepairFallback(String repairReason) {
     return 'assistant_turn_repair|phase=synthesis|reason=$repairReason|output=single_assistant_turn_json';
   }
 
-  String _buildPhaseOneDirectAnswerRepairFallback() {
-    return 'assistant_turn_repair|phase=phase_one_direct_answer|output=single_assistant_turn_json';
+  String _buildPhaseOneDirectAnswerRepairFallback({
+    required String latestUserQuery,
+    required String recoveredMarkdown,
+    required String anchorReminder,
+    required String continuationReminder,
+  }) {
+    final buffer = StringBuffer()
+      ..writeln('repair_mode=phase_one_direct_answer')
+      ..writeln('latestUserQuery=$latestUserQuery')
+      ..writeln('output=single_assistant_turn_json');
+    if (anchorReminder.trim().isNotEmpty) {
+      buffer.writeln(anchorReminder);
+    }
+    if (continuationReminder.trim().isNotEmpty) {
+      buffer.writeln(continuationReminder);
+    }
+    buffer
+      ..writeln('<draft_answer>')
+      ..writeln(recoveredMarkdown)
+      ..writeln('</draft_answer>');
+    return buffer.toString().trimRight();
   }
 
   bool _hasContinuationCarryoverContext(
@@ -3493,11 +3706,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         toolCalls.isEmpty &&
         messageKind == AssistantMessageKind.progress &&
         candidate.isNotEmpty &&
-        (
-          payloadView.phaseIdTrimmed ==
-              AssistantPipelineDiagnosticsKeys.answeringPhaseId ||
-          payloadView.resultTextTrimmed.isNotEmpty
-        );
+        (payloadView.phaseIdTrimmed ==
+                AssistantPipelineDiagnosticsKeys.answeringPhaseId ||
+            payloadView.resultTextTrimmed.isNotEmpty);
     if (!answerLike && !staleProgressAnswer) {
       return '';
     }
@@ -3611,7 +3822,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     if (hasSentenceEnding && normalized.length >= 8) {
       return true;
     }
-    return normalized.length >= 12 && _containsCjkOrAsciiLetterOrDigit(normalized);
+    return normalized.length >= 12 &&
+        _containsCjkOrAsciiLetterOrDigit(normalized);
   }
 
   Future<List<AssistantSubagentRunRecord>> _executeSubagentPlans({
@@ -3632,7 +3844,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         .toList(growable: false);
     if (plans.isEmpty) return const <AssistantSubagentRunRecord>[];
     // Build a single subagent execution closure for parallel dispatch
-      Future<AssistantSubagentRunRecord> runSingleSubagent(
+    Future<AssistantSubagentRunRecord> runSingleSubagent(
       int index,
       SubagentPlan plan,
     ) async {
@@ -3640,8 +3852,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           ? plan.subagentId
           : 'subagent_${index + 1}';
       final goal = plan.goal;
-      final taskBrief =
-          plan.taskBrief.trim().isNotEmpty ? plan.taskBrief.trim() : goal;
+      final taskBrief = plan.taskBrief.trim().isNotEmpty
+          ? plan.taskBrief.trim()
+          : goal;
       final routeNarrative = plan.routeNarrative.trim();
       final localContextSeed = plan.localContextSeed.trim();
       final executionGoal = taskBrief.isNotEmpty ? taskBrief : goal;
@@ -3770,18 +3983,20 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           childToolResults,
           isRealtimeLike: _isRealtimeLikeProblemClass(plan.problemClass),
         );
-        final childReferenceMaps =
-            childReferences.map((item) => item.toJson()).toList(growable: false);
+        final childReferenceMaps = childReferences
+            .map((item) => item.toJson())
+            .toList(growable: false);
         final childAcceptedEvidence = childReferenceMaps;
         final childRejectedEvidence = const <Map<String, dynamic>>[];
-        final childMissingSlots = <String>[
-          ...childAnswerView.topLevelMissingSlots,
-          ...childAnswerView.slotStateMissingSlots,
-        ]
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toSet()
-            .toList(growable: false);
+        final childMissingSlots =
+            <String>[
+                  ...childAnswerView.topLevelMissingSlots,
+                  ...childAnswerView.slotStateMissingSlots,
+                ]
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toSet()
+                .toList(growable: false);
         final childNextAction = childAnswerView.nextActionWireName;
         final childFailureReason = childAnswerView.diagnosticsFailureReason;
         final subagentUsage = usage_stats.buildUsageStatsFromTraces(
@@ -3989,10 +4204,11 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required int uiReferenceCount,
   }) {
     final feedbackHint =
-        (request.contextScopeHint[AssistantPipelineStateKeys.preferenceFeedback] ??
-            '')
-        .toString()
-        .trim();
+        (request.contextScopeHint[AssistantPipelineStateKeys
+                    .preferenceFeedback] ??
+                '')
+            .toString()
+            .trim();
     return _preferenceFactService.buildSessionPreferenceFacts(
       problemClass: skillRuns.isNotEmpty ? skillRuns.first.problemClass : '',
       uiReferenceCount: uiReferenceCount,
@@ -4007,8 +4223,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required List<PreferenceFact> sessionFacts,
   }) {
     return _preferenceFactService.buildLongTermPreferenceFacts(
-      seedFactsRaw:
-          request.contextScopeHint[AssistantPipelineStateKeys.longTermPreferenceFacts],
+      seedFactsRaw: request
+          .contextScopeHint[AssistantPipelineStateKeys.longTermPreferenceFacts],
       emergedTagMaps: apv.diagnosticsEmergedTagMaps,
       sessionFacts: sessionFacts,
     );
@@ -4104,8 +4320,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   ProfileUpdateProposal? _buildProfileUpdateProposal({
     required AssistantRunRequest request,
   }) {
-    final proposalRaw =
-        request.contextScopeHint[AssistantPipelineStateKeys.profileUpdateProposal];
+    final proposalRaw = request
+        .contextScopeHint[AssistantPipelineStateKeys.profileUpdateProposal];
     if (proposalRaw is Map) {
       final parsed = ProfileUpdateProposal.fromJson(
         proposalRaw.cast<String, dynamic>(),
@@ -4139,7 +4355,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     Map<String, dynamic> carriedUnderstandingSnapshot =
         const <String, dynamic>{},
     Map<String, dynamic> carriedRetrievalProcessing = const <String, dynamic>{},
-    Map<String, dynamic> carriedHistoricalThinkingSnapshot = const <String, dynamic>{},
+    Map<String, dynamic> carriedHistoricalThinkingSnapshot =
+        const <String, dynamic>{},
     String streamedRetrievalProcessingSummary = '',
     String streamedAnswerReadinessSummary = '',
     Map<String, dynamic> phaseOneRoutingDiagnostics = const <String, dynamic>{},
@@ -4150,6 +4367,22 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     String? runId,
     String? traceId,
   }) {
+    final skillRoute = SkillRouteOutput(
+      userQuery: skillSynthesisInput.userQuery,
+      selectedTargets: skillSynthesisInput.selectedTargets
+          .map(
+            (item) => SkillRouteTarget(
+              skillId: item.skillId,
+              role: item.role,
+              priority: item.priority,
+              routeNarrative: item.reason,
+            ),
+          )
+          .toList(growable: false),
+      routeNarrative: skillSynthesisInput.routeNarrative,
+      needClarify: skillSynthesisInput.pendingClarifications.isNotEmpty,
+      pendingClarifications: skillSynthesisInput.pendingClarifications,
+    );
     return buildStructuredResponsePayload(
       request: request,
       contextAssembly: contextAssembly,
@@ -4158,6 +4391,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       intentGraph: intentGraph,
       skillRuns: skillRuns,
       aggregationState: aggregationState,
+      skillRoute: skillRoute,
       subagentPlan: subagentPlan,
       subagentRuns: subagentRuns,
       skillSynthesisInput: skillSynthesisInput,

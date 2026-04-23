@@ -37,11 +37,15 @@ class ArticlePageBackwardLeafRenderer extends StatelessWidget {
   Widget build(BuildContext context) {
     final laidDownWidth = scene.pageSize.width * scene.frame.laidDownWidthNormalized;
     final curlWidth = scene.pageSize.width * scene.frame.curlWidthNormalized;
+    final versoRevealWidth = scene.pageSize.width *
+        scene.frame.versoRevealWidthNormalized.clamp(0.0, 1.0).toDouble();
+    final edgeBandWidth = scene.pageSize.width *
+        scene.frame.edgeBandWidthNormalized.clamp(0.0, 1.0).toDouble();
     final rectoRevealWidth = scene.pageSize.width *
         scene.frame.rectoRevealWidthNormalized.clamp(0.0, 1.0).toDouble();
     final boundaryShadowWidth = math.max(
       scene.pageSize.width * 0.08,
-      curlWidth * 1.45,
+      math.max(versoRevealWidth + edgeBandWidth, curlWidth * 0.72) * 1.45,
     );
     final liftPx = scene.pageRect.width * scene.frame.edgeLift * 0.08;
     final curlLeft = scene.pageRect.left + laidDownWidth;
@@ -122,6 +126,8 @@ class ArticlePageBackwardLeafRenderer extends StatelessWidget {
               leafRecto: scene.leafRecto,
               leafVerso: scene.leafVerso,
               curlWidth: curlWidth,
+              versoRevealWidth: math.min(versoRevealWidth, curlWidth),
+              edgeBandWidth: math.min(edgeBandWidth, curlWidth),
               rectoRevealWidth: math.min(rectoRevealWidth, curlWidth),
               liftPx: liftPx,
               unrollProgress: scene.frame.unrollProgress,
@@ -142,6 +148,8 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
     required this.leafRecto,
     required this.leafVerso,
     required this.curlWidth,
+    required this.versoRevealWidth,
+    required this.edgeBandWidth,
     required this.rectoRevealWidth,
     required this.liftPx,
     required this.unrollProgress,
@@ -155,6 +163,8 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
   final Widget leafRecto;
   final Widget leafVerso;
   final double curlWidth;
+  final double versoRevealWidth;
+  final double edgeBandWidth;
   final double rectoRevealWidth;
   final double liftPx;
   final double unrollProgress;
@@ -165,6 +175,13 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final clampedRectoWidth = math.min(rectoRevealWidth, curlWidth);
+    final remainingAfterRecto = math.max(0.0, curlWidth - clampedRectoWidth);
+    final clampedEdgeBandWidth = math.min(edgeBandWidth, remainingAfterRecto);
+    final clampedVersoWidth = math.min(
+      versoRevealWidth,
+      math.max(0.0, curlWidth - clampedRectoWidth - clampedEdgeBandWidth),
+    );
     final flapAngle = (ui.lerpDouble(-1.34, -0.2, unrollProgress) ?? -0.64) *
         (1 - settleProgress * 0.72);
     final flapShadow = 0.1 + (1 - settleProgress) * 0.12;
@@ -181,21 +198,52 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
           children: <Widget>[
             _ClippedLeafSurface(
               surface: leafVerso,
-              visibleWidth: curlWidth,
+              visibleWidth: clampedRectoWidth +
+                  clampedEdgeBandWidth +
+                  clampedVersoWidth,
               pageSize: pageSize,
               alignment: Alignment.centerLeft,
             ),
-            if (rectoRevealWidth > 0.5)
+            if (clampedRectoWidth > 0.5)
               Align(
                 alignment: Alignment.centerLeft,
                 child: SizedBox(
-                  width: rectoRevealWidth,
+                  width: clampedRectoWidth,
                   height: pageSize.height + liftPx * 2,
                   child: _ClippedLeafSurface(
                     surface: leafRecto,
-                    visibleWidth: rectoRevealWidth,
+                    visibleWidth: clampedRectoWidth,
                     pageSize: pageSize,
                     alignment: Alignment.centerLeft,
+                  ),
+                ),
+              ),
+            if (clampedEdgeBandWidth > 0.5)
+              Positioned(
+                left: clampedRectoWidth,
+                top: 0,
+                width: clampedEdgeBandWidth,
+                height: pageSize.height + liftPx * 2,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: <Color>[
+                          highlightColor.withValues(
+                            alpha: 0.18 + unrollProgress * 0.08,
+                          ),
+                          paperTintColor.withValues(
+                            alpha: 0.18 + (1 - settleProgress) * 0.08,
+                          ),
+                          shadowColor.withValues(
+                            alpha: 0.14 + (1 - settleProgress) * 0.08,
+                          ),
+                        ],
+                        stops: const <double>[0.0, 0.42, 1.0],
+                      ),
+                    ),
                   ),
                 ),
               ),

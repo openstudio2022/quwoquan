@@ -6,6 +6,8 @@ class ChatInboxDto {
   final String type;
   final String title;
   final String avatarUrl;
+  final String groupAvatarUrl;
+  final int groupAvatarVersion;
   final List<String> avatarCompositeUrls;
   final String lastMessagePreview;
   final String lastMessageType;
@@ -22,6 +24,8 @@ class ChatInboxDto {
     this.type = '',
     this.title = '',
     this.avatarUrl = '',
+    this.groupAvatarUrl = '',
+    this.groupAvatarVersion = 0,
     this.avatarCompositeUrls = const <String>[],
     this.lastMessagePreview = '',
     this.lastMessageType = 'text',
@@ -40,6 +44,8 @@ class ChatInboxDto {
       type: m['type']?.toString() ?? '',
       title: m['title']?.toString() ?? m['conversationTitle']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      groupAvatarUrl: m['groupAvatarUrl']?.toString() ?? '',
+      groupAvatarVersion: (m['groupAvatarVersion'] as num?)?.toInt() ?? 0,
       avatarCompositeUrls: _parseStringList(m['avatarCompositeUrls']) ?? _parseStringList(m['memberAvatars']) ?? <String>[],
       lastMessagePreview: m['lastMessagePreview']?.toString() ?? m['lastMessage']?.toString() ?? m['preview']?.toString() ?? '',
       lastMessageType: m['lastMessageType']?.toString() ?? m['messageType']?.toString() ?? 'text',
@@ -59,6 +65,8 @@ class ChatInboxDto {
       'type': type,
       'title': title,
       'avatarUrl': avatarUrl,
+      'groupAvatarUrl': groupAvatarUrl,
+      'groupAvatarVersion': groupAvatarVersion,
       'avatarCompositeUrls': avatarCompositeUrls,
       'lastMessagePreview': lastMessagePreview,
       'lastMessageType': lastMessageType,
@@ -77,6 +85,8 @@ class ChatInboxDto {
     String? type,
     String? title,
     String? avatarUrl,
+    String? groupAvatarUrl,
+    int? groupAvatarVersion,
     List<String>? avatarCompositeUrls,
     String? lastMessagePreview,
     String? lastMessageType,
@@ -93,6 +103,8 @@ class ChatInboxDto {
       type: type ?? this.type,
       title: title ?? this.title,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      groupAvatarUrl: groupAvatarUrl ?? this.groupAvatarUrl,
+      groupAvatarVersion: groupAvatarVersion ?? this.groupAvatarVersion,
       avatarCompositeUrls: avatarCompositeUrls ?? this.avatarCompositeUrls,
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
       lastMessageType: lastMessageType ?? this.lastMessageType,

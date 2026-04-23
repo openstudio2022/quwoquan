@@ -68,75 +68,77 @@ api_routes:
     operation: UnbindCredential
     description: 解绑凭证（不能解绑最后一个）
 
-  # ── 子账号管理（OwnerAccount 视图，需登录） ──────────────────────────────
+  # ── 分身管理（用户私有视图，需登录） ───────────────────────────────────
 
   - method: GET
-    path: /v1/owner/sub-accounts
-    operation: ListSubAccounts
-    description: 查看自己所有子账号列表
+    path: /v1/user/personas
+    operation: ListPersonas
+    description: 查看自己所有分身列表
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsFromOwner, profileVisibility, purposeHint, hasAttributedHistory, updatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: GET
-    path: /v1/owner/sub-accounts/summary
+    path: /v1/user/personas/summary
     operation: GetPersonaManagementSummary
     description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
     response_entity: PersonaManagementQuotaView
     response_fields: [ownerUserId, totalCount, quotaLimit, remainingCount, activeProfileSubjectId, primaryProfileSubjectId]
 
   - method: GET
-    path: /v1/owner/sub-accounts/active
+    path: /v1/user/personas/active
     operation: GetActivePersonaContext
     description: 获取当前激活分身上下文快照（供跨域动作主体透传）
     response_entity: ActivePersonaContextView
     response_fields: [ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, switchedAt]
 
   - method: POST
-    path: /v1/owner/sub-accounts
-    operation: CreateSubAccount
-    description: 创建新子账号
+    path: /v1/user/personas
+    operation: CreatePersona
+    description: 创建新分身
     request_entity: Persona
-    request_fields: [displayName, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
+    request_fields: [displayName, userHandle, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsFromOwner, profileVisibility, purposeHint, hasAttributedHistory, updatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: PATCH
-    path: /v1/owner/sub-accounts/{subAccountId}
-    operation: UpdateSubAccount
-    description: 更新子账号资料或隔离等级
+    path: /v1/user/personas/{personaId}
+    operation: UpdatePersona
+    description: 更新分身资料或隔离等级
     request_entity: ProfileSubjectMutation
-    request_fields: [displayName, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
+    request_fields: [displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsFromOwner, profileVisibility, purposeHint, hasAttributedHistory, updatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+
+  - method: POST
+    path: /v1/user/personas/{personaId}/profile-sync
+    operation: ApplyPersonaProfileSync
+    description: 将某个分身的资料字段同步到全部或指定其它分身
+    request_entity: ProfileSubjectMutation
+    request_fields: [applyScope, syncTargetIds, fieldsMask]
 
   - method: GET
-    path: /v1/owner/sub-accounts/{subAccountId}/lifecycle-guard
-    operation: GetSubAccountLifecycleGuard
+    path: /v1/user/personas/{personaId}/lifecycle-guard
+    operation: GetPersonaLifecycleGuard
     description: 获取该分身当前可否删除/退役的保护状态
     response_entity: PersonaLifecycleGuardView
     response_fields: [profileSubjectId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
-  - method: DELETE
-    path: /v1/owner/sub-accounts/{subAccountId}
-    operation: DeleteSubAccount
-    description: 删除子账号（兼容入口；空白分身可删，有历史归因的分身应使用退役契约）
-
   - method: POST
-    path: /v1/owner/sub-accounts/{subAccountId}:retire
-    operation: RetireSubAccount
+    path: /v1/user/personas/{personaId}/retire
+    operation: RetirePersona
     description: 退役已有历史归因的分身，保留历史对象作者归因
     response_entity: PersonaLifecycleGuardView
     response_fields: [profileSubjectId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
-  - method: POST
-    path: /v1/owner/sub-accounts/{subAccountId}:delete-empty
-    operation: DeleteEmptySubAccount
+  - method: DELETE
+    path: /v1/user/personas/{personaId}/delete-empty
+    operation: DeleteEmptyPersona
     description: 删除无历史归因的空白分身
 
   - method: POST
-    path: /v1/owner/sub-accounts/{subAccountId}/activate
-    operation: ActivateSubAccount
-    description: 切换激活子账号（强一致，排他写）
+    path: /v1/user/personas/{personaId}/activate
+    operation: ActivatePersona
+    description: 切换激活分身（强一致，排他写）
     response_entity: ActivePersonaContextView
     response_fields: [ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, switchedAt]
 
@@ -193,7 +195,15 @@ api_routes:
     description: 清空当前账号最近搜索记录
     auth: required
 
-  # ── 原有 API（保持兼容，逐步迁移到上方路径） ──────────────────────────────
+  - method: POST
+    path: /v1/user/sync
+    operation: PullUserSync
+    description: 拉取当前用户资料与头像相关的增量同步补丁
+    request_fields: [afterSeq, limit]
+    response_fields: [patches, latestSyncSeq, hasMore, requiresResync]
+    auth: required
+
+  # ── 其它用户域 API ───────────────────────────────────────────────────────
 
   - method: GET
     path: /v1/user/profile/{userId}
@@ -209,37 +219,6 @@ api_routes:
     description: "[已有] 更新主控账号资料"
     request_entity: ProfileSubjectMutation
     request_fields: [nickname, displayName, avatarUrl, backgroundUrl, bio, gender, birthDate, region, profileVisibility, applyScope, syncTargetIds, fieldsMask]
-
-  - method: GET
-    path: /v1/user/personas
-    operation: ListPersonas
-    description: "[已有] 子账号列表（向后兼容，等同于 ListSubAccounts）"
-    response_entity: Persona
-    response_fields: [id, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner]
-
-  - method: POST
-    path: /v1/user/personas
-    operation: CreatePersona
-    description: "[已有] 创建子账号（向后兼容）"
-    request_entity: Persona
-    request_fields: [displayName, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
-
-  - method: PATCH
-    path: /v1/user/personas/{personaId}
-    operation: UpdatePersona
-    description: "[已有] 更新子账号（向后兼容）"
-    request_entity: ProfileSubjectMutation
-    request_fields: [displayName, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
-
-  - method: DELETE
-    path: /v1/user/personas/{personaId}
-    operation: DeletePersona
-    description: "[已有] 删除子账号（向后兼容）"
-
-  - method: POST
-    path: /v1/user/personas/{personaId}/activate
-    operation: ActivatePersona
-    description: "[已有] 激活子账号（向后兼容）"
 
   - method: GET
     path: /v1/user/settings/notifications

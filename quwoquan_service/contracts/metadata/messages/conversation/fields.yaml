@@ -40,6 +40,33 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+      - name: groupAvatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群头像预合成结果资产 ID；仅群聊会话使用
+
+      - name: groupAvatarVersion
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群头像版本号；服务端每次预合成成功后单调递增
+
+      - name: groupAvatarSourceHash
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 基于 top9 成员与头像版本计算的输入哈希；未变化则可跳过重算
+
       - name: creatorId
         type: string
         constraints: [NOT_NULL]
@@ -431,6 +458,40 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: avatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarVersion
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupAvatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群聊服务端预合成头像 URL；仅主渲染链路使用
+
+      - name: groupAvatarVersion
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群头像版本号；用于端侧缓存失效与 patch 幂等
+
       - name: memberType
         type: enum
         enum_ref: MemberType
@@ -592,6 +653,22 @@ entities:
       - name: avatarUrl
         type: string
         constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupAvatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupAvatarVersion
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -771,6 +848,22 @@ entities:
       - name: avatarUrl
         type: string
         constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupAvatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: groupAvatarVersion
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read

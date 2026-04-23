@@ -5,6 +5,55 @@ import 'package:test/test.dart';
 
 void main() {
   group('AssistantDisplayStateProjection', () {
+    test('检索引用展示优先使用 timeline 中的完整 references 列表', () {
+      const allReferences = <RetrievalProcessingReference>[
+        RetrievalProcessingReference(
+          title: '来源 A',
+          url: 'https://docs.example.com/a',
+          source: 'docs.example.com',
+        ),
+        RetrievalProcessingReference(
+          title: '来源 B',
+          url: 'https://docs.example.com/b',
+          source: 'docs.example.com',
+        ),
+        RetrievalProcessingReference(
+          title: '来源 C',
+          url: 'https://docs.example.com/c',
+          source: 'docs.example.com',
+        ),
+      ];
+      final state = buildAssistantDisplayState(
+        processTimeline: const <ProcessTimelineFrame>[
+          ProcessTimelineFrame(
+            frameId: 'r',
+            stepId: ProcessStepId.retrievalProcessing,
+            status: JourneyStageStatus.completed,
+            references: allReferences,
+          ),
+        ],
+        retrievalProcessing: const RetrievalProcessingSnapshot(
+          processedDocumentCount: 8,
+          acceptedDocumentCount: 2,
+          processingSummary: '已完成检索筛选。',
+          acceptedReferences: <RetrievalProcessingReference>[
+            RetrievalProcessingReference(
+              title: '来源 A',
+              url: 'https://docs.example.com/a',
+              source: 'docs.example.com',
+            ),
+          ],
+        ),
+      );
+
+      final statsBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'retrieval_reference_stats',
+      );
+      expect(statsBlock.title, '处理了 8 篇，接纳了 2 篇');
+      expect(statsBlock.references, hasLength(3));
+      expect(statsBlock.references.last.url, 'https://docs.example.com/c');
+    });
+
     test('会从 snapshots 和 timeline 生成结构化过程区与答案区', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
@@ -34,6 +83,7 @@ void main() {
         ],
         understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
           userFacingSummary: '我先确认你的核心问题和约束。',
+          retrievalDesignNarrative: '我会先按关键信号拆开检索。',
           concernPoints: <String>['先看事实', '再看建议'],
           resolutionItems: <RunArtifactsUnderstandingResolutionItem>[
             RunArtifactsUnderstandingResolutionItem(
@@ -72,17 +122,16 @@ void main() {
         state.process.blocks.first.title,
         contains('我先确认你的核心问题和约束'),
       );
-      expect(
-        state.process.blocks.first.title,
-        contains('深圳'),
-        reason:
-            'resolution items 的地理信息应融入 summary 叙事中',
-      );
       final understandingBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'understanding_narrative',
       );
+      expect(understandingBlock.body, isEmpty);
+      final queryDesignBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'retrieval_query_design',
+      );
+      expect(queryDesignBlock.title, contains('我会先按关键信号拆开检索'));
       expect(
-        understandingBlock.body,
+        queryDesignBlock.body,
         contains('检索词会围绕“昨天A股 大涨 原因”、“昨日 A股 涨停 板块”展开'),
       );
       final statsBlock = state.process.blocks.firstWhere(
@@ -93,15 +142,7 @@ void main() {
         (block) => block.blockId == 'retrieval_narrative',
       );
       expect(retrievalNarrativeBlock.title, contains('能直接支撑结论'));
-      expect(retrievalNarrativeBlock.body, contains('整理成回答'));
-      expect(
-        retrievalNarrativeBlock.body,
-        contains('我先把结果更新时间一致、关键数值可交叉验证这些能直接支撑回答的点拎出来。'),
-      );
-      expect(
-        retrievalNarrativeBlock.body,
-        contains('回答会按先说结论、再补充建议的顺序展开。'),
-      );
+      expect(retrievalNarrativeBlock.body, isEmpty);
       expect(
         state.process.blocks.any(
           (block) => block.blockId == 'understanding_resolution_items',
@@ -319,7 +360,7 @@ void main() {
       );
     });
 
-    test('summary 很短但有 resolution items 时，信息融入 summary 叙事', () {
+    test('summary 很短但有 resolution items 时，主叙事保持模型原文', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -357,8 +398,8 @@ void main() {
       );
       expect(
         summaryBlock.title,
-        contains('外出建议带伞'),
-        reason: 'resolution items 的补充信息应融入 summary',
+        isNot(contains('外出建议带伞')),
+        reason: 'resolution items 不再参与 runtime 主叙事拼接',
       );
       expect(
         state.process.blocks.any(
@@ -369,7 +410,7 @@ void main() {
       );
     });
 
-    test('summary 已包含 resolution 信息时，不重复追加', () {
+    test('summary 已包含 resolution 信息时，不再由 runtime 追加内容', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -402,14 +443,12 @@ void main() {
       );
       expect(
         summaryBlock.title,
-        equals(
-          '你想了解天气并查看出门建议。外出建议带伞；出行建议优先地铁。',
-        ),
-        reason: 'summary 已包含 resolution 信息，不应追加额外内容',
+        equals('你想了解天气并查看出门建议。'),
+        reason: '主叙事只保留模型字段，不再拼接 resolution items',
       );
     });
 
-    test('summary 已含一部分信息时，只追加缺失的补充内容', () {
+    test('summary 已含一部分信息时，不再追加缺失补充内容', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -442,17 +481,12 @@ void main() {
       );
       expect(
         summaryBlock.title,
-        contains('查询范围为深圳'),
-        reason: '缺失的补充信息应追加到叙事中',
-      );
-      expect(
-        summaryBlock.title,
-        contains('外出前查看降雨变化'),
-        reason: '补充内容应追加到叙事中',
+        equals('获取天气及穿衣、出行建议'),
+        reason: '主叙事不再由 runtime 拼接补充信息',
       );
     });
 
-    test('summary 为空时，从 resolution items 构建叙事', () {
+    test('summary 为空时，不再从 resolution items 反向生成主叙事', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -480,15 +514,15 @@ void main() {
         ),
       );
 
-      final summaryBlock = state.process.blocks.firstWhere(
-        (block) => block.blockId == 'understanding_narrative',
+      expect(
+        state.process.blocks.any(
+          (block) => block.blockId == 'understanding_narrative',
+        ),
+        isFalse,
       );
-      expect(summaryBlock.title, contains('外出建议带伞'));
-      expect(summaryBlock.title, contains('出行建议优先地铁'));
-      expect(summaryBlock.kind, ProcessDisplayBlockKind.summary);
     });
 
-    test('retrieval design timeline 会并入 understanding 叙事并带出检索线索', () {
+    test('retrieval design timeline 会生成独立 query design block', () {
       final state = buildAssistantDisplayState(
         processTimeline: const <ProcessTimelineFrame>[
           ProcessTimelineFrame(
@@ -510,13 +544,16 @@ void main() {
         ),
       );
 
-      final summaryBlock = state.process.blocks.firstWhere(
-        (block) => block.blockId == 'understanding_narrative',
+      final queryDesignBlock = state.process.blocks.firstWhere(
+        (block) => block.blockId == 'retrieval_query_design',
       );
-      expect(summaryBlock.title, contains('沿着交易日确认几个维度把检索线索铺开'));
-      expect(summaryBlock.body, contains('我会先沿着交易日确认这一条线继续核对，先把相对时间落成具体日期'));
+      expect(queryDesignBlock.title, contains('沿着交易日确认几个维度把检索线索铺开'));
       expect(
-        summaryBlock.body,
+        queryDesignBlock.body,
+        contains('我会先沿着交易日确认这一条线继续核对，先把相对时间落成具体日期'),
+      );
+      expect(
+        queryDesignBlock.body,
         contains('检索词会围绕“2026-04-07 A股 大涨 原因”展开'),
       );
     });

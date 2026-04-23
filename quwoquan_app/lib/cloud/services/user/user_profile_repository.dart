@@ -1359,10 +1359,10 @@ class RemoteUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<void> deletePersona(String personaId) async {
-    final url = _uri(UserApiMetadata.deletePersonaPath(personaId: personaId));
+    final url = _uri(UserApiMetadata.deleteEmptyPersonaPath(personaId: personaId));
     final resp = await _client.delete(
       url,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deletePersona),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteEmptyPersona),
     );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
       throw Exception('deletePersona failed: ${resp.statusCode}');

@@ -24,9 +24,7 @@ const String assistantHistoricalThinkingSnapshotField =
 const String assistantRetrievalProcessingField = 'retrievalProcessing';
 const String assistantProviderReasoningContinuationField =
     'providerReasoningContinuation';
-const String assistantTurnSchemaVersionField = 'assistantTurnSchemaVersion';
 const String assistantHistoryStorageVersion = 'assistant_history_v1';
-const String assistantTurnSchemaVersion = 'assistant_turn_v1';
 
 /// `jsonDecode` 根或嵌套 JSON 对象 → `Map<String, dynamic>`（会话持久化加载等）。
 Map<String, dynamic>? assistantJsonAsStringKeyedMap(Object? value) {
@@ -42,14 +40,12 @@ Map<String, dynamic>? assistantJsonAsStringKeyedMap(Object? value) {
 const List<JourneyStageId> assistantPrimaryJourneyStages = <JourneyStageId>[
   JourneyStageId.analyze,
   JourneyStageId.search,
+  JourneyStageId.verify,
 ];
 
 AssistantJourney resolvePersistedAssistantJourney(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const AssistantJourney();
-  }
   final raw = (message[assistantJourneyField] as Map?)?.cast<String, dynamic>();
   if (raw != null && raw.isNotEmpty) {
     final parsed = AssistantJourney.fromJson(raw);
@@ -80,9 +76,6 @@ AssistantJourney resolvePersistedAssistantJourneyForDisplay(
 AssistantJourney resolvePersistedAssistantTimeline(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const AssistantJourney();
-  }
   final raw = (message[assistantUiProcessTimelineField] as Map?)
       ?.cast<String, dynamic>();
   if (raw == null || raw.isEmpty) {
@@ -98,9 +91,6 @@ AssistantJourney resolvePersistedAssistantTimeline(
 List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const <ProcessTimelineFrame>[];
-  }
   final direct = _parseProcessTimelineList(message[assistantProcessTimelineField]);
   final runArtifacts = (message['runArtifacts'] as Map?)
       ?.cast<String, dynamic>();
@@ -135,9 +125,6 @@ List<ProcessTimelineFrame> resolvePersistedAssistantVisibleProcessTimeline(
 AssistantDisplayState resolvePersistedAssistantDisplayState(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const AssistantDisplayState();
-  }
   final direct = parseAssistantDisplayStateFromMap(
     (message[assistantDisplayStateField] as Map?)?.cast<String, dynamic>(),
   );
@@ -161,9 +148,6 @@ AssistantDisplayState resolvePersistedAssistantDisplayState(
 RunArtifactsUnderstandingSnapshot resolvePersistedAssistantUnderstandingSnapshot(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const RunArtifactsUnderstandingSnapshot();
-  }
   final raw = _resolvePersistedStructuredMap(
     message,
     assistantUnderstandingSnapshotField,
@@ -177,9 +161,6 @@ RunArtifactsUnderstandingSnapshot resolvePersistedAssistantUnderstandingSnapshot
 RunArtifactsAnswerProcessing resolvePersistedAssistantAnswerProcessing(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const RunArtifactsAnswerProcessing();
-  }
   final raw = _resolvePersistedStructuredMap(
     message,
     assistantAnswerProcessingField,
@@ -194,9 +175,6 @@ RunArtifactsHistoricalThinkingSnapshot
 resolvePersistedAssistantHistoricalThinkingSnapshot(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const RunArtifactsHistoricalThinkingSnapshot();
-  }
   final raw = _resolvePersistedStructuredMap(
     message,
     assistantHistoricalThinkingSnapshotField,
@@ -210,9 +188,6 @@ resolvePersistedAssistantHistoricalThinkingSnapshot(
 RetrievalProcessingSnapshot resolvePersistedAssistantRetrievalProcessing(
   Map<String, dynamic> message,
 ) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return const RetrievalProcessingSnapshot();
-  }
   final raw = _resolvePersistedStructuredMap(
     message,
     assistantRetrievalProcessingField,
@@ -372,15 +347,23 @@ AssistantJourney buildAssistantUiProcessTimeline(AssistantJourney journey) {
       readiness: journey.readiness,
       journeySummary: journey.summary,
     ),
-    _mergeStageForTimeline(
+    _normalizeStageForTimeline(
       stageId: JourneyStageId.search,
       order: 1,
-      primaryStage: stagesById[JourneyStageId.search],
-      secondaryStage: stagesById[JourneyStageId.verify],
+      rawStage: stagesById[JourneyStageId.search],
+      readiness: journey.readiness,
+      journeySummary: journey.summary,
+    ),
+    _normalizeStageForTimeline(
+      stageId: JourneyStageId.verify,
+      order: 2,
+      rawStage: stagesById[JourneyStageId.verify],
+      readiness: journey.readiness,
+      journeySummary: journey.summary,
     ),
     _normalizeStageForTimeline(
       stageId: JourneyStageId.answer,
-      order: 2,
+      order: 3,
       rawStage: stagesById[JourneyStageId.answer],
       readiness: journey.readiness,
       journeySummary: journey.summary,
@@ -458,7 +441,7 @@ AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
         status: frame.status,
         order: stages.length,
         summary: summary,
-        referenceCount: stageId == JourneyStageId.search
+        referenceCount: stageId == JourneyStageId.verify
             ? _maxInt(<int>[
                 frame.references.length,
                 frame.retrievalProcessing.acceptedDocumentCount,
@@ -562,8 +545,17 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
         persistedProcessTimeline,
         fallbackJourney: journey,
       );
+  final normalizedDisplayMarkdown =
+      AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+        displayMarkdown,
+        allowJsonExtraction: false,
+      );
+  final normalizedDisplayPlainText =
+      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        displayPlainText,
+        allowJsonExtraction: false,
+      );
   return <String, dynamic>{
-    assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
     assistantJourneyField: journey.toJson(),
     if (!persistedUiTimeline.isEmpty)
       assistantUiProcessTimelineField: persistedUiTimeline.toJson(),
@@ -590,16 +582,8 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
           .trim(),
     if (_hasStructuredContent(displayState))
       assistantDisplayStateField: _copyStructuredMap(displayState),
-    assistantDisplayMarkdownField:
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-          displayMarkdown,
-          allowJsonExtraction: false,
-        ),
-    assistantDisplayPlainTextField:
-        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-          displayPlainText,
-          allowJsonExtraction: false,
-        ),
+    assistantDisplayMarkdownField: normalizedDisplayMarkdown,
+    assistantDisplayPlainTextField: normalizedDisplayPlainText,
     assistantFollowupPromptField: _sanitizeUserFacingTimelineText(
       followupPrompt,
     ),
@@ -612,9 +596,6 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
 }
 
 bool isCanonicalPersistedAssistantTurnMessage(Map<String, dynamic> message) {
-  if (!_hasCurrentAssistantTurnSchemaVersion(message)) {
-    return false;
-  }
   final hasCanonicalEnvelope =
       message.containsKey(assistantJourneyField) ||
       message.containsKey(assistantDisplayStateField) ||
@@ -649,8 +630,6 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
   final journey = resolvePersistedAssistantJourney(message);
   final processTimeline = resolvePersistedAssistantProcessTimeline(message);
   final displayState = resolvePersistedAssistantDisplayState(message);
-  final displayMarkdown = resolvePersistedAssistantDisplayMarkdown(message);
-  final displayPlainText = resolvePersistedAssistantDisplayPlainText(message);
   final understandingSnapshot = _resolvePersistedStructuredMap(
     message,
     assistantUnderstandingSnapshotField,
@@ -667,13 +646,15 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
     message,
     assistantRetrievalProcessingField,
   );
+  final displayMarkdown = resolvePersistedAssistantDisplayMarkdown(message);
+  final displayPlainText = resolvePersistedAssistantDisplayPlainText(message);
   final providerReasoningContinuation =
       (message[assistantProviderReasoningContinuationField] as String?)
           ?.trim() ??
       '';
   final normalized = <String, dynamic>{
     ...message,
-    assistantTurnSchemaVersionField: assistantTurnSchemaVersion,
+    'streaming': false,
     assistantJourneyField: journey.toJson(),
     if (hasAssistantDisplayState(displayState))
       assistantDisplayStateField: displayState.toJson(),
@@ -709,6 +690,7 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
                 allowJsonExtraction: false,
               ));
   normalized['content'] = bestContent;
+  normalized.remove('assistantTurnSchemaVersion');
   normalized.remove('machineEnvelope');
   normalized.remove('streamFinalAnswer');
   normalized.remove('decisionJson');
@@ -793,69 +775,6 @@ AssistantJourneyStage _normalizeStageForTimeline({
   );
 }
 
-AssistantJourneyStage _mergeStageForTimeline({
-  required JourneyStageId stageId,
-  required int order,
-  required AssistantJourneyStage? primaryStage,
-  required AssistantJourneyStage? secondaryStage,
-}) {
-  final mergedSummary = _firstNonEmpty(<String>[
-    _sanitizeUserFacingTimelineText(
-      secondaryStage?.summary ?? '',
-      stageId: stageId,
-    ),
-    _sanitizeUserFacingTimelineText(
-      primaryStage?.summary ?? '',
-      stageId: stageId,
-    ),
-  ]);
-  if (primaryStage == null && secondaryStage == null) {
-    return AssistantJourneyStage(
-      stageId: stageId,
-      status: JourneyStageStatus.pending,
-      order: order,
-      summary: '',
-      referenceCount: 0,
-    );
-  }
-  return AssistantJourneyStage(
-    stageId: stageId,
-    status: _mergeTimelineStageStatus(
-      primaryStage?.status,
-      secondaryStage?.status,
-    ),
-    order: order,
-    summary: mergedSummary,
-    referenceCount: _maxInt(<int>[
-      primaryStage?.referenceCount ?? 0,
-      secondaryStage?.referenceCount ?? 0,
-    ]),
-  );
-}
-
-JourneyStageStatus _mergeTimelineStageStatus(
-  JourneyStageStatus? primary,
-  JourneyStageStatus? secondary,
-) {
-  final statuses = <JourneyStageStatus>[?primary, ?secondary];
-  if (statuses.contains(JourneyStageStatus.active)) {
-    return JourneyStageStatus.active;
-  }
-  if (statuses.contains(JourneyStageStatus.blocked)) {
-    return JourneyStageStatus.blocked;
-  }
-  if (statuses.contains(JourneyStageStatus.completed)) {
-    return JourneyStageStatus.completed;
-  }
-  if (statuses.contains(JourneyStageStatus.skipped)) {
-    return JourneyStageStatus.skipped;
-  }
-  if (statuses.contains(JourneyStageStatus.pending)) {
-    return JourneyStageStatus.pending;
-  }
-  return JourneyStageStatus.unknown;
-}
-
 AssistantJourneyEntry _normalizeEntryForTimeline(AssistantJourneyEntry entry) {
   final normalizedReferences = entry.references
       .map(
@@ -873,16 +792,13 @@ AssistantJourneyEntry _normalizeEntryForTimeline(AssistantJourneyEntry entry) {
       )
       .toList(growable: false);
   final headline = _normalizeTimelineHeadline(entry);
-  final displayStageId = entry.stageId == JourneyStageId.verify
-      ? JourneyStageId.search
-      : entry.stageId;
   final detail = _sanitizeUserFacingTimelineText(
     entry.detail,
-    stageId: displayStageId,
+    stageId: entry.stageId,
   );
   return AssistantJourneyEntry(
     entryId: entry.entryId,
-    stageId: displayStageId,
+    stageId: entry.stageId,
     kind: entry.kind,
     status: entry.status,
     order: entry.order,
@@ -940,12 +856,9 @@ AssistantJourneyReferenceSummary _normalizeReferenceSummary(
 }
 
 String _normalizeTimelineHeadline(AssistantJourneyEntry entry) {
-  final displayStageId = entry.stageId == JourneyStageId.verify
-      ? JourneyStageId.search
-      : entry.stageId;
   final headline = _sanitizeUserFacingTimelineText(
     entry.headline,
-    stageId: displayStageId,
+    stageId: entry.stageId,
   );
   if (headline.isNotEmpty) {
     return headline;
@@ -997,11 +910,6 @@ int _maxInt(Iterable<int> values) {
     }
   }
   return maxValue;
-}
-
-bool _hasCurrentAssistantTurnSchemaVersion(Map<String, dynamic> message) {
-  return (message[assistantTurnSchemaVersionField] as String?)?.trim() ==
-      assistantTurnSchemaVersion;
 }
 
 List<ProcessTimelineFrame> _parseProcessTimelineList(Object? raw) {

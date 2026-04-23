@@ -625,7 +625,12 @@ Future<String> _testTextLoader(String path) async {
         'custom',
         'unspecified',
       ],
-      'authorityDomains': <String>['weather.com.cn', 'nmc.cn', 'cma.gov.cn'],
+      'authorityDomains': <String>[
+        'weather.cma.cn',
+        'weather.com.cn',
+        'nmc.cn',
+        'cma.gov.cn',
+      ],
       'contextConstraints': <String>[
         '优先返回实时天气关键指标',
         '必须覆盖温度湿度风速和体感温度',

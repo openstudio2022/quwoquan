@@ -81,11 +81,14 @@ class AssistantSessionStore {
             .map((item) => item.map((k, v) => MapEntry(k.toString(), v)))
             .toList(growable: false),
       );
-      if (normalized == null || normalized.isEmpty) {
+      if (normalized == null || normalized.messages.isEmpty) {
         mutated = true;
         continue;
       }
-      sessions[key] = normalized.toList(growable: true);
+      if (normalized.mutated) {
+        mutated = true;
+      }
+      sessions[key] = normalized.messages.toList(growable: true);
     }
     final activeSessionId = (root['activeSessionId'] ?? '').toString().trim();
     if (!sessions.containsKey(activeSessionId) && activeSessionId.isNotEmpty) {
@@ -135,21 +138,25 @@ class AssistantSessionStore {
     return snapshot;
   }
 
-  List<Map<String, dynamic>>? _normalizeLoadedSessionMessages(
+  _NormalizedSessionMessages? _normalizeLoadedSessionMessages(
     List<Map<String, dynamic>> rawMessages,
   ) {
     final normalized = <Map<String, dynamic>>[];
+    var mutated = false;
     for (final raw in rawMessages) {
-      final message = _normalizeLoadedMessage(raw);
-      if (message == null) {
+      final result = _normalizeLoadedMessage(raw);
+      if (result == null) {
         return null;
       }
-      if (_isDegradedAssistantMessage(message)) {
+      if (_isDegradedAssistantMessage(result.message)) {
         return null;
       }
-      normalized.add(message);
+      if (result.mutated) {
+        mutated = true;
+      }
+      normalized.add(result.message);
     }
-    return normalized;
+    return _NormalizedSessionMessages(messages: normalized, mutated: mutated);
   }
 
   /// 判断一条消息是否是降级/错误/JSON原文内容，加载时需过滤，避免污染后续 LLM 历史。
@@ -175,10 +182,12 @@ class AssistantSessionStore {
     return false;
   }
 
-  Map<String, dynamic>? _normalizeLoadedMessage(Map<String, dynamic> raw) {
+  _NormalizedLoadedMessage? _normalizeLoadedMessage(Map<String, dynamic> raw) {
     final normalized = Map<String, dynamic>.from(raw);
     final role = (normalized['role'] ?? '').toString();
-    if (role != 'assistant') return normalized;
+    if (role != 'assistant') {
+      return _NormalizedLoadedMessage(message: normalized, mutated: false);
+    }
     final canonical = normalizeCanonicalPersistedAssistantTurnMessage(
       normalized,
     );
@@ -216,7 +225,37 @@ class AssistantSessionStore {
         ..remove('machineEnvelope');
       canonical['runArtifacts'] = sanitizedArtifacts;
     }
-    return canonical;
+    return _NormalizedLoadedMessage(
+      message: canonical,
+      mutated: !_deepJsonEquals(raw, canonical),
+    );
+  }
+
+  bool _deepJsonEquals(Object? left, Object? right) {
+    if (identical(left, right)) return true;
+    if (left is Map && right is Map) {
+      if (left.length != right.length) return false;
+      for (final entry in left.entries) {
+        final key = entry.key.toString();
+        if (!right.containsKey(key)) {
+          return false;
+        }
+        if (!_deepJsonEquals(entry.value, right[key])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var i = 0; i < left.length; i += 1) {
+        if (!_deepJsonEquals(left[i], right[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return left == right;
   }
 
   String _sanitizeForSummary(String raw) {
@@ -314,4 +353,24 @@ class AssistantSessionStoreSnapshot {
   final Map<String, List<Map<String, dynamic>>> sessions;
   final Map<String, Map<String, dynamic>> metadata;
   final String activeSessionId;
+}
+
+class _NormalizedSessionMessages {
+  const _NormalizedSessionMessages({
+    required this.messages,
+    required this.mutated,
+  });
+
+  final List<Map<String, dynamic>> messages;
+  final bool mutated;
+}
+
+class _NormalizedLoadedMessage {
+  const _NormalizedLoadedMessage({
+    required this.message,
+    required this.mutated,
+  });
+
+  final Map<String, dynamic> message;
+  final bool mutated;
 }

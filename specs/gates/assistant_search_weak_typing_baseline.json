@@ -2,8 +2,8 @@
   "version": 1,
   "buckets": {
     "assistant_handwritten": {
-      "map_string_dynamic": 1390,
-      "dynamic_keyword": 2730
+      "map_string_dynamic": 1425,
+      "dynamic_keyword": 2836
     },
     "core_search_repository": {
       "map_string_dynamic": 14,

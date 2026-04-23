@@ -16,6 +16,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -443,6 +444,71 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
   });
 
+  testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1024, 1366);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final post = _photoPost(
+      imageUrls: const ['https://example.com/photo-wide.jpg'],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'photo',
+              'contentType': 'image',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '宽屏标题',
+              'body': '宽屏说明正文',
+              'coverUrl': post.coverUrl,
+              'imageUrls': post.imageUrls,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final topRailRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-top-rail')),
+    );
+    final captionRailRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-caption-rail')),
+    );
+    final bottomRailRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-engagement-rail')),
+    );
+
+    expect((topRailRect.left - AppSpacing.containerMd).abs(), lessThan(1));
+    expect(
+      (viewerRect.right - topRailRect.right - AppSpacing.containerMd).abs(),
+      lessThan(1),
+    );
+    expect((captionRailRect.left - topRailRect.left).abs(), lessThan(1));
+    expect((captionRailRect.right - topRailRect.right).abs(), lessThan(1));
+    expect((bottomRailRect.left - topRailRect.left).abs(), lessThan(1));
+    expect((bottomRailRect.right - topRailRect.right).abs(), lessThan(1));
+  });
+
   testWidgets('text-only moment 使用文本画布展示 title/body', (tester) async {
     final post = _textMoment();
     await tester.pumpWidget(
@@ -474,6 +540,75 @@ void main() {
 
     expect(find.text('临时改地点提醒'), findsOneWidget);
     expect(find.textContaining('今天风有点大'), findsOneWidget);
+  });
+
+  testWidgets('text-only moment 在 iPad 宽屏下顶部内容底部共享 text rail', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1024, 1366);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final post = _textMoment();
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'moment',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final topRailRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-top-rail')),
+    );
+    final textRailRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-text-stage-rail')),
+    );
+    final bottomRailRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-engagement-rail')),
+    );
+    final expectedRailWidth = (viewerRect.width - AppSpacing.containerMd * 2)
+        .clamp(0.0, AppSpacing.feedMaxContentWidth);
+    final expectedSideMargin = (viewerRect.width - expectedRailWidth) / 2;
+
+    expect((topRailRect.left - expectedSideMargin).abs(), lessThan(1));
+    expect((textRailRect.left - expectedSideMargin).abs(), lessThan(1));
+    expect((bottomRailRect.left - expectedSideMargin).abs(), lessThan(1));
+    expect(
+      (viewerRect.right - topRailRect.right - expectedSideMargin).abs(),
+      lessThan(1),
+    );
+    expect(
+      (viewerRect.right - textRailRect.right - expectedSideMargin).abs(),
+      lessThan(1),
+    );
+    expect(
+      (viewerRect.right - bottomRailRect.right - expectedSideMargin).abs(),
+      lessThan(1),
+    );
   });
 
   testWidgets('沉浸式浏览器更多功能使用贴底非全屏面板', (tester) async {

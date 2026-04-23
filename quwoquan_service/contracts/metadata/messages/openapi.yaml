@@ -328,6 +328,8 @@ components:
         type: { type: string, enum: [direct, group, circle, encrypted] }
         title: { type: string }
         avatarUrl: { type: string, nullable: true }
+        groupAvatarUrl: { type: string, nullable: true }
+        groupAvatarVersion: { type: integer, format: int64 }
         avatarCompositeUrls:
           type: array
           items: { type: string }
@@ -357,8 +359,11 @@ components:
         type: { type: string, enum: [direct, group, circle, encrypted] }
         title: { type: string }
         avatarUrl: { type: string }
+        groupAvatarUrl: { type: string, nullable: true }
+        groupAvatarVersion: { type: integer, format: int64 }
         maxSeq: { type: integer, format: int64 }
         memberCount: { type: integer }
+        membersRosterRevision: { type: integer, format: int64 }
         maxGroupSize: { type: integer }
         receiptEnabled: { type: boolean }
         lastMessagePreview: { type: string }

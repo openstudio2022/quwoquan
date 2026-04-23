@@ -53,6 +53,21 @@ events:
       - aspects
     realtime_channel: "rt:conversation:{conversationId}"
 
+  - name: ConversationAvatarUpdated
+    description: |
+      群头像预合成结果更新。
+      用于统一 sync patch `conversation.avatar.updated` 的上游事件输入。
+    producer: chat-service
+    consumers: [realtime-gateway, notification-service]
+    channel: event_store
+    payload_fields:
+      - conversationId
+      - groupAvatarAssetId
+      - groupAvatarVersion
+      - groupAvatarSourceHash
+      - updatedAt
+    realtime_channel: "rt:conversation:{conversationId}"
+
   - name: MemberLeft
     description: 成员退出（v2 触发 ConversationMember 删除 + memberCount 更新）
     producer: chat-service

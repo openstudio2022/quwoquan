@@ -1,6 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/memory/preference/preference_fact_service.dart';
-import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/session/session_summary_builder.dart';
@@ -19,22 +18,29 @@ class AssistantSessionProjectionService {
   List<Map<String, dynamic>> recentDialogueRounds(
     List<Map<String, dynamic>> history, {
     int limit = defaultRecentDialogueRoundsLimit,
+    int olderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     if (history.isEmpty) {
       return const <Map<String, dynamic>>[];
     }
-    return buildRecentDialogueRounds(history, limit: limit);
+    return buildRecentDialogueRounds(
+      history,
+      limit: limit,
+      olderLimit: olderLimit,
+    );
   }
 
   String summarizeRecent(
     List<Map<String, dynamic>> history, {
     int limit = 8,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     return _summaryBuilder.summarizeRecentMessages(
       history,
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
     );
   }
 
@@ -42,12 +48,14 @@ class AssistantSessionProjectionService {
     List<Map<String, dynamic>> history, {
     int limit = 8,
     int? roundsLimit,
+    int roundsOlderLimit = defaultOlderRecentDialogueRoundsLimit,
     Future<String> Function(String transcript)? summarizer,
   }) {
     return _summaryBuilder.summarizeRecentMessagesAsync(
       history,
       limit: limit,
       roundsLimit: roundsLimit,
+      roundsOlderLimit: roundsOlderLimit,
       summarizer: summarizer,
     );
   }

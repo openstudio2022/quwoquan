@@ -1,134 +1,157 @@
+version: 2
 feature: runtime-media
-level: "L2_feature"
-archived: true
-archived_at: '2026-03-07T18:20:24Z'
+level: L2_journey
+source_path: runtime/runtime-media
+archived: false
+
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: MediaStore 接口定义完整：InitUpload/CompleteUpload/AbortUpload/GetAsset/BatchGetAssets
-      五个方法均有签名、入参和返回类型，且遵循 runtime 模块模式（接口 + 实现分离）
-    status: implemented
-    linked_tasks:
-    - G1
-    - G5
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
+  local_gate: make gate-runtime-media
+  full_gate: make gate-runtime-media-full（需提供 `RUNTIME_MEDIA_T4_EVIDENCE`）
+
+scope:
+  summary: >
+    冻结运行时媒体主线：统一资产引用、URL/objectKey 规范、用户头像与群头像归属、
+    群头像服务端预合成、云厂商适配，以及媒体相关变化进入统一同步模型的 Journey。
+  composed_scenarios:
+    - media-upload-and-storage
+    - group-avatar-server-precompose-and-unified-sync-contract
+  out_of_scope:
+    - 用户自定义上传群头像
+    - 媒体审核与转码管线
+    - WebRTC 实时流媒体传输
+    - 全量历史媒体数据迁移
+
+journey_acceptance:
+  J1:
+    title: 运行时媒体资产以统一对象模型和 URL 规范对外暴露
+    journey: service initializes asset -> runtime stores object identity -> runtime builds CDN URL -> app consumes stable asset ref
+    scenario_refs:
+      - media-upload-and-storage
+      - group-avatar-server-precompose-and-unified-sync-contract
+    done_when:
+      - "统一冻结 `AssetRef / MediaAsset`、`assetKind / ownerType / ownerId / version / variants`"
+      - objectKey 与 CDN URL 规范在 runtime 与业务 spec 中保持单一真相源
+      - 业务服务不再直接拼接 OSS/COS URL
+    release_guardrails:
+      - URL 与 object identity 规范必须优先落在 runtime 与 metadata，不允许散落在业务代码中
+      - 客户端不得根据 objectKey 规则自行拼接资源地址
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
     tests:
-    - file: quwoquan_service/runtime/media/media_test.go
-      layer: T1
-      description: MockMediaStore 单测：Init/Complete/Abort/Get/SignURL 正常+异常路径
-  A2:
-    criteria: OSS presigned URL 上传端到端可用：InitUpload 返回有效 presigned URL，客户端 PUT 文件后
-      CompleteUpload 返回 cdnUrl，GetAsset 可查到 status=ready 的 MediaAsset
+      planned:
+        - runtime media asset contract review
+        - object key and cdn url contract test
+      recorded:
+        - "T1: `go test ./quwoquan_service/runtime/media ./quwoquan_service/runtime/sync`"
+        - "T3: `go test ./quwoquan_service/services/chat-service/tests ./quwoquan_service/services/user-service/tests`"
     status: implemented
-    linked_tasks:
-    - G3
-    - G5
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
+
+  J2:
+    title: 用户头像与群头像边界清晰，群头像以服务端预合成为唯一主链路
+    journey: user updates avatar -> group top9 changes or avatar version changes -> server recomputes group avatar -> app renders returned group avatar or default icon
+    scenario_refs:
+      - group-avatar-server-precompose-and-unified-sync-contract
+    done_when:
+      - "用户头像归 `user-service`，群头像归 `chat-service`"
+      - 群头像仅取前 9 成员，按加入顺序，服务端预合成
+      - 群头像生成失败时客户端显示默认群图标，不做端侧拼图兜底
+    release_guardrails:
+      - 不允许客户端继续以成员头像列表作为群头像主渲染路径
+      - 群头像失败不能阻塞消息列表与会话页主流程
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+        - T4_user_journey
     tests:
-    - file: quwoquan_service/runtime/media/media_test.go
-      layer: T1
-      description: MockMediaStore 端到端流程验证：Init→Complete→Get
-  A3:
-    criteria: CDN URL 签名正确：生成的 URL 含签名参数，过期前可访问，过期后返回 403；过期时间可通过 RuntimeConfigProvider
-      配置
+      planned:
+        - top9 avatar source hash contract test
+        - group avatar fallback journey test
+      recorded:
+        - "T1/T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar'`"
+        - "T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_UserAvatarUpdated|TestGroupAvatar_RecomputePublishesConversationAvatarPatch'`"
+        - "T3: `go test ./quwoquan_service/runtime/sync -run 'TestService_AppendPatchBatchAndMetrics|TestService_PullRequiresResyncWhenGapDetected'`"
+        - "T1/T3: `go test ./quwoquan_service/services/chat-service/internal/application -run TestRuntimeMediaMetricsHandlerReturnsThresholdsAndMetrics`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`"
+        - "T2: `flutter test test/ui/chat/widgets/chat_page_widget_test.dart`"
+        - "T2: `flutter test test/ui/chat/providers/chat_inbox_provider_test.dart`"
+        - "T3: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/chat-service/tests`"
+        - "Gate: `make gate-runtime-media`"
+    notes:
+      - "里程碑1前置复核已确认：`UserAvatarUpdated -> top9 命中 -> RecomputeGroupAvatar` 已由 `user_avatar_refresh.go`、`user_avatar_consumer.go` 与 `TestGroupAvatar_UserAvatarUpdated*` 合同测试闭环。"
+      - "当前群头像异步重算已升级为 score queue 驱动的 Redis-backed 可恢复任务模型，支持按 `conversationId` 去重、失败重试与进程重启后恢复。"
+      - "群头像 URL 的 CDN 域名已从 `chat-service` mock 常量收口到 runtime/config，并通过 `/metrics/runtime-media` 输出最小观测快照。"
+      - "若未来需要跨机房或跨服务更强的消息保证，Redis 轻量任务模型仍不等同完整企业级 MQ，这一差距需继续诚实保留。"
+      - "T4 弱网/双端发布演练已冻结为 `t4-release-rehearsal.md`，未执行该演练时不得宣称高标准准出全部完成。"
     status: implemented
-    linked_tasks:
-    - G4
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
+
+  J3:
+    title: 媒体与头像变化进入统一同步模型并支持在线提示与离线补偿
+    journey: media or avatar state changes -> runtime emits sync patch -> realtime sends hint -> client pulls by cursor -> offline client gap-fills later
+    scenario_refs:
+      - group-avatar-server-precompose-and-unified-sync-contract
+    done_when:
+      - "`user.avatar.updated`、`conversation.avatar.updated` 等 patch 类型冻结"
+      - 在线设备通过 hint 触发定点拉取，离线设备通过 cursor/gap fill 恢复
+      - 不新增第二套头像同步协议
+    release_guardrails:
+      - realtime 只做 hint，不作为最终一致真相源
+      - 媒体文件正文不通过 sync/realtime 通道直接传输
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+        - T4_release_rehearsal
     tests:
-    - file: quwoquan_service/runtime/media/media_test.go
-      layer: T1
-      description: MockMediaStore SignURL 验证
-  A4:
-    criteria: 上传策略引擎按 Category×MediaType 生效：messaging/audio 限制 5MB/120s，messaging/image
-      限制 10MB，content/video 限制 500MB/300s；超出限制返回 ModuleOSS.USER.policy_violation 错误
+      planned:
+        - avatar patch envelope contract test
+        - websocket hint plus cursor gap fill journey
+      recorded:
+        - "T1: `go test ./quwoquan_service/runtime/sync`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`"
+        - "T2: `flutter test test/core/services/local_chat_search_sync_service_test.dart`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart -r compact` 已覆盖高频 hint 防抖合并"
+        - "T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_UserAvatarUpdated|TestGroupAvatar_RecomputePublishesConversationAvatarPatch'`"
+        - "T3: `go test ./quwoquan_service/runtime/sync -run 'TestService_PullSupportsLongOfflineCatchupInBatches|TestService_PullRequiresResyncWhenPatchExpired'`"
+        - "T3: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/chat-service/tests`"
+        - "Preflight review: 异步化仅替换建群/加人/退群中的触发方式，仍复用既有 `conversation.avatar.updated` patch 与 `syncSeq/afterSeq` 主模型，未新增第二套头像协议。"
+        - "Gate: `make gate-runtime-media`"
+    notes:
+      - "sync 拉取已补充显式 gap / `requiresResync` 语义；当前实现使用 pipeline 批量读取 patch key，客户端遇到缺洞不再静默推进游标。"
+      - "realtime 仍只承担 hint，最终一致由 patch 拉取与 `requiresResync` 全量修复共同保证。"
+      - "客户端会话缓存已改为 namespaced 真相源，persona 切换不再依赖全局 `cache.clear()`。"
+      - "T4 release rehearsal 仍以受控演练入口为主，尚未自动化。"
     status: implemented
-    linked_tasks:
-    - G2
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
+
+release_acceptance:
+  R1:
+    title: runtime-media 可作为后续群头像、聊天媒体与内容媒体统一基线进入设计阶段
+    done_when:
+      - 范围边界、Out of Scope、角色分工与覆盖矩阵清晰
+      - 群头像、用户头像、媒体资产与同步合同具备单一真相源
+      - "/design 可直接围绕 metadata -> codegen -> 业务逻辑 -> 测试 展开"
+      - 规模化增长下的最小观测、队列、sync 拉取与客户端 namespace 策略已冻结
+    evidence:
+      primary:
+        - T1_schema
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
     tests:
-    - file: quwoquan_service/runtime/media/media_test.go
-      layer: T1
-      description: ValidateUpload 策略引擎单测：各 Category 组合、超限拦截、未知 Category
-    - file: quwoquan_app/test/cloud/media/contract/upload_policy_contract_test.dart
-      layer: T1
-      description: 端侧 UploadPolicy 契约测试：各 category 校验、超限拦截
-  A5:
-    criteria: 弱网场景上传可靠性：上传失败自动重试最多 3 次（指数退避 1s→2s→4s），presigned URL 过期后自动重新 InitUpload，断网期间任务入本地队列、网络恢复后自动恢复上传
+      planned:
+        - spec acceptance review
+        - affected node traceability review
+      recorded:
+        - "spec traceability review completed against `runtime/media + runtime/sync + user-service + chat-service + app`"
+        - "local gate re-run after acceptance evidence update"
+        - "runtime-media scaling closure review completed against queue model, batch pull, namespace cache and `/metrics/runtime-media` snapshot"
+        - "`make gate-runtime-media`"
     status: implemented
-    linked_tasks:
-    - D3
-    - D5
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: required
-    tests:
-    - file: quwoquan_app/lib/cloud/media/media_upload_manager.dart
-      layer: T2
-      description: MediaUploadManager 实现含重试/离线队列/网络恢复逻辑（T2 单测搁置）
-  A6:
-    criteria: 可观测性完整：每次 InitUpload/CompleteUpload/AbortUpload 操作均有 IOAccessLogger
-      日志（含 mediaId、category、mediaType、fileSizeBytes、latencyMs）；上传成功率 SLI 指标可通过 Prometheus
-      查询
-    status: implemented
-    linked_tasks:
-    - G7
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests:
-    - file: quwoquan_service/runtime/media/oss_adapter.go
-      layer: T1
-      description: OSSMediaStore 实现含 observability span 和日志
-  A7:
-    criteria: content-service 平滑迁移：PostService 中原有的 mediaAssets/uploadSession 内存 map
-      替换为 MediaStore 接口调用，现有 6 个媒体相关 API 路由不变、行为不变，契约测试全部通过
-    status: deferred
-    deferred_reason: content-service codegen 存在预存 YAML 解析问题（storage.yaml），待修复后执行迁移
-    linked_tasks:
-    - G6
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A8:
-    criteria: 端侧 MediaUploadManager 实现：支持队列管理（并发最多 3 个）、自动重试、离线队列（Hive 持久化）、网络恢复自动恢复；MediaDownloadCache
-      支持本地缓存（LRU 策略，默认 200MB）
-    status: implemented
-    linked_tasks:
-    - D3
-    - D4
-    - D5
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: required
-    tests:
-    - file: quwoquan_app/test/cloud/media/contract/media_asset_dto_contract_test.dart
-      layer: T1
-      description: MediaAssetDto 契约测试：序列化/反序列化/可选字段

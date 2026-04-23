@@ -5,6 +5,8 @@ class ConversationDto {
   final String type;
   final String? title;
   final String? avatarUrl;
+  final String? groupAvatarUrl;
+  final int groupAvatarVersion;
   final String creatorId;
   final String? circleId;
   final int maxSeq;
@@ -26,6 +28,8 @@ class ConversationDto {
     required this.type,
     this.title,
     this.avatarUrl,
+    this.groupAvatarUrl,
+    this.groupAvatarVersion = 0,
     required this.creatorId,
     this.circleId,
     required this.maxSeq,
@@ -48,6 +52,8 @@ class ConversationDto {
       type: (map['type'] ?? 'direct') as String,
       title: map['title'] as String?,
       avatarUrl: map['avatarUrl'] as String?,
+      groupAvatarUrl: map['groupAvatarUrl'] as String?,
+      groupAvatarVersion: (map['groupAvatarVersion'] as num?)?.toInt() ?? 0,
       creatorId: (map['creatorId'] ?? '') as String,
       circleId: map['circleId'] as String?,
       maxSeq: (map['maxSeq'] as num?)?.toInt() ?? 0,
@@ -75,6 +81,8 @@ class ConversationDto {
         'type': type,
         if (title != null) 'title': title,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
+        if (groupAvatarUrl != null) 'groupAvatarUrl': groupAvatarUrl,
+        'groupAvatarVersion': groupAvatarVersion,
         'creatorId': creatorId,
         if (circleId != null) 'circleId': circleId,
         'maxSeq': maxSeq,

@@ -16,6 +16,9 @@ class SettingsPage extends ConsumerWidget {
     final contentAccessState = ref.watch(personalContentAccessProvider);
     final snapshot = appearanceState.snapshot;
     final isDark = ref.watch(isDarkProvider);
+    final personaManagementEnabled = ref.watch(
+      personaManagementFeatureFlagProvider,
+    );
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
@@ -82,6 +85,14 @@ class SettingsPage extends ConsumerWidget {
               header: '其他',
               child: Column(
                 children: <Widget>[
+                  if (personaManagementEnabled) ...<Widget>[
+                    _SettingsRow(
+                      icon: CupertinoIcons.person_2,
+                      label: UITextConstants.personaSettingsEntry,
+                      onTap: () => context.push(AppRoutePaths.profilePersonas),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                  ],
                   _SettingsRow(
                     icon: CupertinoIcons.sparkles,
                     label: AppConceptConstants.assistantLabel,

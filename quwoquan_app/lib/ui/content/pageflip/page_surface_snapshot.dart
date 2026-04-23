@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -28,6 +27,11 @@ class ArticlePageTextureSnapshot {
       return 1;
     }
     return image.height / logicalSize.height;
+  }
+
+  bool matchesLogicalSize(Size expected, {double tolerance = 0.01}) {
+    return (logicalSize.width - expected.width).abs() <= tolerance &&
+        (logicalSize.height - expected.height).abs() <= tolerance;
   }
 
   void dispose() {
@@ -102,7 +106,7 @@ class ArticleBackwardPageSurfaceBinding {
 
   int get leafRectoPageIndex => leafPageIndex;
 
-  int get leafVersoPageIndex => coveredPageIndex;
+  int get leafVersoPageIndex => leafPageIndex;
 
   List<int> get prioritizedPageIndices {
     final indices = <int>[coveredPageIndex];
@@ -247,14 +251,14 @@ ArticlePageTextureBinding? resolveArticlePageTextureBinding({
     return ArticlePageTextureBinding(
       direction: direction,
       rectoPageIndex: flippingPageIndex,
-      versoPageIndex: bottomPageIndex,
+      versoPageIndex: flippingPageIndex,
       bottomPageIndex: bottomPageIndex,
     );
   }
   return ArticlePageTextureBinding(
     direction: direction,
     rectoPageIndex: flippingPageIndex,
-    versoPageIndex: currentPageIndex,
+    versoPageIndex: flippingPageIndex,
     bottomPageIndex: currentPageIndex,
   );
 }

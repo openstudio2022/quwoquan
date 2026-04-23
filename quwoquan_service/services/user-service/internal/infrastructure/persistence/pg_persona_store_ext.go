@@ -14,7 +14,7 @@ type PgPersonaStore struct{ pgPersonaStoreBase }
 
 var _ repository.PersonaRepository = (*PgPersonaStore)(nil)
 
-const personaNullableSafeCols = `id, user_id, display_name, COALESCE(avatar_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), invite_count, created_at, updated_at`
+const personaNullableSafeCols = `id, user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner, true), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
 
 func NewPgPersonaStore(pool *pgxpool.Pool) *PgPersonaStore {
 	return &PgPersonaStore{pgPersonaStoreBase{pool: pool}}
@@ -41,6 +41,9 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 			&e.ID,
 			&e.UserID,
 			&e.DisplayName,
+			&e.UserHandle,
+			&e.Phone,
+			&e.Email,
 			&e.AvatarURL,
 			&e.CallerRingtoneID,
 			&e.ThemeModeOverride,
@@ -52,6 +55,11 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 			&e.SubAccountID,
 			&e.IsolationLevel,
 			&e.PurposeHint,
+			&e.InheritsProfileFromOwner,
+			&e.OverriddenProfileFields,
+			&e.LastProfileSyncAt,
+			&e.LastProfileSyncSource,
+			&e.LastActivatedAt,
 			&e.InviteCount,
 			&e.CreatedAt,
 			&e.UpdatedAt,

@@ -8,6 +8,7 @@ const (
 	MessageRecalled             = "MessageRecalled"
 	MemberJoined                = "MemberJoined"
 	ConversationRosterUpdated   = "ConversationRosterUpdated"
+	ConversationAvatarUpdated   = "ConversationAvatarUpdated"
 	MemberLeft                  = "MemberLeft"
 	ConversationSettingsUpdated = "ConversationSettingsUpdated"
 	ReadReceiptSent             = "ReadReceiptSent"

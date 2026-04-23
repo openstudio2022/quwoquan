@@ -116,10 +116,26 @@ AssistantJourney _canonicalJourney() {
 
 Map<String, dynamic> _canonicalAssistantMessage({
   String content = '深圳今天晴，25°C，适合出行。',
+  String? id,
+  String? timestamp,
+  String? understandingSummary,
 }) {
   final journey = _canonicalJourney();
+  final runArtifacts = <String, dynamic>{
+    'journey': journey.toJson(),
+    'answerDecision': const <String, dynamic>{
+      'nextAction': 'answer',
+      'finalAnswerMode': 'full',
+    },
+    if ((understandingSummary ?? '').trim().isNotEmpty)
+      'understandingSnapshot': <String, dynamic>{
+        'userFacingSummary': understandingSummary!.trim(),
+      },
+  };
   return <String, dynamic>{
     'role': 'assistant',
+    if ((id ?? '').trim().isNotEmpty) 'id': id!.trim(),
+    if ((timestamp ?? '').trim().isNotEmpty) 'timestamp': timestamp!.trim(),
     'content': content,
     ...buildPersistedAssistantTurnFields(
       journey: journey,
@@ -130,13 +146,7 @@ Map<String, dynamic> _canonicalAssistantMessage({
       actionHints: const <String>['看今晚天气', '看未来两天'],
       elapsedMs: 4200,
     ),
-    'runArtifacts': <String, dynamic>{
-      'journey': journey.toJson(),
-      'answerDecision': const <String, dynamic>{
-        'nextAction': 'answer',
-        'finalAnswerMode': 'full',
-      },
-    },
+    'runArtifacts': runArtifacts,
   };
 }
 
@@ -193,10 +203,7 @@ void main() {
     final messages = sm.getOrCreateSession('assistant');
     expect(messages.length, equals(2));
     final assistantMsg = messages.last;
-    expect(
-      assistantMsg[assistantTurnSchemaVersionField],
-      equals(assistantTurnSchemaVersion),
-    );
+    expect(assistantMsg.containsKey('assistantTurnSchemaVersion'), isFalse);
     expect(
       (assistantMsg[assistantProcessTimelineField] as List?)?.isNotEmpty,
       isTrue,
@@ -205,6 +212,33 @@ void main() {
       (assistantMsg[assistantProcessTimelineField] as List?)?.length,
       equals(4),
     );
+    expect(assistantMsg['streaming'], isFalse);
+    expect(assistantMsg.containsKey('streamFinalAnswer'), isFalse);
+  });
+
+  test('Rule-2b: load() 会把已完成 canonical assistant turn 的 streaming 残留清掉', () async {
+    final sm = await _loadFrom(tempDir, {
+      'version': assistantHistoryStorageVersion,
+      'activeSessionId': 'assistant',
+      'sessions': {
+        'assistant': [
+          {'role': 'user', 'content': '深圳天气'},
+          {
+            ..._canonicalAssistantMessage(),
+            'streaming': true,
+            'streamFinalAnswer': '正在流式输出中的旧残留',
+          },
+        ],
+      },
+      'metadata': const <String, dynamic>{},
+    });
+
+    final messages = sm.getOrCreateSession('assistant');
+    expect(messages.length, equals(2));
+    final assistantMsg = messages.last;
+    expect(assistantMsg['streaming'], isFalse);
+    expect(assistantMsg.containsKey('streamFinalAnswer'), isFalse);
+    expect(resolvePersistedAssistantDisplayPlainText(assistantMsg), contains('深圳今天晴'));
   });
 
   test('Rule-3: 当前 v1 assistant 历史不满足 canonical schema 时整段清理', () async {
@@ -254,12 +288,29 @@ void main() {
       expect(messages[1]['role'], equals('assistant'));
       expect(messages[1]['content'], equals('深圳今天晴，25°C，适合出行。'));
       expect(messages[1][assistantProcessTimelineField], isA<List<dynamic>>());
-      expect(
-        messages[1][assistantTurnSchemaVersionField],
-        assistantTurnSchemaVersion,
-      );
+      expect(messages[1].containsKey('assistantTurnSchemaVersion'), isFalse);
     },
   );
+
+  test('Rule-4b: appendMessage() 会为缺失或空白 timestamp 自动补值', () async {
+    final sm = AssistantSessionManager(
+      storagePath: '${tempDir.path}/sessions_append_timestamp.json',
+    );
+    await sm.load();
+
+    sm.appendMessage(sessionId: 'assistant', role: 'user', content: '你好');
+    sm.appendMessage(
+      sessionId: 'assistant',
+      role: 'assistant',
+      content: '你好，我在。',
+      metadata: const <String, dynamic>{'timestamp': '   '},
+    );
+
+    final messages = sm.getOrCreateSession('assistant');
+    expect(messages, hasLength(2));
+    expect((messages[0]['timestamp'] as String?)?.trim(), isNotEmpty);
+    expect((messages[1]['timestamp'] as String?)?.trim(), isNotEmpty);
+  });
 
   test('Rule-5: summarizeRecent() 只输出用户可见答案，不输出内部字段', () async {
     final sm = await _loadFrom(tempDir, {
@@ -321,6 +372,66 @@ void main() {
     expect(summary, contains('understanding: 第二轮理解摘要'));
     expect(summary, contains('assistant: 第二答'));
     expect(summary, isNot(contains('第一问')));
+  });
+
+  test('Rule-5d: recent rounds 会按时间窗保留 recent + older transcript', () async {
+    final now = DateTime.now().toUtc();
+    final olderUserTime = now.subtract(const Duration(days: 2, hours: 1));
+    final olderAssistantTime = now.subtract(const Duration(days: 2));
+    final recentUserTime = now.subtract(const Duration(hours: 3));
+    final recentAssistantTime = now.subtract(const Duration(hours: 2));
+    final sm = await _loadFrom(tempDir, {
+      'version': assistantHistoryStorageVersion,
+      'activeSessionId': 'assistant',
+      'sessions': {
+        'assistant': [
+          {
+            'role': 'user',
+            'content': '两天前问',
+            'timestamp': olderUserTime.toIso8601String(),
+          },
+          _canonicalAssistantMessage(
+            id: 'turn_old',
+            timestamp: olderAssistantTime.toIso8601String(),
+            content: '两天前答',
+            understandingSummary: '两天前理解',
+          ),
+          {
+            'role': 'user',
+            'content': '刚刚问',
+            'timestamp': recentUserTime.toIso8601String(),
+          },
+          _canonicalAssistantMessage(
+            id: 'turn_recent',
+            timestamp: recentAssistantTime.toIso8601String(),
+            content: '刚刚答',
+            understandingSummary: '刚刚理解',
+          ),
+        ],
+      },
+      'metadata': {},
+    });
+
+    final rounds = sm.recentDialogueRounds(
+      'assistant',
+      limit: 1,
+      olderLimit: 1,
+    );
+    expect(rounds, hasLength(2));
+    expect(rounds[0]['userQuery'], equals('刚刚问'));
+    expect(rounds[1]['userQuery'], equals('两天前问'));
+
+    final summary = sm.summarizeRecent(
+      'assistant',
+      roundsLimit: 1,
+      roundsOlderLimit: 1,
+    );
+    expect(summary, contains('user: 两天前问'));
+    expect(summary, contains('user: 刚刚问'));
+    expect(
+      summary.indexOf('user: 两天前问'),
+      lessThan(summary.indexOf('user: 刚刚问')),
+    );
   });
 
   test('Rule-5c: historyState 在 sessions.json metadata 中往返保持轻量字段', () async {

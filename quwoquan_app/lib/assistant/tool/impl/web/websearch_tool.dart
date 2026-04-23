@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
@@ -1200,7 +1201,6 @@ class WebSearchTool implements AssistantTool {
         _stringValue(queryNormalization['timezone']),
       ]),
     );
-    final now = temporalReference.referenceNow;
     final mergedArguments = <String, dynamic>{
       ...arguments,
       'timeScope': _firstNonEmpty(<String>[
@@ -1224,63 +1224,36 @@ class WebSearchTool implements AssistantTool {
     final explicitRange = _resolveRangeByExplicitBounds(mergedArguments);
     final calendarPointRange = _resolveRangeByCalendarPoint(
       arguments: mergedArguments,
-      now: now,
+      now: temporalReference.referenceNow,
       scope: explicitScope,
     );
     final resolvedCalendarRange = explicitRange ?? calendarPointRange;
-    final hasTemporalSignal =
-        resolvedCalendarRange != null ||
-        explicitScope.isNotEmpty ||
-        _firstNonEmpty(<String>[
-          domainPolicy.defaultTimeScope,
-          timeContract.defaultScope,
-        ]).isNotEmpty;
-    final preferredScope = hasTemporalSignal
-        ? _firstNonEmpty(<String>[
-            resolvedCalendarRange?.scope ?? '',
-            explicitScope,
-            domainPolicy.defaultTimeScope,
-            timeContract.defaultScope,
-            'unspecified',
-          ])
-        : 'pass_through';
-    final effectiveScope = preferredScope == 'pass_through'
-        ? 'pass_through'
-        : (timeContract.supportedScopes.contains(preferredScope)
-              ? preferredScope
-              : timeContract.defaultScope);
     final explicitFreshness = (arguments['freshnessHoursMax'] as num?)?.toInt();
-    final freshnessHoursMax =
-        explicitFreshness ??
-        _defaultFreshnessHoursForScope(
-          scope: effectiveScope == 'pass_through'
-              ? timeContract.defaultScope
-              : effectiveScope,
-          domainPolicy: domainPolicy,
-          timeContract: timeContract,
+    final effectiveScope = _firstNonEmpty(<String>[
+      resolvedCalendarRange?.scope ?? '',
+      explicitScope,
+      'unspecified',
+    ]);
+    final effectiveRange =
+        resolvedCalendarRange ??
+        _CalendarPointRange(
+          scope: effectiveScope,
+          range: _ResolvedTimeRange(
+            start: temporalReference.referenceNow,
+            end: temporalReference.referenceNow,
+          ),
         );
-    final effectiveRange = effectiveScope == 'pass_through'
-        ? _ResolvedTimeRange(
-            start: now.subtract(Duration(hours: freshnessHoursMax)),
-            end: now,
-          )
-        : (resolvedCalendarRange?.range ??
-              _resolveRangeByScope(
-                scope: effectiveScope,
-                now: now,
-                timeContract: timeContract,
-              ));
     final temporalMode = _resolveTemporalMode(
       scope: effectiveScope,
-      range: effectiveRange,
-      referenceNow: now,
+      range: effectiveRange.range,
+      referenceNow: temporalReference.referenceNow,
     );
     return _SearchTimeConstraint(
       scope: effectiveScope,
-      start: effectiveRange.start,
-      end: effectiveRange.end,
-      freshnessHoursMax: freshnessHoursMax,
-      referenceNow: now,
+      start: effectiveRange.range.start,
+      end: effectiveRange.range.end,
+      freshnessHoursMax: explicitFreshness ?? 0,
+      referenceNow: temporalReference.referenceNow,
       temporalMode: temporalMode,
     );
   }
@@ -1486,23 +1459,14 @@ class WebSearchTool implements AssistantTool {
     required _ResolvedTimeRange range,
     required DateTime referenceNow,
   }) {
-    if (_isStrictRealtimeScope(scope)) {
-      return 'realtime';
-    }
     final dayFloor = _dayFloor(referenceNow);
     if (range.end.isBefore(dayFloor)) {
       return 'historical';
     }
-    if (scope == 'year_month_day' || scope == 'custom') {
-      if (!range.end.isBefore(dayFloor) || range.start.isAfter(referenceNow)) {
-        return 'realtime';
-      }
+    if (range.end.isAfter(referenceNow) || !range.start.isBefore(dayFloor)) {
+      return 'realtime';
     }
     return 'passive';
-  }
-
-  bool _isStrictRealtimeScope(String scope) {
-    return scope == 'latest' || scope == 'today' || scope == 'last_7d';
   }
 
   DateTime _dayFloor(DateTime value) {
@@ -1833,6 +1797,83 @@ class WebSearchTool implements AssistantTool {
       },
       hasError: hasError,
     );
+    _emitConsoleReadableSearchLog(entry, hasError: hasError);
+  }
+
+  void _emitConsoleReadableSearchLog(
+    Map<String, dynamic> entry, {
+    required bool hasError,
+  }) {
+    assert(() {
+      final kind = (entry['kind'] as String?)?.trim() ?? 'search';
+      final provider = (entry['provider'] as String?)?.trim() ?? 'unknown';
+      final request =
+          (entry['request'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final response =
+          (entry['response'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final diagnostics =
+          (entry['diagnostics'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final error = (entry['error'] as String?)?.trim() ?? '';
+      final queryTaskId = _consoleQueryTaskId(request, response);
+      final header = StringBuffer('[AssistantSearch][$kind] ');
+      header.write(hasError ? 'ERROR' : 'OK');
+      header.write(' stage=retrieval_processing');
+      header.write(' tool=web_search');
+      header.write(' provider=$provider');
+      if (queryTaskId.isNotEmpty) {
+        header.write(' queryTaskId=$queryTaskId');
+      }
+      print(header.toString());
+      for (final line in ConsolePrettyLogFormatter.renderSection(
+        prefix: '[AssistantSearch] ',
+        title: 'request',
+        value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(request),
+      )) {
+        print(line);
+      }
+      for (final line in ConsolePrettyLogFormatter.renderSection(
+        prefix: '[AssistantSearch] ',
+        title: 'response',
+        value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(response),
+      )) {
+        print(line);
+      }
+      if (diagnostics.isNotEmpty) {
+        for (final line in ConsolePrettyLogFormatter.renderSection(
+          prefix: '[AssistantSearch] ',
+          title: 'diagnostics',
+          value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(diagnostics),
+        )) {
+          print(line);
+        }
+      }
+      if (error.isNotEmpty) {
+        for (final line in ConsolePrettyLogFormatter.renderSection(
+          prefix: '[AssistantSearch] ',
+          title: 'error',
+          value: error,
+        )) {
+          print(line);
+        }
+      }
+      return true;
+    }());
+  }
+
+  String _consoleQueryTaskId(
+    Map<String, dynamic> request,
+    Map<String, dynamic> response,
+  ) {
+    for (final source in <Map<String, dynamic>>[request, response]) {
+      final queryTaskId = (source['queryTaskId'] as String?)?.trim() ?? '';
+      if (queryTaskId.isNotEmpty) {
+        return queryTaskId;
+      }
+    }
+    return '';
   }
 
   String _summarizeProviderResult({
@@ -3356,13 +3397,6 @@ class WebSearchTool implements AssistantTool {
       return arguments;
     }
     final mergedArguments = Map<String, dynamic>.from(arguments);
-    final mergedAnchors = mergeGeoAnchors(
-      _stringList(arguments['entityAnchors']),
-      resolvedGeoScope,
-    );
-    if (mergedAnchors.isNotEmpty) {
-      mergedArguments['entityAnchors'] = mergedAnchors;
-    }
     final queryNormalization =
         (arguments['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -3388,10 +3422,6 @@ class WebSearchTool implements AssistantTool {
     }
     return <String, dynamic>{
       ...queryTask,
-      'entityAnchors': mergeGeoAnchors(
-        _stringList(queryTask['entityAnchors']),
-        resolvedGeoScope,
-      ),
       'resolvedGeoScope': resolvedGeoScope.toJson(),
     };
   }

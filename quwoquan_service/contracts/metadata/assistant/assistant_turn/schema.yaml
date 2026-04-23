@@ -206,6 +206,7 @@ subcontracts:
     fields:
       - { name: intentSummary, type: string, default: '' }
       - { name: userFacingSummary, type: string, default: '' }
+      - { name: retrievalDesignNarrative, type: string, default: '' }
       - { name: concernPoints, type: list<string>, default: [] }
       - { name: emotionSignal, type: string, default: '' }
       - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }

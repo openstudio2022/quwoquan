@@ -29,7 +29,7 @@ void main() {
     final out = PersistedTimelineTurnCodec.encode(row);
     expect(out['id'], raw['id']);
     expect(out['streaming'], true);
-    expect(out['assistantTurnSchemaVersion'], raw['assistantTurnSchemaVersion']);
+    expect(out.containsKey('assistantTurnSchemaVersion'), isFalse);
     expect(out['displayMarkdown'], raw['displayMarkdown']);
   });
 

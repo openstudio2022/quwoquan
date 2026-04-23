@@ -11,7 +11,8 @@ class AssistantDisplayProjection {
 
   final String markdown;
 
-  String get plainText => AssistantDisplayTextResolver.normalizePlainText(markdown);
+  String get plainText =>
+      AssistantDisplayTextResolver.normalizePlainText(markdown);
 
   bool get hasRenderableContent =>
       markdown.trim().isNotEmpty || plainText.trim().isNotEmpty;
@@ -52,9 +53,7 @@ abstract final class AssistantDisplayTextResolver {
         : sanitizedPlain.isNotEmpty
         ? sanitizedPlain
         : (markdown.isNotEmpty ? stripMarkdown(markdown) : '');
-    return AssistantDisplayProjection(
-      markdown: markdown,
-    );
+    return AssistantDisplayProjection(markdown: markdown);
   }
 
   static AssistantTurnOutput normalizeTurn(AssistantTurnOutput turn) {
@@ -70,7 +69,9 @@ abstract final class AssistantDisplayTextResolver {
       userMarkdown: projection.markdown,
       result: AssistantTurnResult(
         text: projection.plainText,
-        summary: sanitizedSummary.isNotEmpty ? sanitizedSummary : projection.plainText,
+        summary: sanitizedSummary.isNotEmpty
+            ? sanitizedSummary
+            : projection.plainText,
         interpretation: turn.result.interpretation,
         actionHints: turn.result.actionHints,
       ),
@@ -95,6 +96,10 @@ abstract final class AssistantDisplayTextResolver {
       actionCode: turn.actionCode,
       reasonCode: turn.reasonCode,
       reasonShort: turn.reasonShort,
+      understandingSnapshot: turn.understandingSnapshot,
+      retrievalProcessing: turn.retrievalProcessing,
+      answerProcessing: turn.answerProcessing,
+      historicalThinkingSnapshot: turn.historicalThinkingSnapshot,
       sessionPreferenceFacts: turn.sessionPreferenceFacts,
       longTermPreferenceFacts: turn.longTermPreferenceFacts,
     );
@@ -275,7 +280,10 @@ abstract final class AssistantDisplayTextResolver {
       ]);
     }
     return _containsInternalProtocolFields(stripped) ||
-        _containsAnyMarker(stripped, const <String>['<tool_call>', '</tool_call>']);
+        _containsAnyMarker(stripped, const <String>[
+          '<tool_call>',
+          '</tool_call>',
+        ]);
   }
 
   static bool containsInternalProcessFragment(String raw) {

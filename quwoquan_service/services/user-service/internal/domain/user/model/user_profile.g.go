@@ -10,6 +10,8 @@ type UserProfile struct {
 	Phone            string    `json:"-" db:"phone"`
 	Nickname         string    `json:"nickname" db:"nickname"`
 	AvatarURL        string    `json:"avatarUrl" db:"avatar_url"`
+	AvatarAssetID    string    `json:"avatarAssetId" db:"avatar_asset_id"`
+	AvatarVersion    int       `json:"avatarVersion" db:"avatar_version"`
 	Bio              string    `json:"bio" db:"bio"`
 	Gender           string    `json:"gender" db:"gender"`
 	BirthDate        *string   `json:"birthDate" db:"birth_date"`

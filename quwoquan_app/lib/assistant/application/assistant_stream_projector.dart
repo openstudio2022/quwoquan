@@ -158,15 +158,22 @@ class AssistantStreamingProjector {
   ) {
     final direct = resolveAssistantProcessTimelineFromRunResponse(response);
     final projected = _processTimelineProjector.snapshot;
-    if (hasStructuredProcessTimeline(projected) &&
-        (!hasStructuredProcessTimeline(direct) ||
-            projected.length >= direct.length)) {
-      return projected;
+    final rebuiltFromVisible = rebuildCanonicalProcessTimelineFromVisible(
+      visibleProcessTimeline: buildVisibleProcessTimeline(direct),
+      seedProcessTimeline: projected,
+    );
+    final rebuiltFromDisplayState = _rebuildTimelineFromDisplayState(
+      response,
+      seed: hasStructuredProcessTimeline(direct) ? direct : projected,
+    );
+    var best = direct;
+    best = _preferCompletedTimeline(best, projected);
+    best = _preferCompletedTimeline(best, rebuiltFromVisible);
+    best = _preferCompletedTimeline(best, rebuiltFromDisplayState);
+    if (best.isNotEmpty) {
+      return _finalizeCompletedTimeline(best);
     }
-    if (direct.isNotEmpty) {
-      return direct;
-    }
-    return projected;
+    return _finalizeCompletedTimeline(projected);
   }
 
   bool _isUnsafeChunkDisplayCandidate(String raw) {
@@ -205,5 +212,103 @@ class AssistantStreamingProjector {
 
   AssistantJourney _journeyFromResponse(AssistantRunResponse response) {
     return resolveAssistantJourneyFromRunResponse(response);
+  }
+
+  List<ProcessTimelineFrame> _rebuildTimelineFromDisplayState(
+    AssistantRunResponse response, {
+    required List<ProcessTimelineFrame> seed,
+  }) {
+    final displayState = resolveAssistantDisplayStateFromRunResponse(response);
+    final blocks = displayState.process.blocks;
+    if (blocks.isEmpty) {
+      return const <ProcessTimelineFrame>[];
+    }
+    final mergedByStep = <ProcessStepId, ProcessTimelineFrame>{};
+    for (final block in blocks) {
+      if (block.stepId == ProcessStepId.unknown) {
+        continue;
+      }
+      final incoming = buildProcessTimelineFrame(
+        stepId: block.stepId,
+        status: _completedStatus(block.status),
+        headline: block.title,
+        detail: block.body,
+        references: block.references,
+      );
+      final existing = mergedByStep[block.stepId];
+      if (existing == null) {
+        mergedByStep[block.stepId] = incoming;
+        continue;
+      }
+      mergedByStep[block.stepId] = existing.copyWith(
+        status: incoming.status,
+        headline: incoming.headline.trim().isNotEmpty
+            ? incoming.headline
+            : existing.headline,
+        detail: incoming.detail.trim().isNotEmpty
+            ? incoming.detail
+            : existing.detail,
+        references: incoming.references.isNotEmpty
+            ? incoming.references
+            : existing.references,
+      );
+    }
+    final visible = buildVisibleProcessTimeline(
+      mergedByStep.values.toList(growable: false),
+    );
+    if (visible.isEmpty) {
+      return const <ProcessTimelineFrame>[];
+    }
+    return rebuildCanonicalProcessTimelineFromVisible(
+      visibleProcessTimeline: visible,
+      seedProcessTimeline: seed,
+    );
+  }
+
+  List<ProcessTimelineFrame> _preferCompletedTimeline(
+    List<ProcessTimelineFrame> current,
+    List<ProcessTimelineFrame> candidate,
+  ) {
+    if (!hasStructuredProcessTimeline(candidate)) {
+      return current;
+    }
+    if (!hasStructuredProcessTimeline(current)) {
+      return candidate;
+    }
+    final currentVisibleCount = buildVisibleProcessTimeline(current).length;
+    final candidateVisibleCount = buildVisibleProcessTimeline(candidate).length;
+    if (candidateVisibleCount > currentVisibleCount) {
+      return candidate;
+    }
+    if (candidateVisibleCount == currentVisibleCount &&
+        candidate.length > current.length) {
+      return candidate;
+    }
+    return current;
+  }
+
+  List<ProcessTimelineFrame> _finalizeCompletedTimeline(
+    List<ProcessTimelineFrame> timeline,
+  ) {
+    return normalizeProcessTimeline(
+      timeline
+          .map(
+            (frame) => frame.copyWith(status: _completedStatus(frame.status)),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  JourneyStageStatus _completedStatus(JourneyStageStatus status) {
+    switch (status) {
+      case JourneyStageStatus.pending:
+      case JourneyStageStatus.active:
+      case JourneyStageStatus.unknown:
+        return JourneyStageStatus.completed;
+      case JourneyStageStatus.completed:
+      case JourneyStageStatus.blocked:
+      case JourneyStageStatus.skipped:
+        return status;
+    }
   }
 }

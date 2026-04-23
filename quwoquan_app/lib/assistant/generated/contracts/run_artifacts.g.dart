@@ -1060,6 +1060,7 @@ class RunArtifactsUnderstandingSnapshot {
   const RunArtifactsUnderstandingSnapshot({
     this.intentSummary = "",
     this.userFacingSummary = "",
+    this.retrievalDesignNarrative = "",
     this.concernPoints = const <String>[],
     this.emotionSignal = "",
     this.resolutionItems = const <RunArtifactsUnderstandingResolutionItem>[],
@@ -1071,6 +1072,7 @@ class RunArtifactsUnderstandingSnapshot {
 
   final String intentSummary;
   final String userFacingSummary;
+  final String retrievalDesignNarrative;
   final List<String> concernPoints;
   final String emotionSignal;
   final List<RunArtifactsUnderstandingResolutionItem> resolutionItems;
@@ -1082,6 +1084,7 @@ class RunArtifactsUnderstandingSnapshot {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'intentSummary': intentSummary,
         'userFacingSummary': userFacingSummary,
+        'retrievalDesignNarrative': retrievalDesignNarrative,
         'concernPoints': concernPoints,
         'emotionSignal': emotionSignal,
         'resolutionItems': resolutionItems.map((item) => item.toJson()).toList(growable: false),
@@ -1095,6 +1098,7 @@ class RunArtifactsUnderstandingSnapshot {
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
       userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
+      retrievalDesignNarrative: (json['retrievalDesignNarrative'] as String?)?.trim() ?? "",
       concernPoints: _assistantStringList(json['concernPoints']),
       emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
       resolutionItems: (json['resolutionItems'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingResolutionItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingResolutionItem>[],
@@ -1116,6 +1120,7 @@ class RunArtifactsUnderstandingSnapshot {
 class RunArtifactsUnderstandingSnapshotFields {
   static const String intentSummary = 'intentSummary';
   static const String userFacingSummary = 'userFacingSummary';
+  static const String retrievalDesignNarrative = 'retrievalDesignNarrative';
   static const String concernPoints = 'concernPoints';
   static const String emotionSignal = 'emotionSignal';
   static const String resolutionItems = 'resolutionItems';

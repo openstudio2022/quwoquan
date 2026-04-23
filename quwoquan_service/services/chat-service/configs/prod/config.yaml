@@ -11,3 +11,15 @@ redis:
     addr: "${REDIS_ADDR}"
   general:
     addr: "${REDIS_ADDR}"
+
+runtime:
+  media:
+    group_avatar_cdn_domain: "${CHAT_GROUP_AVATAR_CDN_DOMAIN}"
+  sync:
+    patch_ttl_hours: 720
+  observability:
+    runtime_media:
+      group_avatar_recompute_duration_ms_p95: 500
+      group_avatar_fallback_ratio: 0.05
+      hint_to_pull_delay_ms_p95: 500
+      patch_fanout_failure_ratio: 0.01

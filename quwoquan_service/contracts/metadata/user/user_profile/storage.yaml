@@ -11,6 +11,8 @@ tables:
       - { name: phone, type: VARCHAR(20), constraints: [UNIQUE, NOT_NULL] }
       - { name: nickname, type: VARCHAR(64), constraints: [UNIQUE, NOT_NULL] }
       - { name: avatar_url, type: TEXT }
+      - { name: avatar_asset_id, type: VARCHAR(64) }
+      - { name: avatar_version, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: bio, type: VARCHAR(500) }
       - { name: gender, type: VARCHAR(16) }
       - { name: birth_date, type: DATE }
@@ -41,6 +43,9 @@ tables:
       - { name: id, type: VARCHAR(36), constraints: [PK] }
       - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
       - { name: display_name, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: user_handle, type: VARCHAR(64) }
+      - { name: phone, type: VARCHAR(20) }
+      - { name: email, type: VARCHAR(128) }
       - { name: avatar_url, type: TEXT }
       - { name: caller_ringtone_id, type: VARCHAR(64) }
       - { name: theme_mode_override, type: VARCHAR(16) }
@@ -52,16 +57,23 @@ tables:
       - { name: sub_account_id, type: VARCHAR(36), constraints: [NOT_NULL, UNIQUE] }
       - { name: isolation_level, type: VARCHAR(16), constraints: [NOT_NULL], default: "'open'" }
       - { name: purpose_hint, type: VARCHAR(128) }
+      - { name: inherits_profile_from_owner, type: BOOLEAN, constraints: [NOT_NULL], default: true }
+      - { name: overridden_profile_fields, type: "TEXT[]" }
+      - { name: last_profile_sync_at, type: TIMESTAMPTZ }
+      - { name: last_profile_sync_source, type: VARCHAR(16) }
+      - { name: last_activated_at, type: TIMESTAMPTZ }
       - { name: invite_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
       - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
     indexes:
       - { name: idx_personas_user_id, columns: [user_id] }
       - { name: idx_personas_sub_account_id, columns: [sub_account_id] }
+      - { name: idx_personas_user_handle, columns: [user_handle] }
     unique_constraints:
       - { name: uq_personas_primary, columns: [user_id, is_primary], condition: "is_primary = true" }
       - { name: uq_personas_active, columns: [user_id, is_active], condition: "is_active = true" }
       - { name: uq_personas_sub_account_id, columns: [sub_account_id] }
+      - { name: uq_personas_user_handle, columns: [user_handle], condition: "user_handle IS NOT NULL AND user_handle <> ''" }
 
   credential_bindings:
     entity: CredentialBinding

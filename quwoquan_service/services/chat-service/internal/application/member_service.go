@@ -20,20 +20,34 @@ type MemberService struct {
 	cache          *cache.ConversationCache
 	publisher      EventPublisher
 	profiles       ProfileSnapshotResolver
+	media          GroupAvatarAssetizer
+	syncPublisher  UserSyncPublisher
+	scheduler      GroupAvatarTaskScheduler
 	rosterMu       sync.Mutex
 	rosterTimers   map[string]*time.Timer
 	rosterDebounce time.Duration
 }
 
-func NewMemberService(repo persistence.ChatRepository, cache *cache.ConversationCache, publisher EventPublisher, profiles ProfileSnapshotResolver) *MemberService {
+func NewMemberService(
+	repo persistence.ChatRepository,
+	cache *cache.ConversationCache,
+	publisher EventPublisher,
+	profiles ProfileSnapshotResolver,
+	media GroupAvatarAssetizer,
+	syncPublisher UserSyncPublisher,
+	scheduler GroupAvatarTaskScheduler,
+) *MemberService {
 	if publisher == nil {
 		publisher = NoopEventPublisher()
 	}
 	if profiles == nil {
 		profiles = noopProfileResolver{}
 	}
+	if scheduler == nil {
+		scheduler = NoopGroupAvatarTaskScheduler()
+	}
 	return &MemberService{
-		repo: repo, cache: cache, publisher: publisher, profiles: profiles,
+		repo: repo, cache: cache, publisher: publisher, profiles: profiles, media: media, syncPublisher: syncPublisher, scheduler: scheduler,
 		rosterTimers:   make(map[string]*time.Timer),
 		rosterDebounce: 80 * time.Millisecond,
 	}
@@ -126,23 +140,25 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 
 	profMap, _ := s.profiles.ResolveMany(ctx, newUserIDs)
-	lookup := func(uid string) (string, string) {
+	lookup := func(uid string) (string, string, string, int) {
 		if p, ok := profMap[uid]; ok {
-			return p.DisplayName, p.AvatarURL
+			return p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
 		}
-		return "", ""
+		return "", "", "", 0
 	}
 
 	now := time.Now()
 	added := 0
 	for _, userId := range newUserIDs {
-		dn, av := lookup(userId)
+		dn, av, assetID, avatarVersion := lookup(userId)
 		member := &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: req.ConversationId,
 			UserId:         userId,
 			DisplayName:    dn,
 			AvatarUrl:      av,
+			AvatarAssetId:  assetID,
+			AvatarVersion:  int64(avatarVersion),
 			MemberType:     "user",
 			Role:           "member",
 			InvitedBy:      req.InvitedBy,
@@ -174,6 +190,11 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
+	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
+		ConversationID: req.ConversationId,
+		ActorID:        req.InvitedBy,
+		Trigger:        "members.added",
+	})
 
 	s.scheduleRosterUpdatedPublish(req.ConversationId)
 
@@ -287,6 +308,11 @@ func (s *MemberService) RemoveMember(ctx context.Context, conversationId, userId
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, conversationId)
+	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
+		ConversationID: conversationId,
+		ActorID:        userId,
+		Trigger:        "member.removed",
+	})
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.MemberLeft, conversationId, userId, map[string]any{

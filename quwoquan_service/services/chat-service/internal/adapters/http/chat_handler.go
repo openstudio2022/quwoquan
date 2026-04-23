@@ -9,6 +9,7 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/chat-service/internal/application"
+	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
 type ChatHandler struct {
@@ -68,7 +69,7 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 		nextCursor = convs[len(convs)-1].ID
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": convs, "cursor": nextCursor,
+		"items": flattenConversations(convs), "cursor": nextCursor,
 	})
 }
 
@@ -93,7 +94,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, conv)
+	writeJSON(w, http.StatusCreated, conversationToWire(*conv))
 }
 
 func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +104,7 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		writeHTTPError(w, newNotFound("会话", convId))
 		return
 	}
-	writeJSON(w, http.StatusOK, conv)
+	writeJSON(w, http.StatusOK, conversationToWire(*conv))
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -389,7 +390,7 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"items": flattenInboxItems(items)})
 }
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
@@ -468,7 +469,9 @@ func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.R
 			"conversationId":     conversation.ID,
 			"type":               conversation.Type,
 			"title":              conversation.Title,
-			"avatarUrl":          conversation.AvatarUrl,
+			"avatarUrl":          application.ResolveConversationAvatarURL(conversation),
+			"groupAvatarUrl":     application.ResolveGroupAvatarURL(conversation),
+			"groupAvatarVersion": conversation.GroupAvatarVersion,
 			"lastMessagePreview": conversation.LastMessagePreview,
 			"lastMessageTime":    conversation.LastMessageTime,
 			"memberCount":        conversation.MemberCount,
@@ -504,7 +507,7 @@ func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Reques
 			"messageId":              hit.Message.ID,
 			"conversationId":         hit.Conversation.ID,
 			"conversationTitle":      hit.Conversation.Title,
-			"conversationAvatarUrl":  hit.Conversation.AvatarUrl,
+			"conversationAvatarUrl":  application.ResolveConversationAvatarURL(hit.Conversation),
 			"senderProfileSubjectId": "",
 			"senderDisplayName":      hit.Message.SenderId,
 			"senderAvatarUrl":        "",
@@ -528,6 +531,61 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
+}
+
+func flattenConversations(convs []model.Conversation) []map[string]any {
+	items := make([]map[string]any, 0, len(convs))
+	for _, conv := range convs {
+		items = append(items, conversationToWire(conv))
+	}
+	return items
+}
+
+func flattenInboxItems(items []application.InboxItem) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, inboxItemToWire(item))
+	}
+	return out
+}
+
+func inboxItemToWire(item application.InboxItem) map[string]any {
+	conv := conversationToWire(item.Conversation)
+	conv["lastSeq"] = item.Conversation.MaxSeq
+	conv["unreadCount"] = item.UserState.UnreadCount
+	conv["mentionUnreadCount"] = 0
+	conv["muted"] = item.UserState.Muted
+	conv["pinned"] = item.UserState.Pinned
+	return conv
+}
+
+func conversationToWire(conv model.Conversation) map[string]any {
+	groupAvatarURL := application.ResolveGroupAvatarURL(conv)
+	avatarURL := application.ResolveConversationAvatarURL(conv)
+	return map[string]any{
+		"id":                    conv.ID,
+		"_id":                   conv.ID,
+		"conversationId":        conv.ID,
+		"type":                  conv.Type,
+		"title":                 conv.Title,
+		"avatarUrl":             avatarURL,
+		"groupAvatarUrl":        groupAvatarURL,
+		"groupAvatarVersion":    conv.GroupAvatarVersion,
+		"creatorId":             conv.CreatorId,
+		"circleId":              conv.CircleId,
+		"maxSeq":                conv.MaxSeq,
+		"memberCount":           conv.MemberCount,
+		"membersRosterRevision": conv.MembersRosterRevision,
+		"maxGroupSize":          conv.MaxGroupSize,
+		"receiptEnabled":        conv.ReceiptEnabled,
+		"lastMessageId":         conv.LastMessageId,
+		"lastMessagePreview":    conv.LastMessagePreview,
+		"lastMessageTime":       conv.LastMessageTime,
+		"messageCount":          conv.MessageCount,
+		"status":                conv.Status,
+		"createdAt":             conv.CreatedAt,
+		"updatedAt":             conv.UpdatedAt,
+	}
 }
 
 func writeHTTPError(w http.ResponseWriter, err error) {

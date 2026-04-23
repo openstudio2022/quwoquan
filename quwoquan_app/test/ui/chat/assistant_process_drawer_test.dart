@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
@@ -39,135 +40,50 @@ List<ProcessTimelineFrame> _processTimelineFromJourney(
   RetrievalProcessingSnapshot retrievalProcessing =
       const RetrievalProcessingSnapshot(),
 }) {
-  if (journey.isEmpty &&
-      retrievalProcessing.processingSummary.trim().isEmpty &&
-      retrievalProcessing.acceptedReferences.isEmpty &&
-      retrievalProcessing.processedDocumentCount <= 0 &&
-      retrievalProcessing.acceptedDocumentCount <= 0) {
+  final hasRetrievalProcessing = _hasStructuredRetrievalProcessing(
+    retrievalProcessing,
+  );
+  if (journey.isEmpty && !hasRetrievalProcessing) {
     return const <ProcessTimelineFrame>[];
   }
-
-  AssistantJourneyStage? stageFor(JourneyStageId stageId) {
-    for (final stage in journey.stages) {
-      if (stage.stageId == stageId) {
-        return stage;
-      }
-    }
-    return null;
+  final baseFrames = journey.isEmpty
+      ? const <ProcessTimelineFrame>[]
+      : buildProcessTimelineFramesFromJourneyFallback(journey);
+  if (!hasRetrievalProcessing) {
+    return baseFrames;
   }
-
-  AssistantJourneyEntry? firstEntryFor(JourneyStageId stageId) {
-    for (final entry in journey.entries) {
-      if (entry.stageId == stageId) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
-  String firstNonEmpty(Iterable<String?> values) {
-    for (final value in values) {
-      final trimmed = (value ?? '').trim();
-      if (trimmed.isNotEmpty) {
-        return trimmed;
-      }
-    }
-    return '';
-  }
-
-  final analyzeStage = stageFor(JourneyStageId.analyze);
-  final searchStage = stageFor(JourneyStageId.search);
-  final answerStage = stageFor(JourneyStageId.answer);
-  final analyzeEntry = firstEntryFor(JourneyStageId.analyze);
-  final searchEntry = firstEntryFor(JourneyStageId.search);
-  final answerEntry = firstEntryFor(JourneyStageId.answer);
-
-  final analyzeHeadline = firstNonEmpty(<String?>[
-    analyzeEntry?.headline,
-    analyzeEntry?.detail,
-    analyzeStage?.summary,
-  ]);
-  final searchHeadline = firstNonEmpty(<String?>[
-    searchEntry?.headline,
-    searchEntry?.detail,
-    searchStage?.summary,
-    retrievalProcessing.processingSummary,
-  ]);
-  final answerHeadline = firstNonEmpty(<String?>[
-    answerEntry?.headline,
-    answerEntry?.detail,
-    answerStage?.summary,
-  ]);
-
-  final searchReferences =
-      searchEntry?.references
-          .map(
-            (reference) => RetrievalProcessingReference(
-              title: reference.title,
-              url: reference.url,
-              source: reference.source,
-            ),
-          )
-          .toList(growable: false) ??
-      const <RetrievalProcessingReference>[];
-  final effectiveReferences = retrievalProcessing.acceptedReferences.isNotEmpty
-      ? retrievalProcessing.acceptedReferences
-      : searchReferences;
-
-  final searchUsesRetrievalProcessing =
-      retrievalProcessing.processingSummary.trim().isNotEmpty ||
-      retrievalProcessing.acceptedReferences.isNotEmpty ||
-      searchReferences.isNotEmpty ||
-      searchHeadline.contains('核对') ||
-      searchHeadline.contains('来源');
-
-  final frames = <ProcessTimelineFrame>[
-    if ((analyzeStage != null && analyzeHeadline.isEmpty) ||
-        (analyzeHeadline.isNotEmpty &&
-            !analyzeHeadline.contains('我需要搜索最新的天气信息')))
-      buildProcessTimelineFrame(
-        stepId: ProcessStepId.understanding,
-        status: analyzeStage?.status ?? JourneyStageStatus.completed,
-        headline: analyzeHeadline,
-        detail: (analyzeEntry?.detail ?? '').trim(),
-      ),
-    if (searchStage != null || searchHeadline.isNotEmpty)
-      buildProcessTimelineFrame(
-        stepId: searchUsesRetrievalProcessing
-            ? ProcessStepId.retrievalProcessing
-            : ProcessStepId.retrievalDesign,
-        status: searchStage?.status ?? JourneyStageStatus.completed,
-        headline: searchHeadline,
-        detail: (searchEntry?.detail ?? '').trim(),
-        references: effectiveReferences,
-        retrievalProcessing: searchUsesRetrievalProcessing
-            ? retrievalProcessing
-            : const RetrievalProcessingSnapshot(),
-      ),
-    if (answerStage != null || answerHeadline.isNotEmpty)
-      buildProcessTimelineFrame(
-        stepId: ProcessStepId.answerOrganization,
-        status: answerStage?.status ?? JourneyStageStatus.completed,
-        headline: answerHeadline,
-        detail: (answerEntry?.detail ?? '').trim(),
-        answerProcessing: answerHeadline.isEmpty
-            ? const RunArtifactsAnswerProcessing()
-            : RunArtifactsAnswerProcessing(readinessSummary: answerHeadline),
-      ),
-  ];
-
-  final visibleFrames = frames
-      .where(
-        (frame) =>
-            frame.headline.trim().isNotEmpty ||
-            frame.detail.trim().isNotEmpty ||
-            frame.references.isNotEmpty ||
-            frame.status != JourneyStageStatus.pending,
-      )
-      .toList(growable: false);
-  return normalizeProcessTimeline(
-    visibleFrames.isNotEmpty ? visibleFrames : frames,
+  final designFrame = baseFrames.where(
+    (frame) => frame.stepId == ProcessStepId.retrievalDesign,
   );
+  final designNarrative = designFrame.isEmpty
+      ? ''
+      : '${designFrame.first.headline.trim()}\n${designFrame.first.detail.trim()}';
+  final processingSummary = retrievalProcessing.processingSummary.trim();
+  final shouldSupplementRetrievalProcessing =
+      baseFrames.any((frame) => frame.stepId == ProcessStepId.retrievalProcessing) ||
+      retrievalProcessing.acceptedReferences.isNotEmpty ||
+      retrievalProcessing.processedDocumentCount > 0 ||
+      retrievalProcessing.acceptedDocumentCount > 0 ||
+      retrievalProcessing.selectedKeyPoints.any((item) => item.trim().isNotEmpty) ||
+      retrievalProcessing.expansionReason.trim().isNotEmpty ||
+      (processingSummary.isNotEmpty &&
+          processingSummary != designNarrative.trim());
+  if (!shouldSupplementRetrievalProcessing) {
+    return baseFrames;
+  }
+  return buildProcessTimelineFromSnapshots(
+    processTimeline: baseFrames,
+    retrievalProcessing: retrievalProcessing,
+  );
+}
+
+bool _hasStructuredRetrievalProcessing(RetrievalProcessingSnapshot snapshot) {
+  return snapshot.processingSummary.trim().isNotEmpty ||
+      snapshot.expansionReason.trim().isNotEmpty ||
+      snapshot.acceptedReferences.isNotEmpty ||
+      snapshot.selectedKeyPoints.any((item) => item.trim().isNotEmpty) ||
+      snapshot.processedDocumentCount > 0 ||
+      snapshot.acceptedDocumentCount > 0;
 }
 
 const AssistantJourney _referenceJourney = AssistantJourney(
@@ -275,9 +191,20 @@ void main() {
         isRunning: true,
       );
 
-      expect(built.blocks, hasLength(1));
-      expect(built.blocks.first.headline, contains('我先换几个检索词继续找'));
-      expect(built.blocks.first.headline.contains('我需要搜索最新的天气信息'), isFalse);
+      expect(
+        built.blocks.any(
+          (block) => block.headline.contains('我先确认你现在最需要的是实时天气结果'),
+        ),
+        isFalse,
+      );
+      expect(
+        built.blocks.any(
+          (block) =>
+              block.stageId == ProcessStepId.retrievalDesign &&
+              block.headline.contains('我先换几个检索词继续找'),
+        ),
+        isTrue,
+      );
     });
 
     test('运行中且 answer gate 未打开时，会继续停留在搜索阶段', () {
@@ -535,7 +462,7 @@ void main() {
       expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
     });
 
-    testWidgets('无 retrieval snapshot 时不再回退展示自由文本 query design', (
+    testWidgets('有 search stage 时会展示独立 query design，而不是回退成 processing', (
       tester,
     ) async {
       const journey = AssistantJourney(
@@ -575,7 +502,7 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('实时天气'), findsNothing);
+      expect(find.textContaining('实时天气'), findsOneWidget);
       expect(find.textContaining('深圳天气 实时 降雨 温度'), findsNothing);
     });
 
@@ -626,7 +553,7 @@ void main() {
       );
     });
 
-    test('两阶段内容会按理解、处理并生成答案顺序归位', () {
+    test('三阶段内容会按理解、检索设计、检索处理顺序归位', () {
       const journey = AssistantJourney(
         stages: <AssistantJourneyStage>[
           AssistantJourneyStage(
@@ -638,6 +565,11 @@ void main() {
             stageId: JourneyStageId.search,
             status: JourneyStageStatus.completed,
             order: 1,
+          ),
+          AssistantJourneyStage(
+            stageId: JourneyStageId.verify,
+            status: JourneyStageStatus.completed,
+            order: 2,
           ),
           AssistantJourneyStage(
             stageId: JourneyStageId.answer,
@@ -670,13 +602,38 @@ void main() {
             order: 2,
             detail: '已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
           ),
+          AssistantJourneyEntry(
+            entryId: 'journey.verify.weather',
+            stageId: JourneyStageId.verify,
+            kind: JourneyEntryKind.referenceBundle,
+            status: JourneyStageStatus.completed,
+            order: 3,
+            detail: '已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
+            references: <AssistantJourneyReference>[
+              AssistantJourneyReference(
+                title: '深圳天气预报 - nmc.cn',
+                url: 'https://www.nmc.cn',
+                source: 'nmc.cn',
+              ),
+              AssistantJourneyReference(
+                title: '深圳天气预报 - weather.com.cn',
+                url: 'https://www.weather.com.cn',
+                source: 'weather.com.cn',
+              ),
+              AssistantJourneyReference(
+                title: '中央气象台 - wx.nmc.cn',
+                url: 'https://wx.nmc.cn',
+                source: 'wx.nmc.cn',
+              ),
+            ],
+          ),
         ],
         readiness: AssistantJourneyReadiness(finalAnswerReady: true),
       );
       const retrievalProcessing = RetrievalProcessingSnapshot(
         processedDocumentCount: 10,
         acceptedDocumentCount: 3,
-        processingSummary: '围绕深圳实时天气、深圳今天天气预报组织检索。\n检索词：深圳 实时天气；深圳今天天气',
+        processingSummary: '已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
         acceptedReferences: <RetrievalProcessingReference>[
           RetrievalProcessingReference(
             title: '深圳天气预报 - nmc.cn',
@@ -706,20 +663,24 @@ void main() {
         viewModel.blocks.map((block) => block.stageId).toList(growable: false),
         equals(const <ProcessStepId>[
           ProcessStepId.understanding,
+          ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.referenceStats);
-      expect(viewModel.blocks[1].headline, '处理了 10 篇，接纳了 3 篇');
-      expect(viewModel.blocks[1].references, hasLength(3));
-      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.searchSummary);
-      expect(viewModel.blocks[2].headline, contains('围绕深圳实时天气'));
-      expect(viewModel.blocks[2].items, isEmpty);
+      expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.narrative);
+      expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
+      expect(viewModel.blocks[1].items, isEmpty);
+      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.referenceStats);
+      expect(viewModel.blocks[2].headline, '处理了 10 篇，接纳了 3 篇');
+      expect(viewModel.blocks[2].references, hasLength(3));
+      expect(viewModel.blocks[3].kind, AssistantJourneyBlockKind.searchSummary);
+      expect(viewModel.blocks[3].headline, contains('已获取深圳官方及权威气象站'));
+      expect(viewModel.blocks[3].items, isEmpty);
       expect(viewModel.blocks[2].referenceLabel, isEmpty);
     });
 
-    test('canonical 四阶段过程轨会折叠成可见两阶段，且第一阶段只展示稳定主字段', () {
+    test('canonical 四阶段过程轨会折叠成可见三阶段，且 understanding 不再吞并 query design', () {
       final built = _viewModel(
         processTimeline: <ProcessTimelineFrame>[
           buildProcessTimelineFrame(
@@ -756,10 +717,15 @@ void main() {
         built.blocks.map((block) => block.stageId).toList(growable: false),
         orderedEquals(const <ProcessStepId>[
           ProcessStepId.understanding,
+          ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(built.blocks.first.detail, isNotEmpty);
+      expect(built.blocks.first.detail, isEmpty);
+      expect(
+        built.blocks[1].headline,
+        contains('我会先按天气现状和出门建议两路来核对'),
+      );
     });
 
     test('两段叙事会连续带出检索词设计与成答组织', () {
@@ -767,11 +733,17 @@ void main() {
           '我会先沿着天气现状这一条线继续核对，先锁定最新天气面，检索词会围绕“深圳 实时天气”、“深圳 降雨 概率”展开。';
       final built = buildAssistantJourneyViewModel(
         journey: const AssistantJourney(),
-        processTimeline: const <ProcessTimelineFrame>[
+        processTimeline: <ProcessTimelineFrame>[
           ProcessTimelineFrame(
             frameId: 'u',
             stepId: ProcessStepId.understanding,
             status: JourneyStageStatus.completed,
+          ),
+          ProcessTimelineFrame(
+            frameId: 'd',
+            stepId: ProcessStepId.retrievalDesign,
+            status: JourneyStageStatus.completed,
+            headline: designNarrative,
           ),
           ProcessTimelineFrame(
             frameId: 'r',
@@ -781,7 +753,8 @@ void main() {
         ],
         isRunning: false,
         understandingSnapshot: RunArtifactsUnderstandingSnapshot(
-          userFacingSummary: '我先把问题边界收清。$designNarrative',
+          userFacingSummary: '我先把问题边界收清。',
+          retrievalDesignNarrative: designNarrative,
         ),
         retrievalProcessing: const RetrievalProcessingSnapshot(
           processedDocumentCount: 3,
@@ -797,16 +770,13 @@ void main() {
 
       expect(built.blocks.first.headline, contains('我先把问题边界收清'));
       expect(built.blocks.first.items, isEmpty);
-      expect(built.blocks.first.headline, contains(designNarrative));
-      expect(built.blocks[1].kind, AssistantJourneyBlockKind.referenceStats);
-      expect(built.blocks[2].items, isEmpty);
+      expect(built.blocks[1].headline, contains(designNarrative));
+      expect(built.blocks[2].kind, AssistantJourneyBlockKind.referenceStats);
+      expect(built.blocks[3].items, isEmpty);
       expect(
-        built.blocks[2].detail,
-        contains('我先把结果更新时间一致这些能直接支撑回答的点拎出来。'),
-      );
-      expect(
-        built.blocks[2].detail,
-        contains('回答会先围绕先说结论再补建议展开。'),
+        built.blocks[3].detail,
+        isEmpty,
+        reason: '检索处理阶段不再回灌 answerProcessing 或 selectedKeyPoints 生成叙事',
       );
     });
 
@@ -830,9 +800,15 @@ void main() {
 
       expect(
         built.blocks.where(
-          (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
+          (block) => block.kind == AssistantJourneyBlockKind.referenceStats,
         ),
         hasLength(1),
+      );
+      expect(
+        built.blocks.where(
+          (block) => block.kind == AssistantJourneyBlockKind.searchSummary,
+        ),
+        isEmpty,
       );
     });
 
@@ -975,6 +951,41 @@ void main() {
       expect(find.text('耗时 4 秒'), findsOneWidget);
       expect(find.text('已核对 2 个来源'), findsNothing);
       expect(find.textContaining('4.2'), findsNothing);
+    });
+
+    testWidgets('完成态头部不再展示完成图标，展开后会显示完整参考链接', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AssistantProcessDrawer(
+              viewModel: _viewModel(
+                journey: _referenceJourney,
+                isRunning: false,
+                retrievalProcessing: const RetrievalProcessingSnapshot(
+                  processedDocumentCount: 4,
+                  acceptedDocumentCount: 1,
+                  acceptedReferences: <RetrievalProcessingReference>[
+                    RetrievalProcessingReference(
+                      title: '四川文旅公告',
+                      url: 'https://example.com/doc',
+                      source: '官方',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsNothing);
+
+      await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byIcon(CupertinoIcons.chevron_down).last);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('https://example.com/doc'), findsOneWidget);
     });
   });
 }

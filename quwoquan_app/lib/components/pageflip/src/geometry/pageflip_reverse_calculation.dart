@@ -25,4 +25,6 @@ class PageflipReverseCalculation {
   double getProgress() => _calculation.getFlippingProgress() / 100;
   Offset getActiveCorner() => _calculation.getActiveCorner();
   Offset getBottomPagePosition() => _calculation.getBottomPagePosition();
+  List<Offset> getFlippingClipArea() => _calculation.getFlippingClipArea();
+  List<Offset> getBottomClipArea() => _calculation.getBottomClipArea();
 }

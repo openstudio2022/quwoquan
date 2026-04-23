@@ -1595,6 +1595,34 @@ Widget _buildConversationLeading({
   required bool isDark,
   required IconData fallbackIcon,
 }) {
+  final effectiveImageUrl = (avatarUrl ?? '').trim();
+  if (effectiveImageUrl.isNotEmpty) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.avatarUserMd / 2),
+      child: Container(
+        width: AppSpacing.avatarUserMd,
+        height: AppSpacing.avatarUserMd,
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundSecondary,
+        ),
+        child: Image.network(
+          effectiveImageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              fallbackIcon,
+              size: AppSpacing.iconMedium,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
   if (avatarCompositeUrls.isNotEmpty) {
     return SizedBox(
       width: AppSpacing.avatarUserMd,
@@ -1605,7 +1633,6 @@ Widget _buildConversationLeading({
       ),
     );
   }
-  final effectiveImageUrl = (avatarUrl ?? '').trim();
   return ClipRRect(
     borderRadius: BorderRadius.circular(AppSpacing.avatarUserMd / 2),
     child: Container(
@@ -1615,29 +1642,14 @@ Widget _buildConversationLeading({
         isDark,
         ColorType.backgroundSecondary,
       ),
-      child: effectiveImageUrl.isEmpty
-          ? Icon(
-              fallbackIcon,
-              size: AppSpacing.iconMedium,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-            )
-          : Image.network(
-              effectiveImageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  fallbackIcon,
-                  size: AppSpacing.iconMedium,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundSecondary,
-                  ),
-                );
-              },
-            ),
+      child: Icon(
+        fallbackIcon,
+        size: AppSpacing.iconMedium,
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundSecondary,
+        ),
+      ),
     ),
   );
 }

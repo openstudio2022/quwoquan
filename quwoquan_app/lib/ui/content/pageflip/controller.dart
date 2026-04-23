@@ -475,41 +475,16 @@ class StPageFlipController {
     final calculation = _calculation!;
     final direction = _direction;
     final corner = _corner;
-    ReverseFlipPose? resolvedReversePose = reversePose;
     if (direction == null || corner == null) {
       return;
     }
-    if (calculation is ReverseCurlCalculation) {
-      resolvedReversePose ??= resolveReverseFlipPose(
-        localPagePoint: localPagePoint,
-        pageSize: Size(_layout.bounds.pageWidth, _layout.bounds.height),
-        progress: resolveReverseFlipProgress(
-          localX: localPagePoint.dx,
-          pageWidth: _layout.bounds.pageWidth,
-        ),
-        corner: corner,
-      );
-      calculation
-        ..clearPose()
-        ..syncPose(resolvedReversePose);
-    }
     if (calculation.calc(localPagePoint)) {
-      final renderDirection = resolvePageFlipRenderDirection(
-        direction: direction,
-        orientation: _layout.orientation,
-        reversePose: resolvedReversePose,
-      );
-      _shadow = _buildShadowData(
-        calculation.getShadowStartPoint(),
-        calculation.getShadowAngle(),
-        calculation.getFlippingProgress(),
-        renderDirection,
-      );
       _renderFrame = _buildRenderFrame(
         calculation: calculation,
         localPagePoint: renderLocalPagePoint ?? localPagePoint,
-        reversePose: resolvedReversePose,
+        reversePose: null,
       );
+      _shadow = _renderFrame?.shadow;
     }
   }
 
@@ -568,25 +543,6 @@ class StPageFlipController {
     final direction = _direction!;
     final corner = _corner!;
 
-    // 竖屏回翻：沿动画帧序列采样完整的三阶段 ReverseFlipPose，
-    // 使自动动画与拖拽路径共享同一条 backward 运动学主线。
-    List<ReverseFlipPose>? reversePoses;
-    if (_usesThreeStageBackflow(direction)) {
-      final pageSize = Size(_layout.bounds.pageWidth, _layout.bounds.height);
-      reversePoses = frames.map((frame) {
-        final progress = resolveReverseFlipProgress(
-          localX: frame.dx,
-          pageWidth: pageSize.width,
-        );
-        return resolveReverseFlipPose(
-          localPagePoint: frame,
-          pageSize: pageSize,
-          progress: progress,
-          corner: corner,
-        );
-      }).toList();
-    }
-
     return StPageFlipAnimationPlan(
       frames: frames,
       duration: Duration(milliseconds: durationMs.round()),
@@ -594,7 +550,7 @@ class StPageFlipController {
       needReset: needReset,
       direction: direction,
       corner: corner,
-      reversePoses: reversePoses,
+      reversePoses: null,
     );
   }
 
@@ -604,8 +560,8 @@ class StPageFlipController {
     required bool isTurned,
   }) {
     // 点列插值：前翻与回翻共用同一组 Offset 帧序列。
-    // 回翻的三阶段运动学由 _animationPlan 中采样的 reversePoses 驱动，
-    // 不再依赖 mesh builder 侧的镜像推导。
+    // 回翻主线由 render_frame.dart 中的 backwardLeafFrame / replay timeline
+    // 统一解释，动画计划不再携带额外 reversePoses 语义。
     return interpolatePoints(start, end);
   }
 
@@ -647,22 +603,10 @@ class StPageFlipController {
     _renderFrame = null;
   }
 
-  bool _usesThreeStageBackflow(StPageFlipDirection direction) {
-    return direction == StPageFlipDirection.back &&
-        _layout.orientation == StPageFlipOrientation.portrait;
-  }
-
   StPageFlipCalculation _createCalculation({
     required StPageFlipDirection direction,
     required StPageFlipCorner corner,
   }) {
-    if (_usesThreeStageBackflow(direction)) {
-      return ReverseCurlCalculation(
-        corner: corner,
-        pageWidth: _layout.bounds.pageWidth,
-        pageHeight: _layout.bounds.height,
-      );
-    }
     return StPageFlipCalculation(
       direction: direction,
       corner: corner,
@@ -681,14 +625,40 @@ class StPageFlipController {
     final progress = (calculation.getFlippingProgress() / 100)
         .clamp(0.0, 1.0)
         .toDouble();
+    final pageSize = Size(_layout.bounds.pageWidth, _layout.bounds.height);
     final renderDirection = resolvePageFlipRenderDirection(
       direction: direction,
       orientation: _layout.orientation,
       reversePose: reversePose,
     );
+    final backwardLeafFrame = resolveArticlePageBackwardLeafFrame(
+      direction: direction,
+      progress: progress,
+      reversePose: null,
+    );
+    final shadow =
+        direction == StPageFlipDirection.back && backwardLeafFrame != null
+        ? resolveArticlePageBackwardShadowData(
+            frame: backwardLeafFrame,
+            pageSize: pageSize,
+            corner: corner,
+            maxShadowOpacity: maxShadowOpacity,
+          )
+        : _buildShadowData(
+            calculation.getShadowStartPoint(),
+            calculation.getShadowAngle(),
+            calculation.getFlippingProgress(),
+            renderDirection,
+          );
+    final timelineLocalPoint = direction == StPageFlipDirection.back
+        ? resolveBackwardReplayLocalPagePoint(
+            localPagePoint: localPagePoint,
+            pageSize: pageSize,
+          )
+        : localPagePoint;
     final angleBand = resolveForwardCurlAngleBand(
-      localPagePoint: localPagePoint,
-      pageSize: Size(_layout.bounds.pageWidth, _layout.bounds.height),
+      localPagePoint: timelineLocalPoint,
+      pageSize: pageSize,
       corner: corner,
     );
     return StPageFlipRenderFrame(
@@ -698,31 +668,56 @@ class StPageFlipController {
       renderDirection: renderDirection,
       corner: corner,
       flippingClipArea: List<Offset>.unmodifiable(
-        calculation.getFlippingClipArea(),
+        direction == StPageFlipDirection.back && backwardLeafFrame != null
+            ? resolveArticlePageBackwardFlippingClipArea(
+                frame: backwardLeafFrame,
+                pageSize: pageSize,
+              )
+            : calculation.getFlippingClipArea(),
       ),
       bottomClipArea: List<Offset>.unmodifiable(
-        calculation.getBottomClipArea(),
+        direction == StPageFlipDirection.back && backwardLeafFrame != null
+            ? resolveArticlePageBackwardBottomClipArea(
+                frame: backwardLeafFrame,
+                pageSize: pageSize,
+              )
+            : calculation.getBottomClipArea(),
       ),
-      flippingAnchor: calculation.getActiveCorner(),
-      bottomAnchor: calculation.getBottomPagePosition(),
-      angle: calculation.getAngle(),
-      shadow: _shadow,
+      flippingAnchor:
+          direction == StPageFlipDirection.back && backwardLeafFrame != null
+          ? resolveArticlePageBackwardFlippingAnchor(
+              frame: backwardLeafFrame,
+              pageSize: pageSize,
+              corner: corner,
+            )
+          : calculation.getActiveCorner(),
+      bottomAnchor:
+          direction == StPageFlipDirection.back && backwardLeafFrame != null
+          ? resolveArticlePageBackwardBottomAnchor(
+              frame: backwardLeafFrame,
+              pageSize: pageSize,
+              corner: corner,
+            )
+          : calculation.getBottomPagePosition(),
+      angle: direction == StPageFlipDirection.back && backwardLeafFrame != null
+          ? resolveArticlePageBackwardAngle(
+              frame: backwardLeafFrame,
+              corner: corner,
+            )
+          : calculation.getAngle(),
+      shadow: shadow,
       timeline: resolvePageCurlTimeline(
         direction: direction,
         renderDirection: renderDirection,
         progress: progress,
         localPagePoint: localPagePoint,
-        pageSize: Size(_layout.bounds.pageWidth, _layout.bounds.height),
+        pageSize: pageSize,
         corner: corner,
         angleBand: angleBand,
-        reversePose: reversePose,
+        reversePose: null,
       ),
-      reversePose: reversePose,
-      backwardLeafFrame: resolveArticlePageBackwardLeafFrame(
-        direction: direction,
-        progress: progress,
-        reversePose: reversePose,
-      ),
+      reversePose: null,
+      backwardLeafFrame: backwardLeafFrame,
     );
   }
 }

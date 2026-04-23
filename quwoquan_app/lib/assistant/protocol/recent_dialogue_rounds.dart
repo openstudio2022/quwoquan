@@ -4,8 +4,11 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 
-const int defaultRecentDialogueRoundsLimit = 5;
-const int maxRecentDialogueRoundsLimit = 8;
+const int defaultRecentDialogueRoundsLimit = 10;
+const int maxRecentDialogueRoundsLimit = 10;
+const int defaultOlderRecentDialogueRoundsLimit = 5;
+const int maxOlderRecentDialogueRoundsLimit = 5;
+const Duration recentDialogueRoundsFreshWindow = Duration(days: 1);
 
 int resolveRecentDialogueRoundsLimit(
   Map<String, dynamic> contextScopeHint, {
@@ -20,6 +23,27 @@ int resolveRecentDialogueRoundsLimit(
     if (parsed != null) {
       return parsed > maxRecentDialogueRoundsLimit
           ? maxRecentDialogueRoundsLimit
+          : parsed;
+    }
+  }
+  return fallback;
+}
+
+int resolveOlderRecentDialogueRoundsLimit(
+  Map<String, dynamic> contextScopeHint, {
+  int fallback = defaultOlderRecentDialogueRoundsLimit,
+}) {
+  final candidates = <Object?>[
+    contextScopeHint['recentDialogueRoundsOlderLimit'],
+    contextScopeHint['olderRecentDialogueRoundsLimit'],
+    (contextScopeHint['hints'] as Map?)?.cast<String, dynamic>()['recentDialogueRoundsOlderLimit'],
+    (contextScopeHint['hints'] as Map?)?.cast<String, dynamic>()['olderRecentDialogueRoundsLimit'],
+  ];
+  for (final candidate in candidates) {
+    final parsed = _positiveInt(candidate);
+    if (parsed != null) {
+      return parsed > maxOlderRecentDialogueRoundsLimit
+          ? maxOlderRecentDialogueRoundsLimit
           : parsed;
     }
   }
@@ -50,75 +74,78 @@ List<AssistantRunMessage> trimMessagesToRecentRounds(
 }
 
 List<Map<String, dynamic>> coerceRecentDialogueRounds(Object? raw) {
-  if (raw is! List) {
-    return const <Map<String, dynamic>>[];
-  }
-  return raw
-      .whereType<Map>()
-      .map((item) => item.cast<String, dynamic>())
-      .where((item) => item.isNotEmpty)
+  return _coerceRecentDialogueRoundRecords(raw)
+      .map((item) => item.toJson())
       .toList(growable: false);
 }
 
 List<Map<String, dynamic>> buildRecentDialogueRounds(
   List<Map<String, dynamic>> sessionHistory, {
   int limit = defaultRecentDialogueRoundsLimit,
+  int olderLimit = defaultOlderRecentDialogueRoundsLimit,
+  DateTime? referenceTime,
 }) {
-  if (limit <= 0 || sessionHistory.isEmpty) {
+  if ((limit <= 0 && olderLimit <= 0) || sessionHistory.isEmpty) {
     return const <Map<String, dynamic>>[];
   }
-  final rounds = <Map<String, dynamic>>[];
+  final rounds = <_RecentDialogueRoundRecord>[];
   String pendingUserQuery = '';
   String pendingUserTurnId = '';
+  DateTime? pendingUserTimestamp;
   for (final rawMessage in sessionHistory) {
-    final message = Map<String, dynamic>.from(rawMessage);
-    final role = _stringValue(message['role']);
-    if (role == 'user') {
-      pendingUserQuery = _stringValue(message['content']);
-      pendingUserTurnId = _stringValue(message['id']);
+    final message = _SessionHistoryMessageRecord.fromMap(rawMessage);
+    if (message.role == 'user') {
+      pendingUserQuery = message.content;
+      pendingUserTurnId = message.turnId;
+      pendingUserTimestamp = message.timestamp;
       continue;
     }
-    if (role != 'assistant' || pendingUserQuery.isEmpty) {
+    if (message.role != 'assistant' || pendingUserQuery.isEmpty) {
       continue;
     }
     final canonical =
-        normalizeCanonicalPersistedAssistantTurnMessage(message) ?? message;
+        normalizeCanonicalPersistedAssistantTurnMessage(message.raw) ??
+        message.raw;
     rounds.add(
       _buildDialogueRound(
         assistantMessage: canonical,
         userQuery: pendingUserQuery,
         fallbackTurnId: pendingUserTurnId,
+        fallbackTimestamp: pendingUserTimestamp,
         fallbackIndex: rounds.length,
       ),
     );
     pendingUserQuery = '';
     pendingUserTurnId = '';
+    pendingUserTimestamp = null;
   }
-  return rounds.reversed.take(limit).toList(growable: false);
+  return _selectRecentDialogueRounds(
+    rounds,
+    recentLimit: limit,
+    olderLimit: olderLimit,
+    referenceTime: referenceTime,
+  ).map((item) => item.toJson()).toList(growable: false);
 }
 
 List<String> recentUserQueriesFromRounds(List<Map<String, dynamic>> rounds) {
-  return rounds
-      .map((round) => _stringValue(round['userQuery']))
+  return _coerceRecentDialogueRoundRecords(rounds)
+      .map((round) => round.userQuery)
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
 }
 
 String buildRecentDialogueRoundsTranscript(List<Map<String, dynamic>> rounds) {
-  if (rounds.isEmpty) {
+  final records = _coerceRecentDialogueRoundRecords(rounds);
+  if (records.isEmpty) {
     return '';
   }
-  final chronological = rounds.reversed.toList(growable: false);
+  final chronological = records.reversed.toList(growable: false);
   final chunks = <String>[];
   for (final round in chronological) {
-    final userQuery = _stringValue(round['userQuery']);
-    final understandingSnapshot =
-        (round['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final understandingSummary = _stringValue(
-      understandingSnapshot['userFacingSummary'],
-    );
-    final answerSummary = _stringValue(round['assistantSummary']);
+    final userQuery = round.userQuery.trim();
+    final understandingSummary =
+        round.understandingSnapshot.userFacingSummary.trim();
+    final answerSummary = round.assistantSummary.trim();
     final lines = <String>[
       if (userQuery.isNotEmpty) 'user: $userQuery',
       if (understandingSummary.isNotEmpty) 'understanding: $understandingSummary',
@@ -131,10 +158,11 @@ String buildRecentDialogueRoundsTranscript(List<Map<String, dynamic>> rounds) {
   return chunks.join('\n\n').trim();
 }
 
-Map<String, dynamic> _buildDialogueRound({
+_RecentDialogueRoundRecord _buildDialogueRound({
   required Map<String, dynamic> assistantMessage,
   required String userQuery,
   required String fallbackTurnId,
+  required DateTime? fallbackTimestamp,
   required int fallbackIndex,
 }) {
   final intentGraph = resolvePersistedAssistantIntentGraph(assistantMessage);
@@ -146,9 +174,7 @@ Map<String, dynamic> _buildDialogueRound({
       resolvePersistedAssistantAnswerProcessing(assistantMessage);
   final historicalThinkingSnapshot =
       resolvePersistedAssistantHistoricalThinkingSnapshot(assistantMessage);
-  final answerSummary = resolvePersistedAssistantDisplayPlainText(
-    assistantMessage,
-  );
+  final answerSummary = _resolveDialogueRoundAssistantSummary(assistantMessage);
   final journey = resolvePersistedAssistantJourney(assistantMessage);
   final displayState = resolvePersistedAssistantDisplayState(assistantMessage);
   final turnId = _firstNonEmpty(<String>[
@@ -157,22 +183,296 @@ Map<String, dynamic> _buildDialogueRound({
     fallbackTurnId,
     'round_$fallbackIndex',
   ]);
+  final roundTimestamp =
+      _resolveMessageTime(assistantMessage) ?? fallbackTimestamp;
   final finalAnswerReady =
       displayState.process.finalAnswerReady || journey.readiness.finalAnswerReady;
-  return <String, dynamic>{
-    'turnId': turnId,
-    'userQuery': userQuery,
-    'assistantSummary': _truncateText(answerSummary, maxLength: 240),
-    'finalAnswerReady': finalAnswerReady,
-    if (journey.readiness.finalAnswerMode.wireName.isNotEmpty)
-      'finalAnswerMode': journey.readiness.finalAnswerMode.wireName,
-    'intentGraph': _compactIntentGraph(intentGraph),
-    'understandingSnapshot': _compactUnderstandingSnapshot(understandingSnapshot),
-    'retrievalProcessing': _compactRetrievalProcessing(retrievalProcessing),
-    'answerProcessing': _compactAnswerProcessing(answerProcessing),
-    'historicalThinkingSnapshot':
-        _compactHistoricalThinkingSnapshot(historicalThinkingSnapshot),
-  };
+  return _RecentDialogueRoundRecord(
+    turnId: turnId,
+    userQuery: userQuery,
+    timestamp: roundTimestamp,
+    assistantSummary: _truncateText(answerSummary, maxLength: 240),
+    finalAnswerReady: finalAnswerReady,
+    finalAnswerMode: journey.readiness.finalAnswerMode.wireName,
+    intentGraph: intentGraph,
+    understandingSnapshot: understandingSnapshot,
+    retrievalProcessing: retrievalProcessing,
+    answerProcessing: answerProcessing,
+    historicalThinkingSnapshot: historicalThinkingSnapshot,
+  );
+}
+
+String _resolveDialogueRoundAssistantSummary(Map<String, dynamic> message) {
+  final displayState = resolvePersistedAssistantDisplayState(message);
+  final answerSummary = displayState.answer.summary.trim();
+  if (answerSummary.isNotEmpty) {
+    return answerSummary;
+  }
+  final resultSummary =
+      (((message['result'] as Map?)?['summary']) as String?)?.trim() ?? '';
+  if (resultSummary.isNotEmpty) {
+    return resultSummary;
+  }
+  return resolvePersistedAssistantDisplayPlainText(message);
+}
+
+List<_RecentDialogueRoundRecord> _selectRecentDialogueRounds(
+  List<_RecentDialogueRoundRecord> rounds, {
+  required int recentLimit,
+  required int olderLimit,
+  DateTime? referenceTime,
+}) {
+  if (rounds.isEmpty) {
+    return const <_RecentDialogueRoundRecord>[];
+  }
+  final fresh = <_RecentDialogueRoundRecord>[];
+  final older = <_RecentDialogueRoundRecord>[];
+  final effectiveReferenceTime = (referenceTime ?? DateTime.now()).toUtc();
+  for (final round in rounds.reversed) {
+    if (_isWithinFreshWindow(round, referenceTime: effectiveReferenceTime)) {
+      fresh.add(round);
+    } else {
+      older.add(round);
+    }
+  }
+  return <_RecentDialogueRoundRecord>[
+    if (recentLimit > 0) ...fresh.take(recentLimit),
+    if (olderLimit > 0) ...older.take(olderLimit),
+  ];
+}
+
+bool _isWithinFreshWindow(
+  _RecentDialogueRoundRecord round, {
+  required DateTime referenceTime,
+}) {
+  final roundTime = round.timestamp;
+  if (roundTime == null) {
+    return true;
+  }
+  return !roundTime.isBefore(referenceTime.subtract(recentDialogueRoundsFreshWindow));
+}
+
+DateTime? _resolveMessageTime(Map<String, dynamic> message) {
+  final direct = _firstNonNull<DateTime>(<DateTime?>[
+    _dateTimeValue(message['timestamp']),
+    _dateTimeValue(message['createdAt']),
+    _dateTimeValue(message['updatedAt']),
+  ]);
+  if (direct != null) {
+    return direct;
+  }
+  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  if (runArtifacts != null && runArtifacts.isNotEmpty) {
+    return _firstNonNull<DateTime>(<DateTime?>[
+      _dateTimeValue(runArtifacts['timestamp']),
+      _dateTimeValue(runArtifacts['createdAt']),
+      _dateTimeValue(runArtifacts['updatedAt']),
+    ]);
+  }
+  return null;
+}
+
+DateTime? _dateTimeValue(Object? raw) {
+  if (raw is DateTime) {
+    return raw.toUtc();
+  }
+  final text = _stringValue(raw);
+  if (text.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(text)?.toUtc();
+}
+
+List<_RecentDialogueRoundRecord> _coerceRecentDialogueRoundRecords(Object? raw) {
+  if (raw is! List) {
+    return const <_RecentDialogueRoundRecord>[];
+  }
+  final records = <_RecentDialogueRoundRecord>[];
+  for (final item in raw.whereType<Map>()) {
+    final parsed = _RecentDialogueRoundRecord.tryFromMap(
+      item.cast<String, dynamic>(),
+    );
+    if (parsed != null) {
+      records.add(parsed);
+    }
+  }
+  return records;
+}
+
+class _SessionHistoryMessageRecord {
+  const _SessionHistoryMessageRecord({
+    required this.raw,
+    required this.role,
+    required this.content,
+    required this.turnId,
+    required this.timestamp,
+  });
+
+  factory _SessionHistoryMessageRecord.fromMap(Map<String, dynamic> raw) {
+    final message = Map<String, dynamic>.from(raw);
+    return _SessionHistoryMessageRecord(
+      raw: message,
+      role: _stringValue(message['role']),
+      content: _stringValue(message['content']),
+      turnId: _stringValue(message['id']),
+      timestamp: _resolveMessageTime(message),
+    );
+  }
+
+  final Map<String, dynamic> raw;
+  final String role;
+  final String content;
+  final String turnId;
+  final DateTime? timestamp;
+}
+
+class _RecentDialogueRoundRecord {
+  const _RecentDialogueRoundRecord({
+    required this.turnId,
+    required this.userQuery,
+    required this.timestamp,
+    required this.assistantSummary,
+    required this.finalAnswerReady,
+    required this.finalAnswerMode,
+    required this.intentGraph,
+    required this.understandingSnapshot,
+    required this.retrievalProcessing,
+    required this.answerProcessing,
+    required this.historicalThinkingSnapshot,
+  });
+
+  final String turnId;
+  final String userQuery;
+  final DateTime? timestamp;
+  final String assistantSummary;
+  final bool finalAnswerReady;
+  final String finalAnswerMode;
+  final IntentGraph? intentGraph;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
+  final RetrievalProcessingSnapshot retrievalProcessing;
+  final RunArtifactsAnswerProcessing answerProcessing;
+  final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'turnId': turnId,
+      'userQuery': userQuery,
+      if (timestamp != null) 'timestamp': timestamp!.toIso8601String(),
+      'assistantSummary': assistantSummary,
+      'finalAnswerReady': finalAnswerReady,
+      if (finalAnswerMode.isNotEmpty) 'finalAnswerMode': finalAnswerMode,
+      'intentGraph': _compactIntentGraph(intentGraph),
+      'understandingSnapshot': _compactUnderstandingSnapshot(
+        understandingSnapshot,
+      ),
+      'retrievalProcessing': _compactRetrievalProcessing(retrievalProcessing),
+      'answerProcessing': _compactAnswerProcessing(answerProcessing),
+      'historicalThinkingSnapshot': _compactHistoricalThinkingSnapshot(
+        historicalThinkingSnapshot,
+      ),
+    };
+  }
+
+  static _RecentDialogueRoundRecord? tryFromMap(Map<String, dynamic> raw) {
+    final turnId = _stringValue(raw['turnId']);
+    final userQuery = _stringValue(raw['userQuery']);
+    final assistantSummary = _stringValue(raw['assistantSummary']);
+    if (turnId.isEmpty && userQuery.isEmpty && assistantSummary.isEmpty) {
+      return null;
+    }
+    return _RecentDialogueRoundRecord(
+      turnId: turnId,
+      userQuery: userQuery,
+      timestamp: _dateTimeValue(raw['timestamp']),
+      assistantSummary: assistantSummary,
+      finalAnswerReady: raw['finalAnswerReady'] == true,
+      finalAnswerMode: _stringValue(raw['finalAnswerMode']),
+      intentGraph: _intentGraphFromMap(raw['intentGraph']),
+      understandingSnapshot: _understandingSnapshotFromMap(
+        raw['understandingSnapshot'],
+      ),
+      retrievalProcessing: _retrievalProcessingFromMap(
+        raw['retrievalProcessing'],
+      ),
+      answerProcessing: _answerProcessingFromMap(raw['answerProcessing']),
+      historicalThinkingSnapshot: _historicalThinkingSnapshotFromMap(
+        raw['historicalThinkingSnapshot'],
+      ),
+    );
+  }
+}
+
+T? _firstNonNull<T>(Iterable<T?> values) {
+  for (final value in values) {
+    if (value != null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+IntentGraph? _intentGraphFromMap(Object? raw) {
+  if (raw is! Map) {
+    return null;
+  }
+  try {
+    final parsed = IntentGraph.fromJson(raw.cast<String, dynamic>());
+    return parsed.primarySkill.trim().isEmpty &&
+            parsed.userGoal.trim().isEmpty &&
+            parsed.queryTasks.isEmpty
+        ? null
+        : parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+RunArtifactsUnderstandingSnapshot _understandingSnapshotFromMap(Object? raw) {
+  if (raw is! Map) {
+    return const RunArtifactsUnderstandingSnapshot();
+  }
+  try {
+    return RunArtifactsUnderstandingSnapshot.fromJson(raw.cast<String, dynamic>());
+  } catch (_) {
+    return const RunArtifactsUnderstandingSnapshot();
+  }
+}
+
+RetrievalProcessingSnapshot _retrievalProcessingFromMap(Object? raw) {
+  if (raw is! Map) {
+    return const RetrievalProcessingSnapshot();
+  }
+  try {
+    return RetrievalProcessingSnapshot.fromJson(raw.cast<String, dynamic>());
+  } catch (_) {
+    return const RetrievalProcessingSnapshot();
+  }
+}
+
+RunArtifactsAnswerProcessing _answerProcessingFromMap(Object? raw) {
+  if (raw is! Map) {
+    return const RunArtifactsAnswerProcessing();
+  }
+  try {
+    return RunArtifactsAnswerProcessing.fromJson(raw.cast<String, dynamic>());
+  } catch (_) {
+    return const RunArtifactsAnswerProcessing();
+  }
+}
+
+RunArtifactsHistoricalThinkingSnapshot _historicalThinkingSnapshotFromMap(
+  Object? raw,
+) {
+  if (raw is! Map) {
+    return const RunArtifactsHistoricalThinkingSnapshot();
+  }
+  try {
+    return RunArtifactsHistoricalThinkingSnapshot.fromJson(
+      raw.cast<String, dynamic>(),
+    );
+  } catch (_) {
+    return const RunArtifactsHistoricalThinkingSnapshot();
+  }
 }
 
 Map<String, dynamic> _compactIntentGraph(IntentGraph? intentGraph) {
@@ -218,6 +518,8 @@ Map<String, dynamic> _compactUnderstandingSnapshot(
   return <String, dynamic>{
     if (snapshot.userFacingSummary.trim().isNotEmpty)
       'userFacingSummary': snapshot.userFacingSummary.trim(),
+    if (snapshot.retrievalDesignNarrative.trim().isNotEmpty)
+      'retrievalDesignNarrative': snapshot.retrievalDesignNarrative.trim(),
     if (snapshot.resolutionItems.isNotEmpty)
       'resolutionItems': snapshot.resolutionItems
           .where(

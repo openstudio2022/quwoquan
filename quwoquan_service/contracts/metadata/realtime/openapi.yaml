@@ -115,7 +115,7 @@ components:
       type: object
       required: [type, topic]
       properties:
-        type: { type: string, enum: [message, subscribe, unsubscribe, heartbeat, ack, auth_expired, connection_replaced, gap_fill] }
+        type: { type: string, enum: [message, subscribe, unsubscribe, heartbeat, ack, auth_expired, connection_replaced, gap_fill, sync_hint] }
         topic: { type: string }
         payload: { type: object }
         eventId: { type: string }

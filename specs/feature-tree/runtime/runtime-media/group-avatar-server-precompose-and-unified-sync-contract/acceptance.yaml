@@ -1,0 +1,208 @@
+version: 2
+feature: group-avatar-server-precompose-and-unified-sync-contract
+level: L3_scenario
+source_path: runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract
+parent_journey: runtime-media
+archived: false
+
+execution:
+  local_gate: make gate-runtime-media
+  full_gate: make gate-runtime-media-full（需提供 `RUNTIME_MEDIA_T4_EVIDENCE`）
+
+scope:
+  summary: >
+    冻结群头像服务端预合成、统一资产引用与 URL 规范，以及头像变化进入统一 sync patch +
+    realtime hint 的最小可实施合同。
+  out_of_scope:
+    - 用户自定义群头像上传
+    - 端侧群头像拼图兜底
+    - 头像审核与模板市场
+
+scenario_acceptance:
+  A1:
+    title: 群头像主链路切换为服务端预合成结果
+    done_when:
+      - "`chat-service` 对外返回 `groupAvatarUrl` 与 `groupAvatarVersion`"
+      - 客户端群头像主渲染路径不再依赖成员头像列表实时拼装
+      - 群头像生成失败时客户端显示默认群图标
+    edge_cases:
+      - 群头像 URL 缺失
+      - 群头像 URL 加载失败
+      - 群头像重算进行中
+    linked_plan_items: []
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2, T4]
+    tests:
+      planned:
+        - chat inbox group avatar contract test
+        - group avatar fallback widget journey
+      recorded:
+        - "T1/T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar'`"
+        - "T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_UserAvatarUpdated|TestGroupAvatar_RecomputePublishesConversationAvatarPatch'`"
+        - "T1/T3: `go test ./quwoquan_service/services/chat-service/internal/application -run TestRuntimeMediaMetricsHandlerReturnsThresholdsAndMetrics`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`"
+        - "T2: `flutter test test/ui/chat/widgets/chat_page_widget_test.dart`"
+        - "T3: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/chat-service/tests`"
+        - "Gate: `make gate-runtime-media`"
+    notes:
+      - "建群/加人/退群中的群头像重算已改为 score queue 驱动的 Redis-backed 可恢复异步任务；失败时重试并保留旧值或空值，不再阻塞主流程。"
+      - "群头像 CDN 域名已收口到 runtime/config 单一来源，`chat-service` 不再保留 mock 常量解析 URL。"
+      - "客户端默认群图标仍是唯一失败兜底；本轮没有恢复端侧拼图。"
+      - "若未来需要更高等级的跨服务消息保证，当前 Redis 任务模型仍不等同完整企业级 MQ。"
+      - "发布前需结合 `t4-release-rehearsal.md` 执行双设备/弱网/gap 演练；未执行时不得宣称高标准准出。"
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    status: implemented
+
+  A2:
+    title: 前 9 成员与 sourceHash 规则冻结
+    done_when:
+      - 群头像仅取前 9 成员
+      - 排序规则为加入顺序
+      - "`groupAvatarSourceHash = hash(top9UserIdsInOrder + top9AvatarVersions + layoutVersion)`"
+      - sourceHash 未变化时可跳过重算
+    edge_cases:
+      - 非前 9 成员变化
+      - 前 9 成员中有人头像未就绪
+      - 多个成员连续变化进入合并窗口
+    linked_plan_items: []
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2]
+    tests:
+      planned:
+        - source hash monotonic contract test
+        - top9 selection rule test
+      recorded:
+        - "T1: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_VersionBumpsWhenTopNineChanges'`"
+        - "code review confirmed `groupAvatarSourceHash = hash(top9UserIdsInOrder + top9AvatarAssetIds + top9AvatarVersions + layoutVersion)`"
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    status: implemented
+
+  A3:
+    title: 用户头像与群头像归属边界清晰
+    done_when:
+      - "用户头像主数据仅归 `user-service`"
+      - "群头像主数据仅归 `chat-service`"
+      - runtime 仅承载存储、URL 和同步公共能力
+    edge_cases:
+      - 业务服务直接保存临时 URL
+      - 业务服务直接拼接对象存储地址
+    linked_plan_items: []
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    tests:
+      planned:
+        - spec traceability review
+        - metadata ownership review
+      recorded:
+        - "metadata ownership review: `user-service` owns `avatarAssetId/avatarVersion`; `chat-service` owns `groupAvatarAssetId/groupAvatarVersion/groupAvatarSourceHash`"
+        - "runtime review: `runtime/media` owns derived asset registration, `runtime/sync` owns patch/cursor/hint transport"
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A4:
+    title: 统一对象引用与 URL 规范冻结
+    done_when:
+      - "统一 `AssetRef / MediaAsset`"
+      - objectKey 规则与 CDN URL 规则冻结
+      - "业务数据库优先存 `assetId + version`"
+    edge_cases:
+      - CDN 缓存旧版本
+      - 厂商切换导致 URL 变化
+    linked_plan_items: []
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    tests:
+      planned:
+        - asset ref schema contract test
+        - object key/url build contract test
+      recorded:
+        - "T1: `go test ./quwoquan_service/runtime/media`"
+        - "runtime/media group avatar registration now persists derived asset state outside `chat-service`"
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A5:
+    title: 头像变化进入统一 sync patch 与 realtime hint 通道
+    done_when:
+      - "至少支持 `user.avatar.updated` 与 `conversation.avatar.updated`"
+      - realtime 只发 hint，不直接传完整媒体正文
+      - 客户端按 cursor/syncSeq 拉增量，并支持 gap fill
+    edge_cases:
+      - hint 丢失
+      - patch 重复
+      - 客户端长时间离线
+    linked_plan_items: []
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2, T4]
+    tests:
+      planned:
+        - avatar patch envelope contract test
+        - websocket hint plus gap fill integration test
+      recorded:
+        - "T1: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/user-service/tests -run TestUpdateProfile_AvatarVersionAndSyncPatch`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`"
+        - "T2: `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart -r compact` 已覆盖高频 hint 防抖合并"
+        - "T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_UserAvatarUpdated|TestGroupAvatar_RecomputePublishesConversationAvatarPatch'`"
+        - "T3: `go test ./quwoquan_service/runtime/sync -run 'TestService_PullSupportsLongOfflineCatchupInBatches|TestService_PullRequiresResyncWhenPatchExpired'`"
+        - "T3: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/chat-service/tests`"
+        - "Preflight review: `TestGroupAvatar_UserAvatarUpdatedRecomputesWhenMemberIsTopNine|TestGroupAvatar_UserAvatarUpdatedSkipsWhenMemberIsOutsideTopNine|TestGroupAvatar_UserAvatarUpdatedDoesNotBumpWhenSourceHashUnchanged` 已证明头像变化仍走统一 patch/hint 主模型。"
+    notes:
+      - "sync gap 现在以显式 `requiresResync` 返回，不再对缺洞静默跳过；pull 实现已切到 pipeline 批量读取。"
+      - "客户端在 `requiresResync` 时转入全量修复路径，并推进到最新 `syncSeq`；会话缓存已按 namespace 隔离。"
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    status: implemented
+
+  A6:
+    title: 与既有 roster revision 和消息 sync 合同保持单一真相源
+    done_when:
+      - 群头像重算与客户端刷新复用既有 roster/version/sync 主模型
+      - 不创建第二套客户端本地版本号或第二套头像同步协议
+    edge_cases:
+      - 同时发生成员变化与头像变化
+      - 迁移期旧字段与新 patch 双轨并存
+    linked_plan_items: []
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2]
+    tests:
+      planned:
+        - roster revision plus avatar refresh consistency review
+        - dual client consistency journey
+      recorded:
+        - "头像 patch 复用统一 `syncSeq/afterSeq`，未新增独立头像版本游标"
+        - "群头像重算继续复用既有成员变更触发点与会话缓存模型"
+        - "Milestone2 review: 异步化只替换触发时机，不新增本地版本号、不新增第二套头像同步协议。"
+    notes:
+      - "客户端 patch 应用已同步写入 `groupAvatarVersion`，未新增第二套本地头像游标。"
+      - "T4 双端一致性/弱网旅程已冻结为 `t4-release-rehearsal.md`，自动化门禁入口见 `automation-gates.md`。"
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    status: implemented

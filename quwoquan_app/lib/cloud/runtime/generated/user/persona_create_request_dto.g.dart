@@ -3,6 +3,7 @@
 
 class PersonaCreateRequestDto {
   final String displayName;
+  final String? userHandle;
   final String? avatarUrl;
   final String? backgroundUrl;
   final String? bio;
@@ -11,6 +12,7 @@ class PersonaCreateRequestDto {
 
   PersonaCreateRequestDto({
     this.displayName = '',
+    this.userHandle,
     this.avatarUrl,
     this.backgroundUrl,
     this.bio,
@@ -21,6 +23,7 @@ class PersonaCreateRequestDto {
   factory PersonaCreateRequestDto.fromMap(Map<String, dynamic> m) {
     return PersonaCreateRequestDto(
       displayName: m['displayName']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? null,
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       backgroundUrl: m['backgroundUrl']?.toString() ?? null,
       bio: m['bio']?.toString() ?? null,
@@ -32,6 +35,7 @@ class PersonaCreateRequestDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'displayName': displayName,
+      'userHandle': userHandle,
       'avatarUrl': avatarUrl,
       'backgroundUrl': backgroundUrl,
       'bio': bio,
@@ -42,6 +46,7 @@ class PersonaCreateRequestDto {
 
   PersonaCreateRequestDto copyWith({
     String? displayName,
+    String? userHandle,
     String? avatarUrl,
     String? backgroundUrl,
     String? bio,
@@ -50,6 +55,7 @@ class PersonaCreateRequestDto {
   }) {
     return PersonaCreateRequestDto(
       displayName: displayName ?? this.displayName,
+      userHandle: userHandle ?? this.userHandle,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       backgroundUrl: backgroundUrl ?? this.backgroundUrl,
       bio: bio ?? this.bio,

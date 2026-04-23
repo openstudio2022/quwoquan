@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
@@ -41,11 +40,17 @@ void main() {
         resolveAssistantJourneyFromMessage(m),
       );
       expect(
-        resolveAssistantProcessTimelineFromTranscriptRow(row),
-        resolveAssistantProcessTimelineFromMessage(m),
+        resolveAssistantProcessTimelineFromTranscriptRow(
+          row,
+        ).map((frame) => frame.toJson()).toList(),
+        resolveAssistantProcessTimelineFromMessage(
+          m,
+        ).map((frame) => frame.toJson()).toList(),
       );
       expect(
-        resolveAssistantRetrievalProcessingFromTranscriptRow(row).processingSummary,
+        resolveAssistantRetrievalProcessingFromTranscriptRow(
+          row,
+        ).processingSummary,
         resolveAssistantRetrievalProcessingFromMessage(m).processingSummary,
       );
     });

@@ -111,6 +111,38 @@ void main() {
     expect(createCircleTapped, isTrue);
   });
 
+  testWidgets('iPad 下发起弹窗保持内容驱动高度', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: ScreenUtilInit(
+          designSize: const Size(1024, 768),
+          builder: (context, child) => MaterialApp(
+            home: Scaffold(
+              body: CreateActionSheet(
+                onCreateAction: (_) {},
+                onContinueFromDraft: () {},
+                onStartGroupChat: () {},
+                onAddContact: () {},
+                onCancel: () {},
+                priority: CreateActionSheetPriority.socialPrimary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final panel = find.byKey(TestKeys.modalBottomSheetPanel);
+    expect(panel, findsOneWidget);
+    expect(tester.getTopLeft(panel).dy, greaterThan(240));
+  });
+
   testWidgets('点击上半区空白区域可关闭全屏弹层', (tester) async {
     var closed = false;
 

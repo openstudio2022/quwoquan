@@ -229,7 +229,7 @@ void main() {
     );
     expect(binding, isNotNull);
     expect(binding!.rectoPageIndex, 1);
-    expect(binding.versoPageIndex, 2);
+    expect(binding.versoPageIndex, 1);
     expect(binding.bottomPageIndex, 2);
 
     final meshFrame = const ArticlePageCurlMeshBuilder().build(
@@ -259,7 +259,7 @@ void main() {
     expect(meshFrame.unfoldProgress, 0);
   });
 
-  test('FlipController 的 portrait 回翻 render frame 会切到三阶段主线', () {
+  test('FlipController 的 portrait 回翻 render frame 会切到 replay 主线', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -277,18 +277,16 @@ void main() {
     final frame = controller.scene.renderFrame;
     expect(frame, isNotNull);
     expect(frame!.direction, StPageFlipDirection.back);
-    expect(frame.renderDirection, StPageFlipDirection.forward);
-    expect(frame.reversePose, isNotNull);
+    expect(frame.renderDirection, StPageFlipDirection.back);
+    expect(frame.reversePose, isNull);
     expect(frame.timeline.rollProgress, greaterThan(0));
-    expect(
-      frame.timeline.cylinderProgress + frame.timeline.unfoldProgress,
-      greaterThan(0),
-      reason: '三阶段回翻 timeline 应显式携带 cylinder/unfold 进度',
-    );
-    expect(frame.timeline.mirrored, isTrue);
+    expect(frame.timeline.cylinderProgress, equals(0));
+    expect(frame.timeline.unfoldProgress, equals(0));
+    expect(frame.timeline.mirrored, isFalse);
+    expect(frame.backwardLeafFrame, isNotNull);
   });
 
-  test('FlipController 的 portrait 回翻固定走 shared backward engine', () {
+  test('FlipController 的 portrait 回翻固定走 shared replay engine', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -305,67 +303,59 @@ void main() {
 
     final frame = controller.scene.renderFrame;
     expect(frame, isNotNull);
-    expect(controller.scene.calculation, isA<ReverseCurlCalculation>());
+    expect(controller.scene.calculation, isA<StPageFlipCalculation>());
+    expect(controller.scene.calculation, isNot(isA<ReverseCurlCalculation>()));
     expect(frame!.direction, StPageFlipDirection.back);
-    expect(frame.renderDirection, StPageFlipDirection.forward);
-    expect(frame.reversePose, isNotNull);
-    expect(frame.timeline.mirrored, isTrue);
+    expect(frame.renderDirection, StPageFlipDirection.back);
+    expect(frame.reversePose, isNull);
+    expect(frame.timeline.mirrored, isFalse);
     expect(frame.backwardLeafFrame, isNotNull);
     expect(frame.flippingClipArea, isNotEmpty);
     expect(frame.bottomClipArea, isNotEmpty);
   });
 
-  test(
-    'CurlMeshBuilder 在 portrait 回翻时仍消费 shared backward timeline',
-    () {
-      final controller = StPageFlipController(
-        spreadModel: StPageFlipSpreadModel(pageCount: 3),
-        layout: computeStPageFlipLayout(
-          viewportSize: const Size(430, 900),
-          pageWidth: 398,
-          pageHeight: 553,
-          usePortrait: true,
-        ),
-        initialPage: 1,
-      );
+  test('CurlMeshBuilder 在 portrait 回翻时消费 replay timeline', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
 
-      expect(controller.start(const Offset(18, 650)), isTrue);
-      controller.applyAnimationFrame(const Offset(120, 510));
+    expect(controller.start(const Offset(18, 650)), isTrue);
+    controller.applyAnimationFrame(const Offset(120, 510));
 
-      final renderFrame = controller.scene.renderFrame;
-      expect(renderFrame, isNotNull);
-      expect(renderFrame!.timeline.mirrored, isTrue);
-      expect(renderFrame.backwardLeafFrame, isNotNull);
+    final renderFrame = controller.scene.renderFrame;
+    expect(renderFrame, isNotNull);
+    expect(renderFrame!.timeline.mirrored, isFalse);
+    expect(renderFrame.backwardLeafFrame, isNotNull);
 
-      final builder = ArticlePageCurlMeshBuilder();
-      final meshFrame = builder.build(
-        pageRect: const Rect.fromLTWH(16, 64, 398, 553),
-        pageSize: const Size(398, 553),
-        dragPoint: renderFrame.localPagePoint,
-        progress: renderFrame.progress,
-        direction: renderFrame.direction,
-        corner: renderFrame.corner,
-        renderFrame: renderFrame,
-      );
+    final builder = ArticlePageCurlMeshBuilder();
+    final meshFrame = builder.build(
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: const Size(398, 553),
+      dragPoint: renderFrame.localPagePoint,
+      progress: renderFrame.progress,
+      direction: renderFrame.direction,
+      corner: renderFrame.corner,
+      renderFrame: renderFrame,
+    );
 
-      expect(meshFrame.frontSurface, isNotNull);
-      expect(meshFrame.backSurface, isNotNull);
-      expect(
-        meshFrame.rollProgress,
-        closeTo(renderFrame.timeline.rollProgress, 0.0001),
-      );
-      expect(
-        meshFrame.cylinderProgress,
-        closeTo(renderFrame.timeline.cylinderProgress, 0.0001),
-      );
-      expect(
-        meshFrame.unfoldProgress,
-        closeTo(renderFrame.timeline.unfoldProgress, 0.0001),
-      );
-    },
-  );
+    expect(meshFrame.frontSurface, isNotNull);
+    expect(meshFrame.backSurface, isNotNull);
+    expect(
+      meshFrame.rollProgress,
+      closeTo(renderFrame.timeline.rollProgress, 0.0001),
+    );
+    expect(meshFrame.cylinderProgress, equals(0));
+    expect(meshFrame.unfoldProgress, equals(0));
+  });
 
-  test('CurlMeshBuilder 在回翻三阶段 renderFrame 下仍消费统一 timeline', () {
+  test('CurlMeshBuilder 在回翻 replay renderFrame 下仍消费统一 timeline', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -384,7 +374,7 @@ void main() {
     expect(renderFrame, isNotNull);
     expect(renderFrame!.direction, StPageFlipDirection.back);
     expect(renderFrame.backwardLeafFrame, isNotNull);
-    expect(renderFrame.reversePose, isNotNull);
+    expect(renderFrame.reversePose, isNull);
 
     final builder = ArticlePageCurlMeshBuilder();
     final meshFrame = builder.build(
@@ -394,7 +384,6 @@ void main() {
       progress: renderFrame.progress,
       direction: renderFrame.direction,
       corner: renderFrame.corner,
-      reversePose: renderFrame.reversePose,
       renderFrame: renderFrame,
     );
 
@@ -402,14 +391,8 @@ void main() {
       meshFrame.rollProgress,
       closeTo(renderFrame.timeline.rollProgress, 0.0001),
     );
-    expect(
-      meshFrame.cylinderProgress,
-      closeTo(renderFrame.timeline.cylinderProgress, 0.0001),
-    );
-    expect(
-      meshFrame.unfoldProgress,
-      closeTo(renderFrame.timeline.unfoldProgress, 0.0001),
-    );
+    expect(meshFrame.cylinderProgress, equals(0));
+    expect(meshFrame.unfoldProgress, equals(0));
   });
 
   test('FlipController 的前翻不会被 backward shared engine 污染', () {
@@ -593,13 +576,28 @@ void main() {
 
     expect(forwardBinding, isNotNull);
     expect(forwardBinding!.rectoPageIndex, 2);
-    expect(forwardBinding.versoPageIndex, 3);
+    expect(forwardBinding.versoPageIndex, 2);
     expect(forwardBinding.bottomPageIndex, 3);
 
     expect(backwardBinding, isNotNull);
     expect(backwardBinding!.rectoPageIndex, 2);
-    expect(backwardBinding.versoPageIndex, 3);
+    expect(backwardBinding.versoPageIndex, 2);
     expect(backwardBinding.bottomPageIndex, 3);
+  });
+
+  test('PageTextureBinding 的前翻语义是当前页正面/当前页背面/下一页底页', () {
+    final binding = resolveArticlePageTextureBinding(
+      direction: StPageFlipDirection.forward,
+      flippingPageIndex: 4,
+      bottomPageIndex: 5,
+      currentPageIndex: 4,
+    );
+
+    expect(binding, isNotNull);
+    expect(binding!.rectoPageIndex, 4);
+    expect(binding.versoPageIndex, 4);
+    expect(binding.bottomPageIndex, 5);
+    expect(binding.requiredPageIndices, equals(<int>{4, 5}));
   });
 
   test('BackwardPageSurfaceBinding 会区分 covered current 与 previous leaf', () {
@@ -613,7 +611,7 @@ void main() {
     expect(binding!.coveredPageIndex, equals(3));
     expect(binding.leafPageIndex, equals(2));
     expect(binding.leafRectoPageIndex, equals(2));
-    expect(binding.leafVersoPageIndex, equals(3));
+    expect(binding.leafVersoPageIndex, equals(2));
     expect(binding.requiredPageIndices, equals(<int>{2, 3}));
   });
 
@@ -652,6 +650,103 @@ void main() {
     expect(late.coveredWidthNormalized, closeTo(1.0, 0.08));
     expect(late.curlWidthNormalized, lessThan(middle.curlWidthNormalized));
     expect(middle.rectoRevealWidthNormalized, greaterThan(0));
+    expect(early.seamXNormalized, lessThan(middle.seamXNormalized));
+    expect(middle.seamXNormalized, lessThan(late.seamXNormalized));
+    expect(early.versoRevealWidthNormalized, greaterThan(0));
+    expect(middle.edgeBandWidthNormalized, greaterThan(0));
+    expect(
+      middle.totalRectoVisibleWidthNormalized,
+      greaterThan(early.totalRectoVisibleWidthNormalized),
+    );
+    expect(
+      early.currentRevealWidthNormalized,
+      greaterThan(middle.currentRevealWidthNormalized),
+    );
+    expect(
+      middle.currentRevealWidthNormalized,
+      greaterThan(late.currentRevealWidthNormalized),
+    );
+    expect(
+      middle.bottomRevealStartNormalized,
+      closeTo(middle.seamXNormalized, 0.0001),
+    );
+  });
+
+  test('Backward replay renderFrame 几何来自统一 leaf contract', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
+
+    expect(controller.start(const Offset(18, 650)), isTrue);
+    controller.applyAnimationFrame(const Offset(120, 510));
+
+    final frame = controller.scene.renderFrame;
+    expect(frame, isNotNull);
+    expect(frame!.direction, StPageFlipDirection.back);
+    expect(frame.angle, 0);
+    expect(frame.shadow, isNotNull);
+    expect(frame.shadow!.angle, 0);
+    expect(frame.shadow!.width, greaterThan(0));
+    expect(frame.flippingAnchor.dx, 0);
+    expect(frame.bottomAnchor, Offset.zero);
+    expect(frame.flippingClipArea.length, equals(4));
+    expect(frame.bottomClipArea.length, equals(4));
+
+    final seamX = frame.backwardLeafFrame!.seamXNormalized * 398;
+    expect(frame.flippingClipArea[0].dx, 0);
+    expect(frame.flippingClipArea[1].dx, closeTo(seamX, 0.001));
+    expect(frame.flippingClipArea[2].dx, closeTo(seamX, 0.001));
+    expect(frame.flippingClipArea[3].dx, 0);
+    expect(frame.bottomClipArea[0].dx, closeTo(seamX, 0.001));
+    expect(frame.bottomClipArea[1].dx, closeTo(398, 0.001));
+    expect(frame.bottomClipArea[2].dx, closeTo(398, 0.001));
+    expect(frame.bottomClipArea[3].dx, closeTo(seamX, 0.001));
+  });
+
+  test('Backward replay seam 会沿计划单调向右推进', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
+
+    final plan = controller.flipPrev(StPageFlipCorner.bottom);
+    expect(plan, isNotNull);
+
+    final earlyIndex = (plan!.frames.length * 0.2).round();
+    final middleIndex = (plan.frames.length * 0.55).round();
+    final lateIndex = (plan.frames.length * 0.9).round();
+
+    controller.applyAnimationFrame(plan.frames[earlyIndex]);
+    final earlyFrame = controller.scene.renderFrame;
+    controller.applyAnimationFrame(plan.frames[middleIndex]);
+    final middleFrame = controller.scene.renderFrame;
+    controller.applyAnimationFrame(plan.frames[lateIndex]);
+    final lateFrame = controller.scene.renderFrame;
+
+    expect(earlyFrame, isNotNull);
+    expect(middleFrame, isNotNull);
+    expect(lateFrame, isNotNull);
+    expect(
+      earlyFrame!.backwardLeafFrame!.seamXNormalized,
+      lessThan(middleFrame!.backwardLeafFrame!.seamXNormalized),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.seamXNormalized,
+      lessThan(lateFrame!.backwardLeafFrame!.seamXNormalized),
+    );
   });
 
   test('BackwardPageTextureBundle 会映射为 HF curl textures', () async {
@@ -749,12 +844,29 @@ void main() {
     expect(liveSession.bundle, same(bundle));
   });
 
+  test('ArticlePageTextureSnapshot 会校验逻辑尺寸与像素映射', () async {
+    final image = await _createTestImage(width: 4, height: 6);
+    addTearDown(image.dispose);
+    final snapshot = ArticlePageTextureSnapshot(
+      image: image,
+      logicalSize: const Size(2, 3),
+      pixelRatio: 2,
+    );
+
+    expect(snapshot.pixelWidthPerLogical, closeTo(2, 0.0001));
+    expect(snapshot.pixelHeightPerLogical, closeTo(2, 0.0001));
+    expect(snapshot.matchesLogicalSize(const Size(2, 3)), isTrue);
+    expect(snapshot.matchesLogicalSize(const Size(2.02, 3)), isFalse);
+    expect(snapshot.matchesLogicalSize(const Size(2, 3.02)), isFalse);
+  });
+
   test('CurlMeshBuilder 在前翻时生成正反两面网格并保持页内裁剪', () {
     final builder = ArticlePageCurlMeshBuilder();
-    final clipPath = Path()..addRect(const Rect.fromLTWH(16, 64, 398, 553));
+    const pageRect = Rect.fromLTWH(16, 64, 398, 553);
+    final clipPath = Path()..addRect(pageRect);
 
     final frame = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageRect: pageRect,
       pageSize: const Size(398, 553),
       dragPoint: const Offset(92, 520),
       progress: 0.74,
@@ -770,6 +882,13 @@ void main() {
     expect(frame.rollProgress, closeTo(0.74, 0.0001));
     expect(frame.cylinderProgress, equals(0));
     expect(frame.unfoldProgress, equals(0));
+    expect(frame.frontBounds.left, greaterThanOrEqualTo(pageRect.left));
+    expect(frame.frontBounds.top, greaterThanOrEqualTo(pageRect.top));
+    expect(frame.frontBounds.bottom, lessThanOrEqualTo(pageRect.bottom + 16));
+    expect(frame.backBounds.width, greaterThan(8));
+    expect(frame.backBounds.left, greaterThanOrEqualTo(pageRect.left));
+    expect(frame.backBounds.right, lessThanOrEqualTo(pageRect.right));
+    expect(frame.backBounds.left, lessThan(frame.frontBounds.right));
     final clipBounds = clipPath.getBounds();
     final resolvedBounds = frame.bottomClipPath.getBounds();
     expect(resolvedBounds.left, greaterThanOrEqualTo(clipBounds.left));
@@ -778,7 +897,7 @@ void main() {
     expect(resolvedBounds.bottom, equals(clipBounds.bottom));
 
     final steepFrame = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageRect: pageRect,
       pageSize: const Size(398, 553),
       dragPoint: const Offset(220, 300),
       progress: 0.74,
@@ -788,11 +907,115 @@ void main() {
     );
     expect(steepFrame.frontSurface, isNotNull);
     expect(steepFrame.backSurface, isNotNull);
-    expect(steepFrame.bottomClipPath.getBounds().right, equals(clipBounds.right));
+    expect(
+      steepFrame.bottomClipPath.getBounds().right,
+      equals(clipBounds.right),
+    );
+    expect(steepFrame.backBounds.width, greaterThan(8));
+    expect(steepFrame.backBounds.left, greaterThanOrEqualTo(pageRect.left));
+    expect(steepFrame.backBounds.right, lessThanOrEqualTo(pageRect.right));
   });
 
-  test('CurlMeshBuilder 在回翻时产生与前翻对称的镜像卷曲', () {
-    // 无 reversePose 时走降级的 mirrored forward 路径。
+  test('CurlMeshBuilder 会保留前翻 canonical 底页可见区而不是继续缩窄', () {
+    final builder = ArticlePageCurlMeshBuilder();
+    const pageRect = Rect.fromLTWH(16, 64, 398, 553);
+    final clipRect = Rect.fromLTRB(
+      pageRect.left + 188,
+      pageRect.top,
+      pageRect.right,
+      pageRect.bottom,
+    );
+    final clipPath = Path()..addRect(clipRect);
+
+    final frame = builder.build(
+      pageRect: pageRect,
+      pageSize: const Size(398, 553),
+      dragPoint: const Offset(148, 520),
+      progress: 0.52,
+      direction: StPageFlipDirection.forward,
+      corner: StPageFlipCorner.bottom,
+      bottomClipPath: clipPath,
+    );
+
+    final resolvedBounds = frame.bottomClipPath.getBounds();
+    expect(resolvedBounds.left, closeTo(clipRect.left, 0.001));
+    expect(resolvedBounds.top, closeTo(clipRect.top, 0.001));
+    expect(resolvedBounds.right, closeTo(clipRect.right, 0.001));
+    expect(resolvedBounds.bottom, closeTo(clipRect.bottom, 0.001));
+  });
+
+  test('CurlMeshBuilder 的前翻背面展开会消费 rigid angle', () {
+    final builder = ArticlePageCurlMeshBuilder();
+    const pageRect = Rect.fromLTWH(16, 64, 398, 553);
+    const localPoint = Offset(188, 332);
+
+    final shallowAngleFrame = builder.build(
+      pageRect: pageRect,
+      pageSize: const Size(398, 553),
+      dragPoint: localPoint,
+      progress: 0.72,
+      direction: StPageFlipDirection.forward,
+      corner: StPageFlipCorner.bottom,
+      renderFrame: _forwardRenderFrame(
+        localPagePoint: localPoint,
+        progress: 0.72,
+        angle: -0.18,
+        corner: StPageFlipCorner.bottom,
+      ),
+    );
+    final wideAngleFrame = builder.build(
+      pageRect: pageRect,
+      pageSize: const Size(398, 553),
+      dragPoint: localPoint,
+      progress: 0.72,
+      direction: StPageFlipDirection.forward,
+      corner: StPageFlipCorner.bottom,
+      renderFrame: _forwardRenderFrame(
+        localPagePoint: localPoint,
+        progress: 0.72,
+        angle: -1.18,
+        corner: StPageFlipCorner.bottom,
+      ),
+    );
+
+    expect(shallowAngleFrame.backBounds.width, greaterThan(0));
+    expect(
+      wideAngleFrame.backBounds.width,
+      greaterThan(shallowAngleFrame.backBounds.width),
+    );
+    expect(wideAngleFrame.backBounds.right, lessThanOrEqualTo(pageRect.right));
+  });
+
+  test('CurlMeshBuilder 会量化前翻正反面的几何放大与溢出诊断', () {
+    const samples = <({Offset dragPoint, double progress})>[
+      (dragPoint: Offset(340, 520), progress: 0.18),
+      (dragPoint: Offset(276, 488), progress: 0.54),
+      (dragPoint: Offset(220, 300), progress: 0.74),
+      (dragPoint: Offset(184, 220), progress: 0.86),
+    ];
+
+    for (final sample in samples) {
+      final frame = _buildForwardMeshFrame(
+        dragPoint: sample.dragPoint,
+        progress: sample.progress,
+      );
+
+      final front = frame.frontDiagnostics;
+      final back = frame.backDiagnostics;
+      expect(front, isNotNull, reason: 'front diagnostics should exist');
+      expect(back, isNotNull, reason: 'back diagnostics should exist');
+      expect(front!.maxEdgeScale, lessThanOrEqualTo(1.10));
+      expect(back!.maxEdgeScale, lessThanOrEqualTo(1.10));
+      expect(front.maxTriangleAreaScale, lessThanOrEqualTo(1.10));
+      expect(back.maxTriangleAreaScale, lessThanOrEqualTo(1.10));
+      expect(front.meanEdgeScale, lessThanOrEqualTo(0.8));
+      expect(back.meanEdgeScale, lessThanOrEqualTo(1.0));
+      expect(front.hasOverflow, isFalse);
+      expect(back.hasOverflow, isFalse);
+    }
+  });
+
+  test('CurlMeshBuilder 在回翻时走 forward replay 卷曲', () {
     final builder = ArticlePageCurlMeshBuilder();
     final frame = builder.build(
       pageRect: const Rect.fromLTWH(16, 64, 398, 553),
@@ -806,46 +1029,13 @@ void main() {
     expect(frame.frontSurface, isNotNull);
     expect(frame.backSurface, isNotNull);
     expect(frame.curlLift, greaterThan(0));
-    // Mirrored forward: rollProgress comes from the forward cylinder model.
     expect(frame.rollProgress, greaterThan(0));
-    // cylinderProgress and unfoldProgress are 0 in the mirrored path.
     expect(frame.cylinderProgress, equals(0));
     expect(frame.unfoldProgress, equals(0));
     expect(frame.foldXNormalized, greaterThan(0));
   });
 
-  test('CurlMeshBuilder 在回翻有 reversePose 时走三阶段主线', () {
-    final builder = ArticlePageCurlMeshBuilder();
-    const pageSize = Size(398, 553);
-    final reversePose = resolveReverseFlipPose(
-      localPagePoint: const Offset(180, 280),
-      pageSize: pageSize,
-      progress: 0.65,
-      corner: StPageFlipCorner.top,
-    );
-    final frame = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
-      pageSize: pageSize,
-      dragPoint: const Offset(180, 280),
-      progress: 0.65,
-      direction: StPageFlipDirection.back,
-      corner: StPageFlipCorner.top,
-      reversePose: reversePose,
-    );
-
-    expect(frame.frontSurface, isNotNull);
-    expect(frame.backSurface, isNotNull);
-    expect(frame.curlLift, greaterThan(0));
-    expect(frame.rollProgress, greaterThan(0));
-    // 三阶段主线：cylinderProgress 和 unfoldProgress 不再为 0。
-    expect(
-      frame.cylinderProgress + frame.unfoldProgress,
-      greaterThan(0),
-      reason: '三阶段 reversePose 应产出非零 cylinderProgress 或 unfoldProgress',
-    );
-  });
-
-  test('CurlMeshBuilder 在回翻多关键帧下镜像卷曲随进度递增', () {
+  test('CurlMeshBuilder 在回翻多关键帧下 replay 折线从左向右移动', () {
     final builder = ArticlePageCurlMeshBuilder();
     final early = builder.build(
       pageRect: const Rect.fromLTWH(16, 64, 398, 553),
@@ -875,9 +1065,8 @@ void main() {
     expect(early.frontSurface, isNotNull);
     expect(middle.backSurface, isNotNull);
     expect(late.frontSurface, isNotNull);
-    // Mirrored forward: rollProgress increases with progress.
-    expect(early.rollProgress, lessThanOrEqualTo(middle.rollProgress + 0.0001));
-    // cylinderProgress and unfoldProgress are always 0 in mirrored path.
+    expect(early.foldXNormalized, lessThan(middle.foldXNormalized));
+    expect(middle.foldXNormalized, lessThan(late.foldXNormalized));
     expect(early.cylinderProgress, equals(0));
     expect(middle.cylinderProgress, equals(0));
     expect(late.cylinderProgress, equals(0));
@@ -886,77 +1075,9 @@ void main() {
     expect(late.unfoldProgress, equals(0));
   });
 
-  test('CurlMeshBuilder 在回翻有 reversePose 的多关键帧下三阶段递增', () {
+  test('CurlMeshBuilder 会消费 portrait 回翻的 replay render frame', () {
     final builder = ArticlePageCurlMeshBuilder();
-    const pageSize = Size(398, 553);
-    final earlyPose = resolveReverseFlipPose(
-      localPagePoint: const Offset(348, 120),
-      pageSize: pageSize,
-      progress: 0.18,
-      corner: StPageFlipCorner.top,
-    );
-    final middlePose = resolveReverseFlipPose(
-      localPagePoint: const Offset(278, 120),
-      pageSize: pageSize,
-      progress: 0.58,
-      corner: StPageFlipCorner.top,
-    );
-    final latePose = resolveReverseFlipPose(
-      localPagePoint: const Offset(120, 120),
-      pageSize: pageSize,
-      progress: 0.92,
-      corner: StPageFlipCorner.top,
-    );
-    final early = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
-      pageSize: pageSize,
-      dragPoint: const Offset(348, 120),
-      progress: 0.18,
-      direction: StPageFlipDirection.back,
-      corner: StPageFlipCorner.top,
-      reversePose: earlyPose,
-    );
-    final middle = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
-      pageSize: pageSize,
-      dragPoint: const Offset(278, 120),
-      progress: 0.58,
-      direction: StPageFlipDirection.back,
-      corner: StPageFlipCorner.top,
-      reversePose: middlePose,
-    );
-    final late = builder.build(
-      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
-      pageSize: pageSize,
-      dragPoint: const Offset(120, 120),
-      progress: 0.92,
-      direction: StPageFlipDirection.back,
-      corner: StPageFlipCorner.top,
-      reversePose: latePose,
-    );
-
-    expect(early.frontSurface, isNotNull);
-    expect(middle.backSurface, isNotNull);
-    expect(late.frontSurface, isNotNull);
-    // 三阶段主线：随进度推进，cylinderProgress 或 unfoldProgress 应递增。
-    final earlySum = early.cylinderProgress + early.unfoldProgress;
-    final middleSum = middle.cylinderProgress + middle.unfoldProgress;
-    final lateSum = late.cylinderProgress + late.unfoldProgress;
-    expect(
-      lateSum,
-      greaterThanOrEqualTo(middleSum - 0.01),
-      reason: '三阶段进度应随翻页进度递增',
-    );
-    expect(
-      middleSum,
-      greaterThanOrEqualTo(earlySum - 0.01),
-      reason: '三阶段进度应随翻页进度递增',
-    );
-  });
-
-  test('CurlMeshBuilder 会消费 portrait 回翻的三阶段 render frame', () {
-    final builder = ArticlePageCurlMeshBuilder();
-    final frame = _threeStageBackRenderFrame(
+    final frame = _backwardReplayRenderFrame(
       localPagePoint: const Offset(120, 132),
       progress: 0.88,
       corner: StPageFlipCorner.top,
@@ -975,9 +1096,130 @@ void main() {
     expect(meshFrame.frontSurface, isNotNull);
     expect(meshFrame.backSurface, isNotNull);
     expect(meshFrame.rollProgress, greaterThanOrEqualTo(0));
-    expect(meshFrame.cylinderProgress, greaterThanOrEqualTo(0));
-    expect(meshFrame.unfoldProgress, greaterThanOrEqualTo(0));
+    expect(meshFrame.cylinderProgress, equals(0));
+    expect(meshFrame.unfoldProgress, equals(0));
     expect(meshFrame.curlLift, greaterThan(0));
+  });
+
+  test('CurlMeshBuilder 的高保真回翻会锁定书脊为同一条竖线', () {
+    final builder = ArticlePageCurlMeshBuilder();
+    final frame = _backwardReplayRenderFrame(
+      localPagePoint: const Offset(150, 140),
+      progress: 0.72,
+      corner: StPageFlipCorner.top,
+    );
+
+    final meshFrame = builder.build(
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: const Size(398, 553),
+      dragPoint: frame.localPagePoint,
+      progress: frame.progress,
+      direction: frame.direction,
+      corner: frame.corner,
+      renderFrame: frame,
+    );
+
+    expect(meshFrame.alignmentDiagnostics, isNotNull);
+    expect(
+      meshFrame.alignmentDiagnostics!.spineDelta,
+      lessThanOrEqualTo(0.001),
+    );
+    expect(meshFrame.alignmentDiagnostics!.seamDelta, lessThanOrEqualTo(0.001));
+  });
+
+  test('CurlMeshBuilder 的高保真回翻在不同阶段都保持书脊对齐', () {
+    final builder = ArticlePageCurlMeshBuilder();
+    final frames = <StPageFlipRenderFrame>[
+      _backwardReplayRenderFrame(
+        localPagePoint: const Offset(332, 120),
+        progress: 0.18,
+        corner: StPageFlipCorner.top,
+      ),
+      _backwardReplayRenderFrame(
+        localPagePoint: const Offset(228, 140),
+        progress: 0.58,
+        corner: StPageFlipCorner.top,
+      ),
+      _backwardReplayRenderFrame(
+        localPagePoint: const Offset(118, 160),
+        progress: 0.9,
+        corner: StPageFlipCorner.top,
+      ),
+    ];
+
+    for (final frame in frames) {
+      final meshFrame = builder.build(
+        pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+        pageSize: const Size(398, 553),
+        dragPoint: frame.localPagePoint,
+        progress: frame.progress,
+        direction: frame.direction,
+        corner: frame.corner,
+        renderFrame: frame,
+      );
+      expect(meshFrame.alignmentDiagnostics, isNotNull);
+      expect(
+        meshFrame.alignmentDiagnostics!.spineDelta,
+        lessThanOrEqualTo(0.001),
+      );
+      expect(
+        meshFrame.alignmentDiagnostics!.seamDelta,
+        lessThanOrEqualTo(0.001),
+      );
+    }
+  });
+
+  test('CurlMeshBuilder 在 backward leaf contract 存在时优先 replay 主线', () {
+    final builder = ArticlePageCurlMeshBuilder();
+    final baseFrame = _backwardReplayRenderFrame(
+      localPagePoint: const Offset(168, 148),
+      progress: 0.66,
+      corner: StPageFlipCorner.top,
+    );
+    final reversePose = resolveReverseFlipPose(
+      localPagePoint: baseFrame.localPagePoint,
+      pageSize: const Size(398, 553),
+      progress: baseFrame.progress,
+      corner: baseFrame.corner,
+    );
+    final frameWithLegacyPose = StPageFlipRenderFrame(
+      localPagePoint: baseFrame.localPagePoint,
+      progress: baseFrame.progress,
+      direction: baseFrame.direction,
+      renderDirection: baseFrame.renderDirection,
+      corner: baseFrame.corner,
+      flippingClipArea: baseFrame.flippingClipArea,
+      bottomClipArea: baseFrame.bottomClipArea,
+      flippingAnchor: baseFrame.flippingAnchor,
+      bottomAnchor: baseFrame.bottomAnchor,
+      angle: baseFrame.angle,
+      shadow: baseFrame.shadow,
+      timeline: baseFrame.timeline,
+      reversePose: reversePose,
+      backwardLeafFrame: baseFrame.backwardLeafFrame,
+    );
+
+    final meshFrame = builder.build(
+      pageRect: const Rect.fromLTWH(16, 64, 398, 553),
+      pageSize: const Size(398, 553),
+      dragPoint: frameWithLegacyPose.localPagePoint,
+      progress: frameWithLegacyPose.progress,
+      direction: frameWithLegacyPose.direction,
+      corner: frameWithLegacyPose.corner,
+      reversePose: reversePose,
+      renderFrame: frameWithLegacyPose,
+    );
+
+    expect(meshFrame.alignmentDiagnostics, isNotNull);
+    expect(
+      meshFrame.alignmentDiagnostics!.spineDelta,
+      lessThanOrEqualTo(0.001),
+    );
+    expect(meshFrame.alignmentDiagnostics!.seamDelta, lessThanOrEqualTo(0.001));
+    expect(
+      meshFrame.foldXNormalized,
+      closeTo(baseFrame.backwardLeafFrame!.seamXNormalized, 0.0001),
+    );
   });
 
   test('resolvePageCurlTimeline 在前翻时保持更保守的几何 profile', () {
@@ -996,7 +1238,11 @@ void main() {
       ),
     );
 
-    expect(timeline.heightLiftBias, closeTo(0.044, 0.0001));
+    expect(timeline.heightLiftBias, closeTo(0.021, 0.0001));
+    expect(
+      timeline.sheetShift.abs(),
+      lessThanOrEqualTo(pageSize.width * 0.022),
+    );
     expect(timeline.diagonalExtent, lessThanOrEqualTo(pageSize.width * 0.078));
     expect(timeline.leadingRadius, greaterThan(timeline.trailingRadius));
     expect(timeline.cylinderRadiusNormalized, greaterThan(0.06));
@@ -1148,7 +1394,7 @@ void main() {
     expect(threeStageState.spineAmbientStrength, greaterThan(0));
   });
 
-  test('flipPrev 产出的 AnimationPlan 包含非空 reversePoses', () {
+  test('flipPrev 产出的 AnimationPlan 不再携带 reversePoses', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -1162,11 +1408,10 @@ void main() {
 
     final plan = controller.flipPrev(StPageFlipCorner.bottom);
     expect(plan, isNotNull);
-    expect(plan!.reversePoses, isNotNull);
-    expect(plan.reversePoses!.length, equals(plan.frames.length));
+    expect(plan!.reversePoses, isNull);
   });
 
-  test('flipPrev 的 reversePoses 每帧都有合法的三阶段进度', () {
+  test('flipPrev 保持 shared frame 序列而不附加 reversePoses', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -1180,18 +1425,11 @@ void main() {
 
     final plan = controller.flipPrev(StPageFlipCorner.bottom);
     expect(plan, isNotNull);
-
-    final poses = plan!.reversePoses!;
-    // 每帧的 progress 必须在 [0, 1] 范围内
-    for (final pose in poses) {
-      expect(pose.progress, greaterThanOrEqualTo(0.0));
-      expect(pose.progress, lessThanOrEqualTo(1.0));
-    }
-    // 最后一帧的 progress 应接近完成（翻页完成态）
-    expect(poses.last.progress, greaterThan(0.5));
+    expect(plan!.frames, isNotEmpty);
+    expect(plan.reversePoses, isNull);
   });
 
-  test('stopMove 回弹时也产出 reversePoses', () {
+  test('stopMove 回弹时也不再产出 reversePoses', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -1212,9 +1450,7 @@ void main() {
     // 松手回弹
     final plan = controller.stopMove();
     expect(plan, isNotNull);
-    // 回弹也应携带 reversePoses
-    expect(plan!.reversePoses, isNotNull);
-    expect(plan.reversePoses!.length, equals(plan.frames.length));
+    expect(plan!.reversePoses, isNull);
   });
 
   test('flipNext 不产出 reversePoses（前翻不受影响）', () {
@@ -1299,37 +1535,34 @@ void main() {
   });
 }
 
-StPageFlipRenderFrame _threeStageBackRenderFrame({
+StPageFlipRenderFrame _backwardReplayRenderFrame({
   required Offset localPagePoint,
   required double progress,
   required StPageFlipCorner corner,
 }) {
   const pageSize = Size(398, 553);
-  final reversePose = resolveReverseFlipPose(
+  final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
     localPagePoint: localPagePoint,
     pageSize: pageSize,
-    progress: progress,
-    corner: corner,
   );
   final timeline = resolvePageCurlTimeline(
     direction: StPageFlipDirection.back,
-    renderDirection: StPageFlipDirection.forward,
+    renderDirection: StPageFlipDirection.back,
     progress: progress,
     localPagePoint: localPagePoint,
     pageSize: pageSize,
     corner: corner,
     angleBand: resolveForwardCurlAngleBand(
-      localPagePoint: localPagePoint,
+      localPagePoint: replayLocalPoint,
       pageSize: pageSize,
       corner: corner,
     ),
-    reversePose: reversePose,
   );
   return StPageFlipRenderFrame(
     localPagePoint: localPagePoint,
     progress: progress,
     direction: StPageFlipDirection.back,
-    renderDirection: StPageFlipDirection.forward,
+    renderDirection: StPageFlipDirection.back,
     corner: corner,
     flippingClipArea: const <Offset>[
       Offset(148, 0),
@@ -1344,20 +1577,70 @@ StPageFlipRenderFrame _threeStageBackRenderFrame({
       Offset(148, 553),
       Offset.zero,
     ],
-    flippingAnchor: Offset(
-      reversePose.leadingEdgeX,
-      corner == StPageFlipCorner.top ? 0 : 553,
-    ),
-    bottomAnchor: Offset.zero,
-    angle: corner == StPageFlipCorner.top ? 0.32 : -0.32,
+    flippingAnchor: Offset(148, corner == StPageFlipCorner.top ? 0 : 553),
+    bottomAnchor: const Offset(398, 0),
+    angle: corner == StPageFlipCorner.top ? 0.42 : -0.42,
     shadow: null,
     timeline: timeline,
-    reversePose: reversePose,
     backwardLeafFrame: resolveArticlePageBackwardLeafFrame(
       direction: StPageFlipDirection.back,
       progress: progress,
-      reversePose: reversePose,
     ),
+  );
+}
+
+ArticlePageCurlFrame _buildForwardMeshFrame({
+  required Offset dragPoint,
+  required double progress,
+  StPageFlipCorner corner = StPageFlipCorner.bottom,
+}) {
+  const pageRect = Rect.fromLTWH(16, 64, 398, 553);
+  return const ArticlePageCurlMeshBuilder().build(
+    pageRect: pageRect,
+    pageSize: pageRect.size,
+    dragPoint: dragPoint,
+    progress: progress,
+    direction: StPageFlipDirection.forward,
+    corner: corner,
+  );
+}
+
+StPageFlipRenderFrame _forwardRenderFrame({
+  required Offset localPagePoint,
+  required double progress,
+  required double angle,
+  required StPageFlipCorner corner,
+}) {
+  const pageSize = Size(398, 553);
+  final timeline = resolvePageCurlTimeline(
+    direction: StPageFlipDirection.forward,
+    renderDirection: StPageFlipDirection.forward,
+    progress: progress,
+    localPagePoint: localPagePoint,
+    pageSize: pageSize,
+    corner: corner,
+    angleBand: resolveForwardCurlAngleBand(
+      localPagePoint: localPagePoint,
+      pageSize: pageSize,
+      corner: corner,
+    ),
+  );
+  return StPageFlipRenderFrame(
+    localPagePoint: localPagePoint,
+    progress: progress,
+    direction: StPageFlipDirection.forward,
+    renderDirection: StPageFlipDirection.forward,
+    corner: corner,
+    flippingClipArea: const <Offset>[],
+    bottomClipArea: const <Offset>[],
+    flippingAnchor: Offset(
+      localPagePoint.dx,
+      corner == StPageFlipCorner.top ? 0 : pageSize.height,
+    ),
+    bottomAnchor: Offset.zero,
+    angle: angle,
+    shadow: null,
+    timeline: timeline,
   );
 }
 
@@ -1381,15 +1664,15 @@ Future<ArticlePageTextureBundle> _createTestTextureBundle() async {
   );
 }
 
-Future<ui.Image> _createTestImage() async {
+Future<ui.Image> _createTestImage({int width = 1, int height = 1}) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   canvas.drawRect(
-    const Rect.fromLTWH(0, 0, 1, 1),
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
     Paint()..color = const Color(0xFFFFFFFF),
   );
   final picture = recorder.endRecording();
-  final image = await picture.toImage(1, 1);
+  final image = await picture.toImage(width, height);
   picture.dispose();
   return image;
 }

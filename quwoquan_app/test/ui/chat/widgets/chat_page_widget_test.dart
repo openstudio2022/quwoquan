@@ -122,6 +122,16 @@ void main() {
       expect(find.byType(ChatPage), findsOneWidget);
       expect(find.text(UITextConstants.noConversations), findsOneWidget);
     });
+
+    testWidgets('群头像 URL 缺失时回退到默认群图标', (tester) async {
+      await tester.pumpWidget(
+        _scopedApp(mock: _GroupAvatarFallbackChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('默认群头像兜底'), findsOneWidget);
+      expect(find.byIcon(Icons.group), findsWidgets);
+    });
   });
 }
 
@@ -137,5 +147,28 @@ class _EmptyChatRepository extends MockChatRepository {
     int limit = 20,
   }) async {
     return const <ChatInboxDto>[];
+  }
+}
+
+class _GroupAvatarFallbackChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_fallback_group',
+        type: 'group',
+        title: '默认群头像兜底',
+        avatarUrl: '',
+        groupAvatarUrl: '',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
   }
 }

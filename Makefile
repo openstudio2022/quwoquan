@@ -1,4 +1,6 @@
 .PHONY: gate
+.PHONY: gate-runtime-media
+.PHONY: gate-runtime-media-full
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
@@ -75,6 +77,12 @@ gate:
 	@bash scripts/verify_topology_contract_regression.sh
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
+
+gate-runtime-media:
+	@bash scripts/gate_runtime_media.sh
+
+gate-runtime-media-full:
+	@bash scripts/gate_runtime_media.sh --full
 
 verify:
 	@bash scripts/verify_feature_traceability.sh

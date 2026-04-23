@@ -56,11 +56,16 @@ class LocalChatSearchSyncService {
       final cloudIds = <String>{};
       final localConversations = await _store.listConversationPayloads(
         namespace: namespace,
+        limit: null,
+      );
+      final localConversationIds = await _store.listConversationIds(
+        namespace: namespace,
       );
       final localById = <String, Map<String, dynamic>>{
         for (final item in localConversations) _conversationId(item): item,
       };
       final needFetchIds = <String>[];
+      final needIncrementalMessageSyncIds = <String>[];
 
       for (final timestamp in timestamps) {
         final conversationId = _conversationId(timestamp.toMap());
@@ -94,8 +99,16 @@ class LocalChatSearchSyncService {
         final messageChanged =
             cloudLastMessageAt.isNotEmpty &&
             cloudLastMessageAt != localLastMessageAt;
-        if (missingConversation || settingsChanged || messageChanged) {
+        if (missingConversation || settingsChanged) {
           needFetchIds.add(conversationId);
+        } else if (messageChanged) {
+          _conversationCache.updateListFields(
+            conversationId,
+            lastMessagePreview: tsMap['lastMessagePreview']?.toString(),
+            lastMessageAt: cloudLastMessageAt,
+            unreadCount: (tsMap['unreadCount'] as num?)?.toInt(),
+          );
+          needIncrementalMessageSyncIds.add(conversationId);
         } else {
           final lastSeq = await _store.lastSeqForConversation(
             namespace: namespace,
@@ -117,8 +130,9 @@ class LocalChatSearchSyncService {
           final conversations = await _chatRepository.batchGetConversations(
             batchIds,
           );
-          final convMaps =
-              conversations.map((c) => c.toMap()).toList(growable: false);
+          final convMaps = conversations
+              .map((c) => c.toMap())
+              .toList(growable: false);
           _conversationCache.putAll(convMaps);
           await _store.upsertConversations(
             namespace: namespace,
@@ -134,7 +148,20 @@ class LocalChatSearchSyncService {
         }
       }
 
-      for (final localId in localById.keys) {
+      for (final conversationId in needIncrementalMessageSyncIds.toSet()) {
+        final conversation =
+            _conversationCache.get(conversationId) ?? localById[conversationId];
+        if (conversation == null) {
+          continue;
+        }
+        await _syncConversationMessages(
+          namespace: namespace,
+          conversation: conversation,
+          forceFull: false,
+        );
+      }
+
+      for (final localId in localConversationIds) {
         if (localId.isEmpty || cloudIds.contains(localId)) {
           continue;
         }
@@ -287,7 +314,7 @@ class LocalChatSearchSyncService {
       return;
     }
     _activeNamespaceKey = namespace.key;
-    _conversationCache.clear();
+    _conversationCache.activateNamespace(namespace.key);
   }
 
   Future<void> _syncConversationMessages({

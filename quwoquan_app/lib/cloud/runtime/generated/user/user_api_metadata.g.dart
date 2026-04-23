@@ -19,7 +19,7 @@ class UserApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AcceptInvite': '/v1/invites/{linkCode}/accept',
     'ActivatePersona': '/v1/user/personas/{personaId}/activate',
-    'ActivateSubAccount': '/v1/owner/sub-accounts/{subAccountId}/activate',
+    'ApplyPersonaProfileSync': '/v1/user/personas/{personaId}/profile-sync',
     'ApplyProposal': '/v1/user/profile/proposals/{id}/apply',
     'BindCredential': '/v1/owner/credentials/bind',
     'BlockUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/block',
@@ -27,26 +27,23 @@ class UserApiMetadata {
     'ClearRecentSearches': '/v1/user/search/recent',
     'ConfirmProposal': '/v1/user/profile/proposals/{id}/confirm',
     'CreatePersona': '/v1/user/personas',
-    'CreateSubAccount': '/v1/owner/sub-accounts',
-    'DeleteEmptySubAccount': '/v1/owner/sub-accounts/{subAccountId}:delete-empty',
-    'DeletePersona': '/v1/user/personas/{personaId}',
+    'DeleteEmptyPersona': '/v1/user/personas/{personaId}/delete-empty',
     'DeleteRecentSearch': '/v1/user/search/recent/{entryId}',
-    'DeleteSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'DismissContactDiscovery': '/v1/owner/contact-discovery/{id}',
     'FollowUser': '/v1/user/profile-subjects/{targetProfileSubjectId}/follow',
     'GenerateInvite': '/v1/me/invites',
-    'GetActivePersonaContext': '/v1/owner/sub-accounts/active',
+    'GetActivePersonaContext': '/v1/user/personas/active',
     'GetAppearanceSettings': '/v1/user/settings/appearance',
     'GetCallSettings': '/v1/user/settings/calls',
     'GetInviteByCode': '/v1/invites/{linkCode}',
     'GetLatestContactDiscovery': '/v1/owner/contact-discovery/latest',
     'GetMeProfile': '/v1/me',
     'GetNotificationSettings': '/v1/user/settings/notifications',
-    'GetPersonaManagementSummary': '/v1/owner/sub-accounts/summary',
+    'GetPersonaLifecycleGuard': '/v1/user/personas/{personaId}/lifecycle-guard',
+    'GetPersonaManagementSummary': '/v1/user/personas/summary',
     'GetPrivacySettings': '/v1/user/settings/privacy',
     'GetRelationship': '/v1/user/profile-subjects/{profileSubjectId}/relationship',
     'GetRelationshipCapability': '/v1/user/profile-subjects/{profileSubjectId}/relationship/capability',
-    'GetSubAccountLifecycleGuard': '/v1/owner/sub-accounts/{subAccountId}/lifecycle-guard',
     'GetSubAccountProfile': '/v1/user/{subAccountId}',
     'GetUserProfile': '/v1/user/profile/{userId}',
     'IgnoreGreetingRequest': '/v1/user/greeting-request/{requestId}/ignore',
@@ -60,7 +57,6 @@ class UserApiMetadata {
     'ListMyInvites': '/v1/me/invites',
     'ListPersonas': '/v1/user/personas',
     'ListRecentSearches': '/v1/user/search/recent',
-    'ListSubAccounts': '/v1/owner/sub-accounts',
     'ListUserLifeItems': '/v1/users/{userId}/life-items',
     'ListUserLikes': '/v1/users/{userId}/likes',
     'ListUserWorks': '/v1/users/{userId}/works',
@@ -68,11 +64,12 @@ class UserApiMetadata {
     'LoginWithPhone': '/v1/auth/login/phone',
     'LoginWithWechat': '/v1/auth/login/wechat',
     'Logout': '/v1/auth/logout',
+    'PullUserSync': '/v1/user/sync',
     'RefreshToken': '/v1/auth/token/refresh',
     'RegisterDevice': '/v1/user/devices/push-tokens',
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
     'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
-    'RetireSubAccount': '/v1/owner/sub-accounts/{subAccountId}:retire',
+    'RetirePersona': '/v1/user/personas/{personaId}/retire',
     'SearchSocialRelations': '/v1/user/search/social-relations',
     'SendGreetingRequest': '/v1/user/greeting-request',
     'UnbindCredential': '/v1/owner/credentials/{credentialType}',
@@ -83,7 +80,6 @@ class UserApiMetadata {
     'UpdateNotificationSettings': '/v1/user/settings/notifications',
     'UpdatePersona': '/v1/user/personas/{personaId}',
     'UpdatePrivacySettings': '/v1/user/settings/privacy',
-    'UpdateSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'UpdateUserProfile': '/v1/user/profile',
     'UpsertRecentSearch': '/v1/user/search/recent/{entryId}',
   };
@@ -91,7 +87,7 @@ class UserApiMetadata {
   static const Map<String, String> operationToMethod = <String, String>{
     'AcceptInvite': 'POST',
     'ActivatePersona': 'POST',
-    'ActivateSubAccount': 'POST',
+    'ApplyPersonaProfileSync': 'POST',
     'ApplyProposal': 'POST',
     'BindCredential': 'POST',
     'BlockUser': 'POST',
@@ -99,11 +95,8 @@ class UserApiMetadata {
     'ClearRecentSearches': 'DELETE',
     'ConfirmProposal': 'POST',
     'CreatePersona': 'POST',
-    'CreateSubAccount': 'POST',
-    'DeleteEmptySubAccount': 'POST',
-    'DeletePersona': 'DELETE',
+    'DeleteEmptyPersona': 'DELETE',
     'DeleteRecentSearch': 'DELETE',
-    'DeleteSubAccount': 'DELETE',
     'DismissContactDiscovery': 'DELETE',
     'FollowUser': 'POST',
     'GenerateInvite': 'POST',
@@ -114,11 +107,11 @@ class UserApiMetadata {
     'GetLatestContactDiscovery': 'GET',
     'GetMeProfile': 'GET',
     'GetNotificationSettings': 'GET',
+    'GetPersonaLifecycleGuard': 'GET',
     'GetPersonaManagementSummary': 'GET',
     'GetPrivacySettings': 'GET',
     'GetRelationship': 'GET',
     'GetRelationshipCapability': 'GET',
-    'GetSubAccountLifecycleGuard': 'GET',
     'GetSubAccountProfile': 'GET',
     'GetUserProfile': 'GET',
     'IgnoreGreetingRequest': 'POST',
@@ -132,7 +125,6 @@ class UserApiMetadata {
     'ListMyInvites': 'GET',
     'ListPersonas': 'GET',
     'ListRecentSearches': 'GET',
-    'ListSubAccounts': 'GET',
     'ListUserLifeItems': 'GET',
     'ListUserLikes': 'GET',
     'ListUserWorks': 'GET',
@@ -140,11 +132,12 @@ class UserApiMetadata {
     'LoginWithPhone': 'POST',
     'LoginWithWechat': 'POST',
     'Logout': 'POST',
+    'PullUserSync': 'POST',
     'RefreshToken': 'POST',
     'RegisterDevice': 'POST',
     'RejectProposal': 'POST',
     'ReplyGreetingRequest': 'POST',
-    'RetireSubAccount': 'POST',
+    'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
     'UnbindCredential': 'DELETE',
@@ -155,14 +148,13 @@ class UserApiMetadata {
     'UpdateNotificationSettings': 'PATCH',
     'UpdatePersona': 'PATCH',
     'UpdatePrivacySettings': 'PATCH',
-    'UpdateSubAccount': 'PATCH',
     'UpdateUserProfile': 'PATCH',
     'UpsertRecentSearch': 'PUT',
   };
 
   static const String acceptInviteOperation = 'AcceptInvite';
   static const String activatePersonaOperation = 'ActivatePersona';
-  static const String activateSubAccountOperation = 'ActivateSubAccount';
+  static const String applyPersonaProfileSyncOperation = 'ApplyPersonaProfileSync';
   static const String applyProposalOperation = 'ApplyProposal';
   static const String bindCredentialOperation = 'BindCredential';
   static const String blockUserOperation = 'BlockUser';
@@ -170,11 +162,8 @@ class UserApiMetadata {
   static const String clearRecentSearchesOperation = 'ClearRecentSearches';
   static const String confirmProposalOperation = 'ConfirmProposal';
   static const String createPersonaOperation = 'CreatePersona';
-  static const String createSubAccountOperation = 'CreateSubAccount';
-  static const String deleteEmptySubAccountOperation = 'DeleteEmptySubAccount';
-  static const String deletePersonaOperation = 'DeletePersona';
+  static const String deleteEmptyPersonaOperation = 'DeleteEmptyPersona';
   static const String deleteRecentSearchOperation = 'DeleteRecentSearch';
-  static const String deleteSubAccountOperation = 'DeleteSubAccount';
   static const String dismissContactDiscoveryOperation = 'DismissContactDiscovery';
   static const String followUserOperation = 'FollowUser';
   static const String generateInviteOperation = 'GenerateInvite';
@@ -185,11 +174,11 @@ class UserApiMetadata {
   static const String getLatestContactDiscoveryOperation = 'GetLatestContactDiscovery';
   static const String getMeProfileOperation = 'GetMeProfile';
   static const String getNotificationSettingsOperation = 'GetNotificationSettings';
+  static const String getPersonaLifecycleGuardOperation = 'GetPersonaLifecycleGuard';
   static const String getPersonaManagementSummaryOperation = 'GetPersonaManagementSummary';
   static const String getPrivacySettingsOperation = 'GetPrivacySettings';
   static const String getRelationshipOperation = 'GetRelationship';
   static const String getRelationshipCapabilityOperation = 'GetRelationshipCapability';
-  static const String getSubAccountLifecycleGuardOperation = 'GetSubAccountLifecycleGuard';
   static const String getSubAccountProfileOperation = 'GetSubAccountProfile';
   static const String getUserProfileOperation = 'GetUserProfile';
   static const String ignoreGreetingRequestOperation = 'IgnoreGreetingRequest';
@@ -203,7 +192,6 @@ class UserApiMetadata {
   static const String listMyInvitesOperation = 'ListMyInvites';
   static const String listPersonasOperation = 'ListPersonas';
   static const String listRecentSearchesOperation = 'ListRecentSearches';
-  static const String listSubAccountsOperation = 'ListSubAccounts';
   static const String listUserLifeItemsOperation = 'ListUserLifeItems';
   static const String listUserLikesOperation = 'ListUserLikes';
   static const String listUserWorksOperation = 'ListUserWorks';
@@ -211,11 +199,12 @@ class UserApiMetadata {
   static const String loginWithPhoneOperation = 'LoginWithPhone';
   static const String loginWithWechatOperation = 'LoginWithWechat';
   static const String logoutOperation = 'Logout';
+  static const String pullUserSyncOperation = 'PullUserSync';
   static const String refreshTokenOperation = 'RefreshToken';
   static const String registerDeviceOperation = 'RegisterDevice';
   static const String rejectProposalOperation = 'RejectProposal';
   static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
-  static const String retireSubAccountOperation = 'RetireSubAccount';
+  static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
   static const String unbindCredentialOperation = 'UnbindCredential';
@@ -226,7 +215,6 @@ class UserApiMetadata {
   static const String updateNotificationSettingsOperation = 'UpdateNotificationSettings';
   static const String updatePersonaOperation = 'UpdatePersona';
   static const String updatePrivacySettingsOperation = 'UpdatePrivacySettings';
-  static const String updateSubAccountOperation = 'UpdateSubAccount';
   static const String updateUserProfileOperation = 'UpdateUserProfile';
   static const String upsertRecentSearchOperation = 'UpsertRecentSearch';
 
@@ -242,10 +230,10 @@ class UserApiMetadata {
       'personaId': personaId,
     });
   }
-  static const String activateSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}/activate';
-  static String activateSubAccountPath({required String subAccountId}) {
-    return _fillPath(activateSubAccountPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+  static const String applyPersonaProfileSyncPathTemplate = '/v1/user/personas/{personaId}/profile-sync';
+  static String applyPersonaProfileSyncPath({required String personaId}) {
+    return _fillPath(applyPersonaProfileSyncPathTemplate, <String, String>{
+      'personaId': personaId,
     });
   }
   static const String applyProposalPathTemplate = '/v1/user/profile/proposals/{id}/apply';
@@ -275,16 +263,9 @@ class UserApiMetadata {
     });
   }
   static const String createPersonaPath = '/v1/user/personas';
-  static const String createSubAccountPath = '/v1/owner/sub-accounts';
-  static const String deleteEmptySubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}:delete-empty';
-  static String deleteEmptySubAccountPath({required String subAccountId}) {
-    return _fillPath(deleteEmptySubAccountPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
-    });
-  }
-  static const String deletePersonaPathTemplate = '/v1/user/personas/{personaId}';
-  static String deletePersonaPath({required String personaId}) {
-    return _fillPath(deletePersonaPathTemplate, <String, String>{
+  static const String deleteEmptyPersonaPathTemplate = '/v1/user/personas/{personaId}/delete-empty';
+  static String deleteEmptyPersonaPath({required String personaId}) {
+    return _fillPath(deleteEmptyPersonaPathTemplate, <String, String>{
       'personaId': personaId,
     });
   }
@@ -292,12 +273,6 @@ class UserApiMetadata {
   static String deleteRecentSearchPath({required String entryId}) {
     return _fillPath(deleteRecentSearchPathTemplate, <String, String>{
       'entryId': entryId,
-    });
-  }
-  static const String deleteSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}';
-  static String deleteSubAccountPath({required String subAccountId}) {
-    return _fillPath(deleteSubAccountPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
     });
   }
   static const String dismissContactDiscoveryPathTemplate = '/v1/owner/contact-discovery/{id}';
@@ -313,7 +288,7 @@ class UserApiMetadata {
     });
   }
   static const String generateInvitePath = '/v1/me/invites';
-  static const String getActivePersonaContextPath = '/v1/owner/sub-accounts/active';
+  static const String getActivePersonaContextPath = '/v1/user/personas/active';
   static const String getAppearanceSettingsPath = '/v1/user/settings/appearance';
   static const String getCallSettingsPath = '/v1/user/settings/calls';
   static const String getInviteByCodePathTemplate = '/v1/invites/{linkCode}';
@@ -325,7 +300,13 @@ class UserApiMetadata {
   static const String getLatestContactDiscoveryPath = '/v1/owner/contact-discovery/latest';
   static const String getMeProfilePath = '/v1/me';
   static const String getNotificationSettingsPath = '/v1/user/settings/notifications';
-  static const String getPersonaManagementSummaryPath = '/v1/owner/sub-accounts/summary';
+  static const String getPersonaLifecycleGuardPathTemplate = '/v1/user/personas/{personaId}/lifecycle-guard';
+  static String getPersonaLifecycleGuardPath({required String personaId}) {
+    return _fillPath(getPersonaLifecycleGuardPathTemplate, <String, String>{
+      'personaId': personaId,
+    });
+  }
+  static const String getPersonaManagementSummaryPath = '/v1/user/personas/summary';
   static const String getPrivacySettingsPath = '/v1/user/settings/privacy';
   static const String getRelationshipPathTemplate = '/v1/user/profile-subjects/{profileSubjectId}/relationship';
   static String getRelationshipPath({required String profileSubjectId}) {
@@ -337,12 +318,6 @@ class UserApiMetadata {
   static String getRelationshipCapabilityPath({required String profileSubjectId}) {
     return _fillPath(getRelationshipCapabilityPathTemplate, <String, String>{
       'profileSubjectId': profileSubjectId,
-    });
-  }
-  static const String getSubAccountLifecycleGuardPathTemplate = '/v1/owner/sub-accounts/{subAccountId}/lifecycle-guard';
-  static String getSubAccountLifecycleGuardPath({required String subAccountId}) {
-    return _fillPath(getSubAccountLifecycleGuardPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
     });
   }
   static const String getSubAccountProfilePathTemplate = '/v1/user/{subAccountId}';
@@ -383,7 +358,6 @@ class UserApiMetadata {
   static const String listMyInvitesPath = '/v1/me/invites';
   static const String listPersonasPath = '/v1/user/personas';
   static const String listRecentSearchesPath = '/v1/user/search/recent';
-  static const String listSubAccountsPath = '/v1/owner/sub-accounts';
   static const String listUserLifeItemsPathTemplate = '/v1/users/{userId}/life-items';
   static String listUserLifeItemsPath({required String userId}) {
     return _fillPath(listUserLifeItemsPathTemplate, <String, String>{
@@ -406,6 +380,7 @@ class UserApiMetadata {
   static const String loginWithPhonePath = '/v1/auth/login/phone';
   static const String loginWithWechatPath = '/v1/auth/login/wechat';
   static const String logoutPath = '/v1/auth/logout';
+  static const String pullUserSyncPath = '/v1/user/sync';
   static const String refreshTokenPath = '/v1/auth/token/refresh';
   static const String registerDevicePath = '/v1/user/devices/push-tokens';
   static const String rejectProposalPathTemplate = '/v1/user/profile/proposals/{id}/reject';
@@ -420,10 +395,10 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
-  static const String retireSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}:retire';
-  static String retireSubAccountPath({required String subAccountId}) {
-    return _fillPath(retireSubAccountPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+  static const String retirePersonaPathTemplate = '/v1/user/personas/{personaId}/retire';
+  static String retirePersonaPath({required String personaId}) {
+    return _fillPath(retirePersonaPathTemplate, <String, String>{
+      'personaId': personaId,
     });
   }
   static const String searchSocialRelationsPath = '/v1/user/search/social-relations';
@@ -456,12 +431,6 @@ class UserApiMetadata {
     });
   }
   static const String updatePrivacySettingsPath = '/v1/user/settings/privacy';
-  static const String updateSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}';
-  static String updateSubAccountPath({required String subAccountId}) {
-    return _fillPath(updateSubAccountPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
-    });
-  }
   static const String updateUserProfilePath = '/v1/user/profile';
   static const String upsertRecentSearchPathTemplate = '/v1/user/search/recent/{entryId}';
   static String upsertRecentSearchPath({required String entryId}) {

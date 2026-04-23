@@ -7,9 +7,10 @@ description: |
 
 scenarios:
   - name: chat_inbox_dto_parse
-    description: ChatInboxDto 解析（含 mention/unread、头像拼图与最近消息类型）
+    description: ChatInboxDto 解析（含 mention/unread、群头像主字段、头像拼图兼容与最近消息类型）
     assertions:
       - required_fields_non_empty
+      - group_avatar_url_optional
       - avatar_composite_urls_preserved
       - mention_unread_count_non_negative
       - last_message_truncated_at_100chars

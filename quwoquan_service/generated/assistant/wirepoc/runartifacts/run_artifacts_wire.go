@@ -154,6 +154,7 @@ type RunArtifactsUnderstandingResolutionItem struct {
 type RunArtifactsUnderstandingSnapshot struct {
 	IntentSummary string `json:"intentSummary"`
 	UserFacingSummary string `json:"userFacingSummary"`
+	RetrievalDesignNarrative string `json:"retrievalDesignNarrative"`
 	ConcernPoints []string `json:"concernPoints"`
 	EmotionSignal string `json:"emotionSignal"`
 	ResolutionItems []RunArtifactsUnderstandingResolutionItem `json:"resolutionItems"`

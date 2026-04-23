@@ -118,8 +118,8 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       scene.pageRect,
       Paint()
-        ..isAntiAlias = true
-        ..filterQuality = FilterQuality.high,
+        ..isAntiAlias = false
+        ..filterQuality = FilterQuality.none,
     );
     canvas.restore();
   }
@@ -173,6 +173,8 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     if (backSurface == null) {
       return;
     }
+    canvas.save();
+    canvas.clipPath(_leafCoverageClipPath());
     _drawBackAlbedo(canvas, backSurface);
     if (scene.renderConfig.enableBackPaperWash) {
       _drawBackPaperWash(canvas, backSurface);
@@ -180,6 +182,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     if (scene.renderConfig.enableBackCreaseOcclusion) {
       _drawBackCreaseOcclusion(canvas, backSurface);
     }
+    canvas.restore();
   }
 
   void _drawBackAlbedo(Canvas canvas, ArticlePageCurlMeshSurface backSurface) {
@@ -240,6 +243,8 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     if (frontSurface == null) {
       return;
     }
+    canvas.save();
+    canvas.clipPath(_leafCoverageClipPath());
     _drawTexturedSurface(
       canvas,
       frontSurface,
@@ -269,6 +274,15 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
           ..shader = shader,
       );
     }
+    canvas.restore();
+  }
+
+  Path _leafCoverageClipPath() {
+    return Path.combine(
+      PathOperation.difference,
+      Path()..addRect(scene.pageRect),
+      scene.meshFrame.bottomClipPath,
+    );
   }
 
   void _drawTexturedSurface(

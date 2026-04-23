@@ -13,12 +13,12 @@ func TestSubAccount_CreateAndList(t *testing.T) {
 	createTestProfile(t, "sub_owner_1", "sub_owner1")
 	createTestCredential(t, "cred1", "sub_owner_1", "phone", "hash_13800000001")
 
-	// 创建子账号
-	rec := doRequest(t, http.MethodPost, "/v1/user/sub-accounts",
-		`{"displayName":"匿名账号","isolationLevel":"strict"}`,
+	// 创建分身
+	rec := doRequest(t, http.MethodPost, "/v1/user/personas",
+		`{"displayName":"匿名分身","isolationLevel":"strict"}`,
 		authHeaders("sub_owner_1"))
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("create sub-account: expected 201, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("create persona: expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
 	subAccountID, _ := result["subAccountId"].(string)
@@ -26,15 +26,15 @@ func TestSubAccount_CreateAndList(t *testing.T) {
 		t.Fatal("expected non-empty subAccountId in response")
 	}
 
-	// 列出子账号
-	rec = doRequest(t, http.MethodGet, "/v1/user/sub-accounts", "", authHeaders("sub_owner_1"))
+	// 列出分身
+	rec = doRequest(t, http.MethodGet, "/v1/user/personas", "", authHeaders("sub_owner_1"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("list sub-accounts: expected 200, got %d", rec.Code)
+		t.Fatalf("list personas: expected 200, got %d", rec.Code)
 	}
 	list := parseJSON(t, rec)
-	accounts, _ := list["subAccounts"].([]any)
+	accounts, _ := list["items"].([]any)
 	if len(accounts) == 0 {
-		t.Fatal("expected at least one sub-account")
+		t.Fatal("expected at least one persona")
 	}
 }
 
@@ -45,7 +45,7 @@ func TestSubAccount_ActivateSwitchesExclusively(t *testing.T) {
 	createTestPersonaFull(t, "sub_b", "sub_owner_2", "sa_id_b", "SubB", "open", false, false)
 
 	// 激活 sub_b
-	rec := doRequest(t, http.MethodPost, "/v1/user/sub-accounts/sa_id_b/activate", "", authHeaders("sub_owner_2"))
+	rec := doRequest(t, http.MethodPost, "/v1/user/personas/sa_id_b/activate", "", authHeaders("sub_owner_2"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("activate sub-account: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -76,10 +76,10 @@ func TestSubAccount_DeleteForbidsLast(t *testing.T) {
 	createTestProfile(t, "sub_owner_3", "sub_owner3")
 	createTestPersonaFull(t, "only_sub", "sub_owner_3", "sa_only", "OnlySub", "open", true, true)
 
-	// 删除唯一的子账号应该被拒绝
-	rec := doRequest(t, http.MethodDelete, "/v1/user/sub-accounts/sa_only", "", authHeaders("sub_owner_3"))
-	if rec.Code == http.StatusOK {
-		t.Fatal("expected error when deleting the last sub-account")
+	// 删除唯一的分身应该被拒绝
+	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/sa_only/delete-empty", "", authHeaders("sub_owner_3"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when deleting the last persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -116,21 +116,21 @@ func TestSubAccount_ListDoesNotLeakPrivateFields(t *testing.T) {
 	createTestProfile(t, "leaktest_owner", "leaktest_user")
 	createTestPersonaFull(t, "lk_persona", "leaktest_owner", "sa_lktest", "LeakTest", "open", true, true)
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/sub-accounts", "", authHeaders("leaktest_owner"))
+	rec := doRequest(t, http.MethodGet, "/v1/user/personas", "", authHeaders("leaktest_owner"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("list sub-accounts: expected 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("list personas: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
-	accounts, _ := result["subAccounts"].([]any)
+	accounts, _ := result["items"].([]any)
 	if len(accounts) == 0 {
-		t.Fatal("expected at least one sub-account")
+		t.Fatal("expected at least one persona")
 	}
 
-	// purposeHint has json:"-" tag in the model and should never appear
+	// purposeHint 属于私有管理字段，不应出现在列表响应
 	for _, acc := range accounts {
 		am, _ := acc.(map[string]any)
 		if _, has := am["purposeHint"]; has {
-			t.Error("purposeHint is a private field and should NOT appear in sub-account list response")
+			t.Error("purposeHint is a private field and should NOT appear in persona list response")
 		}
 	}
 }

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/components/pageflip/src/scene/pageflip_scene.dart';
+import 'package:quwoquan_app/components/pageflip/src/debug/pageflip_diagnostics_shared.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
+import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
+import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 class PageflipDiagnosticsApp extends StatefulWidget {
@@ -13,13 +16,20 @@ class PageflipDiagnosticsApp extends StatefulWidget {
 }
 
 class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
-  final ValueNotifier<PageflipScene?> _sceneNotifier = ValueNotifier<PageflipScene?>(null);
-  PageflipScene? _pendingScene;
+  late final _pages = buildPageflipDiagnosticPages();
+  final ValueNotifier<StPageFlipScene?> _sceneNotifier =
+      ValueNotifier<StPageFlipScene?>(null);
+  final ValueNotifier<ArticleReadOnlyBookDebugState?> _debugNotifier =
+      ValueNotifier<ArticleReadOnlyBookDebugState?>(null);
+  StPageFlipScene? _pendingScene;
   bool _sceneUpdateScheduled = false;
+  ArticleReadOnlyBookDebugState? _pendingDebugState;
+  bool _debugUpdateScheduled = false;
 
   @override
   void dispose() {
     _sceneNotifier.dispose();
+    _debugNotifier.dispose();
     super.dispose();
   }
 
@@ -42,54 +52,96 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                 variant: ArticleCanvasVariant.detail,
               );
               final pagePadding = articleReaderStagePagePadding();
-              return Stack(
-                fit: StackFit.expand,
+              return Column(
                 children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.containerMd,
-                      AppSpacing.containerMd,
-                      AppSpacing.containerMd,
-                      AppSpacing.containerLg,
-                    ),
-                    child: ArticleReadOnlyBookDeck(
-                      pages: _diagnosticPages(),
-                      template: ArticleTemplatePreset.tech,
-                      fontPreset: ArticleFontPreset.mono,
-                      metrics: metrics,
-                      pagePadding: pagePadding,
-                      initialPage: 2,
-                      coverUrl: '',
-                      showFooterPageLabel: false,
-                      onSceneChanged: (scene) {
-                        _pendingScene = scene;
-                        if (_sceneUpdateScheduled) {
-                          return;
-                        }
-                        _sceneUpdateScheduled = true;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _sceneUpdateScheduled = false;
-                          if (!mounted || _pendingScene == null) {
-                            return;
-                          }
-                          final nextScene = _pendingScene;
-                          _pendingScene = null;
-                          _sceneNotifier.value = nextScene;
-                        });
-                      },
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ValueListenableBuilder<PageflipScene?>(
-                        valueListenable: _sceneNotifier,
-                        builder: (context, scene, _) {
-                          if (scene == null) {
-                            return const SizedBox.shrink();
-                          }
-                          return _SamplingPointsOverlay(scene: scene);
-                        },
-                      ),
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Padding(
+                          padding: kPageflipDiagnosticsViewportPadding,
+                          child: ArticleReadOnlyBookDeck(
+                            pages: _pages,
+                            template: kPageflipDiagnosticsTemplate,
+                            fontPreset: kPageflipDiagnosticsFontPreset,
+                            metrics: metrics,
+                            pagePadding: pagePadding,
+                            initialPage: 2,
+                            coverUrl: '',
+                            showFooterPageLabel: true,
+                            onSceneChanged: (scene) {
+                              _pendingScene = scene;
+                              if (_sceneUpdateScheduled) {
+                                return;
+                              }
+                              _sceneUpdateScheduled = true;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _sceneUpdateScheduled = false;
+                                if (!mounted || _pendingScene == null) {
+                                  return;
+                                }
+                                final nextScene = _pendingScene;
+                                _pendingScene = null;
+                                _sceneNotifier.value = nextScene;
+                              });
+                            },
+                            onDebugStateChanged: (debugState) {
+                              _pendingDebugState = debugState;
+                              if (_debugUpdateScheduled) {
+                                return;
+                              }
+                              _debugUpdateScheduled = true;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _debugUpdateScheduled = false;
+                                if (!mounted || _pendingDebugState == null) {
+                                  return;
+                                }
+                                final nextDebugState = _pendingDebugState;
+                                _pendingDebugState = null;
+                                _debugNotifier.value = nextDebugState;
+                              });
+                            },
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child:
+                                ValueListenableBuilder<
+                                  ArticleReadOnlyBookDebugState?
+                                >(
+                                  valueListenable: _debugNotifier,
+                                  builder: (context, debugState, _) {
+                                    return _DiagnosticsDebugHeader(
+                                      debugState: debugState,
+                                    );
+                                  },
+                                ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: ValueListenableBuilder<StPageFlipScene?>(
+                              valueListenable: _sceneNotifier,
+                              builder: (context, scene, _) {
+                                if (scene == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return ValueListenableBuilder<
+                                  ArticleReadOnlyBookDebugState?
+                                >(
+                                  valueListenable: _debugNotifier,
+                                  builder: (context, debugState, _) {
+                                    return _SamplingPointsOverlay(
+                                      scene: scene,
+                                      debugState: debugState,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -100,66 +152,35 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       ),
     );
   }
-
-  List<ArticlePageData> _diagnosticPages() {
-    return <ArticlePageData>[
-      ArticlePageData(
-        id: 'diag_0',
-        title: 'SEAM TRACE / 01',
-        body: 'page 1/5\n\nLEFT EDGE CHECK | FOLD CHECK | RIGHT EDGE CHECK',
-      ),
-      ArticlePageData(
-        id: 'diag_1',
-        title: 'SEAM TRACE / 02',
-        body: 'page 2/5\n\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-      ),
-      ArticlePageData(
-        id: 'diag_2',
-        title: 'SEAM TRACE / 03',
-        body: 'page 3/5\n\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
-      ),
-      ArticlePageData(
-        id: 'diag_3',
-        title: 'SEAM TRACE / 04',
-        body: 'page 4/5\n\nCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
-      ),
-      ArticlePageData(
-        id: 'diag_4',
-        title: 'SEAM TRACE / 05',
-        body: 'page 5/5\n\nDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
-      ),
-    ];
-  }
 }
 
 class _SamplingPointsOverlay extends StatelessWidget {
-  const _SamplingPointsOverlay({required this.scene});
+  const _SamplingPointsOverlay({required this.scene, required this.debugState});
 
-  final PageflipScene scene;
+  final StPageFlipScene scene;
+  final ArticleReadOnlyBookDebugState? debugState;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageRect = scene.pageRect;
-    final foldSample = _foldSamplePoint(scene);
-    final edgeSample = Offset(
-      pageRect.right - AppSpacing.iconLarge + AppSpacing.xs / 2,
-      pageRect.center.dy,
-    );
-    final seamGuideX = foldSample.dx;
+    final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
+    final foldSample = _foldSamplePoint(pageRect);
+    final edgeSample = _edgeSamplePoint(pageRect);
+    final seamGuideX = debugState?.guideX;
     final sampleRadius = AppSpacing.iconSmall / 2;
     return Stack(
       children: [
-        Positioned(
-          left: seamGuideX - AppSpacing.xs / 4,
-          top: pageRect.top,
-          child: Container(
-            width: AppSpacing.xs / 2,
-            height: pageRect.height,
-            color: AppColors.error.withValues(alpha: 0.8),
+        if (seamGuideX != null)
+          Positioned(
+            left: seamGuideX - AppSpacing.xs / 4,
+            top: pageRect.top,
+            child: Container(
+              width: AppSpacing.xs / 2,
+              height: pageRect.height,
+              color: AppColors.error.withValues(alpha: 0.8),
+            ),
           ),
-        ),
-        if (scene.renderFrame != null)
+        if (debugState?.guideX != null)
           Positioned(
             left: foldSample.dx - sampleRadius,
             top: foldSample.dy - sampleRadius,
@@ -182,14 +203,187 @@ class _SamplingPointsOverlay extends StatelessWidget {
     );
   }
 
-  Offset _foldSamplePoint(PageflipScene scene) {
-    final renderFrame = scene.renderFrame;
-    if (renderFrame == null) {
-      return scene.pageRect.center;
+  Offset _foldSamplePoint(Rect pageRect) {
+    return Offset(debugState?.guideX ?? pageRect.center.dx, pageRect.center.dy);
+  }
+
+  Offset _edgeSamplePoint(Rect pageRect) {
+    final direction =
+        debugState?.renderDirection ?? scene.effectiveRenderDirection;
+    final edgeX = direction == StPageFlipDirection.back
+        ? pageRect.left + AppSpacing.iconLarge - AppSpacing.xs / 2
+        : pageRect.right - AppSpacing.iconLarge + AppSpacing.xs / 2;
+    return Offset(edgeX, pageRect.center.dy);
+  }
+}
+
+class _DiagnosticsDebugHeader extends StatelessWidget {
+  const _DiagnosticsDebugHeader({required this.debugState});
+
+  final ArticleReadOnlyBookDebugState? debugState;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.containerXs,
+          AppSpacing.containerXs,
+          AppSpacing.containerXs,
+          0,
+        ),
+        child: Align(
+          alignment: Alignment.topRight,
+          child: debugState == null
+              ? const SizedBox.shrink()
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: _DebugInfoCard(
+                    debugState: debugState!,
+                    isDark: Theme.of(context).brightness == Brightness.dark,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DebugInfoCard extends StatelessWidget {
+  const _DebugInfoCard({required this.debugState, required this.isDark});
+
+  final ArticleReadOnlyBookDebugState debugState;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = (isDark ? AppColors.black : AppColors.white).withValues(
+      alpha: isDark ? 0.72 : 0.86,
+    );
+    final textColor = isDark ? AppColors.white : AppColors.black;
+    final borderColor = (isDark ? AppColors.white : AppColors.black).withValues(
+      alpha: 0.18,
+    );
+    return DecoratedBox(
+      key: const ValueKey('article_read_only_book_debug_card'),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(color: borderColor, width: AppSpacing.hairline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.containerXs),
+        child: DefaultTextStyle(
+          style: TextStyle(
+            color: textColor,
+            fontSize: AppTypography.iosCaption2,
+            height: AppTypography.lineHeightTight,
+            fontFamily: 'SF Mono',
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _DebugLine(
+                label: 'scene',
+                value:
+                    'cur ${_pageLabel(debugState.currentPageIndex)} | turn ${_pageLabel(debugState.turningPageIndex)} | under ${_pageLabel(debugState.underlayPageIndex)} | cover ${_pageLabel(debugState.coveredPageIndex)}',
+              ),
+              _DebugLine(
+                label: 'spread',
+                value:
+                    'l ${_pageLabel(debugState.leftPageIndex)} | r ${_pageLabel(debugState.rightPageIndex)}',
+              ),
+              _DebugLine(
+                label: 'branch',
+                value:
+                    '${debugState.renderBranch.name} | dir ${debugState.renderDirection?.name ?? '-'}',
+              ),
+              _DebugLine(
+                label: 'request',
+                value:
+                    'r ${_pageLabel(debugState.requestedRectoPageIndex)} | v ${_pageLabel(debugState.requestedVersoPageIndex)} | b ${_pageLabel(debugState.requestedBottomPageIndex)}',
+              ),
+              _DebugLine(
+                label: 'active',
+                value:
+                    'r ${_pageLabel(debugState.activeRectoPageIndex)} | v ${_pageLabel(debugState.activeVersoPageIndex)} | b ${_pageLabel(debugState.activeBottomPageIndex)}',
+              ),
+              _DebugLine(
+                label: 'leaf',
+                value:
+                    'c ${_pageLabel(debugState.backwardCoveredPageIndex)} | r ${_pageLabel(debugState.backwardLeafRectoPageIndex)} | v ${_pageLabel(debugState.backwardLeafVersoPageIndex)}',
+              ),
+              _DebugLine(
+                label: 'bundle',
+                value:
+                    '${debugState.renderSceneReady ? 'render' : 'wait'} | ${debugState.sessionHasBundle ? 'session ok' : 'session missing'}',
+              ),
+              _DebugLine(
+                label: 'cache',
+                value:
+                    'snap [${_pageListLabel(debugState.availableSnapshotIndices)}] | pending [${_pageListLabel(debugState.pendingCaptureIndices)}]',
+              ),
+              _DebugLine(
+                label: 'clip',
+                value: _rectLabel(debugState.bottomClipBounds),
+              ),
+              _DebugLine(
+                label: 'front',
+                value: _rectLabel(debugState.frontBounds),
+              ),
+              _DebugLine(
+                label: 'back',
+                value: _rectLabel(debugState.backBounds),
+              ),
+              _DebugLine(
+                label: 'guide',
+                value: debugState.guideX == null
+                    ? '-'
+                    : debugState.guideX!.toStringAsFixed(1),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _pageLabel(int? index) {
+    if (index == null) {
+      return '-';
     }
-    final pageRect = scene.pageRect;
-    final basePivot = renderFrame.canonicalFrame.timeline.basePivot;
-    return Offset(pageRect.left + basePivot, pageRect.center.dy);
+    return '${index + 1}';
+  }
+
+  String _pageListLabel(List<int> indices) {
+    if (indices.isEmpty) {
+      return '-';
+    }
+    return indices.map((index) => '${index + 1}').join(',');
+  }
+
+  String _rectLabel(Rect? rect) {
+    if (rect == null) {
+      return '-';
+    }
+    return '${rect.left.toStringAsFixed(0)},${rect.top.toStringAsFixed(0)} → ${rect.right.toStringAsFixed(0)},${rect.bottom.toStringAsFixed(0)}';
+  }
+}
+
+class _DebugLine extends StatelessWidget {
+  const _DebugLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs / 2),
+      child: Text('$label  $value'),
+    );
   }
 }
 
@@ -226,8 +420,9 @@ class _SampleDot extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: (isDark ? AppColors.black : AppColors.white)
-                .withValues(alpha: isDark ? 0.6 : 0.78),
+            color: (isDark ? AppColors.black : AppColors.white).withValues(
+              alpha: isDark ? 0.6 : 0.78,
+            ),
             borderRadius: BorderRadius.circular(
               AppSpacing.borderRadius - AppSpacing.xs / 2,
             ),

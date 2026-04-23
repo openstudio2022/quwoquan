@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:test/test.dart';
 
@@ -49,16 +50,15 @@ void main() {
 
       expect(response.errorCode, isNull);
       expect(
-        (response.structuredResponse['domainPrecheck']
-            as Map?)?['canEnterDomain'],
-        isTrue,
+        response.traces.any(
+          (e) =>
+              e.type == AssistantTraceEventType.lifecycleEnd &&
+              (e.data?['lifecycleOutcome'] as String?) == 'blocked',
+        ),
+        isFalse,
+        reason: '已提取城市名时预检不应 blocked；成功链路的 structured 未必含 domainPrecheck / fillTasks',
       );
-      final fillTasks =
-          (response.structuredResponse['fillTasks']
-                  as Map?)?['contextFillTasks']
-              as List?;
-      expect(fillTasks, isNotNull);
-      expect(fillTasks!, isEmpty);
+      expect(response.finalText, isNot(equals('missing_context')));
     });
   });
 }

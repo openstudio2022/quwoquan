@@ -1,7 +1,7 @@
 id: CR-20260321-001
 title: persona follow graph prd baseline expansion
 slug: persona-follow-graph-prd-baseline-expansion
-revision: 4
+revision: 5
 status: active
 
 affected_nodes:
@@ -353,3 +353,161 @@ entries:
       - "`make -C quwoquan_service verify-metadata` 已两次通过，`make codegen` 与 `make codegen-app` 已执行通过。"
       - 生成物已同步反映新的 persona-aware 路由与 page ids，例如 `user_api_metadata.g.dart`、`user_request_page_ids.g.dart`、`content_api_metadata.g.dart`、`chat_api_metadata.g.dart`、`assistant_api_metadata.g.dart`。
       - 本次仍停留在第一组实施切片：metadata 与 codegen 已落地，但 App/provider/service 业务逻辑尚未开始消费这些新 contract。
+  - timestamp: "2026-04-23T14:30:00+08:00"
+    summary: >
+      继续 `/dev`，将首个 L3 场景 persona-management 实际推进到服务端和 App 主链路：
+      Journey/Scenario 文档改写为“用户及分身”口径，management metadata 与 App codegen 收口到
+      `/v1/user/personas`，user-service 补齐 summary/active/lifecycle/delete-empty/retire，
+      App repository 与 `/profile/personas` 主路由切到 persona 命名。
+    reason: >
+      当前仓库的最大断层不是单点缺字段，而是 App 主链路主要走 `/v1/owner/sub-accounts`，
+      user-service 主实现却走 `/v1/user/personas`。如果不先把 persona-management 这条 L3
+      主链路统一，后续用户号、手机号/邮箱继承与同步建议都无法落到真实管理面。
+    change_type:
+      - implement
+      - refine
+      - validate
+      - breaking
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
+        sections:
+          - 功能范围
+          - 权限边界与数据生命周期
+          - 验收重点
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/design.md
+        sections:
+          - 关键设计决策
+          - metadata / codegen 方案
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+        sections:
+          - api_routes
+      - path: quwoquan_service/contracts/metadata/_shared/request_context.yaml
+        sections:
+          - user
+      - path: quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+        sections:
+          - persona-management routes
+          - persona-management handlers
+      - path: quwoquan_service/services/user-service/internal/application/auth_service.go
+        sections:
+          - persona-management service helpers
+      - path: quwoquan_app/lib/cloud/services/user/user_repository.dart
+        sections:
+          - persona-management repository surface
+      - path: quwoquan_app/lib/cloud/services/user/auth_repository.dart
+        sections:
+          - persona-management repository surface
+      - path: quwoquan_app/lib/app/navigation/app_router.dart
+        sections:
+          - profilePersonas route
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已通过。"
+      - "`go test ./services/user-service/...` 已通过，形成 user-service 的 T2/T3 证据。"
+      - "`flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart` 已通过，形成 App contract/path 的 T2 证据。"
+      - `test/ui/user/widgets/sub_account_management_page_test.dart` 受仓库内无关的 `conversation_cache_service.dart` 重复声明阻塞，未纳入本次通过证据。
+  - timestamp: "2026-04-23T18:20:00+08:00"
+    summary: >
+      完成 persona-management 的 M1 复核补齐：将分身管理与资料同步开关接入 runtime config，
+      统一设置页与个人主页入口行为，补齐 App 侧 `summary / update / lifecycle-guard / retire`
+      路径契约、user-service 的 HTTP 黑盒证据，以及成功路径 telemetry 与 flag-off 验证。
+    reason: >
+      上一轮 `/dev` 虽已把分身管理主链路推到真实页面和 `/v1/user/personas` 契约上，但正式验收仍缺
+      文档真相源回写、feature flag 一致性、缺失的路径/黑盒证据，以及 `S1` 所需的成功 telemetry
+      和降级验证。本轮先按复核计划收齐这些缺口，再诚实标注当前仍未完成的 A3 历史归因退役语义。
+    change_type:
+      - implement
+      - validate
+      - refine
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J1
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+        sections:
+          - P2
+          - P3
+          - P4
+      - path: quwoquan_app/lib/core/providers/app_providers.dart
+        sections:
+          - persona management feature flags
+      - path: quwoquan_app/lib/ui/user/widgets/profile_shell.dart
+        sections:
+          - profile action entry gating
+      - path: quwoquan_app/lib/ui/user/widgets/profile_action_bar.dart
+        sections:
+          - mine mode button matrix
+      - path: quwoquan_app/lib/ui/user/providers/persona_management_provider.dart
+        sections:
+          - success telemetry
+      - path: quwoquan_app/test/cloud/integration/remote_api_path_contract_test.dart
+        sections:
+          - persona management remote paths
+      - path: quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+        sections:
+          - persona management flag-off verification
+      - path: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+        sections:
+          - persona management flag-off verification
+      - path: quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
+        sections:
+          - persona management telemetry verification
+      - path: quwoquan_service/services/user-service/tests/persona_contract_test.go
+        sections:
+          - summary update profile-sync guard retire contracts
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - "`go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|SubAccount_)'` 已通过。"
+      - "`flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart test/cloud/integration/remote_api_path_contract_test.dart` 已通过。"
+      - "本轮将 `A1 / A2` 回写为 implemented，`A3 / S1 / J1 / R1` 维持 partial。"
+      - "`retire` 的历史归因持久化语义仍未落地到 user 域实体；当前退役主要是 guard/分流合同，而非完整的持久化状态机。"

@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 
 class MediaCaptionBlock extends StatelessWidget {
   const MediaCaptionBlock({
@@ -10,6 +11,8 @@ class MediaCaptionBlock extends StatelessWidget {
     required this.caption,
     required this.isExpanded,
     required this.onToggle,
+    this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
+    this.railKey,
     this.header,
     this.titleTrailing,
     this.preCaption,
@@ -20,6 +23,8 @@ class MediaCaptionBlock extends StatelessWidget {
   final String caption;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final ImmersiveViewerStageLayoutSpec layoutSpec;
+  final Key? railKey;
   final Widget? header;
   final Widget? titleTrailing;
   final Widget? preCaption;
@@ -27,7 +32,6 @@ class MediaCaptionBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
     final titleStyle = TextStyle(
       color: AppColors.white,
       fontSize: AppTypography.lg,
@@ -39,57 +43,62 @@ class MediaCaptionBlock extends StatelessWidget {
       fontWeight: FontWeight.normal,
     );
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (header != null) ...[
-            Align(alignment: Alignment.center, child: header!),
-            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
-          ],
-          if (title.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: titleStyle,
+    return ImmersiveViewerLayout.alignToRail(
+      context: context,
+      layoutSpec: layoutSpec,
+      child: SizedBox(
+        key: railKey,
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (header != null) ...[
+              Align(alignment: Alignment.center, child: header!),
+              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            ],
+            if (title.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
                     ),
-                  ),
-                  if (titleTrailing != null) ...[
-                    SizedBox(
-                      width: context.safeGetIntraGroupSpacing(SpacingSize.sm),
-                    ),
-                    titleTrailing!,
+                    if (titleTrailing != null) ...[
+                      SizedBox(
+                        width: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                      ),
+                      titleTrailing!,
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          if (title.isEmpty && preCaption != null) ...[
-            preCaption!,
-            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            if (title.isEmpty && preCaption != null) ...[
+              preCaption!,
+              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            ],
+            if (caption.isNotEmpty)
+              _buildExpandableCaption(
+                context,
+                caption: caption,
+                isExpanded: isExpanded,
+                onToggle: onToggle,
+                captionStyle: captionStyle,
+              ),
+            if (footer != null) ...[
+              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              footer!,
+            ],
           ],
-          if (caption.isNotEmpty)
-            _buildExpandableCaption(
-              context,
-              caption: caption,
-              isExpanded: isExpanded,
-              onToggle: onToggle,
-              captionStyle: captionStyle,
-            ),
-          if (footer != null) ...[
-            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
-            footer!,
-          ],
-        ],
+        ),
       ),
     );
   }

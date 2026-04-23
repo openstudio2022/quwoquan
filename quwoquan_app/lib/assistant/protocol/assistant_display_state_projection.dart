@@ -115,11 +115,8 @@ AssistantProcessDisplayState _resolveProcessDisplayState({
       : _resolveActiveStepId(processTimeline);
   final derivedBlocks = <AssistantProcessDisplayBlock>[
     ..._buildUnderstandingBlocks(processTimeline, understandingSnapshot),
-    ..._buildRetrievalBlocks(
-      processTimeline,
-      retrievalProcessing,
-      answerProcessing,
-    ),
+    ..._buildRetrievalDesignBlocks(processTimeline),
+    ..._buildRetrievalBlocks(processTimeline, retrievalProcessing),
   ];
   final mergedBlocks = _mergeProcessBlocks(
     preferred: explicitBlocks,
@@ -191,33 +188,14 @@ List<AssistantProcessDisplayBlock> _buildUnderstandingBlocks(
   RunArtifactsUnderstandingSnapshot snapshot,
 ) {
   final frame = _frameForStep(processTimeline, ProcessStepId.understanding);
-  final designFrame = _frameForStep(processTimeline, ProcessStepId.retrievalDesign);
   final status = frame?.status ?? JourneyStageStatus.pending;
-  final summary = snapshot.userFacingSummary.trim();
-  final resolutionItems = snapshot.resolutionItems
-      .where(
-        (item) =>
-            item.visibleInUnderstanding &&
-            (item.detail.trim().isNotEmpty ||
-                item.resolvedValue.trim().isNotEmpty),
-      )
-      .toList(growable: false);
-  final enriched = _enrichSummaryWithResolutions(summary, resolutionItems);
-  final designSummary = designFrame?.headline.trim() ?? '';
-  final designDetail = designFrame?.detail.trim() ?? '';
-  if (summary.isEmpty &&
-      resolutionItems.isEmpty &&
-      designSummary.isEmpty &&
-      designDetail.isEmpty) {
+  final summary = snapshot.userFacingSummary.trim().isNotEmpty
+      ? snapshot.userFacingSummary.trim()
+      : frame?.headline.trim() ?? '';
+  if (summary.isEmpty) {
     return const <AssistantProcessDisplayBlock>[];
   }
-  final narrative = _buildNarrativeParts(
-    primary: enriched.isNotEmpty ? enriched : designSummary,
-    secondary: _composeNarrativeSegments(<String>[
-      if (enriched.isNotEmpty) designSummary,
-      designDetail,
-    ]),
-  );
+  final narrative = _buildNarrativeParts(primary: summary);
   if (!narrative.hasVisibleText) {
     return const <AssistantProcessDisplayBlock>[];
   }
@@ -233,81 +211,60 @@ List<AssistantProcessDisplayBlock> _buildUnderstandingBlocks(
   ];
 }
 
-String _enrichSummaryWithResolutions(
-  String summary,
-  List<RunArtifactsUnderstandingResolutionItem> resolutionItems,
+List<AssistantProcessDisplayBlock> _buildRetrievalDesignBlocks(
+  List<ProcessTimelineFrame> processTimeline,
 ) {
-  if (resolutionItems.isEmpty) return summary;
-  final details = resolutionItems
-      .map(
-        (item) => item.detail.trim().isNotEmpty
-            ? item.detail.trim()
-            : item.resolvedValue.trim(),
-      )
-      .where((d) => d.isNotEmpty)
-      .toList(growable: false);
-  if (details.isEmpty) return summary;
-  if (summary.isEmpty) {
-    return details.join('；');
+  final frame = _frameForStep(processTimeline, ProcessStepId.retrievalDesign);
+  if (frame == null) {
+    return const <AssistantProcessDisplayBlock>[];
   }
-  final uncovered = details
-      .where((d) => !_summaryCoversDetail(summary, d))
-      .toList(growable: false);
-  if (uncovered.isEmpty) return summary;
-  final base =
-      summary.endsWith('。') || summary.endsWith('.')
-          ? summary.substring(0, summary.length - 1)
-          : summary;
-  return '$base。${uncovered.join('；')}。';
-}
-
-bool _summaryCoversDetail(String summary, String detail) {
-  final s = _stripSpacesAndPunctuation(summary);
-  final d = _stripSpacesAndPunctuation(detail);
-  if (d.length <= 6) return s.contains(d);
-  final segments = _splitDetailSegments(d);
-  for (final seg in segments) {
-    if (seg.length >= 2 && seg.length <= 6 && s.contains(seg)) return true;
+  final narrative = _buildNarrativeParts(
+    primary: frame.headline.trim(),
+    secondary: frame.detail.trim(),
+  );
+  if (!narrative.hasVisibleText) {
+    return const <AssistantProcessDisplayBlock>[];
   }
-  return false;
+  return <AssistantProcessDisplayBlock>[
+    AssistantProcessDisplayBlock(
+      blockId: 'retrieval_query_design',
+      stepId: ProcessStepId.retrievalDesign,
+      status: frame.status,
+      kind: ProcessDisplayBlockKind.summary,
+      title: narrative.title,
+      body: narrative.body,
+    ),
+  ];
 }
 
 List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   List<ProcessTimelineFrame> processTimeline,
   RetrievalProcessingSnapshot snapshot,
-  RunArtifactsAnswerProcessing answerProcessing,
 ) {
   final frame = _frameForStep(
     processTimeline,
     ProcessStepId.retrievalProcessing,
   );
   final status = frame?.status ?? JourneyStageStatus.pending;
-  final refs = snapshot.acceptedReferences
-      .where(
-        (item) =>
-            item.title.trim().isNotEmpty ||
-            item.url.trim().isNotEmpty ||
-            item.source.trim().isNotEmpty,
-      )
-      .toList(growable: false);
+  final refs =
+      ((frame?.references.isNotEmpty ?? false)
+              ? frame!.references
+              : snapshot.acceptedReferences)
+          .where(
+            (item) =>
+                item.title.trim().isNotEmpty ||
+                item.url.trim().isNotEmpty ||
+                item.source.trim().isNotEmpty,
+          )
+          .toList(growable: false);
   final summary = _resolveRetrievalSummary(frame: frame, snapshot: snapshot);
-  final readinessNarrative = answerProcessing.readinessSummary.trim().isNotEmpty
-      ? answerProcessing.readinessSummary.trim()
-      : _fallbackRetrievalReadinessNarrative(
-          snapshot: snapshot,
-          answerProcessing: answerProcessing,
-        );
-  final continuationNarrative = _buildRetrievalContinuationNarrative(
-    snapshot: snapshot,
-    answerProcessing: answerProcessing,
-    existingTexts: <String>[summary, readinessNarrative],
-  );
+  final retrievalDetail = _firstNonEmptyText(<String>[
+    (frame?.detail ?? '').trim(),
+    snapshot.expansionReason.trim(),
+  ]);
   final narrative = _buildNarrativeParts(
-    primary: summary.isNotEmpty ? summary : readinessNarrative,
-    secondary: _composeNarrativeSegments(<String>[
-      if (summary.isNotEmpty) readinessNarrative,
-      continuationNarrative,
-    ]),
+    primary: summary,
+    secondary: retrievalDetail,
   );
   final acceptedCount = snapshot.acceptedDocumentCount > 0
       ? snapshot.acceptedDocumentCount
@@ -348,57 +305,21 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   return blocks;
 }
 
-String _buildRetrievalContinuationNarrative({
-  required RetrievalProcessingSnapshot snapshot,
-  required RunArtifactsAnswerProcessing answerProcessing,
-  required Iterable<String> existingTexts,
-}) {
-  final segments = <String>[];
-  final visibleKeyPoints = snapshot.selectedKeyPoints
-      .map((item) => item.trim())
-      .where(
-        (item) => item.isNotEmpty &&
-            !_isDuplicateNarrativeText(item, existing: existingTexts),
-      )
-      .toList(growable: false);
-  if (visibleKeyPoints.isNotEmpty) {
-    segments.add('我先把${visibleKeyPoints.join('、')}这些能直接支撑回答的点拎出来。');
-  }
-  final visibleKeyFacts = answerProcessing.keyFacts
-      .map((item) => item.trim())
-      .where(
-        (item) => item.isNotEmpty &&
-            !_isDuplicateNarrativeText(item, existing: existingTexts),
-      )
-      .toList(growable: false);
-  if (visibleKeyFacts.isNotEmpty) {
-    if (visibleKeyFacts.length == 1) {
-      segments.add('回答会先围绕${visibleKeyFacts.first}展开。');
-    } else {
-      segments.add('回答会按${visibleKeyFacts.join('、')}的顺序展开。');
-    }
-  }
-  return segments.join('\n');
-}
-
-String _fallbackRetrievalReadinessNarrative({
-  required RetrievalProcessingSnapshot snapshot,
-  required RunArtifactsAnswerProcessing answerProcessing,
-}) {
-  if (answerProcessing.keyFacts.isNotEmpty) {
-    return '我会先把关键点排好顺序，再把回答写清楚。';
-  }
-  if (snapshot.selectedKeyPoints.isNotEmpty) {
-    return '我先把能直接回答你的关键信息收拢起来。';
-  }
-  return '';
-}
-
 String _composeNarrativeSegments(Iterable<String> segments) {
   return segments
       .map((segment) => segment.trim())
       .where((segment) => segment.isNotEmpty)
       .join('\n');
+}
+
+String _firstNonEmptyText(Iterable<String> values) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return '';
 }
 
 _ProcessNarrativeParts _buildNarrativeParts({
@@ -611,7 +532,10 @@ AssistantProcessDisplayBlock _mergeProcessBlock({
     title: _preferRicherProcessText(existing.title, incoming.title),
     body: _preferRicherProcessText(existing.body, incoming.body),
     items: _mergeProcessDisplayItems(existing.items, incoming.items),
-    references: _mergeRetrievalReferences(existing.references, incoming.references),
+    references: _mergeRetrievalReferences(
+      existing.references,
+      incoming.references,
+    ),
   );
 }
 

@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_route_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 
 class SkillSynthesisTarget {
@@ -30,6 +30,15 @@ class SkillSynthesisTarget {
       role: (json['role'] as String?)?.trim() ?? 'supporting',
       priority: (json['priority'] as num?)?.toInt() ?? 0,
       reason: (json['reason'] as String?)?.trim() ?? '',
+    );
+  }
+
+  factory SkillSynthesisTarget.fromRouteTarget(SkillRouteTarget target) {
+    return SkillSynthesisTarget(
+      skillId: target.skillId.trim(),
+      role: target.role.trim().isNotEmpty ? target.role.trim() : 'supporting',
+      priority: target.priority,
+      reason: target.routeNarrative.trim(),
     );
   }
 }
@@ -133,42 +142,74 @@ class SkillSynthesisInput {
 
   factory SkillSynthesisInput.fromExecution({
     required String userQuery,
-    required String routeNarrative,
-    required List<SubagentPlan> selectedTargets,
+    required SkillRouteOutput skillRoute,
     required List<AssistantSubagentRunRecord> subagentRuns,
-    List<String> pendingClarifications = const <String>[],
+    SkillSynthesisSkillResult? primarySkillResult,
     String sessionSummary = '',
   }) {
+    final selectedTargets = skillRoute.selectedTargets
+        .map(SkillSynthesisTarget.fromRouteTarget)
+        .where((item) => item.skillId.trim().isNotEmpty)
+        .toList(growable: false);
     final targetBySkillId = <String, SkillSynthesisTarget>{
-      for (var i = 0; i < selectedTargets.length; i++)
-        if (selectedTargets[i].domainId.trim().isNotEmpty)
-          selectedTargets[i].domainId.trim(): SkillSynthesisTarget(
-            skillId: selectedTargets[i].domainId.trim(),
-            role: selectedTargets[i].role.trim().isNotEmpty
-                ? selectedTargets[i].role.trim()
-                : 'supporting',
-            priority: i + 1,
-            reason: selectedTargets[i].routeNarrative.trim(),
-          ),
+      for (final target in selectedTargets) target.skillId.trim(): target,
     };
+    final resultsBySkillId = <String, SkillSynthesisSkillResult>{};
+    if (primarySkillResult != null &&
+        primarySkillResult.skillId.trim().isNotEmpty) {
+      final skillId = primarySkillResult.skillId.trim();
+      resultsBySkillId[skillId] = _resolveRoleForResult(
+        result: primarySkillResult,
+        role: targetBySkillId[skillId]?.role ?? primarySkillResult.role,
+      );
+    }
+    for (final run in subagentRuns) {
+      final skillId = run.domainId.trim();
+      if (skillId.isEmpty) {
+        continue;
+      }
+      resultsBySkillId[skillId] = _resolveRoleForResult(
+        result: run.toSkillSynthesisSkillResult(
+          role: targetBySkillId[skillId]?.role ?? 'supporting',
+        ),
+        role: targetBySkillId[skillId]?.role ?? 'supporting',
+      );
+    }
     return SkillSynthesisInput(
       userQuery: userQuery,
-      routeNarrative: routeNarrative,
-      selectedTargets: targetBySkillId.values.toList(growable: false),
-      skillResults: subagentRuns
-          .map(
-            (run) => run.toSkillSynthesisSkillResult(
-              role: targetBySkillId[run.domainId.trim()]?.role ?? 'supporting',
-            ),
-          )
-          .toList(growable: false),
-      pendingClarifications: pendingClarifications
+      routeNarrative: skillRoute.routeNarrative,
+      selectedTargets: selectedTargets,
+      skillResults: <SkillSynthesisSkillResult>[
+        for (final target in selectedTargets)
+          if (resultsBySkillId.containsKey(target.skillId.trim()))
+            resultsBySkillId.remove(target.skillId.trim())!,
+        ...resultsBySkillId.values,
+      ],
+      pendingClarifications: skillRoute.pendingClarifications
           .map((item) => item.trim())
           .where((item) => item.isNotEmpty)
           .toList(growable: false),
       sessionSummary: sessionSummary,
     );
   }
+}
+
+SkillSynthesisSkillResult _resolveRoleForResult({
+  required SkillSynthesisSkillResult result,
+  required String role,
+}) {
+  final resolvedRole = role.trim().isNotEmpty ? role.trim() : result.role.trim();
+  return SkillSynthesisSkillResult(
+    skillId: result.skillId,
+    role: resolvedRole.isNotEmpty ? resolvedRole : 'supporting',
+    status: result.status,
+    summary: result.summary,
+    acceptedEvidence: result.acceptedEvidence,
+    rejectedEvidence: result.rejectedEvidence,
+    missingSlots: result.missingSlots,
+    failureReason: result.failureReason,
+    answerReady: result.answerReady,
+  );
 }
 
 class SkillSynthesisOutput {

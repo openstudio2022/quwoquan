@@ -14,20 +14,42 @@ import (
 )
 
 type ConversationService struct {
-	repo      persistence.ChatRepository
-	cache     *cache.ConversationCache
-	publisher EventPublisher
-	profiles  ProfileSnapshotResolver
+	repo          persistence.ChatRepository
+	cache         *cache.ConversationCache
+	publisher     EventPublisher
+	profiles      ProfileSnapshotResolver
+	media         GroupAvatarAssetizer
+	syncPublisher UserSyncPublisher
+	scheduler     GroupAvatarTaskScheduler
 }
 
-func NewConversationService(repo persistence.ChatRepository, cache *cache.ConversationCache, publisher EventPublisher, profiles ProfileSnapshotResolver) *ConversationService {
+func NewConversationService(
+	repo persistence.ChatRepository,
+	cache *cache.ConversationCache,
+	publisher EventPublisher,
+	profiles ProfileSnapshotResolver,
+	media GroupAvatarAssetizer,
+	sync UserSyncPublisher,
+	scheduler GroupAvatarTaskScheduler,
+) *ConversationService {
 	if publisher == nil {
 		publisher = NoopEventPublisher()
 	}
 	if profiles == nil {
 		profiles = noopProfileResolver{}
 	}
-	return &ConversationService{repo: repo, cache: cache, publisher: publisher, profiles: profiles}
+	if scheduler == nil {
+		scheduler = NoopGroupAvatarTaskScheduler()
+	}
+	return &ConversationService{
+		repo:          repo,
+		cache:         cache,
+		publisher:     publisher,
+		profiles:      profiles,
+		media:         media,
+		syncPublisher: sync,
+		scheduler:     scheduler,
+	}
 }
 
 type CreateConversationRequest struct {
@@ -83,20 +105,22 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
-	lookup := func(uid string) (string, string) {
+	lookup := func(uid string) (string, string, string, int) {
 		if p, ok := profMap[uid]; ok {
-			return p.DisplayName, p.AvatarURL
+			return p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
 		}
-		return "", ""
+		return "", "", "", 0
 	}
 
-	creatorDN, creatorAV := lookup(req.CreatorId)
+	creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
 	creator := &model.ConversationMember{
 		ID:             generateID(),
 		ConversationId: conv.ID,
 		UserId:         req.CreatorId,
 		DisplayName:    creatorDN,
 		AvatarUrl:      creatorAV,
+		AvatarAssetId:  creatorAssetID,
+		AvatarVersion:  int64(creatorAvatarVersion),
 		MemberType:     "user",
 		Role:           "owner",
 		JoinedAt:       now,
@@ -106,13 +130,15 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	}
 
 	for i, userID := range initialMemberIds {
-		dn, av := lookup(userID)
+		dn, av, assetID, avatarVersion := lookup(userID)
 		member := &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: conv.ID,
 			UserId:         userID,
 			DisplayName:    dn,
 			AvatarUrl:      av,
+			AvatarAssetId:  assetID,
+			AvatarVersion:  int64(avatarVersion),
 			MemberType:     "user",
 			Role:           "member",
 			InvitedBy:      req.CreatorId,
@@ -135,6 +161,11 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
 		return nil, err
 	}
+	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
+		ConversationID: conv.ID,
+		ActorID:        req.CreatorId,
+		Trigger:        "conversation.created",
+	})
 
 	initState := &model.ConversationUserState{
 		ID:             generateID(),

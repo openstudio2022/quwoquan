@@ -29,6 +29,7 @@ var SupportedEventTypes = []string{
 	event.MessageRecalled,
 	event.MemberJoined,
 	event.ConversationRosterUpdated,
+	event.ConversationAvatarUpdated,
 	event.MemberLeft,
 	event.ConversationCreated,
 	event.ConversationSettingsUpdated,

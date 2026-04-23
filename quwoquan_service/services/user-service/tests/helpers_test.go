@@ -46,8 +46,8 @@ func createTestProfile(t *testing.T, userID, nickname string) {
 	}
 	phone = "t_" + phone
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO user_profiles (user_id, phone, nickname, avatar_url, bio, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', '', '', '', 'active', 1, NOW(), NOW())
+		INSERT INTO user_profiles (user_id, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', 0, '', '', '', '', 'active', 1, NOW(), NOW())
 		ON CONFLICT (user_id) DO NOTHING`,
 		userID, phone, nickname)
 	if err != nil {
@@ -59,8 +59,8 @@ func createTestPersona(t *testing.T, id, userID, displayName string, isPrimary, 
 	t.Helper()
 	subAccountID := id + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (id, user_id, sub_account_id, display_name, avatar_url, purpose_hint, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, '', '', $5, false, $6, 0, NOW(), NOW())`,
+		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, '', '', '', '', '', true, '{}', $5, false, $6, 0, NOW(), NOW())`,
 		id, userID, subAccountID, displayName, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("create test persona: %v", err)
@@ -85,8 +85,8 @@ func cleanAll(t *testing.T) {
 func createTestPersonaFull(t *testing.T, id, userID, subAccountID, displayName, isolationLevel string, isPrimary, isActive bool) {
 	t.Helper()
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (id, user_id, sub_account_id, display_name, avatar_url, purpose_hint, isolation_level, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, '', '', $5, $6, false, $7, 0, NOW(), NOW())`,
+		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, '', '', '', '', '', $5, true, '{}', $6, false, $7, 0, NOW(), NOW())`,
 		id, userID, subAccountID, displayName, isolationLevel, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("createTestPersonaFull: %v", err)

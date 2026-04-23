@@ -1,0 +1,65 @@
+version: 1
+node: runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260423-018-group-avatar-runtime-prd-baseline.yaml
+
+slices:
+  - id: G0
+    title: metadata 与 codegen 基线
+    goal: 群头像字段、chat inbox 主字段、avatar patch 类型与相关 codegen 影响面冻结
+    depends_on: []
+    acceptance_refs: [A1, A3, A4, A5, A6]
+    planned_evidence: [T1]
+    done_when:
+      - metadata 变更项清单完成
+      - verify-metadata / codegen / codegen-app 通过
+    status: implemented
+
+  - id: G1
+    title: runtime group avatar 资产化与 sourceHash
+    goal: runtime/media 支撑 avatar_group 资产类型、objectKey/URL 构建与 sourceHash 去重
+    depends_on: [G0]
+    acceptance_refs: [A2, A4]
+    planned_evidence: [T1, T3]
+    done_when:
+      - 群头像生成结果可落为统一 `MediaAsset`
+      - sourceHash 规则可验证且支持跳过重算
+    status: implemented
+
+  - id: G2
+    title: chat-service 群头像字段回写与重算任务
+    goal: chat-service 能基于 top9 规则触发重算并写入群头像新字段
+    depends_on: [G1]
+    acceptance_refs: [A1, A2, A6]
+    planned_evidence: [T1, T3]
+    done_when:
+      - 成员变化和头像变化可触发重算
+      - 群头像版本与 sourceHash 回写成功
+    status: implemented
+
+  - id: G3
+    title: avatar patch 与 realtime hint 接入
+    goal: `user.avatar.updated` 与 `conversation.avatar.updated` 进入统一 sync cursor 主模型
+    depends_on: [G0, G2]
+    acceptance_refs: [A5, A6]
+    planned_evidence: [T1, T2, T3]
+    done_when:
+      - 客户端能收到 hint 并按 cursor 拉取 avatar 相关 patch
+      - 不再创建第二套头像同步协议
+    status: implemented
+
+  - id: G4
+    title: app 切换群头像主链路
+    goal: 客户端优先消费 `groupAvatarUrl`，失败时统一回退默认群图标
+    depends_on: [G2, G3]
+    acceptance_refs: [A1]
+    planned_evidence: [T2, T3, T4]
+    done_when:
+      - 会话列表与相关页面不再主依赖成员头像列表实时拼装
+      - 默认群图标成为唯一失败兜底
+    status: implemented

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
@@ -895,6 +896,28 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           'provider': 'openai_compatible',
           'model': modelId,
           'template': resolvedPrompt.templateLog,
+          'request': <String, dynamic>{
+            'url': endpoint,
+            'method': 'POST',
+            'headers': requestHeaders,
+            'body': requestBody,
+          },
+          'response': <String, dynamic>{
+            'statusCode': streamedResponse.statusCode,
+            'body': <String, dynamic>{
+              'content': fullText,
+              'reasoning': reasoningBuffer.toString(),
+              'toolCalls': toolCalls
+                  .map(
+                    (call) => <String, dynamic>{
+                      'id': call.id,
+                      'name': call.name,
+                      'arguments': call.arguments,
+                    },
+                  )
+                  .toList(growable: false),
+            },
+          },
           'latencyMs': DateTime.now().difference(startAt).inMilliseconds,
           'streaming': true,
           'toolCallCount': toolCalls.length,
@@ -1126,6 +1149,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       supportsJsonMode: profile.supportsJsonMode,
     );
     try {
+      final startAt = DateTime.now();
       final request = http.Request('POST', Uri.parse(endpoint));
       request.headers.addAll(requestHeaders);
       request.body = jsonEncode(requestBody);
@@ -1133,6 +1157,29 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         const Duration(seconds: 60),
       );
       if (streamedResponse.statusCode >= 400) {
+        final rawBody = await streamedResponse.stream.bytesToString();
+        await _logLlmInteraction(
+          sessionId: sessionId,
+          runId: runId,
+          traceId: traceId,
+          payload: <String, dynamic>{
+            'kind': 'llm_structured_stream',
+            'provider': 'openai_compatible',
+            'model': modelId,
+            'template': resolvedPrompt.templateLog,
+            'request': <String, dynamic>{
+              'url': endpoint,
+              'method': 'POST',
+              'headers': requestHeaders,
+              'body': requestBody,
+            },
+            'response': <String, dynamic>{
+              'statusCode': streamedResponse.statusCode,
+              'body': rawBody,
+            },
+          },
+          hasError: true,
+        );
         onFailure?.call(AssistantFailureCode.modelHttp, <String, dynamic>{
           'statusCode': streamedResponse.statusCode,
           'templateId': templateId,
@@ -1190,8 +1237,49 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
               'modelId': modelId,
             });
       }
+      await _logLlmInteraction(
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        payload: <String, dynamic>{
+          'kind': 'llm_structured_stream',
+          'provider': 'openai_compatible',
+          'model': modelId,
+          'template': resolvedPrompt.templateLog,
+          'request': <String, dynamic>{
+            'url': endpoint,
+            'method': 'POST',
+            'headers': requestHeaders,
+            'body': requestBody,
+          },
+          'response': <String, dynamic>{
+            'statusCode': streamedResponse.statusCode,
+            'body': rawOutput,
+          },
+          'latencyMs': DateTime.now().difference(startAt).inMilliseconds,
+          'streaming': true,
+        },
+      );
       return rawOutput;
     } catch (error) {
+      await _logLlmInteraction(
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        payload: <String, dynamic>{
+          'kind': 'llm_structured_stream',
+          'provider': 'openai_compatible',
+          'model': modelId,
+          'request': <String, dynamic>{
+            'url': endpoint,
+            'method': 'POST',
+            'headers': requestHeaders,
+            'body': requestBody,
+          },
+          'error': error.toString(),
+        },
+        hasError: true,
+      );
       onFailure?.call(AssistantFailureCode.modelException, <String, dynamic>{
         'errorType': error.runtimeType.toString(),
         'templateId': templateId,
@@ -1373,6 +1461,98 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       },
       hasError: hasError,
     );
+    _emitConsoleReadableLlmLog(entry, hasError: hasError);
+  }
+
+  void _emitConsoleReadableLlmLog(
+    Map<String, dynamic> entry, {
+    required bool hasError,
+  }) {
+    assert(() {
+      final kind = (entry['kind'] as String?)?.trim() ?? 'llm';
+      final model = (entry['model'] as String?)?.trim() ?? modelId;
+      final template =
+          (entry['template'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final templateId = (template['templateId'] as String?)?.trim() ?? '';
+      final templateVersion =
+          (template['templateVersion'] as String?)?.trim() ?? '';
+      final request =
+          (entry['request'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final response =
+          (entry['response'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final latencyMs = (entry['latencyMs'] as num?)?.toInt() ?? 0;
+      final error = (entry['error'] as String?)?.trim() ?? '';
+      final stage = _consoleStageLabel(
+        templateId: templateId,
+        request: request,
+        kind: kind,
+      );
+      final header = StringBuffer('[AssistantModel][$kind] ');
+      header.write(hasError ? 'ERROR' : 'OK');
+      if (stage.isNotEmpty) {
+        header.write(' stage=$stage');
+      }
+      header.write(' model=$model');
+      if (templateId.isNotEmpty) {
+        header.write(' template=$templateId');
+      }
+      if (templateVersion.isNotEmpty) {
+        header.write('@$templateVersion');
+      }
+      if (latencyMs > 0) {
+        header.write(' latencyMs=$latencyMs');
+      }
+      print(header.toString());
+      for (final line in _consoleSectionLines('request', request)) {
+        print(line);
+      }
+      for (final line in _consoleSectionLines('response', response)) {
+        print(line);
+      }
+      if (error.isNotEmpty) {
+        for (final line in _consoleSectionLines('error', error)) {
+          print(line);
+        }
+      }
+      return true;
+    }());
+  }
+
+  List<String> _consoleSectionLines(String title, Object? value) {
+    return ConsolePrettyLogFormatter.renderSection(
+      prefix: '[AssistantModel] ',
+      title: title,
+      value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(value),
+    );
+  }
+
+  String _consoleStageLabel({
+    required String templateId,
+    required Map<String, dynamic> request,
+    required String kind,
+  }) {
+    if (templateId == 'synthesizer.final_answer') {
+      return 'answering';
+    }
+    if (templateId == 'planner.global_plan') {
+      final messages =
+          (request['body'] as Map?)?['messages'] as List? ?? const <Object?>[];
+      for (final item in messages) {
+        if (item is! Map) continue;
+        final content = (item['content'] as String?)?.trim() ?? '';
+        if (content.contains('[阶段提示：理解问题]')) {
+          return 'understanding';
+        }
+      }
+      return kind.contains('stream') ? 'planning_stream' : 'planning';
+    }
+    if (templateId == 'phase.output_contract.plan') {
+      return 'planning_contract';
+    }
+    return templateId.trim();
   }
 
   AssistantModelOutput _parseModelOutput(Map<String, dynamic> decoded) {

@@ -10,8 +10,8 @@ derived_from:
 
 slices:
   - id: P1
-    title: freeze identity, graph, and context metadata topology
-    goal: 收口 `ProfileSubject`、active persona、follow graph、block gate 与跨域 request context 的 metadata 真相源
+    title: freeze user and persona metadata topology
+    goal: 收口 `userId / personaId / userHandle`、active persona、follow graph、block gate 与跨域 request context 的 metadata 真相源
     depends_on: []
     acceptance_refs:
       - J1
@@ -21,13 +21,14 @@ slices:
       - T1_schema
     done_when:
       - "`user_profile / follow_edge / block_edge / content/post / messages/conversation / assistant/*` 的字段、request_context、errors 与路由边界冻结"
-      - "`ProfileSubjectView`、`ActivePersonaContextView`、`RelationshipCapabilityView` 与 graph list item 可由 metadata 表达"
+      - "`PersonaProfileView`、`ActivePersonaContextView`、`RelationshipCapabilityView` 与 graph list item 可由 metadata 表达"
+      - 历史 `OwnerAccount / SubAccount / ProfileSubject / username` 主链路命名退出 metadata
       - feature flag 与 telemetry schema 有正式落点
     status: planned
 
   - id: P2
-    title: establish codegen baseline
-    goal: 让 service、App、cloud client 与 assistant/session contract 都能消费 persona-aware 生成物
+    title: establish non-compatible codegen baseline
+    goal: 让 service、App、cloud client 与 assistant/session contract 全部消费新的用户/分身生成物
     depends_on:
       - P1
     acceptance_refs:
@@ -41,11 +42,12 @@ slices:
       - "`make -C quwoquan_service verify-metadata` 通过"
       - "`make codegen` 与 `make codegen-app` 产出可被 App 与 service 消费的生成物"
       - App / cloud / assistant 不再维护第二套 path、operation 或 request context override
+      - 旧 `sub-account / personas / profile-subject` 生成物退出主链路
     status: planned
 
   - id: P3
-    title: land owner plane and public identity contracts
-    goal: 打通分身管理台、公开身份、继承/覆写与 retired attribution 的主链路
+    title: land persona management and profile contracts
+    goal: 打通主分身管理台、公开分身资料、继承/同步建议与 retired attribution 主链路
     depends_on:
       - P2
     acceptance_refs:
@@ -55,8 +57,9 @@ slices:
       - T2_module_interaction
       - T3_cross_service_integration
     done_when:
-      - owner 只看到一个统一的分身管理台入口与列表
-      - "`ProfileSubjectView / Mutation / InheritanceState` 成为公开身份唯一真相源"
+      - 用户只看到一个统一的分身管理台入口与列表
+      - "`PersonaProfileView / Mutation / InheritanceState` 成为公开分身资料唯一真相源"
+      - `displayName / userHandle / phone / email` 统一下沉为分身字段
       - strict isolation 与 retired attribution 规则可被主页和内容域稳定消费
     status: planned
 
@@ -74,12 +77,12 @@ slices:
       - T4_user_journey
     done_when:
       - 发帖、评论、聊天、圈子、通知和助手会话默认都基于 active persona
-      - persona context 缺失时系统阻断、恢复或要求确认，不静默回退到 owner
+      - persona context 缺失时系统阻断、恢复或要求确认，不静默回退到 userId
       - assistant 与 notification 的 drift / mismatch 有明确 telemetry
     status: planned
 
   - id: P5
-    title: separate graph command and read paths
+    title: separate persona graph command and read paths
     goal: 以 `FollowEdge` command side 和 `social graph` read side 取代混杂的关系逻辑
     depends_on:
       - P4
@@ -91,13 +94,13 @@ slices:
       - T3_cross_service_integration
     done_when:
       - follow / unfollow 命令改为 persona-aware `FollowEdge` 写入
-      - follower / following 与 `RelationshipCapabilityView` 以 `ProfileSubject` 为主键稳定读取
+      - follower / following 与 `RelationshipCapabilityView` 以 `personaId` 为内部主键稳定读取
       - block gate、计数修正与列表过滤在弱网和重试下不串号
     status: planned
 
   - id: P6
-    title: validate rollout, migration, and journey evidence
-    goal: 建立 backfill、灰度、监控、回滚与 Journey 级证据闭环，确保可以安全进入 `/dev`
+    title: validate migration, rollout, and journey evidence
+    goal: 建立一次性数据重整、灰度、监控、回滚与 Journey 级证据闭环，确保统一升级可上线
     depends_on:
       - P5
     acceptance_refs:
@@ -111,7 +114,7 @@ slices:
       - T4_user_journey
       - T4_release_rehearsal
     done_when:
-      - owner-level legacy identity 到 `profileSubjectId` 的回填路径明确并完成演练
-      - 四类开关、关键指标和回滚动作可执行
+      - 历史 `user / persona / relation / content / message` 数据到新 `personaId / userHandle` 的重整路径明确并完成演练
+      - 三类开关、关键指标和回滚动作可执行
       - Journey 级主路径回归清单、灰度门槛与失败处置手册明确
     status: planned

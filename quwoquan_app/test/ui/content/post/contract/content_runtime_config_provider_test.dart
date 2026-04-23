@@ -198,4 +198,44 @@ void main() {
     expect(state.clientStateSync.flushOnForegroundResume, isFalse);
     expect(state.clientStateSync.flushOnNetworkRecovered, isTrue);
   });
+
+  test('persona feature flags 默认开启以保持现有管理面可用', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    container.read(contentRuntimeConfigProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    expect(container.read(personaManagementFeatureFlagProvider), isTrue);
+    expect(container.read(personaProfileSyncFeatureFlagProvider), isTrue);
+  });
+
+  test('remote app config 可关闭 persona management 与 sync flags', () async {
+    final container = ProviderContainer(
+      overrides: [
+        contentRepositoryProvider.overrideWithValue(
+          _RuntimeConfigRepository({
+            'content': {
+              'feature_flags': {
+                'ops.user.persona_management_v1': false,
+                'ops.user.persona_profile_sync_v1': false,
+              },
+            },
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container
+        .read(appDataSourceModeProvider.notifier)
+        .setMode(AppDataSourceMode.remote);
+    container.read(contentRuntimeConfigProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    expect(container.read(personaManagementFeatureFlagProvider), isFalse);
+    expect(container.read(personaProfileSyncFeatureFlagProvider), isFalse);
+  });
 }

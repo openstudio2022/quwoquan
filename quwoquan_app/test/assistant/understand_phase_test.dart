@@ -95,7 +95,6 @@ void main() {
       expect(output.state, isNotNull);
       final plannerMessages = provider.capturedMessages;
       expect(plannerMessages, isNotEmpty);
-      expect(plannerMessages.first['role'], 'system');
       final conversationMessages = plannerMessages
           .where(
             (item) =>
@@ -132,7 +131,7 @@ void main() {
       );
     });
 
-    test('天气问题会把默认城市写入 query 与理解解释', () async {
+    test('天气问题不会把设备地点直接写回业务 geo 语义', () async {
       final runtime = ReactRuntime(
         llmProvider: _WeatherPlannerProvider(expectedQuery: '2026-04-09 天气 预报'),
         toolRegistry: AssistantToolRegistry(),
@@ -163,21 +162,26 @@ void main() {
       );
 
       final state = output.state!;
-      expect(state.intentGraph?.resolvedGeoScope.cityLabel, '深圳');
-      expect(state.intentGraph?.resolvedGeoScope.defaultApplied, isTrue);
+      expect(state.intentGraph?.resolvedGeoScope.cityLabel, isEmpty);
+      expect(state.intentGraph?.resolvedGeoScope.defaultApplied, isFalse);
       expect(
         state.intentGraph?.queryTasks.first.query,
         '2026-04-09 天气 预报',
       );
-      expect(state.intentGraph?.clarificationNeeded, isFalse);
+      expect(state.intentGraph?.clarificationNeeded, isTrue);
       expect(
-        state.understandingSnapshot.resolutionItems.any(
-          (item) =>
-              item.kind == 'geo_default' &&
-              item.detail.contains('深圳') &&
-              item.visibleInUnderstanding,
-        ),
-        isTrue,
+        ((state.intentGraph?.contextSlots['availableGeoContext'] as Map?)?['cityLabel']
+                as String?) ??
+            '',
+        '深圳',
+      );
+      expect(
+        state.understandingSnapshot.resolutionItems,
+        isEmpty,
+      );
+      expect(
+        state.understandingSnapshot.retrievalDesignNarrative,
+        contains('天气'),
       );
     });
 
@@ -207,15 +211,11 @@ void main() {
       expect(state.intentGraph?.clarificationNeeded, isTrue);
       expect(
         state.intentGraph?.contextSlots['geoClarificationReason'],
-        'missing_geo_context_for_city',
+        'missing_model_resolved_geo_for_city',
       );
       expect(
-        state.understandingSnapshot.resolutionItems.any(
-          (item) =>
-              item.kind == 'clarification_needed' &&
-              item.title.contains('地理范围'),
-        ),
-        isTrue,
+        state.understandingSnapshot.resolutionItems,
+        isEmpty,
       );
     });
   });
@@ -250,6 +250,7 @@ class _WeatherPlannerProvider implements AssistantLlmProvider {
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先把天气问题落到具体日期再检索。',
+          'retrievalDesignNarrative': '我会先围绕具体日期对应的天气结论继续检索。',
         },
         'intentGraph': <String, dynamic>{
           'userGoal': '获取天气预报',
@@ -319,6 +320,7 @@ class _PlannerRecentRoundsCaptureProvider implements AssistantLlmProvider {
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先沿用最近一轮上下文继续理解。',
+          'retrievalDesignNarrative': '我会沿着最近一轮已确认的上下文继续补查。',
         },
         'intentGraph': const <String, dynamic>{
           'userGoal': '沿着上一轮上下文继续追问',

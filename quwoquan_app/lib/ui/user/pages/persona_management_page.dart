@@ -1,5 +1,3 @@
-// ignore_for_file: unnecessary_underscores
-
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -15,10 +13,9 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
 
-/// 管理分身页；数据来自 [UserRepository] → [PersonaManagementItemViewData]（清单 PersonaDto 投影）。
-/// 路由：/profile/personas
 class PersonaManagementPage extends ConsumerStatefulWidget {
   const PersonaManagementPage({super.key});
 
@@ -28,118 +25,26 @@ class PersonaManagementPage extends ConsumerStatefulWidget {
 }
 
 class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
-  List<PersonaManagementItemViewData> _personas = const [];
-  PersonaManagementQuotaViewData? _quota;
-  String _currentId = '';
-  bool _loading = true;
-  String? _error;
-
-  int get _maxPersonas => _quota?.maxSubAccounts ?? 5;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_load());
-      }
+      unawaited(ref.read(personaManagementProvider.notifier).load());
     });
-  }
-
-  String _resolveCurrentIdFromSummary(PersonaManagementSummaryViewData s) {
-    final ctx = s.activeContext;
-    if (ctx != null && ctx.subAccountId.isNotEmpty) return ctx.subAccountId;
-    for (final p in s.items) {
-      if (p.isActive && p.subAccountId.isNotEmpty) return p.subAccountId;
-    }
-    for (final p in s.items) {
-      if (p.isPrimary) {
-        return p.subAccountId.isNotEmpty ? p.subAccountId : p.profileSubjectId;
-      }
-    }
-    if (s.items.isNotEmpty) {
-      final p = s.items.first;
-      return p.subAccountId.isNotEmpty ? p.subAccountId : p.profileSubjectId;
-    }
-    return '';
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final repo = ref.read(userRepositoryProvider);
-      final summary = await repo.getPersonaManagementSummary();
-      if (!mounted) return;
-      setState(() {
-        _personas = summary.items;
-        _quota = summary.quota;
-        _currentId = _resolveCurrentIdFromSummary(summary);
-        _loading = false;
-      });
-    } catch (e) {
-      try {
-        final repo = ref.read(userRepositoryProvider);
-        final accounts = await repo.listSubAccounts();
-        final activeContext = await repo.getActivePersonaContext();
-        if (!mounted) return;
-        setState(() {
-          _personas = accounts;
-          _quota = PersonaManagementQuotaViewData(
-            maxSubAccounts: 5,
-            usedSubAccounts: accounts.length,
-          );
-          _currentId = activeContext.subAccountId.isNotEmpty
-              ? activeContext.subAccountId
-              : (accounts.isNotEmpty
-                    ? (accounts.first.subAccountId.isNotEmpty
-                          ? accounts.first.subAccountId
-                          : accounts.first.profileSubjectId)
-                    : '');
-          _loading = false;
-        });
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _error = e.toString();
-            _loading = false;
-          });
-        }
-      }
-    }
-  }
-
-  Future<void> _activate(PersonaManagementItemViewData persona) async {
-    final id = persona.subAccountId.isNotEmpty
-        ? persona.subAccountId
-        : persona.profileSubjectId;
-    if (id.isEmpty) return;
-    try {
-      await ref.read(userRepositoryProvider).activateSubAccount(id);
-      if (mounted) setState(() => _currentId = id);
-      await _load();
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(context, '切换失败：$e');
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColors.iosPageBackground(context);
-    final fg = AppColors.iosLabel(context);
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final accent = AppColors.iosAccent(context);
-    final secondaryStyle = isDark
-        ? ProfileIosActionStyle.outlined
-        : ProfileIosActionStyle.tinted;
+    final enabled = ref.watch(personaManagementFeatureFlagProvider);
+    final state = ref.watch(personaManagementProvider);
+    final notifier = ref.read(personaManagementProvider.notifier);
+    final quota = state.quota;
+    final canCreate =
+        quota == null || quota.usedSubAccounts < quota.maxSubAccounts;
 
     return AppScaffold(
-      backgroundColor: bg,
+      backgroundColor: AppColors.iosPageBackground(context),
       navigationBar: AppNavigationBar(
         backgroundColor: AppColors.iosSystemBackground(
           context,
@@ -158,18 +63,42 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           UITextConstants.personaManage,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
+        trailing: enabled && canCreate
+            ? AppNavigationBarIconButton(
+                icon: CupertinoIcons.add,
+                onPressed: () => _showCreateDialog(notifier),
+              )
+            : null,
       ),
-      body: _loading
-          ? const Center(child: CupertinoActivityIndicator())
-          : _error != null
+      body: !enabled
           ? Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppSpacing.containerMd),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: fgSecondary),
-                  textAlign: TextAlign.center,
-                ),
+              child: Text(
+                UITextConstants.personaManage,
+                style: TextStyle(color: AppColors.iosSecondaryLabel(context)),
+              ),
+            )
+          : state.isLoading
+          ? const Center(child: CupertinoActivityIndicator())
+          : state.error != null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: EdgeInsets.all(AppSpacing.containerMd),
+                    child: Text(
+                      state.error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                  ),
+                  CupertinoButton(
+                    onPressed: notifier.load,
+                    child: const Text(UITextConstants.retry),
+                  ),
+                ],
               ),
             )
           : ListView(
@@ -180,8 +109,30 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                     AppSpacing.interGroupLg,
               ),
               children: <Widget>[
+                if (state.pendingSyncSuggestion != null)
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                    ),
+                    child: _SuggestionCard(
+                      suggestion: state.pendingSyncSuggestion!,
+                      onApplyAll: () => _applySuggestion(
+                        notifier,
+                        state.pendingSyncSuggestion!,
+                      ),
+                      onSelectTargets: () => _showTargetPicker(
+                        notifier,
+                        state.pendingSyncSuggestion!,
+                      ),
+                      onIgnore: notifier.ignorePendingSuggestion,
+                    ),
+                  ),
+                if (state.pendingSyncSuggestion != null)
+                  SizedBox(height: AppSpacing.interGroupMd),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerMd,
+                  ),
                   child: ProfileIosSectionCard(
                     addShadow: true,
                     child: Row(
@@ -195,75 +146,48 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                           ),
                           child: Icon(
                             CupertinoIcons.person_2,
-                            color: accent,
+                            color: AppColors.iosAccent(context),
                             size: AppSpacing.iconMedium,
                           ),
                         ),
                         SizedBox(width: AppSpacing.containerSm),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                '角色切换',
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosTitle3,
-                                  fontWeight: AppTypography.semiBold,
-                                  color: fg,
-                                  letterSpacing: -0.32,
-                                ),
-                              ),
-                              SizedBox(height: AppSpacing.intraGroupXs),
-                              Text(
-                                '已创建 ${_personas.length}/$_maxPersonas 个分身，可为不同内容语境切换身份。',
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosFootnote,
-                                  color: fgSecondary,
-                                  height: AppSpacing.textLineHeightBody,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            '${state.items.length}/${quota?.maxSubAccounts ?? 5}',
+                            style: TextStyle(
+                              fontSize: AppTypography.iosTitle3,
+                              fontWeight: AppTypography.semiBold,
+                              color: AppColors.iosLabel(context),
+                            ),
                           ),
                         ),
+                        if (canCreate)
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            onPressed: () => _showCreateDialog(notifier),
+                            child: const Text(UITextConstants.personaCreate),
+                          ),
                       ],
                     ),
                   ),
                 ),
                 SizedBox(height: AppSpacing.interGroupMd),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-                  child: Row(
-                    children: <Widget>[
-                      Text(
-                        '我的分身',
-                        style: TextStyle(
-                          fontSize: AppTypography.iosSectionHeader,
-                          fontWeight: AppTypography.semiBold,
-                          color: fgSecondary,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (_personas.length < _maxPersonas)
-                        ProfileIosActionButton(
-                          label: '新增分身',
-                          icon: CupertinoIcons.add,
-                          onPressed: () =>
-                              AppToast.show(context, '新增分身能力待接入'),
-                          style: secondaryStyle,
-                          expand: false,
-                          height: AppSpacing.buttonHeightSm,
-                        ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupSm),
-                ..._personas.map(
-                  (p) => _buildPersonaCard(
-                    persona: p,
-                    fg: fg,
-                    fgSecondary: fgSecondary,
-                    accent: accent,
-                    secondaryStyle: secondaryStyle,
+                ...state.items.map(
+                  (persona) => Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      0,
+                      AppSpacing.containerMd,
+                      AppSpacing.interGroupSm,
+                    ),
+                    child: _PersonaCard(
+                      persona: persona,
+                      isCurrent: _isCurrentPersona(state, persona),
+                      onActivate: () =>
+                          notifier.activatePersona(persona.subAccountId),
+                      onEdit: () => _showEditDialog(notifier, persona),
+                      onDelete: () => _handleDelete(notifier, persona),
+                    ),
                   ),
                 ),
               ],
@@ -271,208 +195,120 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     );
   }
 
-  Widget _buildPersonaCard({
-    required PersonaManagementItemViewData persona,
-    required Color fg,
-    required Color fgSecondary,
-    required Color accent,
-    required ProfileIosActionStyle secondaryStyle,
-  }) {
-    final rowKey = persona.subAccountId.isNotEmpty
-        ? persona.subAccountId
-        : persona.profileSubjectId;
-    final isActive = _currentId == rowKey || (persona.isActive && _currentId.isEmpty);
-    final isPrimary = persona.isPrimary;
-    final avatar = persona.avatarUrl;
-    final isPrivate = persona.profileVisibility != 'public';
+  bool _isCurrentPersona(
+    PersonaManagementState state,
+    PersonaManagementItemViewData persona,
+  ) {
+    final current = state.activeContext?.subAccountId;
+    if (current == null || current.isEmpty) {
+      return persona.isActive;
+    }
+    return current == persona.subAccountId;
+  }
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        0,
-        AppSpacing.containerMd,
-        AppSpacing.interGroupSm,
-      ),
-      child: ProfileIosSectionCard(
-        addShadow: isActive,
-        backgroundColor: isActive
-            ? AppColors.iosTintedFill(context)
-            : AppColors.iosGroupedSurface(context),
-        borderColor: isActive
-            ? accent.withValues(alpha: 0.24)
-            : AppColors.iosSeparator(context).withValues(alpha: 0.16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    CircleAvatar(
-                      radius: 32,
-                      backgroundImage: avatar.isNotEmpty
-                          ? NetworkImage(avatar)
-                          : null,
-                      backgroundColor: AppColors.iosFill(context),
-                      onBackgroundImageError: (_, __) {},
-                      child: avatar.isEmpty
-                          ? Icon(
-                              CupertinoIcons.person_crop_circle_fill,
-                              color: fgSecondary,
-                            )
-                          : null,
-                    ),
-                    if (isPrimary)
-                      Positioned(
-                        top: -AppSpacing.two,
-                        right: -AppSpacing.two,
-                        child: Container(
-                          width: AppSpacing.twenty,
-                          height: AppSpacing.twenty,
-                          decoration: BoxDecoration(
-                            color: CupertinoColors.systemYellow.resolveFrom(
-                              context,
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.star_fill,
-                            size: AppSpacing.ten + AppSpacing.two,
-                            color: CupertinoColors.white,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                SizedBox(width: AppSpacing.containerSm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              persona.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.iosTitle3,
-                                fontWeight: AppTypography.semiBold,
-                                color: fg,
-                                letterSpacing: -0.32,
-                              ),
-                            ),
-                          ),
-                          if (isPrivate) ...<Widget>[
-                            SizedBox(width: AppSpacing.intraGroupXs),
-                            Icon(
-                              CupertinoIcons.lock_fill,
-                              size: AppSpacing.iconSmall,
-                              color: AppColors.iosSecondaryLabel(context),
-                            ),
-                          ],
-                        ],
-                      ),
-                      SizedBox(height: AppSpacing.intraGroupXs),
-                      Text(
-                        '@${persona.profileSubjectId}',
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: AppSpacing.containerSm),
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.containerSm,
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isActive ? accent : AppColors.iosFill(context),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusTwenty,
-                        ),
-                      ),
-                      child: Text(
-                        isActive ? '当前使用' : '未激活',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosCaption1,
-                          fontWeight: AppTypography.semiBold,
-                          color: isActive
-                              ? CupertinoColors.white
-                              : AppColors.iosSecondaryLabel(context),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: AppSpacing.containerSm),
-            ProfileIosSectionCard(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.containerSm,
-                vertical: AppSpacing.containerSm,
+  Future<void> _showCreateDialog(PersonaManagementNotifier notifier) async {
+    final quota = ref.read(personaManagementProvider).quota;
+    if (quota != null && quota.quotaReached) {
+      await notifier.trackQuotaReached(quota.maxSubAccounts);
+      AppToast.show(
+        context,
+        UITextConstants.profileSubAccountMaxReachedTemplate.replaceFirst(
+          '%s',
+          '${quota.maxSubAccounts}',
+        ),
+      );
+      return;
+    }
+
+    String displayName = '';
+    String userHandle = '';
+    String purposeHint = '';
+    String isolationLevel = 'open';
+
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
+          title: const Text(UITextConstants.personaCreateTitle),
+          content: Column(
+            children: <Widget>[
+              SizedBox(height: AppSpacing.containerSm),
+              CupertinoTextField(
+                placeholder: UITextConstants.profileSubAccountNamePlaceholder,
+                onChanged: (value) => displayName = value,
               ),
-              backgroundColor: AppColors.iosGroupedSurfaceElevated(context),
-              borderColor: AppColors.iosSeparator(
-                context,
-              ).withValues(alpha: 0.12),
-              child: Row(
-                children: <Widget>[
-                  Expanded(child: _statChip('作品', '—', fgSecondary)),
-                  Expanded(child: _statChip('关注', '—', fgSecondary)),
-                  Expanded(child: _statChip('获赞', '—', fgSecondary)),
-                ],
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoTextField(
+                placeholder: UITextConstants.personaUserHandleLabel,
+                onChanged: (value) => userHandle = value,
               ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoTextField(
+                placeholder: UITextConstants.profileSubAccountCreateTitle,
+                onChanged: (value) => purposeHint = value,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoSegmentedControl<String>(
+                groupValue: isolationLevel,
+                onValueChanged: (value) {
+                  setDialogState(() {
+                    isolationLevel = value;
+                  });
+                },
+                children: const <String, Widget>{
+                  'open': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountOpen),
+                  ),
+                  'semi': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountSemi),
+                  ),
+                  'strict': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountStrict),
+                  ),
+                },
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(UITextConstants.cancel),
             ),
-            SizedBox(height: AppSpacing.containerSm),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: ProfileIosActionButton(
-                    label: isActive ? '当前身份' : '切换到此身份',
-                    icon: isActive
-                        ? CupertinoIcons.check_mark
-                        : CupertinoIcons.arrow_right_circle,
-                    onPressed: isActive ? () {} : () => _activate(persona),
-                    style: isActive
-                        ? secondaryStyle
-                        : ProfileIosActionStyle.filled,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: ProfileIosActionButton(
-                    label: '编辑',
-                    icon: CupertinoIcons.pencil,
-                    onPressed: () => AppToast.show(context, '分身编辑待接入'),
-                    style: secondaryStyle,
-                  ),
-                ),
-                if (!isPrimary) ...<Widget>[
-                  SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: ProfileIosActionButton(
-                      label: '删除',
-                      icon: CupertinoIcons.delete,
-                      onPressed: () => AppToast.show(context, '分身删除待接入'),
-                      style: ProfileIosActionStyle.outlined,
-                    ),
-                  ),
-                ],
-              ],
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                if (displayName.trim().isEmpty) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                try {
+                  final created = await notifier.createPersona(
+                    displayName: displayName.trim(),
+                    userHandle: userHandle.trim().isEmpty
+                        ? null
+                        : userHandle.trim(),
+                    isolationLevel: isolationLevel,
+                    purposeHint: purposeHint.trim().isEmpty
+                        ? null
+                        : purposeHint.trim(),
+                  );
+                  if (!mounted || created == null) {
+                    return;
+                  }
+                  await _showCreateSuccessDialog(notifier, created);
+                } catch (e) {
+                  if (mounted) {
+                    AppToast.show(
+                      context,
+                      '${UITextConstants.profileSubAccountCreateFailed}: $e',
+                    );
+                  }
+                }
+              },
+              child: const Text(UITextConstants.create),
             ),
           ],
         ),
@@ -480,31 +316,507 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     );
   }
 
-  Widget _statChip(String label, String value, Color fgSecondary) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
+  Future<void> _showCreateSuccessDialog(
+    PersonaManagementNotifier notifier,
+    PersonaManagementItemViewData created,
+  ) async {
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.personaCreateSuccess),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(UITextConstants.personaSwitchLater),
           ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs / 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosCaption1,
-            color: fgSecondary,
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await notifier.activatePersona(created.subAccountId);
+            },
+            child: const Text(UITextConstants.personaSwitchNow),
           ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditDialog(
+    PersonaManagementNotifier notifier,
+    PersonaManagementItemViewData persona,
+  ) async {
+    final displayNameController = TextEditingController(
+      text: persona.displayName,
+    );
+    final handleController = TextEditingController(text: persona.userHandle);
+    final phoneController = TextEditingController(text: persona.phone);
+    final emailController = TextEditingController(text: persona.email);
+    String isolationLevel = persona.isolationLevel;
+
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
+          title: Text(persona.displayName),
+          content: Column(
+            children: <Widget>[
+              SizedBox(height: AppSpacing.containerSm),
+              CupertinoTextField(
+                controller: displayNameController,
+                placeholder: UITextConstants.profileSubAccountNamePlaceholder,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoTextField(
+                controller: handleController,
+                placeholder: UITextConstants.personaUserHandleLabel,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoTextField(
+                controller: phoneController,
+                placeholder: UITextConstants.personaPhoneLabel,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoTextField(
+                controller: emailController,
+                placeholder: UITextConstants.personaEmailLabel,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              CupertinoSegmentedControl<String>(
+                groupValue: isolationLevel,
+                onValueChanged: (value) {
+                  setDialogState(() {
+                    isolationLevel = value;
+                  });
+                },
+                children: const <String, Widget>{
+                  'open': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountOpen),
+                  ),
+                  'semi': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountSemi),
+                  ),
+                  'strict': Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text(UITextConstants.profileSubAccountStrict),
+                  ),
+                },
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(UITextConstants.cancel),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                try {
+                  await notifier.updatePersona(
+                    persona.subAccountId,
+                    displayName: displayNameController.text.trim(),
+                    userHandle: handleController.text.trim(),
+                    phone: phoneController.text.trim(),
+                    email: emailController.text.trim(),
+                    isolationLevel: isolationLevel,
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    AppToast.show(context, '$e');
+                  }
+                }
+              },
+              child: const Text(UITextConstants.confirm),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+    displayNameController.dispose();
+    handleController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+  }
+
+  Future<void> _handleDelete(
+    PersonaManagementNotifier notifier,
+    PersonaManagementItemViewData persona,
+  ) async {
+    try {
+      final guard = await notifier.getLifecycleGuard(persona.subAccountId);
+      if (!mounted) {
+        return;
+      }
+      if (!guard.canDelete) {
+        if (guard.canRetire) {
+          final retire = await showCupertinoDialog<bool>(
+            context: context,
+            builder: (dialogContext) => CupertinoAlertDialog(
+              title: const Text(UITextConstants.personaRetire),
+              content: Text(
+                guard.message.isNotEmpty
+                    ? guard.message
+                    : UITextConstants.personaRetireBlocked,
+              ),
+              actions: <Widget>[
+                CupertinoDialogAction(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text(UITextConstants.cancel),
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text(UITextConstants.personaRetire),
+                ),
+              ],
+            ),
+          );
+          if (retire == true) {
+            await notifier.retirePersona(persona.subAccountId);
+          }
+          return;
+        }
+        AppToast.show(
+          context,
+          guard.message.isNotEmpty
+              ? guard.message
+              : UITextConstants.personaDeleteBlocked,
+        );
+        return;
+      }
+      final confirmed = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: const Text(UITextConstants.personaDelete),
+          content: Text(
+            UITextConstants.profileSubAccountDeleteConfirmTemplate.replaceFirst(
+              '%s',
+              persona.displayName,
+            ),
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text(UITextConstants.cancel),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text(UITextConstants.personaDelete),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await notifier.deletePersona(persona.subAccountId);
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context, '$e');
+      }
+    }
+  }
+
+  Future<void> _applySuggestion(
+    PersonaManagementNotifier notifier,
+    PersonaSyncSuggestionViewData suggestion,
+  ) async {
+    try {
+      await notifier.applySyncSuggestion(suggestion: suggestion);
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context, '$e');
+      }
+    }
+  }
+
+  Future<void> _showTargetPicker(
+    PersonaManagementNotifier notifier,
+    PersonaSyncSuggestionViewData suggestion,
+  ) async {
+    final selected = <String, bool>{
+      for (final id in suggestion.targetPersonaIds) id: true,
+    };
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
+          title: const Text(UITextConstants.personaSyncApplySelected),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              children: <Widget>[
+                for (var i = 0; i < suggestion.targetPersonaIds.length; i++)
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      final id = suggestion.targetPersonaIds[i];
+                      setDialogState(() {
+                        selected[id] = !(selected[id] ?? false);
+                      });
+                    },
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            suggestion.targetDisplayNames[i],
+                            style: TextStyle(
+                              color: AppColors.iosLabel(context),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          selected[suggestion.targetPersonaIds[i]] == true
+                              ? CupertinoIcons.check_mark_circled_solid
+                              : CupertinoIcons.circle,
+                          color: AppColors.iosAccent(context),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(UITextConstants.cancel),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                final targetIds = selected.entries
+                    .where((entry) => entry.value)
+                    .map((entry) => entry.key)
+                    .toList(growable: false);
+                if (targetIds.isEmpty) {
+                  return;
+                }
+                await notifier.applySyncSuggestion(
+                  suggestion: suggestion,
+                  targetPersonaIds: targetIds,
+                );
+              },
+              child: const Text(UITextConstants.confirm),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({
+    required this.suggestion,
+    required this.onApplyAll,
+    required this.onSelectTargets,
+    required this.onIgnore,
+  });
+
+  final PersonaSyncSuggestionViewData suggestion;
+  final VoidCallback onApplyAll;
+  final VoidCallback onSelectTargets;
+  final VoidCallback onIgnore;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProfileIosSectionCard(
+      addShadow: true,
+      backgroundColor: AppColors.iosTintedFill(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(UITextConstants.personaSyncSuggestionTitle),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            UITextConstants.personaSyncSuggestionBody,
+            style: TextStyle(color: AppColors.iosSecondaryLabel(context)),
+          ),
+          SizedBox(height: AppSpacing.containerSm),
+          Wrap(
+            spacing: AppSpacing.intraGroupSm,
+            runSpacing: AppSpacing.intraGroupSm,
+            children: <Widget>[
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onApplyAll,
+                child: const Text(UITextConstants.personaSyncApplyAll),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onSelectTargets,
+                child: const Text(UITextConstants.personaSyncApplySelected),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onIgnore,
+                child: const Text(UITextConstants.personaSyncIgnore),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PersonaCard extends StatelessWidget {
+  const _PersonaCard({
+    required this.persona,
+    required this.isCurrent,
+    required this.onActivate,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final PersonaManagementItemViewData persona;
+  final bool isCurrent;
+  final VoidCallback onActivate;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final inheritanceLabel = persona.inheritsProfileFromOwner
+        ? (persona.lastProfileSyncAt != null
+              ? UITextConstants.personaInheritanceSynced
+              : UITextConstants.personaInheritanceDefault)
+        : UITextConstants.personaInheritanceCustom;
+    final syncLabel = !persona.hasContactInfo
+        ? UITextConstants.personaSyncStatusMissing
+        : (persona.lastProfileSyncAt != null
+              ? UITextConstants.personaSyncStatusReady
+              : inheritanceLabel);
+
+    return ProfileIosSectionCard(
+      addShadow: isCurrent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Flexible(
+                          child: Text(
+                            persona.displayName,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosTitle3,
+                              fontWeight: AppTypography.semiBold,
+                              color: AppColors.iosLabel(context),
+                            ),
+                          ),
+                        ),
+                        if (persona.isPrimary) ...<Widget>[
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerSm,
+                              vertical: AppSpacing.intraGroupXs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.iosTintedFill(context),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusTwenty,
+                              ),
+                            ),
+                            child: const Text(UITextConstants.personaPrimary),
+                          ),
+                        ],
+                      ],
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      '${UITextConstants.personaUserHandleLabel}: ${persona.userHandle.isEmpty ? '-' : persona.userHandle}',
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                    Text(
+                      '${UITextConstants.personaPhoneLabel}: ${persona.phone.isEmpty ? '-' : persona.phone}',
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                    Text(
+                      '${UITextConstants.personaEmailLabel}: ${persona.email.isEmpty ? '-' : persona.email}',
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      '$inheritanceLabel · $syncLabel',
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                  vertical: AppSpacing.intraGroupXs,
+                ),
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? AppColors.iosAccent(context)
+                      : AppColors.iosFill(context),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                ),
+                child: Text(
+                  isCurrent
+                      ? UITextConstants.personaCurrentUsing
+                      : UITextConstants.personaInactive,
+                  style: TextStyle(
+                    color: isCurrent
+                        ? CupertinoColors.white
+                        : AppColors.iosSecondaryLabel(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.containerSm),
+          Wrap(
+            spacing: AppSpacing.intraGroupSm,
+            runSpacing: AppSpacing.intraGroupSm,
+            children: <Widget>[
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: isCurrent ? null : onActivate,
+                child: Text(
+                  isCurrent
+                      ? UITextConstants.personaCurrentUsing
+                      : UITextConstants.personaSwitchNow,
+                ),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onEdit,
+                child: const Text(UITextConstants.profileEditLabel),
+              ),
+              if (!persona.isPrimary)
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: onDelete,
+                  child: const Text(UITextConstants.personaDelete),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

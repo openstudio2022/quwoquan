@@ -12,6 +12,7 @@ import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
@@ -640,6 +641,7 @@ class AssistantConversationController extends ChangeNotifier {
         dialogueState: structuredRead.dialogueRuntime,
         uiReferences: structuredRead.uiReferences,
         uiActions: structuredRead.uiActions,
+        extraFields: _responseTranscriptExtraFields(runResponse),
         mergedRunArtifacts: mergedRunArtifacts,
         uiUsageStats: uiUsageStats,
         persistedTurnFields: persistedTurnFields,
@@ -1094,7 +1096,7 @@ class AssistantConversationController extends ChangeNotifier {
     final host = uri.host.trim().toLowerCase();
     if (host.isEmpty) return false;
     final whitelist = referenceWhitelistHosts();
-    if (whitelist.isEmpty) return false;
+    if (whitelist.isEmpty) return true;
     for (final allowed in whitelist) {
       if (host == allowed || host.endsWith('.$allowed')) {
         return true;
@@ -1113,8 +1115,7 @@ class AssistantConversationController extends ChangeNotifier {
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
-    if (rawHosts.isNotEmpty) return rawHosts;
-    return AppConceptConstants.assistantReferenceHostWhitelist;
+    return rawHosts;
   }
 
   Map<String, dynamic> replayForMessage(String messageId) {
@@ -2307,6 +2308,27 @@ class AssistantConversationController extends ChangeNotifier {
   AssistantTranscriptTimelineRow _clearStreamingAnswerState(
     AssistantTranscriptTimelineRow row,
   ) => _patchRow(row, {'streamFinalAnswer': ''});
+
+  Map<String, dynamic> _responseTranscriptExtraFields(
+    AssistantRunResponse response,
+  ) {
+    final structured = response.structuredResponse;
+    final extra = <String, dynamic>{};
+    for (final entry in <MapEntry<String, Object?>>[
+      MapEntry('intentGraph', structured['intentGraph']),
+      MapEntry('conversationStateDecision', structured['conversationStateDecision']),
+      MapEntry('aggregationState', structured['aggregationState']),
+      MapEntry(assistantAnswerGateDecisionField, response.answerGateDecision.toJson()),
+    ]) {
+      final value = entry.value;
+      if (value is Map && value.isNotEmpty) {
+        extra[entry.key] = Map<String, dynamic>.from(
+          value.cast<String, dynamic>(),
+        );
+      }
+    }
+    return extra;
+  }
 
   Map<String, dynamic> _withDisplayOverrides(
     Map<String, dynamic> runArtifacts, {

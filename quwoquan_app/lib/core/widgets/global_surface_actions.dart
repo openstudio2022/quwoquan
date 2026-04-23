@@ -229,9 +229,9 @@ class _AddContactSheetState extends ConsumerState<_AddContactSheet> {
   @override
   void initState() {
     super.initState();
-    _contactsFuture = ref.read(chatRepositoryProvider).listContacts(
-          limit: 8.clamp(1, CloudApiDefaults.pageLimit),
-        );
+    _contactsFuture = ref
+        .read(chatRepositoryProvider)
+        .listContacts(limit: 8.clamp(1, CloudApiDefaults.pageLimit));
   }
 
   @override
@@ -249,142 +249,214 @@ class _AddContactSheetState extends ConsumerState<_AddContactSheet> {
         SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            UITextConstants.addContact,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              fontWeight: AppTypography.semiBold,
-              color: CupertinoColors.label.resolveFrom(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.interGroupMd),
-          Flexible(
-            child: FutureBuilder<List<ChatContactRowDto>>(
-              future: _contactsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return SizedBox(
-                    height: AppSpacing.minInteractiveSize * 2,
-                    child: Center(
-                      child: CupertinoActivityIndicator(
-                        color: CupertinoColors.label.resolveFrom(context),
-                      ),
-                    ),
-                  );
-                }
-                final contacts = snapshot.data ?? const <ChatContactRowDto>[];
-                if (contacts.isEmpty) {
-                  return Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                    child: Text(
-                      '暂无可添加联系人',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                return CupertinoScrollbar(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: contacts.length.clamp(0, 8),
-                    separatorBuilder: (context, index) => Container(
-                      margin: EdgeInsets.only(
-                        left: AppSpacing.largeAvatarSize + AppSpacing.md,
-                      ),
-                      height: SettingsSemanticConstants.dividerThickness,
-                      color: SettingsSemanticConstants.dividerColor(isDark),
-                    ),
-                    itemBuilder: (context, index) {
-                      final item = contacts[index];
-                      final displayName = item.displayName.trim().isNotEmpty
-                          ? item.displayName
-                          : item.userId;
-                      final username = item.userId;
-                      final avatarUrl = item.avatarUrl.trim();
-                      return CupertinoListTile(
-                        leading: Container(
-                          width: AppSpacing.avatarUserMd,
-                          height: AppSpacing.avatarUserMd,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark
-                                ? AppColors.white.withValues(alpha: 0.08)
-                                : AppColors.black.withValues(alpha: 0.06),
-                            image: avatarUrl.isEmpty
-                                ? null
-                                : DecorationImage(
-                                    image: NetworkImage(avatarUrl),
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                          alignment: Alignment.center,
-                          child: avatarUrl.isEmpty
-                              ? Icon(
-                                  CupertinoIcons.person_fill,
-                                  size: AppSpacing.iconSmall,
-                                  color: CupertinoColors.secondaryLabel
-                                      .resolveFrom(context),
-                                )
-                              : null,
-                        ),
-                        title: Text(
-                          displayName,
-                          style: TextStyle(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxListHeight = constraints.maxHeight.isFinite
+              ? (constraints.maxHeight -
+                        AppSpacing.modalHeaderHeight -
+                        SettingsSemanticConstants.conversationSheetSectionGap -
+                        AppSpacing.buttonHeight)
+                    .clamp(AppSpacing.minInteractiveSize * 2, double.infinity)
+                    .toDouble()
+              : double.infinity;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConversationSheetHeader(
+                isDark: isDark,
+                title: UITextConstants.addSameInterest,
+              ),
+              FutureBuilder<List<ChatContactRowDto>>(
+                future: _contactsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return ConversationSheetListCard(
+                      isDark: isDark,
+                      child: SizedBox(
+                        height: AppSpacing.minInteractiveSize * 2,
+                        child: Center(
+                          child: CupertinoActivityIndicator(
                             color: CupertinoColors.label.resolveFrom(context),
                           ),
                         ),
-                        subtitle: Text(
-                          username,
+                      ),
+                    );
+                  }
+                  final contacts = snapshot.data ?? const <ChatContactRowDto>[];
+                  if (contacts.isEmpty) {
+                    return ConversationSheetListCard(
+                      isDark: isDark,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                        child: Text(
+                          UITextConstants.noAddableSameInterest,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
+                            fontSize: AppTypography.base,
                             color: CupertinoColors.secondaryLabel.resolveFrom(
                               context,
                             ),
                           ),
                         ),
-                        trailing: CupertinoButton(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          color: AppColors.primaryColor.withValues(alpha: 0.12),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            AppToast.show(
-                              context,
-                              '已将 $displayName 加入联系候选',
-                            );
-                          },
-                          child: Text(
-                            UITextConstants.addContact,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: AppColors.primaryColor,
+                      ),
+                    );
+                  }
+                  return ConversationSheetListCard(
+                    isDark: isDark,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: maxListHeight),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        primary: false,
+                        padding: EdgeInsets.zero,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: contacts.length,
+                        separatorBuilder: (context, index) =>
+                            ConversationSheetDivider(
+                              isDark: isDark,
+                              dividerLeftInset:
+                                  _AddContactSheetRow.dividerLeftInset,
                             ),
-                          ),
+                        itemBuilder: (context, index) => _AddContactSheetRow(
+                          isDark: isDark,
+                          contact: contacts[index],
+                          onAdd: (displayName) {
+                            Navigator.of(context).pop();
+                            AppToast.show(context, '已将 $displayName 加入联系候选');
+                          },
                         ),
-                      );
-                    },
+                      ),
+                    ),
+                  );
+                },
+              ),
+              SizedBox(
+                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              ),
+              ConversationSheetCancelBar(
+                isDark: isDark,
+                label: UITextConstants.cancel,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AddContactSheetRow extends StatelessWidget {
+  const _AddContactSheetRow({
+    required this.isDark,
+    required this.contact,
+    required this.onAdd,
+  });
+
+  final bool isDark;
+  final ChatContactRowDto contact;
+  final ValueChanged<String> onAdd;
+
+  static double get dividerLeftInset =>
+      AppSpacing.containerMd + AppSpacing.avatarUserSm + AppSpacing.containerSm;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = contact.displayName.trim().isNotEmpty
+        ? contact.displayName
+        : contact.userId;
+    final username = contact.userId;
+    final avatarUrl = contact.avatarUrl.trim();
+    final primary =
+        SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
+    final secondary =
+        SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.containerXs,
+      ),
+      child: Row(
+        children: [
+          _AddContactAvatar(isDark: isDark, avatarUrl: avatarUrl),
+          SizedBox(width: AppSpacing.containerSm),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
+                    color: primary,
+                    height: AppTypography.lineHeightCompact,
                   ),
-                );
-              },
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    fontWeight: AppTypography.regular,
+                    color: secondary,
+                    height: AppTypography.lineHeightCompact,
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: AppSpacing.md),
-          CupertinoButton(
-            child: const Text(UITextConstants.cancel),
-            onPressed: () => Navigator.of(context).pop(),
+          SizedBox(width: AppSpacing.containerSm),
+          ConversationSheetPrimaryActionButton(
+            isDark: isDark,
+            label: UITextConstants.addContact,
+            onTap: () => onAdd(displayName),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddContactAvatar extends StatelessWidget {
+  const _AddContactAvatar({required this.isDark, required this.avatarUrl});
+
+  final bool isDark;
+  final String avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: AppSpacing.avatarUserSm,
+      height: AppSpacing.avatarUserSm,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isDark
+            ? AppColors.white.withValues(alpha: 0.08)
+            : AppColors.black.withValues(alpha: 0.06),
+        image: avatarUrl.isEmpty
+            ? null
+            : DecorationImage(
+                image: NetworkImage(avatarUrl),
+                fit: BoxFit.cover,
+              ),
+      ),
+      alignment: Alignment.center,
+      child: avatarUrl.isEmpty
+          ? Icon(
+              CupertinoIcons.person_fill,
+              size: AppSpacing.iconSmall,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+            )
+          : null,
     );
   }
 }

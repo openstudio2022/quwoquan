@@ -44,7 +44,7 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
-import 'package:quwoquan_app/ui/user/pages/sub_account_management_page.dart';
+import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
@@ -607,7 +607,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutePaths.profilePersonas,
         builder: (context, state) {
-          return const SubAccountManagementPage();
+          return const PersonaManagementPage();
         },
       ),
       GoRoute(

@@ -141,7 +141,10 @@ class LocalChatSearchStore {
         conversation['conversationTitle'],
         conversationId,
       ]);
-      final avatarUrl = _string(conversation['avatarUrl']);
+      final avatarUrl = _firstNonEmpty(<Object?>[
+        conversation['groupAvatarUrl'],
+        conversation['avatarUrl'],
+      ]);
       final avatarCompositeUrls = _stringList(
         conversation['avatarCompositeUrls'] ?? conversation['memberAvatars'],
       );
@@ -237,7 +240,10 @@ class LocalChatSearchStore {
       conversation?['title'],
       conversation?['conversationTitle'],
     ]);
-    final fallbackConversationAvatar = _string(conversation?['avatarUrl']);
+    final fallbackConversationAvatar = _firstNonEmpty(<Object?>[
+      conversation?['groupAvatarUrl'],
+      conversation?['avatarUrl'],
+    ]);
     var maxSeq = 0;
     for (final message in messages) {
       final messageId = _string(
@@ -425,7 +431,7 @@ class LocalChatSearchStore {
 
   Future<List<Map<String, dynamic>>> listConversationPayloads({
     required LocalSearchNamespace namespace,
-    int limit = 200,
+    int? limit = 200,
   }) async {
     final database = await _database;
     final rows = await database.query(
@@ -578,6 +584,126 @@ class LocalChatSearchStore {
       return 0;
     }
     return (rows.first['last_seq'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> lastUserSyncSeq({required LocalSearchNamespace namespace}) async {
+    return lastSeqForConversation(
+      namespace: namespace,
+      conversationId: '__user_sync__',
+    );
+  }
+
+  Future<void> saveUserSyncSeq({
+    required LocalSearchNamespace namespace,
+    required int syncSeq,
+  }) async {
+    final database = await _database;
+    await database.insert('chat_sync_state', <String, Object?>{
+      'namespace_key': namespace.key,
+      'conversation_id': '__user_sync__',
+      'last_seq': syncSeq,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> updateConversationAvatar({
+    required LocalSearchNamespace namespace,
+    required String conversationId,
+    required String avatarUrl,
+    int? groupAvatarVersion,
+    String? groupAvatarSourceHash,
+    bool propagateToMessages = false,
+  }) async {
+    if (conversationId.trim().isEmpty) {
+      return;
+    }
+    final database = await _database;
+    final rows = await database.query(
+      'chat_conversations',
+      columns: const <String>['payload_json'],
+      where: 'namespace_key = ? AND conversation_id = ?',
+      whereArgs: <Object?>[namespace.key, conversationId.trim()],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final payload = _decodePayload(rows.first['payload_json']);
+      payload['avatarUrl'] = avatarUrl;
+      payload['groupAvatarUrl'] = avatarUrl;
+      payload['conversationAvatarUrl'] = avatarUrl;
+      if (groupAvatarVersion != null) {
+        payload['groupAvatarVersion'] = groupAvatarVersion;
+      }
+      if (groupAvatarSourceHash != null) {
+        payload['groupAvatarSourceHash'] = groupAvatarSourceHash;
+      }
+      await database.update(
+        'chat_conversations',
+        <String, Object?>{
+          'avatar_url': avatarUrl,
+          'payload_json': jsonEncode(payload),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'namespace_key = ? AND conversation_id = ?',
+        whereArgs: <Object?>[namespace.key, conversationId.trim()],
+      );
+    }
+    if (propagateToMessages) {
+      await database.update(
+        'chat_messages',
+        <String, Object?>{'conversation_avatar_url': avatarUrl},
+        where: 'namespace_key = ? AND conversation_id = ?',
+        whereArgs: <Object?>[namespace.key, conversationId.trim()],
+      );
+    }
+  }
+
+  Future<List<String>> listConversationIds({
+    required LocalSearchNamespace namespace,
+  }) async {
+    final database = await _database;
+    final rows = await database.query(
+      'chat_conversations',
+      columns: const <String>['conversation_id'],
+      where: 'namespace_key = ?',
+      whereArgs: <Object?>[namespace.key],
+      orderBy: 'updated_at DESC',
+    );
+    return rows
+        .map((row) => row['conversation_id']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> updateContactAvatar({
+    required LocalSearchNamespace namespace,
+    required String userId,
+    required String avatarUrl,
+  }) async {
+    if (userId.trim().isEmpty || avatarUrl.trim().isEmpty) {
+      return;
+    }
+    final database = await _database;
+    final rows = await database.query(
+      'chat_contacts',
+      columns: const <String>['contact_id', 'payload_json'],
+      where: 'namespace_key = ? AND contact_id = ?',
+      whereArgs: <Object?>[namespace.key, userId.trim()],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return;
+    }
+    final payload = _decodePayload(rows.first['payload_json']);
+    payload['avatarUrl'] = avatarUrl;
+    await database.update(
+      'chat_contacts',
+      <String, Object?>{
+        'payload_json': jsonEncode(payload),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'namespace_key = ? AND contact_id = ?',
+      whereArgs: <Object?>[namespace.key, userId.trim()],
+    );
   }
 
   Future<bool> hasConversation({

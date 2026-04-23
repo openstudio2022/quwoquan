@@ -26,7 +26,11 @@ List<ProcessTimelineFrame> buildProcessTimelineFramesFromJourneyFallback(
         break;
       case JourneyStageId.search:
         if (hasVerify) {
-          designSearchEntries.add(e);
+          if (_searchEntryLooksLikeVerification(e)) {
+            processingSearchEntries.add(e);
+          } else {
+            designSearchEntries.add(e);
+          }
         } else if (_searchEntryLooksLikeVerification(e)) {
           processingSearchEntries.add(e);
         } else {
@@ -353,6 +357,7 @@ const List<ProcessStepId> assistantPrimaryProcessSteps = <ProcessStepId>[
 
 const List<ProcessStepId> assistantVisibleProcessSteps = <ProcessStepId>[
   ProcessStepId.understanding,
+  ProcessStepId.retrievalDesign,
   ProcessStepId.retrievalProcessing,
 ];
 
@@ -361,8 +366,9 @@ JourneyStageId assistantJourneyStageForProcessStep(ProcessStepId stepId) {
     case ProcessStepId.understanding:
       return JourneyStageId.analyze;
     case ProcessStepId.retrievalDesign:
-    case ProcessStepId.retrievalProcessing:
       return JourneyStageId.search;
+    case ProcessStepId.retrievalProcessing:
+      return JourneyStageId.verify;
     case ProcessStepId.answerOrganization:
       return JourneyStageId.answer;
     case ProcessStepId.unknown:
@@ -452,36 +458,23 @@ List<ProcessTimelineFrame> buildProcessTimelineFromSnapshots({
       const RunArtifactsAnswerProcessing(),
 }) {
   final frames = <ProcessTimelineFrame>[];
-  if (understandingSnapshot.userFacingSummary.trim().isNotEmpty ||
-      understandingSnapshot.resolutionItems.any(
-        (item) =>
-            item.visibleInUnderstanding &&
-            (item.detail.trim().isNotEmpty ||
-                item.resolvedValue.trim().isNotEmpty),
-      )) {
-    final understandingDetail = understandingSnapshot.resolutionItems
-        .where((item) => item.visibleInUnderstanding)
-        .map((item) => item.detail.trim())
-        .where((item) => item.isNotEmpty)
-        .take(2)
-        .join('\n');
+  if (understandingSnapshot.userFacingSummary.trim().isNotEmpty) {
     frames.add(
       buildProcessTimelineFrame(
         stepId: ProcessStepId.understanding,
         headline: understandingSnapshot.userFacingSummary.trim(),
-        detail: understandingDetail,
         understandingSnapshot: understandingSnapshot,
       ),
     );
   }
 
-  final intentSummary = understandingSnapshot.intentSummary.trim();
-  final userFacingSummary = understandingSnapshot.userFacingSummary.trim();
-  if (intentSummary.isNotEmpty && intentSummary != userFacingSummary) {
+  final retrievalDesignNarrative =
+      understandingSnapshot.retrievalDesignNarrative.trim();
+  if (retrievalDesignNarrative.isNotEmpty) {
     frames.add(
       buildProcessTimelineFrame(
         stepId: ProcessStepId.retrievalDesign,
-        headline: intentSummary,
+        headline: retrievalDesignNarrative,
         understandingSnapshot: understandingSnapshot,
       ),
     );
@@ -593,12 +586,9 @@ List<ProcessTimelineFrame> buildVisibleProcessTimeline(
   final byStep = <ProcessStepId, ProcessTimelineFrame>{
     for (final frame in normalized) frame.stepId: frame,
   };
-  final understanding = _mergeVisibleUnderstandingFrame(
-    understanding: byStep[ProcessStepId.understanding],
-    retrievalDesign: byStep[ProcessStepId.retrievalDesign],
-  );
   final visible = <ProcessTimelineFrame>[
-    if (understanding != null && understanding.hasVisibleContent) understanding,
+    ?byStep[ProcessStepId.understanding],
+    ?byStep[ProcessStepId.retrievalDesign],
     ?byStep[ProcessStepId.retrievalProcessing],
   ];
   return normalizeProcessTimeline(
@@ -713,66 +703,6 @@ ProcessTimelineFrame? _reconstructRetrievalDesignFromVisibleUnderstanding(
   );
 }
 
-ProcessTimelineFrame? _mergeVisibleUnderstandingFrame({
-  required ProcessTimelineFrame? understanding,
-  required ProcessTimelineFrame? retrievalDesign,
-}) {
-  if (understanding == null && retrievalDesign == null) {
-    return null;
-  }
-  final base = understanding ?? retrievalDesign!;
-  final retrievalDesignSnapshot =
-      retrievalDesign?.understandingSnapshot ??
-      const RunArtifactsUnderstandingSnapshot();
-  final mergedUnderstandingSnapshot = RunArtifactsUnderstandingSnapshot(
-    intentSummary: _firstNonEmpty(<String>[
-      retrievalDesignSnapshot.intentSummary,
-      base.understandingSnapshot.intentSummary,
-    ]),
-    userFacingSummary: _firstNonEmpty(<String>[
-      base.understandingSnapshot.userFacingSummary,
-      base.headline.trim(),
-    ]),
-    concernPoints: base.understandingSnapshot.concernPoints.isNotEmpty
-        ? base.understandingSnapshot.concernPoints
-        : retrievalDesignSnapshot.concernPoints,
-    emotionSignal: _firstNonEmpty(<String>[
-      base.understandingSnapshot.emotionSignal,
-      retrievalDesignSnapshot.emotionSignal,
-    ]),
-    resolutionItems: _mergeVisibleUnderstandingResolutionItems(
-      base.understandingSnapshot.resolutionItems,
-      retrievalDesignSnapshot.resolutionItems,
-    ),
-    assumptions: base.understandingSnapshot.assumptions.isNotEmpty
-        ? base.understandingSnapshot.assumptions
-        : retrievalDesignSnapshot.assumptions,
-    mismatchSignal: _firstNonEmpty(<String>[
-      base.understandingSnapshot.mismatchSignal,
-      retrievalDesignSnapshot.mismatchSignal,
-    ]),
-    carryForwardFacts: base.understandingSnapshot.carryForwardFacts.isNotEmpty
-        ? base.understandingSnapshot.carryForwardFacts
-        : retrievalDesignSnapshot.carryForwardFacts,
-    discardedAssumptions:
-        base.understandingSnapshot.discardedAssumptions.isNotEmpty
-        ? base.understandingSnapshot.discardedAssumptions
-        : retrievalDesignSnapshot.discardedAssumptions,
-  );
-  return buildProcessTimelineFrame(
-    stepId: ProcessStepId.understanding,
-    status: _mergeVisibleStatus(<JourneyStageStatus>[
-      base.status,
-      if (retrievalDesign != null) retrievalDesign.status,
-    ]),
-    headline: mergedUnderstandingSnapshot.userFacingSummary.trim().isNotEmpty
-        ? mergedUnderstandingSnapshot.userFacingSummary.trim()
-        : base.headline.trim(),
-    detail: base.detail.trim(),
-    understandingSnapshot: mergedUnderstandingSnapshot,
-  );
-}
-
 List<RunArtifactsUnderstandingResolutionItem>
 _mergeVisibleUnderstandingResolutionItems(
   List<RunArtifactsUnderstandingResolutionItem> primary,
@@ -797,25 +727,6 @@ _mergeVisibleUnderstandingResolutionItems(
   absorb(primary);
   absorb(fallback);
   return merged;
-}
-
-JourneyStageStatus _mergeVisibleStatus(List<JourneyStageStatus> statuses) {
-  if (statuses.any((status) => status == JourneyStageStatus.active)) {
-    return JourneyStageStatus.active;
-  }
-  if (statuses.any((status) => status == JourneyStageStatus.blocked)) {
-    return JourneyStageStatus.blocked;
-  }
-  if (statuses.every((status) => status == JourneyStageStatus.completed)) {
-    return JourneyStageStatus.completed;
-  }
-  if (statuses.any((status) => status == JourneyStageStatus.completed)) {
-    return JourneyStageStatus.active;
-  }
-  if (statuses.any((status) => status == JourneyStageStatus.skipped)) {
-    return JourneyStageStatus.skipped;
-  }
-  return JourneyStageStatus.pending;
 }
 
 String _firstNonEmpty(List<String> values) {
@@ -885,12 +796,43 @@ RunArtifactsUnderstandingSnapshot _firstStructuredUnderstandingSnapshot(
 RetrievalProcessingSnapshot _firstStructuredRetrievalProcessing(
   List<RetrievalProcessingSnapshot> candidates,
 ) {
+  var merged = const RetrievalProcessingSnapshot();
   for (final candidate in candidates) {
-    if (_hasStructuredMap(candidate.toJson())) {
-      return candidate;
+    if (!_hasStructuredMap(candidate.toJson())) {
+      continue;
     }
+    if (!_hasStructuredMap(merged.toJson())) {
+      merged = candidate;
+      continue;
+    }
+    merged = RetrievalProcessingSnapshot(
+      processedDocumentCount: _maxInt(<int>[
+        merged.processedDocumentCount,
+        candidate.processedDocumentCount,
+      ]),
+      acceptedDocumentCount: _maxInt(<int>[
+        merged.acceptedDocumentCount,
+        candidate.acceptedDocumentCount,
+      ]),
+      processingSummary: _firstNonEmpty(<String>[
+        merged.processingSummary,
+        candidate.processingSummary,
+      ]),
+      selectedKeyPoints: _mergeUniqueStrings(
+        merged.selectedKeyPoints,
+        candidate.selectedKeyPoints,
+      ),
+      expansionReason: _firstNonEmpty(<String>[
+        merged.expansionReason,
+        candidate.expansionReason,
+      ]),
+      acceptedReferences: _mergeRetrievalReferences(
+        merged.acceptedReferences,
+        candidate.acceptedReferences,
+      ),
+    );
   }
-  return const RetrievalProcessingSnapshot();
+  return merged;
 }
 
 RunArtifactsAnswerProcessing _firstStructuredAnswerProcessing(
@@ -928,6 +870,37 @@ List<String> _mergeUniqueStrings(List<String> primary, List<String> fallback) {
     }
   }
   return merged;
+}
+
+List<RetrievalProcessingReference> _mergeRetrievalReferences(
+  List<RetrievalProcessingReference> primary,
+  List<RetrievalProcessingReference> fallback,
+) {
+  final merged = <RetrievalProcessingReference>[];
+  final seen = <String>{};
+  for (final reference in <RetrievalProcessingReference>[
+    ...primary,
+    ...fallback,
+  ]) {
+    final key = reference.url.trim().isNotEmpty
+        ? reference.url.trim()
+        : '${reference.source.trim()}:${reference.title.trim()}';
+    if (key.trim().isEmpty || !seen.add(key)) {
+      continue;
+    }
+    merged.add(reference);
+  }
+  return merged;
+}
+
+int _maxInt(Iterable<int> values) {
+  var maxValue = 0;
+  for (final value in values) {
+    if (value > maxValue) {
+      maxValue = value;
+    }
+  }
+  return maxValue;
 }
 
 

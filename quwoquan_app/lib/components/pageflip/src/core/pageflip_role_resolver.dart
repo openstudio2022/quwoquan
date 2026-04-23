@@ -27,6 +27,12 @@ class PageflipSinglePageRoleResolver extends PageflipRoleResolver {
     final safeCurrent = pageCount == 0
         ? 0
         : currentPageIndex.clamp(0, pageCount - 1).toInt();
+    final previousPageIndex = pageCount == 0
+        ? 0
+        : (safeCurrent - 1).clamp(0, pageCount - 1).toInt();
+    final nextPageIndex = pageCount == 0
+        ? 0
+        : (safeCurrent + 1).clamp(0, pageCount - 1).toInt();
     if (pageCount == 0) {
       return const PageflipRoleState(
         currentPageIndex: 0,
@@ -39,23 +45,26 @@ class PageflipSinglePageRoleResolver extends PageflipRoleResolver {
       final rightPageIndex = (leftPageIndex + 1).clamp(0, pageCount - 1).toInt();
       return PageflipRoleState(
         currentPageIndex: safeCurrent,
-        turningPageIndex: safeCurrent,
+        turningPageIndex: direction == PageflipDirection.forward
+            ? safeCurrent
+            : previousPageIndex,
         underlayPageIndex: direction == PageflipDirection.forward
-            ? (safeCurrent + 1).clamp(0, pageCount - 1).toInt()
-            : (safeCurrent - 1).clamp(0, pageCount - 1).toInt(),
+            ? nextPageIndex
+            : safeCurrent,
         coveredPageIndex: safeCurrent,
         leftPageIndex: leftPageIndex,
         rightPageIndex: rightPageIndex,
       );
     }
 
-    final underlayPageIndex = direction == PageflipDirection.forward
-        ? (safeCurrent + 1).clamp(0, pageCount - 1).toInt()
-        : (safeCurrent - 1).clamp(0, pageCount - 1).toInt();
     return PageflipRoleState(
       currentPageIndex: safeCurrent,
-      turningPageIndex: safeCurrent,
-      underlayPageIndex: underlayPageIndex,
+      turningPageIndex: direction == PageflipDirection.forward
+          ? safeCurrent
+          : previousPageIndex,
+      underlayPageIndex: direction == PageflipDirection.forward
+          ? nextPageIndex
+          : safeCurrent,
       coveredPageIndex: safeCurrent,
     );
   }

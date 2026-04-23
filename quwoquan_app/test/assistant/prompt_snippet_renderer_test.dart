@@ -43,5 +43,14 @@ void main() {
       expect(rendered, contains('局部上下文：深圳'));
       expect(rendered, contains('你是后台子代理。目标是完成分配任务并给出结构化结论'));
     });
+
+    test(
+        'global prompt_snippets: <!-- snippet:end --> 闭合片段且不被误解析为 id=end',
+        () async {
+      final renderer = PromptSnippetRenderer();
+      final rendered = await renderer.renderSnippet('force_answer_conclusion');
+      expect(rendered, isNotEmpty);
+      expect(rendered, contains('decision=answer'));
+    });
   });
 }

@@ -3,7 +3,6 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 /// C4 持久化块允许的顶层键（与 [buildPersistedAssistantTurnFields] 及 controller spread 对齐）。
 const Set<String> kPersistedAssistantTimelinePayloadKeys = {
-  assistantTurnSchemaVersionField,
   assistantJourneyField,
   assistantUiProcessTimelineField,
   assistantProcessTimelineField,
@@ -54,9 +53,6 @@ class PersistedAssistantTimelinePayload {
 
   Map<String, dynamic> toMap() =>
       _entries.map((k, v) => MapEntry(k, _deepCloneJson(v)));
-
-  String get assistantTurnSchemaVersion =>
-      (_entries[assistantTurnSchemaVersionField] as String?)?.trim() ?? '';
 
   Map<String, dynamic> get journey =>
       (_entries[assistantJourneyField] as Map?)?.cast<String, dynamic>() ??

@@ -92,12 +92,11 @@ class ConversationSheetListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg =
-        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final radius =
-        SettingsSemanticConstants.conversationSheetCardCornerRadius;
-    final border =
-        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
+    final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final radius = SettingsSemanticConstants.conversationSheetCardCornerRadius;
+    final border = SettingsSemanticConstants.conversationSheetCardBorderColor(
+      isDark,
+    );
 
     return Container(
       width: double.infinity,
@@ -124,8 +123,7 @@ class ConversationSheetDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d =
-        SettingsSemanticConstants.conversationSheetDividerColor(isDark);
+    final d = SettingsSemanticConstants.conversationSheetDividerColor(isDark);
     return Container(
       height: AppSpacing.hairline,
       margin: EdgeInsets.only(
@@ -185,11 +183,7 @@ class ConversationSheetSingleSelectRow extends StatelessWidget {
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: AppSpacing.twenty,
-                  color: actionColor,
-                ),
+                Icon(icon, size: AppSpacing.twenty, color: actionColor),
                 const SizedBox(width: AppSpacing.containerSm),
               ],
               Expanded(
@@ -226,9 +220,10 @@ class ConversationSheetSingleSelectRow extends StatelessWidget {
                 Icon(
                   CupertinoIcons.check_mark,
                   size: AppSpacing.iconSmall,
-                  color: SettingsSemanticConstants.conversationSheetSelectionAccentColor(
-                    isDark,
-                  ),
+                  color:
+                      SettingsSemanticConstants.conversationSheetSelectionAccentColor(
+                        isDark,
+                      ),
                 ),
               ],
             ],
@@ -342,14 +337,14 @@ class ConversationSheetCancelBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg =
-        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final border =
-        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
-    final fg =
-        SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
-    final radius =
-        SettingsSemanticConstants.conversationSheetCardCornerRadius;
+    final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final border = SettingsSemanticConstants.conversationSheetCardBorderColor(
+      isDark,
+    );
+    final fg = SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
+      isDark,
+    );
+    final radius = SettingsSemanticConstants.conversationSheetCardCornerRadius;
 
     return SizedBox(
       width: double.infinity,
@@ -376,6 +371,84 @@ class ConversationSheetCancelBar extends StatelessWidget {
                   color: fg,
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 贴底对话态 sheet 行尾轻量主操作按钮（如联系人列表「添加」）。
+class ConversationSheetPrimaryActionButton extends StatelessWidget {
+  const ConversationSheetPrimaryActionButton({
+    super.key,
+    required this.isDark,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final background =
+        SettingsSemanticConstants.conversationSheetPrimaryActionBackgroundColor(
+          isDark,
+        );
+    final foreground =
+        SettingsSemanticConstants.conversationSheetPrimaryActionForegroundColor(
+          isDark,
+        );
+    final border =
+        SettingsSemanticConstants.conversationSheetInlineActionBorderColor(
+          isDark,
+        );
+    final shadow =
+        SettingsSemanticConstants.conversationSheetInlineActionShadowColor(
+          isDark,
+        );
+    final height =
+        SettingsSemanticConstants.conversationSheetInlineActionButtonHeight;
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      borderRadius: BorderRadius.circular(AppSpacing.minInteractiveSize / 2),
+      onPressed: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(height / 2),
+          border: Border.all(color: border, width: AppSpacing.hairline),
+          boxShadow: [
+            BoxShadow(
+              color: shadow,
+              blurRadius: AppSpacing.containerXs,
+              offset: const Offset(0, AppSpacing.hairline),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: SettingsSemanticConstants
+                .conversationSheetInlineActionHorizontalPadding,
+            vertical:
+                (height - AppTypography.sm * AppTypography.lineHeightCompact) /
+                2,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              fontWeight: AppTypography.semiBold,
+              color: foreground,
+              height: AppTypography.lineHeightCompact,
             ),
           ),
         ),

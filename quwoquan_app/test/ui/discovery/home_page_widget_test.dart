@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
@@ -227,7 +228,14 @@ void main() {
 
       expect(cardFinder, findsOneWidget);
       expect(tester.getSize(cardFinder).width, lessThan(screenWidth));
-      expect(tester.getSize(cardFinder).width, closeTo(720.0, 1.0));
+      final ctx = tester.element(cardFinder);
+      final cols = AppSpacing.feedResponsiveColumns(ctx);
+      final pad = AppSpacing.feedContentHorizontal(ctx);
+      final gap = AppSpacing.postPreviewGridSpacing;
+      final expected =
+          (MediaQuery.sizeOf(ctx).width - 2 * pad - (cols - 1) * gap) /
+              cols;
+      expect(tester.getSize(cardFinder).width, closeTo(expected, 1.0));
     });
 
     testWidgets('关注流文章卡覆盖封面/标题四种组合', (tester) async {

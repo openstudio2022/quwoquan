@@ -1,142 +1,394 @@
-# 统一媒体运行时 设计方案
+# runtime-media 设计方案
 
 ## 设计动因
 
-spec.md 要求提取 `runtime/media` 作为横切基础设施模块。当前媒体处理分散在 content-service（内存 mock）、circle-service（FileStore）、chat-service（无上传能力）三处。语音消息、图片消息等多个特性 block 在缺乏统一上传基础设施上。
+`runtime-media` 的 PRD 已冻结两条主线：
+
+1. 运行时媒体对象必须统一为 `AssetRef / MediaAsset / objectKey / CDN URL / version`
+2. 群头像必须以服务端预合成为主链路，并通过统一 sync 模型传播
+
+现有 `runtime/media` 代码更偏向“上传会话能力”，尚不足以支撑本次 Journey 对对象标识、群头像归属、同步 patch、OSS/COS 适配和客户端消费模型的要求。因此 `/design` 需要把“上传底座”升级为“媒体运行时基线”，并将群头像主链路纳入正式实施切片。
 
 ## 上游输入评审
 
-- spec.md 清晰，功能范围 9 条明确
-- acceptance.yaml A1-A8 全部可测量
-- 无阻断项
+| 输入 | 结论 |
+|------|------|
+| `runtime/runtime-media/spec.md` | 已冻结对象模型、归属边界、群头像主链路、同步主模型、灰度回滚要求 |
+| `runtime/runtime-media/acceptance.yaml` | Journey 级验收 J1~J3 与 R1 已可直接映射到稳定切片 |
+| `runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md` | 已冻结前 9 规则、sourceHash、默认群图标降级、统一 patch 类型 |
+| `chat-detail-avatar-display` | 页面头像展示行为已存在，需复用，不重做页面规则 |
+| `group-member-roster-version-sync` | roster revision / 合并推送 / 定点拉取是群头像更新的上游合同 |
+| `specs/runtime/media/*`、`specs/runtime/sync/*` | 作为横切基线设计文档，可直接成为本次设计的真相源输入 |
+
+结论：
+
+- `/design` 进入条件满足
+- 本次设计不需要再讨论“是否云端合成”与“是否端侧拼图兜底”
+- 需要重点收口 metadata/codegen、同步模型复用、群头像合成任务边界与客户端切换路径
 
 ## 对标输入分析
 
 | 对标 | 借鉴 | 不借鉴 | 当前差距 |
 |------|------|--------|---------|
-| AWS S3 SDK | presigned URL 模式、三段式（init/upload/complete） | multipart 分片（单文件 ≤500MB 不需要） | 当前无 OSS 集成 |
-| 七牛云上传策略 | Token 包含限制条件（大小/类型/过期） | 供应商锁定 | 当前策略硬编码在 content-service |
-| 微信媒体管线 | 分层：上传层/处理层/分发层 | 自研 CDN | 当前三层均未实现 |
+| 微信/企业微信公开 IM 资料 | realtime hint + 增量拉取 + gap fill；群头像弱实时更新策略 | 闭源私有协议与自研基础设施 | 当前群头像主链路仍未统一为单图服务端结果 |
+| AWS S3/OSS/COS 对象存储实践 | 数据库存引用、对象存储存实体、CDN 对外域名 | 业务表固化临时 URL | 当前 runtime 代码未统一 object identity 规范 |
+| 现有 `runtime/media` | UploadSession / MediaAsset / MediaStore 雏形 | 仅上传视角，不覆盖 sync/asset/ref | 当前需要扩展为 Journey 级统一媒体能力 |
 
 ## 方案对比
 
-### 方案 A：Per-Domain 媒体（现状延续）
+### 方案 A：各业务服务继续独立维护头像与媒体规则
 
-各服务各自实现上传逻辑：content-service 保留现有实现，chat-service 新增独立上传端点。
+`user-service`、`chat-service`、`content-service` 各自管理：
 
-**优点**：改动最小，各域独立演进
-**缺点**：重复代码（OSS 配置、presigned URL 生成、CDN 签名、错误处理、可观测性全部重复）；新域接入成本高；策略不一致风险
-**适用条件**：仅 1 个域需要媒体上传
+- 自己的对象路径
+- 自己的 CDN URL
+- 自己的 patch 协议
+- 自己的头像更新传播
 
-### 方案 B：统一 runtime/media 模块（选定）
+**优点**
 
-在 `runtime/media/` 定义 `MediaStore` 接口 + OSS 适配器 + 策略引擎，各服务 import 后注入使用。
+- 就地改动，看似实现快
 
-**优点**：统一接口、统一策略、统一可观测、统一治理；新域零成本接入；与现有 runtime 模块模式一致
-**缺点**：需要 content-service 迁移（风险可控，行为不变）；跨域共享模块的版本管理
-**适用条件**：≥2 个域需要媒体上传（当前 3 个域）
+**缺点**
 
-### 方案 C：独立 Media 微服务
+- 形成三套 object identity / URL / sync 规则
+- 客户端需要分别适配头像、群头像、聊天媒体、内容媒体
+- OSS/COS 切换成本高
+- 极易与当前 runtime 横切定位冲突
 
-部署独立的 media-service，各域通过 HTTP/gRPC 调用。
+**结论**
 
-**优点**：完全解耦；可独立扩缩容
-**缺点**：增加网络跳数和延迟（每次上传多一次 RPC）；运维成本高；当前规模不需要
-**适用条件**：超大规模（日均上传 >100 万次）、需要独立扩缩容
+- 拒绝。违背本次 PRD 的“runtime 统一能力”目标。
+
+### 方案 B：runtime 只统一上传，群头像逻辑留在 chat-service 自行扩展
+
+`runtime/media` 只提供 `InitUpload / CompleteUpload / SignURL` 等基础能力；  
+群头像生成、objectKey、sync patch 由 `chat-service` 自己实现。
+
+**优点**
+
+- 复用现有 runtime 代码路径
+- 对上传会话改动较小
+
+**缺点**
+
+- “统一媒体运行时”只能覆盖上传，无法覆盖对象引用与 URL 规范
+- 群头像与用户头像仍会形成两套协议
+- 同步 patch 与 object identity 无法在 runtime 统一
+
+**结论**
+
+- 不选。只能解决一半问题。
+
+### 方案 C：runtime 统一媒体对象模型与 vendor adapter，业务服务仅保留归属语义（选定）
+
+运行时统一：
+
+- `AssetRef / MediaAsset`
+- `objectKey / CDN URL / version`
+- OSS/COS adapter
+- 群头像合成结果的落库与 URL 构建
+- avatar/media 相关 patch envelope
+
+业务服务保留：
+
+- 用户头像归属
+- 群头像归属
+- top9 选择规则
+- 何时触发重算
+
+**优点**
+
+- 符合 runtime 横切定位
+- 保持 DDD 归属清晰
+- 统一客户端消费口径
+- 后续扩展内容媒体与聊天媒体成本最低
+
+**缺点**
+
+- 需要同步梳理 metadata/codegen、runtime、chat-service、user-service 和 app 消费路径
+
+**结论**
+
+- 选定方案。
 
 ## 选型决策
 
-**选定方案**：方案 B — 统一 runtime/media 模块
+**选定方案：方案 C**
 
-**理由**：
-1. 3 个域均需媒体上传，重复代码不可接受
-2. 完美对齐现有 runtime 模块模式（接口 + 实现 + observability + governance）
-3. 避免微服务开销，当前规模不需要独立进程
-4. content-service 迁移风险可控——API 路由不变，仅内部实现替换
+理由：
+
+1. 能同时满足“业务归属分治”和“公共能力统一”
+2. 不新增独立 `media-service`
+3. 不把群头像业务规则错误下沉到 runtime
+4. 可以直接沿用本次 `/prd` 已冻结的 runtime 文档基线
 
 ## 关键设计决策
 
-### KD-1: MediaStore 接口设计（已定）
+### KD-1：统一对象引用模型
 
-```go
-type MediaStore interface {
-    InitUpload(ctx, InitUploadOpts) (*UploadSession, error)
-    CompleteUpload(ctx, sessionID string) (*MediaAsset, error)
-    AbortUpload(ctx, sessionID string) error
-    GetAsset(ctx, mediaID string) (*MediaAsset, error)
-    BatchGetAssets(ctx, ids []string) ([]*MediaAsset, error)
-}
+runtime 统一媒体对象主模型：
+
+- `assetId`
+- `provider`
+- `bucket`
+- `objectKey`
+- `cdnDomain`
+- `assetKind`
+- `ownerType`
+- `ownerId`
+- `version`
+- `variants`
+
+业务表优先存：
+
+- `assetId`
+- `version`
+
+不以临时 URL 作为主数据。
+
+### KD-2：群头像归 `chat-service`，用户头像归 `user-service`
+
+边界不变：
+
+- `user-service` 维护 `avatarAssetId / avatarVersion`
+- `chat-service` 维护 `groupAvatarAssetId / groupAvatarVersion / groupAvatarSourceHash`
+- runtime 不承担“谁拥有这个对象”的业务决策
+
+### KD-3：群头像服务端预合成采用异步任务
+
+合成任务输入：
+
+- `conversationId`
+- `top9UserIdsInOrder`
+- `top9AvatarVersions`
+- `layoutVersion`
+
+输出：
+
+- 一个 `avatar_group` 类型的 `MediaAsset`
+
+流程：
+
+1. 业务层判断是否需要重算
+2. runtime media 读取用户头像引用
+3. 生成目标派生图
+4. 上传对象存储并返回 `assetId/url/version`
+5. `chat-service` 回写群头像字段
+
+### KD-4：sourceHash 驱动去重
+
+统一公式：
+
+```text
+hash(top9UserIdsInOrder + top9AvatarVersions + layoutVersion)
 ```
 
-`InitUploadOpts` 含 `Category`（messaging/content/circle）驱动策略路由。
+用途：
 
-### KD-2: 上传策略引擎（已定）
+- 避免重复重算
+- 允许任务天然幂等
 
-策略按 Category×MediaType 配置，存储在 `RuntimeConfigProvider`，支持热更新。默认策略：
+### KD-5：URL 与 objectKey 统一由 runtime 构建
 
-| Category | MediaType | MaxSize | MaxDuration | AllowedMime |
-|----------|-----------|---------|-------------|-------------|
-| messaging | audio | 5MB | 120s | audio/aac, audio/mp4 |
-| messaging | image | 10MB | — | image/jpeg, image/png, image/webp, image/gif |
-| messaging | video | 50MB | 300s | video/mp4, video/quicktime |
-| content | video | 500MB | 600s | video/mp4, video/quicktime |
-| content | image | 20MB | — | image/jpeg, image/png, image/webp |
+统一规则：
 
-### KD-3: OSS Bucket 分区策略（已定）
-
-```
-{env}-quwoquan-media/
-├── messaging/     # 消息媒体（短生命周期，90 天后降为低频存储）
-├── content/       # 内容创作（长期存储）
-└── circle/        # 圈子文件（长期存储）
+```text
+https://{cdnDomain}/{objectKey}?v={version}
 ```
 
-单 bucket + prefix 分区（而非多 bucket），简化 CDN 配置。
+业务服务禁止：
 
-### KD-4: CDN URL 签名策略（已定）
+- 自己拼 objectKey
+- 自己拼 OSS/COS URL
+- 在数据库主字段中保存签名 URL
 
-- 使用带签名的 URL（防盗链）
-- messaging 类别签名有效期 7 天（消息媒体生命周期较长但不需永久）
-- content 类别签名有效期 1 年
-- 客户端缓存时使用 mediaId 作为缓存 key，签名过期后重新获取 URL
+### KD-6：头像变化进入统一 sync patch
 
-### KD-5: 端侧 MediaUploadManager 设计（已定）
+统一 patch 类型：
 
-- 全局单例，Riverpod Provider 注入
-- 内部维护上传队列（PriorityQueue，messaging 优先于 content）
-- 并发限制 3 个（Semaphore）
-- 重试策略：3 次指数退避（1s→2s→4s）
-- 离线队列：Hive Box 持久化，NetworkConnectivity 监听恢复
-- 进度回调：StreamController 广播
+- `user.avatar.updated`
+- `conversation.avatar.updated`
 
-### KD-6: 端侧 MediaDownloadCache 设计（已定）
+realtime 只推 hint，客户端再按 cursor 拉增量。
 
-- LRU 缓存，容量 200MB（可配置）
-- 缓存目录：`getApplicationCacheDirectory()/media_cache/`
-- 缓存 key：mediaId（不是 URL，避免签名变更导致 cache miss）
-- 下载队列：并发 5 个
-- 流式播放支持：返回 File path 供 just_audio 加载
+### KD-7：群头像失败只降级默认群图标
 
-## 适用场景与约束
+本次不做端侧拼图兜底。  
+失败策略：
 
-- **适用**：所有需要持久化存储的媒体文件，file size ≤ 500MB
-- **不适用**：实时流媒体（WebRTC）、超大文件（需 multipart）
-- **局限**：单一 OSS 供应商；无自动转码管线（后续演进）
+- 服务端重算失败：保留旧群头像；没有旧值时显示默认群图标
+- 客户端拉取失败：显示默认群图标
 
-## Story 与测试层映射
+### KD-8：复用既有 roster revision 与消息 sync 主模型
 
-| Story (L4) | T1 契约 | T2 模块 | T3 集成 | T4 旅程 |
-|------------|---------|---------|---------|---------|
-| upload-session-and-cdn-delivery | 接口编译+策略 codegen | MockMediaStore+Manager 单测 | OSS 端到端+CDN 签名 | content 迁移+端侧上传 |
+群头像更新不创建第二套本地版本号。
+
+依赖：
+
+- `group-member-roster-version-sync` 的 `membersRosterRevision / updatedAt`
+- 既有 `realtime hint + sync pull` 路径
+
+## metadata / codegen 方案
+
+本次设计涉及 metadata/codegen，但在 `/design` 阶段先冻结方案，不在此阶段直接改契约。
+
+### 计划中的 metadata 影响面
+
+- `contracts/metadata/messages/conversation/fields.yaml`
+  - 增 `groupAvatarAssetId`
+  - 增 `groupAvatarVersion`
+  - 增 `groupAvatarSourceHash`
+  - 可选增 `groupAvatarStatus`
+- `contracts/metadata/messages/conversation/projections/chat_inbox.yaml`
+  - 主头像字段切向 `groupAvatarUrl`
+  - `avatarCompositeUrls` 退为兼容字段或迁移期字段
+- `contracts/metadata/messages/conversation/events.yaml`
+  - 增 `ConversationAvatarUpdated`
+- `contracts/metadata/realtime/*` 或对应 sync 契约
+  - 增 avatar patch 类型与 envelope 字段
+- `contracts/metadata/user/user_profile/*`
+  - 明确 `avatarVersion`
+
+### G1 执行结果
+
+已执行：
+
+```bash
+make -C quwoquan_service verify-metadata
+make codegen
+make codegen-app
+```
+
+结果：通过。  
+说明当前仓库 baseline 可继续承接下一步 metadata 设计变更。
+
+## 字段演进、迁移与回填
+
+### 阶段 1：加字段，不切主链路
+
+- 增加群头像新字段
+- 保留旧 `avatarCompositeUrls`
+- 生产端先写新字段
+
+### 阶段 2：双读
+
+客户端优先：
+
+1. `groupAvatarUrl`
+2. 默认群图标
+
+迁移期若需要观察兼容性，可短期保留旧字段，但不再作为主逻辑输入。
+
+### 阶段 3：单读
+
+- 客户端只读新字段
+- 服务端停止依赖旧列表拼图语义
+
+### 阶段 4：清理
+
+- 评估移除或降级 `avatarCompositeUrls`
+
+## 阶段 2 高标准准出补充
+
+当前实现把阶段 2 准出拆成两层：
+
+- **功能准出**：`groupAvatarUrl` 已成为客户端主读取路径，默认群图标是唯一失败兜底。
+- **高标准准出**：在功能准出之上，要求服务端群头像任务具备 Redis-backed 的可恢复/可重试/可去重能力；`runtime/sync` 对 patch 缺洞返回显式 `requiresResync`；客户端在 patch 应用时同步写入 `groupAvatarVersion` 并转入全量修复路径。
+
+这意味着阶段 2 已不再允许仅以“非阻塞 goroutine + 最终靠运气补齐”作为准出说明。
+
+## feature flag、观测、SLO 验证与回滚
+
+### feature flag
+
+- `chat.group_avatar_precompose_enabled`
+- `runtime.avatar_patch_enabled`
+
+### 关键观测
+
+- `quwoquan_runtime_media_group_avatar_recompute_total`
+- `quwoquan_runtime_media_group_avatar_recompute_duration_ms`
+- `quwoquan_runtime_media_patch_fanout_total`
+- `quwoquan_runtime_media_patch_fanout_recipient_total`
+- `quwoquan_runtime_media_sync_pull_total`
+- `quwoquan_runtime_media_sync_requires_resync_total`
+- `chat-service` 通过 `/metrics/runtime-media` 暴露上述快照，供预发与灰度核查
+
+### 回滚
+
+1. 关闭 `runtime.avatar_patch_enabled`
+2. 关闭 `chat.group_avatar_precompose_enabled`
+3. 客户端仅显示默认群图标
+
+回滚要求：
+
+- 不影响消息主链路
+- 不影响用户头像主链路
+
+## TDD / ATDD 策略
+
+### T1
+
+- metadata 字段与 patch schema 契约测试
+- objectKey / URL builder contract
+- sourceHash contract
+
+### T2
+
+- 群头像展示组件与默认图标降级
+- sync patch handler
+
+### T3
+
+- 用户头像变更 -> 群头像重算 -> patch -> 客户端刷新
+- 成员加入离开 -> 群头像重算 -> 客户端刷新
+
+### T4
+
+- 双设备 / 双账号会话列表群头像一致性
+- 弱网下旧图保留 + 最终一致刷新
+
+### T4 受控演练入口
+
+若本轮仍不引入全自动真机链路，至少需要保留一套固定、可复演的预发准出步骤：
+
+1. 准备两个账号/两台设备，同时登录同一群聊。
+2. 在设备 A 执行建群、加人、退群，以及前 9 成员头像更新。
+3. 在设备 B 弱网条件下观察：
+   - 旧图是否保留而非闪成非法状态；
+   - 收到 hint 后是否进入 cursor 拉取；
+   - 遇到 gap 时是否转入 `requiresResync` 的全量修复。
+4. 恢复正常网络后确认两端 `groupAvatarUrl/groupAvatarVersion` 一致。
+
+若该固定预发演练未执行，阶段 2 只能宣称达到“功能准出”，不能宣称“高标准准出全部完成”。
+
+发布级收口产物统一冻结为：
+
+- `specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md`
+- `specs/feature-tree/runtime/runtime-media/observability-and-rollback.md`
+- `specs/feature-tree/runtime/runtime-media/capacity-validation.md`
+- `specs/feature-tree/runtime/runtime-media/automation-gates.md`
+
+其中：
+
+- `make gate-runtime-media` 用于本地高频回归；
+- `make gate-runtime-media-full` 必须结合真实 `RUNTIME_MEDIA_T4_EVIDENCE` 一起执行，不能用空模板替代已执行证据。
+
+## plan slice 与 T1~T4 证据矩阵映射
+
+| Slice | 目标 | T1 | T2 | T3 | T4 |
+|------|------|----|----|----|----|
+| M0 | metadata/codegen 设计基线 | ✓ | | | |
+| M1 | runtime media 资产与 URL 规范 | ✓ | | ✓ | |
+| M2 | chat-service 群头像字段与重算任务 | ✓ | | ✓ | |
+| M3 | avatar patch + realtime hint + cursor pull | ✓ | ✓ | ✓ | |
+| M4 | app 切主链路与默认图标降级 | | ✓ | ✓ | ✓ |
+| M5 | 灰度、观测、回滚与清理 | ✓ | | ✓ | ✓ |
 
 ## 未来演进
 
-1. **媒体处理管线**：转码、缩略图生成、波形提取（触发条件：content 域需要视频转码时）
-2. **多云 OSS**：OSS 适配器抽象允许切换供应商（触发条件：业务需多云部署时）
-3. **分片上传**：对 >500MB 文件支持 multipart（触发条件：视频创作支持超长视频时）
-4. **CDN 智能路由**：根据用户地理位置选择最近 CDN 节点（触发条件：用户覆盖多区域时）
-
-## 遗留带规划任务
-
-- 媒体审核管线（内容安全扫描）：待内容安全供应商对接后启动
-- OSS 生命周期管理（messaging 90 天降频、aborted 会话清理）：待运维基础设施就绪后启动
+1. 自定义群头像上传
+2. 媒体审核与转码管线
+3. 内容媒体全面接入统一资产模型
+4. 更细粒度的多云/多 CDN 策略

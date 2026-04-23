@@ -2,12 +2,12 @@ version: 1
 aggregate: UserProfile
 
 # 语义说明：
-#   UserProfile = OwnerAccount（主控账号，管理平面）
-#   Persona     = SubAccount（子账号，应用平面，强隔离）
+#   UserProfile = 用户根实体（私有管理平面）
+#   Persona     = 用户分身（应用平面，强隔离）
 
 entities:
   UserProfile:
-    description: 主控账号（OwnerAccount）——登录凭证、设备、恢复、子账号的管理容器
+    description: 用户根实体——登录凭证、设备、恢复、审计与多分身管理容器
     fields:
       - name: userId
         type: string
@@ -48,6 +48,26 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         recommend_feature: false
+
+      - name: avatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 用户头像资产主键；作为头像真相源的稳定引用
+
+      - name: avatarVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 用户头像版本号；用于群头像重算与 patch 幂等
 
       - name: backgroundUrl
         type: string
@@ -206,7 +226,7 @@ entities:
         recommend_feature: false
 
   Persona:
-    description: 子账号（SubAccount）——应用内真实身份主体，强隔离，外部不可关联到同一 OwnerAccount
+    description: 用户分身——应用内真实身份主体，强隔离，外部不可关联到同一用户根实体
     fields:
       - name: id
         type: string
@@ -231,6 +251,33 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: userHandle
+        type: string
+        constraints: [NULLABLE, UK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 分身用户号；全局唯一、用户可修改、用于公开标识
+
+      - name: phone
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+        description: 当前分身绑定手机号；默认继承主分身，可单独改写
+
+      - name: email
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+        description: 当前分身绑定邮箱；默认继承主分身，可单独改写
 
       - name: avatarUrl
         type: string
@@ -1065,7 +1112,7 @@ entities:
         ops_exposure: read
 
   PersonaManagementItemView:
-    description: owner 私有的分身管理列表项视图
+    description: 用户私有的分身管理列表项视图
     fields:
       - name: profileSubjectId
         type: string
@@ -1090,6 +1137,30 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: userHandle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: phone
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: email
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
 
       - name: avatarUrl
         type: string
@@ -1176,6 +1247,14 @@ entities:
       - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastActivatedAt
+        type: timestamp
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -1452,6 +1531,30 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: userHandle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: phone
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+
+      - name: email
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
 
       - name: avatarUrl
         type: string

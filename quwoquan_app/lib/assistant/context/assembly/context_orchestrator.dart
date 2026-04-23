@@ -24,11 +24,13 @@ class PersonalAssistantContextOrchestrator {
     required String query,
     required List<Map<String, dynamic>> sessionHistory,
     int recentRoundsLimit = defaultRecentDialogueRoundsLimit,
+    int recentOlderRoundsLimit = defaultOlderRecentDialogueRoundsLimit,
   }) {
     query.trim();
     final referenceQueries = _recentUserQueries(
       sessionHistory,
       limit: recentRoundsLimit,
+      olderLimit: recentOlderRoundsLimit,
     );
     final typedHints = _continuityHintsFromHistory(sessionHistory);
     final continuityMode = parseContextContinuityMode(
@@ -447,8 +449,13 @@ class PersonalAssistantContextOrchestrator {
   List<String> _recentUserQueries(
     List<Map<String, dynamic>> sessionHistory, {
     required int limit,
+    required int olderLimit,
   }) {
-    final rounds = buildRecentDialogueRounds(sessionHistory, limit: limit);
+    final rounds = buildRecentDialogueRounds(
+      sessionHistory,
+      limit: limit,
+      olderLimit: olderLimit,
+    );
     final fromRounds = recentUserQueriesFromRounds(rounds);
     if (fromRounds.isNotEmpty) {
       return fromRounds;

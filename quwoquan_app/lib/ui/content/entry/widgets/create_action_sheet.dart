@@ -39,17 +39,9 @@ class CreateActionSheet extends StatelessWidget {
       isDark,
       ColorType.surfaceElevated,
     );
-    final cancelBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceMuted,
-    );
     final dividerColor = AppColorsFunctional.getColor(
       isDark,
       ColorType.separatorSubtle,
-    );
-    final cancelForeground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
     );
 
     final createActions = <_SheetActionSpec>[
@@ -105,41 +97,48 @@ class CreateActionSheet extends StatelessWidget {
         SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
       panelKey: TestKeys.modalBottomSheetPanel,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < orderedGroups.length; i++) ...[
-                    _SheetActionGroup(
-                      actions: orderedGroups[i],
-                      backgroundColor: blockBackground,
-                      dividerColor: dividerColor,
-                      foregroundColor: AppColors.primaryColor,
-                    ),
-                    SizedBox(height: AppSpacing.interGroupSm),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxActionHeight = constraints.maxHeight.isFinite
+              ? (constraints.maxHeight -
+                        AppSpacing.buttonHeight -
+                        AppSpacing.interGroupSm)
+                    .clamp(AppSpacing.minInteractiveSize * 2, double.infinity)
+                    .toDouble()
+              : double.infinity;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxActionHeight),
+                child: ListView(
+                  shrinkWrap: true,
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    for (var i = 0; i < orderedGroups.length; i++) ...[
+                      _SheetActionGroup(
+                        actions: orderedGroups[i],
+                        backgroundColor: blockBackground,
+                        dividerColor: dividerColor,
+                        foregroundColor: AppColors.primaryColor,
+                      ),
+                      SizedBox(height: AppSpacing.interGroupSm),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ),
-          _SheetActionGroup(
-            actions: <_SheetActionSpec>[
-              _SheetActionSpec(
+              ConversationSheetCancelBar(
+                isDark: isDark,
                 label: UITextConstants.cancel,
-                onPressed: onCancel,
+                onTap: onCancel,
               ),
             ],
-            backgroundColor: cancelBackground,
-            dividerColor: dividerColor,
-            foregroundColor: cancelForeground,
-          ),
-        ],
+          );
+        },
       ),
     );
   }

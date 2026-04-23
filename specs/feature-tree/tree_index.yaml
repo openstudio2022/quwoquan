@@ -2211,6 +2211,16 @@ features:
           status: in_progress
           tags: []
           children:
+            - id: group-avatar-server-precompose-and-unified-sync-contract
+              name: group-avatar-server-precompose-and-unified-sync-contract
+              level: L3_story
+              path: runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract
+              domain: ""
+              status: specified
+              tags:
+                - media
+                - avatar
+                - sync
             - id: media-upload-and-storage
               name: media-upload-and-storage
               level: L3_story

@@ -76,9 +76,13 @@ class BootstrapPhase implements Phase {
     final recentRoundsLimit = resolveRecentDialogueRoundsLimit(
       request.contextScopeHint,
     );
+    final olderRecentRoundsLimit = resolveOlderRecentDialogueRoundsLimit(
+      request.contextScopeHint,
+    );
     final recentDialogueRounds = sessionManager.recentDialogueRounds(
       sessionId,
       limit: recentRoundsLimit,
+      olderLimit: olderRecentRoundsLimit,
     );
     final previousProviderReasoningContinuation =
         _resolveProviderReasoningContinuation(latestAssistant);
@@ -100,6 +104,8 @@ class BootstrapPhase implements Phase {
       sessionHistory: priorSessionHistory,
       previousIntentGraph: previousIntentGraph,
       previousAnswerSummary: previousAnswerSummary,
+      recentRoundsLimit: recentRoundsLimit,
+      olderRecentRoundsLimit: olderRecentRoundsLimit,
     );
     final continuityOverrideSlots =
         (request.contextScopeHint['continuityOverrideSlots'] as Map?)
@@ -148,6 +154,7 @@ class BootstrapPhase implements Phase {
         ? await sessionManager.summarizeRecentAsync(
             sessionId,
             roundsLimit: recentRoundsLimit,
+            roundsOlderLimit: olderRecentRoundsLimit,
             summarizer: (transcript) => _summarizeWithLlm(
               transcript: transcript,
               sessionId: sessionId,
@@ -475,10 +482,14 @@ class BootstrapPhase implements Phase {
     required List<Map<String, dynamic>> sessionHistory,
     required IntentGraph? previousIntentGraph,
     required String previousAnswerSummary,
+    required int recentRoundsLimit,
+    required int olderRecentRoundsLimit,
   }) {
     final seeded = contextOrchestrator.buildContinuityPolicy(
       query: query,
       sessionHistory: sessionHistory,
+      recentRoundsLimit: recentRoundsLimit,
+      recentOlderRoundsLimit: olderRecentRoundsLimit,
     );
     if (_shouldCarryPreviousTurn(seeded)) return seeded;
     final hasPriorTurn =

@@ -34,7 +34,7 @@
 - 禁止用用户可见字符串、中文文案、label 文本做行为路由
 - 禁止在 engine、react、tool 中新增 `contains()` / `RegExp` 语义分类
 - 协议与值域应优先使用 typed contract、enum、schema
-- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议，当前运行时禁止继续保留读取兼容；当前基线为 `assistant_turn_v4`
+- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议；历史不兼容仅允许在启动加载阶段完成一次转换，运行时统一只处理 `assistant_turn`
 
 ### 2.3 提示词与文案约束
 

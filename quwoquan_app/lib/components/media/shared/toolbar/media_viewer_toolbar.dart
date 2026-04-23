@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
@@ -38,46 +39,42 @@ class MediaViewerTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
     final verticalPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
     final statusBarTop = MediaQuery.of(context).padding.top;
     final showPositionInBar = showPosition && !_isBackOnly;
     final showAuthorInBar = !_isBackOnly;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          padding: EdgeInsets.only(
-            left: horizontalPadding,
-            right: horizontalPadding,
-            top: statusBarTop + verticalPadding,
-            bottom: verticalPadding,
-          ),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.overlayStrong,
-                AppColors.transparent,
+    return Container(
+      padding: EdgeInsets.only(
+        top: statusBarTop + verticalPadding,
+        bottom: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.overlayStrong,
+            AppColors.transparent,
+          ],
+        ),
+      ),
+      child: ImmersiveViewerLayout.alignToRail(
+        context: context,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildLeftGroup(context, showPositionInBar),
+                _buildMoreButton(context),
               ],
             ),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildLeftGroup(context, showPositionInBar),
-                  _buildMoreButton(context),
-                ],
-              ),
-              if (showAuthorInBar) _buildAuthorInfo(context),
-            ],
-          ),
-        );
-      },
+            if (showAuthorInBar) _buildAuthorInfo(context),
+          ],
+        ),
+      ),
     );
   }
 
@@ -325,14 +322,11 @@ class MediaViewerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
     final bottomPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Container(
       padding: EdgeInsets.only(
-        left: horizontalPadding,
-        right: horizontalPadding,
         top: context.safeGetIntraGroupSpacing(SpacingSize.sm),
         bottom: safeBottom + bottomPadding,
       ),
@@ -346,44 +340,47 @@ class MediaViewerBottomBar extends StatelessWidget {
           ],
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildActionSlot(
-              context,
-              iconWidget: Icon(
-                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                color: isLiked ? AppColors.error : AppColors.white,
-                size: AppSpacing.iconMedium,
+      child: ImmersiveViewerLayout.alignToRail(
+        context: context,
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildActionSlot(
+                context,
+                iconWidget: Icon(
+                  isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                  color: isLiked ? AppColors.error : AppColors.white,
+                  size: AppSpacing.iconMedium,
+                ),
+                count: likeCount,
+                onTap: onLike,
               ),
-              count: likeCount,
-              onTap: onLike,
             ),
-          ),
-          Expanded(
-            child: _buildActionSlot(
-              context,
-              iconWidget: Icon(
-                CupertinoIcons.arrowshape_turn_up_right,
-                color: AppColors.white,
-                size: AppSpacing.iconMedium,
+            Expanded(
+              child: _buildActionSlot(
+                context,
+                iconWidget: Icon(
+                  CupertinoIcons.arrowshape_turn_up_right,
+                  color: AppColors.white,
+                  size: AppSpacing.iconMedium,
+                ),
+                count: shareCount,
+                onTap: onShare,
               ),
-              count: shareCount,
-              onTap: onShare,
             ),
-          ),
-          Expanded(
-            child: _buildActionSlot(
-              context,
-              iconWidget: AppBubbleIcon(
-                size: AppSpacing.iconMedium,
-                color: AppColors.white,
+            Expanded(
+              child: _buildActionSlot(
+                context,
+                iconWidget: AppBubbleIcon(
+                  size: AppSpacing.iconMedium,
+                  color: AppColors.white,
+                ),
+                count: commentCount,
+                onTap: onComment,
               ),
-              count: commentCount,
-              onTap: onComment,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

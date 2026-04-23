@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
@@ -1226,15 +1225,20 @@ class _ConversationTile extends StatelessWidget {
     return ChatTimeFormatter.formatForConversationList(t);
   }
 
-  Widget _buildConversationAvatar() {
+  Widget _buildConversationAvatar(BuildContext context) {
     final type = conversation.type;
     final isGroup = type == 'group';
 
     if (isGroup) {
-      return GroupAvatarGrid(
-        size: _avatarSize,
-        avatarUrls: conversation.avatarCompositeUrls,
-      );
+      final groupAvatarUrl = conversation.groupAvatarUrl.trim();
+      if (groupAvatarUrl.isNotEmpty) {
+        return RoundedSquareAvatar(
+          size: _avatarSize,
+          imageUrl: groupAvatarUrl,
+          name: conversation.title,
+        );
+      }
+      return _buildDefaultGroupAvatar(context);
     }
 
     return RoundedSquareAvatar(
@@ -1274,7 +1278,7 @@ class _ConversationTile extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                _buildConversationAvatar(),
+                _buildConversationAvatar(context),
                 if (isEncrypted)
                   Positioned(
                     right: -2,
@@ -1421,6 +1425,22 @@ class _ConversationTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildDefaultGroupAvatar(BuildContext context) {
+    return Container(
+      width: _avatarSize,
+      height: _avatarSize,
+      decoration: BoxDecoration(
+        color: AppColors.iosGroupedSurface(context),
+        borderRadius: BorderRadius.circular(AppSpacing.contentPreviewCornerRadius),
+      ),
+      child: Icon(
+        Icons.group,
+        size: AppSpacing.iconLarge,
+        color: fgSecondary,
+      ),
+    );
+  }
 }
 
 class _InboxConversationTile extends StatelessWidget {
@@ -1438,12 +1458,17 @@ class _InboxConversationTile extends StatelessWidget {
 
   static const double _avatarSize = 52.0;
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(BuildContext context) {
     if (item.isGroup) {
-      return GroupAvatarGrid(
-        size: _avatarSize,
-        avatarUrls: item.avatarCompositeUrls,
-      );
+      final groupAvatarUrl = item.groupAvatarUrl.trim();
+      if (groupAvatarUrl.isNotEmpty) {
+        return RoundedSquareAvatar(
+          size: _avatarSize,
+          imageUrl: groupAvatarUrl,
+          name: item.title,
+        );
+      }
+      return _buildDefaultGroupAvatar(context);
     }
     return RoundedSquareAvatar(
       size: _avatarSize,
@@ -1486,7 +1511,7 @@ class _InboxConversationTile extends StatelessWidget {
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      _buildAvatar(),
+                      _buildAvatar(context),
                       if (item.hasUnread)
                         Positioned(
                           top: -4,
@@ -1607,6 +1632,22 @@ class _InboxConversationTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultGroupAvatar(BuildContext context) {
+    return Container(
+      width: _avatarSize,
+      height: _avatarSize,
+      decoration: BoxDecoration(
+        color: AppColors.iosGroupedSurface(context),
+        borderRadius: BorderRadius.circular(AppSpacing.contentPreviewCornerRadius),
+      ),
+      child: Icon(
+        Icons.group,
+        size: AppSpacing.iconLarge,
+        color: fgSecondary,
       ),
     );
   }

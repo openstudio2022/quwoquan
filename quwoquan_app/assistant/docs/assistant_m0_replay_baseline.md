@@ -38,7 +38,7 @@ Each case emits one baseline pack with:
 
 Canonical state comparison is anchored on:
 
-- `assistantTurnSchemaVersion`
+- canonical persisted assistant turn fields（不含版本字段）
 - final answer text / answer blocks
 - normalized process timeline
 - `understandingSnapshot`

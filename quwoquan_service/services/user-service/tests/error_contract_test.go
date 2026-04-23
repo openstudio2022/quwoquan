@@ -32,7 +32,8 @@ func TestErrorCode_Forbidden_DeletePrimary(t *testing.T) {
 	createTestProfile(t, "err_user_1", "err_user1")
 	createTestPersona(t, "err_pa_primary", "err_user_1", "Primary", true, true)
 
-	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/err_pa_primary", "", authHeaders("err_user_1"))
+	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other_sa", "Other", "open", false, false)
+	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/err_pa_primary_sa/delete-empty", "", authHeaders("err_user_1"))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", rec.Code)
 	}

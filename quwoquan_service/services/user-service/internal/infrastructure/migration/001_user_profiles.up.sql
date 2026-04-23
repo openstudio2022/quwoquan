@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     phone                    VARCHAR(20) NOT NULL UNIQUE,
     nickname                 VARCHAR(64) NOT NULL UNIQUE,
     avatar_url               TEXT,
+    avatar_asset_id          VARCHAR(64),
+    avatar_version           INTEGER NOT NULL DEFAULT 0,
     bio                      VARCHAR(500),
     gender                   VARCHAR(16),
     birth_date               DATE,

@@ -6,8 +6,10 @@ import (
 
 // ProfileSnapshot is display data resolved from the user domain for chat members.
 type ProfileSnapshot struct {
-	DisplayName string
-	AvatarURL   string
+	DisplayName   string
+	AvatarURL     string
+	AvatarAssetID string
+	AvatarVersion int
 }
 
 // ProfileSnapshotResolver loads display name / avatar for user IDs (batch).

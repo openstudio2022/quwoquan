@@ -154,28 +154,17 @@ class RelativeTimeResolver {
     String referenceNowIso = '',
     String timezone = '',
   }) {
-    final effectiveReferenceNowIso = referenceNowIso.trim().isNotEmpty
-        ? referenceNowIso.trim()
-        : normalization.referenceNowIso.trim();
-    final effectiveTimezone = timezone.trim().isNotEmpty
-        ? timezone.trim()
-        : normalization.timezone.trim();
     final baseQuery = normalization.normalizedQuery.trim().isNotEmpty
         ? normalization.normalizedQuery.trim()
         : query.trim();
-    final resolution = resolve(
-      query: baseQuery,
-      referenceNowIso: effectiveReferenceNowIso,
-      timezone: effectiveTimezone,
-      timeScope: normalization.timeScope,
-      timeRangeStart: normalization.timeRangeStart,
-      timeRangeEnd: normalization.timeRangeEnd,
-      timePoint: normalization.timePoint,
+    final reference = resolveReferenceContext(
+      referenceNowIso: referenceNowIso.trim().isNotEmpty
+          ? referenceNowIso.trim()
+          : normalization.referenceNowIso.trim(),
+      timezone: timezone.trim().isNotEmpty
+          ? timezone.trim()
+          : normalization.timezone.trim(),
     );
-    final temporalHints = <String>{
-      ...normalization.resolvedTemporalHints.map((item) => item.trim()),
-      ...resolution.resolvedTemporalHints.map((item) => item.trim()),
-    }.where((item) => item.isNotEmpty).toList(growable: false);
     return QueryNormalization(
       normalizedQuery: baseQuery,
       rewrittenQuery: normalization.rewrittenQuery.trim().isNotEmpty
@@ -186,23 +175,15 @@ class RelativeTimeResolver {
       hints: normalization.hints,
       referenceNowIso: normalization.referenceNowIso.trim().isNotEmpty
           ? normalization.referenceNowIso.trim()
-          : resolution.referenceNowIso,
+          : reference.referenceNowIso,
       timezone: normalization.timezone.trim().isNotEmpty
           ? normalization.timezone.trim()
-          : resolution.timezone,
-      resolvedTemporalHints: temporalHints,
-      timeScope: normalization.timeScope.trim().isNotEmpty
-          ? normalization.timeScope.trim()
-          : resolution.timeScope,
-      timeRangeStart: normalization.timeRangeStart.trim().isNotEmpty
-          ? normalization.timeRangeStart.trim()
-          : resolution.timeRangeStartIso,
-      timeRangeEnd: normalization.timeRangeEnd.trim().isNotEmpty
-          ? normalization.timeRangeEnd.trim()
-          : resolution.timeRangeEndIso,
-      timePoint: normalization.timePoint.trim().isNotEmpty
-          ? normalization.timePoint.trim()
-          : resolution.timePointIso,
+          : reference.timezone,
+      resolvedTemporalHints: normalization.resolvedTemporalHints,
+      timeScope: normalization.timeScope.trim(),
+      timeRangeStart: normalization.timeRangeStart.trim(),
+      timeRangeEnd: normalization.timeRangeEnd.trim(),
+      timePoint: normalization.timePoint.trim(),
     );
   }
 
@@ -212,47 +193,14 @@ class RelativeTimeResolver {
     String referenceNowIso = '',
     String timezone = '',
   }) {
-    final taskResolution = resolve(
-      query: task.query.trim().isNotEmpty
-          ? task.query.trim()
-          : fallbackResolution.rewrittenQuery,
-      referenceNowIso: referenceNowIso.trim().isNotEmpty
-          ? referenceNowIso.trim()
-          : fallbackResolution.referenceNowIso,
-      timezone: timezone.trim().isNotEmpty
-          ? timezone.trim()
-          : (task.timezone.trim().isNotEmpty
-                ? task.timezone.trim()
-                : fallbackResolution.timezone),
-      timeScope: task.timeScope.trim().isNotEmpty
-          ? task.timeScope.trim()
-          : fallbackResolution.timeScope,
-      timeRangeStart: task.timeRangeStart.trim().isNotEmpty
-          ? task.timeRangeStart.trim()
-          : fallbackResolution.timeRangeStartIso,
-      timeRangeEnd: task.timeRangeEnd.trim().isNotEmpty
-          ? task.timeRangeEnd.trim()
-          : fallbackResolution.timeRangeEndIso,
-      timePoint: task.timePoint.trim().isNotEmpty
-          ? task.timePoint.trim()
-          : fallbackResolution.timePointIso,
-    );
     return task.copyWith(
       query: task.query.trim().isNotEmpty
           ? task.query.trim()
-          : taskResolution.rewrittenQuery,
-      timeScope: task.timeScope.trim().isNotEmpty
-          ? task.timeScope.trim()
-          : taskResolution.timeScope,
-      timeRangeStart: task.timeRangeStart.trim().isNotEmpty
-          ? task.timeRangeStart.trim()
-          : taskResolution.timeRangeStartIso,
-      timeRangeEnd: task.timeRangeEnd.trim().isNotEmpty
-          ? task.timeRangeEnd.trim()
-          : taskResolution.timeRangeEndIso,
-      timePoint: task.timePoint.trim().isNotEmpty
-          ? task.timePoint.trim()
-          : taskResolution.timePointIso,
+          : fallbackResolution.rewrittenQuery,
+      timeScope: task.timeScope.trim(),
+      timeRangeStart: task.timeRangeStart.trim(),
+      timeRangeEnd: task.timeRangeEnd.trim(),
+      timePoint: task.timePoint.trim(),
       timezone: task.timezone.trim().isNotEmpty
           ? task.timezone.trim()
           : (timezone.isNotEmpty ? timezone : fallbackResolution.timezone),

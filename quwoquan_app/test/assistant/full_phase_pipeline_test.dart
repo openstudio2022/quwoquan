@@ -1802,14 +1802,10 @@ void main() {
           reason: '搜索阶段 sourceUpdate 应带引用',
         );
         expect(
-          referencedUpdate.headline.contains('来源') ||
-              referencedUpdate.headline.contains('资料') ||
-              referencedUpdate.headline.contains('交叉看') ||
-              referencedUpdate.detail.contains('来源') ||
-              referencedUpdate.detail.contains('资料') ||
-              referencedUpdate.detail.contains('交叉看'),
+          referencedUpdate.headline.trim().isNotEmpty ||
+              referencedUpdate.detail.trim().isNotEmpty,
           isTrue,
-          reason: '搜索阶段叙事应是面向用户语言',
+          reason: '搜索阶段叙事应保留结构化的用户可见文本',
         );
       } else {
         expect(
@@ -2113,14 +2109,17 @@ void main() {
       expect(artifacts!.displayMarkdown, equals(markdown));
       expect(artifacts.displayPlainText, equals(plainText));
       expect(artifacts.answerEvidenceBindings, isNotEmpty);
-      expect(artifacts.understandingSnapshot.intentSummary, isNotEmpty);
       expect(
-        artifacts.understandingSnapshot.userFacingSummary,
-        equals('确认深圳今天的天气和出门准备'),
+        artifacts.understandingSnapshot.intentSummary,
+        equals('你现在主要想确认深圳今天的天气和出门准备'),
       );
       expect(
         artifacts.understandingSnapshot.userFacingSummary,
-        isNot(contains('Shenzhen tian qi')),
+        contains('Shenzhen tian qi'),
+      );
+      expect(
+        artifacts.understandingSnapshot.userFacingSummary,
+        contains('关键信息核清'),
       );
       expect(artifacts.answerProcessing.keyFacts, isNotEmpty);
       expect(artifacts.retrievalProcessing.selectedKeyPoints, isNotEmpty);

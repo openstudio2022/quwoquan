@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
-@immutable
 enum StPageFlipCurlAngleBand { shallow, mid, steep }
 
 StPageFlipCurlAngleBand resolveForwardCurlAngleBand({
@@ -115,10 +114,14 @@ class ArticlePageBackwardLeafFrame {
     required this.emergenceProgress,
     required this.unrollProgress,
     required this.settleProgress,
+    required this.seamXNormalized,
+    required this.versoRevealWidthNormalized,
+    required this.edgeBandWidthNormalized,
     required this.coveredWidthNormalized,
     required this.laidDownWidthNormalized,
     required this.curlWidthNormalized,
     required this.rectoRevealWidthNormalized,
+    required this.bottomRevealStartNormalized,
     required this.curlPivotNormalized,
     required this.edgeLift,
   });
@@ -127,12 +130,24 @@ class ArticlePageBackwardLeafFrame {
   final double emergenceProgress;
   final double unrollProgress;
   final double settleProgress;
+  final double seamXNormalized;
+  final double versoRevealWidthNormalized;
+  final double edgeBandWidthNormalized;
   final double coveredWidthNormalized;
   final double laidDownWidthNormalized;
   final double curlWidthNormalized;
   final double rectoRevealWidthNormalized;
+  final double bottomRevealStartNormalized;
   final double curlPivotNormalized;
   final double edgeLift;
+
+  double get totalRectoVisibleWidthNormalized =>
+      (laidDownWidthNormalized + rectoRevealWidthNormalized)
+          .clamp(0.0, 1.0)
+          .toDouble();
+
+  double get currentRevealWidthNormalized =>
+      (1.0 - bottomRevealStartNormalized).clamp(0.0, 1.0).toDouble();
 }
 
 ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
@@ -180,11 +195,26 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
               laidDownBeforeSettle)
           .clamp(0.0, 1.0)
           .toDouble();
-  final coveredWidth = math.min(1.0, laidDownWidth + curlWidth * 0.92);
-  final rectoRevealWidth = math.min(
-    curlWidth * (0.18 + unrollProgress * 0.28),
-    curlWidth * 0.42,
+  final edgeBandProgress = Curves.easeOutCubic.transform(
+    ((unrollProgress - 0.08) / 0.54).clamp(0.0, 1.0),
   );
+  final edgeBandWidth =
+      ((ui.lerpDouble(0.0, 0.022, edgeBandProgress) ?? 0.0) *
+              (1 - settleProgress * 0.28))
+          .clamp(0.0, 0.032)
+          .toDouble();
+  final rectoRevealProgress = Curves.easeOutCubic.transform(
+    ((unrollProgress - 0.14) / 0.74).clamp(0.0, 1.0),
+  );
+  final rectoRevealWidth = math.min(
+    curlWidth * (0.08 + rectoRevealProgress * 0.42),
+    curlWidth * 0.58,
+  );
+  final versoRevealWidth = math.max(
+    0.0,
+    curlWidth - rectoRevealWidth - edgeBandWidth,
+  );
+  final coveredWidth = math.min(1.0, laidDownWidth + curlWidth);
   final curlPivotNormalized = (laidDownWidth + curlWidth * 0.5)
       .clamp(0.0, 1.0)
       .toDouble();
@@ -203,12 +233,134 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
     emergenceProgress: emergenceProgress,
     unrollProgress: unrollProgress,
     settleProgress: settleProgress,
+    seamXNormalized: coveredWidth,
+    versoRevealWidthNormalized: versoRevealWidth,
+    edgeBandWidthNormalized: edgeBandWidth,
     coveredWidthNormalized: coveredWidth,
     laidDownWidthNormalized: laidDownWidth,
     curlWidthNormalized: curlWidth,
     rectoRevealWidthNormalized: rectoRevealWidth,
+    bottomRevealStartNormalized: coveredWidth,
     curlPivotNormalized: curlPivotNormalized,
     edgeLift: edgeLift,
+  );
+}
+
+double resolveArticlePageBackwardSeamX({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+}) {
+  return (pageSize.width * frame.seamXNormalized)
+      .clamp(0.0, pageSize.width)
+      .toDouble();
+}
+
+ui.Rect resolveArticlePageBackwardBottomRevealRect({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+}) {
+  final revealStart = (pageSize.width * frame.bottomRevealStartNormalized)
+      .clamp(0.0, pageSize.width)
+      .toDouble();
+  return ui.Rect.fromLTWH(
+    revealStart,
+    0,
+    math.max(0.0, pageSize.width - revealStart),
+    pageSize.height,
+  );
+}
+
+List<ui.Offset> resolveArticlePageBackwardFlippingClipArea({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+}) {
+  final seamX = resolveArticlePageBackwardSeamX(
+    frame: frame,
+    pageSize: pageSize,
+  );
+  return <ui.Offset>[
+    ui.Offset.zero,
+    ui.Offset(seamX, 0),
+    ui.Offset(seamX, pageSize.height),
+    ui.Offset(0, pageSize.height),
+  ];
+}
+
+List<ui.Offset> resolveArticlePageBackwardBottomClipArea({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+}) {
+  final revealRect = resolveArticlePageBackwardBottomRevealRect(
+    frame: frame,
+    pageSize: pageSize,
+  );
+  return <ui.Offset>[
+    revealRect.topLeft,
+    revealRect.topRight,
+    revealRect.bottomRight,
+    revealRect.bottomLeft,
+  ];
+}
+
+ui.Offset resolveArticlePageBackwardFlippingAnchor({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+  required StPageFlipCorner corner,
+}) {
+  return ui.Offset(
+    0,
+    corner == StPageFlipCorner.top ? 0 : pageSize.height,
+  );
+}
+
+ui.Offset resolveArticlePageBackwardBottomAnchor({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+  required StPageFlipCorner corner,
+}) {
+  return ui.Offset.zero;
+}
+
+double resolveArticlePageBackwardAngle({
+  required ArticlePageBackwardLeafFrame frame,
+  required StPageFlipCorner corner,
+}) {
+  return 0.0;
+}
+
+StPageFlipShadowData resolveArticlePageBackwardShadowData({
+  required ArticlePageBackwardLeafFrame frame,
+  required ui.Size pageSize,
+  required StPageFlipCorner corner,
+  double maxShadowOpacity = 1.0,
+}) {
+  final seamX = resolveArticlePageBackwardSeamX(
+    frame: frame,
+    pageSize: pageSize,
+  );
+  final width = math.max(
+    pageSize.width * 0.08,
+    pageSize.width *
+        (frame.versoRevealWidthNormalized + frame.edgeBandWidthNormalized * 2.4),
+  );
+  final opacity =
+      ((0.12 +
+                  frame.emergenceProgress * 0.08 +
+                  frame.unrollProgress * 0.1) *
+              (1 - frame.settleProgress * 0.45) *
+              maxShadowOpacity)
+          .clamp(0.0, 1.0)
+          .toDouble();
+  return StPageFlipShadowData(
+    position: ui.Offset(
+      seamX,
+      corner == StPageFlipCorner.top ? 0 : pageSize.height,
+    ),
+    angle: 0,
+    width: width,
+    opacity: opacity,
+    direction: StPageFlipDirection.back,
+    progress: frame.seamXNormalized * 100,
   );
 }
 
@@ -217,12 +369,21 @@ StPageFlipDirection resolvePageFlipRenderDirection({
   required StPageFlipOrientation orientation,
   ReverseFlipPose? reversePose,
 }) {
-  if (direction == StPageFlipDirection.back &&
-      orientation == StPageFlipOrientation.portrait &&
-      reversePose != null) {
-    return StPageFlipDirection.forward;
-  }
   return direction;
+}
+
+ui.Offset resolveBackwardReplayLocalPagePoint({
+  required ui.Offset localPagePoint,
+  required ui.Size pageSize,
+}) {
+  return ui.Offset(
+    pageSize.width - localPagePoint.dx.clamp(0.0, pageSize.width),
+    localPagePoint.dy.clamp(0.0, pageSize.height),
+  );
+}
+
+double resolveBackwardReplayProgress(double progress) {
+  return (1.0 - progress).clamp(0.0, 1.0).toDouble();
 }
 
 StPageFlipTimeline resolvePageCurlTimeline({
@@ -236,17 +397,8 @@ StPageFlipTimeline resolvePageCurlTimeline({
   ReverseFlipPose? reversePose,
 }) {
   final settledProgress = progress.clamp(0.0, 1.0).toDouble();
-  if (direction == StPageFlipDirection.back &&
-      renderDirection == StPageFlipDirection.forward &&
-      reversePose != null) {
-    return _resolveThreeStageBackwardTimeline(
-      reversePose: reversePose,
-      pageSize: pageSize,
-      angleBand: angleBand,
-    );
-  }
   if (direction == StPageFlipDirection.back) {
-    return _resolveMirroredForwardTimeline(
+    return _resolveBackwardReplayTimeline(
       progress: settledProgress,
       localPagePoint: localPagePoint,
       pageSize: pageSize,
@@ -258,6 +410,46 @@ StPageFlipTimeline resolvePageCurlTimeline({
     localPagePoint: localPagePoint,
     pageSize: pageSize,
     angleBand: angleBand,
+  );
+}
+
+StPageFlipTimeline _resolveBackwardReplayTimeline({
+  required double progress,
+  required ui.Offset localPagePoint,
+  required ui.Size pageSize,
+  required StPageFlipCurlAngleBand angleBand,
+}) {
+  final replayProgress = resolveBackwardReplayProgress(progress);
+  final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+    localPagePoint: localPagePoint,
+    pageSize: pageSize,
+  );
+  final replayTimeline = _resolveForwardTimeline(
+    progress: replayProgress,
+    localPagePoint: replayLocalPoint,
+    pageSize: pageSize,
+    angleBand: angleBand,
+  );
+  final replayDiagonalExtent =
+      (replayTimeline.diagonalExtent * 0.28)
+          .clamp(pageSize.width * 0.004, pageSize.width * 0.032)
+          .toDouble();
+  return StPageFlipTimeline(
+    mirrored: false,
+    curlAngleBand: replayTimeline.curlAngleBand,
+    basePivot: replayTimeline.basePivot,
+    diagonalExtent: replayDiagonalExtent,
+    leadingRadius: replayTimeline.leadingRadius,
+    trailingRadius: replayTimeline.trailingRadius,
+    sheetShift: replayTimeline.sheetShift,
+    perspective: replayTimeline.perspective,
+    rollProgress: replayTimeline.rollProgress,
+    cylinderProgress: replayTimeline.cylinderProgress,
+    unfoldProgress: replayTimeline.unfoldProgress,
+    heightLiftBias: replayTimeline.heightLiftBias,
+    cylinderRadiusNormalized: replayTimeline.cylinderRadiusNormalized,
+    unrollWidthNormalized: replayTimeline.unrollWidthNormalized,
+    bottomGapNormalized: replayTimeline.bottomGapNormalized,
   );
 }
 
@@ -311,7 +503,7 @@ StPageFlipTimeline _resolveForwardTimeline({
   final sheetShift =
       -(ui.lerpDouble(
             0.0,
-            pageSize.width * 0.06,
+            pageSize.width * 0.022,
             Curves.easeOut.transform(progress),
           ) ??
           0.0);
@@ -338,9 +530,9 @@ StPageFlipTimeline _resolveForwardTimeline({
     cylinderProgress: 0.0,
     unfoldProgress: 0.0,
     heightLiftBias: switch (angleBand) {
-      StPageFlipCurlAngleBand.shallow => 0.040,
-      StPageFlipCurlAngleBand.mid => 0.044,
-      StPageFlipCurlAngleBand.steep => 0.048,
+      StPageFlipCurlAngleBand.shallow => 0.018,
+      StPageFlipCurlAngleBand.mid => 0.021,
+      StPageFlipCurlAngleBand.steep => 0.024,
     },
     cylinderRadiusNormalized: (radiusBase / pageSize.width)
         .clamp(0.0, 1.0)
@@ -352,102 +544,3 @@ StPageFlipTimeline _resolveForwardTimeline({
   );
 }
 
-StPageFlipTimeline _resolveMirroredForwardTimeline({
-  required double progress,
-  required ui.Offset localPagePoint,
-  required ui.Size pageSize,
-  required StPageFlipCurlAngleBand angleBand,
-}) {
-  final mirroredLocalPoint = ui.Offset(
-    pageSize.width - localPagePoint.dx.clamp(0.0, pageSize.width),
-    localPagePoint.dy,
-  );
-  final timeline = _resolveForwardTimeline(
-    progress: progress,
-    localPagePoint: mirroredLocalPoint,
-    pageSize: pageSize,
-    angleBand: angleBand,
-  );
-  return StPageFlipTimeline(
-    mirrored: true,
-    curlAngleBand: timeline.curlAngleBand,
-    basePivot: timeline.basePivot,
-    diagonalExtent: timeline.diagonalExtent,
-    leadingRadius: timeline.leadingRadius,
-    trailingRadius: timeline.trailingRadius,
-    sheetShift: -timeline.sheetShift,
-    perspective: timeline.perspective,
-    rollProgress: timeline.rollProgress,
-    cylinderProgress: timeline.cylinderProgress,
-    unfoldProgress: timeline.unfoldProgress,
-    heightLiftBias: timeline.heightLiftBias,
-    cylinderRadiusNormalized: timeline.cylinderRadiusNormalized,
-    unrollWidthNormalized: timeline.unrollWidthNormalized,
-    bottomGapNormalized: timeline.bottomGapNormalized,
-  );
-}
-
-StPageFlipTimeline _resolveThreeStageBackwardTimeline({
-  required ReverseFlipPose reversePose,
-  required ui.Size pageSize,
-  required StPageFlipCurlAngleBand angleBand,
-}) {
-  final coveredWidth = reversePose.coveredWidth
-      .clamp(0.0, pageSize.width)
-      .toDouble();
-  final flatWidth = reversePose.unrollWidth.clamp(0.0, coveredWidth).toDouble();
-  final cylinderRadius = reversePose.cylinderRadius
-      .clamp(pageSize.width * 0.02, pageSize.width * 0.16)
-      .toDouble();
-  final curlWidth = math.max(
-    coveredWidth - flatWidth,
-    reversePose.cylinderArcWidth.clamp(0.0, pageSize.width),
-  );
-  final diagonalExtent =
-      ((ui.lerpDouble(
-                    pageSize.width * 0.05,
-                    pageSize.width * 0.16,
-                    reversePose.emergenceProgress,
-                  ) ??
-                  (pageSize.width * 0.09)) *
-              (1 - reversePose.unrollProgress * 0.28))
-          .clamp(pageSize.width * 0.03, pageSize.width * 0.18)
-          .toDouble();
-  final heightLiftBias =
-      (ui.lerpDouble(0.22, 0.08, reversePose.unrollProgress) ?? 0.14)
-          .clamp(0.08, 0.22)
-          .toDouble();
-  final effectiveRadius = math.max(cylinderRadius, curlWidth / math.pi);
-  return StPageFlipTimeline(
-    mirrored: true,
-    curlAngleBand: angleBand,
-    basePivot: (pageSize.width - reversePose.leadingEdgeX)
-        .clamp(0.0, pageSize.width)
-        .toDouble(),
-    diagonalExtent: diagonalExtent,
-    leadingRadius: effectiveRadius,
-    trailingRadius: math.max(pageSize.width * 0.02, cylinderRadius * 0.86),
-    sheetShift:
-        (ui.lerpDouble(
-                  0.0,
-                  pageSize.width * 0.04,
-                  reversePose.cylinderProgress,
-                ) ??
-                0.0)
-            .toDouble(),
-    perspective: pageSize.width * 10.0,
-    rollProgress: reversePose.emergenceProgress.clamp(0.0, 1.0).toDouble(),
-    cylinderProgress: reversePose.cylinderProgress.clamp(0.0, 1.0).toDouble(),
-    unfoldProgress: reversePose.unrollProgress.clamp(0.0, 1.0).toDouble(),
-    heightLiftBias: heightLiftBias,
-    cylinderRadiusNormalized: (cylinderRadius / pageSize.width)
-        .clamp(0.0, 1.0)
-        .toDouble(),
-    unrollWidthNormalized: (flatWidth / pageSize.width)
-        .clamp(0.0, 1.0)
-        .toDouble(),
-    bottomGapNormalized: ((pageSize.width - coveredWidth) / pageSize.width)
-        .clamp(0.0, 1.0)
-        .toDouble(),
-  );
-}

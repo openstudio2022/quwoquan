@@ -3,7 +3,10 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	runtimesync "quwoquan_service/runtime/sync"
+	event "quwoquan_service/services/user-service/internal/domain/user/event"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
@@ -15,6 +18,8 @@ type ProfileService struct {
 	settings userrepo.SettingRepository
 	pcache   *cache.ProfileCache
 	scache   *cache.SettingCache
+	events   UserEventPublisher
+	sync     UserSyncStream
 }
 
 func NewProfileService(
@@ -23,13 +28,20 @@ func NewProfileService(
 	settings userrepo.SettingRepository,
 	pcache *cache.ProfileCache,
 	scache *cache.SettingCache,
+	events UserEventPublisher,
+	sync UserSyncStream,
 ) *ProfileService {
+	if events == nil {
+		events = NoopUserEventPublisher()
+	}
 	return &ProfileService{
 		profiles: profiles,
 		personas: personas,
 		settings: settings,
 		pcache:   pcache,
 		scache:   scache,
+		events:   events,
+		sync:     sync,
 	}
 }
 
@@ -75,8 +87,17 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		}
 		profile.Nickname = v
 	}
+	oldAvatarURL := strings.TrimSpace(profile.AvatarURL)
+	oldAvatarVersion := profile.AvatarVersion
 	if v, ok := data["avatarUrl"].(string); ok {
-		profile.AvatarURL = v
+		profile.AvatarURL = strings.TrimSpace(v)
+		if strings.TrimSpace(profile.AvatarURL) != oldAvatarURL {
+			profile.AvatarVersion++
+			if profile.AvatarVersion <= 0 {
+				profile.AvatarVersion = 1
+			}
+			profile.AvatarAssetID = fmt.Sprintf("ua_%s", userID)
+		}
 	}
 	if v, ok := data["bio"].(string); ok {
 		profile.Bio = v
@@ -96,6 +117,35 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 	}
 
 	_ = s.pcache.Del(ctx, userID)
+	updatedAt := profile.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
+	if err := s.events.PublishUserEvent(ctx, event.UserProfileUpdated, userID, userID, map[string]any{
+		"userId":         profile.UserID,
+		"nickname":       profile.Nickname,
+		"bio":            profile.Bio,
+		"avatarUrl":      profile.AvatarURL,
+		"profileVersion": profile.ProfileVersion,
+		"updatedAt":      updatedAt,
+	}); err != nil {
+		return nil, err
+	}
+	if profile.AvatarVersion != oldAvatarVersion {
+		avatarPayload := map[string]any{
+			"userId":         profile.UserID,
+			"avatarAssetId":  profile.AvatarAssetID,
+			"avatarVersion":  profile.AvatarVersion,
+			"avatarUrl":      profile.AvatarURL,
+			"profileVersion": profile.ProfileVersion,
+			"updatedAt":      updatedAt,
+		}
+		if err := s.events.PublishUserEvent(ctx, event.UserAvatarUpdated, userID, userID, avatarPayload); err != nil {
+			return nil, err
+		}
+		if s.sync != nil {
+			if _, err := s.sync.AppendPatch(ctx, userID, "user.avatar.updated", avatarPayload); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return profile, nil
 }
 
@@ -114,4 +164,21 @@ func (s *ProfileService) GetStats(ctx context.Context, userID string) (map[strin
 		"circleCount":    profile.CircleCount,
 		"likeCount":      profile.LikeCount,
 	}, nil
+}
+
+func (s *ProfileService) PullSync(
+	ctx context.Context,
+	userID string,
+	afterSeq int64,
+	limit int,
+) (runtimesync.PullResponse, error) {
+	if s.sync == nil {
+		return runtimesync.PullResponse{
+			Patches:        []runtimesync.Patch{},
+			LatestSyncSeq:  0,
+			HasMore:        false,
+			RequiresResync: false,
+		}, nil
+	}
+	return s.sync.Pull(ctx, userID, afterSeq, limit)
 }
